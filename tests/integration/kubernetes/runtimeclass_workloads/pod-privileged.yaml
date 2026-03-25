@@ -16,3 +16,6 @@ spec:
     name: container
     securityContext:
       privileged: true
+    resources:
+      limits:
+        memory: 2Gi

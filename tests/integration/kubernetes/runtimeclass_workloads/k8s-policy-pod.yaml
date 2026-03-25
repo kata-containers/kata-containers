@@ -61,6 +61,9 @@ spec:
         - name: test-volume1
           mountPath: /test-mount1
           subPathExpr: $(TEST_DIR1)/$(TEST_DIR2)
+      resources:
+        limits:
+          memory: 2Gi
   topologySpreadConstraints:
     - maxSkew: 2
       topologyKey: kubernetes.io/hostname

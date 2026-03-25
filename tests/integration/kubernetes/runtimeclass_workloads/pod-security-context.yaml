@@ -15,3 +15,6 @@ spec:
   - name: sec-text
     image: quay.io/kata-containers/sysbench-kata:latest
     command: ["tail", "-f", "/dev/null"]
+    resources:
+      limits:
+        memory: 2Gi

@@ -16,3 +16,6 @@ spec:
   containers:
   - image: quay.io/prometheus/busybox:latest
     name: sandbox-cgroup-test
+    resources:
+      limits:
+        memory: 2Gi

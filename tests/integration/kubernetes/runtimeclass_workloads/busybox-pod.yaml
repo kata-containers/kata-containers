@@ -19,6 +19,9 @@ spec:
     command:
         - sleep
         - "30"
+    resources:
+      limits:
+        memory: 2Gi
   - name: second-test-container
     image: quay.io/prometheus/busybox:latest
     env:
@@ -29,3 +32,6 @@ spec:
         - "30"
     stdin: true
     tty: true
+    resources:
+      limits:
+        memory: 2Gi

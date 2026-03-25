@@ -25,6 +25,8 @@ spec:
       resources:
         requests:
           memory: "32Mi"
+        limits:
+          memory: 2Gi
       env:
         - name: MY_POD_NAME
           valueFrom:

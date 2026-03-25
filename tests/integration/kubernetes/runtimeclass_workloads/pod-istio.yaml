@@ -35,5 +35,8 @@ spec:
         capabilities:
           add: ["NET_ADMIN", "NET_RAW"]
           drop: ["ALL"]
+      resources:
+        limits:
+          memory: 2Gi
   runtimeClassName: kata
 

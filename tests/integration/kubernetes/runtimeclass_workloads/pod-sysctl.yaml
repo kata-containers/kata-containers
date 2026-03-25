@@ -19,9 +19,15 @@ spec:
       privileged: true
     image: quay.io/prometheus/busybox:latest
     command: ["tail", "-f", "/dev/null"]
+    resources:
+      limits:
+        memory: 2Gi
   initContainers:
   - name: init-sys
     securityContext:
       privileged: true
     image: quay.io/prometheus/busybox:latest
     command: ['sh', '-c', 'echo "64000" > /proc/sys/vm/max_map_count']
+    resources:
+      limits:
+        memory: 2Gi

@@ -185,12 +185,12 @@ function deploy_kata() {
 			;;
 	esac
 
-	ANNOTATIONS="default_vcpus"
+	ANNOTATIONS="default_vcpus default_memory"
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		ANNOTATIONS="image kernel default_vcpus cc_init_data"
+		ANNOTATIONS="image kernel default_vcpus default_memory cc_init_data"
 	fi
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
-		ANNOTATIONS="image initrd kernel default_vcpus"
+		ANNOTATIONS="image initrd kernel default_vcpus default_memory"
 	fi
 
 	SNAPSHOTTER_HANDLER_MAPPING=""

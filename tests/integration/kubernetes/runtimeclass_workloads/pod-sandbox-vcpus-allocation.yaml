@@ -16,6 +16,9 @@ spec:
   - name: vcpus-less-than-one-with-no-limits
     image: quay.io/prometheus/busybox:latest
     command: ['nproc', '--all']
+    resources:
+      limits:
+        memory: 2Gi
   restartPolicy: Never
 ---
 apiVersion: v1
@@ -32,6 +35,7 @@ spec:
     resources:
       limits:
         cpu: "0.25"
+        memory: 2Gi
     command: ['nproc', '--all']
   restartPolicy: Never
 ---
@@ -49,5 +53,6 @@ spec:
     resources:
       limits:
         cpu: "1.2"
+        memory: 2Gi
     command: ['nproc', '--all']
   restartPolicy: Never

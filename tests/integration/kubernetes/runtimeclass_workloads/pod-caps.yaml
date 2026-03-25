@@ -14,4 +14,7 @@ spec:
       image: quay.io/prometheus/busybox:latest
       command: ["sh"]
       args: ["-c", "cat /proc/self/status | grep Cap && sleep infinity"]
+      resources:
+        limits:
+          memory: 2Gi
   restartPolicy: Never

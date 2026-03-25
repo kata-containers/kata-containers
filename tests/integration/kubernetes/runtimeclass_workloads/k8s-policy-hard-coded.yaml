@@ -19,3 +19,6 @@ spec:
       command:
         - sleep
         - "120"
+      resources:
+        limits:
+          memory: 2Gi

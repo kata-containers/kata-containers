@@ -14,6 +14,9 @@ spec:
   - name: first
     image: quay.io/prometheus/busybox:latest
     command: [ "sh", "-c", "echo 'nohup tail -f /dev/null  >/dev/null 2>&1 &' > /init.sh && chmod +x /init.sh && /init.sh" ]
+    resources:
+      limits:
+        memory: 2Gi
   containers:
   - name: first-test-container
     image: quay.io/prometheus/busybox:latest
@@ -23,3 +26,6 @@ spec:
     command:
         - sleep
         - "300"
+    resources:
+      limits:
+        memory: 2Gi

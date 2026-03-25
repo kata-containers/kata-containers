@@ -24,3 +24,6 @@ spec:
       volumeMounts:
         - mountPath: "/mnt/"
           name: pv-storage
+      resources:
+        limits:
+          memory: 2Gi
