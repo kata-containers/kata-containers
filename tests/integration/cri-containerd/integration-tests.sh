@@ -282,6 +282,77 @@ function TestContainerMemoryUpdate() {
 	done
 }
 
+function get_kata_default_memory_mib() {
+	# Sandbox RAM is container limits plus this default (see virtcontainers Sandbox.updateResources).
+	local v
+	v=$(grep -E '^[[:space:]]*default_memory[[:space:]]*=' "${kata_config}" | head -1 | sed -E 's/^[[:space:]]*default_memory[[:space:]]*=[[:space:]]*//; s/#.*//; s/[[:space:]]*$//')
+	if [[ ! "$v" =~ ^[0-9]+$ ]]; then
+		echo 2048
+	else
+		echo "$v"
+	fi
+}
+
+function DoContainerMemoryUpdate() {
+	descrease_memory=$1
+
+	local default_mem_mb
+	default_mem_mb=$(get_kata_default_memory_mib)
+	local initial_limit_mib=$((2048 - default_mem_mb))
+	if [ "$initial_limit_mib" -lt 0 ]; then
+		die "default_memory ${default_mem_mb} MiB in ${kata_config} is above 2048 MiB; cannot satisfy TestContainerMemoryUpdate expectations"
+	fi
+
+	local container_yaml=${REPORT_DIR}/container.yaml
+	if [ "$initial_limit_mib" -gt 0 ]; then
+		cat << EOF > "${container_yaml}"
+metadata:
+  name: busybox-killed-vmm
+  namespace: default
+  uid: busybox-killed-vmm-uid
+linux:
+  resources:
+    memory_limit_in_bytes: $((initial_limit_mib * 1024 * 1024))
+image:
+  image: "busybox:latest"
+command:
+- top
+EOF
+		testContainerStart 1
+	else
+		testContainerStart
+	fi
+
+	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+	if [ $vm_size -gt $((2*1024*1024*1024)) ] || [ $vm_size -lt $((2*1024*1024*1024-128*1024*1024)) ]; then
+		testContainerStop
+		die "The VM memory size $vm_size before update is not right"
+	fi
+
+	sudo crictl update --memory $(((4096 - default_mem_mb) * 1024 * 1024)) $cid
+	sleep 1
+
+	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+	if [ $vm_size -gt $((4*1024*1024*1024)) ] || [ $vm_size -lt $((4*1024*1024*1024-128*1024*1024)) ]; then
+		testContainerStop
+		die "The VM memory size $vm_size after increase is not right"
+	fi
+
+	if [ $descrease_memory -eq 1 ]; then
+		sudo crictl update --memory $(((3072 - default_mem_mb) * 1024 * 1024)) $cid
+		sleep 1
+
+		vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+		if [ $vm_size -gt $((3*1024*1024*1024)) ] || [ $vm_size -lt $((3*1024*1024*1024-128*1024*1024)) ]; then
+			testContainerStop
+			die "The VM memory size $vm_size after decrease is not right"
+		fi
+	fi
+
+	# stop the test container
+	testContainerStop
+}
+
 function PrepareContainerMemoryUpdate() {
 	test_virtio_mem=$1
 
@@ -299,42 +370,6 @@ function PrepareContainerMemoryUpdate() {
 		# Set to false instead of commenting out
 		sudo sed -i -e 's/^#\?enable_virtio_mem.*$/enable_virtio_mem = false/g' "${kata_config}"
 	fi
-}
-
-function DoContainerMemoryUpdate() {
-	descrease_memory=$1
-
-	# start a test container
-	testContainerStart
-
-	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
-	if [ $vm_size -gt $((2*1024*1024*1024)) ] || [ $vm_size -lt $((2*1024*1024*1024-128*1024*1024)) ]; then
-		testContainerStop
-		die "The VM memory size $vm_size before update is not right"
-	fi
-
-	sudo crictl update --memory $((2*1024*1024*1024)) $cid
-	sleep 1
-
-	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
-	if [ $vm_size -gt $((4*1024*1024*1024)) ] || [ $vm_size -lt $((4*1024*1024*1024-128*1024*1024)) ]; then
-		testContainerStop
-		die "The VM memory size $vm_size after increase is not right"
-	fi
-
-	if [ $descrease_memory -eq 1 ]; then
-		sudo crictl update --memory $((1*1024*1024*1024)) $cid
-		sleep 1
-
-		vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
-		if [ $vm_size -gt $((3*1024*1024*1024)) ] || [ $vm_size -lt $((3*1024*1024*1024-128*1024*1024)) ]; then
-			testContainerStop
-			die "The VM memory size $vm_size after decrease is not right"
-		fi
-	fi
-
-	# stop the test container
-	testContainerStop
 }
 
 function getContainerSwapInfo() {
