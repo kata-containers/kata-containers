@@ -7,6 +7,8 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
+# shellcheck source=setup_genpolicy_registry_auth.sh
+source "${BATS_TEST_DIRNAME}/setup_genpolicy_registry_auth.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
 
@@ -182,6 +184,8 @@ setup_file() {
     add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
     if [ "${TEE}" = "true" ]; then
+        # Same bats-exec-file process as genpolicy; use suite tmp (not only run_kubernetes_nv_tests.sh).
+        setup_genpolicy_registry_auth "${BATS_SUITE_TMPDIR}"
         setup_kbs_credentials
         # provision signing public key to KBS so that CDH can verify pre-created, signed secret.
         setup_sealed_secret_signing_public_key

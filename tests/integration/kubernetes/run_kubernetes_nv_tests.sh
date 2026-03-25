@@ -11,6 +11,8 @@ set -o pipefail
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
+# shellcheck disable=SC1091
+source "${kubernetes_dir}/setup_genpolicy_registry_auth.sh"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime via drop-in config
 enable_nvrc_trace() {
@@ -51,27 +53,6 @@ kernel_params = "${new_params}"
 EOF
 }
 
-# Create Docker config for genpolicy so it can authenticate to nvcr.io when
-# pulling image manifests (avoids "UnauthorizedError" from genpolicy's registry pull).
-# Genpolicy (src/tools/genpolicy) uses docker_credential::get_credential() in
-# src/tools/genpolicy/src/registry.rs build_auth(). The docker_credential crate
-# reads config from DOCKER_CONFIG (directory) + "/config.json", so we set
-# DOCKER_CONFIG to a directory containing config.json with nvcr.io auth.
-setup_genpolicy_registry_auth() {
-	if [[ -z "${NGC_API_KEY:-}" ]]; then
-		return
-	fi
-	local auth_dir
-	auth_dir="${kubernetes_dir}/.docker-genpolicy"
-	mkdir -p "${auth_dir}"
-	# Docker config format: auths -> registry -> auth (base64 of "user:password")
-	echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" \
-		> "${auth_dir}/config.json"
-	export DOCKER_CONFIG="${auth_dir}"
-	# REGISTRY_AUTH_FILE (containers-auth.json format) is the same structure for auths
-	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
-}
-
 cleanup() {
 	true
 }
@@ -106,7 +87,7 @@ if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
 fi
 
 # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
-setup_genpolicy_registry_auth
+setup_genpolicy_registry_auth "${kubernetes_dir}"
 
 # Use common bats test runner with proper reporting
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
