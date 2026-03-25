@@ -3,20 +3,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: vcpus-less-than-one-with-no-limits
-  annotations:
-    io.katacontainers.config.hypervisor.default_vcpus: "0"
-spec:
-  runtimeClassName: kata
-  containers:
-  - name: vcpus-less-than-one-with-no-limits
-    image: quay.io/prometheus/busybox:latest
-    command: ['nproc', '--all']
-  restartPolicy: Never
+# msft-preview: default_vcpus = 0 + no limits is expected to fail if not using static resource management
+# ---
+# apiVersion: v1
+# kind: Pod
+# metadata:
+#   name: vcpus-less-than-one-with-no-limits
+#   annotations:
+#     io.katacontainers.config.hypervisor.default_vcpus: "0"
+# spec:
+#   runtimeClassName: kata
+#   containers:
+#   - name: vcpus-less-than-one-with-no-limits
+#     image: quay.io/prometheus/busybox:latest
+#     command: ['nproc', '--all']
+#   restartPolicy: Never
 ---
 apiVersion: v1
 kind: Pod

@@ -23,7 +23,7 @@ jobs:
 
   build-checks:
     needs: skipper
-    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    if: false # msft-preview doesn't have these runners
     strategy:
       fail-fast: false
       matrix:

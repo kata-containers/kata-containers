@@ -4,3 +4,6 @@ metadata:
   namespace: default
   uid: nydus-sandbox-uid
 log_directory: /tmp
+linux:
+  resources:
+    memory_limit_in_bytes: 268435456 # 256Mi

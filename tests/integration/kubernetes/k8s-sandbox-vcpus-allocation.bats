@@ -12,8 +12,9 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	setup_common || die "setup_common failed"
 
-	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
-	expected_vcpus=( 1 1 2 )
+	# msft-preview: default_vcpus = 0 + no limits is expected to fail if not using static resource management
+	pods=( "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
+	expected_vcpus=( 1 2 )
 
 	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
 	set_node "$yaml_file" "$node"
@@ -35,7 +36,8 @@ setup() {
 	kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout=$timeout pod --all
 
 	# Check the pods
-	for i in {0..2}; do
+	# msft-preview: default_vcpus = 0 + no limits is expected to fail if not using static resource management
+	for i in {0..1}; do
 		pod="${pods[$i]}"
 		bats_unbuffered_info "Getting log for pod: ${pod}"
 
