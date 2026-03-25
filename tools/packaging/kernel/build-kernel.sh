@@ -708,8 +708,8 @@ main() {
 		build_type="dragonball-experimental"
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
-			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
+			if [[ ${kernel_major_version} != "6.18" ]]; then
+				info "dragonball-experimental kernel patches are only tested on 6.18.x kernel now, other kernel version may cause confliction"
 			fi
 		fi
 	fi
