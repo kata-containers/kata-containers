@@ -345,12 +345,12 @@
           "driver_options": [
             "encryption_key=ephemeral"
           ],
-          "fs_group": null,
+          "fs_group": {
+            "group_id": 1000
+          },
           "fstype": "ext4",
           "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [
-            "fsgid=1000"
-          ],
+          "options": [],
           "source": "00/00",
           "shared": true
         }
