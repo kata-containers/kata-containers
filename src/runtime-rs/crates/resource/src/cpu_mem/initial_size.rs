@@ -144,19 +144,24 @@ impl InitialSizeManager {
             info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
         }
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
-        if self.resource.mem_mb > 0 {
-            // since the memory overhead introduced by kata-agent and system components
-            // will really affect the amount of memory the user can use, so we choose to
-            // plus the default_memory here, instead of overriding it.
-            // (if we override the default_memory here, and user apllications still
-            // use memory as they orignally expected, it would be easy to OOM.)
-            hv.memory_info.default_memory += self.resource.mem_mb;
+        if self.resource.mem_mb > hv.memory_info.default_memory {
+            // CRI sandbox-memory already includes K8s pod overhead, which is meant to cover
+            // the VM base cost (kernel + agent) that default_memory represents. Taking the
+            // max avoids double-counting both values as independent overhead.
+            hv.memory_info.default_memory = self.resource.mem_mb;
         }
         Ok(())
     }
 
     pub fn get_orig_toml_default_mem(&self) -> u32 {
         self.resource.orig_toml_default_mem
+    }
+
+    /// MiB from CRI / OCI sizing (`io.kubernetes.cri.sandbox-memory` or equivalent):
+    /// sum of container memory limits plus Kubernetes pod overhead.
+    /// Used so guest resize targets stay aligned with [`InitialSizeManager::setup_config`].
+    pub fn get_sandbox_pod_mem_mib(&self) -> u32 {
+        self.resource.mem_mb
     }
 }
 
