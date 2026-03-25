@@ -272,8 +272,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_CACHE_SIZE: &str =
 /// A sandbox annotation to pass options to virtiofsd daemon.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
-/// A sandbox annotation to specify as the msize for 9p shares.
-pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
 /// The initdata annotation passed in when CVM launchs
 pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
     "io.katacontainers.config.hypervisor.cc_init_data";
@@ -975,14 +973,6 @@ impl Annotation {
                             hv.shared_fs.virtio_fs_extra_args.push(arg.to_string());
                         }
                     }
-                    KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P => match self.get_value::<u32>(key) {
-                        Ok(v) => {
-                            hv.shared_fs.msize_9p = v.unwrap_or_default();
-                        }
-                        Err(_e) => {
-                            return Err(u32_err);
-                        }
-                    },
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES => {
                         match self.get_value::<usize>(key) {
                             Ok(v) => {
