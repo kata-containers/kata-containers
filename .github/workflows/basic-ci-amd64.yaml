@@ -25,10 +25,9 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['active']
-        vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
-    # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
-    if: false
-    runs-on: ubuntu-22.04
+        # vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
+        vmm: ['dragonball', 'qemu-runtime-rs']
+    runs-on: ubuntu-24.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}

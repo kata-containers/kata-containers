@@ -61,9 +61,23 @@ function install_dependencies() {
 		"install_${dep[0]}" "${dep[1]}"
 	done
 
-	# Clone containerd as we'll need to build it in order to run the tests
-	# base_version: The version to be intalled in the ${major}.${minor} format
-	clone_cri_containerd $(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")
+	# Clone containerd as we'll need to build it in order to run the tests.
+	# TODO: revert to upstream once https://github.com/containerd/containerd/pull/XXXXX
+	# (fix for getRuncOptions() failing for non-runc runtimes like Kata) is merged and
+	# released.
+	local containerd_fork="fidencio/containerd"
+	local containerd_branch="topic/fix-runc-options-type-mismatch-for-non-runc-runtimes"
+	info "Cloning containerd from fork ${containerd_fork}@${containerd_branch} (temporary, pending upstream fix)"
+	rm -rf containerd
+	git clone -b "${containerd_branch}" "https://github.com/${containerd_fork}"
+
+	# `make cri-integration` uses the cloned tree's `bin/containerd`, but later
+	# Kata-specific tests restart the systemd service and thus use
+	# `/usr/local/bin/containerd`. Install the same patched daemon there so both
+	# phases exercise the same containerd build.
+	info "Building and installing the patched containerd daemon for systemd restarts"
+	make -C containerd bin/containerd
+	sudo install -m 0755 containerd/bin/containerd /usr/local/bin/containerd
 }
 
 function run() {
