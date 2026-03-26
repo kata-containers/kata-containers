@@ -88,6 +88,8 @@ pub async fn update_existing_runtimeclasses_for_nfd(config: &Config) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use crate::config::NYDUS_FOR_KATA_TEE;
+
     #[test]
     fn test_runtime_class_name_without_suffix() {
         // Test runtime class name without MULTI_INSTALL_SUFFIX
@@ -144,24 +146,24 @@ mod tests {
 
     #[test]
     fn test_snapshotter_name_with_suffix() {
-        // Test snapshotter name adjustment with MULTI_INSTALL_SUFFIX
+        // Test that the nydus snapshotter produces the nydus-for-kata-tee containerd plugin
+        // name, with the suffix appended when MULTI_INSTALL_SUFFIX is set.
         let suffix = Some("dev".to_string());
-        let snapshotter = "nydus";
 
         if let Some(s) = suffix {
-            let adjusted = format!("{}-{}", snapshotter, s);
-            assert_eq!(adjusted, "nydus-dev");
+            let adjusted = format!("{NYDUS_FOR_KATA_TEE}-{}", s);
+            assert_eq!(adjusted, format!("{NYDUS_FOR_KATA_TEE}-dev"));
         }
     }
 
     #[test]
     fn test_nydus_snapshotter_systemd_service_with_suffix() {
-        // Test nydus-snapshotter systemd service name with suffix
+        // Test nydus-for-kata-tee systemd service name with suffix
         let suffix = Some("test".to_string());
 
         if let Some(s) = suffix {
-            let service_name = format!("nydus-snapshotter-{}", s);
-            assert_eq!(service_name, "nydus-snapshotter-test");
+            let service_name = format!("{NYDUS_FOR_KATA_TEE}-{}", s);
+            assert_eq!(service_name, format!("{NYDUS_FOR_KATA_TEE}-test"));
         }
     }
 }
