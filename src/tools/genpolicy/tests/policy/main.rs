@@ -118,6 +118,7 @@ mod tests {
             ),
             silent_unsupported_fields: false,
             use_cache: false,
+            use_local_image: false,
             version: false,
             yaml_file: workdir.join("pod.yaml").to_str().map(|s| s.to_string()),
             initdata: kata_types::initdata::InitData::new("sha256", "0.1.0"),

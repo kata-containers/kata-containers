@@ -51,8 +51,17 @@ impl Container {
         let image_str = image.to_string();
         let image_ref: Reference = image_str.parse().unwrap();
 
-        info!("Pulling image: {:?}", image_ref);
-        pull_image(&image_ref, k8_cri_image_client.clone()).await?;
+        if config.use_local_image
+            && is_image_present(&image_ref, k8_cri_image_client.clone()).await?
+        {
+            info!(
+                "Image {:?} found locally, skipping registry pull",
+                image_ref
+            );
+        } else {
+            info!("Pulling image: {:?}", image_ref);
+            pull_image(&image_ref, k8_cri_image_client.clone()).await?;
+        }
 
         let image_ref_str = &image_ref.to_string();
         let manifest = get_image_manifest(image_ref_str, &ctrd_client).await?;
@@ -220,6 +229,23 @@ pub async fn pull_image(
     client.pull_image(req).await?;
 
     Ok(())
+}
+
+/// Returns true if the image is already available in the local containerd store.
+pub async fn is_image_present(
+    image_ref: &Reference,
+    mut client: ImageServiceClient<tonic::transport::Channel>,
+) -> Result<bool> {
+    let req = k8s_cri::v1::ImageStatusRequest {
+        image: Some(k8s_cri::v1::ImageSpec {
+            image: image_ref.to_string(),
+            annotations: HashMap::new(),
+        }),
+        verbose: false,
+    };
+
+    let resp = client.image_status(req).await?;
+    Ok(resp.into_inner().image.is_some())
 }
 
 pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {

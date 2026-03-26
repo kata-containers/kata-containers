@@ -109,6 +109,14 @@ struct CommandLineOptions {
 
     #[clap(long, help = "Path to the initdata TOML file", require_equals = true)]
     initdata_path: Option<String>,
+
+    #[clap(
+        long,
+        help = "If specified, check whether the container image is already present locally before pulling from the registry. \
+                When the image is found locally the registry pull is skipped. \
+                This option only takes effect when --containerd-socket-path is also set."
+    )]
+    use_local_image: bool,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -131,6 +139,7 @@ pub struct Config {
     pub layers_cache: layers_cache::ImageLayersCache,
     pub version: bool,
     pub initdata: kata_types::initdata::InitData,
+    pub use_local_image: bool,
 }
 
 impl Config {
@@ -182,6 +191,7 @@ impl Config {
             layers_cache: layers_cache::ImageLayersCache::new(&layers_cache_file_path),
             version: args.version,
             initdata,
+            use_local_image: args.use_local_image,
         }
     }
 }
