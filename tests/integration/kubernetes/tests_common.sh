@@ -37,6 +37,7 @@ K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+GENPOLICY_USE_LOCAL_IMAGE="${GENPOLICY_USE_LOCAL_IMAGE:-}"
 GENPOLICY_BINARY="${GENPOLICY_BINARY:-"/opt/kata/bin/genpolicy"}"
 GENPOLICY_SETTINGS_DIR="${GENPOLICY_SETTINGS_DIR:-"/opt/kata/share/defaults/kata-containers"}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
@@ -242,6 +243,9 @@ auto_generate_policy_no_added_flags() {
 
 	if [[ "${GENPOLICY_PULL_METHOD}" == "containerd" ]]; then
 		genpolicy_command+=" -d"
+		if [[ "${GENPOLICY_USE_LOCAL_IMAGE}" == "yes" ]]; then
+			genpolicy_command+=" --use-local-image"
+		fi
 	fi
 
 	genpolicy_command+=" ${additional_flags}"

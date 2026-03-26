@@ -108,6 +108,11 @@ fi
 # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
 setup_genpolicy_registry_auth
 
+# NVIDIA test environments have container images pre-pulled onto the node.
+# Skip the registry pull during policy generation to avoid redundant network
+# traffic and potential authentication failures for large model images.
+export GENPOLICY_USE_LOCAL_IMAGE="${GENPOLICY_USE_LOCAL_IMAGE:-yes}"
+
 # Use common bats test runner with proper reporting
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
 run_bats_tests "${kubernetes_dir}" K8S_TEST_NV
