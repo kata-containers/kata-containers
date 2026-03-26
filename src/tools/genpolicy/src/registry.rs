@@ -672,22 +672,26 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
         .strip_suffix('/')
         .unwrap_or_else(|| reference.resolve_registry());
 
+    let docker_config = std::env::var("DOCKER_CONFIG").unwrap_or_else(|_| "<unset>".to_string());
+    info!("build_auth: DOCKER_CONFIG={}", docker_config);
+    info!("build_auth: looking up credentials for server={}", server);
+
     match docker_credential::get_credential(server) {
         Ok(DockerCredential::UsernamePassword(username, password)) => {
-            debug!("build_auth: Found docker credentials");
+            info!("build_auth: Found docker credentials for server={}", server);
             return RegistryAuth::Basic(username, password);
         }
         Ok(DockerCredential::IdentityToken(_)) => {
             warn!("build_auth: Cannot use contents of docker config, identity token not supported. Using anonymous access.");
         }
         Err(CredentialRetrievalError::ConfigNotFound) => {
-            debug!("build_auth: Docker config not found - using anonymous access.");
+            info!("build_auth: Docker config not found - using anonymous access. DOCKER_CONFIG={}", docker_config);
         }
         Err(CredentialRetrievalError::NoCredentialConfigured) => {
-            debug!("build_auth: Docker credentials not configured - using anonymous access.");
+            info!("build_auth: Docker credentials not configured for server={} - using anonymous access.", server);
         }
         Err(CredentialRetrievalError::ConfigReadError) => {
-            debug!("build_auth: Cannot read docker credentials - using anonymous access.");
+            info!("build_auth: Cannot read docker credentials - using anonymous access. DOCKER_CONFIG={}", docker_config);
         }
         Err(CredentialRetrievalError::HelperFailure {
             helper: _,
