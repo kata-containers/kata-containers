@@ -13,6 +13,8 @@ use crate::volume;
 
 use log::debug;
 use protocols::agent;
+use protocols::types::FSGroupChangePolicy;
+use protobuf::EnumOrUnknown;
 use std::ffi::OsString;
 use std::path::Path;
 use std::str;
@@ -114,10 +116,12 @@ pub fn get_mount_and_storage(
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
-        let volume = match emptyDir.medium.as_deref() {
-            Some("Memory") => &settings_volumes.emptyDir_memory,
-            _ if settings.cluster_config.encrypted_emptydir => &settings_volumes.emptyDir_encrypted,
-            _ => &settings_volumes.emptyDir,
+        let (volume, block_encrypted_emptydir) = match emptyDir.medium.as_deref() {
+            Some("Memory") => (&settings_volumes.emptyDir_memory, false),
+            _ if settings.cluster_config.encrypted_emptydir => {
+                (&settings_volumes.emptyDir_encrypted, true)
+            }
+            _ => (&settings_volumes.emptyDir, false),
         };
 
         get_empty_dir_mount_and_storage(
@@ -127,6 +131,7 @@ pub fn get_mount_and_storage(
             yaml_mount,
             volume,
             pod_security_context,
+            block_encrypted_emptydir,
         );
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
@@ -150,18 +155,41 @@ fn get_empty_dir_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
     settings_empty_dir: &settings::EmptyDirVolume,
     pod_security_context: &Option<pod::PodSecurityContext>,
+    block_encrypted_emptydir: bool,
 ) {
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
     if yaml_mount.subPathExpr.is_none() {
         let mut options = settings_empty_dir.options.clone();
-        if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
-            // This matches the runtime behavior of only setting the fsgid if the mountpoint GID is not 0.
-            // https://github.com/kata-containers/kata-containers/blob/b69da5f3ba8385c5833b31db41a846a203812675/src/runtime/virtcontainers/kata_agent.go#L1602-L1607
-            if gid != 0 {
-                options.push(format!("fsgid={gid}"));
+        // Pod fsGroup in policy must mirror how the shim encodes it on Storage:
+        // - Block-encrypted host emptyDirs become virtio-blk/scsi volumes; the runtime sets
+        //   Storage.fs_group from mount metadata (handleDeviceBlockVolume in kata_agent.go).
+        // - Shared-fs / guest-local emptyDirs use Storage.options: the runtime appends
+        //   fsgid=<host GID> when the volume is not root-owned (handleEphemeralStorage and
+        //   handleLocalStorage in kata_agent.go). Genpolicy uses pod fsGroup when non-zero as
+        //   the usual kubelet-applied GID for that stat.
+        let fs_group = if block_encrypted_emptydir {
+            if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
+                if gid > 0 && gid <= u32::MAX as i64 {
+                    protobuf::MessageField::some(agent::FSGroup {
+                        group_id: gid as u32,
+                        group_change_policy: EnumOrUnknown::new(FSGroupChangePolicy::Always),
+                        special_fields: protobuf::SpecialFields::new(),
+                    })
+                } else {
+                    protobuf::MessageField::none()
+                }
+            } else {
+                protobuf::MessageField::none()
             }
-        }
+        } else {
+            if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
+                if gid != 0 {
+                    options.push(format!("fsgid={gid}"));
+                }
+            }
+            protobuf::MessageField::none()
+        };
         storages.push(agent::Storage {
             driver: settings_empty_dir.driver.clone(),
             driver_options: settings_empty_dir.driver_options.clone(),
@@ -173,7 +201,7 @@ fn get_empty_dir_mount_and_storage(
             } else {
                 settings_empty_dir.mount_point.clone()
             },
-            fs_group: protobuf::MessageField::none(),
+            fs_group,
             shared: settings_empty_dir.shared,
             special_fields: ::protobuf::SpecialFields::new(),
         });
