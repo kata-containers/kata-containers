@@ -37,6 +37,23 @@ oc adm policy add-scc-to-group anyuid system:authenticated system:serviceaccount
 oc label --overwrite ns default pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline
 ```
 
+The e2e suite uses a combination of built-in (origin) and external tests. External
+tests include Kubernetes upstream conformance tests from the `hyperkube` image.
+
+To enable external tests, export a variable matching your cluster version:
+
+```bash
+export EXTENSIONS_PAYLOAD_OVERRIDE=$(oc get clusterversion version -o jsonpath='{.status.desired.image}')
+# Optional: limit to hyperkube only (k8s conformance tests, avoids downloading all operator extensions)
+export EXTENSION_BINARY_OVERRIDE_INCLUDE_TAGS="hyperkube"
+```
+
+Alternatively, skip external tests entirely (only OpenShift-specific tests from origin):
+
+```bash
+export OPENSHIFT_SKIP_EXTERNAL_TESTS=1
+```
+
 Now you should be ready to run the openshift-tests. Our CI only uses a subset
 of tests, to get the current ``TEST_SKIPS`` see
 [the pipeline config](https://github.com/openshift/release/tree/master/ci-operator/config/kata-containers/kata-containers).
