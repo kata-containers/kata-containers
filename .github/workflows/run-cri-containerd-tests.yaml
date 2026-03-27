@@ -31,7 +31,7 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-cri-tests
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-cri-tests-${{ toJSON(inputs) }}
   cancel-in-progress: true
 
 permissions: {}
