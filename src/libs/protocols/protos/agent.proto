@@ -493,7 +493,7 @@ message SharedMount {
 // could have been defined through the Mount list of the OCI specification.
 message Storage {
 	// Driver is used to define the way the storage is passed through the
-	// virtual machine. It can be "9p", "blk", or something else, but for
+	// virtual machine. It can be "blk", or something else, but for
 	// all cases, this will define if some extra steps are required before
 	// this storage gets mounted into the container.
 	string driver = 1;
@@ -509,7 +509,7 @@ message Storage {
 	string source = 3;
 	// Fstype represents the filesystem that needs to be used to mount the
 	// storage inside the VM. For instance, it could be "xfs" for block
-	// device, "9p" for shared filesystem, or "tmpfs" for shared /dev/shm.
+	// device, or "tmpfs" for shared /dev/shm.
 	string fstype = 4;
 	// Options describes the additional options that might be needed to
 	// mount properly the storage filesystem.

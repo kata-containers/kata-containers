@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
-use kata_types::device::{DRIVER_9P_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_VIRTIOFS_TYPE};
+use kata_types::device::{DRIVER_OVERLAYFS_TYPE, DRIVER_VIRTIOFS_TYPE};
 use kata_types::mount::{StorageDevice, KATA_VOLUME_OVERLAYFS_CREATE_DIR};
 use protocols::agent::Storage;
 use tracing::instrument;
@@ -64,27 +64,6 @@ impl StorageHandler for OverlayfsHandler {
                 fs::create_dir_all(dir).context("Failed to create directory")?;
             }
         }
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
-    }
-}
-
-#[derive(Debug)]
-pub struct Virtio9pHandler {}
-
-#[async_trait::async_trait]
-impl StorageHandler for Virtio9pHandler {
-    #[instrument]
-    fn driver_types(&self) -> &[&str] {
-        &[DRIVER_9P_TYPE]
-    }
-
-    #[instrument]
-    async fn create_device(
-        &self,
-        storage: Storage,
-        ctx: &mut StorageContext,
-    ) -> Result<Arc<dyn StorageDevice>> {
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
