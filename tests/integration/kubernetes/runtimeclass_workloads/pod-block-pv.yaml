@@ -15,6 +15,9 @@ spec:
       securityContext:
         capabilities:
           add: ["SYS_ADMIN"]
+      resources:
+        limits:
+          memory: 2Gi
   volumes:
     - name: my-volume
       persistentVolumeClaim:

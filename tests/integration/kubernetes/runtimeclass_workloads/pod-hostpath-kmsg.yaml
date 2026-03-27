@@ -21,3 +21,6 @@ spec:
     volumeMounts:
     - name: dev-kmsg
       mountPath: /dev/kmsg
+    resources:
+      limits:
+        memory: 2Gi

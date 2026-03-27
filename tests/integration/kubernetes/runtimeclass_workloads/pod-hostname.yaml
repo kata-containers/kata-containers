@@ -16,3 +16,6 @@ spec:
     name: pod-hostname-c01
     command: ["sh"]
     args: ["-c", "hostname"]
+    resources:
+      limits:
+        memory: 2Gi

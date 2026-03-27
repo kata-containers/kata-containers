@@ -13,3 +13,6 @@ spec:
   - name: default-cpu-demo-ctr
     image: quay.io/prometheus/busybox:latest
     command: ["tail", "-f", "/dev/null"]
+    resources:
+      limits:
+        memory: 2Gi

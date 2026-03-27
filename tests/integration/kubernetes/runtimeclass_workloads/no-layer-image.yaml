@@ -7,7 +7,9 @@ spec:
   containers:
   - name: no-layer-image
     image: ghcr.io/kata-containers/no-layer-image:latest
-    resources: {}
+    resources:
+      limits:
+        memory: 2Gi
     command:
     - sleep
     - infinity

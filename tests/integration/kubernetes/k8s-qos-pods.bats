@@ -56,6 +56,9 @@ setup() {
 	pod_name="besteffort-test"
 	yaml_file="${pod_config_dir}/pod-besteffort.yaml"
 
+	# Pod uses hypervisor default_memory (BestEffort cannot use K8s memory limits).
+	# CI allowlists that key via HELM_ALLOWED_HYPERVISOR_ANNOTATIONS (see gha-run.sh deploy_kata).
+
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"

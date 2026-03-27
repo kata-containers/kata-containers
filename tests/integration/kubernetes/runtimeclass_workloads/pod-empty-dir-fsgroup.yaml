@@ -27,6 +27,9 @@ spec:
     volumeMounts:
       - name: emptydir-volume
         mountPath: /test-volume
+    resources:
+      limits:
+        memory: 2Gi
   - name: mounttest-container-2
     image: ${agnhost_image}
     command:
@@ -40,6 +43,9 @@ spec:
     volumeMounts:
       - name: mem-emptydir-volume
         mountPath: /test-volume-2
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: emptydir-volume
     emptyDir: {}

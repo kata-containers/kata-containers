@@ -21,6 +21,9 @@ spec:
       mountPath: /tmp
     command: ["/bin/sh"]
     args: ["-c", "tail -f /dev/null"]
+    resources:
+      limits:
+        memory: 2Gi
   - name: busybox-second-container
     image: quay.io/prometheus/busybox:latest
     volumeMounts:
@@ -28,3 +31,6 @@ spec:
       mountPath: /tmp
     command: ["/bin/sh"]
     args: ["-c", "echo Hello from the busybox-second-container > /tmp/pod-data && tail -f /dev/null"]
+    resources:
+      limits:
+        memory: 2Gi

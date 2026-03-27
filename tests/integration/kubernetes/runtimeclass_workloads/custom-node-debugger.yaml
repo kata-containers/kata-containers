@@ -30,6 +30,9 @@ spec:
     volumeMounts:
     - name: host-root
       mountPath: /host
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: host-root
     hostPath:

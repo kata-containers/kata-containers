@@ -23,3 +23,6 @@ spec:
         image: ${NGINX_IMAGE}
         ports:
         - containerPort: 80
+        resources:
+          limits:
+            memory: 2Gi

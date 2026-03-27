@@ -19,3 +19,6 @@ spec:
     securityContext:
       seccompProfile:
         type: RuntimeDefault
+    resources:
+      limits:
+        memory: 2Gi

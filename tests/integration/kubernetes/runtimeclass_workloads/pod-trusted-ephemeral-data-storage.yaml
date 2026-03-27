@@ -27,6 +27,9 @@ spec:
       mountPath: /mnt/temp-encrypted
     - name: guest-dev
       mountPath: /dev
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: temp-encrypted
     emptyDir:

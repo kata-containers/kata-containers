@@ -24,5 +24,8 @@ spec:
               value: val1
           securityContext:
             readOnlyRootFilesystem: true
+          resources:
+            limits:
+              memory: 2Gi
       restartPolicy: Never
   backoffLimit: 4

@@ -398,6 +398,37 @@ mod tests {
         assert!(anno.update_config_by_annotation(&mut config).is_err());
     }
 
+    /// Plain decimals are MiB, matching the Go runtime (`strconv.ParseUint`), not byte_unit bytes.
+    #[test]
+    fn test_default_memory_plain_decimal_is_mib() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            "2048".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        assert_eq!(
+            config
+                .hypervisor
+                .get("qemu")
+                .unwrap()
+                .memory_info
+                .default_memory,
+            2048
+        );
+    }
+
     #[test]
     fn test_fail_to_change_default_vcpus_becuase_more_than_max_cpu_size() {
         let content = include_str!("texture/configuration-anno-0.toml");

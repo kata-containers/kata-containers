@@ -18,6 +18,9 @@ spec:
           name: empty-config
         - mountPath: /optional-missing-config
           name: optional-missing-config
+      resources:
+        limits:
+          memory: 2Gi
   volumes:
     - name: empty-config
       configMap:

@@ -16,6 +16,9 @@ spec:
     volumeMounts:
       - mountPath: /volume
         name: volume
+    resources:
+      limits:
+        memory: 2Gi
   containers:
   - name: last
     image: quay.io/prometheus/busybox:latest
@@ -23,6 +26,9 @@ spec:
     volumeMounts:
     - mountPath: /volume
       name: volume
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: volume
     emptyDir: {}

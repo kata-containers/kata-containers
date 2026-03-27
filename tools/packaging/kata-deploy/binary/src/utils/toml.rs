@@ -980,8 +980,10 @@ kernel_params = "console=hvc0"
                     .replace("@CLHVALIDHYPERVISORPATHS@", "[]")
                     .replace("@KERNELPARAMS@", "")
                     .replace("@DEFVCPUS@", "1")
+                    .replace("@DEFVCPUS_CLH_RUNTIME_RS@", "0.25")
                     .replace("@DEFMAXVCPUS@", "0")
                     .replace("@DEFMEMSZ@", "2048")
+                    .replace("@DEFMEMSZ_CLH_RUNTIME_RS@", "130")
                     .replace("@DEFBRIDGES@", "1")
                     .replace("@DEFNETWORKMODEL_CLH@", "tcfilter")
                     .replace("@DEFDISABLEGUESTSECCOMP@", "true")
@@ -1062,9 +1064,9 @@ kernel_params = "console=hvc0"
                     )
                     .replace("@DEFROOTFSTYPE@", "\"ext4\"")
                     .replace("@KERNELPARAMS_DB@", "")
-                    .replace("@DEFVCPUS@", "1")
+                    .replace("@DEFVCPUS_DB_RUNTIME_RS@", "0.25")
                     .replace("@DEFMAXVCPUS_DB@", "0")
-                    .replace("@DEFMEMSZ@", "2048")
+                    .replace("@DEFMEMSZ_DB_RUNTIME_RS@", "130")
                     .replace("@DEFMAXMEMSZ@", "2048")
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
                     .replace("@DBVALIDHYPERVISORPATHS@", "[]")
@@ -1244,7 +1246,9 @@ kernel_params = "console=hvc0"
                     .replace("@DEFENABLEANNOTATIONS@", "[]")
                     .replace("@CLHVALIDHYPERVISORPATHS@", "[]")
                     .replace("@KERNELPARAMS@", "")
-                    .replace("@DEFVCPUS@", "1");
+                    .replace("@DEFVCPUS@", "1")
+                    .replace("@DEFVCPUS_CLH_RUNTIME_RS@", "0.25")
+                    .replace("@DEFMEMSZ_CLH_RUNTIME_RS@", "130");
 
                 // Replace any remaining @...@ placeholders with 0 (for numeric fields)
                 let rust_content = regex::Regex::new(r"=\s*@[A-Z_0-9]+@")

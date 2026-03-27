@@ -25,3 +25,6 @@ spec:
         - /tmp/healthy
       initialDelaySeconds: 3
       periodSeconds: 3
+    resources:
+      limits:
+        memory: 2Gi

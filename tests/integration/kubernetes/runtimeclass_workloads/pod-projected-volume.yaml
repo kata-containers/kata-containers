@@ -17,6 +17,9 @@ spec:
     - name: all-in-one
       mountPath: "/projected-volume"
       readOnly: true
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: all-in-one
     projected:

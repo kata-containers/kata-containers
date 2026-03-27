@@ -23,6 +23,9 @@ pub struct MemResource {
     /// Default memory
     pub(crate) orig_toml_default_mem: u32,
 
+    /// CRI sandbox memory (containers + K8s pod overhead) in MiB when set at sandbox create.
+    sandbox_pod_mem_mib: u32,
+
     /// MemResource of each container
     pub(crate) container_mem_resources: Arc<RwLock<HashMap<String, LinuxResources>>>,
 }
@@ -32,6 +35,7 @@ impl MemResource {
         Ok(Self {
             container_mem_resources: Arc::new(RwLock::new(HashMap::new())),
             orig_toml_default_mem: init_size_manager.get_orig_toml_default_mem(),
+            sandbox_pod_mem_mib: init_size_manager.get_sandbox_pod_mem_mib(),
         })
     }
 
@@ -58,11 +62,19 @@ impl MemResource {
     }
 
     pub(crate) async fn get_current_mb(&self) -> Result<u32> {
-        let mut mem_sb_mb = self
+        let container_mib = self
             .total_mems()
             .await
             .context("failed to calculate total memory requirement for containers")?;
-        mem_sb_mb += self.orig_toml_default_mem;
+        let mut mem_sb_mb = container_mib + self.orig_toml_default_mem;
+
+        // CRI sandbox-memory (containers + K8s pod overhead) is the floor: pod overhead
+        // covers the VM base cost, so we must not resize below the CRI-requested total.
+        // `orig_toml_default_mem` is not added here because pod overhead already accounts
+        // for the VM base, matching the max() in setup_config.
+        if self.sandbox_pod_mem_mib > 0 {
+            mem_sb_mb = std::cmp::max(mem_sb_mb, self.sandbox_pod_mem_mib);
+        }
 
         Ok(mem_sb_mb)
     }
@@ -126,5 +138,56 @@ impl MemResource {
             .context("resize memory")?;
 
         Ok(new_memory)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oci_spec::runtime::{LinuxMemoryBuilder, LinuxResourcesBuilder};
+
+    const MIB: i64 = 1024 * 1024;
+
+    fn linux_res_limit(mem_mib: i64) -> LinuxResources {
+        LinuxResourcesBuilder::default()
+            .memory(
+                LinuxMemoryBuilder::default()
+                    .limit(mem_mib * MIB)
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn get_current_mb_includes_k8s_sandbox_pod_memory_floor() {
+        let container_mem_resources = Arc::new(RwLock::new(HashMap::new()));
+        {
+            let mut map = container_mem_resources.write().await;
+            map.insert("c1".into(), linux_res_limit(400));
+            map.insert("c2".into(), linux_res_limit(500));
+        }
+
+        // With CRI sandbox: containers=900, orig_toml=130 → 1030; floor=sandbox=1060.
+        // Pod overhead is already in sandbox_pod_mem_mib, so we don't add orig_toml again.
+        let mem_res = MemResource {
+            orig_toml_default_mem: 130,
+            sandbox_pod_mem_mib: 1060,
+            container_mem_resources: container_mem_resources.clone(),
+        };
+        assert_eq!(
+            mem_res.get_current_mb().await.unwrap(),
+            1060,
+            "resize floor is the CRI sandbox total; pod overhead covers VM base, no double-count"
+        );
+
+        // Without CRI sizing (docker run style): just container_sum + orig_toml.
+        let mem_no_k8s = MemResource {
+            orig_toml_default_mem: 130,
+            sandbox_pod_mem_mib: 0,
+            container_mem_resources,
+        };
+        assert_eq!(mem_no_k8s.get_current_mb().await.unwrap(), 1030);
     }
 }

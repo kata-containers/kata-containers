@@ -21,3 +21,6 @@ spec:
       preStop:
         exec:
           command: ["/usr/sbin/nginx","-s","quit"]
+    resources:
+      limits:
+        memory: 2Gi

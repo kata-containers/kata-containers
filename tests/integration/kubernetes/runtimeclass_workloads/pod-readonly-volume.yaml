@@ -24,3 +24,6 @@ spec:
       readOnly: true
     command: ["/bin/sh"]
     args: ["-c", "tail -f /dev/null"]
+    resources:
+      limits:
+        memory: 2Gi

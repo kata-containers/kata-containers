@@ -48,6 +48,9 @@ spec:
     - name: ssh-config-map
       mountPath: /root/.ssh/authorized_keys
       subPath: authorized_keys
+    resources:
+      limits:
+        memory: 2Gi
   # These containers are run during pod initialization
   initContainers:
   - name: install
@@ -56,3 +59,6 @@ spec:
     volumeMounts:
     - name: ssh-dir
       mountPath: /root/.ssh
+    resources:
+      limits:
+        memory: 2Gi
