@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	deviceUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
@@ -1358,9 +1359,13 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 		class := deviceUtils.GetPCIDeviceProperty(bdf, deviceUtils.PCISysFsDevicesClass)
 		_, isKnownCDIDevice = cdiKindForDevice(vendorID, class)
 	} else {
-		// Legacy VFIO group (/dev/vfio/<GROUP>): may contain multiple devices
+		// Legacy VFIO group (/dev/vfio/<GROUP>) and no-IOMMU VFIO group
+		// (/dev/vfio/noiommu-<GROUP>): may contain multiple devices.
+		// The kernel names the sysfs directory by the bare group number,
+		// so strip the "noiommu-" prefix before constructing the path.
 		vfioGroup := filepath.Base(devPath)
-		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+		sysfsGroup := strings.TrimPrefix(vfioGroup, pkgDevice.VfioNoIOMMUPrefix)
+		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, sysfsGroup, "devices")
 		deviceFiles, err := os.ReadDir(iommuDevicesPath)
 		if err != nil {
 			return err

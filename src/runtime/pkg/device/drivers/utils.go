@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 
+	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -255,7 +256,17 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 	vfioDevs := []*config.VFIODev{}
 
 	vfioGroup := filepath.Base(device.HostPath)
-	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+
+	// When enable_unsafe_noiommu_mode is active the kernel names the group
+	// device file /dev/vfio/noiommu-<N>, but the sysfs IOMMU group directory
+	// is still at /sys/kernel/iommu_groups/<N> (without the prefix).
+	noIOMMU := strings.HasPrefix(vfioGroup, pkgDevice.VfioNoIOMMUPrefix)
+	sysfsGroup := vfioGroup
+	if noIOMMU {
+		sysfsGroup = strings.TrimPrefix(vfioGroup, pkgDevice.VfioNoIOMMUPrefix)
+	}
+
+	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, sysfsGroup, "devices")
 
 	deviceFiles, err := os.ReadDir(iommuDevicesPath)
 	if err != nil {
@@ -303,6 +314,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				DeviceID: deviceID,
 				Port:     device.Port,
 				HostPath: device.HostPath,
+				NoIOMMU:  noIOMMU,
 			}
 
 		case config.VFIOAPDeviceMediatedType:
@@ -316,6 +328,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Type:      config.VFIOAPDeviceMediatedType,
 				APDevices: devices,
 				Port:      device.Port,
+				NoIOMMU:   noIOMMU,
 			}
 		default:
 			return nil, fmt.Errorf("Failed to append device: VFIO device type unrecognized")

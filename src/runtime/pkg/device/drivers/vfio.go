@@ -69,13 +69,22 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	// In the case of IOMMUFD the device.HostPath will look like
 	// /dev/vfio/devices/vfio0
 	// (1) Check if we have the new IOMMUFD or old container based VFIO
+	hostPathBase := filepath.Base(device.DeviceInfo.HostPath)
+	isNoIOMMU := strings.HasPrefix(hostPathBase, pkgDevice.VfioNoIOMMUPrefix)
 	if strings.HasPrefix(device.DeviceInfo.HostPath, pkgDevice.IommufdDevPath) {
+		// IOMMUFD does not support no-IOMMU mode; a path like
+		// /dev/vfio/noiommu-<GROUP> must not reach this branch, but
+		// guard defensively anyway.
+		if isNoIOMMU {
+			return fmt.Errorf("IOMMUFD cannot be used with no-IOMMU VFIO device %s", device.DeviceInfo.HostPath)
+		}
 		device.VfioDevs, err = GetDeviceFromVFIODev(*device.DeviceInfo)
 		if err != nil {
 			return err
 		}
 	} else {
-		// Once we have
+		// Legacy VFIO group path (/dev/vfio/<GROUP>) and no-IOMMU mode
+		// (/dev/vfio/noiommu-<GROUP>) both use the IOMMU-group code path.
 		device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)
 		if err != nil {
 			return err
