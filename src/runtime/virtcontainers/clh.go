@@ -976,6 +976,44 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	return err
 }
 
+// coldPlugVFIODevice appends a VFIO device to the VM configuration so that it
+// is present when the VM is created (before boot). Cloud Hypervisor's CreateVM
+// API accepts a list of devices that are attached at VM creation time, which
+// effectively provides cold-plug semantics — the guest sees the device on its
+// PCI bus from the very first enumeration.
+func (clh *cloudHypervisor) coldPlugVFIODevice(device *config.VFIODev) error {
+	switch device.Type {
+	case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+		// Supported PCI VFIO device types for Cloud Hypervisor.
+	default:
+		return fmt.Errorf("VFIO device %+v has unsupported type %v; only PCI VFIO devices are supported in Cloud Hypervisor", device, device.Type)
+	}
+	if strings.TrimSpace(device.SysfsDev) == "" {
+		return fmt.Errorf("VFIO device %q has empty or invalid SysfsDev path", device.ID)
+	}
+
+	clh.Logger().WithFields(log.Fields{
+		"device": device.ID,
+		"sysfs":  device.SysfsDev,
+		"bdf":    device.BDF,
+	}).Info("Cold-plugging VFIO device into VM config")
+
+	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
+	clhDevice.SetIommu(clh.config.IOMMU)
+	clhDevice.SetId(device.ID)
+
+	if clh.vmconfig.Devices != nil {
+		*clh.vmconfig.Devices = append(*clh.vmconfig.Devices, clhDevice)
+	} else {
+		clh.vmconfig.Devices = &[]chclient.DeviceConfig{clhDevice}
+	}
+
+	// Track the device ID so that it can be referenced later (e.g. for removal).
+	clh.devicesIds[device.ID] = device.ID
+
+	return nil
+}
+
 func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
@@ -1342,6 +1380,8 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
 		err = clh.addVolume(v)
+	case config.VFIODev:
+		err = clh.coldPlugVFIODevice(&v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
 		return fmt.Errorf("Not implemented support for %s", v)
