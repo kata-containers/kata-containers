@@ -36,7 +36,6 @@ concurrency:
 
 permissions: {}
 
-
 jobs:
   run-cri-containerd:
     name: run-cri-containerd-${{ inputs.arch }} (${{ inputs.containerd_version }}, ${{ inputs.vmm }})
