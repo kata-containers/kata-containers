@@ -58,7 +58,9 @@ jobs:
     permissions:
       contents: read
       id-token: write # Used for OIDC access to log into Azure
-    environment: ci
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
