@@ -16,6 +16,11 @@ use crate::k8s;
 pub const K3S_RKE2_CONTAINERD_V3_TMPL: &str = "/etc/containerd/config-v3.toml.tmpl";
 pub const K3S_RKE2_CONTAINERD_V2_TMPL: &str = "/etc/containerd/config.toml.tmpl";
 
+/// Name of the nydus-snapshotter instance deployed and managed by kata-deploy for TEE workloads.
+/// Used as the systemd service name, the containerd proxy plugin key, the runtime class
+/// snapshotter field, and the base name for the data directory and socket path on the host.
+pub const NYDUS_FOR_KATA_TEE: &str = "nydus-for-kata-tee";
+
 /// Resolves whether to use containerd config v3 (true) or v2 (false) for K3s/RKE2.
 /// 1. Tries config.toml (containerd config file): if it exists and contains "version = 3" or "version = 2", use that.
 /// 2. Else falls back to the node's containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1").

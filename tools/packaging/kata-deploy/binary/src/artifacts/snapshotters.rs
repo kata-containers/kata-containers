@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::{Config, NYDUS_FOR_KATA_TEE};
 use crate::runtime::containerd;
 use crate::utils;
 use crate::utils::toml as toml_utils;
@@ -49,17 +49,14 @@ pub async fn configure_nydus_snapshotter(
     configuration_file: &Path,
     pluginid: &str,
 ) -> Result<()> {
-    info!("Configuring nydus-snapshotter");
+    info!("Configuring {NYDUS_FOR_KATA_TEE}");
 
     let nydus = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("nydus-{suffix}"),
-        _ => "nydus".to_string(),
+        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
+        _ => NYDUS_FOR_KATA_TEE.to_string(),
     };
 
-    let containerd_nydus = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("nydus-snapshotter-{suffix}"),
-        _ => "nydus-snapshotter".to_string(),
-    };
+    let containerd_nydus = nydus.clone();
 
     toml_utils::set_toml_value(
         configuration_file,
@@ -118,8 +115,8 @@ pub async fn configure_snapshotter(
             configure_nydus_snapshotter(config, &configuration_file, pluginid).await?;
 
             let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-                Some(suffix) if !suffix.is_empty() => format!("nydus-snapshotter-{suffix}"),
-                _ => "nydus-snapshotter".to_string(),
+                Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
+                _ => NYDUS_FOR_KATA_TEE.to_string(),
             };
 
             utils::host_systemctl(&["restart", &nydus_snapshotter])?;
@@ -136,17 +133,17 @@ pub async fn configure_snapshotter(
 }
 
 pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
-    info!("Deploying nydus-snapshotter");
+    info!("Deploying {NYDUS_FOR_KATA_TEE}");
 
     let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("nydus-snapshotter-{suffix}"),
-        _ => "nydus-snapshotter".to_string(),
+        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
+        _ => NYDUS_FOR_KATA_TEE.to_string(),
     };
 
     // Stop the service if it is currently running so we can replace the binaries safely.
     let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]);
 
-    // The nydus data directory (/var/lib/nydus-snapshotter) is intentionally preserved
+    // The nydus data directory (/var/lib/nydus-for-kata-tee) is intentionally preserved
     // across reinstalls.  Removing it would create a split-brain state: the nydus backend
     // would start empty while containerd's BoltDB (meta.db) still holds snapshot records
     // from the previous run.  Any subsequent image pull then fails with:
@@ -184,7 +181,7 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
     config_content = config_content.replace(
         "@NYDUS_OVERLAYFS_PATH@",
         &format!(
-            "{}/nydus-snapshotter/nydus-overlayfs",
+            "{}/{NYDUS_FOR_KATA_TEE}/nydus-overlayfs",
             &config
                 .host_install_dir
                 .strip_prefix("/host")
@@ -196,7 +193,7 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
     service_content = service_content.replace(
         "@CONTAINERD_NYDUS_GRPC_BINARY@",
         &format!(
-            "{}/nydus-snapshotter/containerd-nydus-grpc",
+            "{}/{NYDUS_FOR_KATA_TEE}/containerd-nydus-grpc",
             &config
                 .host_install_dir
                 .strip_prefix("/host")
@@ -206,7 +203,7 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
     service_content = service_content.replace(
         "@CONFIG_GUEST_PULLING@",
         &format!(
-            "{}/nydus-snapshotter/config-guest-pulling.toml",
+            "{}/{NYDUS_FOR_KATA_TEE}/config-guest-pulling.toml",
             &config
                 .host_install_dir
                 .strip_prefix("/host")
@@ -214,7 +211,7 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
         ),
     );
 
-    fs::create_dir_all(format!("{}/nydus-snapshotter", config.host_install_dir))?;
+    fs::create_dir_all(format!("{}/{NYDUS_FOR_KATA_TEE}", config.host_install_dir))?;
 
     // Remove existing binaries before copying new ones.
     // This is crucial for atomic updates (same pattern as copy_artifacts in install.rs):
@@ -223,13 +220,13 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
     // - Running processes keep using the old inode until they exit
     // - New processes use the new file immediately
     // Without this, fs::copy would fail with ETXTBSY ("Text file busy") if the
-    // nydus-snapshotter service is still running from a previous installation.
+    // nydus-for-kata-tee service is still running from a previous installation.
     let grpc_binary = format!(
-        "{}/nydus-snapshotter/containerd-nydus-grpc",
+        "{}/{NYDUS_FOR_KATA_TEE}/containerd-nydus-grpc",
         config.host_install_dir
     );
     let overlayfs_binary = format!(
-        "{}/nydus-snapshotter/nydus-overlayfs",
+        "{}/{NYDUS_FOR_KATA_TEE}/nydus-overlayfs",
         config.host_install_dir
     );
     for binary in [&grpc_binary, &overlayfs_binary] {
@@ -251,7 +248,7 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
 
     fs::write(
         format!(
-            "{}/nydus-snapshotter/config-guest-pulling.toml",
+            "{}/{NYDUS_FOR_KATA_TEE}/config-guest-pulling.toml",
             config.host_install_dir
         ),
         config_content,
@@ -269,11 +266,11 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
 }
 
 pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
-    info!("Removing deployed nydus-snapshotter");
+    info!("Removing deployed {NYDUS_FOR_KATA_TEE}");
 
     let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("nydus-snapshotter-{suffix}"),
-        _ => "nydus-snapshotter".to_string(),
+        Some(suffix) if !suffix.is_empty() => format!("{NYDUS_FOR_KATA_TEE}-{suffix}"),
+        _ => NYDUS_FOR_KATA_TEE.to_string(),
     };
 
     utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")])?;
@@ -282,9 +279,9 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
         "/host/etc/systemd/system/{nydus_snapshotter}.service"
     ))
     .ok();
-    fs::remove_dir_all(format!("{}/nydus-snapshotter", config.host_install_dir)).ok();
+    fs::remove_dir_all(format!("{}/{NYDUS_FOR_KATA_TEE}", config.host_install_dir)).ok();
 
-    // The nydus data directory (/var/lib/nydus-snapshotter) is intentionally preserved.
+    // The nydus data directory (/var/lib/nydus-for-kata-tee) is intentionally preserved.
     // See install_nydus_snapshotter for the full explanation: meta.db and the nydus backend
     // must always agree, and the only way to guarantee that without complex, fragile cleanup
     // logic is to never remove the data directory.  After uninstall, containerd is

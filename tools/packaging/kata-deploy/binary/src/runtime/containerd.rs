@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{Config, ContainerdPaths, CustomRuntime};
+use crate::config::{Config, ContainerdPaths, CustomRuntime, NYDUS_FOR_KATA_TEE};
 use crate::k8s;
 use crate::utils;
 use crate::utils::toml as toml_utils;
@@ -195,8 +195,10 @@ pub async fn configure_containerd_runtime(
                     let value = parts[1];
                     let snapshotter_value = if value == "nydus" {
                         match config.multi_install_suffix.as_ref() {
-                            Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
-                            _ => format!("\"{value}\""),
+                            Some(suffix) if !suffix.is_empty() => {
+                                format!("\"{NYDUS_FOR_KATA_TEE}-{suffix}\"")
+                            }
+                            _ => format!("\"{NYDUS_FOR_KATA_TEE}\""),
                         }
                     } else {
                         format!("\"{value}\"")
@@ -262,8 +264,8 @@ pub async fn configure_custom_containerd_runtime(
     let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
         if s == "nydus" {
             match config.multi_install_suffix.as_ref() {
-                Some(suffix) if !suffix.is_empty() => format!("\"{s}-{suffix}\""),
-                _ => format!("\"{s}\""),
+                Some(suffix) if !suffix.is_empty() => format!("\"{NYDUS_FOR_KATA_TEE}-{suffix}\""),
+                _ => format!("\"{NYDUS_FOR_KATA_TEE}\""),
             }
         } else {
             format!("\"{s}\"")

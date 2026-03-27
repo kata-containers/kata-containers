@@ -790,23 +790,6 @@ function helm_helper() {
 		# Always unset first to clear any defaults from base file
 		yq -i ".snapshotter.setup = []" "${values_yaml}"
 
-		# For TDX and SNP shims, snapshotter.setup must ALWAYS be disabled in CI
-		# Check if any TDX/SNP shims are enabled
-		disable_snapshotter_setup=false
-		for shim in ${HELM_SHIMS}; do
-			case "${shim}" in
-				qemu-snp)
-					disable_snapshotter_setup=true
-					break
-					;;
-			esac
-		done
-
-		# Safety check: Fail if EXPERIMENTAL_SETUP_SNAPSHOTTER is set when using SNP/TDX shims
-		if [[ "${disable_snapshotter_setup}" == "true" ]] && [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
-			die "ERROR: HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER cannot be set when using SNP shims (qemu-snp). snapshotter.setup must always be disabled for these shims."
-		fi
-
 		if [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
 			# Convert space-separated or comma-separated list to YAML array
 			IFS=', ' read -ra snapshotter_list <<< "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}"

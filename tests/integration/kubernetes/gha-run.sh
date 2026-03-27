@@ -176,7 +176,7 @@ function deploy_kata() {
 
 	# Workaround to avoid modifying the workflow yaml files
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-nvidia-gpu-*)
+		qemu-tdx|qemu-snp|qemu-nvidia-gpu-*)
 			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 			SNAPSHOTTER="nydus"
 			EXPERIMENTAL_FORCE_GUEST_PULL=false
@@ -208,26 +208,14 @@ function deploy_kata() {
 		HOST_OS="${KATA_HOST_OS}"
 	fi
 
+	# nydus and erofs are always deployed by kata-deploy; set this unconditionally
+	# based on the snapshotter so that all architectures and hypervisors work
+	# without needing per-workflow USE_EXPERIMENTAL_SETUP_SNAPSHOTTER overrides.
 	EXPERIMENTAL_SETUP_SNAPSHOTTER=""
-	if [[ "${USE_EXPERIMENTAL_SETUP_SNAPSHOTTER:-false}" == "true" ]]; then
-		case "${SNAPSHOTTER}" in
-			nydus|erofs)
-				ARCH="$(uname -m)"
-				# We only want to tests this for the qemu-coco-dev and
-				# qemu-coco-dev-runtime-rs runtime classes
-				# as they are running on a GitHub runner (and not on a BM machine),
-				# and there the snapshotter is deployed on every run (rather than
-				# deployed when the machine is configured, as on the BM machines).
-				if [[ ${ARCH} == "x86_64" ]]; then
-					case "${KATA_HYPERVISOR}" in
-						qemu-tdx|qemu-coco-dev*|qemu-nvidia-gpu-*) EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}" ;;
-						*) ;;
-					esac
-				fi
-				;;
-			*) ;;
-		esac
-	fi
+	case "${SNAPSHOTTER}" in
+		nydus|erofs) EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}" ;;
+		*) ;;
+	esac
 
 	EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
 
@@ -476,92 +464,11 @@ function cleanup_snapshotter() {
 }
 
 function deploy_nydus_snapshotter() {
-	echo "::group::deploy_nydus_snapshotter"
-	ensure_yq
-
-	local nydus_snapshotter_install_dir
-	nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
-	if [[ -d "${nydus_snapshotter_install_dir}" ]]; then
-		rm -rf "${nydus_snapshotter_install_dir}"
-	fi
-	mkdir -p "${nydus_snapshotter_install_dir}"
-	nydus_snapshotter_url=$(get_from_kata_deps ".externals.nydus-snapshotter.url")
-	nydus_snapshotter_version=$(get_from_kata_deps ".externals.nydus-snapshotter.version")
-	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
-
-	pushd "${nydus_snapshotter_install_dir}"
-	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
-		cleanup_nydus_snapshotter || true
-	fi
-	if [[ "${PULL_TYPE}" == "guest-pull" ]]; then
-		# Enable guest pull feature in nydus snapshotter
-		yq -i \
-      'select(.kind == "ConfigMap").data.FS_DRIVER = "proxy"' \
-      misc/snapshotter/base/nydus-snapshotter.yaml
-	else
-		>&2 echo "Invalid pull type"; exit 2
-	fi
-
-	# Disable to read snapshotter config from configmap
-	yq -i \
-    'select(.kind == "ConfigMap").data.ENABLE_CONFIG_FROM_VOLUME = "false"' \
-	  misc/snapshotter/base/nydus-snapshotter.yaml
-	# Enable to run snapshotter as a systemd service
-	yq -i \
-    'select(.kind == "ConfigMap").data.ENABLE_SYSTEMD_SERVICE = "true"' \
-	  misc/snapshotter/base/nydus-snapshotter.yaml
-	# Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
-	yq -i \
-    'select(.kind == "ConfigMap").data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER = "true"' \
-	  misc/snapshotter/base/nydus-snapshotter.yaml
-
-	# Pin the version of nydus-snapshotter image.
-	# TODO: replace with a definitive solution (see https://github.com/kata-containers/kata-containers/issues/9742)
-	yq -i \
-		"select(.kind == \"DaemonSet\").spec.template.spec.containers[0].image = \"ghcr.io/containerd/nydus-snapshotter:${nydus_snapshotter_version}\"" \
-		misc/snapshotter/base/nydus-snapshotter.yaml
-
-	# Deploy nydus snapshotter as a daemonset
-	kubectl_retry create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	if [[ "${KUBERNETES}" = "k3s" ]]; then
-		kubectl_retry apply -k "misc/snapshotter/overlays/k3s"
-	else
-		kubectl_retry apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
-	fi
-	popd
-
-	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout "${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}"
-
-	echo "::endgroup::"
-	echo "::group::nydus snapshotter logs"
-	kubectl_retry logs --selector=app=nydus-snapshotter -n nydus-system
-	echo "::endgroup::"
-	echo "::group::nydus snapshotter describe"
-	kubectl_retry describe pod --selector=app=nydus-snapshotter -n nydus-system
-	echo "::endgroup::"
+	echo "nydus-for-kata-tee is now deployed and managed by kata-deploy; nothing to do here."
 }
 
 function cleanup_nydus_snapshotter() {
-	echo "cleanup_nydus_snapshotter"
-	local nydus_snapshotter_install_dir
-	nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
-	if [[ ! -d "${nydus_snapshotter_install_dir}" ]]; then
-		>&2 echo "nydus snapshotter dir not found"
-		exit 1
-	fi
-
-	pushd "${nydus_snapshotter_install_dir}"
-
-	if [[ "${KUBERNETES}" = "k3s" ]]; then
-		kubectl_retry delete --ignore-not-found -k "misc/snapshotter/overlays/k3s"
-	else
-		kubectl_retry delete --ignore-not-found -f "misc/snapshotter/base/nydus-snapshotter.yaml"
-	fi
-	sleep 180s
-	kubectl_retry delete --ignore-not-found -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	popd
-	sleep 30s
-	echo "::endgroup::"
+	echo "nydus-for-kata-tee is now deployed and managed by kata-deploy; nothing to do here."
 }
 
 function main() {
