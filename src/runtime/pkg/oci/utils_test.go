@@ -665,6 +665,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	// 10Mbit
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
+	ocispec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = "512"
+	ocispec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = "4096"
 
 	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.NoError(err)
@@ -706,6 +708,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)
 	assert.Equal(sbConfig.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
 	assert.Equal(sbConfig.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceLogicalSectorSize, uint32(512))
+	assert.Equal(sbConfig.HypervisorConfig.BlockDevicePhysicalSectorSize, uint32(4096))
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
@@ -724,6 +728,80 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMemory] = fmt.Sprintf("%d", vc.MinHypervisorMemory+1)
 	assert.Error(err)
+}
+
+func TestBlockDeviceSectorSizeAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+	}
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+
+	newSpec := func() specs.Spec {
+		return specs.Spec{Annotations: make(map[string]string)}
+	}
+	newConfig := func() vc.SandboxConfig {
+		return vc.SandboxConfig{Annotations: make(map[string]string)}
+	}
+
+	// Valid: 0 means "use hypervisor default", no override applied
+	for _, v := range []string{"0", "512", "1024", "2048", "4096", "8192", "16384", "32768", "65536"} {
+		spec := newSpec()
+		cfg := newConfig()
+		spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = v
+		spec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = v
+		assert.NoError(addAnnotations(spec, &cfg, runtimeConfig), "expected valid size %s to be accepted", v)
+	}
+
+	// Invalid: not a power of 2
+	for _, v := range []string{"3", "100", "1000", "3000", "5000"} {
+		spec := newSpec()
+		cfg := newConfig()
+		spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = v
+		assert.Error(addAnnotations(spec, &cfg, runtimeConfig), "expected non-power-of-2 size %s to be rejected", v)
+	}
+
+	// Invalid: below minimum (512)
+	for _, v := range []string{"1", "256"} {
+		spec := newSpec()
+		cfg := newConfig()
+		spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = v
+		assert.Error(addAnnotations(spec, &cfg, runtimeConfig), "expected below-minimum size %s to be rejected", v)
+	}
+
+	// Invalid: above maximum (65536)
+	for _, v := range []string{"131072", "1048576"} {
+		spec := newSpec()
+		cfg := newConfig()
+		spec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = v
+		assert.Error(addAnnotations(spec, &cfg, runtimeConfig), "expected above-maximum size %s to be rejected", v)
+	}
+
+	// Logical 4096 with physical 4096 — both valid
+	spec := newSpec()
+	cfg := newConfig()
+	spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = "4096"
+	spec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = "4096"
+	assert.NoError(addAnnotations(spec, &cfg, runtimeConfig))
+	assert.Equal(cfg.HypervisorConfig.BlockDeviceLogicalSectorSize, uint32(4096))
+	assert.Equal(cfg.HypervisorConfig.BlockDevicePhysicalSectorSize, uint32(4096))
+
+	// Logical 512 with physical 4096 — both valid
+	spec = newSpec()
+	cfg = newConfig()
+	spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = "512"
+	spec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = "4096"
+	assert.NoError(addAnnotations(spec, &cfg, runtimeConfig))
+	assert.Equal(cfg.HypervisorConfig.BlockDeviceLogicalSectorSize, uint32(512))
+	assert.Equal(cfg.HypervisorConfig.BlockDevicePhysicalSectorSize, uint32(4096))
+
+	// Invalid: logical > physical
+	spec = newSpec()
+	cfg = newConfig()
+	spec.Annotations[vcAnnotations.BlockDeviceLogicalSectorSize] = "4096"
+	spec.Annotations[vcAnnotations.BlockDevicePhysicalSectorSize] = "512"
+	assert.Error(addAnnotations(spec, &cfg, runtimeConfig), "logical > physical should be rejected")
 }
 
 func TestAddRemoteHypervisorAnnotations(t *testing.T) {
