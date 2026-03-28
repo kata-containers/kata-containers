@@ -1,5 +1,5 @@
 [workspace]
-members = ["rustjail", "policy", "vsock-exporter"]
+members = ["rustjail", "policy", "vsock-exporter", "initdata-processor"]
 
 [workspace.package]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
