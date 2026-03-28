@@ -856,7 +856,12 @@ impl QemuInner {
                         block_device.config.index,
                         &block_device.config.path_on_host,
                         &block_device.config.blkdev_aio.to_string(),
-                        block_device.config.is_direct,
+                        Some(
+                            block_device
+                                .config
+                                .is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
+                        ),
                         block_device.config.is_readonly,
                         block_device.config.no_drop,
                     )
