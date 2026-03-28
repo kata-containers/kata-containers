@@ -3,9 +3,9 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-sa
+  name: {{ include "kata-deploy.name" . }}-sa
 {{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
@@ -16,9 +16,9 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-role-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-role
+  name: {{ include "kata-deploy.name" . }}-role
 {{- end }}
   annotations:
     helm.sh/resource-policy: keep
@@ -43,9 +43,9 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-rb-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-rb-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-rb
+  name: {{ include "kata-deploy.name" . }}-rb
 {{- end }}
   annotations:
     helm.sh/resource-policy: keep
@@ -53,16 +53,16 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-role-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-role
+  name: {{ include "kata-deploy.name" . }}-role
 {{- end }}
 subjects:
 - kind: ServiceAccount
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-sa
+  name: {{ include "kata-deploy.name" . }}-sa
 {{- end }}
   namespace: {{ .Release.Namespace }}
 ---
@@ -72,9 +72,9 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-sa-cleanup
+  name: {{ include "kata-deploy.name" . }}-sa-cleanup
 {{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
@@ -86,9 +86,9 @@ kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-cleanup-role
+  name: {{ include "kata-deploy.name" . }}-cleanup-role
 {{- end }}
   annotations:
     "helm.sh/hook": post-delete
@@ -106,9 +106,9 @@ kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-cleanup-rb-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-cleanup-rb-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-cleanup-rb
+  name: {{ include "kata-deploy.name" . }}-cleanup-rb
 {{- end }}
   annotations:
     "helm.sh/hook": post-delete
@@ -118,15 +118,15 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-cleanup-role
+  name: {{ include "kata-deploy.name" . }}-cleanup-role
 {{- end }}
 subjects:
 - kind: ServiceAccount
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-sa-cleanup
+  name: {{ include "kata-deploy.name" . }}-sa-cleanup
 {{- end }}
   namespace: {{ .Release.Namespace }}

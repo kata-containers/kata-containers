@@ -6,9 +6,9 @@ apiVersion: batch/v1
 kind: Job
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}-rb-cleanup
+  name: {{ include "kata-deploy.name" . }}-rb-cleanup
 {{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
@@ -22,14 +22,14 @@ spec:
     metadata:
 {{- if .Values.env.multiInstallSuffix }}
       labels:
-        name: {{ .Chart.Name }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
+        name: {{ include "kata-deploy.name" . }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- end }}
     spec:
       restartPolicy: OnFailure
 {{- if .Values.env.multiInstallSuffix }}
-      serviceAccountName: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ include "kata-deploy.name" . }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-      serviceAccountName: {{ .Chart.Name }}-sa-cleanup
+      serviceAccountName: {{ include "kata-deploy.name" . }}-sa-cleanup
 {{- end }}
       containers:
         - name: rb-cleanup
@@ -88,25 +88,25 @@ spec:
               value: {{ .Release.Namespace | quote }}
             - name: DAEMONSET_POD_LABEL
 {{- if .Values.env.multiInstallSuffix }}
-              value: "name={{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}"
+              value: "name={{ include "kata-deploy.name" . }}-{{ .Values.env.multiInstallSuffix }}"
 {{- else }}
-              value: "name={{ .Chart.Name }}"
+              value: "name={{ include "kata-deploy.name" . }}"
 {{- end }}
             - name: CLUSTER_ROLE_BINDING_NAME
 {{- if .Values.env.multiInstallSuffix }}
-              value: {{ .Chart.Name }}-rb-{{ .Values.env.multiInstallSuffix }}
+              value: {{ include "kata-deploy.name" . }}-rb-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-              value: {{ .Chart.Name }}-rb
+              value: {{ include "kata-deploy.name" . }}-rb
 {{- end }}
             - name: CLUSTER_ROLE_NAME
 {{- if .Values.env.multiInstallSuffix }}
-              value: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}
+              value: {{ include "kata-deploy.name" . }}-role-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-              value: {{ .Chart.Name }}-role
+              value: {{ include "kata-deploy.name" . }}-role
 {{- end }}
             - name: SERVICE_ACCOUNT_NAME
 {{- if .Values.env.multiInstallSuffix }}
-              value: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+              value: {{ include "kata-deploy.name" . }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-              value: {{ .Chart.Name }}-sa
+              value: {{ include "kata-deploy.name" . }}-sa
 {{- end }}
