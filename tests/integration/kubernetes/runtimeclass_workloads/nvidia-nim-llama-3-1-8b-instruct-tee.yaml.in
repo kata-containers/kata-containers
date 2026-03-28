@@ -69,14 +69,20 @@ spec:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "64Gi"
+        memory: "48Gi"
     volumeMounts:
       - name: nim-trusted-cache
         mountPath: /opt/nim/.cache
+    volumeDevices:
+      - devicePath: /dev/trusted_store
+        name: trusted-storage
   volumes:
   - name: nim-trusted-cache
     emptyDir:
       sizeLimit: 64Gi
+  - name: trusted-storage
+    persistentVolumeClaim:
+      claimName: trusted-pvc-instruct
 ---
 apiVersion: v1
 kind: Secret
