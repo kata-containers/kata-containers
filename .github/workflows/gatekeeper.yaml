@@ -43,7 +43,7 @@ jobs:
           GH_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           #!/usr/bin/env bash -x
-          mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t)
+          mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t --from-target-branch)
           export REQUIRED_JOBS="${lines[0]}"
           export REQUIRED_REGEXPS="${lines[1]}"
           export REQUIRED_LABELS="${lines[2]}"
