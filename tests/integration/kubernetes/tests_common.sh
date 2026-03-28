@@ -249,6 +249,11 @@ auto_generate_policy_no_added_flags() {
 	# Retry if genpolicy fails, because typical failures of this tool are caused by
 	# transient network errors.
 	for _ in {1..6}; do
+		info "DOCKER_CONFIG=${DOCKER_CONFIG:-<unset>}"
+		if [[ -n "${DOCKER_CONFIG:-}" ]]; then
+			info "DOCKER_CONFIG dir exists: $(test -d "${DOCKER_CONFIG}" && echo yes || echo no)"
+			info "DOCKER_CONFIG/config.json exists: $(test -f "${DOCKER_CONFIG}/config.json" && echo yes || echo no)"
+		fi
 		info "Executing: ${genpolicy_command}"
 		eval "${genpolicy_command}" && return 0
 		info "Sleeping after command failed..."
