@@ -54,6 +54,9 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
             instance-type: normal
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-k8s-tests-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     permissions:
       contents: read

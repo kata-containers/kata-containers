@@ -22,7 +22,7 @@ on:
       AZ_APPID:
         required: true
       AZ_TENANT_ID:
-       required: true
+        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
       QUAY_DEPLOYER_PASSWORD:
@@ -31,6 +31,10 @@ on:
         required: true
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-weekly
+  cancel-in-progress: true
 
 jobs:
   build-kata-static-tarball-amd64:
