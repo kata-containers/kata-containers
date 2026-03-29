@@ -62,6 +62,8 @@ hugepage
 MACVTAP
 memdisk
 pmem
+Sharedfs
+Initdata
 
 # Networking & Communication
 netns
@@ -74,6 +76,8 @@ cgroupsv1
 coredump
 CPUSET
 crio
+nerdctl
+dockershim
 dentries
 hypercalls
 inodes
@@ -89,3 +93,13 @@ unbootable
 userspace
 eBPF
 dwarves
+passthroughfd
+passfd
+sendfd
+RunD
+udevd
+Reflink
+UNBINDABLE
+RAII
+Virt
+sysfs

@@ -177,7 +177,7 @@ pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
 ///
 /// To ensure security, the `create_mount_destination()` function takes an extra parameter `root`,
 /// which is used to ensure that `dst` is within the specified directory. And a safe version of
-/// `PathBuf` is returned to avoid TOCTTOU type of flaws.
+/// `PathBuf` is returned to avoid TOCTOU type of flaws.
 pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
     src: S,
     dst: D,
