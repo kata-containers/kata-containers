@@ -32,6 +32,7 @@ jobs:
       matrix:
         vmm:
           - qemu
+          - qemu-runtime-rs
         k8s:
           - kubeadm
     runs-on: ppc64le-k8s
