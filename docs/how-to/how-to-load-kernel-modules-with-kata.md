@@ -1,73 +1,90 @@
-# Loading kernel modules
+# Loading kernel modules in Kata Containers
 
-A new feature for loading kernel modules was introduced in Kata Containers 1.9.
-The list of kernel modules and their parameters can be provided using the
-configuration file or OCI annotations. The [Kata runtime][1] gives that
-information to the [Kata Agent][2] through gRPC when the sandbox is created.
-The [Kata Agent][2] will insert the kernel modules using `modprobe(8)`, hence
-modules dependencies are resolved automatically.
+This document describes how to load kernel modules inside Kata Containers guest VM.
 
-The sandbox will not be started when:
+## Overview
 
-  * A kernel module is specified and the `modprobe(8)` command is not installed in
-    the guest or it fails loading the module.
-  * The module is not available in the guest or it doesn't meet the guest kernel
-    requirements, like architecture and version.
+The kernel modules feature allows you to load specific kernel modules into the guest VM kernel when a sandbox is created. This is useful when your containerized applications require specific kernel functionality that is not built into the guest kernel.
 
-In the following sections are documented the different ways that exist for
-loading kernel modules in Kata Containers.
+**How it works:**
+
+1. You specify kernel modules and their parameters via configuration file or OCI annotations
+2. The Kata runtime passes this information to the Kata Agent through gRPC during sandbox creation
+3. The Kata Agent loads the modules using `modprobe(8)`, which automatically resolves module dependencies
+
+**Failure conditions:**
+
+The sandbox will fail to start if:
+
+- A kernel module is specified but `modprobe(8)` is not installed in the guest, or it fails to load the module
+- The module is not available in the guest or doesn't meet guest kernel requirements (architecture, version, etc.)
+
+## Configuration Methods
 
 - [Using Kata Configuration file](#using-kata-configuration-file)
 - [Using annotations](#using-annotations)
 
-# Using Kata Configuration file
+## Using Kata Configuration file
 
-```
-NOTE: Use this method, only if you need to pass the kernel modules to all
-containers. Please use annotations described below to set per pod annotations.
-```
+> **Note**: Use this method when you need the kernel modules loaded for all containers. For per-pod configuration, use annotations instead.
 
-The list of kernel modules and parameters can be set in the `kernel_modules`
-option as a coma separated list, where each entry in the list specifies a kernel
-module and its parameters. Each list element comprises one or more space separated
-fields. The first field specifies the module name and subsequent fields specify
-individual parameters for the module.
+The `kernel_modules` option accepts a list of kernel modules with their parameters. Each list element specifies a module name followed by space-separated parameters.
 
-The following example specifies two modules to load: `e1000e` and `i915`. Two parameters
-are specified for the `e1000` module: `InterruptThrottleRate` (which takes an array
-of integer values) and `EEE` (which requires a single integer value).
+### Configuration Format
+
+**For runtime-go** (`configuration-qemu.toml`, etc.):
 
 ```toml
-kernel_modules=["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1", "i915"]
+[agent.kata]
+kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1", "i915"]
 ```
 
-Not all the container managers allow users provide custom annotations, hence
-this is the only way that Kata Containers provide for loading modules when
-custom annotations are not supported.
+**For runtime-rs** (`configuration-qemu-runtime-rs.toml`, etc.):
 
-There are some limitations with this approach:
+```toml
+[agent.kata]
+kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1", "i915"]
+```
 
-* Write access to the Kata configuration file is required.
-* The configuration file must be updated when a new container is created,
-  otherwise the same list of modules is used, even if they are not needed in the
-  container.
+### Example
 
-# Using annotations
+The following example loads two modules:
 
-As was mentioned above, not all containers need the same modules, therefore using
-the configuration file for specifying the list of kernel modules per [POD][3] can
-be a pain.
-Unlike the configuration file, [annotations](how-to-set-sandbox-config-kata.md)
-provide a way to specify custom configurations per POD.
+- `e1000e` with parameters `InterruptThrottleRate=3000,3000,3000` and `EEE=1`
+- `i915` with no parameters
 
-The list of kernel modules and parameters can be set using the annotation
-`io.katacontainers.config.agent.kernel_modules` as a semicolon separated
-list, where the first word of each element is considered as the module name and
-the rest as its parameters.
+```toml
+kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1", "i915"]
+```
 
-In the following example two PODs are created, but the kernel modules `e1000e`
-and `i915` are inserted only in the POD `pod1`.
+### Limitations
 
+- Write access to the Kata configuration file is required
+- All containers will use the same module list, even if some containers don't need them
+- Configuration changes require service restart to take effect
+
+## Using annotations
+
+Annotations provide a way to specify kernel modules per pod, which is more flexible than the configuration file approach.
+
+### Annotation Key
+
+```
+io.katacontainers.config.agent.kernel_modules
+```
+
+### Format
+
+The annotation value uses **semicolon (`;`)** as the separator between modules. Each module specification consists of:
+
+- Module name (first word)
+- Parameters (subsequent words, space-separated)
+
+Example: `"e1000e EEE=1; i915 enable_ppgtt=0"`
+
+### Kubernetes Example
+
+The following example creates two pods, where only `pod1` will have the kernel modules `e1000e` and `i915` loaded:
 
 ```yaml
 apiVersion: v1
@@ -104,6 +121,53 @@ spec:
 
 > **Note**: To pass annotations to Kata containers, [CRI-O must be configured correctly](how-to-set-sandbox-config-kata.md#cri-o-configuration)
 
-[1]: ../../src/runtime
-[2]: ../../src/agent
-[3]: https://kubernetes.io/docs/concepts/workloads/pods/pod/
+## Technical Details
+
+### Data Flow
+
+```
+    Configuration File / Annotation
+            │
+            ▼
+    SandboxConfig.AgentConfig.KernelModules
+            │
+            ▼
+    Converted to gRPC KernelModule messages
+            │
+            ▼
+    CreateSandboxRequest sent to Agent
+            │
+            ▼
+    Agent executes modprobe in guest VM
+```
+
+### Implementation in Runtimes
+
+**runtime-go:**
+
+- Config parsing: `src/runtime/pkg/katautils/config.go`
+- Annotation handling: `src/runtime/pkg/oci/utils.go` (`addAgentConfigOverrides()`)
+- Module parsing: `src/runtime/virtcontainers/kata_agent.go` (`setupKernelModules()`)
+
+**runtime-rs:**
+
+- Config structure: `src/libs/kata-types/src/config/agent.rs`
+- Annotation handling: `src/libs/kata-types/src/annotations/mod.rs` (`update_config_by_annotation()`)
+- Module parsing: `src/runtime-rs/crates/agent/src/types.rs` (`KernelModule::set_kernel_modules()`)
+
+## Debugging
+
+To verify kernel modules are loaded in the guest VM:
+
+```bash
+# Inside the container, run:
+lsmod | grep <module_name>
+
+# Or check modprobe output in guest VM journal
+```
+
+If module loading fails, check:
+
+1. Module is available in guest kernel modules directory (`/lib/modules/$(uname -r)`)
+2. Module dependencies are satisfied
+3. Guest kernel version matches module requirements
