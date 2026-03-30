@@ -150,9 +150,9 @@ enable_tracing = false
 
 debug_console_enabled = false
 
-# Agent connection dialing timeout value in seconds
-# (default: 30)
-dial_timeout = 30
+# Agent connection dialing timeout value in milliseconds
+# (default: 30000)
+dial_timeout_ms = 30000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.

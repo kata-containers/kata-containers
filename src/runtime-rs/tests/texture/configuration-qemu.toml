@@ -65,8 +65,8 @@ enable_guest_swap = true
 [agent.agent0]
 enable_tracing = true
 debug_console_enabled = true
-debug = true
-dial_timeout = 1
+enable_debug = true
+dial_timeout_ms = 1000
 kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1","i915_enabled_ppgtt=0"]
 container_pipe_size = 2
 [runtime]
