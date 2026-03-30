@@ -72,6 +72,8 @@ type VCSandbox interface {
 
 	GetOOMEvent(ctx context.Context) (string, error)
 	GetHypervisorPid() (int, error)
+	// RescanNetwork re-scans the network namespace for late-discovered endpoints.
+	RescanNetwork(ctx context.Context) error
 
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics(ctx context.Context) (string, error)
