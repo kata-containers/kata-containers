@@ -46,6 +46,16 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		}
 		go watchSandbox(ctx, s)
 
+		// Docker 26+ configures networking after the Start response.
+		// Run the network rescan asynchronously so we don't block
+		// the Start RPC — Docker won't call allocateNetwork until
+		// it receives the StartResponse.
+		go func() {
+			if err := s.sandbox.RescanNetwork(s.ctx); err != nil {
+				shimLog.WithError(err).Warn("async network rescan failed")
+			}
+		}()
+
 		// We use s.ctx(`ctx` derived from `s.ctx`) to check for cancellation of the
 		// shim context and the context passed to startContainer for tracing.
 		go watchOOMEvents(ctx, s)

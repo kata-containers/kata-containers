@@ -72,6 +72,7 @@ type VCSandbox interface {
 
 	GetOOMEvent(ctx context.Context) (string, error)
 	GetHypervisorPid() (int, error)
+	RescanNetwork(ctx context.Context) error
 
 	UpdateRuntimeMetrics() error
 	GetAgentMetrics(ctx context.Context) (string, error)

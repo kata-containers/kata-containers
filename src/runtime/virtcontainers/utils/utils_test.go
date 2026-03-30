@@ -582,21 +582,127 @@ func TestRevertBytes(t *testing.T) {
 func TestIsDockerContainer(t *testing.T) {
 	assert := assert.New(t)
 
+	// nil spec
+	assert.False(IsDockerContainer(nil))
+
+	// nil hooks
+	assert.False(IsDockerContainer(&specs.Spec{}))
+
+	// Unrelated prestart hook
 	ociSpec := &specs.Spec{
 		Hooks: &specs.Hooks{
-			Prestart: []specs.Hook{
-				{
-					Args: []string{
-						"haha",
-					},
-				},
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"haha"}},
 			},
 		},
 	}
 	assert.False(IsDockerContainer(ociSpec))
 
+	// Prestart hook with libnetwork (Docker < 26)
 	ociSpec.Hooks.Prestart = append(ociSpec.Hooks.Prestart, specs.Hook{ //nolint:all
 		Args: []string{"libnetwork-xxx"},
 	})
 	assert.True(IsDockerContainer(ociSpec))
+
+	// CreateRuntime hook with libnetwork (Docker >= 26)
+	ociSpec2 := &specs.Spec{
+		Hooks: &specs.Hooks{
+			CreateRuntime: []specs.Hook{
+				{Args: []string{"/usr/bin/docker-proxy", "libnetwork-setkey", "abc123", "ctrl"}},
+			},
+		},
+	}
+	assert.True(IsDockerContainer(ociSpec2))
+
+	// CreateRuntime hook without libnetwork
+	ociSpec3 := &specs.Spec{
+		Hooks: &specs.Hooks{
+			CreateRuntime: []specs.Hook{
+				{Args: []string{"/some/other/hook"}},
+			},
+		},
+	}
+	assert.False(IsDockerContainer(ociSpec3))
+}
+
+func TestDockerNetnsPath(t *testing.T) {
+	assert := assert.New(t)
+
+	// nil spec
+	assert.Equal("", DockerNetnsPath(nil))
+
+	// nil hooks
+	assert.Equal("", DockerNetnsPath(&specs.Spec{}))
+
+	// Hook without libnetwork-setkey
+	spec := &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/some/binary", "unrelated"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Prestart hook with libnetwork-setkey but netns file doesn't exist
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "nonexistent999", "ctrl"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Prestart hook with libnetwork-setkey and existing netns file
+	tmpDir := t.TempDir()
+	// Simulate /var/run/docker/netns/<id> by creating the file
+	fakeNsDir := filepath.Join(tmpDir, "netns")
+	err := os.MkdirAll(fakeNsDir, 0755)
+	assert.NoError(err)
+	fakeNsFile := filepath.Join(fakeNsDir, "abc123def456")
+	err = os.WriteFile(fakeNsFile, []byte{}, 0644)
+	assert.NoError(err)
+
+	// DockerNetnsPath checks hardcoded paths (/var/run/docker/netns/, /run/docker/netns/)
+	// so with a temp dir it won't find it. Verify that non-existent paths return "".
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "abc123def456", "ctrl"}},
+			},
+		},
+	}
+	// The sandbox ID "abc123def456" won't exist under /var/run/docker/netns/
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// CreateRuntime hook with libnetwork-setkey — same behavior, file doesn't exist
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			CreateRuntime: []specs.Hook{
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "xyz789", "ctrl"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Hook with libnetwork-setkey as last arg (no sandbox ID follows) — no panic
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"libnetwork-setkey"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Empty args slice
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
 }

@@ -493,22 +493,88 @@ func RevertBytes(num uint64) uint64 {
 	return 1024*RevertBytes(a) + b
 }
 
+const (
+	// dockerLibnetworkSetkey is the hook argument that identifies Docker's
+	// network configuration hook. The argument following it is the sandbox ID.
+	dockerLibnetworkSetkey = "libnetwork-setkey"
+)
+
+// dockerNetnsPrefixes are the well-known filesystem paths where the Docker
+// daemon bind-mounts container network namespaces.
+var dockerNetnsPrefixes = []string{"/var/run/docker/netns/", "/run/docker/netns/"}
+
 // IsDockerContainer returns if the container is managed by docker
-// This is done by checking the prestart hook for `libnetwork` arguments.
+// This is done by checking the prestart and createRuntime hooks for
+// `libnetwork` arguments. Docker 26+ may use CreateRuntime hooks
+// instead of the deprecated Prestart hooks.
 func IsDockerContainer(spec *specs.Spec) bool {
 	if spec == nil || spec.Hooks == nil {
 		return false
 	}
 
-	for _, hook := range spec.Hooks.Prestart { //nolint:all
-		for _, arg := range hook.Args {
-			if strings.HasPrefix(arg, "libnetwork") {
-				return true
+	// Check both Prestart (Docker < 26) and CreateRuntime (Docker >= 26) hooks.
+	hookSets := [][]specs.Hook{
+		spec.Hooks.Prestart, //nolint:all
+		spec.Hooks.CreateRuntime,
+	}
+
+	for _, hooks := range hookSets {
+		for _, hook := range hooks {
+			for _, arg := range hook.Args {
+				if strings.HasPrefix(arg, "libnetwork") {
+					return true
+				}
 			}
 		}
 	}
 
 	return false
+}
+
+// DockerNetnsPath attempts to discover Docker's pre-created network namespace
+// path from OCI spec hooks. Docker's libnetwork-setkey hook contains the
+// sandbox ID as its second argument, which maps to the netns file under
+// /var/run/docker/netns/<sandbox_id>.
+func DockerNetnsPath(spec *specs.Spec) string {
+	if spec == nil || spec.Hooks == nil {
+		return ""
+	}
+
+	// Search both Prestart and CreateRuntime hooks for libnetwork-setkey.
+	hookSets := [][]specs.Hook{
+		spec.Hooks.Prestart, //nolint:all
+		spec.Hooks.CreateRuntime,
+	}
+
+	for _, hooks := range hookSets {
+		for _, hook := range hooks {
+			for i, arg := range hook.Args {
+				if arg == dockerLibnetworkSetkey && i+1 < len(hook.Args) {
+					sandboxID := hook.Args[i+1]
+					// Validate sandbox ID to prevent path traversal.
+					// Docker sandbox IDs are always hex strings.
+					if sandboxID == "" ||
+						strings.Contains(sandboxID, "/") ||
+						strings.Contains(sandboxID, "\\") ||
+						strings.Contains(sandboxID, "..") ||
+						strings.ContainsRune(sandboxID, 0) {
+						continue
+					}
+					// Docker stores netns under well-known paths.
+					// Use Lstat to reject symlinks that could point
+					// outside the Docker netns directory.
+					for _, prefix := range dockerNetnsPrefixes {
+						nsPath := prefix + sandboxID
+						if fi, err := os.Lstat(nsPath); err == nil && fi.Mode().Type()&os.ModeSymlink == 0 {
+							return nsPath
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // GetGuestNUMANodes constructs guest NUMA nodes mapping to host NUMA nodes and host CPUs.
