@@ -971,6 +971,16 @@ impl AgentPolicy {
             );
         }
 
+        yaml::apply_pod_fs_group_and_supplemental_groups(
+            &mut process,
+            resource.get_pod_security_context(),
+            is_pause_container,
+        );
+        debug!(
+            "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
+            &process.User
+        );
+
         ///////////////////////////////////////////////////////////////////////////////////////
         // Container-level settings from user's YAML.
         yaml_container.get_process_fields(&mut process);
