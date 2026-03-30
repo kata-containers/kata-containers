@@ -26,10 +26,22 @@ handler: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
 {{- else }}
 handler: kata-{{ .shim }}
 {{- end }}
+{{- /* Overhead section - controlled by global or per-shim overheadEnabled flag (default: true) */ -}}
+{{- $shimOverheadEnabled := true -}}
+{{- if hasKey .root.Values.runtimeClasses "overheadEnabled" -}}
+{{- $shimOverheadEnabled = .root.Values.runtimeClasses.overheadEnabled -}}
+{{- end -}}
+{{- with .shimConfig.runtimeClass -}}
+{{- if hasKey . "overheadEnabled" -}}
+{{- $shimOverheadEnabled = .overheadEnabled -}}
+{{- end -}}
+{{- end -}}
+{{- if $shimOverheadEnabled }}
 overhead:
   podFixed:
     memory: {{ .config.memory | quote }}
     cpu: {{ .config.cpu | quote }}
+{{- end }}
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
