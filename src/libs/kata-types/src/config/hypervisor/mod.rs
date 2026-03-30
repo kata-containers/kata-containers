@@ -1163,6 +1163,7 @@ impl NetworkInfo {
 
 /// Configuration information for rootless user.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RootlessUser {
     /// The UID of the rootless user.
     #[serde(default)]
@@ -1568,6 +1569,7 @@ impl VmTemplateInfo {
 
 /// Configuration information for VM factory (templating, caches, etc.).
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Factory {
     /// Enable VM templating support.
     /// When enabled, new VMs may be created from a template to speed up creation.

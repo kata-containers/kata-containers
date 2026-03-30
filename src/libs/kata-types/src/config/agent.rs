@@ -19,6 +19,7 @@ use super::default::{
 pub const AGENT_NAME_KATA: &str = "kata";
 
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct MemAgent {
     #[serde(default, alias = "mem_agent_enable")]
     pub enable: bool,
@@ -58,6 +59,7 @@ pub struct MemAgent {
 
 /// Kata agent configuration information.
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Agent {
     /// If enabled, the agent will log additional debug messages to the system log.
     #[serde(default, rename = "enable_debug")]
