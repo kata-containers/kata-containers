@@ -3,9 +3,9 @@
 ## Kubernetes Integration
 
 - [Run Kata containers with `crictl`](run-kata-with-crictl.md)
-- [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
 - [How to use Kata Containers and Containerd](containerd-kata.md)
 - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
+- [How to use Kata Containers and CRI-O with Kubernetes](how-to-use-k8s-with-crio-and-kata.md)
 - [Kata Containers and service mesh for Kubernetes](service-mesh.md)
 - [How to import Kata Containers logs into Fluentd](how-to-import-kata-logs-with-fluentd.md)
 
@@ -50,3 +50,4 @@
 - [How to pull images in the guest](how-to-pull-images-in-guest-with-kata.md)
 - [How to use mem-agent to decrease the memory usage of Kata container](how-to-use-memory-agent.md)
 - [How to use seccomp with runtime-rs](how-to-use-seccomp-with-runtime-rs.md)
+- [How to use passthroughfd-IO with runtime-rs and Dragonball](how-to-use-passthroughfd-io-within-runtime-rs.md)

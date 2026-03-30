@@ -99,11 +99,11 @@ HYPERVISOR_REMOTE = remote
 ARCH_SUPPORT_DB := x86_64 aarch64
 ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_DB)),)
     # When set to true, builds the built-in Dragonball hypervisor
-    USE_BUILDIN_DB := true
+    USE_BUILTIN_DB := true
 else
-    USE_BUILDIN_DB := false
+    USE_BUILTIN_DB := false
     $(info Dragonball does not support ARCH $(ARCH), disabled. \
-        Specify "USE_BUILDIN_DB=true" to force enable.)
+        Specify "USE_BUILTIN_DB=true" to force enable.)
 endif
 
 HYPERVISOR ?= $(HYPERVISOR_DB)
@@ -483,7 +483,7 @@ USER_VARS += CONFIG_REMOTE_IN
 USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
-USER_VARS += USE_BUILDIN_DB
+USER_VARS += USE_BUILTIN_DB
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -651,7 +651,7 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 EXTRA_RUSTFEATURES :=
 
 # if use dragonball hypervisor, add the feature to build dragonball in runtime
-ifeq ($(USE_BUILDIN_DB),true)
+ifeq ($(USE_BUILTIN_DB),true)
     EXTRA_RUSTFEATURES +=  dragonball
 endif
 

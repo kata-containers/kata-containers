@@ -96,6 +96,10 @@ path = "/path/to/qemu/build/qemu-system-x86_64"
 ```toml
 shared_fs = "virtio-9p"
 ```
+- Use `blockfile` snapshotter: Since virtio-fs remains unsupported due to bugs in QEMU snp-v3, and virtio-9p is no longer supported in runtime-rs, it is recommended to use the blockfile snapshotter. This allows container images to be managed via block devices without relying on a shared file system. To enable this, set the `snapshotter` to `blockfile` in the containerd config file, please refer to [blockfile guide](https://github.com/containerd/containerd/blob/main/docs/snapshotters/blockfile.md) for more information. Additionally, shared_fs should be set to "none" since no shared file system is used.
+```toml
+shared_fs = "none"
+```
 - Disable `virtiofsd` since it is no longer required (comment out)
 ```toml
 # virtio_fs_daemon = "/usr/libexec/virtiofsd"
