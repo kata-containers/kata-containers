@@ -560,6 +560,63 @@ function ensure_yq() {
 	hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
 }
 
+function ensure_pip() {
+	command -v python3 &> /dev/null || die "python3 is required"
+	python3 -m pip --version &> /dev/null && return
+
+	python3 -m ensurepip --user 2>/dev/null || \
+		(sudo apt-get update && \
+			sudo apt-get install -y python3-pip 2>/dev/null) || \
+		die "failed to bootstrap pip"
+
+	python3 -m pip --version &> /dev/null || die "pip is unavailable after bootstrap"
+}
+
+function install_tomlq() {
+	command -v jq &> /dev/null || die "jq is required by tomlq but was not found"
+	command -v tomlq &> /dev/null && echo "tomlq is already installed." && return
+	ensure_pip
+
+	echo "tomlq is not installed. Installing..."
+	python3 -m pip install --user --upgrade yq tomlkit 2>/dev/null || \
+		python3 -m pip install --user --upgrade --break-system-packages yq tomlkit || \
+		die "failed to install tomlq"
+
+	# Save the original PATH before modifying it
+	export _TOMLQ_ORIGINAL_PATH="${PATH}"
+	export PATH="${HOME}/.local/bin:${PATH}"
+	hash -r
+
+	command -v tomlq &> /dev/null && export _TOMLQ_INSTALLED=true || die "tomlq installation failed"
+}
+
+function uninstall_tomlq() {
+	if [ -z "${_TOMLQ_INSTALLED:-}" ]; then
+		echo "tomlq was not installed by install_tomlq(); skipping uninstall."
+		return
+	fi
+
+	if command -v tomlq &> /dev/null; then
+		echo "Uninstalling tomlq..."
+
+		# Only attempt uninstall if python3 and pip are available
+		if command -v python3 &> /dev/null && python3 -m pip --version &> /dev/null; then
+			python3 -m pip uninstall -y yq tomlkit 2>/dev/null || \
+				python3 -m pip uninstall -y --break-system-packages yq tomlkit || \
+				die "failed to uninstall tomlq"
+		else
+			warn "tomlq found in PATH but python3 or pip unavailable; skipping uninstall (likely preinstalled)"
+		fi
+	fi
+
+	# Restore the original PATH if it was saved by install_tomlq
+	if [ -n "${_TOMLQ_ORIGINAL_PATH}" ]; then
+		export PATH="${_TOMLQ_ORIGINAL_PATH}"
+		unset _TOMLQ_ORIGINAL_PATH
+		hash -r
+	fi
+}
+
 function ensure_helm() {
 	ensure_yq
 	# The get-helm-3 script will take care of downloaading and installing Helm
