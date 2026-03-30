@@ -525,6 +525,16 @@ enable_pprof = false
 # - When running single containers using a tool like ctr, container sizing information will be available.
 static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_CLH@
 
+# If set, the runtime will use the value as the default workload memory in MiB for the sandbox when no workload memory request is passed
+# down to the shim via the OCI when static sandbox resource management is enabled. With this, we ensure that workloads have a proper
+# default amount of memory available within the sandbox.
+static_sandbox_default_workload_mem = @DEFSTATICSANDBOXWORKLOADMEM@
+
+# If set, the runtime will use the value as the default number of vcpus for the sandbox when no workload vcpu request is passed
+# down to the shim via the OCI when static sandbox resource management is enabled. With this, we ensure that workloads have a proper
+# default amount of vcpus available within the sandbox.
+static_sandbox_default_workload_vcpus = @DEFSTATICSANDBOXWORKLOADVCPUS@
+
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted(ro, rw) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
 # If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`

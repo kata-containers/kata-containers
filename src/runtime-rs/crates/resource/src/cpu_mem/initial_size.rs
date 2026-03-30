@@ -159,6 +159,16 @@ impl InitialSizeManager {
             .get_mut(hypervisor_name)
             .context("failed to get hypervisor config")?;
 
+        if config.runtime.static_sandbox_resource_mgmt {
+            if self.resource.mem_mb == 0 {
+                self.resource.mem_mb = config.runtime.static_sandbox_default_workload_mem;
+            }
+
+            if self.resource.vcpu == 0.0 {
+                self.resource.vcpu = config.runtime.static_sandbox_default_workload_vcpus;
+            }
+        }
+
         if self.resource.vcpu > 0.0 {
             info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
             if config.runtime.static_sandbox_resource_mgmt {
@@ -170,7 +180,6 @@ impl InitialSizeManager {
             let new_vcpus_ceil = hv.cpu_info.default_vcpus.ceil() as u32;
             hv.cpu_info.default_maxvcpus = new_vcpus_ceil;
         }
-
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {
             info!(sl!(), "resource with memory {}", self.resource.mem_mb);
@@ -550,5 +559,28 @@ mod tests {
         const VCPU_TOLERANCE: f32 = 0.0001;
         assert!((mgr.resource.vcpu - 1.2).abs() < VCPU_TOLERANCE);
         assert_eq!(mgr.resource.mem_mb, 256);
+    }
+
+    #[test]
+    fn test_setup_config_static_uses_default_workload_resources_when_unset() {
+        let mut config = make_config(1.0, 2, 256, 300, true);
+        config.runtime.static_sandbox_default_workload_vcpus = 1.5;
+        config.runtime.static_sandbox_default_workload_mem = 512;
+
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 0,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus, 2.5);
+        assert_eq!(hv.cpu_info.default_maxvcpus, 3);
+        assert_eq!(hv.memory_info.default_memory, 768);
+        assert_eq!(hv.memory_info.default_maxmemory, 768);
     }
 }

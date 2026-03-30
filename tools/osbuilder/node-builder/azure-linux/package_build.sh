@@ -45,6 +45,10 @@ runtime_rs_make_flags=(
 	"FCCMD="
 	"DEFVIRTIOFSDAEMON=${VIRTIOFSD_BINARY_LOCATION}"
 	"PREFIX=${INSTALL_PATH_PREFIX}"
+	"DEFMEMSZ=0"
+	"DEFSTATICSANDBOXWORKLOADMEM=512"
+	"DEFVCPUS=0"
+	"DEFSTATICSANDBOXWORKLOADVCPUS=1"
 )
 
 # - for vanilla Kata we use the kernel binary. For ConfPods we use IGVM, so no need to provide kernel path.

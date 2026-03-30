@@ -1182,14 +1182,9 @@ impl MemoryInfo {
 
     /// Validates the memory configuration information.
     ///
-    /// This ensures that critical memory parameters like `default_memory`
-    /// and `memory_slots` are non-zero.
+    /// This ensures that critical memory parameters like `memory_slots`
+    /// are non-zero.
     pub fn validate(&self) -> Result<()> {
-        if self.default_memory == 0 {
-            return Err(std::io::Error::other(
-                "Configured memory size for guest VM is zero",
-            ));
-        }
         if self.memory_slots == 0 {
             return Err(std::io::Error::other(
                 "Configured memory slots for guest VM are zero",

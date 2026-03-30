@@ -80,9 +80,6 @@ impl ConfigPlugin for CloudHypervisorConfig {
                 ch.machine_info.entropy_source = default::DEFAULT_CH_ENTROPY_SOURCE.to_string();
             }
 
-            if ch.memory_info.default_memory == 0 {
-                ch.memory_info.default_memory = default::DEFAULT_CH_MEMORY_SIZE_MB;
-            }
             if ch.memory_info.memory_slots == 0 {
                 ch.memory_info.memory_slots = default::DEFAULT_CH_MEMORY_SLOTS;
             }
@@ -138,12 +135,6 @@ impl ConfigPlugin for CloudHypervisorConfig {
                 return Err(std::io::Error::other(format!(
                     "CH hypervisor cannot support {} PCI bridges",
                     ch.device_info.default_bridges,
-                )));
-            }
-
-            if ch.memory_info.default_memory < MIN_CH_MEMORY_SIZE_MB {
-                return Err(std::io::Error::other(format!(
-                    "CH hypervisor has minimal memory limitation {MIN_CH_MEMORY_SIZE_MB}",
                 )));
             }
         }

@@ -137,11 +137,6 @@ impl VmConfig {
             conf.cpu_info.default_vcpus = default::DEFAULT_GUEST_VCPUS as f32;
         }
 
-        // memory_size
-        if conf.memory_info.default_memory == 0 {
-            conf.memory_info.default_memory = default::DEFAULT_QEMU_MEMORY_SIZE_MB;
-        }
-
         // default_bridges
         if conf.device_info.default_bridges == 0 {
             conf.device_info.default_bridges = default::DEFAULT_QEMU_PCI_BRIDGES;
