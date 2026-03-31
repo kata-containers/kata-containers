@@ -26,6 +26,10 @@ use shim::{config, Args, Error, ShimExecutor};
 const DEFAULT_TOKIO_RUNTIME_WORKER_THREADS: usize = 2;
 // env to config tokio runtime worker threads
 const ENV_TOKIO_RUNTIME_WORKER_THREADS: &str = "TOKIO_RUNTIME_WORKER_THREADS";
+// RUNTIME_ALLOW_MOUNTS are the custom mount types allowed by the runtime. These
+// types should not be handled by the mount manager.
+// To include prepare mount types, use "/*" suffix, such as "format/*"
+pub const RUNTIME_ALLOW_MOUNTS: &str = "containerd.io/runtime-allow-mounts";
 
 #[derive(Debug)]
 enum Action {
@@ -134,6 +138,10 @@ fn show_info() -> Result<()> {
     let mut info = RuntimeInfo::new();
     info.name = config::CONTAINERD_RUNTIME_NAME.to_string();
     info.version = Some(version).into();
+    info.annotations.insert(
+        RUNTIME_ALLOW_MOUNTS.to_string(),
+        "mkdir/*,format/*,erofs".to_string(),
+    );
 
     let data = info
         .write_to_bytes()
