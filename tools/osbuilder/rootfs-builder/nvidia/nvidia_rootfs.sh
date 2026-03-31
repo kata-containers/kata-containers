@@ -224,6 +224,26 @@ chisseled_gpudirect() {
 	exit 1
 }
 
+chisseled_nvat() {
+	if [[ "${type}" != "confidential" ]]; then
+                return
+	fi
+
+	echo "nvidia: chisseling NVAT"
+
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	# NVAT shared library (bundled via coco-guest-components tarball)
+	cp -a "${stage_one}"/usr/local/lib/libnvat.so* "${libdir}"/.
+
+	# NVAT runtime dependencies (per ldd on attestation-agent)
+	cp -a "${stage_one}/${libdir}"/libxml2.so.2*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libstdc++.so.6*   "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/liblzma.so.5*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libicuuc.so.*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libicudata.so.*   "${libdir}"/.
+}
+
 setup_nvrc_init_symlinks() {
 	local nvrc="NVRC-${machine_arch}-unknown-linux-musl"
 	# make sure NVRC is the init process for the initrd and image case
@@ -358,7 +378,7 @@ coco_guest_components() {
 	local -r pause_dir="pause_bundle"
 
 	mkdir -p "${coco_bin_dir}"
-	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent     "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent-nv  "${coco_bin_dir}/attestation-agent"
 	cp -a "${stage_one}/${coco_bin_dir}"/api-server-rest       "${coco_bin_dir}/."
 	cp -a "${stage_one}/${coco_bin_dir}"/confidential-data-hub "${coco_bin_dir}/."
 
@@ -418,6 +438,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		done
 
 		coco_guest_components
+		chisseled_nvat
 	fi
 
 	compress_rootfs
