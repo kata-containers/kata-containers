@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2019-2026 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -13,6 +13,9 @@ mod share_virtio_fs_inline;
 use share_virtio_fs_inline::ShareVirtioFsInline;
 mod share_virtio_fs_standalone;
 use share_virtio_fs_standalone::ShareVirtioFsStandalone;
+mod share_virtio_fs_nydus;
+pub use nydus::nydus_client::NydusClient;
+pub use nydus::nydus_daemon::{Nydusd, NydusdConfig};
 mod utils;
 use tokio::sync::Mutex;
 pub use utils::{
@@ -34,14 +37,20 @@ use tokio::sync::RwLock;
 
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
+use crate::share_fs::share_virtio_fs_nydus::ShareVirtioFsNydus;
+
 const VIRTIO_FS: &str = "virtio-fs";
-const _VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
+pub const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 
 const DEFAULT_KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
 /// default share fs (for example virtio-fs) mount path in the guest
 const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+
+/// The virtiofs mount point in the guest for nydusd mode.
+/// In nydusd mode, virtiofs is mounted at `/run/kata-containers/shared/`
+const DEFAULT_KATA_GUEST_ROOT_DIR: &str = "/run/kata-containers/shared/";
 
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
@@ -52,6 +61,11 @@ pub fn kata_host_shared_dir() -> String {
 
 pub fn kata_guest_share_dir() -> String {
     build_path(DEFAULT_KATA_GUEST_SHARE_DIR)
+}
+
+/// The virtiofs mount point in the guest for nydusd mode.
+pub fn kata_guest_nydus_root_dir() -> String {
+    build_path(DEFAULT_KATA_GUEST_ROOT_DIR)
 }
 
 #[async_trait]
@@ -185,16 +199,39 @@ pub trait ShareFsMount: Send + Sync {
     async fn cleanup(&self, sid: &str) -> Result<()>;
 }
 
-pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
+/// Result of creating a new share fs instance.
+pub struct ShareFsInstance {
+    /// The share fs trait object (always present).
+    pub share_fs: Arc<dyn ShareFs>,
+    /// The nydus-specific trait object (present only in standalone nydus mode).
+    pub nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
+}
+
+pub fn new(id: &str, config: &SharedFsInfo) -> Result<ShareFsInstance> {
     let shared_fs = config.shared_fs.clone();
     let shared_fs = shared_fs.unwrap_or_default();
     match shared_fs.as_str() {
-        INLINE_VIRTIO_FS => Ok(Arc::new(
-            ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
-        )),
-        VIRTIO_FS => Ok(Arc::new(
-            ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
-        )),
+        INLINE_VIRTIO_FS => Ok(ShareFsInstance {
+            share_fs: Arc::new(
+                ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
+            ),
+            nydus_share_fs: None,
+        }),
+        VIRTIO_FS => Ok(ShareFsInstance {
+            share_fs: Arc::new(
+                ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
+            ),
+            nydus_share_fs: None,
+        }),
+        VIRTIO_FS_NYDUS => {
+            let nydus = Arc::new(
+                ShareVirtioFsNydus::new(id, config).context("new nydus virtio fs")?,
+            );
+            Ok(ShareFsInstance {
+                share_fs: nydus.clone() as Arc<dyn ShareFs>,
+                nydus_share_fs: Some(nydus as Arc<dyn NydusShareFs>),
+            })
+        }
         _ => Err(anyhow!("unsupported shared fs {:?}", &shared_fs)),
     }
 }
