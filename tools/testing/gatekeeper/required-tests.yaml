@@ -22,6 +22,7 @@ paths:
   - "^docs/": ["static"]
   - "^mkdocs\\.yaml$": ["static"]
   - "\\.md$": ["static"]
+  - "^tests/spellcheck/kata-dictionary.txt": ["static"]
   # TODO: Expand filters
   # Sources
   #- "^src/": ["static", "build", "test"]
