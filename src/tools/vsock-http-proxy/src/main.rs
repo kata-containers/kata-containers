@@ -81,7 +81,7 @@ async fn serve_mapping(mapping: PortMapping) -> Result<()> {
     // VMADDR_CID_ANY (u32::MAX) accepts connections from any CID, which
     // is correct for a guest-side listener: the host connects using the
     // guest's assigned CID.
-    let listener = VsockListener::bind(libc::VMADDR_CID_ANY, mapping.vsock_port)
+    let mut listener = VsockListener::bind(libc::VMADDR_CID_ANY, mapping.vsock_port)
         .with_context(|| format!("listen on vsock port {}", mapping.vsock_port))?;
 
     eprintln!(
