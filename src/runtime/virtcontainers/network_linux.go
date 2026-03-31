@@ -478,8 +478,8 @@ func (n *LinuxNetwork) detectHypervisorNetns(s *Sandbox) (string, bool) {
 
 	hypervisorNs := fmt.Sprintf("/proc/%d/ns/net", pid)
 
-	// Compare namespace inodes. If they differ the hypervisor was placed
-	// in a different namespace (e.g. by Docker).
+	// Compare device and inode numbers. Inode numbers are only unique
+	// within a device, so both must match to confirm the same namespace.
 	var currentStat, hvStat unix.Stat_t
 	if err := unix.Stat(n.netNSPath, &currentStat); err != nil {
 		return "", false
@@ -488,7 +488,7 @@ func (n *LinuxNetwork) detectHypervisorNetns(s *Sandbox) (string, bool) {
 		return "", false
 	}
 
-	if currentStat.Ino != hvStat.Ino {
+	if currentStat.Dev != hvStat.Dev || currentStat.Ino != hvStat.Ino {
 		return hypervisorNs, true
 	}
 	return "", false
