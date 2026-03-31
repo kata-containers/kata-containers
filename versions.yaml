@@ -269,6 +269,10 @@ externals:
     ctk:
       version: "1.18.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
+    nvat:
+      desc: "NVIDIA Attestation SDK"
+      version: "2026.03.02"
+      url: "https://github.com/NVIDIA/attestation-sdk"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
