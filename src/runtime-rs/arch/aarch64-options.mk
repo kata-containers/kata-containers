@@ -13,7 +13,6 @@ CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
 QEMUFW := AAVMF_CODE.fd
-QEMUFWVOL := AAVMF_VARS.fd
 
 # dragonball binary name
 DBCMD := dragonball

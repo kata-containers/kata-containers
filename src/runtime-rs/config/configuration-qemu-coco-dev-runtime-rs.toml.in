@@ -76,12 +76,6 @@ kernel_params = "@KERNELPARAMS@"
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWAREPATH@"
 
-# Path to the firmware volume.
-# firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
-# as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
-# can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWAREVOLUMEPATH@"
-
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
@@ -89,12 +83,12 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
 # comma-separated list of seccomp sandbox features to control the syscall access.
-# For example, `seccompsandbox= "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
+# For example, `seccomp_sandbox = "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
 # Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 # Recommended value when enabling: "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
-seccompsandbox = "@DEFSECCOMPSANDBOXPARAM@"
+seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
@@ -311,11 +305,6 @@ enable_iommu_platform = false
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
-# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
-# qemu will delay this many seconds and then attempt to reconnect.
-# Zero disables reconnecting, and the default is zero.
-vhost_user_reconnect_timeout_sec = 0
-
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
@@ -350,7 +339,7 @@ enable_debug = false
 #
 # If set to the empty string "", no extra monitor socket is added. This is
 # the default.
-extra_monitor_socket = ""
+dbg_monitor_socket = ""
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
@@ -377,18 +366,6 @@ disable_image_nvdimm = false
 # a bridge.
 # Default false
 hotplug_vfio_on_root_bus = false
-
-# Enable hot-plugging of VFIO devices to a bridge-port,
-# root-port or switch-port.
-# The default setting is  "no-port"
-hot_plug_vfio = "no-port"
-
-# In a confidential compute environment hot-plugging can compromise
-# security.
-# Enable cold-plugging of VFIO devices to a bridge-port,
-# root-port or switch-port.
-# The default setting is  "no-port", which means disabled.
-cold_plug_vfio = "no-port"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
@@ -483,9 +460,6 @@ guest_memory_dump_path = ""
 # See: https://www.qemu.org/docs/master/qemu-qmp-ref.html#Dump-guest-memory for details
 #guest_memory_dump_paging=false
 
-# use legacy serial for guest console if available and implemented for architecture. Default false
-use_legacy_serial = false
-
 # disable applying SELinux on the VMM process (default false)
 disable_selinux = @DEFDISABLESELINUX@
 
@@ -497,7 +471,7 @@ disable_selinux = @DEFDISABLESELINUX@
 disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
 
-[factory]
+[hypervisor.qemu.factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
 # agent memory by mapping it readonly. It helps speeding up new container
@@ -725,20 +699,6 @@ agent_name = "@PROJECT_TYPE@"
 # within the guest
 # (default: true)
 disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
-
-# vCPUs pinning settings
-# if enabled, each vCPU thread will be scheduled to a fixed CPU
-# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
-enable_vcpus_pinning = false
-
-# Apply a custom SELinux security policy to the container process inside the VM.
-# This is used when you want to apply a type other than the default `container_t`,
-# so general users should not uncomment and apply it.
-# (format: "user:role:type")
-# Note: You cannot specify MCS policy with the label because the sensitivity levels and
-# categories are determined automatically by high-level container runtimes such as containerd.
-# Example value when enabling: "system_u:system_r:container_t"
-guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
