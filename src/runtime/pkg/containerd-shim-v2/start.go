@@ -8,11 +8,13 @@ package containerdshim
 import (
 	"context"
 	"fmt"
-
-	"github.com/sirupsen/logrus"
+	"syscall"
 
 	"github.com/containerd/containerd/api/types/task"
+	"github.com/sirupsen/logrus"
+
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	vcutils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 func startContainer(ctx context.Context, s *service, c *container) (retErr error) {
@@ -50,11 +52,21 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		// Run the network rescan asynchronously so we don't block
 		// the Start RPC — Docker won't call allocateNetwork until
 		// it receives the StartResponse.
-		go func() {
-			if err := s.sandbox.RescanNetwork(s.ctx); err != nil {
-				shimLog.WithError(err).Warn("async network rescan failed")
-			}
-		}()
+		if c.spec != nil && vcutils.IsDockerContainer(c.spec) {
+			go func() {
+				if err := s.sandbox.RescanNetwork(s.ctx); err != nil {
+					shimLog.WithError(err).WithFields(logrus.Fields{
+						"sandbox":   s.sandbox.ID(),
+						"container": c.id,
+					}).Error("Docker 26+ network setup failed: no interfaces discovered after timeout. " +
+						"Container killed to prevent silent networking failure. " +
+						"Check Docker daemon logs and network configuration.")
+					if sigErr := s.sandbox.SignalProcess(s.ctx, c.id, c.id, syscall.SIGKILL, true); sigErr != nil {
+						shimLog.WithError(sigErr).Error("failed to kill container after network setup failure")
+					}
+				}
+			}()
+		}
 
 		// We use s.ctx(`ctx` derived from `s.ctx`) to check for cancellation of the
 		// shim context and the context passed to startContainer for tracing.

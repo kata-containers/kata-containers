@@ -579,6 +579,9 @@ func TestRevertBytes(t *testing.T) {
 	assert.Equal(expectedNum, num)
 }
 
+// TestIsDockerContainer validates hook-detection logic in isolation.
+// End-to-end Docker→containerd→kata integration is covered by
+// external tests (see tests/integration/kubernetes/).
 func TestIsDockerContainer(t *testing.T) {
 	assert := assert.New(t)
 
@@ -625,6 +628,9 @@ func TestIsDockerContainer(t *testing.T) {
 	assert.False(IsDockerContainer(ociSpec3))
 }
 
+// TestDockerNetnsPath validates netns path discovery from OCI hook args.
+// This does not test the actual namespace opening or endpoint scanning;
+// see integration tests for full-path coverage.
 func TestDockerNetnsPath(t *testing.T) {
 	assert := assert.New(t)
 

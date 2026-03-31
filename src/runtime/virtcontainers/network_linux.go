@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	otelTrace "go.opentelemetry.io/otel/trace"
@@ -347,10 +348,10 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 	// hypervisor is running in a different namespace and retry there.
 	if len(endpoints) == 0 && s != nil {
 		if hypervisorNs, ok := n.detectHypervisorNetns(s); ok {
-			networkLogger().WithFields(map[string]interface{}{
+			networkLogger().WithFields(logrus.Fields{
 				"original_netns":   n.netNSPath,
 				"hypervisor_netns": hypervisorNs,
-			}).Info("no endpoints in original netns, switching to hypervisor netns")
+			}).Debug("no endpoints in original netns, switching to hypervisor netns")
 
 			origPath := n.netNSPath
 			origCreated := n.netNSCreated
@@ -414,6 +415,7 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 	for _, link := range linkList {
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
+			// No rollback needed — no endpoints were added in this iteration yet.
 			return nil, err
 		}
 
@@ -685,7 +687,7 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 		if delErr := deleteNetNS(n.placeholderNetNS); delErr != nil {
 			networkLogger().WithField("netns", n.placeholderNetNS).WithError(delErr).Warn("failed to delete placeholder netns during teardown")
 		} else {
-			networkLogger().Infof("Placeholder network namespace %q deleted", n.placeholderNetNS)
+			networkLogger().WithField("netns", n.placeholderNetNS).Info("placeholder network namespace deleted")
 			n.placeholderNetNS = ""
 		}
 	}

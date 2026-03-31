@@ -357,7 +357,7 @@ func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
-	s.Logger().Info("waiting for network interfaces in namespace")
+	s.Logger().Debug("waiting for network interfaces in namespace")
 
 	for {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
@@ -371,8 +371,7 @@ func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			s.Logger().Warn("no network interfaces found after timeout")
-			return nil
+			return fmt.Errorf("no network interfaces discovered after %s timeout", maxWait)
 		case <-ticker.C:
 		}
 	}

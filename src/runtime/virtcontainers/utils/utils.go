@@ -494,11 +494,9 @@ func RevertBytes(num uint64) uint64 {
 	return 1024*RevertBytes(a) + b
 }
 
-const (
-	// dockerLibnetworkSetkey is the hook argument that identifies Docker's
-	// network configuration hook. The argument following it is the sandbox ID.
-	dockerLibnetworkSetkey = "libnetwork-setkey"
-)
+// dockerLibnetworkSetkey is the hook argument that identifies Docker's
+// network configuration hook. The argument following it is the sandbox ID.
+const dockerLibnetworkSetkey = "libnetwork-setkey"
 
 // dockerNetnsPrefixes are the well-known filesystem paths where the Docker
 // daemon bind-mounts container network namespaces.
