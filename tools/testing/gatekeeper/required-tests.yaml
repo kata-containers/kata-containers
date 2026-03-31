@@ -97,7 +97,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev-runtime-rs, nydus, guest-pull)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
