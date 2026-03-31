@@ -38,7 +38,6 @@ pub struct ShareVirtioFsNydus {
 }
 
 impl ShareVirtioFsNydus {
-    #[allow(dead_code)]
     pub fn new(id: &str, config: &SharedFsInfo) -> Result<Self> {
         Ok(Self {
             config: ShareVirtioFsNydusConfig {
@@ -202,7 +201,6 @@ impl ShareVirtioFsNydus {
     /// The overlay_config should be a JSON string containing:
     /// - upper_dir: path to the upper directory in the guest
     /// - work_dir: path to the work directory in the guest
-    #[allow(dead_code)]
     async fn do_mount_rafs_with_overlay(
         &self,
         mountpoint: &str,

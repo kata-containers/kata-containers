@@ -40,7 +40,7 @@ use crate::{
     network::{self, Network, NetworkConfig},
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
-    share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
+    share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, NydusShareFs, ShareFs},
     volume::{Volume, VolumeResource},
     ResourceConfig, ResourceUpdateOp,
 };
@@ -53,6 +53,7 @@ pub(crate) struct ResourceManagerInner {
     device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
+    nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
 
     pub rootfs_resource: RootFsResource,
     pub volume_resource: VolumeResource,
@@ -124,6 +125,7 @@ impl ResourceManagerInner {
             device_manager,
             network: None,
             share_fs: None,
+            nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource,
@@ -148,14 +150,16 @@ impl ResourceManagerInner {
         for dc in device_configs {
             match dc {
                 ResourceConfig::ShareFs(c) => {
-                    self.share_fs = if self
+                    if self
                         .hypervisor
                         .capabilities()
                         .await?
                         .is_fs_sharing_supported()
                     {
-                        let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
-                        share_fs
+                        let instance =
+                            share_fs::new(&self.sid, &c).context("new share fs")?;
+                        instance
+                            .share_fs
                             .setup_device_before_start_vm(
                                 self.hypervisor.as_ref(),
                                 &self.device_manager,
@@ -168,9 +172,8 @@ impl ResourceManagerInner {
                             .await
                             .context("failed setup sandbox bindmounts")?;
 
-                        Some(share_fs)
-                    } else {
-                        None
+                        self.share_fs = Some(instance.share_fs);
+                        self.nydus_share_fs = instance.nydus_share_fs;
                     };
                 }
                 ResourceConfig::Network(c) => {
@@ -378,6 +381,7 @@ impl ResourceManagerInner {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
+                &self.nydus_share_fs,
                 self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
                 &self.sid,
@@ -564,6 +568,14 @@ impl ResourceManagerInner {
             .await
             .context("failed to cleanup sandbox bindmounts")?;
 
+        // stop share fs daemon (e.g., virtiofsd, nydusd) before cleaning up mount
+        if let Some(share_fs) = &self.share_fs {
+            share_fs
+                .stop()
+                .await
+                .context("failed to stop share fs daemon")?;
+        }
+
         // clean up share fs mount
         if let Some(share_fs) = &self.share_fs {
             share_fs
@@ -714,6 +726,7 @@ impl Persist for ResourceManagerInner {
             device_manager,
             network: None,
             share_fs: None,
+            nydus_share_fs: None,
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource: CgroupsResource::restore(

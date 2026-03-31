@@ -196,16 +196,39 @@ pub trait ShareFsMount: Send + Sync {
     async fn cleanup(&self, sid: &str) -> Result<()>;
 }
 
-pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
+/// Result of creating a new share fs instance.
+pub struct ShareFsInstance {
+    /// The share fs trait object (always present).
+    pub share_fs: Arc<dyn ShareFs>,
+    /// The nydus-specific trait object (present only in standalone nydus mode).
+    pub nydus_share_fs: Option<Arc<dyn NydusShareFs>>,
+}
+
+pub fn new(id: &str, config: &SharedFsInfo) -> Result<ShareFsInstance> {
     let shared_fs = config.shared_fs.clone();
     let shared_fs = shared_fs.unwrap_or_default();
     match shared_fs.as_str() {
-        INLINE_VIRTIO_FS => Ok(Arc::new(
-            ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
-        )),
-        VIRTIO_FS => Ok(Arc::new(
-            ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
-        )),
-        _ => Err(anyhow!("unsupported shred fs {:?}", &shared_fs)),
+        INLINE_VIRTIO_FS => Ok(ShareFsInstance {
+            share_fs: Arc::new(
+                ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
+            ),
+            nydus_share_fs: None,
+        }),
+        VIRTIO_FS => Ok(ShareFsInstance {
+            share_fs: Arc::new(
+                ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
+            ),
+            nydus_share_fs: None,
+        }),
+        VIRTIO_FS_NYDUS => {
+            let nydus = Arc::new(
+                ShareVirtioFsNydus::new(id, config).context("new nydus virtio fs")?,
+            );
+            Ok(ShareFsInstance {
+                share_fs: nydus.clone() as Arc<dyn ShareFs>,
+                nydus_share_fs: Some(nydus as Arc<dyn NydusShareFs>),
+            })
+        }
+        _ => Err(anyhow!("unsupported shared fs {:?}", &shared_fs)),
     }
 }
