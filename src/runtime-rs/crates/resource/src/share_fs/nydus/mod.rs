@@ -15,8 +15,6 @@ pub struct MountRequest {
     pub fs_type: String,
     pub source: PathBuf,
     pub config: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub overlay: Option<String>,
 }
 
 impl MountRequest {
@@ -25,21 +23,6 @@ impl MountRequest {
             fs_type: fs_type.to_string(),
             source: source.to_path_buf(),
             config: config.to_string(),
-            overlay: None,
-        }
-    }
-
-    pub fn new_with_overlay(
-        fs_type: &str,
-        source: &Path,
-        config: &str,
-        overlay_config: &str,
-    ) -> Self {
-        Self {
-            fs_type: fs_type.to_string(),
-            source: source.to_path_buf(),
-            config: config.to_string(),
-            overlay: Some(overlay_config.to_string()),
         }
     }
 }
