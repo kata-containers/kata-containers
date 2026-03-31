@@ -66,6 +66,33 @@ pub trait ShareFs: Send + Sync {
     ) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
+
+    /// Stop the share fs daemon process (e.g., virtiofsd, nydusd).
+    /// Called during sandbox cleanup before cleaning up mounts.
+    /// Default implementation does nothing for inline modes that don't manage external daemons.
+    async fn stop(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+/// Trait for nydus-specific data-plane operations (standalone nydusd mode).
+/// This trait is implemented by ShareVirtioFsNydus and provides operations
+/// that are specific to the nydusd daemon's rafs mount capabilities.
+#[async_trait]
+pub trait NydusShareFs: Send + Sync {
+    /// Mount rafs with nydusd native overlay support.
+    /// Returns the mount point path within the nydusd namespace.
+    async fn mount_rafs(
+        &self,
+        cid: &str,
+        rafs_meta: &str,
+        config: &str,
+        overlay_config: &str,
+    ) -> Result<String>;
+
+    /// Umount rafs from nydusd.
+    /// Called during container cleanup.
+    async fn umount_rafs(&self, mountpoint: &str) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
