@@ -11,6 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::mount::Mount;
 mod block_rootfs;
+mod erofs_rootfs;
 pub mod virtual_volume;
 
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
@@ -19,8 +20,11 @@ use virtual_volume::{is_kata_virtual_volume, VirtualVolume};
 use std::{collections::HashMap, sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
-use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
-use crate::share_fs::ShareFs;
+use self::{
+    block_rootfs::is_block_rootfs, erofs_rootfs::ErofsMultiLayerRootfs,
+    nydus_rootfs::NYDUS_ROOTFS_TYPE,
+};
+use crate::{rootfs::erofs_rootfs::is_erofs_multi_layer, share_fs::ShareFs};
 use oci_spec::runtime as oci;
 
 const ROOTFS: &str = "rootfs";
@@ -90,9 +94,26 @@ impl RootFsResource {
                     Err(anyhow!("share fs is unavailable"))
                 }
             }
-            mounts_vec if is_single_layer_rootfs(mounts_vec) => {
+            _ if is_erofs_multi_layer(rootfs_mounts) => {
+                info!(
+                    sl!(),
+                    "handling multi-layer erofs rootfs with {} mounts",
+                    rootfs_mounts.len()
+                );
+
+                let multi_layer =
+                    ErofsMultiLayerRootfs::new(device_manager, sid, cid, rootfs_mounts, share_fs)
+                        .await
+                        .context("new multi-layer erofs rootfs")?;
+
+                let ret = Arc::new(multi_layer);
+                let mut inner = self.inner.write().await;
+                inner.rootfs.push(ret.clone());
+                Ok(ret)
+            }
+            _ if is_single_layer_rootfs(rootfs_mounts) => {
                 // Safe as single_layer_rootfs must have one layer
-                let layer = &mounts_vec[0];
+                let layer = &rootfs_mounts[0];
                 let mut inner = self.inner.write().await;
 
                 if is_guest_pull_volume(share_fs, layer) {
