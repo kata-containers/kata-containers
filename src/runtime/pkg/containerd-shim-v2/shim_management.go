@@ -41,6 +41,13 @@ const (
 	PolicyURL             = "/policy"
 	IP6TablesURL          = "/ip6tables"
 	MetricsURL            = "/metrics"
+	DCGMVSockEndpointsURL = "/dcgm-vsock-endpoints"
+
+	// dcgmVSockPortsParam is the kernel parameter that carries the
+	// comma-separated list of vsock_port:http_port mappings for the DCGM
+	// vsock-http-proxy instances.  Set by the administrator in kernel_params
+	// and read by NVRC inside the guest.
+	dcgmVSockPortsParam = "nvrc.dcgm.vsock_ports"
 )
 
 var (
@@ -63,6 +70,67 @@ func (s *service) agentURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprint(w, url)
+}
+
+// dcgmVSockEndpoints handles GET /dcgm-vsock-endpoints.
+//
+// It returns a newline-separated list of "vsock://CID:VSOCK_PORT" endpoints
+// for the in-guest vsock-http-proxy instances serving DCGM metrics.  The CID
+// is obtained from the agent URL; the VSOCK ports are the first element of
+// each "vsock_port:http_port" pair in the "nvrc.dcgm.vsock_ports" kernel
+// parameter set by the administrator in kernel_params.
+// Returns 204 No Content when the kernel parameter is absent.
+func (s *service) dcgmVSockEndpoints(w http.ResponseWriter, r *http.Request) {
+	// Find nvrc.dcgm.vsock_ports in the kernel parameters configured for
+	// this sandbox.
+	var mappingStr string
+	for _, p := range s.config.HypervisorConfig.KernelParams {
+		if p.Key == dcgmVSockPortsParam {
+			mappingStr = p.Value
+			break
+		}
+	}
+	if mappingStr == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Get the VSOCK CID from the agent URL (format: "vsock://CID:PORT").
+	agentURL, err := s.sandbox.GetAgentURL()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "get agent URL: %v", err)
+		return
+	}
+	var cid string
+	if after, ok := strings.CutPrefix(agentURL, "vsock://"); ok {
+		cid, _, _ = strings.Cut(after, ":")
+	}
+	if cid == "" {
+		// Non-vsock hypervisor — DCGM VSOCK export is not meaningful.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Each mapping is "vsock_port:http_port"; the host only needs the vsock
+	// port to connect.
+	var endpoints []string
+	for mapping := range strings.SplitSeq(mappingStr, ",") {
+		mapping = strings.TrimSpace(mapping)
+		if mapping == "" {
+			continue
+		}
+		// Extract just the vsock port (first component of vsock_port:http_port).
+		vsockPort, _, ok := strings.Cut(mapping, ":")
+		if !ok {
+			// Plain port number (no colon) — use as-is for backward compat.
+			vsockPort = mapping
+		}
+		if vsockPort != "" {
+			endpoints = append(endpoints, "vsock://"+cid+":"+vsockPort)
+		}
+	}
+	fmt.Fprint(w, strings.Join(endpoints, "\n"))
 }
 
 // serveMetrics handle /metrics requests
@@ -295,6 +363,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m.Handle(IPTablesURL, http.HandlerFunc(s.ipTablesHandler))
 	m.Handle(PolicyURL, http.HandlerFunc(s.policyHandler))
 	m.Handle(IP6TablesURL, http.HandlerFunc(s.ip6TablesHandler))
+	m.Handle(DCGMVSockEndpointsURL, http.HandlerFunc(s.dcgmVSockEndpoints))
 	s.mountPprofHandle(m, ociSpec)
 
 	// register shim metrics

@@ -271,6 +271,15 @@ const (
 
 	// Initdata is the initdata passed in when CreateVM
 	Initdata = kataConfAnnotationsPrefix + "hypervisor.cc_init_data"
+
+	// DCGMVSockEndpoints is a read-only sandbox annotation written by the
+	// shim after the VM starts.  It contains a newline-separated list of
+	// "vsock://CID:VSOCK_PORT" URIs — one per "vsock_port:http_port" pair in
+	// the kernel parameter "nvrc.dcgm.vsock_ports" — that host-side
+	// Prometheus scrapers can use to reach the in-guest vsock-http-proxy
+	// instances forwarding to dcgm-exporter.  Also queryable at runtime via
+	// the shim management endpoint /dcgm-vsock-endpoints.
+	DCGMVSockEndpoints = kataAnnotationsPrefix + "nvidia.dcgm.vsock.endpoints"
 )
 
 // Runtime related annotations

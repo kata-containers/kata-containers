@@ -1,0 +1,26 @@
+# Copyright (c) 2026 The Kata Containers Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[workspace]
+resolver = "2"
+
+[package]
+name = "vsock-http-proxy"
+version = "0.0.1"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2021"
+license = "Apache-2.0"
+description = "Bridge a guest-side HTTP service to a virtio-vsock port"
+
+[[bin]]
+name = "vsock-http-proxy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+hyper = { version = "0.14", features = ["http1", "server", "client", "tcp"] }
+libc = "0.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio-vsock = "0.3"

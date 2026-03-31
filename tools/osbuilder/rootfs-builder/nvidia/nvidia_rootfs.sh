@@ -164,6 +164,32 @@ chisseled_nvswitch() {
 	sed -i 's|^LOG_USE_SYSLOG=.*|LOG_USE_SYSLOG=1|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 }
 
+build_vsock_http_proxy() {
+	local proxy_bin="${BUILD_DIR}/vsock-http-proxy-${machine_arch}"
+	if [[ -e "${proxy_bin}" ]]; then
+		info "nvidia: vsock-http-proxy already built"
+		return
+	fi
+
+	local repo_root
+	repo_root="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
+	local proxy_src="${repo_root}/src/tools/vsock-http-proxy"
+
+	local rust_target
+	case "${machine_arch}" in
+		x86_64)  rust_target="x86_64-unknown-linux-gnu"  ;;
+		aarch64) rust_target="aarch64-unknown-linux-gnu" ;;
+		*) die "Unsupported architecture for vsock-http-proxy: ${machine_arch}" ;;
+	esac
+
+	info "nvidia: building vsock-http-proxy for ${machine_arch} (${rust_target})"
+	cargo build --release \
+		--target "${rust_target}" \
+		--manifest-path "${proxy_src}/Cargo.toml"
+
+	cp "${repo_root}/target/${rust_target}/release/vsock-http-proxy" "${proxy_bin}"
+}
+
 chisseled_dcgm() {
 	echo "nvidia: chisseling DCGM"
 
@@ -173,6 +199,11 @@ chisseled_dcgm() {
 	cp -a "${stage_one}"/usr/"${libdir}"/libdcgm.*     "${libdir}"/.
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
+
+	# Install the in-guest VSOCK proxy so that NVRC can start it when the
+	# nvrc.dcgm.vsock_ports kernel parameter is present.
+	build_vsock_http_proxy
+	cp -a "${BUILD_DIR}/vsock-http-proxy-${machine_arch}" bin/vsock-http-proxy
 }
 
 # copute always includes utility per default
