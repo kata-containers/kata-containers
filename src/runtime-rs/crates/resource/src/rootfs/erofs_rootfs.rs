@@ -1,0 +1,638 @@
+// Copyright (c) 2026 Ant Group
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Handle multi-layer EROFS rootfs:
+// Mount[0]: ext4 rw layer -> virtio-blk device (writable)
+// Mount[1]: erofs with device= -> virtio-blk via VMDK (read-only)
+// Mount[2]: overlay (format/mkdir/overlay) -> host mount OR guest agent
+// The overlay mount may be handled by the guest agent if it contains "{{"
+// templates in upperdir/workdir.
+
+use super::{Rootfs, ROOTFS};
+use crate::share_fs::{do_get_guest_path, do_get_host_path};
+use agent::Storage;
+use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
+use hypervisor::{
+    device::{
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        DeviceConfig, DeviceType,
+    },
+    BlockConfig, BlockDeviceAio, BlockDeviceFormat,
+};
+use kata_types::config::hypervisor::{
+    VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
+};
+use kata_types::mount::Mount;
+use oci_spec::runtime as oci;
+use std::fs;
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// EROFS rootfs type identifier
+pub(crate) const EROFS_ROOTFS_TYPE: &str = "erofs";
+/// RW layer rootfs type identifier, used for multi-layer EROFS as the writable upper layer
+/// Typically ext4 format, but can be extended to other fs types in the future.
+pub(crate) const RW_LAYER_ROOTFS_TYPE: &str = "ext4";
+/// VMDK file extension for merged EROFS image
+const EROFS_MERGED_VMDK: &str = "merged_fs.vmdk";
+/// Maximum number of virtio-blk devices allowed
+const MAX_VIRTIO_BLK_DEVICES: usize = 10;
+/// Maximum sectors per 2GB extent (2GB / 512 bytes per sector)
+const MAX_2GB_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
+/// Sectors per track for VMDK geometry
+const SECTORS_PER_TRACK: u64 = 63;
+/// Number of heads for VMDK geometry
+const NUMBER_HEADS: u64 = 16;
+/// VMDK subformat type (twoGbMaxExtentFlat for large files)
+const VMDK_SUBFORMAT: &str = "twoGbMaxExtentFlat";
+/// VMDK adapter type
+const VMDK_ADAPTER_TYPE: &str = "ide";
+/// VMDK hardware version
+const VMDK_HW_VERSION: &str = "4";
+/// Default shared directory for guest rootfs VMDK files (for multi-layer EROFS)
+const DEFAULT_KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
+/// Template for mkdir option in overlay mount (X-containerd.mkdir.path)
+const X_CONTAINERD_MKDIR_PATH: &str = "X-containerd.mkdir.path=";
+
+/// Generate merged VMDK file from multiple EROFS devices
+///
+/// Creates a VMDK descriptor that combines multiple EROFS images into a single
+/// virtual block device (flatten device). For a single device, the EROFS image
+/// is used directly without a VMDK wrapper.
+///
+/// And `erofs_devices` are for host paths to EROFS image files (from `source` and `device=` options)
+async fn generate_merged_erofs_vmdk(
+    sid: &str,
+    cid: &str,
+    erofs_devices: &[String],
+) -> Result<(String, BlockDeviceFormat)> {
+    if erofs_devices.is_empty() {
+        return Err(anyhow!("no EROFS devices provided"));
+    }
+
+    // Validate all device paths exist and are regular files before proceeding.
+    for dev_path in erofs_devices {
+        let metadata = fs::metadata(dev_path)
+            .context(format!("EROFS device path not accessible: {}", dev_path))?;
+        if !metadata.is_file() {
+            return Err(anyhow!(
+                "EROFS device path is not a regular file: {}",
+                dev_path
+            ));
+        }
+    }
+
+    // For single device, use it directly with Raw format (no need for VMDK descriptor)
+    if erofs_devices.len() == 1 {
+        info!(
+            sl!(),
+            "single EROFS device, using directly with Raw format: {}", erofs_devices[0]
+        );
+        return Ok((erofs_devices[0].clone(), BlockDeviceFormat::Raw));
+    }
+
+    // For multiple devices, create VMDK descriptor
+    let sandbox_dir = PathBuf::from(DEFAULT_KATA_GUEST_ROOT_SHARED_FS).join(sid);
+    let container_dir = sandbox_dir.join(cid);
+    fs::create_dir_all(&container_dir).context(
+        format!(
+            "failed to create container directory: {}",
+            container_dir.display()
+        ))?;
+
+    let vmdk_path = container_dir.join(EROFS_MERGED_VMDK);
+
+    info!(
+        sl!(),
+        "creating VMDK descriptor for {} EROFS devices: {}",
+        erofs_devices.len(),
+        vmdk_path.display()
+    );
+
+    // create_vmdk_descriptor uses atomic write (temp + rename) internally,
+    // so a failure will not leave a corrupt descriptor file.
+    create_vmdk_descriptor(&vmdk_path, erofs_devices)
+        .context("failed to create VMDK descriptor")?;
+
+    Ok((vmdk_path.display().to_string(), BlockDeviceFormat::Vmdk))
+}
+
+/// Create VMDK descriptor for multiple EROFS extents (flatten device)
+///
+/// Generates a VMDK descriptor file (twoGbMaxExtentFlat format) that references
+/// multiple EROFS images as flat extents, allowing them to be treated as a single
+/// contiguous block device in the VM.
+fn create_vmdk_descriptor(vmdk_path: &Path, erofs_paths: &[String]) -> Result<()> {
+    if erofs_paths.is_empty() {
+        return Err(anyhow!("empty EROFS path list, cannot create VMDK descriptor"));
+    }
+
+    // collect extent information without writing anything.
+    struct ExtentInfo {
+        path: String,
+        total_sectors: u64,
+    }
+
+    let mut extents: Vec<ExtentInfo> = Vec::with_capacity(erofs_paths.len());
+    let mut total_sectors: u64 = 0;
+
+    for erofs_path in erofs_paths {
+        let metadata = fs::metadata(erofs_path)
+            .context(format!("failed to stat EROFS file: {}", erofs_path))?;
+
+        let file_size = metadata.len();
+        if file_size == 0 {
+            warn!(
+                sl!(),
+                "EROFS file {} is zero-length, skipping", erofs_path
+            );
+            continue;
+        }
+
+        // round up to whole sectors to avoid losing tail bytes on non-aligned files.
+        // VMDK extents are measured in 512-byte sectors; a file that is not sector-aligned
+        // still needs the last partial sector to be addressable by the VM.
+        let sectors = (file_size + 511) / 512;
+
+        if file_size % 512 != 0 {
+            warn!(
+                sl!(),
+                "EROFS file {} size ({} bytes) is not 512-byte aligned, \
+                 rounding up to {} sectors ({} bytes addressable)",
+                erofs_path,
+                file_size,
+                sectors,
+                sectors * 512
+            );
+        }
+
+        total_sectors = total_sectors.checked_add(sectors).ok_or_else(|| {
+            anyhow!(
+                "total sector count overflow when adding {} ({} sectors)",
+                erofs_path,
+                sectors
+            )
+        })?;
+
+        extents.push(ExtentInfo {
+            path: erofs_path.clone(),
+            total_sectors: sectors,
+        });
+    }
+
+    if total_sectors == 0 {
+        return Err(anyhow!("no valid EROFS files to create VMDK descriptor (all files are empty)"));
+    }
+
+    // write descriptor to a temp file, then atomically rename.
+    let tmp_path = vmdk_path.with_extension("vmdk.tmp");
+
+    let file = fs::File::create(&tmp_path)
+        .context(format!("failed to create temp VMDK file: {}", tmp_path.display()))?;
+    let mut writer = BufWriter::new(file);
+
+    // Header
+    writeln!(writer, "# Disk DescriptorFile")?;
+    writeln!(writer, "version=1")?;
+    writeln!(writer, "CID=fffffffe")?;
+    writeln!(writer, "parentCID=ffffffff")?;
+    writeln!(writer, "createType=\"{}\"", VMDK_SUBFORMAT)?;
+    writeln!(writer)?;
+
+    // Extent descriptions
+    writeln!(writer, "# Extent description")?;
+    for extent in &extents {
+        let mut remaining = extent.total_sectors;
+        let mut file_offset: u64 = 0;
+
+        while remaining > 0 {
+            let chunk = remaining.min(MAX_2GB_EXTENT_SECTORS);
+            writeln!(
+                writer,
+                "RW {} FLAT \"{}\" {}",
+                chunk, extent.path, file_offset
+            )?;
+            file_offset += chunk;
+            remaining -= chunk;
+        }
+
+        info!(
+            sl!(),
+            "VMDK extent: {} ({} sectors, {} extent chunk(s))",
+            extent.path,
+            extent.total_sectors,
+            (extent.total_sectors + MAX_2GB_EXTENT_SECTORS - 1) / MAX_2GB_EXTENT_SECTORS
+        );
+    }
+    writeln!(writer)?;
+
+    // Disk Data Base (DDB)
+    // Geometry: cylinders = ceil(total_sectors / (sectors_per_track * heads))
+    let cylinders =
+        (total_sectors + SECTORS_PER_TRACK * NUMBER_HEADS - 1) / (SECTORS_PER_TRACK * NUMBER_HEADS);
+
+    writeln!(writer, "# The Disk Data Base")?;
+    writeln!(writer, "#DDB")?;
+    writeln!(writer)?;
+    writeln!(
+        writer,
+        "ddb.virtualHWVersion = \"{}\"",
+        VMDK_HW_VERSION
+    )?;
+    writeln!(
+        writer,
+        "ddb.geometry.cylinders = \"{}\"",
+        cylinders
+    )?;
+    writeln!(
+        writer,
+        "ddb.geometry.heads = \"{}\"",
+        NUMBER_HEADS
+    )?;
+    writeln!(
+        writer,
+        "ddb.geometry.sectors = \"{}\"",
+        SECTORS_PER_TRACK
+    )?;
+    writeln!(
+        writer,
+        "ddb.adapterType = \"{}\"",
+        VMDK_ADAPTER_TYPE
+    )?;
+
+    // Flush the BufWriter to ensure all data is written before rename.
+    writer.flush().context("failed to flush VMDK descriptor")?;
+    // Explicitly drop to close the file handle before rename.
+    drop(writer);
+
+    // atomic rename: tmp -> final path.
+    fs::rename(&tmp_path, vmdk_path).context(
+        format!(
+            "failed to rename temp VMDK {} -> {}",
+            tmp_path.display(),
+            vmdk_path.display()
+        ))?;
+
+    info!(
+        sl!(),
+        "VMDK descriptor created: {} (total {} sectors, {} extents, {} cylinders)",
+        vmdk_path.display(),
+        total_sectors,
+        extents.len(),
+        cylinders
+    );
+
+    Ok(())
+}
+
+/// Extract block device information from hypervisor device info
+fn extract_block_device_info(
+    device_info: &DeviceType,
+    block_driver: &str,
+) -> Result<(String, String, String)> {
+    if let DeviceType::Block(device) = device_info {
+        let blk_driver = device.config.driver_option.clone();
+        let device_id = device.device_id.clone();
+
+        // Use virt_path as guest device path (e.g., /dev/vda)
+        // pci_path is PCI address (e.g., 02/00) which is not a valid mount source
+        let guest_path = match block_driver {
+            VIRTIO_BLK_PCI | VIRTIO_BLK_MMIO | VIRTIO_BLK_CCW => {
+                // virt_path is the correct guest device path for all virtio-blk types
+                if device.config.virt_path.is_empty() {
+                    return Err(anyhow!("virt_path is empty for block device"));
+                }
+                device.config.virt_path.clone()
+            }
+            VIRTIO_SCSI | VIRTIO_PMEM => {
+                return Err(anyhow!(
+                    "Block driver {} not fully supported for EROFS",
+                    block_driver
+                ));
+            }
+            _ => {
+                return Err(anyhow!("Unknown block driver: {}", block_driver));
+            }
+        };
+
+        Ok((device_id, guest_path, blk_driver))
+    } else {
+        Err(anyhow!("Expected block device, got {:?}", device_info))
+    }
+}
+
+/// EROFS Multi-Layer Rootfs with overlay support
+///
+/// Handles the EROFS Multi-Layer where rootfs consists of:
+/// - Mount[0]: ext4 rw layer (writable container layer) -> virtio-blk device
+/// - Mount[1]: erofs layers (fsmeta + flattened layers) -> virtio-blk via VMDK
+/// - Mount[2]: overlay (to combine ext4 upper + erofs lower)
+pub(crate) struct ErofsMultiLayerRootfs {
+    guest_path: String,
+    device_ids: Vec<String>,
+    mount: oci::Mount,
+    rwlayer_storage: Option<Storage>, // Writable layer storage (upper layer), typically ext4
+    erofs_storage: Option<Storage>,
+}
+
+impl ErofsMultiLayerRootfs {
+    pub async fn new(
+        device_manager: &RwLock<DeviceManager>,
+        sid: &str,
+        cid: &str,
+        rootfs_mounts: &[Mount],
+        _share_fs: &Option<Arc<dyn crate::share_fs::ShareFs>>,
+    ) -> Result<Self> {
+        let container_path = do_get_guest_path(ROOTFS, cid, false, false);
+        let host_path = do_get_host_path(ROOTFS, sid, cid, false, false);
+
+        fs::create_dir_all(&host_path)
+            .map_err(|e| anyhow!("failed to create rootfs dir {}: {:?}", host_path, e))?;
+
+        let mut device_ids = Vec::new();
+        let mut rwlayer_storage: Option<Storage> = None;
+        let mut erofs_storage: Option<Storage> = None;
+
+        // Directories to create (X-containerd.mkdir.path)
+        let mut mkdir_dirs: Vec<String> = Vec::new();
+
+        let blkdev_info = get_block_device_info(device_manager).await;
+        let block_driver = blkdev_info.block_device_driver.clone();
+
+        // Process each mount in rootfs_mounts to set up devices and storages
+        for mount in rootfs_mounts {
+            match mount.fs_type.as_str() {
+                fmt if fmt.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE) => {
+                    // Mount[0]: rw layer -> virtio-blk device /dev/vdX1
+                    info!(
+                        sl!(),
+                        "multi-layer erofs: adding rw layer: {}", mount.source
+                    );
+
+                    let device_config = &mut BlockConfig {
+                        driver_option: block_driver.clone(),
+                        format: BlockDeviceFormat::Raw, // rw layer should be raw format
+                        path_on_host: mount.source.clone(),
+                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        ..Default::default()
+                    };
+
+                    let device_info = do_handle_device(
+                        device_manager,
+                        &DeviceConfig::BlockCfg(device_config.clone()),
+                    )
+                    .await
+                    .context("failed to attach rw block device")?;
+
+                    let (device_id, guest_path, blk_driver) =
+                        extract_block_device_info(&device_info, &block_driver)?;
+                    info!(
+                        sl!(),
+                        "writable block device attached - device_id: {} guest_path: {}",
+                        device_id,
+                        guest_path
+                    );
+
+                    // Filter out "loop" option which is not needed in VM (device is already /dev/vdX)
+                    let options: Vec<String> = mount
+                        .options
+                        .iter()
+                        .filter(|o| *o != "loop")
+                        .cloned()
+                        .collect();
+
+                    // Set up storage for rw layer (upper layer)
+                    rwlayer_storage = Some(Storage {
+                        driver: blk_driver,
+                        source: guest_path.clone(),
+                        fs_type: RW_LAYER_ROOTFS_TYPE.to_string(),
+                        mount_point: container_path.clone(),
+                        options,
+                        ..Default::default()
+                    });
+
+                    device_ids.push(device_id);
+                }
+                fmt if fmt.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE) => {
+                    // Mount[1]: erofs layers -> virtio-blk via VMDK /dev/vdX2
+                    info!(
+                        sl!(),
+                        "multi-layer erofs: adding erofs layers: {}", mount.source
+                    );
+
+                    // Collect all EROFS devices: source + `device=` options
+                    let mut erofs_devices = vec![mount.source.clone()];
+                    for opt in &mount.options {
+                        if let Some(device_path) = opt.strip_prefix("device=") {
+                            erofs_devices.push(device_path.to_string());
+                        }
+                    }
+
+                    info!(sl!(), "EROFS devices count: {}", erofs_devices.len());
+
+                    // Generate merged VMDK file from all EROFS devices
+                    // Returns (path, format) - format is Vmdk for multiple devices, Raw for single device
+                    let (vmdk_path, vmdk_format) = generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
+                        .await
+                        .context("failed to generate EROFS VMDK")?;
+
+                    info!(
+                        sl!(),
+                        "EROFS block device config - path: {}, format: {:?}",
+                        vmdk_path,
+                        vmdk_format
+                    );
+
+                    let device_config = &mut BlockConfig {
+                        driver_option: block_driver.clone(),
+                        format: vmdk_format, // Vmdk for multiple devices, Raw for single device
+                        path_on_host: vmdk_path,
+                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        ..Default::default()
+                    };
+
+                    let device_info = do_handle_device(
+                        device_manager,
+                        &DeviceConfig::BlockCfg(device_config.clone()),
+                    )
+                    .await
+                    .context("failed to attach erofs block device")?;
+
+                    let (device_id, guest_path, blk_driver) =
+                        extract_block_device_info(&device_info, &block_driver)?;
+                    info!(
+                        sl!(),
+                        "erofs device attached - device_id: {} guest_path: {}",
+                        device_id,
+                        guest_path
+                    );
+
+                    let options: Vec<String> = mount
+                        .options
+                        .iter()
+                        .filter(|o| {
+                            // Filter out options that are not valid erofs mount parameters:
+                            // 1. "loop" - not needed in VM, device is already /dev/vdX
+                            // 2. "device=" prefix - used for VMDK generation only, not for mount
+                            // 3. "X-kata." prefix - metadata markers for kata internals
+                            *o != "loop" && !o.starts_with("device=") && !o.starts_with("X-kata.")
+                        })
+                        .cloned()
+                        .collect();
+
+                    info!(
+                        sl!(),
+                        "erofs storage options filtered: {:?} -> {:?}", mount.options, options
+                    );
+
+                    erofs_storage = Some(Storage {
+                        driver: blk_driver,
+                        source: guest_path.clone(),
+                        fs_type: EROFS_ROOTFS_TYPE.to_string(),
+                        mount_point: container_path.clone(),
+                        options,
+                        ..Default::default()
+                    });
+
+                    device_ids.push(device_id);
+                }
+                fmt if fmt.eq_ignore_ascii_case("overlay")
+                    || fmt.eq_ignore_ascii_case("format/overlay")
+                    || fmt.eq_ignore_ascii_case("format/mkdir/overlay") =>
+                {
+                    // Mount[2]: overlay to combine rwlayer (upper) + erofs (lower)
+                    info!(
+                        sl!(),
+                        "multi-layer erofs: parsing overlay mount, options: {:?}", mount.options
+                    );
+
+                    // Parse mkdir options (X-containerd.mkdir.path)
+                    for opt in &mount.options {
+                        if let Some(mkdir_spec) = opt.strip_prefix(X_CONTAINERD_MKDIR_PATH) {
+                            // Format: path:mode or path:mode:uid:gid
+                            let parts: Vec<&str> = mkdir_spec.splitn(2, ':').collect();
+                            if !parts.is_empty() {
+                                let dir_path = parts[0].to_string();
+                                // Replace {{ mount i }} template with actual path (will be resolved in guest)
+                                // For now, just collect them; guest agent will handle actual mkdir
+                                mkdir_dirs.push(dir_path);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    info!(
+                        sl!(),
+                        "multi-layer erofs: ignoring unknown mount type: {}", mount.fs_type
+                    );
+                }
+            }
+        }
+
+        if device_ids.is_empty() {
+            return Err(anyhow!("no devices attached for multi-layer erofs rootfs"));
+        }
+
+        // Check device count limit
+        if device_ids.len() > MAX_VIRTIO_BLK_DEVICES {
+            return Err(anyhow!(
+                "exceeded maximum virtio disk count: {} > {}",
+                device_ids.len(),
+                MAX_VIRTIO_BLK_DEVICES
+            ));
+        }
+
+        let mount = oci::Mount::default();
+
+        Ok(Self {
+            guest_path: container_path,
+            device_ids,
+            mount,
+            rwlayer_storage,
+            erofs_storage,
+        })
+    }
+}
+
+#[async_trait]
+impl Rootfs for ErofsMultiLayerRootfs {
+    async fn get_guest_rootfs_path(&self) -> Result<String> {
+        Ok(self.guest_path.clone())
+    }
+
+    async fn get_rootfs_mount(&self) -> Result<Vec<oci::Mount>> {
+        Ok(vec![self.mount.clone()])
+    }
+
+    async fn get_storage(&self) -> Option<Vec<Storage>> {
+        // Return all storages for multi-layer EROFS:
+        // - rw layer is the writable upper layer
+        // - erofs layers are read-only lower layers
+        // Guest agent needs both to create overlay mount
+        let mut storages = Vec::new();
+
+        // Add rw layer storage (upper layer) with multi-layer marker
+        if let Some(mut rwlayer) = self.rwlayer_storage.clone() {
+            if self.erofs_storage.is_some() {
+                // Mark as overlay upper layer
+                rwlayer.options.push("X-kata.overlay-upper".to_string());
+                rwlayer.options.push("X-kata.multi-layer=true".to_string());
+            }
+            storages.push(rwlayer);
+        }
+
+        // Add erofs storage (lower layer)
+        if let Some(mut erofs) = self.erofs_storage.clone() {
+            if self.rwlayer_storage.is_some() {
+                // Mark as overlay lower layer
+                erofs.options.push("X-kata.overlay-lower".to_string());
+                erofs.options.push("X-kata.multi-layer=true".to_string());
+            }
+            storages.push(erofs);
+        }
+
+        if storages.is_empty() {
+            None
+        } else {
+            Some(storages)
+        }
+    }
+
+    async fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(self.device_ids.first().cloned())
+    }
+
+    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        let mut dm = device_manager.write().await;
+        for device_id in &self.device_ids {
+            dm.try_remove_device(device_id).await?;
+        }
+        Ok(())
+    }
+}
+
+/// Check if mounts represent multi-layer EROFS rootfs(with or without `device=` options):
+/// - Must have at least 2 mounts (rw layer + erofs layer)
+/// - Multi-layer: erofs with `device=` options
+/// - Single-layer: erofs without `device=` options (just layer.erofs)
+pub fn is_erofs_multi_layer(rootfs_mounts: &[Mount]) -> bool {
+    if rootfs_mounts.len() < 2 {
+        return false;
+    }
+
+    let has_rwlayer = rootfs_mounts
+        .iter()
+        .any(|m| m.fs_type.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE) && m.options.iter().any(|o| o == "rw"));
+
+    let has_erofs = rootfs_mounts
+        .iter()
+        .any(|m| m.fs_type.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE));
+
+    // Must have rwlayer + erofs (multi-layer or single-layer)
+    has_rwlayer && has_erofs
+}
+
