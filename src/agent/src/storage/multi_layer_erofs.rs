@@ -12,12 +12,15 @@
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use kata_sys_util::mount::create_mount_destination;
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
+use regex::Regex;
+use slog::Logger;
 use tokio::sync::Mutex;
 
 use crate::device::BLOCK;
@@ -25,9 +28,6 @@ use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
-use kata_sys_util::mount::create_mount_destination;
-use regex::Regex;
-use slog::Logger;
 
 /// EROFS Type
 const EROFS_TYPE: &str = "erofs";
@@ -68,6 +68,19 @@ impl UeventMatcher for VirtioBlkMatcher {
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
 
+#[derive(Debug, Clone)]
+pub struct MultiLayerErofsResult {
+    pub mount_point: String,
+    pub processed_mount_points: Vec<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+struct MkdirDirective {
+    raw_path: String,
+    mode: Option<String>,
+}
+
 #[async_trait::async_trait]
 impl StorageHandler for MultiLayerErofsHandler {
     fn driver_types(&self) -> &[&str] {
@@ -95,42 +108,52 @@ impl StorageHandler for MultiLayerErofsHandler {
     }
 }
 
-/// Handle multi-layer EROFS storage by combining multiple storages
-pub async fn handle_multi_layer_erofs(
-    storages: &[&Storage],
+pub fn is_multi_layer_storage(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_MULTI_LAYER)
+        || storage.driver == DRIVER_MULTI_LAYER_EROFS
+}
+
+pub async fn handle_multi_layer_erofs_group(
+    trigger: &Storage,
+    storages: &[Storage],
     cid: &Option<String>,
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
-) -> Result<String> {
-    let logger = logger.new(o!("subsystem" => "multi-layer-erofs"));
+) -> Result<MultiLayerErofsResult> {
+    let logger = logger.new(o!(
+        "subsystem" => "multi-layer-erofs",
+        "trigger-mount-point" => trigger.mount_point.clone(),
+    ));
 
-    // Find ext4 (upper) and erofs (lower) storages
+    let multi_layer_storages: Vec<&Storage> = storages
+        .iter()
+        .filter(|s| is_multi_layer_storage(s))
+        .collect();
+
+    if multi_layer_storages.is_empty() {
+        return Err(anyhow!("no multi-layer storages found"));
+    }
+
     let mut ext4_storage: Option<&Storage> = None;
     let mut erofs_storages: Vec<&Storage> = Vec::new();
-    let mut mkdir_dirs: Vec<(String, Option<String>)> = Vec::new(); // (path, mode)
+    let mut mkdir_dirs: Vec<MkdirDirective> = Vec::new();
 
-    for storage in storages {
-        if storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER)
-            || (storage.fstype == EXT4_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
-        {
+    for storage in &multi_layer_storages {
+        if is_upper_storage(storage) {
+            if ext4_storage.is_some() {
+                return Err(anyhow!(
+                    "multi-layer erofs currently supports exactly one ext4 upper layer"
+                ));
+            }
             ext4_storage = Some(*storage);
 
             // Extract mkdir directories from X-kata.mkdir.path options
             for opt in &storage.options {
                 if let Some(mkdir_spec) = opt.strip_prefix(OPT_MKDIR_PATH) {
-                    // Format: path:mode or path:mode:uid:gid
-                    let parts: Vec<&str> = mkdir_spec.splitn(2, ':').collect();
-                    if !parts.is_empty() {
-                        let path = parts[0].to_string();
-                        let mode = parts.get(1).map(|s| s.to_string());
-                        mkdir_dirs.push((path, mode));
-                    }
+                    mkdir_dirs.push(parse_mkdir_directive(mkdir_spec)?);
                 }
             }
-        } else if storage.options.iter().any(|o| o == OPT_OVERLAY_LOWER)
-            || (storage.fstype == EROFS_TYPE
-                && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
-        {
+        } else if is_lower_storage(storage) {
             erofs_storages.push(*storage);
         }
     }
@@ -146,40 +169,183 @@ pub async fn handle_multi_layer_erofs(
 
     slog::info!(
         logger,
-        "handling multi-layer erofs";
+        "handling multi-layer erofs group";
         "ext4-device" => &ext4.source,
-        "erofs-devices" => erofs_storages.iter().map(|s| s.source.as_str()).collect::<Vec<_>>().join(", "),
+        "erofs-devices" => erofs_storages
+            .iter()
+            .map(|s| s.source.as_str())
+            .collect::<Vec<_>>()
+            .join(","),
         "mount-point" => &ext4.mount_point,
-        "ext4-fstype" => &ext4.fstype,
-        "ext4-options" => ext4.options.join(","),
         "mkdir-dirs-count" => mkdir_dirs.len(),
     );
 
     // Create temporary mount points for upper and lower layers
     let cid_str = cid.as_deref().unwrap_or("sandbox");
-    let temp_base =
-        std::path::PathBuf::from(format!("/run/kata-containers/{}/multi-layer", cid_str));
+    let temp_base = PathBuf::from(format!("/run/kata-containers/{}/multi-layer", cid_str));
     fs::create_dir_all(&temp_base).context("failed to create temp mount base")?;
 
     let upper_mount = temp_base.join("upper");
-    let lower_mount = temp_base.join("lower");
+    fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    // work_dir MUST be inside the ext4 mount for overlay to work
-    // It will be set to upper_mount/work after ext4 is mounted
+    wait_and_mount_upper(ext4, &upper_mount, sandbox, &logger).await?;
+
+    for mkdir_dir in &mkdir_dirs {
+        let resolved_path = resolve_mkdir_path(&mkdir_dir.raw_path, &upper_mount, None);
+        slog::info!(
+            logger,
+            "creating mkdir directory in upper layer";
+            "raw-path" => &mkdir_dir.raw_path,
+            "resolved-path" => &resolved_path,
+        );
+
+        fs::create_dir_all(&resolved_path)
+            .with_context(|| format!("failed to create mkdir directory: {}", resolved_path))?;
+    }
+
+    let mut lower_mounts = Vec::new();
+    for (index, erofs) in erofs_storages.iter().enumerate() {
+        let lower_mount = temp_base.join(format!("lower-{}", index));
+        fs::create_dir_all(&lower_mount).with_context(|| {
+            format!("failed to create lower mount dir {}", lower_mount.display())
+        })?;
+
+        wait_and_mount_lower(erofs, &lower_mount, sandbox, &logger).await?;
+        lower_mounts.push(lower_mount);
+    }
+
+    // If any mkdir directive refers to {{ mount 1 }}, resolve it now using the first lower mount.
+    // This matches current supported placeholder behavior without inventing a broader template scheme.
+    for mkdir_dir in &mkdir_dirs {
+        if mkdir_dir.raw_path.contains("{{ mount 1 }}") {
+            let first_lower = lower_mounts
+                .first()
+                .ok_or_else(|| anyhow!("lower mount is missing while resolving mkdir path"))?;
+            let resolved_path =
+                resolve_mkdir_path(&mkdir_dir.raw_path, &upper_mount, Some(first_lower));
+            slog::info!(
+                logger,
+                "creating deferred mkdir directory";
+                "raw-path" => &mkdir_dir.raw_path,
+                "resolved-path" => &resolved_path,
+            );
+
+            fs::create_dir_all(&resolved_path).with_context(|| {
+                format!(
+                    "failed to create deferred mkdir directory: {}",
+                    resolved_path
+                )
+            })?;
+        }
+    }
+
+    let upperdir = upper_mount.join("upper");
+    let workdir = upper_mount.join("work");
+
+    if !upperdir.exists() {
+        fs::create_dir_all(&upperdir).context("failed to create upperdir")?;
+    }
+    fs::create_dir_all(&workdir).context("failed to create workdir")?;
+
+    let lowerdir = lower_mounts
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(":");
 
     slog::info!(
         logger,
-        "created temp mount directories";
-        "temp-base" => temp_base.display(),
-        "upper-mount" => upper_mount.display(),
-        "lower-mount" => lower_mount.display(),
+        "creating overlay mount";
+        "upperdir" => upperdir.display(),
+        "lowerdir" => &lowerdir,
+        "workdir" => workdir.display(),
+        "target" => &ext4.mount_point,
     );
 
-    fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
-    fs::create_dir_all(&lower_mount).context("failed to create lower mount dir")?;
+    create_mount_destination(
+        Path::new(OVERLAY_TYPE),
+        Path::new(&ext4.mount_point),
+        "",
+        OVERLAY_TYPE,
+    )
+    .context("failed to create overlay mount destination")?;
 
-    // Wait for block devices to be ready before mounting
-    // Extract device name from source (e.g., /dev/vda -> vda)
+    let overlay_options = format!(
+        "upperdir={},lowerdir={},workdir={}",
+        upperdir.display(),
+        lowerdir,
+        workdir.display()
+    );
+
+    baremount(
+        Path::new(OVERLAY_TYPE),
+        Path::new(&ext4.mount_point),
+        OVERLAY_TYPE,
+        nix::mount::MsFlags::empty(),
+        &overlay_options,
+        &logger,
+    )
+    .context("failed to mount overlay")?;
+
+    slog::info!(
+        logger,
+        "multi-layer erofs overlay mounted successfully";
+        "mount-point" => &ext4.mount_point,
+    );
+
+    let processed_mount_points = multi_layer_storages
+        .iter()
+        .map(|s| s.mount_point.clone())
+        .collect::<Vec<_>>();
+
+    Ok(MultiLayerErofsResult {
+        mount_point: ext4.mount_point.clone(),
+        processed_mount_points,
+    })
+}
+
+fn is_upper_storage(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER)
+        || (storage.fstype == EXT4_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+}
+
+fn is_lower_storage(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_OVERLAY_LOWER)
+        || (storage.fstype == EROFS_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+}
+
+fn parse_mkdir_directive(spec: &str) -> Result<MkdirDirective> {
+    let parts: Vec<&str> = spec.splitn(2, ':').collect();
+    if parts.is_empty() || parts[0].is_empty() {
+        return Err(anyhow!("invalid X-kata.mkdir.path directive: '{}'", spec));
+    }
+
+    Ok(MkdirDirective {
+        raw_path: parts[0].to_string(),
+        mode: parts.get(1).map(|s| s.to_string()),
+    })
+}
+
+fn resolve_mkdir_path(
+    raw_path: &str,
+    upper_mount: &Path,
+    first_lower_mount: Option<&Path>,
+) -> String {
+    let mut resolved = raw_path.replace("{{ mount 0 }}", upper_mount.to_str().unwrap_or(""));
+
+    if let Some(lower) = first_lower_mount {
+        resolved = resolved.replace("{{ mount 1 }}", lower.to_str().unwrap_or(""));
+    }
+
+    resolved
+}
+
+async fn wait_and_mount_upper(
+    ext4: &Storage,
+    upper_mount: &Path,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    logger: &Logger,
+) -> Result<()> {
     let ext4_devname = extract_device_name(&ext4.source)?;
     slog::info!(
         logger,
@@ -193,7 +359,6 @@ pub async fn handle_multi_layer_erofs(
         .await
         .context("timeout waiting for ext4 block device")?;
 
-    // Step 1: Mount upper layer (ext4)
     slog::info!(
         logger,
         "mounting ext4 upper layer";
@@ -203,7 +368,7 @@ pub async fn handle_multi_layer_erofs(
         "options" => ext4.options.join(","),
     );
 
-    create_mount_destination(Path::new(&ext4.source), &upper_mount, "", &ext4.fstype)
+    create_mount_destination(Path::new(&ext4.source), upper_mount, "", &ext4.fstype)
         .context("failed to create upper mount destination")?;
 
     // Filter out X-kata.* custom options before mount
@@ -225,57 +390,23 @@ pub async fn handle_multi_layer_erofs(
     let (flags, options) = kata_sys_util::mount::parse_mount_options(&mount_options)?;
     baremount(
         Path::new(&ext4.source),
-        &upper_mount,
+        upper_mount,
         &ext4.fstype,
         flags,
         options.as_str(),
-        &logger,
+        logger,
     )
     .context("failed to mount ext4 upper layer")?;
 
-    slog::info!(
-        logger,
-        "ext4 upper layer mounted successfully";
-        "mount-point" => upper_mount.display(),
-    );
+    Ok(())
+}
 
-    // Step 2: Create mkdir directories specified in X-kata.mkdir.path options
-    for (raw_path, _mode) in &mkdir_dirs {
-        // Resolve template variables like {{ mount 0 }}/upper
-        // Currently we only support {{ mount 0 }} which references upper_mount
-        let resolved_path = if raw_path.contains("{{ mount 0 }}") {
-            raw_path.replace("{{ mount 0 }}", upper_mount.to_str().unwrap_or(""))
-        } else if raw_path.contains("{{ mount 1 }}") {
-            // This will be resolved after erofs mount
-            slog::warn!(
-                logger,
-                "mkdir path references unmounted layer, deferring creation";
-                "path" => raw_path
-            );
-            continue;
-        } else {
-            raw_path.clone()
-        };
-
-        slog::info!(
-            logger,
-            "creating mkdir directory";
-            "raw-path" => raw_path,
-            "resolved-path" => &resolved_path,
-        );
-
-        // Create directory with default permissions (0755)
-        // Mode parsing can be added in future if needed
-        fs::create_dir_all(&resolved_path).context(format!(
-            "failed to create mkdir directory: {}",
-            resolved_path
-        ))?;
-    }
-
-    // Step 3: Mount lower layers (erofs)
-    let erofs = erofs_storages[0];
-
-    // Wait for erofs block device to be ready before mounting
+async fn wait_and_mount_lower(
+    erofs: &Storage,
+    lower_mount: &Path,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    logger: &Logger,
+) -> Result<()> {
     let erofs_devname = extract_device_name(&erofs.source)?;
     slog::info!(
         logger,
@@ -291,79 +422,25 @@ pub async fn handle_multi_layer_erofs(
 
     slog::info!(
         logger,
-        "block device is ready, mounting erofs lower layer";
+        "mounting erofs lower layer";
         "device" => &erofs.source,
         "mount-point" => lower_mount.display(),
     );
 
-    create_mount_destination(Path::new(&erofs.source), &lower_mount, "", EROFS_TYPE)
+    create_mount_destination(Path::new(&erofs.source), lower_mount, "", EROFS_TYPE)
         .context("failed to create lower mount destination")?;
 
     baremount(
         Path::new(&erofs.source),
-        &lower_mount,
+        lower_mount,
         EROFS_TYPE,
         nix::mount::MsFlags::MS_RDONLY,
         "ro",
-        &logger,
+        logger,
     )
     .context("failed to mount erofs lower layer")?;
 
-    // Step 4: Create upperdir and workdir within the ext4 mount
-    // Both MUST be on the same filesystem (the ext4 mount)
-    // mkdir step already created {{ mount 0 }}/upper, so upperdir is upper_mount/upper
-    let upperdir = upper_mount.join("upper");
-    let workdir = upper_mount.join("work");
-
-    // Ensure upperdir exists (mkdir step should have created it, but check again)
-    if !upperdir.exists() {
-        fs::create_dir_all(&upperdir).context("failed to create upperdir")?;
-    }
-    // workdir MUST be created inside ext4 mount, not in temp_base
-    fs::create_dir_all(&workdir).context("failed to create workdir")?;
-
-    // Step 5: Create overlay mount at final mount_point
-    slog::info!(
-        logger,
-        "creating overlay mount";
-        "upperdir" => upperdir.display(),
-        "lowerdir" => lower_mount.display(),
-        "workdir" => workdir.display(),
-        "target" => &ext4.mount_point,
-    );
-
-    create_mount_destination(
-        Path::new(OVERLAY_TYPE),
-        Path::new(&ext4.mount_point),
-        "",
-        OVERLAY_TYPE,
-    )
-    .context("failed to create overlay mount destination")?;
-
-    let overlay_options = format!(
-        "upperdir={},lowerdir={},workdir={}",
-        upperdir.display(),
-        lower_mount.display(),
-        workdir.display()
-    );
-
-    baremount(
-        Path::new(OVERLAY_TYPE),
-        Path::new(&ext4.mount_point),
-        OVERLAY_TYPE,
-        nix::mount::MsFlags::empty(),
-        &overlay_options,
-        &logger,
-    )
-    .context("failed to mount overlay")?;
-
-    slog::info!(
-        logger,
-        "multi-layer erofs overlay mounted successfully";
-        "mount-point" => &ext4.mount_point,
-    );
-
-    Ok(ext4.mount_point.clone())
+    Ok(())
 }
 
 /// Extract device name from a device path
