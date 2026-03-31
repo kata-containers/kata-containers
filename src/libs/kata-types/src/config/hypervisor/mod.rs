@@ -70,6 +70,7 @@ pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 const NO_VIRTIO_FS: &str = "none";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
+const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const MAX_BRIDGE_SIZE: u32 = 5;
 const MAX_NETWORK_QUEUES: u32 = 256;
 
@@ -1528,6 +1529,7 @@ impl SharedFsInfo {
         match self.shared_fs.as_deref() {
             Some(VIRTIO_FS) => self.adjust_virtio_fs(false)?,
             Some(VIRTIO_FS_INLINE) => self.adjust_virtio_fs(true)?,
+            Some(VIRTIO_FS_NYDUS) => self.adjust_virtio_fs(false)?,
             _ => {}
         }
 
@@ -1543,6 +1545,7 @@ impl SharedFsInfo {
             None => Ok(()),
             Some(VIRTIO_FS) => self.validate_virtio_fs(false),
             Some(VIRTIO_FS_INLINE) => self.validate_virtio_fs(true),
+            Some(VIRTIO_FS_NYDUS) => self.validate_virtio_fs(false),
             Some(v) => Err(std::io::Error::other(format!("Invalid shared_fs type {v}"))),
         }
     }
