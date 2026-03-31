@@ -259,4 +259,10 @@ impl ShareFs for ShareVirtioFsStandalone {
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
         self.mounted_info_set.clone()
     }
+
+    async fn stop(&self) -> Result<()> {
+        self.shutdown_virtiofsd()
+            .await
+            .context("failed to stop virtiofsd daemon")
+    }
 }
