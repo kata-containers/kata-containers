@@ -192,8 +192,20 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
     let mut builder = fs::DirBuilder::new();
     builder
         .mode(MOUNT_DIR_PERM)
-        .recursive(true)
-        .create(parent)?;
+        .recursive(true);
+    
+    // Try to create parent directory, but handle ENOSYS gracefully
+    // ENOSYS can occur on certain filesystems (e.g., virtio-fs) where mkdir is not fully supported
+    if let Err(e) = builder.create(parent) {
+        // If the error is ENOSYS or AlreadyExists, check if parent exists and continue
+        if e.kind() != std::io::ErrorKind::AlreadyExists && e.raw_os_error() != Some(libc::ENOSYS) {
+            return Err(e.into());
+        }
+        // Verify parent exists
+        if !parent.exists() {
+            return Err(e.into());
+        }
+    }
 
     if fs_type == "bind" {
         // The source and destination for bind mounting must be the same type: file or directory.
@@ -207,11 +219,17 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
         }
     }
 
+    // Try to create destination directory, but handle ENOSYS gracefully
     if let Err(e) = builder.create(dst) {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
+        if e.kind() != std::io::ErrorKind::AlreadyExists && e.raw_os_error() != Some(libc::ENOSYS) {
             return Err(e.into());
         }
+        // If ENOSYS or AlreadyExists, check if dst exists and is a directory
+        if !dst.exists() || !dst.is_dir() {
+            return Err(Error::InvalidPath(dst.to_path_buf()));
+        }
     }
+    
     if !dst.is_dir() {
         Err(Error::InvalidPath(dst.to_path_buf()))
     } else {
