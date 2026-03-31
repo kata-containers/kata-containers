@@ -73,7 +73,7 @@ impl Rootfs for ShareFsRootfs {
         todo!()
     }
 
-    async fn get_storage(&self) -> Option<Storage> {
+    async fn get_storage(&self) -> Option<Vec<Storage>> {
         None
     }
 
