@@ -10,6 +10,11 @@ mod share_virtio_fs_inline;
 use share_virtio_fs_inline::ShareVirtioFsInline;
 mod share_virtio_fs_standalone;
 use share_virtio_fs_standalone::ShareVirtioFsStandalone;
+mod share_virtio_fs_nydus;
+use share_virtio_fs_nydus::ShareVirtioFsNydus;
+mod nydus;
+pub use nydus::nydus_client::NydusClient;
+pub use nydus::nydus_daemon::{Nydusd, NydusdConfig};
 mod utils;
 use tokio::sync::Mutex;
 pub use utils::{
@@ -32,13 +37,17 @@ use tokio::sync::RwLock;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
 const VIRTIO_FS: &str = "virtio-fs";
-const _VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
+pub const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 
 const DEFAULT_KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
 /// default share fs (for example virtio-fs) mount path in the guest
 const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+
+/// The virtiofs mount point in the guest for nydusd mode.
+/// In nydusd mode, virtiofs is mounted at `/run/kata-containers/shared/`
+const DEFAULT_KATA_GUEST_ROOT_DIR: &str = "/run/kata-containers/shared/";
 
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
@@ -49,6 +58,11 @@ pub fn kata_host_shared_dir() -> String {
 
 pub fn kata_guest_share_dir() -> String {
     build_path(DEFAULT_KATA_GUEST_SHARE_DIR)
+}
+
+/// The virtiofs mount point in the guest for nydusd mode.
+pub fn kata_guest_nydus_root_dir() -> String {
+    build_path(DEFAULT_KATA_GUEST_ROOT_DIR)
 }
 
 #[async_trait]
