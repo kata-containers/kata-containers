@@ -60,6 +60,23 @@ impl std::fmt::Display for BlockDeviceAio {
 }
 
 #[derive(Debug, Clone, Default)]
+pub enum BlockDeviceFormat {
+    #[default]
+    Raw,
+    Vmdk,
+}
+
+impl std::fmt::Display for BlockDeviceFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
+            BlockDeviceFormat::Raw => "raw".to_string(),
+            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
+        };
+        write!(f, "{to_string}")
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
     /// Path of the drive.
     pub path_on_host: String,
@@ -70,6 +87,9 @@ pub struct BlockConfig {
 
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
+
+    /// raw, qcow2, vmdk, etc.
+    pub format: BlockDeviceFormat,
 
     /// Specifies cache-related options for block devices.
     /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
