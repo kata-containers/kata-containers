@@ -48,7 +48,9 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
     runs-on: ubuntu-22.04
-    environment: ci
+    environment:
+      name: ci
+      deployment: false
     permissions:
       id-token: write # Used for OIDC access to log into Azure
     env:
