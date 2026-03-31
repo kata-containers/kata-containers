@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -503,6 +504,9 @@ const (
 // daemon bind-mounts container network namespaces.
 var dockerNetnsPrefixes = []string{"/var/run/docker/netns/", "/run/docker/netns/"}
 
+// validSandboxID matches Docker sandbox IDs: exactly 64 lowercase hex characters.
+var validSandboxID = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 // IsDockerContainer returns if the container is managed by docker
 // This is done by checking the prestart and createRuntime hooks for
 // `libnetwork` arguments. Docker 26+ may use CreateRuntime hooks
@@ -551,21 +555,19 @@ func DockerNetnsPath(spec *specs.Spec) string {
 			for i, arg := range hook.Args {
 				if arg == dockerLibnetworkSetkey && i+1 < len(hook.Args) {
 					sandboxID := hook.Args[i+1]
-					// Validate sandbox ID to prevent path traversal.
-					// Docker sandbox IDs are always hex strings.
-					if sandboxID == "" ||
-						strings.Contains(sandboxID, "/") ||
-						strings.Contains(sandboxID, "\\") ||
-						strings.Contains(sandboxID, "..") ||
-						strings.ContainsRune(sandboxID, 0) {
+					// Docker sandbox IDs are exactly 64 lowercase hex
+					// characters. Reject anything else to prevent path
+					// traversal and unexpected input.
+					if !validSandboxID.MatchString(sandboxID) {
 						continue
 					}
 					// Docker stores netns under well-known paths.
-					// Use Lstat to reject symlinks that could point
-					// outside the Docker netns directory.
+					// Use Lstat to reject symlinks (which could point
+					// outside the Docker netns directory) and non-regular
+					// files such as directories.
 					for _, prefix := range dockerNetnsPrefixes {
 						nsPath := prefix + sandboxID
-						if fi, err := os.Lstat(nsPath); err == nil && fi.Mode().Type()&os.ModeSymlink == 0 {
+						if fi, err := os.Lstat(nsPath); err == nil && fi.Mode().IsRegular() {
 							return nsPath
 						}
 					}

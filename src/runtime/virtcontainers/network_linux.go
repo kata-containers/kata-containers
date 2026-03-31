@@ -46,6 +46,11 @@ type LinuxNetwork struct {
 	interworkingModel NetInterworkingModel
 	netNSCreated      bool
 	danConfigPath     string
+	// placeholderNetNS holds the path to a placeholder network namespace
+	// that we created but later abandoned in favour of the hypervisor's
+	// netns. If best-effort deletion in addAllEndpoints fails, teardown
+	// retries the cleanup via RemoveEndpoints.
+	placeholderNetNS string
 }
 
 // NewNetwork creates a new Linux Network from a NetworkConfig.
@@ -69,11 +74,11 @@ func NewNetwork(configs ...*NetworkConfig) (Network, error) {
 	}
 
 	return &LinuxNetwork{
-		config.NetworkID,
-		[]Endpoint{},
-		config.InterworkingModel,
-		config.NetworkCreated,
-		config.DanConfigPath,
+		netNSPath:         config.NetworkID,
+		eps:               []Endpoint{},
+		interworkingModel: config.InterworkingModel,
+		netNSCreated:      config.NetworkCreated,
+		danConfigPath:     config.DanConfigPath,
 	}, nil
 }
 
@@ -350,8 +355,6 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			origPath := n.netNSPath
 			origCreated := n.netNSCreated
 			n.netNSPath = hypervisorNs
-			// The hypervisor's namespace was not created by us.
-			n.netNSCreated = false
 
 			_, err = n.scanEndpointsInNs(ctx, s, n.netNSPath, hotplug)
 			if err != nil {
@@ -362,11 +365,16 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 
 			// Clean up the placeholder namespace we created — we're now
 			// using the hypervisor's namespace and the placeholder is empty.
+			// Only clear netNSCreated once deletion succeeds; on failure,
+			// stash the path so RemoveEndpoints can retry during teardown.
 			if origCreated {
 				if delErr := deleteNetNS(origPath); delErr != nil {
-					networkLogger().WithField("netns", origPath).WithError(delErr).Warn("failed to delete placeholder netns")
+					networkLogger().WithField("netns", origPath).WithError(delErr).Warn("failed to delete placeholder netns, will retry during teardown")
+					n.placeholderNetNS = origPath
 				}
 			}
+			// The hypervisor's namespace was not created by us.
+			n.netNSCreated = false
 		}
 	}
 
@@ -400,7 +408,9 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 		return nil, err
 	}
 
+	epsBefore := len(n.eps)
 	var added []Endpoint
+
 	for _, link := range linkList {
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
@@ -433,6 +443,9 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 			}
 			return addErr
 		}); err != nil {
+			// Rollback: remove any endpoints added during this scan
+			// so that a failed scan does not leave partial side effects.
+			n.eps = n.eps[:epsBefore]
 			return nil, err
 		}
 	}
@@ -664,6 +677,17 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 	if n.netNSCreated && endpoints == nil {
 		networkLogger().Infof("Network namespace %q deleted", n.netNSPath)
 		return deleteNetNS(n.netNSPath)
+	}
+
+	// Retry cleanup of a placeholder namespace whose earlier deletion
+	// failed in addAllEndpoints.
+	if n.placeholderNetNS != "" && endpoints == nil {
+		if delErr := deleteNetNS(n.placeholderNetNS); delErr != nil {
+			networkLogger().WithField("netns", n.placeholderNetNS).WithError(delErr).Warn("failed to delete placeholder netns during teardown")
+		} else {
+			networkLogger().Infof("Placeholder network namespace %q deleted", n.placeholderNetNS)
+			n.placeholderNetNS = ""
+		}
 	}
 
 	return nil

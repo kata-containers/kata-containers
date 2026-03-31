@@ -363,11 +363,11 @@ func TestConvertDanDeviceToNetworkInfo(t *testing.T) {
 func TestAddEndpoints_Dan(t *testing.T) {
 
 	network := &LinuxNetwork{
-		"net-123",
-		[]Endpoint{},
-		NetXConnectDefaultModel,
-		true,
-		"testdata/dan-config.json",
+		netNSPath:         "net-123",
+		eps:               []Endpoint{},
+		interworkingModel: NetXConnectDefaultModel,
+		netNSCreated:      true,
+		danConfigPath:     "testdata/dan-config.json",
 	}
 
 	ctx := context.TODO()

@@ -352,11 +352,14 @@ func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 
 	const maxWait = 5 * time.Second
 	const pollInterval = 50 * time.Millisecond
-	deadline := time.Now().Add(maxWait)
+	deadline := time.NewTimer(maxWait)
+	defer deadline.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
 
 	s.Logger().Info("waiting for network interfaces in namespace")
 
-	for time.Now().Before(deadline) {
+	for {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
@@ -367,12 +370,12 @@ func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(pollInterval):
+		case <-deadline.C:
+			s.Logger().Warn("no network interfaces found after timeout")
+			return nil
+		case <-ticker.C:
 		}
 	}
-
-	s.Logger().Warn("no network interfaces found after timeout")
-	return nil
 }
 
 // configureGuestNetwork informs the guest agent about discovered network

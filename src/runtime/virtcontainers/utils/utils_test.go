@@ -628,6 +628,12 @@ func TestIsDockerContainer(t *testing.T) {
 func TestDockerNetnsPath(t *testing.T) {
 	assert := assert.New(t)
 
+	// Valid 64-char hex sandbox IDs for test cases.
+	validID := strings.Repeat("ab", 32)   // 64 hex chars
+	validID2 := strings.Repeat("cd", 32)  // another 64 hex chars
+	invalidShortID := "abc123"             // too short
+	invalidUpperID := strings.Repeat("AB", 32) // uppercase rejected
+
 	// nil spec
 	assert.Equal("", DockerNetnsPath(nil))
 
@@ -644,43 +650,79 @@ func TestDockerNetnsPath(t *testing.T) {
 	}
 	assert.Equal("", DockerNetnsPath(spec))
 
-	// Prestart hook with libnetwork-setkey but netns file doesn't exist
+	// Prestart hook with libnetwork-setkey but sandbox ID too short (rejected by regex)
 	spec = &specs.Spec{
 		Hooks: &specs.Hooks{
 			Prestart: []specs.Hook{ //nolint:all
-				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "nonexistent999", "ctrl"}},
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", invalidShortID, "ctrl"}},
 			},
 		},
 	}
 	assert.Equal("", DockerNetnsPath(spec))
 
-	// Prestart hook with libnetwork-setkey and existing netns file
+	// Prestart hook with libnetwork-setkey but uppercase hex (rejected by regex)
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", invalidUpperID, "ctrl"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Prestart hook with valid sandbox ID but netns file doesn't exist on disk
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", validID, "ctrl"}},
+			},
+		},
+	}
+	assert.Equal("", DockerNetnsPath(spec))
+
+	// Prestart hook with libnetwork-setkey and existing netns file — success path
 	tmpDir := t.TempDir()
-	// Simulate /var/run/docker/netns/<id> by creating the file
 	fakeNsDir := filepath.Join(tmpDir, "netns")
 	err := os.MkdirAll(fakeNsDir, 0755)
 	assert.NoError(err)
-	fakeNsFile := filepath.Join(fakeNsDir, "abc123def456")
+	fakeNsFile := filepath.Join(fakeNsDir, validID)
 	err = os.WriteFile(fakeNsFile, []byte{}, 0644)
 	assert.NoError(err)
 
-	// DockerNetnsPath checks hardcoded paths (/var/run/docker/netns/, /run/docker/netns/)
-	// so with a temp dir it won't find it. Verify that non-existent paths return "".
+	// Temporarily override dockerNetnsPrefixes so DockerNetnsPath can find
+	// the netns file we created under the temp directory.
+	origPrefixes := dockerNetnsPrefixes
+	dockerNetnsPrefixes = []string{fakeNsDir + "/"}
+	defer func() { dockerNetnsPrefixes = origPrefixes }()
+
 	spec = &specs.Spec{
 		Hooks: &specs.Hooks{
 			Prestart: []specs.Hook{ //nolint:all
-				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "abc123def456", "ctrl"}},
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", validID, "ctrl"}},
 			},
 		},
 	}
-	// The sandbox ID "abc123def456" won't exist under /var/run/docker/netns/
+	assert.Equal(fakeNsFile, DockerNetnsPath(spec))
+
+	// Sandbox ID that is a directory rather than a regular file — must be rejected
+	dirID := validID2
+	err = os.MkdirAll(filepath.Join(fakeNsDir, dirID), 0755)
+	assert.NoError(err)
+	spec = &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{ //nolint:all
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", dirID, "ctrl"}},
+			},
+		},
+	}
 	assert.Equal("", DockerNetnsPath(spec))
 
-	// CreateRuntime hook with libnetwork-setkey — same behavior, file doesn't exist
+	// CreateRuntime hook with valid sandbox ID — file doesn't exist
+	validID3 := strings.Repeat("ef", 32)
 	spec = &specs.Spec{
 		Hooks: &specs.Hooks{
 			CreateRuntime: []specs.Hook{
-				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", "xyz789", "ctrl"}},
+				{Args: []string{"/usr/bin/proxy", "libnetwork-setkey", validID3, "ctrl"}},
 			},
 		},
 	}
