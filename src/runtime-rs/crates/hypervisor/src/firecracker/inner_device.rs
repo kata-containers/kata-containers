@@ -33,10 +33,21 @@ impl FcInner {
                     .await
                     .context("add block device")
             }
-            DeviceType::Network(network) => self
-                .add_net_device(&network.config, network.device_id)
-                .await
-                .context("add net device"),
+            DeviceType::Network(network) => {
+                // Firecracker rejects PUT /network-interfaces once the VM runs
+                // and has no network hotplug. Network devices are buffered here
+                // and sent by start_vm(), right before InstanceStart.
+                if self.state == VmmState::VmRunning {
+                    return Err(anyhow!(
+                        "cannot add network interface {} to a running Firecracker VM: no hotplug",
+                        network.device_id
+                    ));
+                }
+                debug!(sl(), "buffering network device for pre-start flush");
+                self.pending_net_devices
+                    .push((network.config, network.device_id));
+                Ok(())
+            }
             DeviceType::HybridVsock(hvsock) => {
                 self.add_hvsock(&hvsock.config).await.context("add vsock")
             }
