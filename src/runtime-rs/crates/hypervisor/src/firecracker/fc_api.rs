@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
-use hyper::{Body, Method, Request, Response};
+use hyper::{Body, Method, Request};
 use hyperlocal::Uri;
 use kata_sys_util::mount;
 use kata_types::config::hypervisor::RateLimiterConfig;
@@ -23,6 +23,16 @@ use tokio::{fs, fs::File};
 
 const REQUEST_RETRY: u32 = 500;
 const FC_KERNEL: &str = "vmlinux";
+
+/// Distinguishes a transient transport error (FC not ready yet, retry allowed)
+/// from a permanent HTTP-level API error returned by FC (no retry).
+#[derive(Debug)]
+enum FcRequestError {
+    /// Could not reach the FC API socket (connection refused, etc.)
+    Transport(String),
+    /// FC returned a non-2xx HTTP status. (status_code, response_body)
+    Api(u16, String),
+}
 const FC_ROOT_FS: &str = "rootfs";
 const DRIVE_PREFIX: &str = "drive";
 const DISK_POOL_SIZE: u32 = 6;
@@ -215,13 +225,29 @@ impl FcInner {
             Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
             None => None,
         };
+
+        let rx_rate_limiter = RateLimiterConfig::new(
+            self.config.network_info.rx_rate_limiter_max_rate,
+            0,
+            None,
+            None,
+        );
+        let tx_rate_limiter = RateLimiterConfig::new(
+            self.config.network_info.tx_rate_limiter_max_rate,
+            0,
+            None,
+            None,
+        );
+
         let body: String = json!({
             "iface_id": &device_id,
             "guest_mac": g_mac,
-            "host_dev_name": &config.host_dev_name
-
+            "host_dev_name": &config.host_dev_name,
+            "rx_rate_limiter": rx_rate_limiter,
+            "tx_rate_limiter": tx_rate_limiter,
         })
         .to_string();
+        info!(sl(), "FC: add network device: iface_id={} guest_mac={:?} host_dev_name={}", device_id, g_mac, config.host_dev_name);
         self.request_with_retry(
             Method::PUT,
             &["/network-interfaces/", &device_id].concat(),
@@ -259,50 +285,54 @@ impl FcInner {
                 .body(Body::from(data.clone()))?;
 
             match self.send_request(req).await {
-                Ok(resp) => {
-                    debug!(sl(), "Request sent, resp: {:?}", resp);
-                    return Ok(());
-                }
-                Err(resp) => {
-                    debug!(sl(), "Request sent with error, resp: {:?}", resp);
+                Ok(_) => return Ok(()),
+                // A transport error (FC not ready yet) — retry.
+                Err(FcRequestError::Transport(e)) => {
+                    debug!(sl(), "FC not reachable yet, retrying: {:?}", e);
                     std::thread::sleep(std::time::Duration::from_millis(10));
                     continue;
+                }
+                // An HTTP-level error from FC — fail immediately with the
+                // actual error body so the problem is visible in logs.
+                Err(FcRequestError::Api(status, body)) => {
+                    return Err(anyhow::anyhow!(
+                        "FC API error: status={} body={}",
+                        status,
+                        body
+                    ));
                 }
             }
         }
         Err(anyhow::anyhow!(
-            "After {} attempts, it still doesn't work.",
-            REQUEST_RETRY
+            "FC not reachable after {} attempts (method={:?} uri={:?})",
+            REQUEST_RETRY,
+            method,
+            uri,
         ))
     }
 
-    pub(crate) async fn send_request(&self, req: Request<Body>) -> Result<Response<Body>> {
-        let resp = self.client.request(req).await?;
+    async fn send_request(&self, req: Request<Body>) -> Result<(), FcRequestError> {
+        let resp = self
+            .client
+            .request(req)
+            .await
+            .map_err(|e| FcRequestError::Transport(e.to_string()))?;
 
         let status = resp.status();
-        debug!(sl(), "Request RESPONSE {:?} {:?}", &status, resp);
         if status.is_success() {
-            return Ok(resp);
-        } else {
-            let body = hyper::body::to_bytes(resp.into_body()).await?;
-            if body.is_empty() {
-                debug!(sl(), "Request FAILED WITH STATUS: {:?}", status);
-                None
-            } else {
-                let body = String::from_utf8_lossy(&body).into_owned();
-                debug!(
-                    sl(),
-                    "Request FAILED WITH STATUS: {:?} and BODY: {:?}", status, body
-                );
-                Some(body)
-            };
+            debug!(sl(), "FC request succeeded: {:?}", status);
+            return Ok(());
         }
 
-        Err(anyhow::anyhow!(
-            "After {} attempts, it
-                            still doesn't work.",
-            REQUEST_RETRY
-        ))
+        let body = hyper::body::to_bytes(resp.into_body())
+            .await
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default();
+        error!(
+            sl(),
+            "FC API rejected request: status={:?} body={:?}", status, body
+        );
+        Err(FcRequestError::Api(status.as_u16(), body))
     }
     pub(crate) fn cleanup_resource(&self) {
         if self.jailed {

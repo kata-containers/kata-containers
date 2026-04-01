@@ -691,14 +691,12 @@ impl QemuInner {
 
         let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
-            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
-                new_hotplugged_mem,
-                guest_mem_block_size,
-            )
-            .ok_or(anyhow!(format!(
-                "alignment of {} B to the block size of {} B failed",
-                new_hotplugged_mem, guest_mem_block_size
-            )))?
+            new_hotplugged_mem = new_hotplugged_mem
+                .checked_next_multiple_of(guest_mem_block_size)
+                .ok_or(anyhow!(format!(
+                    "alignment of {} B to the block size of {} B failed",
+                    new_hotplugged_mem, guest_mem_block_size
+                )))?
         }
         let new_hotplugged_mem = new_hotplugged_mem;
 
