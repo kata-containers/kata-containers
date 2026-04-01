@@ -39,6 +39,21 @@ git_sparse_clone() {
   git checkout FETCH_HEAD
 }
 
+#######################
+# Install prerequisites
+#######################
+if ! command -v helm &>/dev/null; then
+	echo "Helm not installed, installing in current location..."
+	PATH="${PWD}:${PATH}"
+	curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | HELM_INSTALL_DIR='.' bash -s -- --no-sudo
+fi
+if ! command -v yq &>/dev/null; then
+	echo "yq not installed, installing in current location..."
+	PATH="${PWD}:${PATH}"
+	curl -fsSL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o ./yq
+	chmod +x yq
+fi
+
 ###############################
 # Disable security to allow e2e
 ###############################
@@ -83,7 +98,6 @@ AZURE_REGION=$(az group show --resource-group "${AZURE_RESOURCE_GROUP}" --query 
 # Create workload identity
 AZURE_WORKLOAD_IDENTITY_NAME="caa-${AZURE_CLIENT_ID}"
 az identity create   --name "${AZURE_WORKLOAD_IDENTITY_NAME}"   --resource-group "${AZURE_RESOURCE_GROUP}"   --location "${AZURE_REGION}"
-USER_ASSIGNED_CLIENT_ID="$(az identity show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_WORKLOAD_IDENTITY_NAME}" --query 'clientId' -otsv)"
 
 
 #############################
@@ -184,84 +198,36 @@ echo "CAA_IMAGE=\"${CAA_IMAGE}\""
 echo "CAA_TAG=\"${CAA_TAG}\""
 echo "PP_IMAGE_ID=\"${PP_IMAGE_ID}\""
 
+# Install cert-manager (prerequisit)
+helm install cert-manager oci://quay.io/jetstack/charts/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true
+
 # Clone and configure caa
-git_sparse_clone "https://github.com/confidential-containers/cloud-api-adaptor.git" "${CAA_GIT_SHA:-main}" "src/cloud-api-adaptor/install/"
+git_sparse_clone "https://github.com/confidential-containers/cloud-api-adaptor.git" "${CAA_GIT_SHA:-main}" "src/cloud-api-adaptor/install/charts/" "src/peerpod-ctrl/chart" "src/webhook/chart"
 echo "CAA_GIT_SHA=\"$(git rev-parse HEAD)\""
-pushd src/cloud-api-adaptor
-cat <<EOF > install/overlays/azure/workload-identity.yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: cloud-api-adaptor-daemonset
-  namespace: confidential-containers-system
-spec:
-  template:
-    metadata:
-      labels:
-        azure.workload.identity/use: "true"
----
+pushd src/cloud-api-adaptor/install/charts/peerpods
+# Use the latest kata-deploy
+yq -i '( .dependencies[] | select(.name == "kata-deploy") ) .version = "0.0.0-dev"' Chart.yaml
+helm dependency update .
+# Create secrets
+kubectl apply -f - << EOF
 apiVersion: v1
-kind: ServiceAccount
+kind: Namespace
 metadata:
-  name: cloud-api-adaptor
-  namespace: confidential-containers-system
-  annotations:
-    azure.workload.identity/client-id: "${USER_ASSIGNED_CLIENT_ID}"
+    name: confidential-containers-system
+    labels:
+        app.kubernetes.io/managed-by: Helm
+    annotations:
+        meta.helm.sh/release-name: peerpods
+        meta.helm.sh/release-namespace: confidential-containers-system
 EOF
-PP_INSTANCE_SIZE="Standard_D2as_v5"
-DISABLECVM="true"
-cat <<EOF > install/overlays/azure/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-bases:
-- ../../yamls
-images:
-- name: cloud-api-adaptor
-  newName: "${CAA_IMAGE}"
-  newTag: "${CAA_TAG}"
-generatorOptions:
-  disableNameSuffixHash: true
-configMapGenerator:
-- name: peer-pods-cm
-  namespace: confidential-containers-system
-  literals:
-  - CLOUD_PROVIDER="azure"
-  - AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}"
-  - AZURE_REGION="${PP_REGION}"
-  - AZURE_INSTANCE_SIZE="${PP_INSTANCE_SIZE}"
-  - AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}"
-  - AZURE_SUBNET_ID="${PP_SUBNET_ID}"
-  - AZURE_IMAGE_ID="${PP_IMAGE_ID}"
-  - DISABLECVM="${DISABLECVM}"
-  - PEERPODS_LIMIT_PER_NODE="50"
-secretGenerator:
-- name: peer-pods-secret
-  namespace: confidential-containers-system
-  envs:
-  - service-principal.env
-- name: ssh-key-secret
-  namespace: confidential-containers-system
-  files:
-  - id_rsa.pub
-patchesStrategicMerge:
-- workload-identity.yaml
-EOF
-ssh-keygen -t rsa -f install/overlays/azure/id_rsa -N ''
-echo "AZURE_CLIENT_ID=${AZURE_CLIENT_ID}" > install/overlays/azure/service-principal.env
-echo "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}" >> install/overlays/azure/service-principal.env
-echo "AZURE_TENANT_ID=${AZURE_TENANT_ID}" >> install/overlays/azure/service-principal.env
-
-# Deploy Operator
-git_sparse_clone "https://github.com/confidential-containers/operator" "${OPERATOR_SHA:-main}" "config/"
-echo "OPERATOR_SHA=\"$(git rev-parse HEAD)\""
-oc apply -k "config/release"
-oc apply -k "config/samples/ccruntime/peer-pods"
-popd
-
-# Deploy CAA
-kubectl apply -k "install/overlays/azure"
-popd
-popd
+kubectl create secret generic my-provider-creds \
+       -n confidential-containers-system \
+       --from-literal=AZURE_CLIENT_ID="$AZURE_CLIENT_ID" \
+       --from-literal=AZURE_CLIENT_SECRET="$AZURE_CLIENT_SECRET" \
+       --from-literal=AZURE_TENANT_ID="$AZURE_TENANT_ID"
+helm install peerpods . -f providers/azure.yaml --set secrets.mode=reference --set secrets.existingSecretName=my-provider-creds --set providerConfigs.azure.AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}" --set providerConfigs.azure.AZURE_REGION="${PP_REGION}" --set providerConfigs.azure.AZURE_INSTANCE_SIZE="Standard_D2as_v5" --set providerConfigs.azure.AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}" --set providerConfigs.azure.AZURE_SUBNET_ID="${PP_SUBNET_ID}" --set providerConfigs.azure.AZURE_IMAGE_ID="${PP_IMAGE_ID}" --set providerConfigs.azure.DISABLECVM="true" --set providerConfigs.azure.PEERPODS_LIMIT_PER_NODE="50" --set kata-deploy.snapshotter.setup= --dependency-update -n confidential-containers-system --create-namespace --wait
+popd	# charts
+popd	# git_sparse_clone CAA
 
 # Wait for runtimeclass
 SECONDS=0
