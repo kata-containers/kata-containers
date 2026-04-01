@@ -68,6 +68,8 @@ memdisk
 pmem
 Sharedfs
 Initdata
+fsmerge
+fsmerged
 
 # Networking & Communication
 netns
