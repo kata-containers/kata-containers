@@ -86,30 +86,41 @@ EOF
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
-	# We're not using this with baremetal machines, so we're fine on cutting
-	# corners here and just append this to the configuration file.
-	# Check if the "devmapper" plugin section exists in the file
-	if grep -q 'plugins."io.containerd.snapshotter.v1.devmapper"' "${containerd_config_file}"; then
-	    echo "devmapper section found. Updating pool_name and base_image_size..."
-	    sudo sed -i '/\[plugins."io.containerd.snapshotter.v1.devmapper"\]/,/\[plugins\./ {
-	        s/pool_name = ".*"/pool_name = "contd-thin-pool"/
-	        s/base_image_size = ".*"/base_image_size = "4096MB"/
-	    }' "${containerd_config_file}"
-	else
-	    echo "devmapper section not found. Appending to the config file..."
-		cat<<EOF | sudo tee -a "${containerd_config_file}"
-[plugins."io.containerd.snapshotter.v1.devmapper"]
-  pool_name = "contd-thin-pool"
-  base_image_size = "4096MB"
-EOF
-	fi
+	# We need to use tomlq to update the containerd config with the devmapper configuration,
+	# as it's a more complex update that involves adding new entries and modifying existing ones
+	# for two different containerd versions.
+	install_tomlq
+
+	containerd_arch="$(uname -m)"
+	case "${containerd_arch}" in
+		x86_64) containerd_arch="amd64" ;;
+		aarch64|arm64) containerd_arch="arm64" ;;
+	esac
+
+	echo "Updating containerd config with tomlq..."
+	config_tmp_file="$(sudo mktemp)"
+	sudo cat "${containerd_config_file}" | tomlq -t --arg platform "linux/${containerd_arch}" '
+		.plugins["io.containerd.snapshotter.v1.devmapper"].pool_name = "contd-thin-pool"
+		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
+		| .plugins["io.containerd.transfer.v1.local"].unpack_config =
+			[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
+		| if .version == 3 then
+			.plugins["io.containerd.cri.v1.images"].snapshotter = "devmapper"
+		  else
+			.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "devmapper"
+		  end
+	' | sudo tee "${config_tmp_file}" > /dev/null
+	sudo mv "${config_tmp_file}" "${containerd_config_file}"
+
+	# We only need tomlq for this configuration.
+	# yq, installed by install_tomlq, might cause an issue with go-based yq used by CI.
+	# So we uninstall tomlq to remove the yq from PATH and avoid any potential conflict.
+	uninstall_tomlq
 
 	case "${KUBERNETES}" in
 		k3s)
-			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
 			sudo systemctl restart k3s ;;
 		kubeadm)
-			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
 			sudo systemctl restart containerd ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
