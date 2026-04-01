@@ -49,6 +49,8 @@ impl NetworkPair {
         let unique_id = kata_sys_util::rand::UUID::new();
         let model = network_model::new(model).context("new network model")?;
         let tap_iface_name = format!("tap{idx}{TAP_SUFFIX}");
+        // Use the actual interface name from the netns scan. Fall back to eth{idx}
+        // only if the caller passed an empty name.
         let virt_iface_name = if name.is_empty() {
             format!("eth{idx}")
         } else {

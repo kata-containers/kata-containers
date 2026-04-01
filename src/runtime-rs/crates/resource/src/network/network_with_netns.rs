@@ -151,6 +151,7 @@ impl Network for NetworkWithNetns {
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let inner = self.inner.read().await;
+<<<<<<< HEAD
 
         // Always detach endpoints regardless of whether kata created the netns.
         // Physical endpoints rebind their VF from vfio-pci back to the original

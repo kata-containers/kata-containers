@@ -31,10 +31,29 @@ impl FcInner {
                 .hotplug_block_device(block.config.path_on_host.as_str(), block.config.index)
                 .await
                 .context("add block device"),
-            DeviceType::Network(network) => self
-                .add_net_device(&network.config, network.device_id)
-                .await
-                .context("add net device"),
+            DeviceType::Network(network) => {
+                // Buffer network devices and send them to FC just before InstanceStart
+                // in start_vm(). Firecracker rejects PUT /network-interfaces after the
+                // VM has started, so we must ensure they arrive before InstanceStart.
+                // This mirrors the Go runtime's batch-configuration approach.
+                //
+                // If the VM is already running (e.g. a post-start prestart-hooks rescan
+                // called add_device again), we cannot do anything useful — FC has already
+                // started and does not support network-interface hotplug.  Log a warning
+                // and return Ok so the rest of the setup path can continue.
+                if self.state == VmmState::VmRunning {
+                    warn!(
+                        sl(),
+                        "FC: ignoring late network device add for iface {} — VM already running, hotplug not supported",
+                        network.device_id
+                    );
+                    return Ok(());
+                }
+                debug!(sl(), "buffering network device for pre-start flush");
+                self.pending_net_devices
+                    .push((network.config, network.device_id));
+                Ok(())
+            }
             DeviceType::HybridVsock(hvsock) => {
                 self.add_hvsock(&hvsock.config).await.context("add vsock")
             }

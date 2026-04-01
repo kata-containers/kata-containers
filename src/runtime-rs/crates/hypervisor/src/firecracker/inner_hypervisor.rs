@@ -77,6 +77,17 @@ impl FcInner {
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         debug!(sl(), "Starting sandbox");
+
+        // Flush all buffered network devices before sending InstanceStart.
+        // FC rejects PUT /network-interfaces once the VM is running, so network
+        // interfaces must be configured here, immediately before the start action.
+        let net_devices = std::mem::take(&mut self.pending_net_devices);
+        for (config, device_id) in net_devices {
+            self.add_net_device(&config, device_id)
+                .await
+                .context("configure network interface before start")?;
+        }
+
         let body: String = serde_json::json!({
             "action_type": "InstanceStart"
         })
