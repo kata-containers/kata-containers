@@ -25,6 +25,10 @@ on:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-zvsi
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -63,6 +67,9 @@ jobs:
             vmm: qemu
           - snapshotter: nydus
             vmm: qemu-runtime-rs
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-zvsi-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
