@@ -5,6 +5,8 @@ Before=containerd.service
 
 [Service]
 ExecStart=@CONTAINERD_NYDUS_GRPC_BINARY@ --config @CONFIG_GUEST_PULLING@ --log-to-stdout
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=containerd.service
