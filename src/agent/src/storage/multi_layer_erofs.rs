@@ -51,6 +51,10 @@ pub struct MultiLayerErofsHandler {}
 pub struct MultiLayerErofsResult {
     pub mount_point: String,
     pub processed_mount_points: Vec<String>,
+    /// Temporary mount points (upper, lower-0, lower-1, …) that back the
+    /// overlay.  These must be tracked so they are unmounted *after* the
+    /// overlay target during container teardown.
+    pub temp_mount_points: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -300,9 +304,18 @@ pub async fn handle_multi_layer_erofs_group(
         acc
     });
 
+    // Collect the temporary mount points (upper first, then lowers) so the
+    // caller can register them in container_mounts for proper cleanup.
+    let mut temp_mount_points = Vec::with_capacity(1 + lower_mounts.len());
+    temp_mount_points.push(upper_mount.display().to_string());
+    for lm in &lower_mounts {
+        temp_mount_points.push(lm.display().to_string());
+    }
+
     Ok(MultiLayerErofsResult {
         mount_point: ext4.mount_point.clone(),
         processed_mount_points,
+        temp_mount_points,
     })
 }
 
