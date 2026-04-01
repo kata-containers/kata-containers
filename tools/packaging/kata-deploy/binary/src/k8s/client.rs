@@ -94,30 +94,41 @@ impl K8sClient {
         Ok(())
     }
 
-    pub async fn count_kata_deploy_daemonsets(&self) -> Result<usize> {
+    /// Returns whether a non-terminating DaemonSet with this exact name
+    /// exists in the current namespace. Used to decide whether this pod is
+    /// being restarted (true) or uninstalled (false).
+    pub async fn own_daemonset_exists(&self, daemonset_name: &str) -> Result<bool> {
+        use k8s_openapi::api::apps::v1::DaemonSet;
+        use kube::api::Api;
+
+        let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
+        match ds_api.get_opt(daemonset_name).await? {
+            Some(ds) => Ok(ds.metadata.deletion_timestamp.is_none()),
+            None => Ok(false),
+        }
+    }
+
+    /// Returns how many non-terminating DaemonSets across all namespaces
+    /// have a name containing "kata-deploy". Used to decide whether shared
+    /// node-level resources (node label, CRI restart) should be cleaned up:
+    /// they are only safe to remove when no kata-deploy instance remains
+    /// on the cluster.
+    pub async fn count_any_kata_deploy_daemonsets(&self) -> Result<usize> {
         use k8s_openapi::api::apps::v1::DaemonSet;
         use kube::api::{Api, ListParams};
 
-        let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
-        let lp = ListParams::default();
-        let daemonsets = ds_api.list(&lp).await?;
+        let ds_api: Api<DaemonSet> = Api::all(self.client.clone());
+        let daemonsets = ds_api.list(&ListParams::default()).await?;
 
-        // Note: We use client-side filtering here because Kubernetes field selectors
-        // don't support "contains" operations - they only support exact matches and comparisons.
-        // Filtering by name containing "kata-deploy" requires client-side processing.
-        // Exclude DaemonSets that are terminating (have deletion_timestamp) so that when our
-        // DaemonSet pod runs cleanup on SIGTERM during uninstall, we count 0 and remove the label.
         let count = daemonsets
             .iter()
             .filter(|ds| {
-                if ds.metadata.deletion_timestamp.is_some() {
-                    return false;
-                }
-                ds.metadata
-                    .name
-                    .as_ref()
-                    .map(|n| n.contains("kata-deploy"))
-                    .unwrap_or(false)
+                ds.metadata.deletion_timestamp.is_none()
+                    && ds
+                        .metadata
+                        .name
+                        .as_ref()
+                        .is_some_and(|n| n.contains("kata-deploy"))
             })
             .count();
 
@@ -584,9 +595,14 @@ pub async fn label_node(
     client.label_node(label_key, label_value, overwrite).await
 }
 
-pub async fn count_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.count_kata_deploy_daemonsets().await
+    client.own_daemonset_exists(&config.daemonset_name).await
+}
+
+pub async fn count_any_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client.count_any_kata_deploy_daemonsets().await
 }
 
 pub async fn crd_exists(config: &Config, crd_name: &str) -> Result<bool> {

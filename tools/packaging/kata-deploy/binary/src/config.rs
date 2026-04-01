@@ -155,6 +155,7 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
 }
@@ -168,6 +169,12 @@ impl Config {
         if node_name.trim().is_empty() {
             return Err(anyhow::anyhow!("NODE_NAME must not be empty"));
         }
+
+        let daemonset_name = env::var("DAEMONSET_NAME")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "kata-deploy".to_string());
 
         let debug = env::var("DEBUG").unwrap_or_else(|_| "false".to_string()) == "true";
 
@@ -293,6 +300,7 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
         };

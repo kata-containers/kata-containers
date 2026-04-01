@@ -236,18 +236,28 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Cleaning up Kata Containers");
 
-    info!("Counting kata-deploy daemonsets");
-    let kata_deploy_installations = k8s::count_kata_deploy_daemonsets(config).await?;
+    // Step 1: Check if THIS pod's owning DaemonSet still exists.
+    // If it does, this is a pod restart (rolling update, label change, etc.),
+    // not an uninstall — skip everything so running kata pods are not disrupted.
     info!(
-        "Found {} kata-deploy daemonset(s)",
-        kata_deploy_installations
+        "Checking if DaemonSet '{}' still exists",
+        config.daemonset_name
     );
-
-    if kata_deploy_installations == 0 {
-        info!("Removing kata-runtime label from node");
-        k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
-        info!("Successfully removed kata-runtime label");
+    if k8s::own_daemonset_exists(config).await? {
+        info!(
+            "DaemonSet '{}' still exists, \
+             skipping all cleanup to avoid disrupting running kata pods",
+            config.daemonset_name
+        );
+        return Ok(());
     }
+
+    // Step 2: Our DaemonSet is gone (uninstall). Perform instance-specific
+    // cleanup: snapshotters, CRI config, and artifacts for this instance.
+    info!(
+        "DaemonSet '{}' not found, proceeding with instance cleanup",
+        config.daemonset_name
+    );
 
     match config.experimental_setup_snapshotter.as_ref() {
         Some(snapshotters) => {
@@ -269,6 +279,25 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Removing kata artifacts from host");
     artifacts::remove_artifacts(config).await?;
     info!("Successfully removed kata artifacts");
+
+    // Step 3: Check if ANY other kata-deploy DaemonSets still exist.
+    // Shared resources (node label, CRI restart) are only safe to touch
+    // when no other kata-deploy instance remains.
+    let other_ds_count = k8s::count_any_kata_deploy_daemonsets(config).await?;
+    if other_ds_count > 0 {
+        info!(
+            "{} other kata-deploy DaemonSet(s) still exist, \
+             skipping node label removal and CRI restart",
+            other_ds_count
+        );
+        return Ok(());
+    }
+
+    info!("No other kata-deploy DaemonSets found, performing full shared cleanup");
+
+    info!("Removing kata-runtime label from node");
+    k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
+    info!("Successfully removed kata-runtime label");
 
     // Restart the CRI runtime last. On k3s/rke2 this restarts the entire
     // server process, which kills this (terminating) pod. By doing it after
