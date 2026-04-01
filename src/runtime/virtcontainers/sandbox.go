@@ -371,7 +371,8 @@ func (s *Sandbox) RescanNetwork(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			return fmt.Errorf("no network interfaces discovered after %s timeout", maxWait)
+			s.Logger().Warn("no network interfaces found after timeout — networking may be configured by prestart hooks")
+			return nil
 		case <-ticker.C:
 		}
 	}
@@ -1571,12 +1572,9 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 	// 3. In case of vm factory, scan the netns to hotplug interfaces after vm is started.
 	// 4. In case of prestartHookFunc, network config might have been changed. We need to
 	//    rescan and handle the change.
-	// 5. If no endpoints were found pre-VM-start (e.g. Docker 26+ placed the
-	//    hypervisor in its own pre-configured netns), rescan now that the
-	//    hypervisor is running so addAllEndpoints can discover its namespace.
 	if !s.config.NetworkConfig.DisableNewNetwork &&
 		caps.IsNetworkDeviceHotplugSupported() &&
-		(s.factory != nil || prestartHookFunc != nil || len(s.network.Endpoints()) == 0) {
+		(s.factory != nil || prestartHookFunc != nil) {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}
