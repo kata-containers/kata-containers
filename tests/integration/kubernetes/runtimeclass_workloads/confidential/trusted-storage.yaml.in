@@ -14,10 +14,10 @@ volumeBindingMode: WaitForFirstConsumer
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: trusted-block-pv
+  name: $PV_NAME
 spec:
   capacity:
-    storage: 10Gi
+    storage: $PV_STORAGE_CAPACITY
   volumeMode: Block
   accessModes:
     - ReadWriteOnce
@@ -37,12 +37,12 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: trusted-pvc
+  name: $PVC_NAME
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 1Gi
+      storage: $PVC_STORAGE_REQUEST
   volumeMode: Block
   storageClassName: local-storage
