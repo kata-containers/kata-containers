@@ -611,11 +611,14 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // start vm
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
-        info!(sl!(), "start vm");
-
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
+        //
+        // These must run BEFORE start_vm so that:
+        // (a) createRuntime hooks (e.g. nerdctl's CNI hook) can create the veth pair
+        //     in the container netns while the VMM process (already started by
+        //     prepare_vm and placed in the netns) is still pre-InstanceStart, and
+        // (b) hypervisors that do not support network-interface hotplug (e.g.
+        //     Firecracker) can configure the interface before InstanceStart.
         let (prestart_hooks, create_runtime_hooks) =
             if let Some(hooks) = sandbox_config.hooks.as_ref() {
                 (
@@ -633,12 +636,15 @@ impl Sandbox for VirtSandbox {
         )
         .await?;
 
-        // 1. if there are pre-start hook functions, network config might have been changed.
-        //    We need to rescan the netns to handle the change.
-        // 2. Do not scan the netns if we want no network for the VM.
-        // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
+        // Rescan the netns and update the network configuration before start_vm:
+        // 1. When network_created==true the veth is set up by the createRuntime hook
+        //    above; we must scan now so the network device lands in pending_net_devices
+        //    before InstanceStart (required for FC which has no hotplug).
+        // 2. When there are pre-start hooks the network config may have changed.
+        // 3. Do not scan if disable_new_netns is set.
         let config = self.resource_manager.config().await;
-        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
+        if (sandbox_config.network_env.network_created
+            || self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks))
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
         {
@@ -657,9 +663,13 @@ impl Sandbox for VirtSandbox {
                 self.resource_manager
                     .handle_network(network_resource)
                     .await
-                    .context("set up device after start vm")?;
+                    .context("set up network before start vm")?;
             }
         }
+
+        // start vm
+        self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        info!(sl!(), "start vm");
 
         // connect agent
         // set agent socket
