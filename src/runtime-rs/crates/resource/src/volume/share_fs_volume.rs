@@ -467,7 +467,7 @@ impl ShareFsVolume {
 
                     oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     volume.mounts.push(oci_mount);
-                } else if src.is_dir() {
+                } else if src.is_dir() && is_allowlist_volume(&src) {
                     // We allow directory copying wildly
                     // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &src);
@@ -949,6 +949,21 @@ pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     uid = String::from(uid_vec[0]);
 
     format!("{nid}-{uid}-{file_name}")
+}
+
+
+/// This function is used to check whether a given volume is a watchable volume.
+/// More specifically, it determines whether the volume's path is located under
+/// a predefined list of allowed copy directories.
+pub(crate) fn is_allowlist_volume(source_path: &PathBuf) -> bool {
+    if !source_path.is_dir() {
+        return false;
+    }
+    // allowlist: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
+    is_projected(source_path)
+        || is_downward_api(source_path)
+        || is_secret(source_path)
+        || is_configmap(source_path)
 }
 
 /// This function is used to check whether a given volume is a watchable volume.
