@@ -73,6 +73,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || steps.pr-details.outputs.head-sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref || steps.pr-details.outputs.base-ref }}
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event.pull_request.base.ref || steps.pr-details.outputs.gatekeeper-ref }}
