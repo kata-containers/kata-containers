@@ -371,7 +371,27 @@ impl ContainerManager for VirtContainerManager {
                 exited_at: None,
             })
         } else {
-            Err(Error::ContainerNotFound(container_id.clone()).into())
+            // Container not found in HashMap - this can happen during normal operation
+            // when containerd queries state during/after container deletion.
+            // Return a synthetic "stopped" state
+            warn!(
+                sl!(),
+                "Container not found in state query, returning stopped state";
+                "container_id" => container_id
+            );
+            Ok(ProcessStateInfo {
+                container_id: container_id.clone(),
+                exec_id: process.exec_id.clone(),
+                pid: PID { pid: 0 },
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: ProcessStatus::Stopped,
+                exit_status: 0,
+                exited_at: None,
+            })
         }
     }
 
