@@ -75,6 +75,11 @@ impl Hypervisor for Firecracker {
         inner.start_vm(timeout).await
     }
 
+    async fn boot_vm(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.boot_vm().await
+    }
+
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.stop_vm().await
