@@ -24,4 +24,7 @@ spec:
             configMapKeyRef:
               name: test-configmap
               key: data-2
+      resources:
+        limits:
+          memory: 2Gi
   restartPolicy: Never

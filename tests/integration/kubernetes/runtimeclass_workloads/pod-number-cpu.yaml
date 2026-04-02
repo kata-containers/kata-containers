@@ -16,6 +16,7 @@ spec:
     resources:
       limits:
         cpu: "500m"
+        memory: 2Gi
   - name: c2
     image: quay.io/prometheus/busybox:latest
     command:
@@ -24,3 +25,4 @@ spec:
     resources:
       limits:
         cpu: "500m"
+        memory: 2Gi

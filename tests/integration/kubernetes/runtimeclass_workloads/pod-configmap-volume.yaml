@@ -18,6 +18,9 @@ spec:
     - name: config-volume
       mountPath: /etc/config
       readOnly: true
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: config-volume
     configMap:

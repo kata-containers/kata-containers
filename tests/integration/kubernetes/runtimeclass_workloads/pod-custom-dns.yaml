@@ -13,6 +13,9 @@ spec:
     - name: test
       image: quay.io/prometheus/busybox:latest
       command: ["tail", "-f", "/dev/null"]
+      resources:
+        limits:
+          memory: 2Gi
   dnsPolicy: "None"
   dnsConfig:
     nameservers:

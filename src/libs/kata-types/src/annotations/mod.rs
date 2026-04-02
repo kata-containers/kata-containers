@@ -784,38 +784,55 @@ impl Annotation {
                     }
                     // Hypervisor Memory related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
-                        match byte_unit::Byte::parse_str(value, true) {
-                            Ok(mem_bytes) => {
-                                let memory_size = mem_bytes
-                                    .get_adjusted_unit(byte_unit::Unit::MiB)
-                                    .get_value()
-                                    as u32;
-                                info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
-                                if memory_size
-                                    < get_hypervisor_plugin(hypervisor_name)
-                                        .unwrap()
-                                        .get_min_memory()
-                                {
+                        // Match GO_RUNTIME (`strconv.ParseUint`): a plain decimal string is MiB.
+                        // `byte_unit` treats bare numbers as bytes, which breaks values like "2048".
+                        let memory_size: u32 =
+                            if !value.is_empty() && value.chars().all(|c| c.is_ascii_digit()) {
+                                let n: u64 = value.parse().map_err(|e| {
+                                    io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        format!("invalid default_memory digits: {e}"),
+                                    )
+                                })?;
+                                if n > u64::from(u32::MAX) {
                                     return Err(io::Error::new(
                                         io::ErrorKind::InvalidData,
-                                        format!(
-                                            "memory specified in annotation {} is less than minimum limitation {}",
-                                            memory_size,
-                                            get_hypervisor_plugin(hypervisor_name)
-                                                .unwrap()
-                                                .get_min_memory()
-                                        ),
+                                        "default_memory decimal value exceeds u32::MAX",
                                     ));
                                 }
-                                hv.memory_info.default_memory = memory_size;
-                            }
-                            Err(error) => {
-                                error!(
-                                    sl!(),
-                                    "failed to parse byte from string {} error {:?}", value, error
-                                );
-                            }
+                                n as u32
+                            } else {
+                                let mem_bytes =
+                                    byte_unit::Byte::parse_str(value, true).map_err(|error| {
+                                        error!(
+                                            sl!(),
+                                            "failed to parse default_memory {:?} error {:?}",
+                                            value,
+                                            error
+                                        );
+                                        io::Error::new(
+                                            io::ErrorKind::InvalidData,
+                                            format!("failed to parse default_memory: {error}"),
+                                        )
+                                    })?;
+                                mem_bytes
+                                    .get_adjusted_unit(byte_unit::Unit::MiB)
+                                    .get_value() as u32
+                            };
+                        info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
+                        let min_mem = get_hypervisor_plugin(hypervisor_name)
+                            .unwrap()
+                            .get_min_memory();
+                        if memory_size < min_mem {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!(
+                                    "memory specified in annotation {} is less than minimum limitation {}",
+                                    memory_size, min_mem
+                                ),
+                            ));
                         }
+                        hv.memory_info.default_memory = memory_size;
                     }
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS => match self.get_value::<u32>(key) {
                         Ok(v) => {

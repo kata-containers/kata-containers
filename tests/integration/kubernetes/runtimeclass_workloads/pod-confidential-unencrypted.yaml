@@ -33,3 +33,6 @@ spec:
         image: ghcr.io/kata-containers/test-images:unencrypted-nightly
         imagePullPolicy: Always
 
+        resources:
+          limits:
+            memory: 2Gi

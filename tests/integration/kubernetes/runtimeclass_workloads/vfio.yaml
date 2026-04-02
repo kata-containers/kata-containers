@@ -19,5 +19,6 @@ spec:
     resources:
       limits:
         intel.com/virtio_net: "1"
+        memory: 2Gi
       requests:
         intel.com/virtio_net: "1"

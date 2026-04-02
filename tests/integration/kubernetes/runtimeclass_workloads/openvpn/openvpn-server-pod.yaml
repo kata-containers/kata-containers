@@ -55,6 +55,9 @@ spec:
         - "netstat -anu | grep 1194"
       initialDelaySeconds: 5
       periodSeconds: 5
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: openvpn-server-secrets
     secret:

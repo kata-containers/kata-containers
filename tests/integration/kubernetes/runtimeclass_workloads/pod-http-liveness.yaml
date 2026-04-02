@@ -24,3 +24,6 @@ spec:
         port: 8080
       initialDelaySeconds: 3
       periodSeconds: 3
+    resources:
+      limits:
+        memory: 2Gi

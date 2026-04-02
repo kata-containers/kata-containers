@@ -109,9 +109,11 @@ impl FcInner {
             .get_resource(&self.config.boot_info.image, FC_ROOT_FS)
             .context("get resource ROOTFS")?;
 
+        let vcpu_count = (self.config.cpu_info.default_vcpus.ceil() as u32).max(1);
+
         let body_config: String = json!({
             "mem_size_mib": self.config.memory_info.default_memory,
-            "vcpu_count": self.config.cpu_info.default_vcpus,
+            "vcpu_count": vcpu_count,
         })
         .to_string();
         let body_kernel: String = json!({

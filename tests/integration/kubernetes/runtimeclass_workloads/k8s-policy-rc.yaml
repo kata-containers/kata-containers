@@ -34,6 +34,9 @@ spec:
           - mountPath: /tmp/results-read-only
             name: hostpath-vol-read-only
             readOnly: true
+        resources:
+          limits:
+            memory: 2Gi
       volumes:
       - name: host-empty-vol
         emptyDir: {}

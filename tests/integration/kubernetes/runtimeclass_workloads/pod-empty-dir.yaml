@@ -18,6 +18,9 @@ spec:
         mountPath: "/host/cache"
       - name: memory-empty-vol
         mountPath: "/tmp/cache"
+    resources:
+      limits:
+        memory: 2Gi
   volumes:
   - name: host-empty-vol
     emptyDir: {}

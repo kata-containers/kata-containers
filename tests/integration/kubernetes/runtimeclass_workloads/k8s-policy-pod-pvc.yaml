@@ -15,6 +15,9 @@ spec:
       volumeDevices:
         - name: dev
           devicePath: /dev/csi0
+      resources:
+        limits:
+          memory: 2Gi
   volumes:
     - name: dev
       persistentVolumeClaim:

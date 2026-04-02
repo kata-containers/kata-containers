@@ -15,5 +15,8 @@ spec:
       - name: pi
         image: quay.io/prometheus/busybox:latest
         command: ["/bin/sh", "-c", "echo 'scale=5; 4*a(1)' | bc -l"]
+        resources:
+          limits:
+            memory: 2Gi
       restartPolicy: Never
   backoffLimit: 4
