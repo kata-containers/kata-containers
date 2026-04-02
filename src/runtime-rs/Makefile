@@ -26,22 +26,12 @@ ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
-ifeq ($(ARCH), s390x)
+UNSUPPORTED_ARCHS := s390x powerpc64le riscv64gc
+
+ifeq ($(filter $(ARCH), $(UNSUPPORTED_ARCHS)),$(ARCH))
 default: runtime show-header
 test:
-	@echo "s390x is not currently supported"
-	exit 0
-install: install-runtime install-configs
-else ifeq ($(ARCH), powerpc64le)
-default: runtime show-header
-test:
-	@echo "powerpc64le is not currently supported"
-	exit 0
-install: install-runtime install-configs
-else ifeq ($(ARCH), riscv64gc)
-default: runtime show-header
-test:
-	@echo "RISC-V 64 is not currently supported"
+	@echo "$(ARCH) is not currently supported"
 	exit 0
 install: install-runtime install-configs
 else
