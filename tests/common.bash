@@ -178,7 +178,7 @@ function extract_kata_env() {
 	local req_num_vcpus
 
 	case "${KATA_HYPERVISOR}" in
-		dragonball)
+		dragonball|fc-rs|cloud-hypervisor|qemu-runtime-rs|qemu-se-runtime-rs)
 			cmd=kata-ctl
 			config_path=".runtime.config.path"
 			runtime_version=".runtime.version"
@@ -205,7 +205,7 @@ function extract_kata_env() {
 			req_num_vcpus=""
 			;;
 	esac
-	kata_env="$(sudo ${cmd} env --json)"
+	kata_env="$(sudo ${cmd} env --json 2>/dev/null || true)"
 
 	RUNTIME_CONFIG_PATH="$(echo "${kata_env}" | jq -r ${config_path})"
 	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r ${runtime_version} | grep ${runtime_version_semver} | cut -d'"' -f4)"
@@ -228,8 +228,19 @@ function extract_kata_env() {
 	VIRTIOFSD_PATH=$(echo "${kata_env}" | jq -r ${virtio_fs_daemon_path})
 	INITRD_PATH=$(echo "${kata_env}" | jq -r ${initrd_path})
 
+	# Fall back to well-known paths when kata-ctl is unavailable (e.g. local builds
+	# that pre-date kata-ctl or installations that only ship the shim binary).
+	if [ "${HYPERVISOR_PATH}" = "null" ] || [ -z "${HYPERVISOR_PATH}" ]; then
+		case "${KATA_HYPERVISOR}" in
+			fc-rs)                  HYPERVISOR_PATH="/opt/kata/bin/firecracker" ;;
+			cloud-hypervisor)       HYPERVISOR_PATH="/opt/kata/bin/cloud-hypervisor" ;;
+			qemu-runtime-rs|\
+			qemu-se-runtime-rs)     HYPERVISOR_PATH="/opt/kata/bin/qemu-system-x86_64" ;;
+		esac
+	fi
+
 	# TODO: there is no ${cmd} of rust version currently
-	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
+	if [[ ! "${KATA_HYPERVISOR}" =~ ^(dragonball|cloud-hypervisor|qemu-runtime-rs|qemu-se-runtime-rs)$ ]]; then
 		if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
 			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} -version | head -n1)
 		else
@@ -517,12 +528,14 @@ function enabling_hypervisor() {
 	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
 
 	case "${KATA_HYPERVISOR}" in
-		dragonball|cloud-hypervisor|qemu-runtime-rs|qemu-se-runtime-rs)
+		dragonball|cloud-hypervisor|qemu-runtime-rs|qemu-se-runtime-rs|fc-rs)
 			sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+			sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "/usr/local/bin/containerd-shim-kata-v2"
 			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers/runtime-rs"
 			;;
 		*)
 			sudo ln -sf "${KATA_DIR}/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+			sudo ln -sf "${KATA_DIR}/bin/containerd-shim-kata-v2" "/usr/local/bin/containerd-shim-kata-v2"
 			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers"
 			;;
 	esac
@@ -535,6 +548,65 @@ function enabling_hypervisor() {
 	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
+
+# Sets up a devmapper thin-pool and reconfigures standalone containerd to use
+# it as the default snapshotter.  Required for block-device based hypervisors
+# (e.g. Firecracker / fc-rs) that cannot use the overlayfs snapshotter.
+# Expects containerd to already be installed and /etc/containerd/config.toml
+# to exist (e.g. after `containerd config default | sudo tee ...`).
+function configure_devmapper_for_containerd() {
+	info "Configuring devmapper snapshotter for standalone containerd"
+
+	sudo mkdir -p /var/lib/containerd/devmapper
+	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
+	sudo truncate --size 1G  /var/lib/containerd/devmapper/meta-disk.img
+
+	# Allocate loop devices dynamically to avoid conflicts with pre-existing ones.
+	local loop_data loop_meta
+	loop_data=$(sudo losetup --find --show /var/lib/containerd/devmapper/data-disk.img)
+	loop_meta=$(sudo losetup --find --show /var/lib/containerd/devmapper/meta-disk.img)
+	info "devmapper: data=${loop_data} meta=${loop_meta}"
+
+	local data_sectors
+	data_sectors=$(sudo blockdev --getsz "${loop_data}")
+	sudo dmsetup create contd-thin-pool \
+		--table "0 ${data_sectors} thin-pool ${loop_meta} ${loop_data} 512 32768 1 skip_block_zeroing"
+
+	# Write a complete containerd v2 config combining the kata runtime with the
+	# devmapper snapshotter.  We replace whatever was there before (both the v2
+	# config from overwrite_containerd_config and the v3 default from
+	# 'containerd config default') so the result is always correct regardless of
+	# format or prior content.
+	sudo tee /etc/containerd/config.toml <<'TOML_EOF'
+version = 2
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "devmapper"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+          runtime_type = "io.containerd.kata.v2"
+
+[plugins."io.containerd.snapshotter.v1.devmapper"]
+  pool_name = "contd-thin-pool"
+  root_path = "/var/lib/containerd/devmapper"
+  base_image_size = "4096MB"
+  discard_blocks = true
+TOML_EOF
+
+	sudo systemctl restart containerd
+
+	# Verify the plugin came up healthy
+	local dm_status
+	dm_status=$(sudo ctr plugins ls | awk '$2 ~ /^devmapper$/ { print $4 }' || true)
+	[ "${dm_status}" = "ok" ] || \
+		die "containerd devmapper snapshotter not healthy (status: '${dm_status}')"
+
+	info "devmapper snapshotter configured and healthy"
+}
 
 function check_containerd_config_for_kata() {
 	# check containerd config

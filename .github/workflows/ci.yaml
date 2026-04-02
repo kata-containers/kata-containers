@@ -382,11 +382,13 @@ jobs:
           { containerd_version: lts,    vmm: qemu             },
           { containerd_version: lts,    vmm: cloud-hypervisor },
           { containerd_version: lts,    vmm: qemu-runtime-rs  },
+          { containerd_version: lts,    vmm: fc-rs            },
           { containerd_version: active, vmm: clh              },
           { containerd_version: active, vmm: dragonball       },
           { containerd_version: active, vmm: qemu             },
           { containerd_version: active, vmm: cloud-hypervisor },
           { containerd_version: active, vmm: qemu-runtime-rs  },
+          { containerd_version: active, vmm: fc-rs            },
          ]
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:

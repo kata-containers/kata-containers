@@ -3,6 +3,8 @@
 //
 //SPDX-License-Identifier: Apache-2.0
 
+use std::convert::TryFrom;
+
 use crate::{
     firecracker::{
         inner_hypervisor::{FC_AGENT_SOCKET_NAME, ROOT},
@@ -121,7 +123,8 @@ impl FcInner {
 
         let body_config: String = json!({
             "mem_size_mib": self.config.memory_info.default_memory,
-            "vcpu_count": self.config.cpu_info.default_vcpus.ceil() as u8,
+            "vcpu_count": u8::try_from(self.config.cpu_info.default_vcpus.ceil() as u64)
+                .context("vcpu_count overflows u8")?,
         })
         .to_string();
         let body_kernel: String = json!({
@@ -289,7 +292,7 @@ impl FcInner {
                 // A transport error (FC not ready yet) — retry.
                 Err(FcRequestError::Transport(e)) => {
                     debug!(sl(), "FC not reachable yet, retrying: {:?}", e);
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                     continue;
                 }
                 // An HTTP-level error from FC — fail immediately with the
