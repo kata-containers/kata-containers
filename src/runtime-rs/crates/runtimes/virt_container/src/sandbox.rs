@@ -395,24 +395,6 @@ impl VirtSandbox {
         self.hypervisor.clone()
     }
 
-    /// Start the VMM, record the attempt and watch for its exit.
-    async fn start_vmm(&self, inner: &mut SandboxInner) -> Result<()> {
-        inner.vmm_start_attempted = true;
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
-        info!(sl!(), "start vm");
-        self.remember_vmm_process().await;
-
-        let sandbox = self.clone();
-        // wait for vm exit in background, and record the exit status and time when vm exited.
-        tokio::spawn(async move {
-            sandbox
-                .finish_vm_exit(sandbox.hypervisor.wait_vm().await)
-                .await;
-        });
-        inner.vmm_exit_watched = true;
-        Ok(())
-    }
-
     async fn remember_vmm_process(&self) {
         let identity = match self.hypervisor.get_vmm_master_tid().await {
             Ok(pid) => VmmProcessIdentity::capture(pid),
@@ -1408,19 +1390,20 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // Hypervisors without network-interface hotplug (Firecracker) need the
-        // network configured before the VM starts: run the OCI hooks and the
-        // netns rescan first, then start the VM. Hypervisors with hotplug keep
-        // the usual order: start the VM, then run the hooks.
-        let network_hotplug = self
-            .hypervisor
-            .capabilities()
-            .await?
-            .is_network_device_hotplug_supported();
+        // start vm
+        inner.vmm_start_attempted = true;
+        self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        info!(sl!(), "start vm");
+        self.remember_vmm_process().await;
 
-        if network_hotplug {
-            self.start_vmm(&mut inner).await?;
-        }
+        let sandbox = self.clone();
+        // wait for vm exit in background, and record the exit status and time when vm exited.
+        tokio::spawn(async move {
+            sandbox
+                .finish_vm_exit(sandbox.hypervisor.wait_vm().await)
+                .await;
+        });
+        inner.vmm_exit_watched = true;
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
@@ -1442,17 +1425,12 @@ impl Sandbox for VirtSandbox {
 
         // 1. if there are pre-start hook functions, network config might have been changed.
         //    We need to rescan the netns to handle the change.
-        // 2. Without network hotplug, a netns kata created is populated by the
-        //    createRuntime hooks above (nerdctl's CNI hook), so rescan it as
-        //    well before the VM starts.
-        // 3. Do not scan the netns if we want no network for the VM.
+        // 2. Do not scan the netns if we want no network for the VM.
         // QEMU and Cloud Hypervisor advertise network hotplug support, so
         // factory VMs using them defer network setup until after VM startup.
         // Backends without this capability retain pre-start setup.
         let config = self.resource_manager.config().await;
-        let rescan_netns = self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
-            || (!network_hotplug && sandbox_config.network_env.network_created);
-        if rescan_netns
+        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
             && !defer_network
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
@@ -1472,13 +1450,17 @@ impl Sandbox for VirtSandbox {
                 self.resource_manager
                     .handle_network(network_resource)
                     .await
-                    .context("set up network after hooks")?;
+                    .context("set up device after start vm")?;
             }
         }
 
-        if !network_hotplug {
-            self.start_vmm(&mut inner).await?;
-        }
+        // Give the hypervisor a chance to finalize boot now that OCI hooks and
+        // the post-hooks network rescan have completed.  For hypervisors that
+        // require all devices (including network) to be registered before the
+        // guest boots (e.g. Firecracker), start_vm defers the actual boot
+        // command to this call.  For hypervisors that boot the guest in
+        // start_vm (QEMU, dragonball, cloud-hypervisor), this is a no-op.
+        self.hypervisor.boot_vm().await.context("boot vm")?;
 
         if defer_network {
             self.setup_deferred_network_after_start(sandbox_config)
