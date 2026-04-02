@@ -41,8 +41,16 @@ export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
-	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
+	sudo truncate --size 1G  /var/lib/containerd/devmapper/meta-disk.img
 
+	# Allocate loop devices dynamically to avoid conflicts with pre-existing ones
+	# (e.g. snap loop mounts on ubuntu-24.04).
+	local loop_data loop_meta
+	loop_data=$(sudo losetup --find --show /var/lib/containerd/devmapper/data-disk.img)
+	loop_meta=$(sudo losetup --find --show /var/lib/containerd/devmapper/meta-disk.img)
+	info "devmapper: data=${loop_data} meta=${loop_meta}"
+
+	# Persist the loop device mapping across reboots / containerd restarts.
 	cat<<EOF | sudo tee /etc/systemd/system/containerd-devmapper.service
 [Unit]
 Description=Setup containerd devmapper device
@@ -53,14 +61,14 @@ Wants=systemd-udev-settle.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=-/sbin/losetup /dev/loop20 /var/lib/containerd/devmapper/data-disk.img
-ExecStart=-/sbin/losetup /dev/loop21 /var/lib/containerd/devmapper/meta-disk.img
+ExecStart=-/sbin/losetup ${loop_data} /var/lib/containerd/devmapper/data-disk.img
+ExecStart=-/sbin/losetup ${loop_meta} /var/lib/containerd/devmapper/meta-disk.img
 [Install]
 WantedBy=local-fs.target
 EOF
 
 	sudo systemctl daemon-reload
-	sudo systemctl enable --now containerd-devmapper
+	sudo systemctl enable containerd-devmapper
 
 	# Time to setup the thin pool for consumption.
 	# The table arguments are such.
@@ -72,15 +80,17 @@ EOF
 	# low_water_mark. Copied this from containerd snapshotter test setup
 	# no. of feature arguments
 	# Skip zeroing blocks for new volumes.
+	local data_sectors
+	data_sectors=$(sudo blockdev --getsz "${loop_data}")
 	sudo dmsetup create contd-thin-pool \
-		--table "0 20971520 thin-pool /dev/loop21 /dev/loop20 512 32768 1 skip_block_zeroing"
+		--table "0 ${data_sectors} thin-pool ${loop_meta} ${loop_data} 512 32768 1 skip_block_zeroing"
 
 	case "${KUBERNETES}" in
 		k3s)
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
 			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
-		kubeadm)
+		kubeadm|vanilla)
 			containerd_config_file="/etc/containerd/config.toml"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
@@ -120,7 +130,7 @@ EOF
 	case "${KUBERNETES}" in
 		k3s)
 			sudo systemctl restart k3s ;;
-		kubeadm)
+		kubeadm|vanilla)
 			sudo systemctl restart containerd ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac

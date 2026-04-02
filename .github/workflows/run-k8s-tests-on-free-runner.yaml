@@ -46,6 +46,8 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: active },
           { vmm: cloud-hypervisor, containerd_version: lts },
           { vmm: cloud-hypervisor, containerd_version: active },
+          { vmm: fc-rs, containerd_version: lts, snapshotter: devmapper },
+          { vmm: fc-rs, containerd_version: active, snapshotter: devmapper },
         ]
     runs-on: ubuntu-24.04
     permissions:
@@ -61,6 +63,7 @@ jobs:
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter || '' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -104,6 +107,10 @@ jobs:
 
       - name: Deploy k8s (kubeadm)
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      - name: Configure snapshotter
+        if: matrix.environment.snapshotter != ''
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats

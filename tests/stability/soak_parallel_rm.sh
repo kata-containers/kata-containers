@@ -124,7 +124,7 @@ function go() {
 		local i
 		for ((i=1; i<= ${MAX_CONTAINERS}; i++)); do
 			containers+=($(random_name))
-			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
+			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
 			((how_many++))
 		done
 
@@ -178,7 +178,7 @@ function init() {
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	# Pull nginx image
-	sudo "${CTR_EXE}" image pull "${nginx_image}"
+	sudo "${CTR_EXE}" image pull ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} "${nginx_image}"
 	if [ $? != 0 ]; then
 		die "Unable to retry docker image ${nginx_image}"
 	fi
