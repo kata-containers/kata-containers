@@ -37,6 +37,8 @@ walkdir = "2.5.0"
 flate2 = "1.1"
 tempfile = "3.19.1"
 hex = "0.4"
+hyper = { workspace = true, features = ["client", "http1"] }
+hyperlocal = { workspace = true }
 
 ## Dependencies from `rust-netlink`
 netlink-packet-route = "0.26"
