@@ -1,0 +1,21 @@
+# Copyright (c) 2025 Kata Containers Authors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Defined below are the security contacts for this repo.
+#
+# They are the contact point for the Product Security Committee to reach out
+# to for triaging and handling of incoming issues.
+#
+# DO NOT REPORT SECURITY VULNERABILITIES DIRECTLY TO THESE NAMES, FOLLOW THE
+# INSTRUCTIONS AT [SECURITY.md](SECURITY.md)
+
+# For vulnerability reports:
+# - Preferred: Use GitHub's security advisory workflow (see SECURITY.md)
+# - Alternative: Email security@katacontainers.io
+
+# Security contacts for the architecture committee:
+@kata-containers/architecture-committee
+
+# For downstream distribution early notification of embargoed fixes,
+# contact the security team at security@katacontainers.io
