@@ -17,9 +17,11 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	otelTrace "go.opentelemetry.io/otel/trace"
@@ -45,6 +47,11 @@ type LinuxNetwork struct {
 	interworkingModel NetInterworkingModel
 	netNSCreated      bool
 	danConfigPath     string
+	// placeholderNetNS holds the path to a placeholder network namespace
+	// that we created but later abandoned in favour of the hypervisor's
+	// netns. If best-effort deletion in addAllEndpoints fails, teardown
+	// retries the cleanup via RemoveEndpoints.
+	placeholderNetNS string
 }
 
 // NewNetwork creates a new Linux Network from a NetworkConfig.
@@ -68,11 +75,11 @@ func NewNetwork(configs ...*NetworkConfig) (Network, error) {
 	}
 
 	return &LinuxNetwork{
-		config.NetworkID,
-		[]Endpoint{},
-		config.InterworkingModel,
-		config.NetworkCreated,
-		config.DanConfigPath,
+		netNSPath:         config.NetworkID,
+		eps:               []Endpoint{},
+		interworkingModel: config.InterworkingModel,
+		netNSCreated:      config.NetworkCreated,
+		danConfigPath:     config.DanConfigPath,
 	}, nil
 }
 
@@ -325,28 +332,91 @@ func (n *LinuxNetwork) GetEndpointsNum() (int, error) {
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
+//
+// If no usable interfaces are found and the hypervisor is running in a
+// different network namespace (e.g. Docker 26+ places QEMU in its own
+// pre-configured namespace), switch to the hypervisor's namespace and
+// rescan there. This handles the case where the OCI spec does not
+// communicate the network namespace path.
 func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug bool) error {
-	netnsHandle, err := netns.GetFromPath(n.netNSPath)
+	endpoints, err := n.scanEndpointsInNs(ctx, s, n.netNSPath, hotplug)
 	if err != nil {
 		return err
+	}
+
+	// If the scan found no usable endpoints, check whether the
+	// hypervisor is running in a different namespace and retry there.
+	if len(endpoints) == 0 && s != nil {
+		if hypervisorNs, ok := n.detectHypervisorNetns(s); ok {
+			networkLogger().WithFields(logrus.Fields{
+				"original_netns":   n.netNSPath,
+				"hypervisor_netns": hypervisorNs,
+			}).Debug("no endpoints in original netns, switching to hypervisor netns")
+
+			origPath := n.netNSPath
+			origCreated := n.netNSCreated
+			n.netNSPath = hypervisorNs
+
+			_, err = n.scanEndpointsInNs(ctx, s, n.netNSPath, hotplug)
+			if err != nil {
+				n.netNSPath = origPath
+				n.netNSCreated = origCreated
+				return err
+			}
+
+			// Clean up the placeholder namespace we created — we're now
+			// using the hypervisor's namespace and the placeholder is empty.
+			// Only clear netNSCreated once deletion succeeds; on failure,
+			// stash the path so RemoveEndpoints can retry during teardown.
+			if origCreated {
+				if delErr := deleteNetNS(origPath); delErr != nil {
+					networkLogger().WithField("netns", origPath).WithError(delErr).Warn("failed to delete placeholder netns, will retry during teardown")
+					n.placeholderNetNS = origPath
+				}
+			}
+			// The hypervisor's namespace was not created by us.
+			n.netNSCreated = false
+		}
+	}
+
+	sort.Slice(n.eps, func(i, j int) bool {
+		return n.eps[i].Name() < n.eps[j].Name()
+	})
+
+	networkLogger().WithField("endpoints", n.eps).Info("endpoints found after scan")
+
+	return nil
+}
+
+// scanEndpointsInNs scans a network namespace for usable (non-loopback,
+// configured) interfaces and adds them as endpoints. Returns the list of
+// newly added endpoints.
+func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath string, hotplug bool) ([]Endpoint, error) {
+	netnsHandle, err := netns.GetFromPath(nsPath)
+	if err != nil {
+		return nil, err
 	}
 	defer netnsHandle.Close()
 
 	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer netlinkHandle.Close()
 
 	linkList, err := netlinkHandle.LinkList()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	epsBefore := len(n.eps)
+	var added []Endpoint
 
 	for _, link := range linkList {
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
-			return err
+			// No rollback needed — no endpoints were added in this iteration yet.
+			return nil, err
 		}
 
 		// Ignore unconfigured network interfaces. These are
@@ -368,22 +438,62 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 			continue
 		}
 
-		if err := doNetNS(n.netNSPath, func(_ ns.NetNS) error {
-			_, err = n.addSingleEndpoint(ctx, s, netInfo, hotplug)
-			return err
+		if err := doNetNS(nsPath, func(_ ns.NetNS) error {
+			ep, addErr := n.addSingleEndpoint(ctx, s, netInfo, hotplug)
+			if addErr == nil {
+				added = append(added, ep)
+			}
+			return addErr
 		}); err != nil {
-			return err
+			// Rollback: remove any endpoints added during this scan
+			// so that a failed scan does not leave partial side effects.
+			n.eps = n.eps[:epsBefore]
+			return nil, err
 		}
-
 	}
 
-	sort.Slice(n.eps, func(i, j int) bool {
-		return n.eps[i].Name() < n.eps[j].Name()
-	})
+	return added, nil
+}
 
-	networkLogger().WithField("endpoints", n.eps).Info("endpoints found after scan")
+// detectHypervisorNetns checks whether the hypervisor process is running in a
+// network namespace different from the one we are currently tracking. If so it
+// returns the procfs path to the hypervisor's netns and true.
+func (n *LinuxNetwork) detectHypervisorNetns(s *Sandbox) (string, bool) {
+	pid, err := s.GetHypervisorPid()
+	if err != nil || pid <= 0 {
+		return "", false
+	}
 
-	return nil
+	// Guard against PID recycling: verify the process belongs to this
+	// sandbox by checking its command line for the sandbox ID. QEMU is
+	// started with -name sandbox-<id>, so the ID will appear in cmdline.
+	// /proc/pid/cmdline uses null bytes as argument separators; replace
+	// them so the substring search works on the joined argument string.
+	cmdlineRaw, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+	if err != nil {
+		return "", false
+	}
+	cmdline := strings.ReplaceAll(string(cmdlineRaw), "\x00", " ")
+	if !strings.Contains(cmdline, s.id) {
+		return "", false
+	}
+
+	hypervisorNs := fmt.Sprintf("/proc/%d/ns/net", pid)
+
+	// Compare device and inode numbers. Inode numbers are only unique
+	// within a device, so both must match to confirm the same namespace.
+	var currentStat, hvStat unix.Stat_t
+	if err := unix.Stat(n.netNSPath, &currentStat); err != nil {
+		return "", false
+	}
+	if err := unix.Stat(hypervisorNs, &hvStat); err != nil {
+		return "", false
+	}
+
+	if currentStat.Dev != hvStat.Dev || currentStat.Ino != hvStat.Ino {
+		return hypervisorNs, true
+	}
+	return "", false
 }
 
 func convertDanDeviceToNetworkInfo(device *vctypes.DanDevice) (*NetworkInfo, error) {
@@ -569,6 +679,17 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 	if n.netNSCreated && endpoints == nil {
 		networkLogger().Infof("Network namespace %q deleted", n.netNSPath)
 		return deleteNetNS(n.netNSPath)
+	}
+
+	// Retry cleanup of a placeholder namespace whose earlier deletion
+	// failed in addAllEndpoints.
+	if n.placeholderNetNS != "" && endpoints == nil {
+		if delErr := deleteNetNS(n.placeholderNetNS); delErr != nil {
+			networkLogger().WithField("netns", n.placeholderNetNS).WithError(delErr).Warn("failed to delete placeholder netns during teardown")
+		} else {
+			networkLogger().WithField("netns", n.placeholderNetNS).Info("placeholder network namespace deleted")
+			n.placeholderNetNS = ""
+		}
 	}
 
 	return nil
