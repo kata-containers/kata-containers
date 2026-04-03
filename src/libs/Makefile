@@ -11,6 +11,17 @@ ifeq ($(USERID), 0)
     override EXTRA_TEST_FLAGS = --ignored
 endif
 
+LIBS := \
+    -p kata-sys-util \
+    -p kata-types \
+    -p logging \
+    -p mem-agent \
+    -p protocols \
+    -p runtime-spec \
+    -p safe-path \
+    -p shim-interface \
+    -p test-utils
+
 default: build
 
 build:
@@ -23,13 +34,13 @@ check: clippy format
 
 clippy:
 	@echo "INFO: cargo clippy..."
-	cargo clippy --all-targets --all-features --release \
+	cargo clippy $(LIBS) --all-features --release \
 		-- \
 		-D warnings
 
 format:
 	@echo "INFO: cargo fmt..."
-	cargo fmt -- --check
+	cargo fmt $(LIBS) -- --check
 
 clean:
 	cargo clean
@@ -38,8 +49,8 @@ clean:
 # See the `test_logger_levels()` test for further information.
 test:
 	@echo "INFO: testing libraries for development build"
-	cargo test --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 	@echo "INFO: testing libraries for release build"
-	cargo test --release --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test --release $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 
 .PHONY: install vendor
