@@ -7,17 +7,17 @@
 
 FROM golang:1.24-alpine AS nydus-binary-downloader
 
-# Keep the version here aligned with "nydus-snapshotter.version"
-# in versions.yaml
-ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.13
-ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+COPY versions.yaml /tmp/versions.yaml
 
 RUN \
+	set -e && \
+	apk add --no-cache curl yq-go && \
+	NYDUS_SNAPSHOTTER_VERSION="$(yq eval -e '.externals.nydus-snapshotter.version | explode(.)' /tmp/versions.yaml)" && \
+	NYDUS_SNAPSHOTTER_REPO="$(yq eval -e '.externals.nydus-snapshotter.url | explode(.)' /tmp/versions.yaml)" && \
 	mkdir -p /opt/nydus-snapshotter && \
 	ARCH="$(uname -m)" && \
 	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64 ; fi && \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	apk add --no-cache curl && \
 	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" && \
 	tar xvzpf "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" -C /opt/nydus-snapshotter && \
 	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
