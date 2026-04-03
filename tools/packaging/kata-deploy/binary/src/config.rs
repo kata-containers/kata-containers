@@ -757,18 +757,15 @@ fn get_arch_var_or_base(base_name: &str, arch: &str) -> Option<String> {
 mod tests {
     //! Tests for configuration parsing and validation.
     //!
-    //! IMPORTANT: All tests in this crate MUST be run serially (--test-threads=1)
-    //! because they manipulate shared environment variables. Running tests in parallel
-    //! will cause race conditions and test failures.
-    //!
-    //! Use: cargo test --bin kata-deploy -- --test-threads=1
+    //! Tests that touch environment variables use `serial_test::serial` so they do not run
+    //! in parallel within this process. For extra isolation you can still use
+    //! `cargo test -p kata-deploy config::tests -- --test-threads=1`.
 
     use super::*;
     use rstest::rstest;
+    use serial_test::serial;
 
-    // NOTE: These tests modify environment variables which are process-global.
-    // Run with: cargo test config::tests -- --test-threads=1
-    // to ensure proper test isolation.
+    // NOTE: Env-var tests use #[serial] (see above) for safe parallel execution with other modules.
 
     /// Helper to clean up common environment variables used in tests
     fn cleanup_env_vars() {
@@ -867,6 +864,7 @@ mod tests {
         );
     }
 
+    #[serial]
     #[test]
     fn test_get_arch() {
         let arch = get_arch().unwrap();
@@ -874,6 +872,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_get_arch_var() {
         std::env::set_var("SHIMS_X86_64", "test1 test2");
@@ -887,10 +886,12 @@ mod tests {
     #[rstest]
     #[case(false, "config.toml.d")]
     #[case(true, "config-v3.toml.d")]
+    #[serial]
     fn test_k3s_rke2_drop_in_dir_name(#[case] use_v3: bool, #[case] expected: &str) {
         assert_eq!(k3s_rke2_drop_in_dir_name(use_v3), expected);
     }
 
+    #[serial]
     #[test]
     fn test_k3s_rke2_rendered_config_path() {
         assert_eq!(k3s_rke2_rendered_config_path(), "/etc/containerd/config.toml");
@@ -905,6 +906,7 @@ mod tests {
     #[case("version = 2\n", false, false)]
     #[case("imports = [\"/path/config-v3.toml.d/*.toml\"]", true, true)]
     #[case("imports = [\"/path/config.toml.d/*.toml\"]", true, false)]
+    #[serial]
     fn test_k3s_rke2_rendered_has_import(
         #[case] content: &str,
         #[case] use_v3: bool,
@@ -913,6 +915,7 @@ mod tests {
         assert_eq!(k3s_rke2_rendered_has_import(content, use_v3), expected);
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_not_set() {
         setup_minimal_env();
@@ -929,6 +932,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_with_value() {
         setup_minimal_env();
@@ -950,6 +954,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_different_values() {
         let suffixes = ["staging", "prod", "v2", "test123"];
@@ -970,6 +975,7 @@ mod tests {
         }
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_prefix_and_suffix() {
         setup_minimal_env();
@@ -988,6 +994,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_empty_shims_no_custom_runtimes() {
         setup_minimal_env();
@@ -1013,6 +1020,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_default_shim_not_in_shims() {
         setup_minimal_env();
@@ -1025,6 +1033,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_hypervisor_annotation_invalid_shim() {
         setup_minimal_env();
@@ -1041,6 +1050,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_agent_https_proxy_invalid_shim() {
         setup_minimal_env();
@@ -1057,6 +1067,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_snapshotter_mapping_invalid_shim() {
         setup_minimal_env();
@@ -1067,6 +1078,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_pull_type_mapping_invalid_shim() {
         setup_minimal_env();
@@ -1077,6 +1089,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_force_guest_pull_invalid_shim() {
         setup_minimal_env();
@@ -1087,6 +1100,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_success() {
         setup_minimal_env();
@@ -1106,6 +1120,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_missing_node_name_fails() {
         cleanup_env_vars();
@@ -1116,6 +1131,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_empty_node_name_fails() {
         setup_minimal_env();
@@ -1125,6 +1141,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_empty_default_shim_fails() {
         setup_minimal_env();
@@ -1137,6 +1154,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_whitespace_only_default_shim_fails() {
         setup_minimal_env();
@@ -1147,6 +1165,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_whitespace_only_shims_fails() {
         setup_minimal_env();
@@ -1156,6 +1175,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_agent_no_proxy_invalid_shim() {
         setup_minimal_env();
@@ -1166,6 +1186,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_empty_treated_as_none() {
         setup_minimal_env();
@@ -1177,6 +1198,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_arch_specific_all_variables() {
         // Test ALL architecture-specific variables work without base variables

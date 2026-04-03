@@ -42,6 +42,9 @@ members = [
   # genpolicy
   "src/tools/genpolicy",
 
+  # kata-deploy (Kubernetes installer binary)
+  "tools/packaging/kata-deploy/binary",
+
   # runtime-rs
   "src/runtime-rs",
   "src/runtime-rs/crates/agent",
@@ -59,9 +62,6 @@ resolver = "2"
 # TODO: Add all excluded crates to root workspace
 exclude = [
   "src/tools",
-
-  # kata-deploy binary is standalone and has its own Cargo.toml for now
-  "tools/packaging/kata-deploy/binary",
 
   # We are cloning and building rust packages under
   # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead

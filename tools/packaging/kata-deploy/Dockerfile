@@ -7,7 +7,7 @@
 
 FROM golang:1.24-alpine AS nydus-binary-downloader
 
-# Keep the version here aligned with "ndyus-snapshotter.version"
+# Keep the version here aligned with "nydus-snapshotter.version"
 # in versions.yaml
 ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.13
 ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
@@ -49,10 +49,13 @@ RUN \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
-WORKDIR /kata-deploy
+# Build from the repository root so kata-deploy uses the root Cargo workspace:
+#   docker build -f tools/packaging/kata-deploy/Dockerfile .
+WORKDIR /kata
 
-# Copy standalone binary project
-COPY binary /kata-deploy
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY tools/packaging/kata-deploy/binary ./tools/packaging/kata-deploy/binary
 
 # Install target and run tests based on architecture
 # - AMD64/arm64: use musl for fully static binaries
@@ -93,23 +96,23 @@ RUN \
 RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
 	echo "Running binary tests with target ${rust_target}..." && \
-	RUSTFLAGS="-D warnings" cargo test --target "${rust_target}" -- --test-threads=1 && \
+	RUSTFLAGS="-D warnings" cargo test -p kata-deploy --target "${rust_target}" -- --test-threads=1 && \
 	echo "All tests passed!"
 
 RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
 	echo "Building kata-deploy binary for ${rust_target}..." && \
-	RUSTFLAGS="-D warnings" cargo build --release --target "${rust_target}" && \
+	RUSTFLAGS="-D warnings" cargo build --release -p kata-deploy --target "${rust_target}" && \
 	mkdir -p /kata-deploy/bin && \
-	cp "/kata-deploy/target/${rust_target}/release/kata-deploy" /kata-deploy/bin/kata-deploy && \
+	cp "/kata/target/${rust_target}/release/kata-deploy" /kata-deploy/bin/kata-deploy && \
 	echo "Cleaning up build artifacts to save disk space..." && \
-	rm -rf /kata-deploy/target && \
+	rm -rf /kata/target && \
 	cargo clean
 
 #### Extract kata artifacts
 FROM alpine:3.22 AS artifact-extractor
 
-ARG KATA_ARTIFACTS=kata-static.tar.zst
+ARG KATA_ARTIFACTS=tools/packaging/kata-deploy/kata-static.tar.zst
 ARG DESTINATION=/opt/kata-artifacts
 
 COPY ${KATA_ARTIFACTS} /tmp/
@@ -222,11 +225,11 @@ COPY --from=runtime-assembler /output/lib/ /lib/
 COPY --from=runtime-assembler /output/lib64/ /lib64/
 
 # Copy nydus snapshotter
-COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
+COPY tools/packaging/kata-deploy/nydus-snapshotter ${DESTINATION}/nydus-snapshotter
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 
 # Copy runtimeclasses and node-feature-rules
-COPY node-feature-rules ${DESTINATION}/node-feature-rules
+COPY tools/packaging/kata-deploy/node-feature-rules ${DESTINATION}/node-feature-rules
 
 ENTRYPOINT ["/usr/bin/kata-deploy"]
