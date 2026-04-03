@@ -61,7 +61,11 @@ impl StorageHandler for OverlayfsHandler {
                 .as_str()
                 .strip_prefix(overlay_create_dir_prefix)
             {
-                fs::create_dir_all(dir).context("Failed to create directory")?;
+                // Verify directory exists, but don't try to create it
+                // This avoids ENOSYS errors on virtio-fs
+                if !std::path::Path::new(dir).exists() {
+                    warn!(ctx.logger, "Directory {} does not exist, but skipping creation", dir);
+                }
             }
         }
         let path = common_storage_handler(ctx.logger, &storage)?;

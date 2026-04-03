@@ -48,6 +48,17 @@ use tokio::{
     sync::{mpsc, Mutex},
 };
 
+// Local implementation of checked_next_multiple_of to avoid ch_config dependency
+// This is a temporary solution until checked_next_multiple_of() integer
+// method is available in the rust language.
+// See: https://github.com/rust-lang/rust/issues/88581
+fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
+    match value.checked_rem(multiple) {
+        None => Some(value),
+        Some(r) => value.checked_add(multiple - r),
+    }
+}
+
 const VSOCK_SCHEME: &str = "vsock";
 
 #[derive(Debug)]
@@ -114,7 +125,10 @@ impl QemuInner {
         for device in &mut self.devices {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
-                    if share_fs_dev.config.fs_type == "virtio-fs" {
+                    // Both "virtio-fs" and "virtio-fs-nydus" need virtiofs device
+                    if share_fs_dev.config.fs_type == "virtio-fs"
+                        || share_fs_dev.config.fs_type == "virtio-fs-nydus"
+                    {
                         cmdline.add_virtiofs_share(
                             &share_fs_dev.config.sock_path,
                             &share_fs_dev.config.mount_tag,
@@ -691,7 +705,7 @@ impl QemuInner {
 
         let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
-            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
+            new_hotplugged_mem = checked_next_multiple_of(
                 new_hotplugged_mem,
                 guest_mem_block_size,
             )

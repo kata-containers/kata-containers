@@ -20,11 +20,11 @@ use std::{collections::HashMap, sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
-use crate::share_fs::ShareFs;
+use crate::share_fs::{NydusShareFs, ShareFs};
 use oci_spec::runtime as oci;
 
 const ROOTFS: &str = "rootfs";
-const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
+pub const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
 const TYPE_OVERLAY_FS: &str = "overlay";
 
 #[async_trait]
@@ -62,6 +62,7 @@ impl RootFsResource {
     pub async fn handler_rootfs(
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
+        nydus_share_fs: &Option<Arc<dyn NydusShareFs>>,
         device_manager: &RwLock<DeviceManager>,
         h: &dyn Hypervisor,
         sid: &str,
@@ -115,12 +116,13 @@ impl RootFsResource {
                     );
                     Ok(block_rootfs)
                 } else if let Some(share_fs) = share_fs {
-                    // handle nydus rootfs
+                    // handle nydus rootfs (unified implementation for both inline and standalone modes)
                     let share_rootfs: Arc<dyn Rootfs> = if layer.fs_type == NYDUS_ROOTFS_TYPE {
                         Arc::new(
                             nydus_rootfs::NydusRootfs::new(
                                 device_manager,
                                 share_fs,
+                                nydus_share_fs,
                                 h,
                                 sid,
                                 cid,
