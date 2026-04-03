@@ -10,36 +10,61 @@ and reports feature skips in form of "skip_$feature=yes|no"
 or list of required tests (based on argv[1])
 """
 
+import argparse
 from collections import OrderedDict
 import os
 import re
 import subprocess
 import sys
 
+import requests
 import yaml
 
 
 class Checks:
-    def __init__(self):
-        config_path = os.path.join(os.path.dirname(__file__), "required-tests.yaml")
+    def __init__(self, from_target_branch=False, target_branch=None):
+        config = self._load_config(from_target_branch, target_branch) or {}
+        self._parse_config(config)
+
+    def _load_config(self, from_target_branch, target_branch):
+        """
+        Load the required-tests.yaml config.
+
+        :param from_target_branch: If True, fetch config from the target branch
+            via GitHub raw URL instead of using local file
+        :param target_branch: The target branch to fetch from (required if
+            from_target_branch is True)
+        :returns: Parsed YAML config dict
+        """
+        if from_target_branch:
+            repo = os.environ.get('GITHUB_REPOSITORY')
+            if not repo:
+                raise RuntimeError(
+                    "GITHUB_REPOSITORY env var required when using "
+                    "--from-target-branch")
+            if not target_branch:
+                raise RuntimeError(
+                    "target_branch required when using --from-target-branch")
+            url = (f"https://raw.githubusercontent.com/{repo}/"
+                   f"refs/heads/{target_branch}/"
+                   "tools/testing/gatekeeper/required-tests.yaml")
+            print(f"Fetching config from: {url}", file=sys.stderr)
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            return yaml.load(response.text, Loader=yaml.SafeLoader)
+        config_path = os.path.join(os.path.dirname(__file__),
+                                   "required-tests.yaml")
         with open(config_path, "r", encoding="utf8") as config_fd:
-            config = yaml.load(config_fd, Loader=yaml.SafeLoader)
-        if config.get('required_tests'):
-            self.required_tests = config['required_tests']
-        else:
-            self.required_tests = []
-        if config.get('required_regexps'):
-            self.required_regexps = config['required_regexps']
-        else:
-            self.required_regexps = []
-        if config.get('paths'):
-            self.paths = OrderedDict((re.compile(key), value)
-                                       for items in config['paths']
-                                       for key, value in items.items())
-        if config.get('mapping'):
-            self.mapping = config['mapping']
-        else:
-            self.mapping = {}
+            return yaml.load(config_fd, Loader=yaml.SafeLoader)
+
+    def _parse_config(self, config):
+        """Parse the config dict into instance attributes."""
+        self.required_tests = config.get('required_tests') or []
+        self.required_regexps = config.get('required_regexps') or []
+        self.paths = OrderedDict((re.compile(key), value)
+                                   for items in config.get('paths', [])
+                                   for key, value in items.items())
+        self.mapping = config.get('mapping') or {}
         self.all_set_of_tests = set(self.mapping.keys())
 
     def run(self, tests, target_branch):
@@ -102,8 +127,20 @@ class Checks:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        _TESTS = sys.argv[1] == '-t'
-    else:
-        _TESTS = False
-    sys.exit(Checks().run(_TESTS, os.getenv("TARGET_BRANCH", "main")))
+    parser = argparse.ArgumentParser(
+        description="Get required tests based on changed files")
+    parser.add_argument(
+        "-t", "--tests", action="store_true",
+        help="Report required tests and regexps instead of skip flags")
+    parser.add_argument(
+        "--from-target-branch", action="store_true",
+        help="Fetch required-tests.yaml from the target branch via GitHub "
+             "raw URL instead of using local file. This prevents PRs from "
+             "modifying the required tests config. Requires GITHUB_REPOSITORY "
+             "and TARGET_BRANCH env vars.")
+    args = parser.parse_args()
+
+    TARGET_BRANCH = os.getenv("TARGET_BRANCH", "main")
+    checks = Checks(from_target_branch=args.from_target_branch,
+                    target_branch=TARGET_BRANCH)
+    sys.exit(checks.run(args.tests, TARGET_BRANCH))

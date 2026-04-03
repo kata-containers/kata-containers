@@ -51,5 +51,5 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
         run: |
-          python3 tools/testing/gatekeeper/skips.py | tee -a "$GITHUB_OUTPUT"
+          python3 tools/testing/gatekeeper/skips.py --from-target-branch | tee -a "$GITHUB_OUTPUT"
         shell: /usr/bin/bash -x {0}
