@@ -17,7 +17,7 @@ use rustjail::pipestream::PipeStream;
 use slog::Logger;
 use std::ffi::CString;
 use std::os::unix::io::{FromRawFd, RawFd};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex as SyncMutex;
@@ -28,6 +28,19 @@ use tokio::select;
 use tokio::sync::watch::Receiver;
 
 const CONSOLE_PATH: &str = "/dev/console";
+
+/// Returns true if the shell is ash-like (e.g. busybox ash), which requires
+/// a valid argv and "-i" for interactive mode.
+fn is_ash_like(shell: &str) -> bool {
+    let path = Path::new(shell);
+    let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let name = resolved
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    let path_str = resolved.to_string_lossy();
+    name == "ash" || (name == "sh" && path_str.contains("busybox"))
+}
 
 lazy_static! {
     static ref SHELLS: Arc<SyncMutex<Vec<String>>> = {
@@ -144,8 +157,14 @@ fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
         libc::ioctl(0, libc::TIOCSCTTY);
     }
 
-    let cmd = CString::new(shell).unwrap();
-    let args: Vec<CString> = Vec::new();
+    let cmd = CString::new(shell.clone()).unwrap();
+    // execvp requires argv[0] = program name. Ash (e.g. busybox) needs "-i" for interactive.
+    let arg_i = CString::new("-i").unwrap();
+    let args: Vec<&std::ffi::CStr> = if is_ash_like(&shell) {
+        vec![cmd.as_c_str(), arg_i.as_c_str()]
+    } else {
+        vec![cmd.as_c_str()]
+    };
 
     // run shell
     let _ = unistd::execvp(cmd.as_c_str(), &args).map_err(|e| match e {
@@ -242,7 +261,35 @@ async fn run_debug_console_serial(shell: String, fd: RawFd) -> Result<()> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+    use tokio::io::AsyncReadExt;
     use tokio::sync::watch;
+
+    #[test]
+    fn test_is_ash_like() {
+        // Paths that don't exist fall back to path; "sh" without busybox in path is not ash
+        assert!(!is_ash_like("/nonexistent/shell"));
+        let _ = is_ash_like("/bin/sh");
+        let _ = is_ash_like("/bin/ash");
+    }
+
+    #[tokio::test]
+    async fn test_run_debug_console_vsock_completes() {
+        let shell = ["/bin/bash", "/bin/sh"]
+            .iter()
+            .find(|sh| PathBuf::from(*sh).exists())
+            .map(|s| (*s).to_string());
+        let Some(shell) = shell else {
+            eprintln!("no shell found, skipping run_debug_console_vsock test");
+            return;
+        };
+        let logger = slog_scope::logger();
+        let (mut client, mut server) = tokio::io::duplex(1024);
+        drop(server);
+        let mut buf = [0u8; 1];
+        let _ = client.read(&mut buf).await;
+        let result = run_debug_console_vsock(logger, shell, client).await;
+        result.ok();
+    }
 
     #[tokio::test]
     async fn test_setup_debug_console_no_shells() {
