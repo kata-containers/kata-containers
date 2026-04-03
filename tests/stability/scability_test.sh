@@ -46,7 +46,7 @@ function main() {
 
 	for ((i=1; i<= "${NUM_CONTAINERS}"; i++)); do
 		containers+=($(random_name))
-		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
+		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
 		((not_started_count--))
 		info "$not_started_count remaining containers"
 	done

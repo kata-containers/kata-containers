@@ -106,6 +106,23 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
         selinux_label: Option<String>,
     ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
+
+    /// Finalize VM boot after OCI hooks and network setup have run.
+    ///
+    /// For hypervisors that require all devices (including network) to be
+    /// registered before the guest boots (e.g. Firecracker, which has no
+    /// hotplug), `start_vm` only starts the VMM process, while `boot_vm`
+    /// flushes the device queue and issues the actual boot command
+    /// (InstanceStart for FC).  For hypervisors that start the guest
+    /// immediately in `start_vm` (QEMU, dragonball, cloud-hypervisor), the
+    /// default no-op implementation is sufficient.
+    ///
+    /// sandbox.rs calls this after OCI hooks and the post-hooks network
+    /// rescan, but before connecting to the kata-agent.
+    async fn boot_vm(&self) -> Result<()> {
+        Ok(())
+    }
+
     async fn stop_vm(&self) -> Result<()>;
     async fn wait_vm(&self) -> Result<i32>;
     async fn pause_vm(&self) -> Result<()>;

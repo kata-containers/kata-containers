@@ -140,21 +140,22 @@ impl Network for NetworkWithNetns {
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let inner = self.inner.read().await;
-        // The network namespace would have been deleted at this point
-        // if it has not been created by virtcontainers.
-        if !inner.network_created {
-            return Ok(());
-        }
-        {
+        // Always clean up endpoint resources (TC filter rules, TAP devices) regardless
+        // of who created the network namespace.
+        if !inner.netns_path.is_empty() {
             let _netns_guard =
                 netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
             for e in &inner.entity_list {
                 e.endpoint.detach(h).await.context("detach")?;
             }
         }
-        let netns = get_from_path(inner.netns_path.clone())?;
-        netns.remove()?;
-        fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
+        // Only remove the network namespace itself if virtcontainers created it.
+        if inner.network_created {
+            let netns = get_from_path(inner.netns_path.clone())?;
+            netns.remove()?;
+            fs::remove_dir_all(inner.netns_path.clone())
+                .context("failed to remove netns path")?;
+        }
         Ok(())
     }
 }

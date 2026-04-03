@@ -49,7 +49,13 @@ impl NetworkPair {
         let unique_id = kata_sys_util::rand::UUID::new();
         let model = network_model::new(model).context("new network model")?;
         let tap_iface_name = format!("tap{idx}{TAP_SUFFIX}");
-        let virt_iface_name = format!("eth{idx}");
+        // Use the actual interface name from the netns scan. Fall back to eth{idx}
+        // only if the caller passed an empty name.
+        let virt_iface_name = if name.is_empty() {
+            format!("eth{idx}")
+        } else {
+            name.to_string()
+        };
         let tap_link = create_link(handle, &tap_iface_name, queues)
             .await
             .context("create link")?;
@@ -106,7 +112,7 @@ impl NetworkPair {
             .await
             .context("set link up")?;
 
-        let mut net_pair = NetworkPair {
+        let net_pair = NetworkPair {
             tap: TapInterface {
                 id: String::from(&unique_id),
                 name: format!("br{idx}{TAP_SUFFIX}"),
@@ -124,10 +130,6 @@ impl NetworkPair {
             model,
             network_qos: false,
         };
-
-        if !name.is_empty() {
-            net_pair.virt_iface.name = String::from(name);
-        }
 
         Ok(net_pair)
     }

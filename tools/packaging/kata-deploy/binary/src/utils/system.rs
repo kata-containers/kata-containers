@@ -9,6 +9,7 @@ use std::process::Command;
 pub const RUST_SHIMS: &[&str] = &[
     "cloud-hypervisor",
     "dragonball",
+    "fc-rs",
     "qemu-runtime-rs",
     "qemu-coco-dev-runtime-rs",
     "qemu-se-runtime-rs",
@@ -100,6 +101,7 @@ mod tests {
     #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case("fc-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs")]
     #[case("clh", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("cloud-hypervisor", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs")]
     #[case("qemu-runtime-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs")]
@@ -118,6 +120,7 @@ mod tests {
     #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/qemu")]
     #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/qemu-tdx")]
     #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/fc")]
+    #[case("fc-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/fc-rs")]
     #[case("cloud-hypervisor", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor")]
     #[case("qemu-runtime-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/qemu-runtime-rs")]
     #[case("qemu", "/custom/path", "/custom/path/share/defaults/kata-containers/runtimes/qemu")]
