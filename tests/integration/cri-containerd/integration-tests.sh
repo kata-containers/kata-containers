@@ -162,6 +162,13 @@ function err_report() {
 
 function check_daemon_setup() {
 	info "containerd(cri): Check daemon works with runc"
+	# Use podsandbox for the runc sanity check: the shim sandboxer has a known
+	# containerd-side bug where the OCI spec is not populated before NewBundle is
+	# called, so config.json is never written and containerd-shim-runc-v2 fails.
+	# See https://github.com/containerd/containerd/issues/11640
+	# This check only verifies that containerd + runc are functional before the
+	# real kata tests run, so the sandboxer choice doesn't matter here.
+	local SANDBOXER="podsandbox"
 	create_containerd_config "runc"
 
 	# containerd cri-integration will modify the passed in config file. Let's
@@ -659,7 +666,13 @@ function main() {
 	info "containerd(cri): Running cri-integration"
 
 
-	passing_test="TestContainerStats|TestContainerRestart|TestContainerListStatsWithIdFilter|TestContainerListStatsWithIdSandboxIdFilter|TestDuplicateName|TestImageLoad|TestImageFSInfo|TestSandboxCleanRemove"
+	# TestContainerRestart is excluded: creating a new container in the same
+	# sandbox VM after the previous container has exited and been removed has
+	# never been supported by kata-containers (neither with the go-based nor
+	# the rust-based runtime).  The kata VM shuts down when its last container
+	# is removed, so any attempt to start a new container in the same sandbox
+	# fails.  This test exercises a use-case kata does not currently support.
+	passing_test="TestContainerStats|TestContainerListStatsWithIdFilter|TestContainerListStatsWithIdSandboxIdFilter|TestDuplicateName|TestImageLoad|TestImageFSInfo|TestSandboxCleanRemove"
 
 	if [[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" || \
 		"${KATA_HYPERVISOR}" == "qemu" ]]; then
