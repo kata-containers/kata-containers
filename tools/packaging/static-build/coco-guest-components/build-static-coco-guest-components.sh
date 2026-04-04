@@ -35,6 +35,20 @@ build_coco_guest_components_from_source() {
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
 
 	install -D -m0644 "confidential-data-hub/hub/src/image/ocicrypt_config.json" "${DESTDIR}/etc/ocicrypt_config.json"
+
+	if [ -n "${NV_ATTESTER:-}" ]; then
+		echo "build attestation-agent-nv with nvidia-attester support"
+
+		# remove previous attestation-agent build
+		rm "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
+
+		ATTESTER="${NV_ATTESTER}" NVAT_USE_SYSTEM_LIB=1 RUSTFLAGS="-L /usr/local/lib" \
+			DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make build
+		strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
+		install -D -m0755 "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent" \
+			"${DESTDIR}/usr/local/bin/attestation-agent-nv"
+	fi
+
 	popd
 }
 

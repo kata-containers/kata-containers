@@ -106,9 +106,10 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
 
 	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+	nvat_version=$(get_package_version_from_kata_yaml "externals.nvidia.nvat.version")
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
-		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version} ${nvat_version}"
 
 	umount -R ./dev
 	umount ./proc
@@ -222,6 +223,26 @@ chisseled_gpudirect() {
 	echo "nvidia: chisseling GPUDirect"
 	echo "nvidia: not implemented yet"
 	exit 1
+}
+
+chisseled_nvat() {
+	if [[ "${type}" != "confidential" ]]; then
+                return
+	fi
+
+	echo "nvidia: chisseling NVAT"
+
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	# NVAT shared library (built from source in stage one)
+	cp -a "${stage_one}"/usr/local/lib/libnvat.so* "${libdir}"/.
+
+	# NVAT runtime dependencies (per ldd on attestation-agent)
+	cp -a "${stage_one}/${libdir}"/libxml2.so.2*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libstdc++.so.6*   "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/liblzma.so.5*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libicuuc.so.*     "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libicudata.so.*   "${libdir}"/.
 }
 
 setup_nvrc_init_symlinks() {
@@ -358,7 +379,7 @@ coco_guest_components() {
 	local -r pause_dir="pause_bundle"
 
 	mkdir -p "${coco_bin_dir}"
-	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent     "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent-nv  "${coco_bin_dir}/attestation-agent"
 	cp -a "${stage_one}/${coco_bin_dir}"/api-server-rest       "${coco_bin_dir}/."
 	cp -a "${stage_one}/${coco_bin_dir}"/confidential-data-hub "${coco_bin_dir}/."
 
@@ -418,6 +439,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		done
 
 		coco_guest_components
+		chisseled_nvat
 	fi
 
 	compress_rootfs

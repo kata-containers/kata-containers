@@ -25,6 +25,7 @@ cuda_repo_pkg="${5:?cuda_repo_pkg not specified}"
 tools_repo_url="${6:?tools_repo_url not specified}"
 tools_repo_pkg="${7:?tools_repo_pkg not specified}"
 ctk_version="${8:?ctk_version not specified}"
+nvat_version="${9:?nvat_version not specified}"
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -38,6 +39,27 @@ install_nvidia_ctk() {
 	echo "chroot: Installing NVIDIA GPU container runtime"
 	# Base  gives a nvidia-ctk and the nvidia-container-runtime
 	eval "${APT_INSTALL}" nvidia-container-toolkit-base="${ctk_version}"
+}
+
+install_nvidia_nvat() {
+	echo "chroot: Installing NVIDIA Attestation SDK"
+	eval "${APT_INSTALL}" git cmake build-essential libxml2-dev zlib1g-dev curl
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+	export PATH="/root/.cargo/bin:${PATH}"
+	local tmpdir
+	tmpdir=$(mktemp -d)
+	pushd "${tmpdir}"
+	git clone https://github.com/NVIDIA/attestation-sdk
+	cd attestation-sdk
+	git checkout "${nvat_version}"
+	cd nv-attestation-sdk-cpp
+	cmake .
+	make install
+	ldconfig
+	popd
+	rm -rf "${tmpdir}"
+	rm -rf /root/.cargo /root/.rustup
+	apt-mark hold libxml2-dev
 }
 
 install_nvidia_fabricmanager() {
@@ -193,6 +215,7 @@ setup_apt_repositories
 install_userspace_components
 install_nvidia_fabricmanager
 install_nvidia_ctk
+install_nvidia_nvat
 install_nvidia_dcgm
 install_devkit_packages
 cleanup_rootfs
