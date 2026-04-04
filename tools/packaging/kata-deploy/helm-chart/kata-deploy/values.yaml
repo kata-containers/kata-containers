@@ -197,6 +197,24 @@ shims:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
   qemu-nvidia-gpu-tdx:
     enabled: ~
     supportedArches:
