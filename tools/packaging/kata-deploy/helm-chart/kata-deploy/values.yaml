@@ -223,6 +223,24 @@ shims:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
 
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
   qemu-snp:
     enabled: ~
     supportedArches:
