@@ -250,6 +250,29 @@ pub async fn add_devices(
     update_spec_devices(logger, spec, dev_updates)
 }
 
+pub fn dump_nvidia_cdi_yaml(logger: &Logger) -> Result<()> {
+    let file_path = "/var/run/cdi/nvidia.yaml";
+    let path = PathBuf::from(file_path);
+
+    if !path.exists() {
+        debug!(
+            logger,
+            "CDI spec file does not exist, skipping: {}", file_path
+        );
+        return Ok(());
+    }
+
+    let metadata = fs::metadata(&path)?;
+    debug!(
+        logger,
+        "CDI spec at {}: {} bytes",
+        file_path,
+        metadata.len()
+    );
+
+    Ok(())
+}
+
 #[instrument]
 pub async fn handle_cdi_devices(
     logger: &Logger,
@@ -308,9 +331,9 @@ pub async fn handle_cdi_devices(
                     cdi_timeout.as_secs(),
                     e
                 );
+                time::sleep(Duration::from_secs(1)).await;
             }
         }
-        time::sleep(Duration::from_secs(1)).await;
     }
     Err(anyhow!(
         "failed to inject devices after CDI timeout of {} seconds",
@@ -561,6 +584,104 @@ fn update_spec_devices(
     Ok(())
 }
 
+fn parse_pci_bdf_name(name: &str) -> Option<pci::Address> {
+    pci::Address::from_str(name).ok()
+}
+
+fn bus_of_addr(addr: &pci::Address) -> Result<String> {
+    // addr.to_string() format: "0000:01:00.0"
+    let s = addr.to_string();
+    let mut parts = s.split(':');
+
+    let domain = parts
+        .next()
+        .ok_or_else(|| anyhow!("bad pci address {}", s))?;
+    let bus = parts
+        .next()
+        .ok_or_else(|| anyhow!("bad pci address {}", s))?;
+
+    Ok(format!("{domain}:{bus}"))
+}
+
+fn unique_bus_from_pci_addresses(addrs: &[pci::Address]) -> Result<String> {
+    let mut buses = addrs.iter().map(bus_of_addr).collect::<Result<Vec<_>>>()?;
+
+    buses.sort();
+    buses.dedup();
+
+    match buses.len() {
+        1 => Ok(buses[0].clone()),
+        0 => Err(anyhow!("no downstream PCI devices found")),
+        _ => Err(anyhow!("multiple downstream buses found: {:?}", buses)),
+    }
+}
+
+fn read_single_bus_from_pci_bus_dir(bridgebuspath: &PathBuf) -> Result<String> {
+    let mut files = Vec::new();
+
+    for entry in fs::read_dir(bridgebuspath)? {
+        files.push(entry?);
+    }
+
+    if files.len() != 1 {
+        return Err(anyhow!(
+            "expected exactly one PCI bus in {:?}, got {}",
+            bridgebuspath,
+            files.len()
+        ));
+    }
+
+    files[0]
+        .file_name()
+        .into_string()
+        .map_err(|e| anyhow!("bad filename under {:?}: {:?}", bridgebuspath, e))
+}
+
+fn infer_bus_from_child_devices(devpath: &PathBuf) -> Result<String> {
+    let mut child_pci_addrs = Vec::new();
+
+    for entry in fs::read_dir(devpath)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let name = name
+            .to_str()
+            .ok_or_else(|| anyhow!("non-utf8 filename under {:?}: {:?}", devpath, name))?;
+
+        if let Some(addr) = parse_pci_bdf_name(name) {
+            child_pci_addrs.push(addr);
+        }
+    }
+
+    unique_bus_from_pci_addresses(&child_pci_addrs).with_context(|| {
+        format!(
+            "failed to infer downstream bus from child PCI devices under {:?}",
+            devpath
+        )
+    })
+}
+
+fn get_next_bus_from_bridge(devpath: &PathBuf) -> Result<String> {
+    let bridgebuspath = devpath.join("pci_bus");
+
+    if bridgebuspath.exists() {
+        return read_single_bus_from_pci_bus_dir(&bridgebuspath)
+            .with_context(|| format!("failed to read downstream bus from {:?}", bridgebuspath));
+    }
+
+    infer_bus_from_child_devices(devpath).with_context(|| {
+        format!(
+            "bridge {:?} has no pci_bus directory; fallback to child device scan failed",
+            devpath
+        )
+    })
+}
+
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
@@ -568,6 +689,10 @@ fn update_spec_devices(
 pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
+
+    if pcipath.is_empty() {
+        return Err(anyhow!("empty PCI path"));
+    }
 
     for i in 0..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
@@ -579,26 +704,14 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
             break;
         }
 
-        // Find out the bus exposed by bridge
-        let bridgebuspath = format!("{root_bus_sysfs}{relpath}/pci_bus");
-        let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
+        let devpath = PathBuf::from(root_bus_sysfs).join(relpath.trim_start_matches('/'));
 
-        match files.pop() {
-            Some(busfile) if files.is_empty() => {
-                bus = busfile?
-                    .file_name()
-                    .into_string()
-                    .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Expected exactly one PCI bus in {}, got {} instead",
-                    bridgebuspath,
-                    // Adjust to original value as we've already popped
-                    files.len() + 1
-                ));
-            }
-        };
+        bus = get_next_bus_from_bridge(&devpath).with_context(|| {
+            format!(
+                "failed to resolve next bus for PCI path element {} (device {}) under root {}",
+                i, bdf, root_bus_sysfs
+            )
+        })?;
     }
 
     Ok(relpath)
@@ -1148,6 +1261,21 @@ mod tests {
 
         let relpath = pcipath_to_sysfs(rootbuspath, &path234);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
+    }
+
+    #[test]
+    fn test_pcipath_to_sysfs_fallback_child_device_scan() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let rootbuspath = testdir.path().to_str().unwrap();
+
+        let path23 = pci::Path::from_str("02/03").unwrap();
+        let bridge2path = format!("{}{}", rootbuspath, "/0000:00:02.0");
+        let child_device_path = format!("{bridge2path}/0000:01:03.0");
+
+        fs::create_dir_all(child_device_path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
     }
 
     // We use device specific variants of this for real cases, but
