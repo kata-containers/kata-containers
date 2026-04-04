@@ -113,6 +113,7 @@ scheduling:
   "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-nvidia-gpu-snp-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-nvidia-gpu-tdx" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
   "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
   "remote" (dict "memory" "120Mi" "cpu" "250m")
