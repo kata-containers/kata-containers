@@ -8,16 +8,17 @@
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_QEMU_NVIDIA_GPU_SNP_IN@"
+# XXX: Source file: "@CONFIG_QEMU_NVIDIA_GPU_TDX_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUSNPPATH@"
+path = "@QEMUTDXPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
 image = "@IMAGEPATH_CONFIDENTIAL_NV@"
 machine_type = "@MACHINETYPE@"
+tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -34,31 +35,6 @@ machine_type = "@MACHINETYPE@"
 #
 # Default false
 confidential_guest = true
-
-# Enable AMD SEV-SNP confidential guests
-# In case of using confidential guests on AMD hardware that supports SEV-SNP,
-# the following enables SEV-SNP guests. Default true
-sev_snp_guest = true
-
-# SNP 'ID Block' and 'ID Authentication Information Structure'.
-# If one of snp_id_block or snp_id_auth is specified, the other must be specified, too.
-# Notice that the default SNP policy of QEMU (0x30000) is used by Kata, if not explicitly
-# set via 'snp_guest_policy' option. The IDBlock contains the guest policy as field, and
-# it must match the value from 'snp_guest_policy' or, if unset, the QEMU default policy.
-#
-# 96-byte, base64-encoded blob to provide the 'ID Block' structure for the
-# SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
-snp_id_block = ""
-# 4096-byte, base64-encoded blob to provide the 'ID Authentication Information Structure'
-# for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
-snp_id_auth = ""
-
-# SNP Guest Policy, the 'POLICY' parameter to the SNP_LAUNCH_START command.
-# If unset, the QEMU default policy (0x30000) will be used.
-# Notice that the guest policy is enforced at VM launch, and your pod VMs
-# won't start at all if the policy denys it. This will be indicated by a
-# 'SNP_LAUNCH_START' error.
-snp_guest_policy = 196608
 
 # rootfs filesystem type:
 #   - ext4 (default)
@@ -84,8 +60,8 @@ enable_annotations = @DEFENABLEANNOTATIONS_COCO@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @QEMUSNPVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
+# Your distribution recommends: @QEMUTDXVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUTDXVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -106,7 +82,7 @@ kernel_verity_params = "@KERNELVERITYPARAMS_CONFIDENTIAL_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWARESNPPATH_NV@"
+firmware = "@FIRMWARETDVFPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -219,7 +195,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-fs-nydus
 #   - none
-shared_fs = "none"
+shared_fs = "@DEFSHAREDFS_QEMU_TDX_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
