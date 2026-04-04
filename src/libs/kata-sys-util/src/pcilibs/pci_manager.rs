@@ -7,9 +7,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use mockall::automock;
 use pci_ids::{Classes, Vendors};
 
 const PCI_DEV_DOMAIN: &str = "0000";
@@ -18,87 +17,9 @@ const PCI_CONFIG_SPACE_SZ: u64 = 256;
 const UNKNOWN_DEVICE: &str = "UNKNOWN_DEVICE";
 const UNKNOWN_CLASS: &str = "UNKNOWN_CLASS";
 
-const PCI_IOV_NUM_BAR: usize = 6;
-const PCI_BASE_ADDRESS_MEM_TYPE_MASK: u64 = 0x06;
-
-pub(crate) const PCI_BASE_ADDRESS_MEM_TYPE32: u64 = 0x00; // 32 bit address
-pub(crate) const PCI_BASE_ADDRESS_MEM_TYPE64: u64 = 0x04; // 64 bit address
-
 fn address_to_id(address: &str) -> u64 {
     let cleaned_address = address.replace(":", "").replace(".", "");
     u64::from_str_radix(&cleaned_address, 16).unwrap_or(0)
-}
-
-// Calculate the next power of 2.
-fn calc_next_power_of_2(mut n: u64) -> u64 {
-    if n < 1 {
-        return 1_u64;
-    }
-
-    n -= 1;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n |= n >> 32;
-    n + 1
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct MemoryResource {
-    pub(crate) start: u64,
-    pub(crate) end: u64,
-    pub(crate) flags: u64,
-    pub(crate) path: PathBuf,
-}
-
-pub(crate) type MemoryResources = HashMap<usize, MemoryResource>;
-
-pub(crate) trait MemoryResourceTrait {
-    fn get_total_addressable_memory(&self, round_up: bool) -> (u64, u64);
-}
-
-impl MemoryResourceTrait for MemoryResources {
-    fn get_total_addressable_memory(&self, round_up: bool) -> (u64, u64) {
-        let mut mem_size_32bit = 0u64;
-        let mut mem_size_64bit = 0u64;
-
-        let mut keys: Vec<_> = self.keys().cloned().collect();
-        keys.sort();
-
-        for (num_bar, key) in keys.into_iter().enumerate() {
-            if key >= PCI_IOV_NUM_BAR || num_bar == PCI_IOV_NUM_BAR {
-                break;
-            }
-
-            if let Some(region) = self.get(&key) {
-                let flags = region.flags & PCI_BASE_ADDRESS_MEM_TYPE_MASK;
-                let mem_type_32bit = flags == PCI_BASE_ADDRESS_MEM_TYPE32;
-                let mem_type_64bit = flags == PCI_BASE_ADDRESS_MEM_TYPE64;
-                let mem_size = region.end - region.start + 1;
-
-                if mem_type_32bit {
-                    mem_size_32bit += mem_size;
-                }
-                if mem_type_64bit {
-                    mem_size_64bit += mem_size;
-                }
-            }
-        }
-
-        if round_up {
-            mem_size_32bit = calc_next_power_of_2(mem_size_32bit);
-            mem_size_64bit = calc_next_power_of_2(mem_size_64bit);
-        }
-
-        (mem_size_32bit, mem_size_64bit)
-    }
-}
-
-#[automock]
-pub trait PCIDevices {
-    fn get_pci_devices(&self, vendor: Option<u16>) -> Vec<PCIDevice>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -113,7 +34,6 @@ pub struct PCIDevice {
     pub(crate) driver: String,
     pub(crate) iommu_group: i64,
     pub(crate) numa_node: i64,
-    pub(crate) resources: MemoryResources,
 }
 
 pub struct PCIDeviceManager {
@@ -148,7 +68,7 @@ impl PCIDeviceManager {
         Ok(pci_devices)
     }
 
-    fn get_device_by_pci_bus_id(
+    pub fn get_device_by_pci_bus_id(
         &self,
         address: &str,
         vendor: Option<u16>,
@@ -197,8 +117,6 @@ impl PCIDeviceManager {
             .map(|numa| numa.trim().parse::<i64>().unwrap_or(-1))
             .unwrap_or(-1);
 
-        let resources = self.parse_resources(&device_path)?;
-
         let mut device_name = UNKNOWN_DEVICE.to_string();
         for vendor in Vendors::iter() {
             for device in vendor.devices() {
@@ -226,7 +144,6 @@ impl PCIDeviceManager {
             driver,
             iommu_group,
             numa_node,
-            resources,
             device_name,
             class_name,
         };
@@ -236,40 +153,6 @@ impl PCIDeviceManager {
         Ok(Some(pci_device))
     }
 
-    fn parse_resources(&self, device_path: &Path) -> io::Result<MemoryResources> {
-        let content = fs::read_to_string(device_path.join("resource"))?;
-        let mut resources: MemoryResources = MemoryResources::new();
-        for (i, line) in content.lines().enumerate() {
-            let values: Vec<&str> = line.split_whitespace().collect();
-            if values.len() != 3 {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("there's more than 3 entries in line '{i}'"),
-                ));
-            }
-
-            let mem_start = u64::from_str_radix(values[0].trim_start_matches("0x"), 16)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            let mem_end = u64::from_str_radix(values[1].trim_start_matches("0x"), 16)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            let mem_flags = u64::from_str_radix(values[2].trim_start_matches("0x"), 16)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            if mem_end > mem_start {
-                resources.insert(
-                    i,
-                    MemoryResource {
-                        start: mem_start,
-                        end: mem_end,
-                        flags: mem_flags,
-                        path: device_path.join(format!("resource{i}")),
-                    },
-                );
-            }
-        }
-
-        Ok(resources)
-    }
 }
 
 /// Checks if the given BDF corresponds to a PCIe device.
@@ -312,61 +195,7 @@ mod tests {
         fs::write(device_path.join("device"), "0x1234").unwrap();
         fs::write(device_path.join("class"), "0x060100").unwrap();
         fs::write(device_path.join("numa_node"), "0").unwrap();
-        fs::write(
-            device_path.join("resource"),
-            "0x00000000 0x0000ffff 0x00000404\n",
-        )
-        .unwrap();
         dir
-    }
-
-    #[test]
-    fn test_calc_next_power_of_2() {
-        assert_eq!(calc_next_power_of_2(0), 1);
-        assert_eq!(calc_next_power_of_2(1), 1);
-        assert_eq!(calc_next_power_of_2(6), 8);
-        assert_eq!(calc_next_power_of_2(9), 16);
-        assert_eq!(calc_next_power_of_2(15), 16);
-        assert_eq!(calc_next_power_of_2(16), 16);
-        assert_eq!(calc_next_power_of_2(17), 32);
-    }
-
-    #[test]
-    fn test_get_total_addressable_memory() {
-        let mut resources: MemoryResources = HashMap::new();
-
-        // Adding a 32b memory region
-        resources.insert(
-            0,
-            MemoryResource {
-                start: 0,
-                end: 1023,
-                flags: PCI_BASE_ADDRESS_MEM_TYPE32,
-                path: PathBuf::from("/path/resource0"),
-            },
-        );
-
-        // Adding a 64b memory region
-        resources.insert(
-            1,
-            MemoryResource {
-                start: 1024,
-                end: 2047,
-                flags: PCI_BASE_ADDRESS_MEM_TYPE64,
-                path: PathBuf::from("/path/resource1"),
-            },
-        );
-
-        let (mem32, mem64) = resources.get_total_addressable_memory(false);
-        assert_eq!(mem32, 1024);
-        assert_eq!(mem64, 1024);
-
-        // Test with rounding up
-        let (mem32, mem64) = resources.get_total_addressable_memory(true);
-
-        // Nearest power of 2 is the number itself
-        assert_eq!(mem32, 1024);
-        assert_eq!(mem64, 1024);
     }
 
     #[test]
@@ -388,25 +217,6 @@ mod tests {
         assert_eq!(device.vendor, 0x8086);
         assert_eq!(device.device, 0x1234);
         assert_eq!(device.class, 0x060100);
-    }
-
-    #[test]
-    fn test_parse_resources() {
-        let tmpdir = setup_mock_device_files();
-
-        let manager = PCIDeviceManager::new(&tmpdir.path().to_string_lossy());
-        let device_path = tmpdir.path().join("0000:ff:1f.0");
-
-        let resources_result = manager.parse_resources(&device_path);
-        assert!(resources_result.is_ok());
-
-        let resources = resources_result.unwrap();
-        assert_eq!(resources.len(), 1);
-
-        let resource = resources.get(&0).unwrap();
-        assert_eq!(resource.start, 0x00000000);
-        assert_eq!(resource.end, 0x0000ffff);
-        assert_eq!(resource.flags, 0x00000404);
     }
 
     #[test]
