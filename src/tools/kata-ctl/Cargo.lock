@@ -3078,6 +3078,8 @@ dependencies = [
  "hyper-util",
  "oci-spec",
  "prost 0.14.3",
+ "serde",
+ "serde_json",
  "slog",
  "slog-scope",
  "tokio",
