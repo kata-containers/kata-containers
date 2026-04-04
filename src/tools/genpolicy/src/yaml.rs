@@ -107,6 +107,10 @@ pub trait K8sResource {
         // for some of the K8s resource types.
     }
 
+    fn get_pod_security_context(&self) -> Option<&pod::PodSecurityContext> {
+        None
+    }
+
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         vec![]
     }
@@ -388,6 +392,39 @@ fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     }
 }
 
+/// Applies pod `fsGroup` and `supplementalGroups` to `AdditionalGids`.
+pub fn apply_pod_fs_group_and_supplemental_groups(
+    process: &mut policy::KataProcess,
+    security_context: Option<&pod::PodSecurityContext>,
+    is_pause_container: bool,
+) {
+    if is_pause_container {
+        return;
+    }
+    let Some(context) = security_context else {
+        return;
+    };
+
+    if let Some(fs_group) = context.fsGroup {
+        let gid: u32 = fs_group.try_into().unwrap();
+        process.User.AdditionalGids.insert(gid);
+        debug!(
+            "apply_pod_fs_group_and_supplemental_groups: inserted fs_group = {gid} into AdditionalGids, User = {:?}",
+            &process.User
+        );
+    }
+
+    if let Some(supplemental_groups) = &context.supplementalGroups {
+        supplemental_groups.iter().for_each(|g| {
+            process.User.AdditionalGids.insert(*g);
+        });
+        debug!(
+            "apply_pod_fs_group_and_supplemental_groups: inserted supplementalGroups = {:?} into AdditionalGids, User = {:?}",
+            &supplemental_groups, &process.User
+        );
+    }
+}
+
 pub fn get_process_fields(
     process: &mut policy::KataProcess,
     must_check_passwd: &mut bool,
@@ -445,27 +482,6 @@ pub fn get_process_fields(
             );
 
             *must_check_passwd = false;
-        }
-
-        if !is_pause_container {
-            if let Some(fs_group) = context.fsGroup {
-                let gid = fs_group.try_into().unwrap();
-                process.User.AdditionalGids.insert(gid);
-                debug!(
-                    "get_process_fields: inserted fs_group = {gid} into AdditionalGids, User = {:?}",
-                    &process.User
-                );
-            }
-
-            if let Some(supplemental_groups) = &context.supplementalGroups {
-                supplemental_groups.iter().for_each(|g| {
-                    process.User.AdditionalGids.insert(*g);
-                });
-                debug!(
-                    "get_process_fields: inserted supplementalGroups = {:?} into AdditionalGids, User = {:?}",
-                    &supplemental_groups, &process.User
-                );
-            }
         }
 
         if let Some(allow) = context.allowPrivilegeEscalation {
