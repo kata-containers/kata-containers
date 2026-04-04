@@ -691,14 +691,14 @@ impl QemuInner {
 
         let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
-            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
-                new_hotplugged_mem,
-                guest_mem_block_size,
-            )
-            .ok_or(anyhow!(format!(
-                "alignment of {} B to the block size of {} B failed",
-                new_hotplugged_mem, guest_mem_block_size
-            )))?
+            new_hotplugged_mem = new_hotplugged_mem
+                .checked_add(guest_mem_block_size - 1)
+                .and_then(|v| v.checked_div(guest_mem_block_size))
+                .and_then(|v| v.checked_mul(guest_mem_block_size))
+                .ok_or(anyhow!(format!(
+                    "alignment of {} B to the block size of {} B failed",
+                    new_hotplugged_mem, guest_mem_block_size
+                )))?;
         }
         let new_hotplugged_mem = new_hotplugged_mem;
 
@@ -866,6 +866,7 @@ impl QemuInner {
                         ),
                         block_device.config.is_readonly,
                         block_device.config.no_drop,
+                        &format!("{}", block_device.config.format),
                     )
                     .context("hotplug block device")?;
 
