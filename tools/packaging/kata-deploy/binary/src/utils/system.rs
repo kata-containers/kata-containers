@@ -11,6 +11,7 @@ pub const RUST_SHIMS: &[&str] = &[
     "dragonball",
     "qemu-runtime-rs",
     "qemu-nvidia-gpu-runtime-rs",
+    "qemu-nvidia-gpu-snp-runtime-rs",
     "qemu-coco-dev-runtime-rs",
     "qemu-se-runtime-rs",
     "qemu-snp-runtime-rs",
