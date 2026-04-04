@@ -7,10 +7,10 @@ pub mod pod_resources;
 
 use anyhow::{Result, anyhow};
 use cdi::specs::config::DeviceNode;
-// use cdi::container_edits::DeviceNode;
 use cdi::cache::{CdiOption, new_cache, with_auto_refresh};
 use cdi::spec_dirs::with_spec_dirs;
 use container_device_interface as cdi;
+use serde::Deserialize;
 
 use slog::info;
 use std::sync::Arc;
@@ -21,6 +21,24 @@ const DEFAULT_DYNAMIC_CDI_SPEC_PATH: &str = "/var/run/cdi";
 /// DEFAULT_STATIC_CDI_SPEC_PATH is the default directory for static CDI Specs,
 /// which can be overridden by specifying a different path when creating the cache.
 const DEFAULT_STATIC_CDI_SPEC_PATH: &str = "/etc/cdi";
+
+/// Typed projection of the upstream `DeviceNode` fields we need. The upstream
+/// struct keeps `path` / `host_path` as `pub(crate)`, so we round-trip through
+/// serde with a fixed field-name contract rather than relying on JSON key strings.
+#[derive(Deserialize)]
+struct DeviceNodePaths {
+    path: Option<String>,
+    #[serde(rename = "hostPath")]
+    host_path: Option<String>,
+}
+
+/// Returns the host-side path for a CDI `DeviceNode`: `hostPath` if present,
+/// otherwise `path`.
+pub fn device_node_host_path(dn: &DeviceNode) -> Option<String> {
+    let v = serde_json::to_value(dn).ok()?;
+    let paths: DeviceNodePaths = serde_json::from_value(v).ok()?;
+    paths.host_path.or(paths.path)
+}
 
 #[macro_export]
 macro_rules! sl {

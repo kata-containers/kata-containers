@@ -16,5 +16,7 @@ prost = "0.14"
 tonic-prost = "0.14"
 oci-spec = { workspace = true }
 container-device-interface = "0.1.2"
+serde = { workspace = true }
+serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
