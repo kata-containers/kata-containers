@@ -161,6 +161,20 @@ shims:
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
   qemu-nvidia-gpu-snp:
     enabled: ~
     supportedArches:

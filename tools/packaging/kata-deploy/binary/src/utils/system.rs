@@ -10,6 +10,7 @@ pub const RUST_SHIMS: &[&str] = &[
     "cloud-hypervisor",
     "dragonball",
     "qemu-runtime-rs",
+    "qemu-nvidia-gpu-runtime-rs",
     "qemu-coco-dev-runtime-rs",
     "qemu-se-runtime-rs",
     "qemu-snp-runtime-rs",
