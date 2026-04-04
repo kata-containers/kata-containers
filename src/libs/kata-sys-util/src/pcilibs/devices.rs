@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-#![allow(dead_code)]
+
+use std::collections::HashMap;
+
+use crate::pcilibs::pci_manager::{
+    calc_next_power_of_2, PCI_BASE_ADDRESS_MEM_TYPE64, PCI_BASE_ADDRESS_MEM_TYPE_MASK,
+};
 
 use super::pci_manager::{MemoryResourceTrait, PCIDevice, PCIDeviceManager, PCIDevices};
 
@@ -24,21 +29,24 @@ impl NvidiaPCIDevice {
     }
 
     pub fn get_bars_max_addressable_memory(&self) -> (u64, u64) {
-        let mut max_32bit = 2 * 1024 * 1024;
-        let mut max_64bit = 2 * 1024 * 1024;
+        let mut total_32bit = 0u64;
+        let mut total_64bit = 0u64;
 
         let nvgpu_devices = self.get_pci_devices(Some(self.vendor_id));
         for dev in nvgpu_devices {
-            let (mem_size_32bit, mem_size_64bit) = dev.resources.get_total_addressable_memory(true);
-            if max_32bit < mem_size_32bit {
-                max_32bit = mem_size_32bit;
-            }
-            if max_64bit < mem_size_64bit {
-                max_64bit = mem_size_64bit;
-            }
+            let (mem_size_32bit, mem_size_64bit) =
+                dev.resources.get_total_addressable_memory(false);
+            total_32bit += mem_size_32bit;
+            total_64bit += mem_size_64bit;
         }
 
-        (max_32bit * 2, max_64bit)
+        total_32bit = total_32bit.max(2 * 1024 * 1024);
+        total_64bit = total_64bit.max(2 * 1024 * 1024);
+
+        (
+            calc_next_power_of_2(total_32bit) * 2,
+            calc_next_power_of_2(total_64bit),
+        )
     }
 
     fn is_vga_controller(&self, device: &PCIDevice) -> bool {
@@ -75,6 +83,46 @@ pub fn get_bars_max_addressable_memory() -> (u64, u64) {
     let (max_32bit, max_64bit) = nvdevice.get_bars_max_addressable_memory();
 
     (max_32bit, max_64bit)
+}
+
+pub fn calc_fw_cfg_mmio64_mb(pci_addr: &str) -> u64 {
+    const FALLBACK_MB: u64 = 256 * 1024; // 256GB
+
+    let manager = PCIDeviceManager::new("/sys/bus/pci/devices");
+    let mut cache = HashMap::new();
+
+    let device = match manager
+        .get_device_by_pci_bus_id(pci_addr, None, &mut cache)
+        .ok()
+        .flatten()
+    {
+        Some(dev) => dev,
+        None => return FALLBACK_MB,
+    };
+
+    let mem_64bit_raw: u64 = device
+        .resources
+        .iter()
+        .filter_map(|(_, region)| {
+            if region.end <= region.start {
+                return None;
+            }
+            let flags = region.flags & PCI_BASE_ADDRESS_MEM_TYPE_MASK;
+            if flags != PCI_BASE_ADDRESS_MEM_TYPE64 {
+                return None;
+            }
+            Some(region.end - region.start + 1)
+        })
+        .sum();
+
+    if mem_64bit_raw == 0 {
+        return FALLBACK_MB;
+    }
+
+    // Perform round_up only once, then convert directly to MB
+    // Bytes -> round_up -> MB (strictly aligned with pref64-reserve source)
+    let rounded_bytes = calc_next_power_of_2(mem_64bit_raw);
+    rounded_bytes / (1024 * 1024) // No need for a second round_up
 }
 
 #[cfg(test)]

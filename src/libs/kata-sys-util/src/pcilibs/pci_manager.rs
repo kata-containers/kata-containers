@@ -18,8 +18,7 @@ const PCI_CONFIG_SPACE_SZ: u64 = 256;
 const UNKNOWN_DEVICE: &str = "UNKNOWN_DEVICE";
 const UNKNOWN_CLASS: &str = "UNKNOWN_CLASS";
 
-const PCI_IOV_NUM_BAR: usize = 6;
-const PCI_BASE_ADDRESS_MEM_TYPE_MASK: u64 = 0x06;
+pub const PCI_BASE_ADDRESS_MEM_TYPE_MASK: u64 = 0x06;
 
 pub(crate) const PCI_BASE_ADDRESS_MEM_TYPE32: u64 = 0x00; // 32 bit address
 pub(crate) const PCI_BASE_ADDRESS_MEM_TYPE64: u64 = 0x04; // 64 bit address
@@ -30,7 +29,7 @@ fn address_to_id(address: &str) -> u64 {
 }
 
 // Calculate the next power of 2.
-fn calc_next_power_of_2(mut n: u64) -> u64 {
+pub fn calc_next_power_of_2(mut n: u64) -> u64 {
     if n < 1 {
         return 1_u64;
     }
@@ -67,22 +66,19 @@ impl MemoryResourceTrait for MemoryResources {
         let mut keys: Vec<_> = self.keys().cloned().collect();
         keys.sort();
 
-        for (num_bar, key) in keys.into_iter().enumerate() {
-            if key >= PCI_IOV_NUM_BAR || num_bar == PCI_IOV_NUM_BAR {
-                break;
-            }
-
+        for key in keys.into_iter() {
             if let Some(region) = self.get(&key) {
+                if region.end <= region.start {
+                    continue;
+                }
+
                 let flags = region.flags & PCI_BASE_ADDRESS_MEM_TYPE_MASK;
-                let mem_type_32bit = flags == PCI_BASE_ADDRESS_MEM_TYPE32;
-                let mem_type_64bit = flags == PCI_BASE_ADDRESS_MEM_TYPE64;
                 let mem_size = region.end - region.start + 1;
 
-                if mem_type_32bit {
-                    mem_size_32bit += mem_size;
-                }
-                if mem_type_64bit {
-                    mem_size_64bit += mem_size;
+                match flags {
+                    PCI_BASE_ADDRESS_MEM_TYPE32 => mem_size_32bit += mem_size,
+                    PCI_BASE_ADDRESS_MEM_TYPE64 => mem_size_64bit += mem_size,
+                    _ => {}
                 }
             }
         }
@@ -148,7 +144,7 @@ impl PCIDeviceManager {
         Ok(pci_devices)
     }
 
-    fn get_device_by_pci_bus_id(
+    pub fn get_device_by_pci_bus_id(
         &self,
         address: &str,
         vendor: Option<u16>,
