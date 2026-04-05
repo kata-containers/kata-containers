@@ -41,7 +41,7 @@ updateStrategy:
 debug: false
 
 snapshotter:
-  setup: []  # ["nydus", "erofs"] or []
+  setup: ["nydus"]  # ["nydus", "erofs"] or []
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
@@ -153,8 +153,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
@@ -176,8 +176,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
