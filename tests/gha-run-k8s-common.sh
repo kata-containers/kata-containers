@@ -691,7 +691,7 @@ function helm_helper() {
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
-			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx-runtime-rs"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
@@ -705,7 +705,7 @@ function helm_helper() {
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 						;;
-					qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-tdx-runtime-rs|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
+					qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-tdx-runtime-rs|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-nvidia-gpu-snp-runtime-rs|qemu-nvidia-gpu-tdx-runtime-rs)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 						;;
@@ -717,7 +717,7 @@ function helm_helper() {
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
 						;;
-					qemu-nvidia-gpu)
+					qemu-nvidia-gpu|qemu-nvidia-gpu-runtime-rs)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\"]" "${values_yaml}"
 						;;

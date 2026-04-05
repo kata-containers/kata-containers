@@ -187,7 +187,7 @@ function deploy_kata() {
 
 	# Workaround to avoid modifying the workflow yaml files
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-snp|qemu-snp-runtime-rs|qemu-nvidia-gpu-*)
+		qemu-tdx|qemu-snp|qemu-snp-runtime-rs|qemu-nvidia-gpu-tdx*|qemu-nvidia-gpu-snp*)
 			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 			SNAPSHOTTER="nydus"
 			EXPERIMENTAL_FORCE_GUEST_PULL=false
