@@ -53,6 +53,9 @@ linux_container = { workspace = true, optional = true }
 virt_container = { workspace = true, optional = true }
 wasm_container = { workspace = true, optional = true }
 
+[dev-dependencies]
+rstest = { workspace = true }
+
 [features]
 default = ["virt"]
 linux = ["linux_container"]

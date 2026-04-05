@@ -51,6 +51,13 @@ pub trait Sandbox: Send + Sync {
         shim_pid: u32,
     ) -> Result<()>;
 
+    /// Re-scan the network namespace for late-discovered endpoints.
+    /// This handles runtimes like Docker 26+ that configure networking
+    /// after the Start response. The default implementation is a no-op.
+    async fn rescan_network(&self) -> Result<()> {
+        Ok(())
+    }
+
     // metrics function
     async fn agent_metrics(&self) -> Result<String>;
     async fn hypervisor_metrics(&self) -> Result<String>;

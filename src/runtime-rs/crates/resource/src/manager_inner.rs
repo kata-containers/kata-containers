@@ -296,6 +296,33 @@ impl ResourceManagerInner {
         Ok(())
     }
 
+    pub async fn has_network_endpoints(&self) -> bool {
+        if let Some(network) = &self.network {
+            match network.interfaces().await {
+                std::result::Result::Ok(interfaces) => !interfaces.is_empty(),
+                Err(_) => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    pub async fn setup_network_in_guest(&self) -> Result<()> {
+        if let Some(network) = self.network.as_ref() {
+            let network = network.as_ref();
+            self.handle_interfaces(network)
+                .await
+                .context("handle interfaces during network rescan")?;
+            self.handle_neighbours(network)
+                .await
+                .context("handle neighbours during network rescan")?;
+            self.handle_routes(network)
+                .await
+                .context("handle routes during network rescan")?;
+        }
+        Ok(())
+    }
+
     pub async fn setup_after_start_vm(&mut self) -> Result<()> {
         self.cgroups_resource
             .setup_after_start_vm(self.hypervisor.as_ref())

@@ -69,6 +69,53 @@ use crate::{
     tracer::{KataTracer, ROOTSPAN},
 };
 
+const DOCKER_LIBNETWORK_SETKEY: &str = "libnetwork-setkey";
+
+const DOCKER_NETNS_PREFIXES: &[&str] = &["/var/run/docker/netns/", "/run/docker/netns/"];
+
+fn is_valid_docker_sandbox_id(id: &str) -> bool {
+    id.len() == 64 && id.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Discover Docker's pre-created network namespace path from OCI spec hooks.
+///
+/// Docker's libnetwork-setkey hook contains the sandbox ID as its
+/// argument following "libnetwork-setkey", which maps to a netns file
+/// under /var/run/docker/netns/<sandbox_id> or /run/docker/netns/<sandbox_id>.
+fn docker_netns_path(spec: &oci::Spec) -> Option<String> {
+    let hooks = spec.hooks().as_ref()?;
+
+    let hook_sets: [&[oci::Hook]; 2] = [
+        hooks.prestart().as_deref().unwrap_or_default(),
+        hooks.create_runtime().as_deref().unwrap_or_default(),
+    ];
+
+    for hooks in &hook_sets {
+        for hook in *hooks {
+            if let Some(args) = hook.args() {
+                for (i, arg) in args.iter().enumerate() {
+                    if arg == DOCKER_LIBNETWORK_SETKEY && i + 1 < args.len() {
+                        let sandbox_id = &args[i + 1];
+                        if !is_valid_docker_sandbox_id(sandbox_id) {
+                            continue;
+                        }
+                        for prefix in DOCKER_NETNS_PREFIXES {
+                            let ns_path = format!("{}{}", prefix, sandbox_id);
+                            if let Ok(metadata) = std::fs::symlink_metadata(&ns_path) {
+                                if metadata.is_file() {
+                                    return Some(ns_path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
     match string_level {
         "trace" => slog::Level::Trace,
@@ -377,8 +424,17 @@ impl RuntimeHandlerManager {
                 if ns.path().is_some() {
                     netns = ns.path().clone().map(|p| p.display().to_string());
                 }
-                // if we get empty netns from oci spec, we need to create netns for the VM
-                else {
+                // Docker 26+ may configure networking outside of the OCI
+                // spec namespace path. Try to discover the netns from hook
+                // args before falling back to creating a placeholder.
+                else if let Some(docker_ns) = docker_netns_path(spec) {
+                    info!(
+                        sl!(),
+                        "discovered Docker network namespace from hook args";
+                        "netns" => &docker_ns
+                    );
+                    netns = Some(docker_ns);
+                } else {
                     let ns_name = generate_netns_name();
                     let raw_netns = NetNs::new(ns_name)?;
                     let path = Some(PathBuf::from(raw_netns.path()).display().to_string());
@@ -639,6 +695,7 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::WaitProcess(exit_status))
             }
             TaskRequest::StartProcess(process_id) => {
+                let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await
@@ -647,6 +704,25 @@ impl RuntimeHandlerManager {
                 let pid = shim_pid.pid;
                 let process_type = process_id.process_type;
                 let container_id = process_id.container_id().to_string();
+
+                // Schedule an async network rescan for sandbox containers.
+                // This handles runtimes that configure networking after the
+                // Start response (e.g. Docker 26+). rescan_network is
+                // idempotent — it returns immediately if endpoints already
+                // exist.
+                if is_sandbox_container {
+                    let sandbox_rescan = sandbox.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = sandbox_rescan.rescan_network().await {
+                            error!(
+                                sl!(),
+                                "async network rescan failed — container may lack networking: {:?}",
+                                e
+                            );
+                        }
+                    });
+                }
+
                 tokio::spawn(async move {
                     let result = sandbox.wait_process(cm, process_id, pid).await;
                     if let Err(e) = result {
@@ -919,4 +995,86 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oci_spec::runtime::{HookBuilder, HooksBuilder, SpecBuilder};
+    use rstest::rstest;
+
+    const VALID_SANDBOX_ID: &str =
+        "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+
+    #[rstest]
+    #[case::all_lowercase_hex(VALID_SANDBOX_ID, true)]
+    #[case::all_zeros("0000000000000000000000000000000000000000000000000000000000000000", true)]
+    #[case::uppercase_hex("A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2", false)]
+    #[case::too_short("a1b2c3d4", false)]
+    #[case::non_hex("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", false)]
+    #[case::path_traversal("../../../etc/passwd", false)]
+    #[case::empty("", false)]
+    fn test_is_valid_docker_sandbox_id(#[case] id: &str, #[case] expected: bool) {
+        assert_eq!(is_valid_docker_sandbox_id(id), expected);
+    }
+
+    fn make_hook_with_args(args: Vec<&str>) -> oci::Hook {
+        HookBuilder::default()
+            .path("/usr/bin/test")
+            .args(args.into_iter().map(String::from).collect::<Vec<_>>())
+            .build()
+            .unwrap()
+    }
+
+    #[rstest]
+    #[case::no_hooks(None, None)]
+    #[case::unrelated_hooks(
+        Some(HooksBuilder::default()
+            .prestart(vec![make_hook_with_args(vec!["some-hook", "arg1"])])
+            .build().unwrap()),
+        None
+    )]
+    #[case::invalid_sandbox_id(
+        Some(HooksBuilder::default()
+            .prestart(vec![make_hook_with_args(vec![
+                "/usr/bin/dockerd", "libnetwork-setkey", "not-a-valid-id",
+            ])])
+            .build().unwrap()),
+        None
+    )]
+    #[case::setkey_at_end_of_args(
+        Some(HooksBuilder::default()
+            .prestart(vec![make_hook_with_args(vec![
+                "/usr/bin/dockerd", "libnetwork-setkey",
+            ])])
+            .build().unwrap()),
+        None
+    )]
+    #[case::valid_prestart_but_no_file(
+        Some(HooksBuilder::default()
+            .prestart(vec![make_hook_with_args(vec![
+                "/usr/bin/dockerd", "libnetwork-setkey", VALID_SANDBOX_ID,
+            ])])
+            .build().unwrap()),
+        None
+    )]
+    #[case::valid_create_runtime_but_no_file(
+        Some(HooksBuilder::default()
+            .create_runtime(vec![make_hook_with_args(vec![
+                "/usr/bin/dockerd", "libnetwork-setkey", VALID_SANDBOX_ID,
+            ])])
+            .build().unwrap()),
+        None
+    )]
+    fn test_docker_netns_path(
+        #[case] hooks: Option<oci::Hooks>,
+        #[case] expected: Option<String>,
+    ) {
+        let mut builder = SpecBuilder::default();
+        if let Some(h) = hooks {
+            builder = builder.hooks(h);
+        }
+        let spec = builder.build().unwrap();
+        assert_eq!(docker_netns_path(&spec), expected);
+    }
 }

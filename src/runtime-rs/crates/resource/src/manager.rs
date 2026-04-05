@@ -84,6 +84,16 @@ impl ResourceManager {
         inner.handle_network(network_config).await
     }
 
+    pub async fn has_network_endpoints(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.has_network_endpoints().await
+    }
+
+    pub async fn setup_network_in_guest(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.setup_network_in_guest().await
+    }
+
     #[instrument]
     pub async fn setup_after_start_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;

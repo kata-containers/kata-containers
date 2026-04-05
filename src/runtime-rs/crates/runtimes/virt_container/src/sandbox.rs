@@ -58,6 +58,7 @@ use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -971,6 +972,71 @@ impl Sandbox for VirtSandbox {
 
     async fn hypervisor_metrics(&self) -> Result<String> {
         self.hypervisor.get_hypervisor_metrics().await
+    }
+
+    async fn rescan_network(&self) -> Result<()> {
+        let config = self.resource_manager.config().await;
+        if config.runtime.disable_new_netns {
+            return Ok(());
+        }
+        if dan_config_path(&config, &self.sid).exists() {
+            return Ok(());
+        }
+        if self.resource_manager.has_network_endpoints().await {
+            return Ok(());
+        }
+
+        let sandbox_config = match &self.sandbox_config {
+            Some(c) => c,
+            None => return Ok(()),
+        };
+        let netns_path = match &sandbox_config.network_env.netns {
+            Some(p) => p.clone(),
+            None => return Ok(()),
+        };
+
+        const MAX_WAIT: Duration = Duration::from_secs(5);
+        const POLL_INTERVAL: Duration = Duration::from_millis(50);
+        let deadline = tokio::time::Instant::now() + MAX_WAIT;
+
+        info!(sl!(), "waiting for network interfaces in namespace");
+
+        loop {
+            let network_config = NetworkConfig::NetNs(NetworkWithNetNsConfig {
+                network_model: config.runtime.internetworking_model.clone(),
+                netns_path: netns_path.clone(),
+                queues: self
+                    .hypervisor
+                    .hypervisor_config()
+                    .await
+                    .network_info
+                    .network_queues as usize,
+                network_created: sandbox_config.network_env.network_created,
+            });
+
+            if let Err(e) = self.resource_manager.handle_network(network_config).await {
+                warn!(sl!(), "network rescan attempt failed: {:?}", e);
+            }
+
+            if self.resource_manager.has_network_endpoints().await {
+                info!(sl!(), "network interfaces discovered during rescan");
+                return self
+                    .resource_manager
+                    .setup_network_in_guest()
+                    .await
+                    .context("setup network in guest after rescan");
+            }
+
+            if tokio::time::Instant::now() >= deadline {
+                warn!(
+                    sl!(),
+                    "no network interfaces found after timeout — networking may be configured later"
+                );
+                return Ok(());
+            }
+
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
     }
 
     async fn set_policy(&self, policy: &str) -> Result<()> {
