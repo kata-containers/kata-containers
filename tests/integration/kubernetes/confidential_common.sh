@@ -10,7 +10,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 

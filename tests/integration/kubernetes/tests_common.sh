@@ -82,7 +82,7 @@ auto_generate_policy_enabled() {
 
 is_coco_platform() {
 	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|"qemu-snp-runtime-rs"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp")
+		"qemu-tdx"|"qemu-snp"|"qemu-snp-runtime-rs"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp"|"qemu-nvidia-gpu-tdx-runtime-rs"|"qemu-nvidia-gpu-snp-runtime-rs")
 			return 0
 			;;
 		*)
