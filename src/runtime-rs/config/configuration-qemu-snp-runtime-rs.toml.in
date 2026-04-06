@@ -103,12 +103,6 @@ kernel_params = "@KERNELPARAMS@"
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWARE_SNP_PATH@"
 
-# Path to the firmware volume.
-# firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
-# as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
-# can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWARE_VOLUME_SNP_PATH@"
-
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
@@ -116,12 +110,12 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
 # comma-separated list of seccomp sandbox features to control the syscall access.
-# For example, `seccompsandbox= "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
+# For example, `seccomp_sandbox = "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
 # Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 # Recommended value when enabling: "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
-seccompsandbox = "@DEFSECCOMPSANDBOXPARAM@"
+seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
@@ -289,10 +283,6 @@ block_device_cache_noflush = false
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
 
-# Independent IOThreads enables IO to be processed in a separate thread, it is
-# for QEMU hotplug device attach to iothread, like virtio-blk.
-indep_iothreads = @DEFINDEPIOTHREADS@
-
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked
@@ -345,11 +335,6 @@ enable_iommu_platform = false
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
-
-# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
-# qemu will delay this many seconds and then attempt to reconnect.
-# Zero disables reconnecting, and the default is zero.
-vhost_user_reconnect_timeout_sec = 0
 
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
@@ -407,7 +392,7 @@ disable_vhost_net = false
 #
 # If set to the empty string "", no extra monitor socket is added. This is
 # the default.
-#extra_monitor_socket = "hmp"
+#dbg_monitor_socket = "hmp"
 
 #
 # Default entropy source.
@@ -495,9 +480,6 @@ guest_memory_dump_paging = false
 # be default_memory.
 enable_guest_swap = false
 
-# use legacy serial for guest console if available and implemented for architecture. Default false
-use_legacy_serial = false
-
 # disable applying SELinux on the VMM process (default false)
 disable_selinux = @DEFDISABLESELINUX@
 
@@ -509,7 +491,7 @@ disable_selinux = @DEFDISABLESELINUX@
 disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
 
-[factory]
+[hypervisor.qemu.factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
 # agent memory by mapping it readonly. It helps speeding up new container
@@ -527,30 +509,6 @@ enable_template = false
 #
 # Default "/run/vc/vm/template"
 template_path = "/run/vc/vm/template"
-
-# The number of caches of VMCache:
-# unspecified or == 0   --> VMCache is disabled
-# > 0                   --> will be set to the specified number
-#
-# VMCache is a function that creates VMs as caches before using it.
-# It helps speed up new container creation.
-# The function consists of a server and some clients communicating
-# through Unix socket.  The protocol is gRPC in protocols/cache/cache.proto.
-# The VMCache server will create some VMs and cache them by factory cache.
-# It will convert the VM to gRPC format and transport it when gets
-# requestion from clients.
-# Factory grpccache is the VMCache client.  It will request gRPC format
-# VM and convert it back to a VM.  If VMCache function is enabled,
-# kata-runtime will request VM from factory grpccache when it creates
-# a new sandbox.
-#
-# Default 0
-vm_cache_number = 0
-
-# Specify the address of the Unix socket that is used by VMCache.
-#
-# Default /var/run/kata-containers/cache.sock
-vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
@@ -651,19 +609,6 @@ agent_name="@PROJECT_TYPE@"
 # (default: true)
 disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 
-# vCPUs pinning settings
-# if enabled, each vCPU thread will be scheduled to a fixed CPU
-# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
-enable_vcpus_pinning = false
-
-# Apply a custom SELinux security policy to the container process inside the VM.
-# This is used when you want to apply a type other than the default `container_t`,
-# so general users should not uncomment and apply it.
-# (format: "user:role:type")
-# Note: You cannot specify MCS policy with the label because the sensitivity levels and
-# categories are determined automatically by high-level container runtimes such as containerd.
-guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
-
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
@@ -757,22 +702,3 @@ enable_pprof = false
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
-
-# pod_resource_api_sock specifies the unix socket for the Kubelet's
-# PodResource API endpoint. If empty, kubernetes based cold plug
-# will not be attempted. In order for this feature to work, the
-# KubeletPodResourcesGet featureGate must be enabled in Kubelet,
-# if using Kubelet older than 1.34.
-#
-# The pod resource API's socket is relative to the Kubelet's root-dir,
-# which is defined by the cluster admin, and its location is:
-# ${KubeletRootDir}/pod-resources/kubelet.sock
-#
-# cold_plug_vfio(see hypervisor config) acts as a feature gate:
-#      cold_plug_vfio = no_port (default) => no cold plug
-#      cold_plug_vfio != no_port AND pod_resource_api_sock = "" => need
-#              explicit CDI annotation for cold plug (applies mainly
-#              to non-k8s cases)
-#      cold_plug_vfio != no_port AND pod_resource_api_sock != "" => kubelet
-#              based cold plug.
-pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK@"
