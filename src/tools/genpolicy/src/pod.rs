@@ -937,6 +937,10 @@ impl yaml::K8sResource for Pod {
     fn get_sysctls(&self) -> Vec<Sysctl> {
         yaml::get_sysctls(&self.spec.securityContext)
     }
+
+    fn get_pod_security_context(&self) -> Option<&PodSecurityContext> {
+        self.spec.securityContext.as_ref()
+    }
 }
 
 impl Container {

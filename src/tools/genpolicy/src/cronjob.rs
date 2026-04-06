@@ -166,4 +166,14 @@ impl yaml::K8sResource for CronJob {
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         yaml::get_sysctls(&self.spec.jobTemplate.spec.template.spec.securityContext)
     }
+
+    fn get_pod_security_context(&self) -> Option<&pod::PodSecurityContext> {
+        self.spec
+            .jobTemplate
+            .spec
+            .template
+            .spec
+            .securityContext
+            .as_ref()
+    }
 }

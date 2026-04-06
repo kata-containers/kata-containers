@@ -10,15 +10,16 @@ metadata:
   labels:
     app: ${POD_NAME_EMBEDQA}
 spec:
+  # unlike the instruct manifest, this image needs securityContext to
+  # avoid NVML/GPU permission failures
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
   restartPolicy: Always
   runtimeClassName: kata
   serviceAccountName: default
   imagePullSecrets:
     - name: ngc-secret-embedqa
-  securityContext:
-    fsGroup: 0
-    runAsGroup: 0
-    runAsUser: 0
   containers:
   - name: ${POD_NAME_EMBEDQA}
     image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.10.1

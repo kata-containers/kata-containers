@@ -15,7 +15,7 @@ spec:
     fsGroup: 123
   containers:
   - name: mounttest-container
-    image: ${agnhost_image}
+    image: ${AGNHOST_IMAGE}
     command:
       - /agnhost
     args:
@@ -28,7 +28,7 @@ spec:
       - name: emptydir-volume
         mountPath: /test-volume
   - name: mounttest-container-2
-    image: ${agnhost_image}
+    image: ${AGNHOST_IMAGE}
     command:
       - /agnhost
     args:
