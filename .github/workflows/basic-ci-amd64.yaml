@@ -88,7 +88,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'qemu-runtime-rs']
+        vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'qemu-runtime-rs', 'fc-rs']
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -327,6 +327,7 @@ jobs:
           - qemu
           - cloud-hypervisor
           - qemu-runtime-rs
+          - fc-rs
     runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}

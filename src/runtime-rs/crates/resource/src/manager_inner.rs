@@ -249,13 +249,48 @@ impl ResourceManagerInner {
     }
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
+        // The guest virtio-net device may not be visible to the kernel immediately
+        // after InstanceStart completes. Retry on "Link not found" to allow time
+        // for virtio-net driver initialisation in the guest.
+        // Use a generous window (100 × 100 ms = 10 s) since on some systems
+        // virtio-net initialisation is slower than the Go runtime's 20 × 20 ms.
+        const MAX_ATTEMPTS: u32 = 100;
+        const RETRY_DELAY_MS: u64 = 100;
+
         for i in network.interfaces().await.context("get interfaces")? {
-            // update interface
-            info!(sl!(), "update interface {:?}", i);
-            self.agent
-                .update_interface(agent::UpdateInterfaceRequest { interface: Some(i) })
-                .await
-                .context("update interface")?;
+            info!(sl!(), "update interface: hw_addr={} name={}", i.hw_addr, i.name);
+            let mut last_err = None;
+            for attempt in 0..MAX_ATTEMPTS {
+                let result = self
+                    .agent
+                    .update_interface(agent::UpdateInterfaceRequest {
+                        interface: Some(i.clone()),
+                    })
+                    .await;
+                if let Err(e) = result {
+                    let msg = e.to_string();
+                    if msg.contains("Link not found") {
+                        info!(
+                            sl!(),
+                            "update interface: link not found (attempt {}/{}), retrying in {}ms",
+                            attempt + 1,
+                            MAX_ATTEMPTS,
+                            RETRY_DELAY_MS,
+                        );
+                        last_err = Some(e);
+                        tokio::time::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS))
+                            .await;
+                    } else {
+                        return Err(e).context("update interface");
+                    }
+                } else {
+                    last_err = None;
+                    break;
+                }
+            }
+            if let Some(e) = last_err {
+                return Err(e).context("update interface");
+            }
         }
 
         Ok(())

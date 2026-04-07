@@ -275,7 +275,7 @@ Each hypervisor has a dedicated configuration file:
 |------------|----------------|-----------------|
 | QEMU |`configuration-qemu-runtime-rs.toml` |`configuration-qemu.toml` |
 | Cloud Hypervisor | `configuration-cloud-hypervisor.toml` | `configuration-clh.toml` |
-| Firecracker | `configuration-rs-fc.toml` | `configuration-fc.toml` |
+| Firecracker | `configuration-fc-rs.toml` | `configuration-fc.toml` |
 | Dragonball | `configuration-dragonball.toml` (default) | `No` |
 
 > **Note:** Configuration files are typically installed in `/opt/kata/share/defaults/kata-containers/` or  `/opt/kata/share/defaults/kata-containers/runtime-rs/` or `/usr/share/defaults/kata-containers/`.
