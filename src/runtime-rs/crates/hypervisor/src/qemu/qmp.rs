@@ -14,7 +14,8 @@ use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, MigrationInfo, PciDeviceInfo,
+    BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
+    MigrationInfo, PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -644,6 +645,7 @@ impl Qmp {
         no_drop: bool,
         logical_block_size: u32,
         physical_block_size: u32,
+        format: &str,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = format!("drive-{index}");
@@ -692,27 +694,66 @@ impl Qmp {
             }
         };
 
-        let blockdev_options_raw = BlockdevOptions::raw {
-            base: BlockdevOptionsBase {
-                detect_zeroes: None,
-                cache: None,
-                discard: None,
-                force_share: None,
-                auto_read_only: None,
-                node_name: Some(node_name.clone()),
-                read_only: None,
-            },
-            raw: BlockdevOptionsRaw {
-                base: BlockdevOptionsGenericFormat {
-                    file: BlockdevRef::definition(Box::new(blockdev_file)),
-                },
-                offset: None,
-                size: None,
-            },
+        let blockdev_options = match format {
+            "raw" => {
+                // Use raw format for regular block devices
+                BlockdevOptions::raw {
+                    base: BlockdevOptionsBase {
+                        detect_zeroes: None,
+                        cache: None,
+                        discard: None,
+                        force_share: None,
+                        auto_read_only: None,
+                        node_name: Some(node_name.clone()),
+                        read_only: None,
+                    },
+                    raw: BlockdevOptionsRaw {
+                        base: BlockdevOptionsGenericFormat {
+                            file: BlockdevRef::definition(Box::new(blockdev_file)),
+                        },
+                        offset: None,
+                        size: None,
+                    },
+                }
+            }
+            "vmdk" => {
+                // Use VMDK format driver for VMDK descriptor files
+                // The VMDK driver will parse the descriptor and handle multi-extent files
+                info!(
+                    sl!(),
+                    "hotplug_block_device: using VMDK format driver for {}", path_on_host
+                );
+                BlockdevOptions::vmdk {
+                    base: BlockdevOptionsBase {
+                        detect_zeroes: None,
+                        cache: None,
+                        discard: None,
+                        force_share: None,
+                        auto_read_only: None,
+                        node_name: Some(node_name.clone()),
+                        read_only: None,
+                    },
+                    vmdk: BlockdevOptionsGenericCOWFormat {
+                        base: BlockdevOptionsGenericFormat {
+                            file: BlockdevRef::definition(Box::new(blockdev_file)),
+                        },
+                        backing: None,
+                    },
+                }
+            }
+            other => {
+                warn!(
+                    sl!(),
+                    "unrecognized block device format '{}' for {}; rejecting hotplug request",
+                    other,
+                    path_on_host
+                );
+                return Err(anyhow!("unrecognized block device format: {}", other));
+            }
         };
 
         self.qmp
-            .execute(&qapi_qmp::blockdev_add(blockdev_options_raw))
+            .execute(&qapi_qmp::blockdev_add(blockdev_options))
             .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
             .map(|_| ())?;
 
