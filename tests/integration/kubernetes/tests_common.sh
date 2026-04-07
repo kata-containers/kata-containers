@@ -112,6 +112,12 @@ is_k3s_or_rke2() {
 	esac
 }
 
+# The arm64 runner owners keep containerd updates synced across all runners.
+is_arm64_host() {
+	[[ "$(uname -m)" == "aarch64" ]] && return 0
+	return 1
+}
+
 # Return the kubelet data directory, which varies by Kubernetes distribution.
 get_kubelet_data_dir() {
 	case "${KUBERNETES:-}" in
@@ -145,7 +151,7 @@ install_genpolicy_drop_ins() {
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 
