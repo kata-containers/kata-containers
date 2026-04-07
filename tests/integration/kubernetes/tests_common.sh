@@ -148,7 +148,7 @@ install_genpolicy_drop_ins() {
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || [[ "$(uname -m)" == "aarch64" ]]; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 

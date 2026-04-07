@@ -21,21 +21,31 @@ on:
         required: false
         type: string
         default: ""
+      tarball-suffix:
+        required: false
+        type: string
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: false
 
 permissions: {}
 
 jobs:
   run-k8s-tests-on-arm64:
-    name: run-k8s-tests-on-arm64
+    name: run-k8s-tests-on-arm64 (${{ matrix.vmm }}, ${{ matrix.k8s }})
     strategy:
       fail-fast: false
       matrix:
         vmm:
           - qemu
+          - qemu-coco-dev-runtime-rs
           - qemu-runtime-rs
         k8s:
           - kubeadm
     runs-on: arm64-k8s
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -45,6 +55,14 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       K8S_TEST_HOST_TYPE: all
       TARGET_ARCH: "aarch64"
+      KBS: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 'true' || 'false' }}
+      KBS_INGRESS: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 'nodeport' || '' }}
+      AUTO_GENERATE_POLICY: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 'yes' || '' }}
+      PULL_TYPE: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 'guest-pull' || 'default' }}
+      SNAPSHOTTER: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 'nydus' || '' }}
+      AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -58,15 +76,41 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: get-kata-tools-tarball
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-arm64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
       - name: Deploy Kata
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Uninstall previous `kbs-client`
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
+
+      - name: Deploy CoCo KBS
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+
+      - name: Install `kbs-client`
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Run tests
-        timeout-minutes: 30
+        timeout-minutes: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') && 90 || 30 }}
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Report tests
