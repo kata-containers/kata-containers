@@ -384,6 +384,10 @@ ifneq (,$(QEMUCMD))
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
+    # runtime-rs memory hotplug hard-codes pc-dimm, which is x86-only.
+    # s390x (s390-ccw-virtio) requires virtio-mem-ccw instead. Use static
+    # sandbox resource management to size the VM upfront and bypass hotplug.
+    DEFSTATICRESOURCEMGMT_QEMU := true
 else ifeq ($(ARCH), aarch64)
     # NVDIMM/virtio-pmem has issues on arm64 (cache coherency problems with DAX),
     # so we use virtio-blk-pci instead.
