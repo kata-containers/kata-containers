@@ -6,6 +6,17 @@ rust-version = "1.88"
 
 [workspace]
 members = [
+  # libs
+  "src/libs/kata-sys-util",
+  "src/libs/kata-types",
+  "src/libs/logging",
+  "src/libs/mem-agent",
+  "src/libs/protocols",
+  "src/libs/runtime-spec",
+  "src/libs/safe-path",
+  "src/libs/shim-interface",
+  "src/libs/test-utils",
+
   # kata-agent
   "src/agent",
   "src/agent/rustjail",
@@ -48,7 +59,6 @@ resolver = "2"
 # TODO: Add all excluded crates to root workspace
 exclude = [
   "src/tools",
-  "src/libs",
 
   # kata-deploy binary is standalone and has its own Cargo.toml for now
   "tools/packaging/kata-deploy/binary",

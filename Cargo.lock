@@ -3307,6 +3307,8 @@ dependencies = [
  "slog",
  "slog-scope",
  "subprocess",
+ "tempfile",
+ "test-utils",
  "thiserror 1.0.69",
 ]
 
@@ -3325,6 +3327,7 @@ dependencies = [
  "num_cpus",
  "oci-spec 0.8.4",
  "regex",
+ "rstest",
  "safe-path 0.1.0",
  "serde",
  "serde-enum-str",
@@ -3334,6 +3337,8 @@ dependencies = [
  "slog-scope",
  "sysctl",
  "sysinfo",
+ "tempfile",
+ "test-utils",
  "thiserror 1.0.69",
  "toml",
 ]
@@ -3539,6 +3544,7 @@ dependencies = [
  "slog-json",
  "slog-scope",
  "slog-term",
+ "tempfile",
 ]
 
 [[package]]
@@ -3584,11 +3590,16 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "lazy_static",
  "maplit",
  "nix 0.30.1",
+ "once_cell",
  "page_size",
  "slog",
+ "slog-async",
  "slog-scope",
+ "slog-term",
+ "test-utils",
  "tokio",
 ]
 
@@ -6073,6 +6084,7 @@ name = "safe-path"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "tempfile",
 ]
 
 [[package]]
@@ -6496,6 +6508,8 @@ dependencies = [
  "kata-sys-util",
  "kata-types",
  "nix 0.26.4",
+ "tempfile",
+ "test-utils",
  "tokio",
 ]
 
