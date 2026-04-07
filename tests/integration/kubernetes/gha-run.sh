@@ -187,7 +187,7 @@ function deploy_kata() {
 
 	# Workaround to avoid modifying the workflow yaml files
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-snp|qemu-nvidia-gpu-*)
+		qemu-tdx|qemu-snp|qemu-snp-runtime-rs|qemu-nvidia-gpu-*)
 			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 			SNAPSHOTTER="nydus"
 			EXPERIMENTAL_FORCE_GUEST_PULL=false
@@ -447,7 +447,7 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -461,7 +461,7 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi

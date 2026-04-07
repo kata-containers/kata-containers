@@ -15,7 +15,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
 	pod_name="constraints-cpu-test"
@@ -121,7 +121,7 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
 	# Debugging information

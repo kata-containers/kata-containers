@@ -11,7 +11,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
-SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 
 function setup_unencrypted_confidential_pod() {
@@ -36,7 +36,7 @@ function get_remote_command_per_hypervisor() {
 		qemu-se*)
 			echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 			;;
-		qemu-snp)
+		qemu-snp|qemu-snp-runtime-rs)
 			echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 			;;
 		qemu-tdx)

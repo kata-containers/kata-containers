@@ -53,6 +53,8 @@ jobs:
             vmm: qemu-tdx
           - runner: sev-snp
             vmm: qemu-snp
+          - runner: sev-snp
+            vmm: qemu-snp-runtime-rs
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
