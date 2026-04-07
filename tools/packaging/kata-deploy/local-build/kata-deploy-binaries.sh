@@ -719,6 +719,11 @@ install_kernel() {
 			export MEASURED_ROOTFS="no"
 			extra_cmd="-x"
 			;;
+		aarch64)
+			export CONFIDENTIAL_GUEST="yes"
+			export MEASURED_ROOTFS="yes"
+			extra_cmd="-x"
+			;;
 		x86_64)
 			export CONFIDENTIAL_GUEST="yes"
 			export MEASURED_ROOTFS="yes"
