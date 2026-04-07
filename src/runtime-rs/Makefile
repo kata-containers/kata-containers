@@ -389,6 +389,10 @@ else ifeq ($(ARCH), aarch64)
     # so we use virtio-blk-pci instead.
     VMROOTFSDRIVER_QEMU := virtio-blk-pci
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    # runtime-rs lacks ARM CPU hotplug support (pflash/UEFI, SMP topology,
+    # QMP vCPU add for virt machine type). Use static sandbox resource
+    # management to size the VM upfront instead.
+    DEFSTATICRESOURCEMGMT_QEMU := true
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
