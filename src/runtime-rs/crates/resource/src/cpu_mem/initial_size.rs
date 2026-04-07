@@ -142,15 +142,23 @@ impl InitialSizeManager {
 
         if self.resource.vcpu > 0.0 {
             info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
+            if config.runtime.static_sandbox_resource_mgmt {
+                hv.cpu_info.default_vcpus += self.resource.vcpu;
+                let new_vcpus_ceil = hv.cpu_info.default_vcpus.ceil() as u32;
+                if hv.cpu_info.default_maxvcpus < new_vcpus_ceil {
+                    hv.cpu_info.default_maxvcpus = new_vcpus_ceil;
+                }
+            }
         }
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {
-            // since the memory overhead introduced by kata-agent and system components
-            // will really affect the amount of memory the user can use, so we choose to
-            // plus the default_memory here, instead of overriding it.
-            // (if we override the default_memory here, and user apllications still
-            // use memory as they orignally expected, it would be easy to OOM.)
-            hv.memory_info.default_memory += self.resource.mem_mb;
+            info!(sl!(), "resource with memory {}", self.resource.mem_mb);
+            if config.runtime.static_sandbox_resource_mgmt {
+                hv.memory_info.default_memory += self.resource.mem_mb;
+                if hv.memory_info.default_maxmemory < hv.memory_info.default_memory {
+                    hv.memory_info.default_maxmemory = hv.memory_info.default_memory;
+                }
+            }
         }
         Ok(())
     }
@@ -365,5 +373,115 @@ mod tests {
                 i, d.desc, d.result.mem_mb,
             );
         }
+    }
+
+    fn make_config(
+        default_vcpus: f32,
+        default_maxvcpus: u32,
+        default_memory: u32,
+        default_maxmemory: u32,
+        static_sandbox_resource_mgmt: bool,
+    ) -> TomlConfig {
+        use kata_types::config::Hypervisor;
+
+        let mut config = TomlConfig::default();
+        config
+            .hypervisor
+            .insert("qemu".to_owned(), Hypervisor::default());
+        config
+            .hypervisor
+            .entry("qemu".to_owned())
+            .and_modify(|hv| {
+                hv.cpu_info.default_vcpus = default_vcpus;
+                hv.cpu_info.default_maxvcpus = default_maxvcpus;
+                hv.memory_info.default_memory = default_memory;
+                hv.memory_info.default_maxmemory = default_maxmemory;
+            });
+        config.runtime.hypervisor_name = "qemu".to_owned();
+        config.runtime.static_sandbox_resource_mgmt = static_sandbox_resource_mgmt;
+        config
+    }
+
+    #[test]
+    fn test_setup_config_static_applies_vcpu_and_memory() {
+        let mut config = make_config(1.0, 4, 256, 4096, true);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 1.2,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus, 2.2);
+        assert_eq!(hv.memory_info.default_memory, 768);
+    }
+
+    #[test]
+    fn test_setup_config_non_static_does_not_apply() {
+        let mut config = make_config(1.0, 4, 256, 4096, false);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 1.2,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus, 1.0);
+        assert_eq!(hv.memory_info.default_memory, 256);
+    }
+
+    #[test]
+    fn test_setup_config_clamps_maxvcpus() {
+        let mut config = make_config(1.0, 2, 256, 4096, true);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 2.5,
+                mem_mb: 0,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus, 3.5);
+        assert_eq!(hv.cpu_info.default_maxvcpus, 4);
+    }
+
+    #[test]
+    fn test_setup_config_clamps_maxmemory() {
+        let mut config = make_config(1.0, 4, 256, 300, true);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.memory_info.default_memory, 768);
+        assert_eq!(hv.memory_info.default_maxmemory, 768);
+    }
+
+    #[test]
+    fn test_setup_config_preserves_orig_toml_default_mem() {
+        let mut config = make_config(1.0, 4, 256, 4096, true);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 128,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        assert_eq!(mgr.get_orig_toml_default_mem(), 256);
     }
 }
