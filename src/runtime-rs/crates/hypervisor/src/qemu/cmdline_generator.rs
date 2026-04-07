@@ -2248,8 +2248,8 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_iommu();
         }
 
-        if config.debug_info.enable_debug && !config.debug_info.dbg_monitor_socket.is_empty() {
-            qemu_cmd_line.add_monitor(&config.debug_info.dbg_monitor_socket)?;
+        if config.debug_info.enable_debug && !config.debug_info.extra_monitor_socket.is_empty() {
+            qemu_cmd_line.add_monitor(&config.debug_info.extra_monitor_socket)?;
         }
 
         qemu_cmd_line.add_rtc();

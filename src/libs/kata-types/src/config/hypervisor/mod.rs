@@ -708,10 +708,10 @@ pub struct DebugInfo {
     ///
     /// Example usage in configuration:
     /// ```toml
-    /// dbg_monitor_socket = "hmp"
+    /// extra_monitor_socket = "hmp"
     /// ```
-    #[serde(default)]
-    pub dbg_monitor_socket: String,
+    #[serde(default, alias = "dbg_monitor_socket")]
+    pub extra_monitor_socket: String,
 }
 
 impl DebugInfo {
