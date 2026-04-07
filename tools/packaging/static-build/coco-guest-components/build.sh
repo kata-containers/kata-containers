@@ -28,12 +28,16 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${coco_guest_components_version}" ] || die "Failed to get coco-guest-components version or commit"
 [ -n "${coco_guest_components_toolchain}" ] || die "Failed to get the rust toolchain to build coco-guest-components"
 
+nvat_version="${nvat_version:-}"
+[ -n "${nvat_version}" ] || nvat_version=$(get_from_kata_deps ".externals.nvidia.nvat.version" 2>/dev/null || true)
+
 container_image="${COCO_GUEST_COMPONENTS_CONTAINER_BUILDER:-$(get_coco_guest_components_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
 docker pull ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
 	    	--build-arg RUST_TOOLCHAIN="${coco_guest_components_toolchain}" \
+		--build-arg NVAT_VERSION="${nvat_version}" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
@@ -44,7 +48,8 @@ RESOURCE_PROVIDER="kbs,sev"
 # snp-attester and tdx-attester crates require packages only available on x86
 # se-attester crate requires packages only available on s390x
 case "$(uname -m)" in
-	x86_64) ATTESTER="snp-attester,tdx-attester,nvidia-attester" ;;
+	x86_64) ATTESTER="snp-attester,tdx-attester"
+		NV_ATTESTER="snp-attester,tdx-attester,nvidia-attester" ;;
 	s390x) ATTESTER="se-attester" ;;
 	aarch64) ATTESTER="cca-attester" ;;
 	*) ATTESTER="none" ;;
@@ -56,6 +61,7 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env TEE_PLATFORM=${TEE_PLATFORM:+"all"} \
 	--env RESOURCE_PROVIDER=${RESOURCE_PROVIDER:-} \
 	--env ATTESTER=${ATTESTER:-} \
+	--env NV_ATTESTER=${NV_ATTESTER:-} \
 	--env coco_guest_components_repo="${coco_guest_components_repo}" \
 	--env coco_guest_components_version="${coco_guest_components_version}" \
 	--user "$(id -u)":"$(id -g)" \

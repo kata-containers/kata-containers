@@ -29,14 +29,6 @@ setup() {
 
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
 
-    if [ "${TEE}" = "true" ]; then
-        kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
-        kernel_params_value="nvrc.smi.srs=1"
-        set_metadata_annotation "${pod_yaml}" \
-            "${kernel_params_annotation}" \
-            "${kernel_params_value}"
-    fi
-
     policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
     add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 

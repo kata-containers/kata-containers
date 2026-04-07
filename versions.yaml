@@ -269,6 +269,10 @@ externals:
     ctk:
       version: "1.18.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
+    nvat:
+      desc: "NVIDIA Attestation SDK"
+      version: "2026.03.02"
+      url: "https://github.com/NVIDIA/attestation-sdk"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
@@ -288,18 +292,18 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "ab95914ac84c32a43102463cc0ae330710af47be"
+    version: "30b552e7841b10e656fa28cf643ed25b9d45e33f"
     toolchain: "1.90.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e"
+    version: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e"
+    image_tag: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e-x86_64"
+    ita_image_tag: "22788122660d6e9be3e4bf52704282de5fcc0a2a-x86_64"
     toolchain: "1.90.0"
 
   containerd:
