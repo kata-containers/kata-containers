@@ -437,8 +437,14 @@ impl
             Some(PathBuf::from(boot_info.firmware))
         };
 
-        let mrconfigid = if let Some(data) = protection_device {
-            data.mrconfigid
+        let mrconfigid = if let Some(ref data) = protection_device {
+            data.mrconfigid.clone()
+        } else {
+            None
+        };
+
+        let host_data = if let Some(ref data) = protection_device {
+            data.host_data.clone()
         } else {
             None
         };
@@ -449,6 +455,7 @@ impl
             cmdline,
             firmware,
             mrconfigid,
+            host_data,
         };
 
         Ok(payload)
@@ -721,6 +728,7 @@ mod tests {
             firmware: payload_firmware,
             cmdline,
             mrconfigid: None,
+            host_data: None,
         };
 
         (boot_info, payload_config)
@@ -1375,6 +1383,7 @@ mod tests {
                     initramfs: Some(PathBuf::from(initramfs)),
                     firmware: Some(PathBuf::from(firmware)),
                     mrconfigid: None,
+                    host_data: None,
                 }),
             },
             TestData {

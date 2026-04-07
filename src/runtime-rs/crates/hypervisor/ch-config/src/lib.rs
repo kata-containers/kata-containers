@@ -232,6 +232,7 @@ pub struct MemoryZoneConfig {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ProtectionDevConfig {
     pub mrconfigid: Option<String>,
+    pub host_data: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -337,6 +338,8 @@ pub struct PayloadConfig {
     pub initramfs: Option<PathBuf>,
     #[serde(default)]
     pub mrconfigid: Option<String>,
+    #[serde(default)]
+    pub host_data: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]

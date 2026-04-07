@@ -522,11 +522,11 @@ impl CloudHypervisorInner {
                 DeviceType::Protection(pdev) => {
                     let config = pdev.config;
                     match config {
-                        // ProtectionDeviceConfig::SevSnp(sevsnp_cfg) => {
-                        //     if sevsnp_cfg.is_snp {
-                        //         protection_device.host_data = sevsnp_cfg.host_data;
-                        //     }
-                        // }
+                        ProtectionDeviceConfig::SevSnp(sevsnp_cfg) => {
+                            if sevsnp_cfg.is_snp {
+                                protection_device.host_data = sevsnp_cfg.host_data;
+                            }
+                        }
                         ProtectionDeviceConfig::Tdx(tdx_config) => {
                             protection_device.mrconfigid = tdx_config.mrconfigid;
                         }
