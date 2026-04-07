@@ -109,7 +109,7 @@ Includes:
 - `qemu-se-runtime-rs` - IBM Secure Execution for Linux (SEL) Rust runtime (s390x)
 - `qemu-cca` - Arm Confidential Compute Architecture (arm64)
 - `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
-- `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, s390x)
+- `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, arm64, s390x)
 
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
