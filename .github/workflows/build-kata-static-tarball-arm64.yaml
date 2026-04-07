@@ -43,6 +43,7 @@ jobs:
           - agent
           - busybox
           - cloud-hypervisor
+          - coco-guest-components
           - firecracker
           - kernel
           - kernel-debug
@@ -51,6 +52,7 @@ jobs:
           - kernel-cca-confidential
           - nydus
           - ovmf
+          - pause-image
           - qemu
           - virtiofsd
     env:
@@ -151,6 +153,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
+          - rootfs-image-confidential
           - rootfs-image-nvidia-gpu
           - rootfs-initrd
     steps:
@@ -216,7 +219,9 @@ jobs:
       matrix:
         asset:
           - busybox
+          - coco-guest-components
           - kernel-nvidia-gpu-modules
+          - pause-image
     steps:
       - uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # v6.0.0
         with:
@@ -288,6 +293,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact shim-v2
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
