@@ -552,8 +552,8 @@ reconnect_timeout_ms = 3000
 # - create_container_timeout: The timeout value configured for creating containers (default: 30 seconds).
 # - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
-create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+# Defaults to @DEFCREATECONTAINERTIMEOUT_COCO@ second(s)
+create_container_timeout = @DEFCREATECONTAINERTIMEOUT_COCO@
 
 [agent.@PROJECT_TYPE@.mem_agent]
 # Control the mem-agent function enable or disable.
@@ -650,19 +650,6 @@ compact_threshold = 1024
 # If compact_force_times is set to 9223372036854775807, will never do force compaction.
 # Default to 9223372036854775807
 compact_force_times = 9223372036854775807
-
-# Create Container Request Timeout
-# This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
-# It's also used to ensure that workloads, especially those involving large image pulls within the guest,
-# have sufficient time to complete.
-#
-# Effective Timeout Determination:
-# The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
-# - create_container_timeout: The timeout value configured for creating containers (default: @DEFCREATECONTAINERTIMEOUT_COCO@ seconds).
-# - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
-# Defaults to @DEFCREATECONTAINERTIMEOUT_COCO@ second(s)
-create_container_timeout = @DEFCREATECONTAINERTIMEOUT_COCO@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
