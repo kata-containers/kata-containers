@@ -177,36 +177,30 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     }
 
     // Validate snapshotter if needed
-    match config.experimental_setup_snapshotter.as_ref() {
-        Some(snapshotter) => {
-            let non_empty_snapshotters: Vec<_> =
-                snapshotter.iter().filter(|s| !s.is_empty()).collect();
+    if let Some(snapshotter) = config.experimental_setup_snapshotter.as_ref() {
+        let non_empty_snapshotters: Vec<_> = snapshotter.iter().filter(|s| !s.is_empty()).collect();
 
-            if !non_empty_snapshotters.is_empty() {
-                if runtime == "crio" {
-                    log::warn!("EXPERIMENTAL_SETUP_SNAPSHOTTER is being ignored!");
-                    log::warn!("Snapshotter is a containerd specific option.");
-                } else {
-                    for s in &non_empty_snapshotters {
-                        match s.as_str() {
-                            "erofs" => {
-                                runtime::containerd::containerd_erofs_snapshotter_version_check(
-                                    config,
-                                )
+        if !non_empty_snapshotters.is_empty() {
+            if runtime == "crio" {
+                log::warn!("EXPERIMENTAL_SETUP_SNAPSHOTTER is being ignored!");
+                log::warn!("Snapshotter is a containerd specific option.");
+            } else {
+                for s in &non_empty_snapshotters {
+                    match s.as_str() {
+                        "erofs" => {
+                            runtime::containerd::containerd_erofs_snapshotter_version_check(config)
                                 .await?;
-                            }
-                            "nydus" => {}
-                            _ => {
-                                return Err(anyhow::anyhow!(
-                                    "{s} is not a supported snapshotter by kata-deploy"
-                                ));
-                            }
+                        }
+                        "nydus" => {}
+                        _ => {
+                            return Err(anyhow::anyhow!(
+                                "{s} is not a supported snapshotter by kata-deploy"
+                            ));
                         }
                     }
                 }
             }
         }
-        None => {}
     }
 
     runtime::containerd::setup_containerd_config_files(runtime, config).await?;
@@ -216,15 +210,12 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     runtime::configure_cri_runtime(config, runtime).await?;
 
     if runtime != "crio" {
-        match config.experimental_setup_snapshotter.as_ref() {
-            Some(snapshotters) => {
-                for snapshotter in snapshotters {
-                    artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
-                    artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
-                        .await?;
-                }
+        if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
+            for snapshotter in snapshotters {
+                artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
+                artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
+                    .await?;
             }
-            None => {}
         }
     }
 

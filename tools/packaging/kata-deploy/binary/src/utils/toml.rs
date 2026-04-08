@@ -15,9 +15,9 @@ fn parse_toml_path(path: &str) -> Result<Vec<String>> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
-    let mut chars = path.chars().peekable();
+    let chars = path.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         match ch {
             '"' => {
                 in_quotes = !in_quotes;

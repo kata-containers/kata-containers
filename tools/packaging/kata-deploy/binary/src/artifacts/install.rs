@@ -341,10 +341,10 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 if let Ok(rel) = link_target.strip_prefix(src_path) {
                     Path::new(dst).join(rel)
                 } else {
-                    link_target.into()
+                    link_target
                 }
             } else {
-                link_target.into()
+                link_target
             };
 
             if let Some(parent) = dst_path.parent() {
@@ -385,7 +385,7 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
 }
 
 fn set_executable_permissions(dir: &str) -> Result<()> {
-    let bin_paths = vec!["bin", "runtime-rs/bin"];
+    let bin_paths = ["bin", "runtime-rs/bin"];
 
     for bin_path in bin_paths.iter() {
         let bin_dir = Path::new(dir).join(bin_path);

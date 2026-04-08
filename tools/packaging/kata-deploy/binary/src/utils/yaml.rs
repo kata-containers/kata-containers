@@ -37,15 +37,14 @@ pub fn set_yaml_value(file_path: &Path, key_path: &str, value: serde_yaml::Value
         } else {
             // Navigate/create intermediate mappings
             if let Some(map) = current.as_mapping_mut() {
-                if !map.contains_key(&serde_yaml::Value::String(part.to_string())) {
+                let key = serde_yaml::Value::String(part.to_string());
+                if !map.contains_key(&key) {
                     map.insert(
-                        serde_yaml::Value::String(part.to_string()),
+                        key.clone(),
                         serde_yaml::Value::Mapping(serde_yaml::Mapping::new()),
                     );
                 }
-                current = map
-                    .get_mut(&serde_yaml::Value::String(part.to_string()))
-                    .unwrap();
+                current = map.get_mut(&key).unwrap();
             } else {
                 return Err(anyhow::anyhow!("Path component '{part}' is not a mapping"));
             }
