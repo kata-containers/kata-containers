@@ -34,10 +34,10 @@ jobs:
       - name: Install yq
         run: ./ci/install_yq.sh
 
-      - name: Install ORAS
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-        with:
-          version: "1.2.0"
+      # - name: Install ORAS
+      #   uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+      #   with:
+      #     version: "1.2.0"
 
       - name: Populate ORAS tarball cache
         run: ./tools/packaging/scripts/populate-oras-tarball-cache.sh all
