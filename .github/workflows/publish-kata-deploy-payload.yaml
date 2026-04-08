@@ -32,7 +32,7 @@ on:
         type: string
     secrets:
       QUAY_DEPLOYER_PASSWORD:
-        required: true
+        required: false
 
 permissions: {}
 
@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -100,10 +101,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure AWS credentials for ECR
+        if: ${{ inputs.registry == 'ecr' }}
+        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        with:
+          aws-region: ${{ vars.AWS_ECR_REGION }}
+          role-to-assume: ${{ vars.AWS_ECR_IAM_ROLE_ARN }}
+          role-session-name: ${{ github.event.repository.name }}
+
+      - name: Login to Amazon ECR
+        if: ${{ inputs.registry == 'ecr' }}
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
       - name: build-and-push-kata-payload for ${{ inputs.arch }}
         id: build-and-push-kata-payload
         env:
-          REGISTRY: ${{ inputs.registry }}
+          REGISTRY: ${{ inputs.registry == 'ecr' && steps.login-ecr.outputs.registry || inputs.registry }}
           REPO: ${{ inputs.repo }}
           TAG: ${{ inputs.tag }}
         run: |
