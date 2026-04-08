@@ -213,12 +213,10 @@ API and kernel drivers, interacting with the pass-through GPU device.
 An additional step is exercised in our CI samples: when using images from an
 authenticated registry, the guest-pull mechanism triggers attestation using
 Trustee's Key Broker Service (KBS) for secure release of the NGC API
-authentication key used to access the NVCR container registry. As part of
-this, the attestation agent exercises composite attestation and transitions
-the GPU into `Ready` state (without this, the GPU has to explicitly be
-transitioned into `Ready` state by passing the `nvrc.smi.srs=1` kernel
-parameter via the shim config, causing NVRC to transition the GPU into the
-`Ready` state).
+authentication key used to access the NVCR container registry.
+In this flow the CPU and all additional devices are attested.
+GPUs will automatically be set to ready by NVRC per the NVRC configuration
+flag in the default kernel command line.
 
 ## Deployment Guidance
 
@@ -465,8 +463,6 @@ kind: Pod
 metadata:
   name: cuda-vectoradd-kata
   namespace: default
-  annotations:
-    io.katacontainers.config.hypervisor.kernel_params: "nvrc.smi.srs=1"
 spec:
   runtimeClassName: ${GPU_RUNTIME_CLASS_NAME}
   restartPolicy: Never
@@ -613,12 +609,7 @@ You can author pod manifests leveraging your own containers, for instance,
 containers built using the CUDA container toolkit. We recommend to start
 with a CUDA base container.
 
-The GPU is transitioned into the `Ready` state via attestation, for instance,
-when pulling authenticated images. If your deployment scenario does not use
-attestation, please refer back to the CUDA vectorAdd pod manifest. In this
-manifest, we ensure that NVRC sets the GPU to `Ready` state by adding the
-following annotation in the manifest:
-`io.katacontainers.config.hypervisor.kernel_params: "nvrc.smi.srs=1"`
+When using the GPU runtime classes, the GPUs will automatically be set to ready.
 
 > **Notes:**
 >
