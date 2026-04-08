@@ -365,6 +365,14 @@ get_latest_ctk_version() {
 	echo $(get_from_kata_deps ".externals.nvidia.ctk.version")
 }
 
+get_latest_nvrc_version() {
+	echo $(get_from_kata_deps ".externals.nvrc.version")
+}
+
+get_latest_nvat_version() {
+	echo $(get_from_kata_deps ".externals.nvidia.nvat.version")
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -398,6 +406,8 @@ install_image() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_latest_ctk_version)"
+			latest_artefact+="-$(get_latest_nvrc_version)"
+			latest_artefact+="-$(get_latest_nvat_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -410,6 +420,7 @@ install_image() {
 		# If we bump the kernel we need to rebuild the image
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_ctk_version)"
+		latest_artefact+="-$(get_latest_nvrc_version)"
 	fi
 
 	latest_builder_image=""
@@ -506,6 +517,8 @@ install_initrd() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 			latest_artefact+="-$(get_latest_ctk_version)"
+			latest_artefact+="-$(get_latest_nvrc_version)"
+			latest_artefact+="-$(get_latest_nvat_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -517,6 +530,7 @@ install_initrd() {
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_ctk_version)"
+		latest_artefact+="-$(get_latest_nvrc_version)"
 	fi
 
 	latest_builder_image=""
