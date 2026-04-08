@@ -16,7 +16,7 @@ shim_config_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_
 
 check_and_skip() {
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-coco-dev)
+		qemu-tdx|qemu-coco-dev|qemu-snp)
 			if [ "$(uname -m)" == "s390x" ]; then
 				skip "measured rootfs tests not implemented for s390x"
 			fi
