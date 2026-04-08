@@ -58,7 +58,7 @@ apply_kata_deploy() {
 	oc delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
 
 	echo "Installing kata using helm ${chart} ${version} (sha printed in helm output)"
-	helm install kata-deploy --wait --namespace kube-system --set "image.reference=${KATA_DEPLOY_IMAGE%%:*},image.tag=${KATA_DEPLOY_IMAGE##*:}" "${chart}" --version "${version}"
+	helm install kata-deploy --wait --namespace kube-system --set "image.reference=${KATA_DEPLOY_IMAGE%%:*},image.tag=${KATA_DEPLOY_IMAGE##*:}" --set snapshotter.setup= "${chart}" --version "${version}"
 }
 
 
