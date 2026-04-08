@@ -418,9 +418,17 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     };
 
-    // Send pidfd back to parent if available
+    // Send pidfd availability to parent first (closed-loop communication)
+    let pidfd_available = pidfd.is_some();
+    let _ = write_sync(
+        cwfd,
+        crate::sync::SYNC_PIDFD_AVAILABLE,
+        &pidfd_available.to_string(),
+    );
+
+    // Send pidfd value back to parent if available
     if let Some(fd) = pidfd {
-        let _ = write_sync(cwfd, crate::sync::SYNC_PIDFD, &fd.to_string());
+        let _ = write_sync(cwfd, crate::sync::SYNC_DATA, &fd.to_string());
     }
 
     let buf = read_sync(crfd)?;
@@ -1232,21 +1240,36 @@ impl BaseContainer for LinuxContainer {
 
         p.pid = pid;
 
-        // get container process's pidfd if available
-        let pidfd_buf = read_async(&mut pipe_r).await?;
-        if !pidfd_buf.is_empty() {
-            let pidfd_str = std::str::from_utf8(&pidfd_buf).context("get pidfd string")?;
-            let pidfd = match pidfd_str.parse::<i32>() {
+        // get container process's pidfd availability first (closed-loop communication)
+        let pidfd_available_buf = read_async(&mut pipe_r).await?;
+        if !pidfd_available_buf.is_empty() {
+            let pidfd_available_str = std::str::from_utf8(&pidfd_available_buf)
+                .context("get pidfd availability string")?;
+            let pidfd_available: i32 = match pidfd_available_str.parse::<i32>() {
                 Ok(i) => i,
                 Err(e) => {
                     return Err(anyhow!(format!(
-                        "failed to get container process's pidfd: {:?}",
+                        "failed to parse pidfd availability: {:?}",
                         e
                     )));
                 }
             };
-            p.set_pidfd(pidfd);
-            info!(logger, "container process pidfd: {}", pidfd);
+
+            // get pidfd value only if available
+            if pidfd_available == 1 {
+                let pidfd_buf = read_async(&mut pipe_r).await?;
+                if !pidfd_buf.is_empty() {
+                    let pidfd_str = std::str::from_utf8(&pidfd_buf).context("get pidfd string")?;
+                    let pidfd = match pidfd_str.parse::<i32>() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            return Err(anyhow!(format!("failed to parse pidfd value: {:?}", e)));
+                        }
+                    };
+                    p.set_pidfd(pidfd);
+                    info!(logger, "container process pidfd: {}", pidfd);
+                }
+            }
         }
 
         if p.init {
