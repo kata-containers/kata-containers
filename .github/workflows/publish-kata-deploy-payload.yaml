@@ -85,22 +85,6 @@ jobs:
         with:
           name: kata-static-tarball-${{ inputs.arch}}${{ inputs.tarball-suffix }}
 
-      - name: Login to Kata Containers quay.io
-        if: ${{ inputs.registry == 'quay.io' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-      - name: Login to Kata Containers ghcr.io
-        if: ${{ inputs.registry == 'ghcr.io' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Configure AWS credentials for ECR
         if: ${{ inputs.registry == 'ecr' }}
         uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0

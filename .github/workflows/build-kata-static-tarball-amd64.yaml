@@ -24,7 +24,7 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: false
       KBUILD_SIGN_PIN:
-        required: true
+        required: false
 
 permissions: {}
 
