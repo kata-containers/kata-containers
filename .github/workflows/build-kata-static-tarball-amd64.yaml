@@ -110,35 +110,35 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
 
-      - name: Parse OCI image name and digest
-        id: parse-oci-segments
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-        env:
-          KATA_ASSET: ${{ matrix.asset }}
-        run: |
-          oci_image="$(<"build/${KATA_ASSET}-oci-image")"
-          echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
-          echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
+      # - name: Parse OCI image name and digest
+      #   id: parse-oci-segments
+      #   if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+      #   env:
+      #     KATA_ASSET: ${{ matrix.asset }}
+      #   run: |
+      #     oci_image="$(<"build/${KATA_ASSET}-oci-image")"
+      #     echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
+      #     echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
-      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-        with:
-          version: "1.2.0"
+      # - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+      #   if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+      #   with:
+      #     version: "1.2.0"
 
-      # for pushing attestations to the registry
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # # for pushing attestations to the registry
+      # - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      #   if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-        with:
-          subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
-          subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
-          push-to-registry: true
+      # - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
+      #   if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+      #   with:
+      #     subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
+      #     subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
+      #     push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -25,24 +25,24 @@ on:
         default: no
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
-        required: true
+        required: false
 
       AZ_APPID:
-        required: true
+        required: false
       AZ_TENANT_ID:
-       required: true
+        required: false
       AZ_SUBSCRIPTION_ID:
-        required: true
+        required: false
       CI_HKD_PATH:
-        required: true
+        required: false
       ITA_KEY:
-        required: true
+        required: false
       QUAY_DEPLOYER_PASSWORD:
-        required: true
+        required: false
       NGC_API_KEY:
-        required: true
+        required: false
       KBUILD_SIGN_PIN:
-        required: true
+        required: false
 
 permissions: {}
 
