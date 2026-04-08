@@ -143,9 +143,8 @@ shims:
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
-      # Uncomment once GPU Operator v26.3 is out
-      # nodeSelector:
-        # nvidia.com/cc.ready.state: "false"
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
 
   qemu-nvidia-gpu-snp:
     enabled: ~
@@ -166,8 +165,7 @@ shims:
       # If you don't have NFD, you need to add the snp label by other
       # means to your SNP nodes.
       nodeSelector:
-        # Uncomment once GPU Operator v26.3 is out
-        # nvidia.com/cc.ready.state: "true"
+        nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
   qemu-nvidia-gpu-tdx:
@@ -189,8 +187,7 @@ shims:
       # If you don't have NFD, you need to add the tdx label by other
       # means to your TDX nodes.
       nodeSelector:
-        # Uncomment once GPU Operator v26.3 is out
-        # nvidia.com/cc.ready.state: "true"
+        nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
 
   qemu-snp:
