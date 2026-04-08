@@ -215,15 +215,17 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
     runtime::configure_cri_runtime(config, runtime).await?;
 
-    match config.experimental_setup_snapshotter.as_ref() {
-        Some(snapshotters) => {
-            for snapshotter in snapshotters {
-                artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
-                artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
-                    .await?;
+    if runtime != "crio" {
+        match config.experimental_setup_snapshotter.as_ref() {
+            Some(snapshotters) => {
+                for snapshotter in snapshotters {
+                    artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
+                    artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
+                        .await?;
+                }
             }
+            None => {}
         }
-        None => {}
     }
 
     info!("About to restart runtime: {}", runtime);
@@ -262,17 +264,21 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
         config.daemonset_name
     );
 
-    match config.experimental_setup_snapshotter.as_ref() {
-        Some(snapshotters) => {
-            for snapshotter in snapshotters {
-                info!("Uninstalling snapshotter: {}", snapshotter);
-                artifacts::snapshotters::uninstall_snapshotter(snapshotter, config).await?;
-                info!("Successfully uninstalled snapshotter: {}", snapshotter);
+    if runtime != "crio" {
+        match config.experimental_setup_snapshotter.as_ref() {
+            Some(snapshotters) => {
+                for snapshotter in snapshotters {
+                    info!("Uninstalling snapshotter: {}", snapshotter);
+                    artifacts::snapshotters::uninstall_snapshotter(snapshotter, config).await?;
+                    info!("Successfully uninstalled snapshotter: {}", snapshotter);
+                }
+            }
+            None => {
+                info!("No experimental snapshotters to uninstall");
             }
         }
-        None => {
-            info!("No experimental snapshotters to uninstall");
-        }
+    } else {
+        info!("Skipping snapshotter uninstall on CRI-O (containerd-specific feature)");
     }
 
     info!("Cleaning up CRI runtime configuration");
