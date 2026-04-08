@@ -708,10 +708,10 @@ pub struct DebugInfo {
     ///
     /// Example usage in configuration:
     /// ```toml
-    /// dbg_monitor_socket = "hmp"
+    /// extra_monitor_socket = "hmp"
     /// ```
-    #[serde(default)]
-    pub dbg_monitor_socket: String,
+    #[serde(default, alias = "dbg_monitor_socket")]
+    pub extra_monitor_socket: String,
 }
 
 impl DebugInfo {
@@ -1238,6 +1238,7 @@ impl NetworkInfo {
 
 /// Configuration information for rootless user.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RootlessUser {
     /// The UID of the rootless user.
     #[serde(default)]
@@ -1643,6 +1644,7 @@ impl VmTemplateInfo {
 
 /// Configuration information for VM factory (templating, caches, etc.).
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Factory {
     /// Enable VM templating support.
     /// When enabled, new VMs may be created from a template to speed up creation.
