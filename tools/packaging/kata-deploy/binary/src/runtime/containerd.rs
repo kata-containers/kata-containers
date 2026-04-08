@@ -144,8 +144,7 @@ fn write_containerd_runtime_config(
                 config_file,
                 &format!(
                     ".plugins.{}.runtime_platforms.\"{}\".snapshotter",
-                    CONTAINERD_CRI_IMAGES_PLUGIN_ID,
-                    params.runtime_name
+                    CONTAINERD_CRI_IMAGES_PLUGIN_ID, params.runtime_name
                 ),
                 snapshotter,
             )?;
@@ -280,9 +279,7 @@ pub async fn configure_custom_containerd_runtime(
         ),
         config_path: format!(
             "\"{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml\"",
-            config.dest_dir,
-            custom_runtime.handler,
-            custom_runtime.base_config
+            config.dest_dir, custom_runtime.handler, custom_runtime.base_config
         ),
         pod_annotations,
         snapshotter,
@@ -339,11 +336,7 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
             let imports_path = ".imports";
             let drop_in_path = format!("\"{}\"", paths.drop_in_file);
 
-            toml_utils::append_to_toml_array(
-                Path::new(imports_file),
-                imports_path,
-                &drop_in_path,
-            )?;
+            toml_utils::append_to_toml_array(Path::new(imports_file), imports_path, &drop_in_path)?;
             log::info!("Successfully added drop-in to imports array");
         } else {
             log::info!("Runtime auto-loads drop-in files, skipping imports");
@@ -369,10 +362,7 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
             config.custom_runtimes.len()
         );
         for custom_runtime in &config.custom_runtimes {
-            log::info!(
-                "Configuring custom runtime: {}",
-                custom_runtime.handler
-            );
+            log::info!("Configuring custom runtime: {}", custom_runtime.handler);
             configure_custom_containerd_runtime(config, runtime, custom_runtime).await?;
             log::info!(
                 "Successfully configured custom runtime: {}",
@@ -436,12 +426,14 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
                 Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
             };
             if let Some(parent) = drop_in_path.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create K3s/RKE2 drop-in dir: {parent:?}"))?;
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create K3s/RKE2 drop-in dir: {parent:?}")
+                })?;
             }
             if !drop_in_path.exists() {
-                fs::write(&drop_in_path, "")
-                    .with_context(|| format!("Failed to create K3s/RKE2 drop-in file: {drop_in_path:?}"))?;
+                fs::write(&drop_in_path, "").with_context(|| {
+                    format!("Failed to create K3s/RKE2 drop-in file: {drop_in_path:?}")
+                })?;
             }
         }
         "k0s-worker" | "k0s-controller" => {
@@ -501,7 +493,10 @@ pub async fn containerd_snapshotter_version_check(config: &Config) -> Result<()>
         .map(|s| !s.is_empty())
         .unwrap_or(false);
 
-    check_containerd_snapshotter_version_support(&container_runtime_version, has_snapshotter_mapping)
+    check_containerd_snapshotter_version_support(
+        &container_runtime_version,
+        has_snapshotter_mapping,
+    )
 }
 
 fn check_containerd_erofs_version_support(container_runtime_version: &str) -> Result<()> {
@@ -609,10 +604,7 @@ mod tests {
     use std::path::Path;
     use tempfile::NamedTempFile;
 
-    fn make_params(
-        runtime_name: &str,
-        snapshotter: Option<&str>,
-    ) -> ContainerdRuntimeParams {
+    fn make_params(runtime_name: &str, snapshotter: Option<&str>) -> ContainerdRuntimeParams {
         ContainerdRuntimeParams {
             runtime_name: runtime_name.to_string(),
             runtime_path: "\"/opt/kata/bin/kata-runtime\"".to_string(),
@@ -673,7 +665,11 @@ mod tests {
 
     /// pluginid_for_snapshotter_annotations maps runtime plugin id to the table where disable_snapshot_annotations lives.
     #[rstest]
-    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID, CONTAINERD_CRI_IMAGES_PLUGIN_ID, false)]
+    #[case(
+        CONTAINERD_V3_RUNTIME_PLUGIN_ID,
+        CONTAINERD_CRI_IMAGES_PLUGIN_ID,
+        false
+    )]
     #[case(CONTAINERD_V2_CRI_PLUGIN_ID, CONTAINERD_CRI_CONTAINERD_TABLE_V2, false)]
     #[case(CONTAINERD_LEGACY_CRI_PLUGIN_ID, "", true)]
     fn test_pluginid_for_snapshotter_annotations(
@@ -709,9 +705,7 @@ mod tests {
     #[rstest]
     #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
     #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
-    fn test_write_containerd_runtime_config_empty_file_no_leading_newlines(
-        #[case] pluginid: &str,
-    ) {
+    fn test_write_containerd_runtime_config_empty_file_no_leading_newlines(#[case] pluginid: &str) {
         let file = NamedTempFile::new().unwrap();
         let path = file.path();
         std::fs::write(path, "").unwrap();
@@ -733,7 +727,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case("containerd://1.6.28", true, false, Some("kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"))]
+    #[case(
+        "containerd://1.6.28",
+        true,
+        false,
+        Some("kata-deploy only supports snapshotter configuration with containerd 1.7 or newer")
+    )]
     #[case("containerd://1.6.28", false, true, None)]
     #[case("containerd://1.6.0", true, false, None)]
     #[case("containerd://1.6.999", true, false, None)]
@@ -750,9 +749,19 @@ mod tests {
     ) {
         let result = check_containerd_snapshotter_version_support(version, has_mapping);
         if expect_ok {
-            assert!(result.is_ok(), "expected ok for version={} has_mapping={}", version, has_mapping);
+            assert!(
+                result.is_ok(),
+                "expected ok for version={} has_mapping={}",
+                version,
+                has_mapping
+            );
         } else {
-            assert!(result.is_err(), "expected err for version={} has_mapping={}", version, has_mapping);
+            assert!(
+                result.is_err(),
+                "expected err for version={} has_mapping={}",
+                version,
+                has_mapping
+            );
             if let Some(sub) = expected_error_substring {
                 assert!(
                     result.unwrap_err().to_string().contains(sub),

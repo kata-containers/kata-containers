@@ -91,7 +91,8 @@ pub async fn configure_snapshotter(
         Some(id) => id.as_str(),
         None => containerd::get_containerd_pluginid(&paths.config_file)?,
     };
-    let pluginid = containerd::pluginid_for_snapshotter_annotations(runtime_plugin_id, &paths.config_file)?;
+    let pluginid =
+        containerd::pluginid_for_snapshotter_annotations(runtime_plugin_id, &paths.config_file)?;
 
     let configuration_file: std::path::PathBuf = if paths.use_drop_in {
         // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)

@@ -67,11 +67,7 @@ fn split_non_toml_header(content: &str) -> (&str, &str) {
 /// Ensures the header ends with a newline before the TOML body.
 /// Trims leading newlines from the serialized document to avoid many blank lines
 /// when the file was initially empty (e.g. containerd drop-in).
-fn write_toml_with_header(
-    file_path: &Path,
-    header: &str,
-    doc: &DocumentMut,
-) -> Result<()> {
+fn write_toml_with_header(file_path: &Path, header: &str, doc: &DocumentMut) -> Result<()> {
     let normalized_header = if header.is_empty() {
         String::new()
     } else if header.ends_with('\n') {
@@ -214,7 +210,10 @@ pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result
             // This is the array itself - use .get() to avoid panic on missing key
             let key_exists = current.get(part.as_str()).is_some();
             if !key_exists {
-                current.insert(part.as_str(), Item::Value(Value::Array(toml_edit::Array::new())));
+                current.insert(
+                    part.as_str(),
+                    Item::Value(Value::Array(toml_edit::Array::new())),
+                );
             }
             if let Some(Item::Value(Value::Array(arr))) = current.get_mut(part.as_str()) {
                 let value_item = parse_toml_value(value);
@@ -441,11 +440,7 @@ mod tests {
     #[case("", "", "")]
     #[case("key = \"value\"\n", "", "key = \"value\"\n")]
     #[case("[plugins]\nfoo = 1\n", "", "[plugins]\nfoo = 1\n")]
-    #[case(
-        "{{ template \"base\" . }}\n",
-        "{{ template \"base\" . }}\n",
-        ""
-    )]
+    #[case("{{ template \"base\" . }}\n", "{{ template \"base\" . }}\n", "")]
     #[case(
         "{{ template \"base\" . }}\n[plugins]\nfoo = 1\n",
         "{{ template \"base\" . }}\n",
@@ -464,7 +459,11 @@ mod tests {
         #[case] expected_toml: &str,
     ) {
         let (header, toml) = split_non_toml_header(input);
-        assert_eq!(header, expected_header, "header mismatch for input: {:?}", input);
+        assert_eq!(
+            header, expected_header,
+            "header mismatch for input: {:?}",
+            input
+        );
         assert_eq!(toml, expected_toml, "toml mismatch for input: {:?}", input);
     }
 
@@ -484,7 +483,10 @@ mod tests {
         .unwrap();
 
         let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"), "header must be preserved");
+        assert!(
+            content.starts_with("{{ template \"base\" . }}\n"),
+            "header must be preserved"
+        );
         assert!(content.contains("runtime_type"), "value must be written");
 
         let value = get_toml_value(
@@ -580,8 +582,12 @@ mod tests {
                 &format!("\"io.containerd.{shim}.v2\""),
             )
             .unwrap();
-            set_toml_value(path, &format!("{table}.privileged_without_host_devices"), "true")
-                .unwrap();
+            set_toml_value(
+                path,
+                &format!("{table}.privileged_without_host_devices"),
+                "true",
+            )
+            .unwrap();
         }
 
         let content = std::fs::read_to_string(path).unwrap();
@@ -633,7 +639,10 @@ mod tests {
         )
         .unwrap();
         let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with(expected_prefix), "header/prefix must be preserved");
+        assert!(
+            content.starts_with(expected_prefix),
+            "header/prefix must be preserved"
+        );
         let body_start = content.strip_prefix(expected_prefix).unwrap();
         assert!(
             !body_start.starts_with('\n'),
@@ -782,11 +791,7 @@ mod tests {
     #[case("test.string_value", "test_string", "test_string")]
     #[case("test.bool_value", "true", "true")]
     #[case("test.int_value", "42", "42")]
-    fn test_toml_value_types(
-        #[case] path: &str,
-        #[case] value: &str,
-        #[case] expected: &str,
-    ) {
+    fn test_toml_value_types(#[case] path: &str, #[case] value: &str, #[case] expected: &str) {
         let file = NamedTempFile::new().unwrap();
         let file_path = file.path();
         std::fs::write(file_path, "").unwrap();
@@ -827,8 +832,8 @@ mod tests {
                 );
 
                 // Test modifying kernel_params on real config
-                let current = get_toml_value(temp_path, "hypervisor.qemu.kernel_params")
-                    .unwrap_or_default();
+                let current =
+                    get_toml_value(temp_path, "hypervisor.qemu.kernel_params").unwrap_or_default();
                 let new_value = format!("{} agent.log=debug", current.trim_matches('"'));
                 let result = set_toml_value(
                     temp_path,
@@ -1318,7 +1323,11 @@ kernel_params = "console=hvc0"
             "set" => set_toml_value(temp_path, "some.path", "\"value\""),
             _ => panic!("unknown op"),
         };
-        assert!(result.is_err(), "Should fail parsing invalid TOML (op={})", op);
+        assert!(
+            result.is_err(),
+            "Should fail parsing invalid TOML (op={})",
+            op
+        );
     }
 
     #[test]
