@@ -38,6 +38,7 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
@@ -59,6 +60,7 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
