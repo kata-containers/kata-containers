@@ -69,7 +69,10 @@ async fn main() -> Result<()> {
             let mut sigterm = match signal(SignalKind::terminate()) {
                 Ok(s) => s,
                 Err(e) => {
-                    log::warn!("Failed to register SIGTERM handler: {}, sleeping forever", e);
+                    log::warn!(
+                        "Failed to register SIGTERM handler: {}, sleeping forever",
+                        e
+                    );
                     std::future::pending::<()>().await;
                     return Ok(());
                 }

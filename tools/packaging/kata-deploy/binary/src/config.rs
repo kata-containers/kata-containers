@@ -189,14 +189,11 @@ impl Config {
         let default_shim_for_arch = get_arch_var("DEFAULT_SHIM", "qemu", &arch);
 
         // Only use arch-specific variable for allowed hypervisor annotations
-        let allowed_hypervisor_annotations_for_arch = get_arch_var(
-            "ALLOWED_HYPERVISOR_ANNOTATIONS",
-            "",
-            &arch,
-        )
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
+        let allowed_hypervisor_annotations_for_arch =
+            get_arch_var("ALLOWED_HYPERVISOR_ANNOTATIONS", "", &arch)
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
 
         // Only use arch-specific variable for snapshotter handler mapping
         let snapshotter_handler_mapping_for_arch =
@@ -208,7 +205,9 @@ impl Config {
 
         let pull_type_mapping_for_arch = get_arch_var_or_base("PULL_TYPE_MAPPING", &arch);
 
-        let installation_prefix = env::var("INSTALLATION_PREFIX").ok().filter(|s| !s.is_empty());
+        let installation_prefix = env::var("INSTALLATION_PREFIX")
+            .ok()
+            .filter(|s| !s.is_empty());
         let dest_dir = match installation_prefix {
             Some(ref prefix) => {
                 if !prefix.starts_with('/') {
@@ -258,15 +257,12 @@ impl Config {
             .map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
         // Only use arch-specific variable for experimental force guest pull
-        let experimental_force_guest_pull_for_arch = get_arch_var(
-            "EXPERIMENTAL_FORCE_GUEST_PULL",
-            "",
-            &arch,
-        )
-        .split(',')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.trim().to_string())
-        .collect();
+        let experimental_force_guest_pull_for_arch =
+            get_arch_var("EXPERIMENTAL_FORCE_GUEST_PULL", "", &arch)
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
 
         // Parse custom runtimes from ConfigMap
         let custom_runtimes_enabled =
@@ -531,7 +527,8 @@ impl Config {
         use crate::runtime::manager;
 
         // Check if drop-in files can be used based on containerd version
-        let use_drop_in = manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
+        let use_drop_in =
+            manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
 
         let paths = match runtime {
             "k0s-worker" | "k0s-controller" => ContainerdPaths {
@@ -556,12 +553,10 @@ impl Config {
                 // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
                 // missing we bail; the cluster must configure the template with the import
                 // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
-                let container_runtime_version = k8s::get_node_field(
-                    self,
-                    ".status.nodeInfo.containerRuntimeVersion",
-                )
-                .await
-                .ok();
+                let container_runtime_version =
+                    k8s::get_node_field(self, ".status.nodeInfo.containerRuntimeVersion")
+                        .await
+                        .ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
                     &self.containerd_conf_file,
                     container_runtime_version.as_deref(),
@@ -894,14 +889,17 @@ mod tests {
     #[serial]
     #[test]
     fn test_k3s_rke2_rendered_config_path() {
-        assert_eq!(k3s_rke2_rendered_config_path(), "/etc/containerd/config.toml");
+        assert_eq!(
+            k3s_rke2_rendered_config_path(),
+            "/etc/containerd/config.toml"
+        );
     }
 
     #[rstest]
     #[case(
         "imports = [\"/var/lib/rancher/k3s/agent/etc/containerd/config.toml.d/*.toml\"]\n",
         false,
-        true,
+        true
     )]
     #[case("version = 2\n", false, false)]
     #[case("imports = [\"/path/config-v3.toml.d/*.toml\"]", true, true)]

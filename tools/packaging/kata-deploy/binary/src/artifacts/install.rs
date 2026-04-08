@@ -76,8 +76,12 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
 
     // Create the installation directory if it doesn't exist
     // fs::create_dir_all handles existing directories gracefully (returns Ok if already exists)
-    fs::create_dir_all(&config.host_install_dir)
-        .with_context(|| format!("Failed to create installation directory: {}", config.host_install_dir))?;
+    fs::create_dir_all(&config.host_install_dir).with_context(|| {
+        format!(
+            "Failed to create installation directory: {}",
+            config.host_install_dir
+        )
+    })?;
 
     // Verify the path exists and is a directory (not a file)
     let install_path = Path::new(&config.host_install_dir);
@@ -182,7 +186,11 @@ fn write_common_drop_ins(
     let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
     if !kernel_params_content.is_empty() {
         info!("  - Kernel parameters: configured");
-        write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+        write_drop_in_file(
+            config_d_dir,
+            "30-kernel-params.toml",
+            &kernel_params_content,
+        )?;
     }
 
     Ok(())
@@ -239,7 +247,12 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
         }
 
         // Generate the common drop-in files (shared with standard runtimes)
-        write_common_drop_ins(config, &runtime.base_config, &config_d_dir, container_runtime)?;
+        write_common_drop_ins(
+            config,
+            &runtime.base_config,
+            &config_d_dir,
+            container_runtime,
+        )?;
 
         // Copy user-provided drop-in file if provided (at 50-overrides.toml)
         if let Some(ref drop_in_src) = runtime.drop_in_file {
@@ -342,8 +355,12 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e.into()),
             }
-            std::os::unix::fs::symlink(&new_target, &dst_path)
-                .with_context(|| format!("Failed to create symlink {:?} -> {:?}", dst_path, new_target))?;
+            std::os::unix::fs::symlink(&new_target, &dst_path).with_context(|| {
+                format!(
+                    "Failed to create symlink {:?} -> {:?}",
+                    dst_path, new_target
+                )
+            })?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -459,13 +476,18 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         // fs::copy follows symlinks and would write to the wrong location
         let dest_path = Path::new(&dest_config_file);
         if dest_path.exists() || dest_path.is_symlink() {
-            fs::remove_file(&dest_config_file)
-                .with_context(|| format!("Failed to remove existing config: {}", dest_config_file))?;
+            fs::remove_file(&dest_config_file).with_context(|| {
+                format!("Failed to remove existing config: {}", dest_config_file)
+            })?;
         }
 
         // Copy the base config file
-        fs::copy(&original_config_file, &dest_config_file)
-            .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
+        fs::copy(&original_config_file, &dest_config_file).with_context(|| {
+            format!(
+                "Failed to copy config: {} -> {}",
+                original_config_file, dest_config_file
+            )
+        })?;
 
         // Add warning comment to inform users about drop-in files
         add_kata_deploy_warning(Path::new(&dest_config_file))?;
@@ -484,8 +506,9 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     );
 
     if Path::new(&runtime_config_dir).exists() {
-        fs::remove_dir_all(&runtime_config_dir)
-            .with_context(|| format!("Failed to remove runtime directory: {}", runtime_config_dir))?;
+        fs::remove_dir_all(&runtime_config_dir).with_context(|| {
+            format!("Failed to remove runtime directory: {}", runtime_config_dir)
+        })?;
         log::debug!("Removed runtime directory: {}", runtime_config_dir);
     }
 
@@ -514,7 +537,8 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
     );
     let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
-    let kata_config_file = Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
+    let kata_config_file =
+        Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
 
     // The configuration file (symlink) should exist after setup_runtime_directory()
     if !kata_config_file.exists() {
@@ -545,8 +569,8 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 /// Reads the current value (defaulting to "false" if not found), and if it's not "true",
 /// logs the update and sets it to "true".
 fn set_toml_bool_to_true(config_file: &Path, path: &str) -> Result<()> {
-    let current_value = toml_utils::get_toml_value(config_file, path)
-        .unwrap_or_else(|_| "false".to_string());
+    let current_value =
+        toml_utils::get_toml_value(config_file, path).unwrap_or_else(|_| "false".to_string());
     if current_value != "true" {
         log::debug!(
             "Updating {} in {}: old=\"{}\" new=\"true\"",
@@ -636,8 +660,9 @@ fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
     if is_qemu_shim(shim) {
         // For QEMU shims, use the wrapper script that adds firmware paths
         // create_qemu_wrapper_script always returns Some for QEMU shims
-        create_qemu_wrapper_script(config, shim)?
-            .ok_or_else(|| anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims"))
+        create_qemu_wrapper_script(config, shim)?.ok_or_else(|| {
+            anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims")
+        })
     } else {
         // For non-QEMU shims, use the appropriate hypervisor binary
         let binary = match shim {
@@ -673,20 +698,41 @@ fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<S
     }
 
     // Common paths for all hypervisors
-    content.push_str(&format!("kernel = \"{}/share/kata-containers/vmlinux.container\"\n", config.dest_dir));
-    content.push_str(&format!("image = \"{}/share/kata-containers/kata-containers.img\"\n", config.dest_dir));
-    content.push_str(&format!("initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n", config.dest_dir));
+    content.push_str(&format!(
+        "kernel = \"{}/share/kata-containers/vmlinux.container\"\n",
+        config.dest_dir
+    ));
+    content.push_str(&format!(
+        "image = \"{}/share/kata-containers/kata-containers.img\"\n",
+        config.dest_dir
+    ));
+    content.push_str(&format!(
+        "initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n",
+        config.dest_dir
+    ));
 
     // QEMU-specific paths (firmware is only relevant for QEMU)
     if is_qemu_shim(shim) {
-        content.push_str(&format!("firmware = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
-        content.push_str(&format!("firmware_volume = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+        content.push_str(&format!(
+            "firmware = \"{}/share/kata-containers/firmware/\"\n",
+            config.dest_dir
+        ));
+        content.push_str(&format!(
+            "firmware_volume = \"{}/share/kata-containers/firmware/\"\n",
+            config.dest_dir
+        ));
     }
 
     // Firecracker-specific paths (jailer is only for Firecracker)
     if shim == "fc" || shim == "firecracker" {
-        content.push_str(&format!("jailer_path = \"{}/bin/jailer\"\n", config.dest_dir));
-        content.push_str(&format!("valid_jailer_paths = [\"{}/bin/jailer\"]\n", config.dest_dir));
+        content.push_str(&format!(
+            "jailer_path = \"{}/bin/jailer\"\n",
+            config.dest_dir
+        ));
+        content.push_str(&format!(
+            "valid_jailer_paths = [\"{}/bin/jailer\"]\n",
+            config.dest_dir
+        ));
     }
 
     Ok(content)
@@ -738,16 +784,14 @@ fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<St
     match proxy_var {
         Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
             // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
-            proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
+            proxy.split(';').find_map(|m| {
+                let parts: Vec<&str> = m.splitn(2, '=').collect();
+                if parts.len() == 2 && parts[0] == shim {
+                    Some(parts[1].to_string())
+                } else {
+                    None
+                }
+            })
         }
         Some(proxy) if !proxy.is_empty() => Some(proxy.clone()),
         _ => None,
@@ -770,8 +814,8 @@ fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
     }
 
     let kernel_params_path = format!("hypervisor.{}.kernel_params", hypervisor_name);
-    let base_params = toml_utils::get_toml_value(config_path, &kernel_params_path)
-        .unwrap_or_default();
+    let base_params =
+        toml_utils::get_toml_value(config_path, &kernel_params_path).unwrap_or_default();
 
     // Remove surrounding quotes if present
     Ok(base_params.trim_matches('"').to_string())
@@ -1100,5 +1144,4 @@ mod tests {
             "following the symlink should yield the real content"
         );
     }
-
 }
