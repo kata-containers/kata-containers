@@ -440,14 +440,46 @@ fn add_kata_deploy_warning(config_file: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Atomically replace a file with a symlink.
+///
+/// Creates the symlink at a temporary path first, then renames it over the
+/// original so the original is preserved if symlink creation fails.
+fn atomic_symlink_replace(file_path: &str, symlink_target: &str) -> Result<()> {
+    let temp_symlink = format!("{}.tmp-link", file_path);
+
+    // Clean up any stale temp symlink from a previous interrupted run
+    if Path::new(&temp_symlink).exists() || Path::new(&temp_symlink).is_symlink() {
+        let _ = fs::remove_file(&temp_symlink);
+    }
+
+    std::os::unix::fs::symlink(symlink_target, &temp_symlink).with_context(|| {
+        format!(
+            "Failed to create temporary symlink {} -> {}",
+            temp_symlink, symlink_target
+        )
+    })?;
+
+    fs::rename(&temp_symlink, file_path).map_err(|err| {
+        let _ = fs::remove_file(&temp_symlink);
+        anyhow::anyhow!(
+            "Failed to atomically replace {} with symlink to {}: {}",
+            file_path,
+            symlink_target,
+            err
+        )
+    })?;
+
+    Ok(())
+}
+
 /// Set up the runtime directory structure for a shim.
 /// Creates: {config_path}/runtimes/{shim}/
 ///          {config_path}/runtimes/{shim}/config.d/
 ///          {config_path}/runtimes/{shim}/configuration-{shim}.toml (copy of original)
 ///
-/// Note: We copy the config file instead of symlinking because kata-containers'
-/// ResolvePath uses filepath.EvalSymlinks, which would resolve to the original
-/// location and look for config.d there instead of in our per-shim directory.
+/// After copying, the original config file is replaced with a symlink pointing
+/// to the runtime copy. This way the runtime's ResolvePath / EvalSymlinks resolves
+/// the symlink and finds config.d next to the real file in the per-shim directory.
 fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     let original_config_dir = format!(
         "/host{}",
@@ -466,9 +498,9 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     fs::create_dir_all(&config_d_dir)
         .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
 
-    // Copy the original config file to the runtime directory
-    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
-    let dest_config_file = format!("{}/configuration-{}.toml", runtime_config_dir, shim);
+    let config_filename = format!("configuration-{}.toml", shim);
+    let original_config_file = format!("{}/{}", original_config_dir, config_filename);
+    let dest_config_file = format!("{}/{}", runtime_config_dir, config_filename);
 
     // Only copy if original exists
     if Path::new(&original_config_file).exists() {
@@ -481,7 +513,7 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
             })?;
         }
 
-        // Copy the base config file
+        // Copy the base config file to the runtime directory
         fs::copy(&original_config_file, &dest_config_file).with_context(|| {
             format!(
                 "Failed to copy config: {} -> {}",
@@ -493,13 +525,37 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         add_kata_deploy_warning(Path::new(&dest_config_file))?;
 
         info!("  Copied base config: {}", dest_config_file);
+
+        let symlink_target = format!("runtimes/{}/{}", shim, config_filename);
+        atomic_symlink_replace(&original_config_file, &symlink_target)?;
+
+        info!(
+            "  Symlinked original config: {} -> {}",
+            original_config_file, symlink_target
+        );
     }
 
     Ok(())
 }
 
-/// Remove the runtime directory for a shim during cleanup
+/// Remove the runtime directory for a shim during cleanup.
+/// Also removes the symlink at the original config location that was created
+/// by setup_runtime_directory.
 fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    // Remove the symlink at the original config location (if present)
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let original_path = Path::new(&original_config_file);
+    if original_path.is_symlink() {
+        fs::remove_file(&original_config_file).with_context(|| {
+            format!("Failed to remove config symlink: {}", original_config_file)
+        })?;
+        log::debug!("Removed config symlink: {}", original_config_file);
+    }
+
     let runtime_config_dir = format!(
         "/host{}",
         utils::get_kata_containers_config_path(shim, &config.dest_dir)
@@ -528,7 +584,7 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
 }
 
 async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &str) -> Result<()> {
-    // Set up the runtime directory structure with symlink to original config
+    // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
     let runtime_config_dir = format!(
@@ -540,11 +596,11 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
     let kata_config_file =
         Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
 
-    // The configuration file (symlink) should exist after setup_runtime_directory()
+    // The configuration file should exist after setup_runtime_directory()
     if !kata_config_file.exists() {
         return Err(anyhow::anyhow!(
             "Configuration file not found: {kata_config_file:?}. This file should have been \
-             symlinked from the original config. Check that the shim '{}' has a valid configuration \
+             copied from the original config. Check that the shim '{}' has a valid configuration \
              file in the artifacts.",
             shim
         ));
@@ -1143,5 +1199,142 @@ mod tests {
             "actual content",
             "following the symlink should yield the real content"
         );
+    }
+
+    #[test]
+    fn test_atomic_symlink_replace_creates_symlink() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        // Create the original file and the target it will point to
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        let target_file = target_dir.join("configuration-qemu.toml");
+        fs::write(&target_file, "real config content").unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original content").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+
+        assert!(original.is_symlink(), "original should now be a symlink");
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+        assert_eq!(
+            fs::read_to_string(&original).unwrap(),
+            "real config content",
+            "reading through the symlink should yield the target's content"
+        );
+    }
+
+    #[test]
+    fn test_atomic_symlink_replace_is_idempotent() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        let target_file = target_dir.join("configuration-qemu.toml");
+        fs::write(&target_file, "config content").unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+
+        // First call
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+        assert!(original.is_symlink());
+
+        // Second call (e.g. re-install) should succeed and still be a valid symlink
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+        assert!(original.is_symlink());
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+    }
+
+    #[test]
+    fn test_atomic_symlink_replace_cleans_stale_temp() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original").unwrap();
+
+        // Simulate a stale temp symlink from an interrupted previous run
+        let stale_temp = tmpdir.path().join("configuration-qemu.toml.tmp-link");
+        std::os::unix::fs::symlink("stale-target", &stale_temp).unwrap();
+        assert!(stale_temp.is_symlink());
+
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("configuration-qemu.toml"), "content").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+
+        assert!(original.is_symlink());
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+        // Temp file should not linger
+        assert!(!stale_temp.exists() && !stale_temp.is_symlink());
+    }
+
+    #[test]
+    fn test_setup_and_remove_runtime_directory_symlink() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        // Simulate the directory layout that setup_runtime_directory expects
+        // (after copy_artifacts has run), using a Go shim as example.
+        let defaults_dir = tmpdir.path().join("share/defaults/kata-containers");
+        fs::create_dir_all(&defaults_dir).unwrap();
+
+        let config_filename = "configuration-qemu.toml";
+        let original_config = defaults_dir.join(config_filename);
+        fs::write(
+            &original_config,
+            "[hypervisor.qemu]\npath = \"/usr/bin/qemu\"",
+        )
+        .unwrap();
+
+        // Create the runtime directory and copy the config (mimics setup_runtime_directory)
+        let runtime_dir = defaults_dir.join("runtimes/qemu");
+        let config_d_dir = runtime_dir.join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        let dest_config = runtime_dir.join(config_filename);
+        fs::copy(&original_config, &dest_config).unwrap();
+
+        // Atomically replace the original with a symlink
+        let symlink_target = format!("runtimes/qemu/{}", config_filename);
+        atomic_symlink_replace(original_config.to_str().unwrap(), &symlink_target).unwrap();
+
+        // Verify: original is now a symlink
+        assert!(original_config.is_symlink());
+        assert_eq!(
+            fs::read_link(&original_config).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+
+        // Verify: reading through the symlink yields the real file content
+        assert_eq!(
+            fs::read_to_string(&original_config).unwrap(),
+            fs::read_to_string(&dest_config).unwrap()
+        );
+
+        // Verify: config.d is next to the real file (the resolved path)
+        assert!(dest_config.parent().unwrap().join("config.d").is_dir());
+
+        // Simulate remove_runtime_directory: remove symlink then runtime dir
+        assert!(original_config.is_symlink());
+        fs::remove_file(&original_config).unwrap();
+        assert!(!original_config.exists() && !original_config.is_symlink());
+
+        fs::remove_dir_all(&runtime_dir).unwrap();
+        assert!(!runtime_dir.exists());
     }
 }
