@@ -2322,7 +2322,7 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                     &dev_major_minor,
                     "luks2",
                     KATA_IMAGE_WORK_DIR,
-                    "",
+                    "-O ^has_journal -m 0 -i 163840 -I 128",
                 )
                 .await?;
                 break;
