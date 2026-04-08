@@ -252,32 +252,13 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
-  remove-rootfs-binary-artifacts:
-    name: remove-rootfs-binary-artifacts
-    runs-on: ubuntu-22.04
-    needs: [build-asset-rootfs, build-asset-boot-image-se]
-    strategy:
-      matrix:
-        asset:
-          - agent
-          - coco-guest-components
-          - pause-image
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
-        if: ${{ inputs.stage == 'release' }}
-        with:
-          name: kata-artifacts-s390x-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+  # NOTE: remove-rootfs-binary-artifacts job has been disabled
+  # (delete-artifact action removed for enterprise compliance)
 
   build-asset-shim-v2:
     name: build-asset-shim-v2
     runs-on: ubuntu-24.04-s390x
-    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs]
     permissions:
       contents: read
       packages: write

@@ -108,11 +108,6 @@ jobs:
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
-      # - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-      #   if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
-      #   with:
-      #     version: "1.2.0"
-
       # for pushing attestations to the registry
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
@@ -217,50 +212,13 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
-  remove-rootfs-binary-artifacts:
-    name: remove-rootfs-binary-artifacts
-    runs-on: ubuntu-24.04-arm
-    needs: build-asset-rootfs
-    strategy:
-      matrix:
-        asset:
-          - busybox
-          - kernel-nvidia-gpu-modules
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
-        with:
-          name: kata-artifacts-arm64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
-
-  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
-  remove-rootfs-binary-artifacts-for-release:
-    name: remove-rootfs-binary-artifacts-for-release
-    runs-on: ubuntu-24.04-arm
-    needs: build-asset-rootfs
-    strategy:
-      matrix:
-        asset:
-          - agent
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-        with:
-          egress-policy: audit
-
-      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
-        if: ${{ inputs.stage == 'release' }}
-        with:
-          name: kata-artifacts-arm64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+  # NOTE: remove-rootfs-binary-artifacts and remove-rootfs-binary-artifacts-for-release
+  # jobs have been disabled (delete-artifact action removed for enterprise compliance)
 
   build-asset-shim-v2:
     name: build-asset-shim-v2
     runs-on: ubuntu-24.04-arm
-    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
+    needs: [build-asset, build-asset-rootfs]
     permissions:
       contents: read
       packages: write

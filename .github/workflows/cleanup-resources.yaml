@@ -25,13 +25,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # - name: Log into Azure
-      #   uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
-      #   with:
-      #     client-id: ${{ secrets.AZ_APPID }}
-      #     tenant-id: ${{ secrets.AZ_TENANT_ID }}
-      #     subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-
       - name: Install Python dependencies
         run: |
           pip3 install --user --upgrade \
