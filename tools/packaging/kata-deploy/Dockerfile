@@ -47,7 +47,8 @@ RUN \
 		libc6-dev \
 		musl-tools && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
+	rustup component add rustfmt clippy
 
 # Build from the repository root so kata-deploy uses the root Cargo workspace:
 #   docker build -f tools/packaging/kata-deploy/Dockerfile .
@@ -90,6 +91,17 @@ RUN \
 		*) echo "Unsupported architecture: ${HOST_ARCH}" && exit 1 ;; \
 	esac; \
 	echo "${rust_target}" > /tmp/rust_target
+
+# Verify code formatting and run cargo check before tests and build
+RUN \
+	set -e && \
+	rust_target="$(cat /tmp/rust_target)" && \
+	echo "Checking code formatting..." && \
+	cargo fmt -p kata-deploy --check && \
+	echo "Code formatting check passed!" && \
+	echo "Running cargo clippy with target ${rust_target}..." && \
+	cargo clippy -p kata-deploy --all-targets --all-features --release --locked --target "${rust_target}" -- -D warnings && \
+	echo "Cargo clippy passed!"
 
 # Run tests using --test-threads=1 to prevent environment variable pollution between tests,
 # and this is fine as we'll never ever have multiple binaries running at the same time.
