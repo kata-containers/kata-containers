@@ -552,9 +552,28 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# Install erofs specific dependencies
+				# Install erofs-utils >= 1.8 from Ubuntu 25.10
+				# (Questing Quokka) so that mkfs.erofs supports the
+				# flags containerd's erofs differ needs (e.g. -T0,
+				# --mkfs-time, --sort).  Ubuntu 24.04 ships 1.7.1
+				# which is too old.
+				sudo apt-get -y install --no-install-recommends \
+					software-properties-common
+				sudo add-apt-repository -y \
+					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+				# Pin questing packages low so only explicitly
+				# requested packages are pulled from that release.
+				sudo tee /etc/apt/preferences.d/questing-pin > /dev/null <<-'APTPIN'
+				Package: *
+				Pin: release n=questing
+				Pin-Priority: 100
+				APTPIN
 				sudo apt-get update
-				sudo apt-get -y install erofs-utils fsverity
+				sudo apt-get -y install --no-install-recommends \
+					-t questing erofs-utils fsverity
+				sudo rm -f /etc/apt/preferences.d/questing-pin
+				sudo add-apt-repository -y --remove \
+					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
 
 				# Load the erofs module
 				sudo modprobe erofs
