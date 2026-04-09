@@ -13,7 +13,7 @@ include ../../../utils.mk
 all: build
 
 build:
-	RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
+	CARGO_TARGET_DIR=./target RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 test:
 	cargo test
@@ -22,7 +22,5 @@ clean:
 	CARGO_TARGET_DIR=./target cargo clean
 
 install: build
-	install -D -m 755 target/release/initdata-processor $(DESTDIR)$(BINDIR)/initdata-processor
-
-systemd-install:
+	install -D -m 755 target/$(TRIPLE)/release/initdata-processor $(DESTDIR)$(BINDIR)/initdata-processor
 	install -D -m 644 systemd-services/initdata-processor.service $(DESTDIR)$(SYSTEMD_DIR)/initdata-processor.service
