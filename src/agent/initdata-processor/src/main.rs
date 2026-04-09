@@ -59,10 +59,8 @@ impl InitDataProcessor {
         let initdata_file = initdata_dir.with_extension("toml");
 
         // Create the config_path.
-        std::fs::create_dir_all(&initdata_dir).context(format!(
-            "Failed to create config path: {:?}",
-            &initdata_dir,
-        ))?;
+        std::fs::create_dir_all(&initdata_dir)
+            .context(format!("Failed to create config path: {:?}", &initdata_dir,))?;
 
         // Set directory permissions.
         #[cfg(unix)]
@@ -76,7 +74,10 @@ impl InitDataProcessor {
         }
 
         self.write_file(&initdata_file, raw_initdata)
-            .context(format!("Failed to write initdata file {:?}", &initdata_file))?;
+            .context(format!(
+                "Failed to write initdata file {:?}",
+                &initdata_file
+            ))?;
 
         let mut written_files = 1;
 
@@ -149,7 +150,9 @@ impl InitDataProcessor {
         );
 
         // 2. Validate initdata structurally.
-        initdata.validate().context("structural initdata validation failed")?;
+        initdata
+            .validate()
+            .context("structural initdata validation failed")?;
 
         // TODO(burgerdev): 3. invoke the external initdata-validator.
 
