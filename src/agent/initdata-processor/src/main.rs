@@ -41,7 +41,7 @@ impl InitDataProcessor {
     }
 
     /// Writes configurations.
-    fn write_config_files(&self, initdata: &InitData) -> Result<()> {
+    fn write_config_files(&self, raw_initdata: &[u8], initdata: &InitData) -> Result<()> {
         info!(
             self.logger,
             "Writing configuration files to: {:?}", self.config_path
@@ -51,22 +51,30 @@ impl InitDataProcessor {
             std::fs::remove_dir_all(&self.config_path)?;
         }
 
+        let initdata_dir = self.config_path.join("initdata");
+        let initdata_file = initdata_dir.with_extension("toml");
+
         // Create the config_path.
-        std::fs::create_dir_all(&self.config_path).context(format!(
+        std::fs::create_dir_all(&initdata_dir).context(format!(
             "Failed to create config path: {:?}",
-            self.config_path
+            &initdata_dir,
         ))?;
 
         // Set directory permissions.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&self.config_path)?.permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&self.config_path, perms)?;
+            for dir in [&self.config_path, &initdata_dir] {
+                let mut perms = std::fs::metadata(dir)?.permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(dir, perms)?;
+            }
         }
 
-        let mut written_files = 0;
+        self.write_file(&initdata_file, raw_initdata)
+            .context(format!("Failed to write initdata file {:?}", &initdata_file))?;
+
+        let mut written_files = 1;
 
         // Write each configuration item.
         for (key, value) in initdata.data() {
@@ -139,9 +147,7 @@ impl InitDataProcessor {
         // TODO(burgerdev): 2. Validate initdata.
 
         // 3. Write config files.
-        let initdata_path = self.config_path.join("initdata.toml");
-        self.write_file(&initdata_path, &initdata_content)?;
-        self.write_config_files(&initdata)?;
+        self.write_config_files(&initdata_content, &initdata)?;
 
         info!(self.logger, "Initdata processing completed successfully");
         Ok(())
