@@ -30,6 +30,20 @@ pub async fn configure_erofs_snapshotter(
         "[\"erofs\",\"walking\"]",
     )?;
 
+    //// Configure erofs differ plugin
+    //// erofs-utils >= 1.8.2
+    //toml_utils::set_toml_value(
+    //    configuration_file,
+    //    ".plugins.\"io.containerd.differ.v1.erofs\".mkfs_options",
+    //    "[\"-T0\",\"--mkfs-time\",\"--sort=none\"]",
+    //)?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
+        "false",
+    )?;
+
+    // Configure erofs snapshotter plugin
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
@@ -39,6 +53,16 @@ pub async fn configure_erofs_snapshotter(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
         "true",
+    )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
+        "\"10G\"",
+    )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        "1",
     )?;
 
     Ok(())
