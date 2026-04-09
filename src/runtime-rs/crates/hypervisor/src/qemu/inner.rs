@@ -114,7 +114,10 @@ impl QemuInner {
         for device in &mut self.devices {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
-                    if share_fs_dev.config.fs_type == "virtio-fs" {
+                    // Both "virtio-fs" and "virtio-fs-nydus" need virtiofs device
+                    if share_fs_dev.config.fs_type == "virtio-fs"
+                        || share_fs_dev.config.fs_type == "virtio-fs-nydus"
+                    {
                         cmdline.add_virtiofs_share(
                             &share_fs_dev.config.sock_path,
                             &share_fs_dev.config.mount_tag,
