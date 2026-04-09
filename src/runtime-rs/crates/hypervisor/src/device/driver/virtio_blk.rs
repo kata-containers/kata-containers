@@ -112,6 +112,12 @@ pub struct BlockConfig {
 
     /// block device multi-queue
     pub num_queues: usize,
+
+    /// Logical sector size in bytes reported to the guest. 0 means use hypervisor default.
+    pub logical_sector_size: u32,
+
+    /// Physical sector size in bytes reported to the guest. 0 means use hypervisor default.
+    pub physical_sector_size: u32,
 }
 
 #[derive(Debug, Clone, Default)]
