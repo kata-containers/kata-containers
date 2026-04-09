@@ -64,6 +64,9 @@ memdisk
 pmem
 Sharedfs
 Initdata
+Rafs
+virtiofsd
+nydusd
 
 # Networking & Communication
 netns
