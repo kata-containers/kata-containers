@@ -4,6 +4,7 @@
     "description": "copy initiated by k8s mount",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-resolv.conf"
     }
   },
@@ -12,6 +13,7 @@
     "description": "a dirname can have trailing dots",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo../bar"
     }
   },
@@ -20,6 +22,7 @@
     "description": "attempt to copy outside of container root",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/etc/ssl/cert.pem"
     }
   },
@@ -28,6 +31,7 @@
     "description": "attempt to write into container root",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
     }
   },
@@ -36,6 +40,7 @@
     "description": "attempt to write into container root - guest pull",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/run/kata-containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
     }
   },
@@ -44,6 +49,7 @@
     "description": "attempted directory traversal",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/../../../../../etc/ssl/cert.pem"
     }
   },
@@ -52,6 +58,7 @@
     "description": "attempted directory traversal - parent directory",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 16895,
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/.."
     }
   },
@@ -60,6 +67,7 @@
     "description": "relative path",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 33206,
       "path": "etc/ssl/cert.pem"
     }
   },
@@ -68,7 +76,122 @@
     "description": "relative path - parent directory",
     "kind": "CopyFileRequest",
     "request": {
+      "file_mode": 16895,
       "path": ".."
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unsupported S_IFBLK",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 24576,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unsupported S_IFSOCK",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 49152,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unsupported S_IFIFO",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 4096,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unsupported mixed mode (S_IFREG | S_IFLNK)",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 73728,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unsupported no mode",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 511,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+    }
+  },
+  {
+    "allowed": true,
+    "description": "directory in top-level shared directory",
+    "kind": "CopyFileRequest",
+    "request": {
+      "file_mode": 16895,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "symlink in top-level shared directory",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [97, 98, 99],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo"
+    }
+  },
+  {
+    "allowed": true,
+    "description": "symlink beneath top-level shared directory",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [97, 98, 99],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "symlink pointing up - leading (../abc)",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [46, 46, 47, 97, 98, 99],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "symlink pointing up - middle (a/../../b)",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [97, 47, 46, 46, 47, 46, 46, 47, 98],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "symlink with 0-byte in target (a\\x00/b)",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [97, 0, 47, 98],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
+    }
+  },
+  {
+    "allowed": false,
+    "description": "symlink with absolute target (/abc)",
+    "kind": "CopyFileRequest",
+    "request": {
+      "data": [47, 97, 98, 99],
+      "file_mode": 41471,
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
     }
   }
 ]

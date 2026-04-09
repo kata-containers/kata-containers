@@ -1519,6 +1519,8 @@ CopyFileRequest if {
 
     check_directory_traversal(input.path)
 
+    allow_copy_file(input.path, input.file_mode, input.data)
+
     some regex1 in policy_data.request_defaults.CopyFileRequest
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
@@ -1528,6 +1530,39 @@ CopyFileRequest if {
     regex.match(regex4, input.path)
 
     print("CopyFileRequest: true")
+}
+
+allow_copy_file(path, mode, data) if {
+    print("allow_copy_file regular")
+
+    bits.and(mode, 61440) == 32768
+
+    print("allow_copy_file regular: true")
+}
+
+allow_copy_file(path, mode, data) if {
+    print("allow_copy_file dir")
+
+    bits.and(mode, 61440) == 16384
+
+    print("allow_copy_file dir: true")
+}
+
+allow_copy_file(path, mode, data) if {
+    print("allow_copy_file symlink")
+
+    bits.and(mode, 61440) == 40960
+
+    target := concat("", [sprintf("%c", [c]) | c := data[_]])
+    check_directory_traversal(target)
+    not startswith(target, "/")
+
+    regex1 := concat("", [policy_data.common.sfprefix, ".*/.+"])
+    regex2 := replace(regex1, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(bundle-id)", "[a-z0-9]{64}")
+    regex.match(regex3, path)
+
+    print("allow_copy_file symlink: true")
 }
 
 CreateSandboxRequest if {
