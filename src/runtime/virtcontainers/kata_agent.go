@@ -292,15 +292,16 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	KernelModules      []string
-	ContainerPipeSize  uint32
-	DialTimeout        uint32
-	CdhApiTimeout      uint32
-	LongLiveConn       bool
-	Debug              bool
-	Trace              bool
-	EnableDebugConsole bool
-	Policy             string
+	KernelModules        []string
+	ContainerPipeSize    uint32
+	DialTimeout          uint32
+	CdhApiTimeout        uint32
+	LaunchProcessTimeout uint32
+	LongLiveConn         bool
+	Debug                bool
+	Trace                bool
+	EnableDebugConsole   bool
+	Policy               string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -364,6 +365,11 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.CdhApiTimeout > 0 {
 		cdhApiTimeout := strconv.FormatUint(uint64(config.CdhApiTimeout), 10)
 		params = append(params, Param{Key: vcAnnotations.CdhApiTimeoutKernelParam, Value: cdhApiTimeout})
+	}
+
+	if config.LaunchProcessTimeout > 0 {
+		launchProcessTimeout := strconv.FormatUint(uint64(config.LaunchProcessTimeout), 10)
+		params = append(params, Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: launchProcessTimeout})
 	}
 
 	return params

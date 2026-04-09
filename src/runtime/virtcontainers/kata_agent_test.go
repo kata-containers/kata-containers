@@ -1083,47 +1083,56 @@ func TestKataAgentKernelParams(t *testing.T) {
 
 	// nolint: govet
 	type testData struct {
-		debug             bool
-		trace             bool
-		containerPipeSize uint32
-		expectedParams    []Param
+		debug                bool
+		trace                bool
+		containerPipeSize    uint32
+		launchProcessTimeout uint32
+		expectedParams       []Param
 	}
 
 	debugParam := Param{Key: "agent.log", Value: "debug"}
 	traceParam := Param{Key: "agent.trace", Value: "true"}
 
 	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
+	launchProcessTimeoutParam := Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: "60"}
 
 	data := []testData{
-		{false, false, 0, []Param{}},
+		{false, false, 0, 0, []Param{}},
 
 		// Debug
-		{true, false, 0, []Param{debugParam}},
+		{true, false, 0, 0, []Param{debugParam}},
 
 		// Tracing
-		{false, true, 0, []Param{traceParam}},
+		{false, true, 0, 0, []Param{traceParam}},
 
 		// Debug + Tracing
-		{true, true, 0, []Param{debugParam, traceParam}},
+		{true, true, 0, 0, []Param{debugParam, traceParam}},
 
 		// pipesize
-		{false, false, 2097152, []Param{containerPipeSizeParam}},
+		{false, false, 2097152, 0, []Param{containerPipeSizeParam}},
 
 		// Debug + pipesize
-		{true, false, 2097152, []Param{debugParam, containerPipeSizeParam}},
+		{true, false, 2097152, 0, []Param{debugParam, containerPipeSizeParam}},
 
 		// Tracing + pipesize
-		{false, true, 2097152, []Param{traceParam, containerPipeSizeParam}},
+		{false, true, 2097152, 0, []Param{traceParam, containerPipeSizeParam}},
 
 		// Debug + Tracing + pipesize
-		{true, true, 2097152, []Param{debugParam, traceParam, containerPipeSizeParam}},
+		{true, true, 2097152, 0, []Param{debugParam, traceParam, containerPipeSizeParam}},
+
+		// LaunchProcessTimeout
+		{false, false, 0, 60, []Param{launchProcessTimeoutParam}},
+
+		// Debug + LaunchProcessTimeout
+		{true, false, 0, 60, []Param{debugParam, launchProcessTimeoutParam}},
 	}
 
 	for i, d := range data {
 		config := KataAgentConfig{
-			Debug:             d.debug,
-			Trace:             d.trace,
-			ContainerPipeSize: d.containerPipeSize,
+			Debug:                d.debug,
+			Trace:                d.trace,
+			ContainerPipeSize:    d.containerPipeSize,
+			LaunchProcessTimeout: d.launchProcessTimeout,
 		}
 
 		count := len(d.expectedParams)

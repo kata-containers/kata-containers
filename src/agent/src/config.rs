@@ -25,6 +25,7 @@ const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
 const CDH_IMAGE_PULL_TIMEOUT_OPTION: &str = "agent.image_pull_timeout";
 const CDI_TIMEOUT_OPTION: &str = "agent.cdi_timeout";
+const LAUNCH_PROCESS_TIMEOUT_OPTION: &str = "agent.launch_process_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
@@ -66,6 +67,7 @@ const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
 const DEFAULT_IMAGE_PULL_TIMEOUT: time::Duration = time::Duration::from_secs(1200);
 const DEFAULT_CDI_TIMEOUT: time::Duration = time::Duration::from_secs(100);
+const DEFAULT_LAUNCH_PROCESS_TIMEOUT: time::Duration = time::Duration::from_secs(6);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 
@@ -130,6 +132,7 @@ pub struct AgentConfig {
     pub cdh_api_timeout: time::Duration,
     pub image_pull_timeout: time::Duration,
     pub cdi_timeout: time::Duration,
+    pub launch_process_timeout: time::Duration,
     pub debug_console_vport: i32,
     pub log_vport: i32,
     pub container_pipe_size: i32,
@@ -163,6 +166,7 @@ pub struct AgentConfigBuilder {
     pub cdh_api_timeout: Option<time::Duration>,
     pub image_pull_timeout: Option<time::Duration>,
     pub cdi_timeout: Option<time::Duration>,
+    pub launch_process_timeout: Option<time::Duration>,
     pub debug_console_vport: Option<i32>,
     pub log_vport: Option<i32>,
     pub container_pipe_size: Option<i32>,
@@ -257,6 +261,7 @@ impl Default for AgentConfig {
             cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
             image_pull_timeout: DEFAULT_IMAGE_PULL_TIMEOUT,
             cdi_timeout: DEFAULT_CDI_TIMEOUT,
+            launch_process_timeout: DEFAULT_LAUNCH_PROCESS_TIMEOUT,
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
@@ -298,6 +303,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, cdh_api_timeout);
         config_override!(agent_config_builder, agent_config, image_pull_timeout);
         config_override!(agent_config_builder, agent_config, cdi_timeout);
+        config_override!(agent_config_builder, agent_config, launch_process_timeout);
         config_override!(agent_config_builder, agent_config, debug_console_vport);
         config_override!(agent_config_builder, agent_config, log_vport);
         config_override!(agent_config_builder, agent_config, container_pipe_size);
@@ -479,6 +485,14 @@ impl AgentConfig {
                 config.cdi_timeout,
                 get_timeout,
                 |cdi_timeout: &time::Duration| cdi_timeout.as_secs() > 0
+            );
+
+            parse_cmdline_param!(
+                param,
+                LAUNCH_PROCESS_TIMEOUT_OPTION,
+                config.launch_process_timeout,
+                get_timeout,
+                |launch_process_timeout: &time::Duration| launch_process_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values
@@ -742,6 +756,7 @@ fn get_timeout(param: &str) -> Result<time::Duration> {
                 | CDH_API_TIMOUT_OPTION
                 | CDH_IMAGE_PULL_TIMEOUT_OPTION
                 | CDI_TIMEOUT_OPTION
+                | LAUNCH_PROCESS_TIMEOUT_OPTION
         ),
         ERR_INVALID_TIMEOUT_KEY
     );
@@ -1630,6 +1645,7 @@ Caused by:
     #[case("agent.cdh_api_timeout=600", Ok(time::Duration::from_secs(600)))]
     #[case("agent.image_pull_timeout=1200", Ok(time::Duration::from_secs(1200)))]
     #[case("agent.cdi_timeout=320", Ok(time::Duration::from_secs(320)))]
+    #[case("agent.launch_process_timeout=60", Ok(time::Duration::from_secs(60)))]
     fn test_timeout(#[case] param: &str, #[case] expected: Result<time::Duration>) {
         let result = get_timeout(param);
         let msg = format!("expected: {expected:?}, result: {result:?}");

@@ -588,6 +588,13 @@ debug_console_enabled = false
 # (default: 90)
 dial_timeout = @DEFAULTTIMEOUT_NV@
 
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# With NVIDIA GPUs and NVSwitches, the attestation-agent needs extra time
+# to collect evidence during initialization.
+# (agent default when unset: 6)
+launch_process_timeout = @DEFAULTLAUNCHPROCESSTIMEOUT_NV@
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log

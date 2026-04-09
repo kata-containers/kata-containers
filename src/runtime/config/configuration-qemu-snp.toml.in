@@ -603,6 +603,11 @@ debug_console_enabled = false
 # (default: 90)
 dial_timeout = 90
 
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# (agent default when unset: 6)
+launch_process_timeout = 6
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
