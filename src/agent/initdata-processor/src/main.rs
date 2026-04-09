@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ant Group
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 mod initdata;
 
 use std::fs::OpenOptions;
