@@ -3,8 +3,6 @@
 [Unit]
 Description=Kata InitData Processor
 Documentation=https://github.com/kata-containers/kata-containers
-Before=guest-components.target kata-agent.service
-Wants=guest-components.target
 
 [Service]
 Type=oneshot
