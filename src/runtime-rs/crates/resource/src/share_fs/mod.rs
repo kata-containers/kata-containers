@@ -3,6 +3,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+//
+
+mod nydus;
 
 mod share_virtio_fs;
 pub use share_virtio_fs::rafs_mount;

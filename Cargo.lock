@@ -6308,6 +6308,8 @@ dependencies = [
  "futures",
  "futures-lite 2.6.1",
  "hex",
+ "hyper 0.14.32",
+ "hyperlocal",
  "hypervisor",
  "inotify 0.11.1",
  "kata-sys-util",
