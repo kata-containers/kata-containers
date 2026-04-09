@@ -380,6 +380,7 @@ jobs:
       matrix:
         vmm:
           - qemu-coco-dev
+          - qemu-coco-dev-runtime-rs
         snapshotter:
           - erofs
         pull-type:
