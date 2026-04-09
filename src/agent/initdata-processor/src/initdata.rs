@@ -80,7 +80,7 @@ pub fn locate_device(path: &Path, logger: &Logger) -> Result<Option<PathBuf>> {
             }
         }
     }
-    if errors.len() > 0 {
+    if !errors.is_empty() {
         Err(MultiError { errors }.into())
     } else {
         Ok(None)
