@@ -18,6 +18,11 @@ jobs:
       actions: write # Needed to manage caches for state persistence across runs
       pull-requests: write # Needed to add/remove labels, post comments, or close PRs
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
       - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.1.0
         with:
           stale-pr-message: 'This PR has been opened without activity for 180 days. Please comment on the issue or it will be closed in 7 days.'

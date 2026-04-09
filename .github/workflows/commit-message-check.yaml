@@ -25,6 +25,11 @@ jobs:
       PR_AUTHOR: ${{ github.event.pull_request.user.login }}
     name: Commit Message Check
     steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      with:
+        egress-policy: audit
+
     - name: Get PR Commits
       id: 'get-pr-commits'
       uses: tim-actions/get-pr-commits@c64db31d359214d244884dd68f971a110b29ab83 # v1.2.0
