@@ -120,6 +120,11 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
                         link = Some(Box::new(Bridge::default()));
                     }
                 }
+                InfoKind::Netkit => {
+                    if link.is_none() {
+                        link = Some(Box::new(Netkit::default()));
+                    }
+                }
                 _ => {
                     if link.is_none() {
                         link = Some(Box::new(Device::default()));
@@ -144,6 +149,9 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
                 }
                 InfoData::Bridge(ibs) => {
                     link = Some(Box::new(parse_bridge(ibs)));
+                }
+                InfoData::Netkit(_) => {
+                    link = Some(Box::new(Netkit::default()));
                 }
                 _ => {
                     link = Some(Box::new(Device::default()));
@@ -214,6 +222,7 @@ macro_rules! define_and_impl_network_dev {
 define_and_impl_network_dev!("device", Device);
 define_and_impl_network_dev!("tuntap", Tuntap);
 define_and_impl_network_dev!("veth", Veth);
+define_and_impl_network_dev!("netkit", Netkit);
 define_and_impl_network_dev!("ipvlan", IpVlan);
 define_and_impl_network_dev!("macvlan", MacVlan);
 define_and_impl_network_dev!("vlan", Vlan);
