@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Ant Group
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 use std::{
     io::{ErrorKind, Read as _, Seek as _},
     os::unix::fs::FileTypeExt,
