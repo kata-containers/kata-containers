@@ -770,7 +770,7 @@ EOF
 		agent_dir="${script_dir}/../../../src/agent/"
 
 		info "Build initdata-processor"
-		pushd "${agent_dir}"
+		pushd "${script_dir}/../../../src/agent/initdata-processor"
 		make clean
 		make
 		make install DESTDIR="${ROOTFS_DIR}"
