@@ -21,6 +21,11 @@ fn is_initdata_device(path: &Path) -> Result<bool> {
             // Device is shorter than magic, thus it's not an initdata device.
             Ok(false)
         }
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            // Most likely, we're looking for a hard-coded path that's not present in this VM. If
+            // it's not there, it can't be an initdata device.
+            Ok(false)
+        }
         Err(e) => Err(e).context(format!("reading from device {path:?}")),
         Ok(()) => Ok(magic == INITDATA_MAGIC_NUMBER),
     }
