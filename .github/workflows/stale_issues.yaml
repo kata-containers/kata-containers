@@ -38,5 +38,6 @@ jobs:
           days-before-pr-close: -1
           days-before-issue-stale: ${AGE}
           days-before-issue-close: 30
+          operations-per-run: 100
         env:
           DATE: ${{ inputs.date }}
