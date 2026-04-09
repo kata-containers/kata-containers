@@ -18,7 +18,7 @@ jobs:
       actions: write # Needed to manage caches for state persistence across runs
       pull-requests: write # Needed to add/remove labels, post comments, or close PRs
     steps:
-      - uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.1.0
+      - uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
         with:
           stale-pr-message: 'This PR has been opened without activity for 180 days. Please comment on the issue or it will be closed in 7 days.'
           days-before-pr-stale: 180
