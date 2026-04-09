@@ -44,6 +44,9 @@ jobs:
         k8s:
           - kubeadm
     runs-on: ${{ matrix.environment.runner }}
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
