@@ -5,6 +5,7 @@
 //
 
 pub mod nydus_client;
+pub mod nydus_daemon;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -18,7 +19,6 @@ pub struct MountRequest {
     pub overlay: Option<String>,
 }
 
-#[allow(dead_code)]
 impl MountRequest {
     pub fn new(fs_type: &str, source: &Path, config: &str) -> Self {
         Self {
