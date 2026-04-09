@@ -144,9 +144,12 @@ impl InitDataProcessor {
             initdata.data().len()
         );
 
-        // TODO(burgerdev): 2. Validate initdata.
+        // 2. Validate initdata structurally.
+        initdata.validate().context("structural initdata validation failed")?;
 
-        // 3. Write config files.
+        // TODO(burgerdev): 3. invoke the external initdata-validator.
+
+        // 4. Write config files.
         self.write_config_files(&initdata_content, &initdata)?;
 
         info!(self.logger, "Initdata processing completed successfully");
