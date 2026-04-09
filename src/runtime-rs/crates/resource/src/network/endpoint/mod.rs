@@ -8,6 +8,8 @@ mod physical_endpoint;
 pub use physical_endpoint::PhysicalEndpoint;
 mod veth_endpoint;
 pub use veth_endpoint::VethEndpoint;
+mod netkit_endpoint;
+pub use netkit_endpoint::NetkitEndpoint;
 mod ipvlan_endpoint;
 pub use ipvlan_endpoint::IPVlanEndpoint;
 mod vlan_endpoint;
