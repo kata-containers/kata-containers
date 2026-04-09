@@ -6,7 +6,10 @@
 
 //! Policy evaluation for the kata-agent.
 
-use anyhow::{bail, Result};
+use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
+
+use anyhow::{bail, Error, Result};
+use protocols::agent::CopyFileRequest;
 use slog::{debug, error, info, warn};
 use tokio::io::AsyncWriteExt;
 
@@ -239,5 +242,222 @@ impl AgentPolicy {
             Err(_) => false,
         };
         Ok(())
+    }
+}
+
+/// FileType represents the S_IFMT part of the POSIX file mode such that it's easier to check in
+/// Rego.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub enum FileType {
+    #[default]
+    Unknown,
+    Regular,
+    Directory,
+    Symlink,
+}
+
+impl From<u32> for FileType {
+    fn from(raw_mode: u32) -> Self {
+        match raw_mode & libc::S_IFMT {
+            libc::S_IFREG => Self::Regular,
+            libc::S_IFDIR => Self::Directory,
+            libc::S_IFLNK => Self::Symlink,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// PolicyCopyFileRequest is a pre-processed variant of the CopyFileRequest that avoids byte
+/// manipulation in Rego rules.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct PolicyCopyFileRequest {
+    pub path: String,
+    pub file_type: FileType,
+    pub symlink_target: Option<String>,
+
+    // Below fields are copied from the original request. They are not used by the genpolicy rules,
+    // but might be relevant for alternative rule sets. The data field is intentionally omitted to
+    // reduce serde overhead and protect the rules engine.
+
+    pub file_size: i64,
+    pub file_mode: u32,
+    pub dir_mode: u32,
+    pub uid: i32,
+    pub gid: i32,
+    pub offset: i64,
+}
+
+impl std::convert::TryFrom<&CopyFileRequest> for PolicyCopyFileRequest {
+    type Error = Error;
+
+    fn try_from(req: &CopyFileRequest) -> Result<Self> {
+        let file_type = req.file_mode.into();
+        let symlink_target: Option<String> = match file_type {
+            FileType::Symlink => {
+                if let Some(s) = OsStr::from_bytes(&req.data).to_str() {
+                    Some(s.to_owned())
+                } else {
+                    bail!("invalid symlink content")
+                }
+            }
+            _ => None,
+        };
+
+        Ok(PolicyCopyFileRequest {
+            path: req.path.clone(),
+            file_type,
+            symlink_target,
+            file_size: req.file_size,
+            file_mode: req.file_mode,
+            dir_mode: req.dir_mode,
+            uid: req.uid,
+            gid: req.gid,
+            offset: req.offset,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::convert::TryInto;
+
+    use protocols::agent::CopyFileRequest;
+
+    struct TestCase {
+        name: String,
+        input: CopyFileRequest,
+        output: Option<PolicyCopyFileRequest>,
+    }
+
+    #[test]
+    fn test_copyfile_translation() {
+        let test_cases = [
+            TestCase {
+                name: "regular".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFREG,
+                    path: "/foo/bar".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFREG,
+                    file_type: FileType::Regular,
+                    path: "/foo/bar".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "directory".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFDIR,
+                    path: "/foo".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFDIR,
+                    file_type: FileType::Directory,
+                    path: "/foo".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "socket".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFSOCK,
+                    path: "/foo/sock".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFSOCK,
+                    file_type: FileType::Unknown,
+                    path: "/foo/sock".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "mixed".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFDIR | libc::S_IFREG,
+                    path: "/foo/dunno".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFDIR | libc::S_IFREG,
+                    file_type: FileType::Unknown,
+                    path: "/foo/dunno".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "all".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFMT,
+                    path: "/wat".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFMT,
+                    file_type: FileType::Unknown,
+                    path: "/wat".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "none".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: 0,
+                    path: "/0".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: 0,
+                    file_type: FileType::Unknown,
+                    path: "/0".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "link/valid".to_owned(),
+                input: CopyFileRequest {
+                    data: b"..data/foo".to_vec(),
+                    file_mode: libc::S_IFLNK,
+                    path: "/foo/lnk".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFLNK,
+                    file_type: FileType::Symlink,
+                    symlink_target: Some("..data/foo".to_owned()),
+                    path: "/foo/lnk".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "link/invalid".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFLNK,
+                    data: vec![0x00, 0xFF, 0xFF, 0x00],
+                    ..Default::default()
+                },
+                output: None,
+            },
+        ];
+
+        for test_case in test_cases {
+            let output_res: Result<PolicyCopyFileRequest> = (&test_case.input).try_into();
+            if let Some(expected) = test_case.output {
+                let output = output_res.expect(&format!("test case {}", &test_case.name));
+                assert_eq!(expected, output, "test case {}", &test_case.name)
+            } else {
+                assert!(
+                    output_res.is_err(),
+                    "test case {}\nunexpected success: {:?}",
+                    &test_case.name,
+                    output_res
+                )
+            }
+        }
     }
 }

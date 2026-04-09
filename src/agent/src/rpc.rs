@@ -4,12 +4,16 @@
 //
 
 use async_trait::async_trait;
+#[cfg(feature = "agent-policy")]
+use kata_agent_policy::policy::PolicyCopyFileRequest;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
 use std::convert::TryFrom;
+#[cfg(feature = "agent-policy")]
+use std::convert::TryInto as _;
 use std::ffi::{CString, OsStr};
 use std::fmt::Debug;
 use std::io;
@@ -28,6 +32,8 @@ use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
+#[cfg(feature = "agent-policy")]
+use protobuf::MessageDyn;
 use protobuf::MessageField;
 use protocols::agent::{
     AddSwapPathRequest, AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest,
@@ -85,7 +91,7 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::{do_set_policy, is_allowed};
+use crate::policy::{do_set_policy, is_allowed, is_allowed_with_entrypoint};
 
 use opentelemetry::global;
 use tracing::span;
@@ -1582,6 +1588,15 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "copy_file", req);
+        #[cfg(feature = "agent-policy")]
+        {
+            let req_for_policy: PolicyCopyFileRequest = (&req)
+                .try_into()
+                .context("parsing CopyFileRequest for policy")
+                .map_ttrpc_err(same)?;
+            is_allowed_with_entrypoint(req.descriptor_dyn().name(), &req_for_policy).await?;
+        }
+        #[cfg(not(feature = "agent-policy"))]
         is_allowed(&req).await?;
 
         do_copy_file(&req).map_ttrpc_err(same)?;

@@ -25,8 +25,15 @@ regorus = { version = "0.2.8", default-features = false, features = [
 ] }
 json-patch = "2.0.0"
 
+# POSIX
+libc.workspace = true
+
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
 slog.workspace = true
 slog-scope.workspace = true
+
+# Internal dependencies
+
+protocols = { workspace = true, features = ["with-serde"] }
