@@ -8,10 +8,12 @@ PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
 SYSTEMD_DIR ?= /usr/lib/systemd/system
 
+include ../../../utils.mk
+
 all: build
 
 build:
-	CARGO_TARGET_DIR=./target cargo build --release
+	RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 test:
 	cargo test
