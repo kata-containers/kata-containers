@@ -68,7 +68,6 @@ mod firecracker;
 pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 
 const NO_VIRTIO_FS: &str = "none";
-const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
@@ -1419,12 +1418,13 @@ impl SecurityInfo {
     }
 }
 
-/// Configuration information for shared filesystems, such as virtio-9p and virtio-fs.
+/// Configuration information for shared filesystems, such as virtio-fs-nydus and virtio-fs.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SharedFsInfo {
     /// Type of shared file system to use:
     /// - `virtio-fs` (default)
-    /// - `virtio-9p`
+    /// - `inline-virtio-fs`
+    /// - `virtio-fs-nydus`
     /// - `none` (disables shared filesystem)
     pub shared_fs: Option<String>,
 
@@ -1466,18 +1466,13 @@ pub struct SharedFsInfo {
     /// Enables `virtio-fs` DAX (Direct Access) window if `true`.
     #[serde(default)]
     pub virtio_fs_is_dax: bool,
-
-    /// This is the `msize` used for 9p shares. It represents the number of bytes
-    /// used for the 9p packet payload.
-    #[serde(default)]
-    pub msize_9p: u32,
 }
 
 impl SharedFsInfo {
     /// Adjusts the shared filesystem configuration after loading from a configuration file.
     ///
     /// Handles default values for `shared_fs` type, `virtio-fs` specific settings
-    /// (daemon path, cache mode, DAX), and `virtio-9p` msize.
+    /// (daemon path, cache mode, DAX) or `inline-virtio-fs` settings.
     pub fn adjust_config(&mut self) -> Result<()> {
         if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
             self.shared_fs = None;
@@ -1490,11 +1485,6 @@ impl SharedFsInfo {
         match self.shared_fs.as_deref() {
             Some(VIRTIO_FS) => self.adjust_virtio_fs(false)?,
             Some(VIRTIO_FS_INLINE) => self.adjust_virtio_fs(true)?,
-            Some(VIRTIO_9P) => {
-                if self.msize_9p == 0 {
-                    self.msize_9p = default::DEFAULT_SHARED_9PFS_SIZE_MB;
-                }
-            }
             _ => {}
         }
 
@@ -1504,23 +1494,12 @@ impl SharedFsInfo {
     /// Validates the shared filesystem configuration.
     ///
     /// Checks the validity of the selected `shared_fs` type and
-    /// performs specific validations for `virtio-fs` and `virtio-9p` settings.
+    /// performs specific validations for `virtio-fs` and `inline-virtio-fs` settings.
     pub fn validate(&self) -> Result<()> {
         match self.shared_fs.as_deref() {
             None => Ok(()),
             Some(VIRTIO_FS) => self.validate_virtio_fs(false),
             Some(VIRTIO_FS_INLINE) => self.validate_virtio_fs(true),
-            Some(VIRTIO_9P) => {
-                if self.msize_9p < default::MIN_SHARED_9PFS_SIZE_MB
-                    || self.msize_9p > default::MAX_SHARED_9PFS_SIZE_MB
-                {
-                    return Err(std::io::Error::other(format!(
-                        "Invalid 9p configuration msize 0x{:x}, min value is 0x{:x}, max value is 0x{:x}",
-                        self.msize_9p,default::MIN_SHARED_9PFS_SIZE_MB, default::MAX_SHARED_9PFS_SIZE_MB
-                    )));
-                }
-                Ok(())
-            }
             Some(v) => Err(std::io::Error::other(format!("Invalid shared_fs type {v}"))),
         }
     }

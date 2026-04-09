@@ -23,7 +23,7 @@ use tracing::instrument;
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
 use self::ephemeral_handler::EphemeralHandler;
-use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
+use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use crate::mount::{baremount, is_mounted, remove_mounts};
@@ -134,7 +134,6 @@ lazy_static! {
     pub static ref STORAGE_HANDLERS: StorageHandlerManager<Arc<dyn StorageHandler>> = {
         let mut manager: StorageHandlerManager<Arc<dyn StorageHandler>> = StorageHandlerManager::new();
         let handlers: Vec<Arc<dyn StorageHandler>> = vec![
-            Arc::new(Virtio9pHandler {}),
             Arc::new(VirtioBlkMmioHandler {}),
             Arc::new(VirtioBlkPciHandler {}),
             Arc::new(EphemeralHandler {}),

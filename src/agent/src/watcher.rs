@@ -425,7 +425,7 @@ impl SandboxStorages {
 /// or updated file to a target mount point, or remove the removed file from the target mount point.  All WatchableStorage
 /// target mount points are expected to reside within a single tmpfs, whose root is created by the BindWatcher.
 ///
-/// This is a temporary workaround to handle config map updates until we get inotify on 9p/virtio-fs.
+/// This is a temporary workaround to handle config map updates until we get inotify on virtio-fs.
 /// More context on this:
 /// - https://github.com/kata-containers/runtime/issues/1505
 /// - https://github.com/kata-containers/kata-containers/issues/1879
