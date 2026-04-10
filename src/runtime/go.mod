@@ -61,7 +61,7 @@ require (
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.10
 	k8s.io/apimachinery v0.33.0
-	k8s.io/cri-api v0.33.0
+	k8s.io/cri-api v0.35.3
 	k8s.io/kubelet v0.33.0
 	tags.cncf.io/container-device-interface v1.0.1
 )
