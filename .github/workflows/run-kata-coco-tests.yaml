@@ -31,11 +31,11 @@ on:
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
-      AZ_APPID:
+      AZ_APPID2:
         required: true
-      AZ_TENANT_ID:
+      AZ_TENANT_ID2:
        required: true
-      AZ_SUBSCRIPTION_ID:
+      AZ_SUBSCRIPTION_ID2:
         required: true
       ITA_KEY:
         required: true
