@@ -18,6 +18,12 @@ pub use shared_mount::SharedMount;
 /// Type of runtime VirtContainer.
 pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
 
+/// emptydir_mode value: share the emptyDir via the shared filesystem (default).
+pub const EMPTYDIR_MODE_SHARED_FS: &str = "shared-fs";
+
+/// emptydir_mode value: plug an encrypted block device (LUKS2 via CDH) for each emptyDir.
+pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -133,6 +139,21 @@ pub struct Runtime {
     /// This is potentially slower, but allows sharing of files from host to guest.
     #[serde(default)]
     pub disable_guest_empty_dir: bool,
+
+    /// Specifies how Kubernetes emptyDir volumes are handled.
+    ///
+    /// Options:
+    ///
+    ///   - shared-fs (default)
+    ///     Shares the emptyDir folder with the guest using the method given
+    ///     by the `shared_fs` setting.
+    ///
+    ///   - block-encrypted
+    ///     Plugs a block device to be encrypted in the guest using LUKS2
+    ///     via the Confidential Data Hub (CDH).
+    ///
+    #[serde(default)]
+    pub emptydir_mode: String,
 
     /// Determines how VFIO devices should be be presented to the container.
     ///
@@ -250,6 +271,17 @@ impl ConfigOps for Runtime {
         if !vfio_mode.is_empty() && vfio_mode != "vfio" && vfio_mode != "guest-kernel" {
             return Err(std::io::Error::other(format!(
                 "Invalid vfio_mode `{vfio_mode}` in configuration file",
+            )));
+        }
+
+        let emptydir_mode = &conf.runtime.emptydir_mode;
+        if !emptydir_mode.is_empty()
+            && emptydir_mode != EMPTYDIR_MODE_SHARED_FS
+            && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+        {
+            return Err(std::io::Error::other(format!(
+                "Invalid emptydir_mode `{emptydir_mode}` in configuration file, \
+                 allowed values: \"{EMPTYDIR_MODE_SHARED_FS}\", \"{EMPTYDIR_MODE_BLOCK_ENCRYPTED}\"",
             )));
         }
 
