@@ -646,11 +646,6 @@ ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features $(EXTRA_RUSTFEATURES)
 endif
 
-# C++ compiler for musl targets. The cc crate checks CXX_<triple> (hyphens→underscores)
-# before searching PATH for <arch>-linux-musl-g++. Defaults to the system g++,
-# which works on native runners. Override with a cross-compiler when cross-compiling.
-MUSL_CXX ?= g++
-MUSL_CXX_VAR := CXX_$(subst -,_,$(TRIPLE))
 
 TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
@@ -730,7 +725,7 @@ static-checks-build: $(GENERATED_FILES)
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@$(RELEASE_CARGO_PROFILE_ENV) $(MUSL_CXX_VAR)=$(MUSL_CXX) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
