@@ -642,6 +642,8 @@ impl Qmp {
         is_direct: Option<bool>,
         is_readonly: bool,
         no_drop: bool,
+        logical_block_size: u32,
+        physical_block_size: u32,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = format!("drive-{index}");
@@ -718,6 +720,13 @@ impl Qmp {
         // `device_add`
         let mut blkdev_add_args = Dictionary::new();
         blkdev_add_args.insert("drive".to_owned(), node_name.clone().into());
+
+        if logical_block_size > 0 {
+            blkdev_add_args.insert("logical_block_size".to_owned(), logical_block_size.into());
+        }
+        if physical_block_size > 0 {
+            blkdev_add_args.insert("physical_block_size".to_owned(), physical_block_size.into());
+        }
 
         if block_driver == VIRTIO_SCSI {
             // Helper closure to decode a flattened u16 SCSI index into an (ID, LUN) pair.

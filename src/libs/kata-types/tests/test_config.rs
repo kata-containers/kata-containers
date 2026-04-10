@@ -7,7 +7,9 @@ mod tests {
     use kata_types::annotations::{
         Annotation, KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CFG_AGENT_TRACE,
         KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP, KATA_ANNO_CFG_ENABLE_PPROF,
-        KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
+        KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE,
+        KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE,
+        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
@@ -474,6 +476,113 @@ mod tests {
         anno_hash.insert(
             KATA_ANNO_CFG_RUNTIME_NAME.to_string(),
             "other-container".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_block_device_sector_size_annotations_valid() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        // Valid: 512 logical, 4096 physical
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE.to_string(),
+            "512".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE.to_string(),
+            "4096".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = config.hypervisor.get("qemu") {
+            assert_eq!(hv.blockdev_info.block_device_logical_sector_size, 512);
+            assert_eq!(hv.blockdev_info.block_device_physical_sector_size, 4096);
+        }
+
+        // Valid: 0 means hypervisor default
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE.to_string(),
+            "0".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE.to_string(),
+            "0".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = config.hypervisor.get("qemu") {
+            assert_eq!(hv.blockdev_info.block_device_logical_sector_size, 0);
+            assert_eq!(hv.blockdev_info.block_device_physical_sector_size, 0);
+        }
+    }
+
+    #[test]
+    fn test_block_device_sector_size_annotation_invalid_not_power_of_two() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE.to_string(),
+            "1000".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_block_device_sector_size_annotation_invalid_below_minimum() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE.to_string(),
+            "256".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+        assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_block_device_sector_size_annotation_invalid_above_maximum() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE.to_string(),
+            "131072".to_string(),
         );
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();

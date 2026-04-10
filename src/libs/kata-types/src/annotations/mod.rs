@@ -284,6 +284,20 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
     "io.katacontainers.config.hypervisor.default_gpu_model";
 
+/// A sandbox annotation that specifies the logical sector size reported by block devices to the
+/// guest, in bytes. Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+/// NOTE: the annotation key uses "blk_logical_sector_size" rather than
+/// "block_device_logical_sector_size" because Kubernetes enforces a 63-character limit on
+/// annotation name segments.
+pub const KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE: &str =
+    "io.katacontainers.config.hypervisor.blk_logical_sector_size";
+/// A sandbox annotation that specifies the physical sector size reported by block devices to the
+/// guest, in bytes. Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+/// NOTE: the annotation key uses "blk_physical_sector_size" rather than
+/// "block_device_physical_sector_size" because Kubernetes enforces a 63-character limit on
+/// annotation name segments.
+pub const KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE: &str =
+    "io.katacontainers.config.hypervisor.blk_physical_sector_size";
 /// Block device specific annotation for num_queues
 pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES: &str =
     "io.katacontainers.config.hypervisor.block_device_num_queues";
@@ -973,6 +987,48 @@ impl Annotation {
                             hv.shared_fs.virtio_fs_extra_args.push(arg.to_string());
                         }
                     }
+                    KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                let size = v.unwrap_or_default();
+                                if let Err(e) =
+                                    crate::config::hypervisor::validate_block_device_sector_size(
+                                        size,
+                                    )
+                                {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        e.to_string(),
+                                    ));
+                                }
+                                hv.blockdev_info.block_device_logical_sector_size = size;
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
+                        }
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                let size = v.unwrap_or_default();
+                                if let Err(e) =
+                                    crate::config::hypervisor::validate_block_device_sector_size(
+                                        size,
+                                    )
+                                {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        e.to_string(),
+                                    ));
+                                }
+                                hv.blockdev_info.block_device_physical_sector_size = size;
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
+                        }
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES => {
                         match self.get_value::<usize>(key) {
                             Ok(v) => {
@@ -1121,6 +1177,18 @@ impl Annotation {
                     }
                 }
             }
+        }
+
+        // Validate cross-field constraint: logical sector size must not exceed physical.
+        // Individual sizes are validated inside the loop, but the cross-field check must
+        // run after both annotations have been applied.
+        let logical = hv.blockdev_info.block_device_logical_sector_size;
+        let physical = hv.blockdev_info.block_device_physical_sector_size;
+        if logical != 0 && physical != 0 && logical > physical {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid sector sizes: logical ({logical}) must not be larger than physical ({physical})"),
+            ));
         }
 
         config.adjust_config()?;

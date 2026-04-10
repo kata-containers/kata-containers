@@ -422,6 +422,8 @@ impl ResourceManagerInner {
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
                         num_queues: blkdev_info.num_queues,
                         queue_size: blkdev_info.queue_size,
+                        logical_sector_size: blkdev_info.block_device_logical_sector_size,
+                        physical_sector_size: blkdev_info.block_device_physical_sector_size,
                         ..Default::default()
                     });
 

@@ -271,6 +271,18 @@ pub struct BlockDeviceInfo {
     #[serde(default)]
     pub block_device_cache_noflush: bool,
 
+    /// Specifies the logical sector size, in bytes, reported by block devices to the guest.
+    /// Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+    /// Must be 0 or a power of 2 between 512 and 65536.
+    #[serde(default)]
+    pub block_device_logical_sector_size: u32,
+
+    /// Specifies the physical sector size, in bytes, reported by block devices to the guest.
+    /// Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+    /// Must be 0 or a power of 2 between 512 and 65536.
+    #[serde(default)]
+    pub block_device_physical_sector_size: u32,
+
     /// If false and nvdimm is supported, use nvdimm device to plug guest image.
     #[serde(default)]
     pub disable_image_nvdimm: bool,
@@ -400,6 +412,16 @@ impl BlockDeviceInfo {
             "Invalid vhost-user-store-path {}: {}"
         )?;
 
+        validate_block_device_sector_size(self.block_device_logical_sector_size)?;
+        validate_block_device_sector_size(self.block_device_physical_sector_size)?;
+        let logical = self.block_device_logical_sector_size;
+        let physical = self.block_device_physical_sector_size;
+        if logical != 0 && physical != 0 && logical > physical {
+            return Err(std::io::Error::other(format!(
+                "invalid sector sizes: logical ({logical}) must not be larger than physical ({physical})"
+            )));
+        }
+
         Ok(())
     }
 
@@ -407,6 +429,19 @@ impl BlockDeviceInfo {
     pub fn validate_vhost_user_store_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_vhost_user_store_paths, path)
     }
+}
+
+/// Validate that a block device sector size is 0 or a power of 2 in [512, 65536].
+pub fn validate_block_device_sector_size(size: u32) -> Result<()> {
+    if size == 0 {
+        return Ok(());
+    }
+    if !(512..=65536).contains(&size) || (size & (size - 1)) != 0 {
+        return Err(std::io::Error::other(format!(
+            "invalid sector size {size}: must be 0 or a power of 2 between 512 and 65536"
+        )));
+    }
+    Ok(())
 }
 
 /// Guest kernel boot information.
@@ -2070,6 +2105,85 @@ mod tests {
             "Error message '{}' does not contain expected text '{}'",
             error_msg,
             expected_error_msg
+        );
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_valid() {
+        for size in [0, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536] {
+            assert!(
+                validate_block_device_sector_size(size).is_ok(),
+                "expected size {} to be accepted",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_not_power_of_two() {
+        for size in [3, 100, 1000, 3000, 5000] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected non-power-of-2 size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_below_minimum() {
+        for size in [1, 256] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected below-minimum size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_above_maximum() {
+        for size in [131072, 1048576] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected above-maximum size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    fn blockdev_info_with_sectors(logical: u32, physical: u32) -> BlockDeviceInfo {
+        BlockDeviceInfo {
+            block_device_driver: VIRTIO_BLK_PCI.to_string(),
+            block_device_logical_sector_size: logical,
+            block_device_physical_sector_size: physical,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_sizes_valid() {
+        assert!(blockdev_info_with_sectors(0, 0).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 0).validate().is_ok());
+        assert!(blockdev_info_with_sectors(0, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(4096, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 512).validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_sizes_logical_exceeds_physical() {
+        assert!(
+            blockdev_info_with_sectors(4096, 512).validate().is_err(),
+            "logical > physical should be rejected"
+        );
+        assert!(
+            blockdev_info_with_sectors(4096, 1024).validate().is_err(),
+            "logical > physical should be rejected"
+        );
+        assert!(
+            blockdev_info_with_sectors(65536, 512).validate().is_err(),
+            "logical > physical should be rejected"
         );
     }
 }
