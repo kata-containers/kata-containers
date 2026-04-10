@@ -1,7 +1,0 @@
-[
-  {
-    "op": "replace",
-    "path": "/cluster_config/encrypted_emptydir",
-    "value": false
-  }
-]
