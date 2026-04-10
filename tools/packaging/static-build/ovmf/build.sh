@@ -23,6 +23,7 @@ ovmf_version="${ovmf_version:-}"
 ovmf_package="${ovmf_package:-}"
 ovmf_branch="${ovmf_branch:-}"
 package_output_dir="${package_output_dir:-}"
+tdx_reference_value_calculator_url="${tdx_reference_value_calculator_url:-}"
 
 if [ -z "$ovmf_repo" ]; then
 	ovmf_repo=$(get_from_kata_deps ".externals.ovmf.url")
@@ -42,6 +43,7 @@ elif [ "${ovmf_build}" == "tdx" ]; then
 	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.tdx.version")
 	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.tdx.package")
 	[ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps ".externals.ovmf.tdx.package_output_dir")
+	[ -n "$tdx_reference_value_calculator_url" ] || tdx_reference_value_calculator_url=$(get_from_kata_deps ".externals.ovmf.tdx.reference_value_calculator")
 elif [ "${ovmf_build}" == "arm64" ]; then
 	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.arm64.version")
 	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.arm64.package")
@@ -70,6 +72,7 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env ovmf_version="${ovmf_version}" \
 	--env ovmf_package="${ovmf_package}" \
 	--env package_output_dir="${package_output_dir}" \
+	--env tdx_reference_value_calculator_url="${tdx_reference_value_calculator_url}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${ovmf_builder}"

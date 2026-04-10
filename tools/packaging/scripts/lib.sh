@@ -64,6 +64,26 @@ get_repo_hash() {
 	popd >>/dev/null
 }
 
+# Return a version identifier for reference-value keys:
+# - exact tag on HEAD when available
+# - otherwise current commit SHA
+get_reference_value_version() {
+	local repo_dir="${1:-${repo_root_dir}}"
+	local version=""
+
+	if [ -d "${repo_dir}/.git" ]; then
+		version="$(git -C "${repo_dir}" describe --exact-match --tags HEAD 2>/dev/null || true)"
+		if [ -z "${version}" ]; then
+			version="$(git -C "${repo_dir}" rev-parse HEAD)"
+		fi
+	else
+		# Fall back when git metadata is unavailable.
+		version="unknown"
+	fi
+
+	echo "${version}"
+}
+
 arch_to_golang()
 {
 	local -r arch="$1"
