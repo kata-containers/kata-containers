@@ -31,11 +31,11 @@ on:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
 
-      AZ_APPID:
+      AZ_APPID2:
         required: true
-      AZ_TENANT_ID:
+      AZ_TENANT_ID2:
        required: true
-      AZ_SUBSCRIPTION_ID:
+      AZ_SUBSCRIPTION_ID2:
         required: true
       CI_HKD_PATH:
         required: true
@@ -246,9 +246,9 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      AZ_APPID: ${{ secrets.AZ_APPID2 }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID2 }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
 
   run-k8s-tests-on-free-runner:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -314,9 +314,9 @@ jobs:
       tee-test-scope: ${{ inputs.tee-test-scope }}
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      AZ_APPID: ${{ secrets.AZ_APPID2 }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID2 }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
 
   run-k8s-tests-on-zvsi:
