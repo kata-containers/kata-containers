@@ -3411,7 +3411,7 @@ type Storage struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Driver is used to define the way the storage is passed through the
-	// virtual machine. It can be "9p", "blk", or something else, but for
+	// virtual machine. It can be "blk", or something else, but for
 	// all cases, this will define if some extra steps are required before
 	// this storage gets mounted into the container.
 	Driver string `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
@@ -3427,7 +3427,7 @@ type Storage struct {
 	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
 	// Fstype represents the filesystem that needs to be used to mount the
 	// storage inside the VM. For instance, it could be "xfs" for block
-	// device, "9p" for shared filesystem, or "tmpfs" for shared /dev/shm.
+	// device, or "tmpfs" for shared /dev/shm.
 	Fstype string `protobuf:"bytes,4,opt,name=fstype,proto3" json:"fstype,omitempty"`
 	// Options describes the additional options that might be needed to
 	// mount properly the storage filesystem.
