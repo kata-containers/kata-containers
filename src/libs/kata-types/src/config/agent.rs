@@ -146,6 +146,11 @@ pub struct Agent {
     #[serde(default)]
     pub container_pipe_size: u32,
 
+    /// Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+    /// to create their Unix sockets after being spawned by the agent.
+    #[serde(default)]
+    pub launch_process_timeout: u32,
+
     /// Memory agent configuration
     #[serde(default)]
     pub mem_agent: MemAgent,
@@ -180,6 +185,7 @@ impl std::default::Default for Agent {
             health_check_request_timeout_ms: 90_000,
             kernel_modules: Default::default(),
             container_pipe_size: 0,
+            launch_process_timeout: 0,
             mem_agent: MemAgent::default(),
             policy: Default::default(),
         }

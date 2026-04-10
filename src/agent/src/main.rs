@@ -111,8 +111,6 @@ const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 /// TODO: remove this when we move the launch of CDH out of the kata-agent.
 const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
 
-const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
-
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
         // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
@@ -505,7 +503,7 @@ async fn launch_guest_component_procs(
         aa_args,
         Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
-        DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+        config.launch_process_timeout.as_secs(),
         &[],
     )
     .await
@@ -527,7 +525,7 @@ async fn launch_guest_component_procs(
         vec![],
         Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
-        DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+        config.launch_process_timeout.as_secs(),
         &[("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH)],
     )
     .await
@@ -587,7 +585,7 @@ async fn init_attestation_components(
     Ok(())
 }
 
-async fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+async fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: u64) -> Result<()> {
     let p = Path::new(path);
     let mut attempts = 0;
     loop {
@@ -614,7 +612,7 @@ async fn launch_process(
     mut args: Vec<&str>,
     config: Option<&str>,
     unix_socket_path: &str,
-    timeout_secs: i32,
+    timeout_secs: u64,
     envs: &[(&str, &str)],
 ) -> Result<()> {
     if !Path::new(path).exists() {

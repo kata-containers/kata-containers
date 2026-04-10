@@ -224,12 +224,13 @@ func (r runtime) emptyDirMode() (string, error) {
 }
 
 type agent struct {
-	KernelModules       []string `toml:"kernel_modules"`
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
-	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
-	DialTimeout         uint32   `toml:"dial_timeout"`
-	CdhApiTimeout       uint32   `toml:"cdh_api_timeout"`
+	KernelModules        []string `toml:"kernel_modules"`
+	Debug                bool     `toml:"enable_debug"`
+	Tracing              bool     `toml:"enable_tracing"`
+	DebugConsoleEnabled  bool     `toml:"debug_console_enabled"`
+	DialTimeout          uint32   `toml:"dial_timeout"`
+	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
+	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
 }
 
 func (orig *tomlConfig) Clone() tomlConfig {
@@ -796,6 +797,10 @@ func (a agent) dialTimout() uint32 {
 
 func (a agent) cdhApiTimout() uint32 {
 	return a.CdhApiTimeout
+}
+
+func (a agent) launchProcessTimeout() uint32 {
+	return a.LaunchProcessTimeout
 }
 
 func (a agent) debug() bool {
@@ -1464,13 +1469,14 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for _, agent := range tomlConf.Agent {
 		config.AgentConfig = vc.KataAgentConfig{
-			LongLiveConn:       true,
-			Debug:              agent.debug(),
-			Trace:              agent.trace(),
-			KernelModules:      agent.kernelModules(),
-			EnableDebugConsole: agent.debugConsoleEnabled(),
-			DialTimeout:        agent.dialTimout(),
-			CdhApiTimeout:      agent.cdhApiTimout(),
+			LongLiveConn:         true,
+			Debug:                agent.debug(),
+			Trace:                agent.trace(),
+			KernelModules:        agent.kernelModules(),
+			EnableDebugConsole:   agent.debugConsoleEnabled(),
+			DialTimeout:          agent.dialTimout(),
+			CdhApiTimeout:        agent.cdhApiTimout(),
+			LaunchProcessTimeout: agent.launchProcessTimeout(),
 		}
 	}
 

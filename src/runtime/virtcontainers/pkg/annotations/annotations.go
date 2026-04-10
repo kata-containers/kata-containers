@@ -334,11 +334,13 @@ const (
 	AgentTrace = kataAnnotAgentPrefix + "enable_tracing"
 
 	// AgentContainerPipeSize is an annotation to specify the size of the pipes created for containers
-	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
-	ContainerPipeSizeOption      = "container_pipe_size"
-	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
-	CdhApiTimeoutOption          = "cdh_api_timeout"
-	CdhApiTimeoutKernelParam     = "agent." + CdhApiTimeoutOption
+	AgentContainerPipeSize          = kataAnnotAgentPrefix + ContainerPipeSizeOption
+	ContainerPipeSizeOption         = "container_pipe_size"
+	ContainerPipeSizeKernelParam    = "agent." + ContainerPipeSizeOption
+	CdhApiTimeoutOption             = "cdh_api_timeout"
+	CdhApiTimeoutKernelParam        = "agent." + CdhApiTimeoutOption
+	LaunchProcessTimeoutOption      = "launch_process_timeout"
+	LaunchProcessTimeoutKernelParam = "agent." + LaunchProcessTimeoutOption
 
 	// Policy is an annotation containing the contents of an agent policy file, base64 encoded.
 	Policy = kataAnnotAgentPrefix + "policy"

@@ -565,6 +565,11 @@ dial_timeout_ms = 10
 # (default: 3000)
 reconnect_timeout_ms = 3000
 
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# (agent default when unset: 6)
+launch_process_timeout = 6
+
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
 # It's also used to ensure that workloads, especially those involving large image pulls within the guest,
