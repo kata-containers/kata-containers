@@ -16,12 +16,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
+use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::create_mount_destination;
+use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use slog::Logger;
@@ -341,8 +343,30 @@ async fn wait_and_mount_layer(
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
 ) -> Result<()> {
-    let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
-    let dev_path = get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?;
+    info!(
+        logger,
+        "Waiting for layer device";
+        "device" => &layer.source,
+        "driver" => &layer.driver,
+        "mount-point" => layer_mount.display(),
+    );
+    let dev_path = match layer.driver.as_str() {
+        DRIVER_SCSI_TYPE => {
+            // For SCSI devices, we need to wait for the device to appear and get its path before mounting.
+            get_scsi_device_name(sandbox, &layer.source).await?
+        }
+        DRIVER_BLK_PCI_TYPE => {
+            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
+            get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
+        }
+        _ => {
+            // For non-SCSI devices, we can assume the source is directly mountable.
+            return Err(anyhow!(
+                "unsupported driver type '{}' for multi-layer erofs",
+                layer.driver
+            ));
+        }
+    };
 
     info!(
         logger,
