@@ -69,6 +69,7 @@ snapshotter:
 #       runtimeClass:
 #         nodeSelector:              # extra node selectors added to the RuntimeClass
 #           example.io/feature: "true"
+#         overheadEnabled: true      # enable/disable overhead in RuntimeClass (default: inherits from runtimeClasses.overheadEnabled)
 #         overhead:                  # override pod overhead (falls back to built-in defaults)
 #           memory: "160Mi"
 #           cpu: "250m"
@@ -344,6 +345,10 @@ runtimeClasses:
   enabled: true
   createDefault: false
   defaultName: "kata"
+  # Global switch for overhead in all RuntimeClasses (default: true)
+  # Set to false to disable overhead for all shims globally.
+  # Individual shims can override this via shims.<name>.runtimeClass.overheadEnabled
+  overheadEnabled: true
 
 env:
   installationPrefix: ""
