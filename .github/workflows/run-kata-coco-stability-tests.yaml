@@ -122,10 +122,6 @@ jobs:
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
 
-      - name: Deploy Snapshotter
-        timeout-minutes: 5
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
-
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks

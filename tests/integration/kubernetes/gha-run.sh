@@ -442,42 +442,6 @@ function cleanup() {
 	cleanup_kata_deploy
 }
 
-function deploy_snapshotter() {
-	if is_tdx_hypervisor "${KATA_HYPERVISOR}" || is_snp_hypervisor "${KATA_HYPERVISOR}"; then
-		echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
-		return
-	fi
-
-	echo "::group::Deploying ${SNAPSHOTTER}"
-	case ${SNAPSHOTTER} in
-		nydus) deploy_nydus_snapshotter ;;
-		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
-	esac
-	echo "::endgroup::"
-}
-
-function cleanup_snapshotter() {
-	if is_tdx_hypervisor "${KATA_HYPERVISOR}" || is_snp_hypervisor "${KATA_HYPERVISOR}"; then
-		echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
-		return
-	fi
-
-	echo "::group::Cleanuping ${SNAPSHOTTER}"
-	case ${SNAPSHOTTER} in
-		nydus) cleanup_nydus_snapshotter ;;
-		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
-	esac
-	echo "::endgroup::"
-}
-
-function deploy_nydus_snapshotter() {
-	echo "nydus-for-kata-tee is now deployed and managed by kata-deploy; nothing to do here."
-}
-
-function cleanup_nydus_snapshotter() {
-	echo "nydus-for-kata-tee is now deployed and managed by kata-deploy; nothing to do here."
-}
-
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
@@ -518,7 +482,6 @@ function main() {
 		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
-		deploy-snapshotter) deploy_snapshotter ;;
 		report-tests) report_tests ;;
 		run-tests)
 			K8STESTS=run_kubernetes_tests.sh
@@ -535,7 +498,6 @@ function main() {
 		cleanup-kubeadm) cleanup "kubeadm" ;;
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
-		cleanup-snapshotter) cleanup_snapshotter ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
