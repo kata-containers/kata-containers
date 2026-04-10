@@ -139,7 +139,7 @@ async-trait = "0.1.48"
 capctl = "0.2.0"
 cfg-if = "1.0.0"
 cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
-clap = { version = "4.5.40", features = ["derive"] }
+clap = { version = "4.5.60", features = ["derive"] }
 const_format = "0.2.30"
 containerd-shim = { version = "0.10.0", features = ["async"] }
 containerd-shim-protos = { version = "0.10.0", features = ["async"] }
