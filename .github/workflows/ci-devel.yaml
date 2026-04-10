@@ -21,9 +21,9 @@ jobs:
 
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      AZ_APPID: ${{ secrets.AZ_APPID2 }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID2 }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
       CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
