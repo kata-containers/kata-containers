@@ -60,6 +60,9 @@ pub struct Storage {
     pub fs_group: Option<FSGroup>,
     pub options: Vec<String>,
     pub mount_point: String,
+    /// When true the agent keeps this storage alive for the entire sandbox
+    /// lifetime and does not tear it down when an individual container exits.
+    pub shared: bool,
 }
 
 #[derive(PartialEq, Clone, Default)]

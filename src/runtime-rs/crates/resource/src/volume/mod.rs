@@ -6,6 +6,7 @@
 
 mod block_volume;
 mod default_volume;
+pub(crate) mod encrypted_emptydir_volume;
 mod ephemeral_volume;
 pub mod hugepage;
 mod local_volume;
@@ -24,6 +25,9 @@ use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use encrypted_emptydir_volume::{
+    is_encrypted_emptydir_volume, remove_volume_mount_info, EncryptedEmptyDirVolume, EphemeralDisk,
+};
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::get_mount_options;
 use oci_spec::runtime as oci;
@@ -44,14 +48,24 @@ pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
 }
 
-#[derive(Default)]
 pub struct VolumeResource {
     inner: Arc<RwLock<VolumeResourceInner>>,
-    // The core purpose of introducing `volume_manager` to `VolumeResource` is to centralize the management of shared file system volumes.
-    // By creating a single VolumeManager instance within VolumeResource, all shared file volumes are managed by one central entity.
-    // This single volume_manager can accurately track the references of all ShareFsVolume instances to the shared volumes,
-    // ensuring correct reference counting, proper volume lifecycle management, and preventing issues like volumes being overwritten.
+    // The core purpose of introducing `volume_manager` to `VolumeResource` is to centralize
+    // the management of shared file system volumes.  By creating a single VolumeManager
+    // instance within VolumeResource, all shared file volumes are managed by one central
+    // entity.  This single volume_manager can accurately track the references of all
+    // ShareFsVolume instances to the shared volumes, ensuring correct reference counting,
+    // proper volume lifecycle management, and preventing issues like volumes being overwritten.
     volume_manager: Arc<VolumeManager>,
+    // Tracks block-encrypted emptyDir disks that were created during the sandbox lifetime.
+    // Populated by handler_volumes(); drained by cleanup_ephemeral_disks() at sandbox teardown.
+    ephemeral_disks: Arc<RwLock<Vec<EphemeralDisk>>>,
+}
+
+impl Default for VolumeResource {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VolumeResource {
@@ -59,9 +73,11 @@ impl VolumeResource {
         Self {
             inner: Arc::new(RwLock::new(VolumeResourceInner::default())),
             volume_manager: Arc::new(VolumeManager::new()),
+            ephemeral_disks: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn handler_volumes(
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
@@ -70,6 +86,7 @@ impl VolumeResource {
         d: &RwLock<DeviceManager>,
         sid: &str,
         agent: Arc<dyn Agent>,
+        emptydir_mode: &str,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts().clone().unwrap_or_default();
@@ -77,7 +94,15 @@ impl VolumeResource {
         // handle mounts
         for m in oci_mounts {
             let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
-            let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
+            let volume: Arc<dyn Volume> = if is_encrypted_emptydir_volume(m, emptydir_mode) {
+                // Block-encrypted Kubernetes emptyDir: plug a LUKS2-encrypted
+                // virtio-blk disk and let CDH format/mount it in the guest.
+                Arc::new(
+                    EncryptedEmptyDirVolume::new(d, m, sid, self.ephemeral_disks.clone())
+                        .await
+                        .with_context(|| format!("new encrypted emptyDir volume {m:?}"))?,
+                )
+            } else if shm_volume::is_shm_volume(m) {
                 Arc::new(
                     shm_volume::ShmVolume::new(m)
                         .with_context(|| format!("new shm volume {m:?}"))?,
@@ -148,6 +173,37 @@ impl VolumeResource {
         }
 
         Ok(volumes)
+    }
+
+    /// Removes host-side `disk.img` files and `mountInfo.json` directories for
+    /// all block-encrypted emptyDir volumes created during this sandbox's lifetime.
+    ///
+    /// Must be called once at sandbox teardown, after the VM has stopped.
+    pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
+        let mut disks = self.ephemeral_disks.write().await;
+        for disk in disks.drain(..) {
+            // Remove the sparse disk image.
+            match std::fs::remove_file(&disk.disk_path) {
+                Ok(()) => {
+                    info!(sl!(), "removed ephemeral disk {}", disk.disk_path);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    warn!(
+                        sl!(),
+                        "failed to remove ephemeral disk {}: {}", disk.disk_path, e
+                    );
+                }
+            }
+            // Remove the direct-volume mountInfo.json directory.
+            if let Err(e) = remove_volume_mount_info(&disk.source_path) {
+                warn!(
+                    sl!(),
+                    "failed to remove mountInfo.json for {}: {}", disk.source_path, e
+                );
+            }
+        }
+        Ok(())
     }
 
     pub async fn dump(&self) {

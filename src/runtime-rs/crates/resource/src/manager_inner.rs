@@ -408,6 +408,7 @@ impl ResourceManagerInner {
                 self.device_manager.as_ref(),
                 &self.sid,
                 self.agent.clone(),
+                &self.toml_config.runtime.emptydir_mode,
             )
             .await
     }
@@ -667,6 +668,13 @@ impl ResourceManagerInner {
         if let Some(swap) = self.swap_resource.as_ref() {
             swap.clean().await;
         }
+
+        // Remove host-side disk images and direct-volume metadata for any
+        // block-encrypted emptyDir volumes created during this sandbox lifetime.
+        self.volume_resource
+            .cleanup_ephemeral_disks()
+            .await
+            .context("cleanup block-encrypted emptyDir disks")?;
 
         // TODO cleanup other resources
         Ok(())

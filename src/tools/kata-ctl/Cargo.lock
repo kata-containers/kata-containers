@@ -3768,6 +3768,7 @@ dependencies = [
  "agent",
  "anyhow",
  "async-trait",
+ "base64 0.13.1",
  "byte-unit",
  "cgroups-rs",
  "flate2",

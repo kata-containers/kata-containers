@@ -114,6 +114,7 @@ impl From<Storage> for agent::Storage {
             fs_group: from_option(from.fs_group),
             options: trans_vec(from.options),
             mount_point: from.mount_point,
+            shared: from.shared,
             ..Default::default()
         }
     }

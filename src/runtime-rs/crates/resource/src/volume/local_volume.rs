@@ -75,6 +75,7 @@ impl LocalStorage {
             fs_group: None,
             options: dir_options,
             mount_point: source.clone(),
+            shared: false,
         };
 
         let mounts: Vec<oci::Mount> = if sid != cid {
