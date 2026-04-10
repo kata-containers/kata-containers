@@ -1,25 +1,23 @@
 #!/usr/bin/env bash
 # Copyright 2022-2023 Advanced Micro Devices, Inc.
 # Copyright 2023 Intel Corporation
+# Copyright 2026 IBM Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 source "${BATS_TEST_DIRNAME}/tests_common.sh"
 source "${BATS_TEST_DIRNAME}/../../common.bash"
+source "${BATS_TEST_DIRNAME}/../../hypervisor_helpers.sh"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
-
-SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
-SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
-SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
 
 	export SSH_KEY_FILE="${pod_config_dir}/confidential/unencrypted/ssh/unencrypted"
 
-	if [ -n "${GH_PR_NUMBER}" ]; then
+	if [[ -n "${GH_PR_NUMBER}" ]]; then
 		# Use correct address in pod yaml
 		sed -i "s/-nightly/-${GH_PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
 	fi
@@ -32,89 +30,37 @@ function setup_unencrypted_confidential_pod() {
 # and returns the remote command to be executed to that specific hypervisor
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
-	case "${KATA_HYPERVISOR}" in
-		qemu-se*)
-			echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
-			;;
-		qemu-snp|qemu-snp-runtime-rs)
-			echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
-			;;
-		qemu-tdx)
-			echo "cpuid | grep TDX_GUEST"
-			;;
-		*)
-			echo ""
-			;;
-	esac
-}
-
-# This function verifies whether the input hypervisor supports confidential tests and
-# relies on `KATA_HYPERVISOR` being an environment variable
-function check_hypervisor_for_confidential_tests() {
-	local kata_hypervisor="${1}"
-	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
-	# having substrings, like qemu, being matched with qemu-$something.
-	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
-	[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
-		return 0
+	if is_se_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
+	elif is_snp_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
+	elif is_tdx_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "cpuid | grep TDX_GUEST"
+	elif is_cca_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "echo 'Remote TEE verification is not implemented for qemu-cca' >&2; exit 1"
 	else
-		return 1
+		echo ""
 	fi
-}
-
-# This function verifies whether the input hypervisor supports confidential tests and
-# relies on `KATA_HYPERVISOR` being an environment variable
-function check_hypervisor_for_confidential_tests_tee_only() {
-	local kata_hypervisor="${1}"
-	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
-	# having substrings, like qemu, being matched with qemu-$something.
-	# shellcheck disable=SC2076 # intentionally use literal string matching
-	if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
-		return 0
-	fi
-
-	return 1
-}
-
-# This function verifies whether the input hypervisor supports confidential GPU tests
-function check_hypervisor_for_confidential_gpu_tests() {
-	local kata_hypervisor="${1}"
-	# This check must be done with "<SPACE>${kata_hypervisor}<SPACE>" to avoid
-	# having substrings being matched incorrectly.
-	# shellcheck disable=SC2076 # intentionally use literal string matching
-	if [[ " ${SUPPORTED_GPU_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
-		return 0
-	fi
-
-	return 1
-}
-
-# Common check for confidential tests.
-function is_confidential_runtime_class() {
-	if check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
-		return 0
-	fi
-
-	return 1
-}
-
-# Common check for confidential hardware tests.
-function is_confidential_hardware() {
-	if check_hypervisor_for_confidential_tests_tee_only "${KATA_HYPERVISOR}"; then
-		return 0
-	fi
-
-	return 1
 }
 
 # Common check for confidential GPU hardware tests.
 function is_confidential_gpu_hardware() {
-	if check_hypervisor_for_confidential_gpu_tests "${KATA_HYPERVISOR}"; then
+	if is_confidential_gpu_hypervisor "${KATA_HYPERVISOR}"; then
 		return 0
 	fi
 
 	return 1
 }
+
+supports_hotplug() {
+	local hypervisor="$1"
+	# Confidential computing hypervisors don't support hotplug
+	if is_confidential_runtime_class "${hypervisor}"; then
+		return 1
+	fi
+	return 0
+}
+
 
 # create_loop_device creates a loop device backed by a file.
 # $1: loop file path (default: /tmp/trusted-image-storage.img)
