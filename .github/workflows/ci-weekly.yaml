@@ -120,9 +120,9 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      AZ_APPID: ${{ secrets.AZ_APPID2 }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID2 }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
+      AZ_APPID2: ${{ secrets.AZ_APPID2 }}
+      AZ_TENANT_ID2: ${{ secrets.AZ_TENANT_ID2 }}
+      AZ_SUBSCRIPTION_ID2: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
     permissions:
       contents: read
       id-token: write
