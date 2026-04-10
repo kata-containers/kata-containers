@@ -405,7 +405,7 @@ jobs:
       KBS_INGRESS: ""
       KUBERNETES: "vanilla"
       CONTAINER_ENGINE: "containerd"
-      CONTAINER_ENGINE_VERSION: "active"
+      CONTAINER_ENGINE_VERSION: "v2.3"
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
