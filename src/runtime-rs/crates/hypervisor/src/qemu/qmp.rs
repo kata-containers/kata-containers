@@ -697,15 +697,18 @@ impl Qmp {
         let blockdev_options = match format {
             "raw" => {
                 // Use raw format for regular block devices
+                // Note: For read-only raw files (e.g., EROFS images), we need to set
+                // read_only and force_share on the format driver to avoid lock conflicts
+                // with other processes that may have the file open.
                 BlockdevOptions::raw {
                     base: BlockdevOptionsBase {
                         detect_zeroes: None,
                         cache: None,
                         discard: None,
-                        force_share: None,
+                        force_share: if is_readonly { Some(true) } else { None },
                         auto_read_only: None,
                         node_name: Some(node_name.clone()),
-                        read_only: None,
+                        read_only: Some(is_readonly),
                     },
                     raw: BlockdevOptionsRaw {
                         base: BlockdevOptionsGenericFormat {
@@ -717,21 +720,21 @@ impl Qmp {
                 }
             }
             "vmdk" => {
-                // Use VMDK format driver for VMDK descriptor files
-                // The VMDK driver will parse the descriptor and handle multi-extent files
                 info!(
                     sl!(),
-                    "hotplug_block_device: using VMDK format driver for {}", path_on_host
+                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                    path_on_host,
+                    is_readonly
                 );
                 BlockdevOptions::vmdk {
                     base: BlockdevOptionsBase {
                         detect_zeroes: None,
                         cache: None,
                         discard: None,
-                        force_share: None,
+                        force_share: Some(true),
                         auto_read_only: None,
                         node_name: Some(node_name.clone()),
-                        read_only: None,
+                        read_only: Some(is_readonly), // must be true for VMDK to avoid exclusive locks on extents
                     },
                     vmdk: BlockdevOptionsGenericCOWFormat {
                         base: BlockdevOptionsGenericFormat {

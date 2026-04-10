@@ -457,6 +457,7 @@ impl ErofsMultiLayerRootfs {
                         driver_option: block_driver.clone(),
                         format: erofs_format, // Vmdk for multiple devices, Raw for single device
                         path_on_host: erofs_path,
+                        is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
                         ..Default::default()
                     };
