@@ -717,14 +717,16 @@ impl Qmp {
             BlockDeviceFormat::Vmdk => {
                 info!(
                     sl!(),
-                    "hotplug_block_device: using VMDK format driver for {}", path_on_host
+                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                    path_on_host,
+                    is_readonly
                 );
                 BlockdevOptions::vmdk {
                     base: BlockdevOptionsBase {
                         detect_zeroes: None,
                         cache: None,
                         discard: None,
-                        force_share: None,
+                        force_share: Some(true),
                         auto_read_only: None,
                         node_name: Some(node_name.clone()),
                         read_only: Some(is_readonly),
