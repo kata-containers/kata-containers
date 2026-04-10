@@ -47,12 +47,12 @@ pub async fn configure_erofs_snapshotter(
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
-        "true",
+        "false",
     )?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
-        "true",
+        "false",
     )?;
     toml_utils::set_toml_value(
         configuration_file,
