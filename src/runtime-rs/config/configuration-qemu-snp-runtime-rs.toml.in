@@ -695,6 +695,18 @@ sandbox_bind_mounts = @DEFBINDMOUNTS@
 #
 vfio_mode = "@DEFVFIOMODE@"
 
+# Controls how Kubernetes emptyDir volumes are handled:
+#
+#   - "shared-fs" (default): shares the emptyDir folder with the guest via
+#     the shared filesystem backend.
+#
+#   - "block-encrypted": plugs a sparse disk image as a virtio-blk device
+#     and has the kata-agent format and mount it with LUKS2 encryption via
+#     the Confidential Data Hub (CDH).  This is the recommended setting for
+#     confidential computing variants.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
+
 # If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
 disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
