@@ -82,7 +82,7 @@ auto_generate_policy_enabled() {
 
 is_coco_platform() {
 	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp")
+		"qemu-tdx"|"qemu-snp"|"qemu-snp-runtime-rs"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp")
 			return 0
 			;;
 		*)
@@ -148,7 +148,7 @@ install_genpolicy_drop_ins() {
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 
@@ -340,7 +340,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx" "qemu-coco-dev-runtime-rs")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-coco-dev-runtime-rs")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then

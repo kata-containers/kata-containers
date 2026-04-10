@@ -635,7 +635,7 @@ function helm_helper() {
 					base_values_file="${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml"
 				fi
 				;;
-			qemu-snp|qemu-tdx|qemu-se|qemu-se-runtime-rs|qemu-cca|qemu-coco-dev|qemu-coco-dev-runtime-rs)
+			qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-se|qemu-se-runtime-rs|qemu-cca|qemu-coco-dev|qemu-coco-dev-runtime-rs)
 				# Use TEE example file
 				if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
 					base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"

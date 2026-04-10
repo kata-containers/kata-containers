@@ -9,14 +9,18 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
-# Currently only the Go runtime provides the config path used here.
-# If a Rust hypervisor runs this test, mirror the enabling_hypervisor
-# pattern in tests/common.bash to select the correct runtime-rs config.
-shim_config_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
+case "${KATA_HYPERVISOR}" in
+	*-runtime-rs)
+		shim_config_file="/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
+		;;
+	*)
+		shim_config_file="/opt/kata/share/defaults/kata-containers/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
+		;;
+esac
 
 check_and_skip() {
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-coco-dev|qemu-snp)
+		qemu-tdx|qemu-coco-dev|qemu-snp|qemu-snp-runtime-rs)
 			if [ "$(uname -m)" == "s390x" ]; then
 				skip "measured rootfs tests not implemented for s390x"
 			fi
