@@ -89,7 +89,6 @@ build-shim-rust-amd64:
   tags: [ "arch:amd64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - ln -sf /usr/bin/g++ /usr/local/bin/x86_64-linux-musl-g++
     - rustup target add x86_64-unknown-linux-musl
     - cd src/runtime-rs
     - make clean-generated-files
@@ -106,7 +105,6 @@ build-shim-rust-arm64:
   tags: [ "arch:arm64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - ln -sf /usr/bin/g++ /usr/local/bin/aarch64-linux-musl-g++
     - rustup target add aarch64-unknown-linux-musl
     - cd src/runtime-rs
     - make clean-generated-files
