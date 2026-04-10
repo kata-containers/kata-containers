@@ -9,6 +9,7 @@
 //! This module depends on kubelet internal implementation details, a better way is needed
 //! to detect K8S EmptyDir medium type from `oci::spec::Mount` objects.
 
+use kata_types::config::{EMPTYDIR_MODE_BLOCK_ENCRYPTED, EMPTYDIR_MODE_SHARED_FS};
 use kata_types::mount;
 use oci_spec::runtime::{Mount, Spec};
 
@@ -58,7 +59,22 @@ pub fn is_host_empty_dir(path: &str) -> bool {
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_dir: bool) {
+//
+// When emptydir_mode is "block-encrypted", host emptyDir mounts are left as
+// "bind" so that the volume dispatch layer can route them to the
+// EncryptedEmptyDirVolume handler instead of the local-storage path.
+pub fn update_ephemeral_storage_type(
+    oci_spec: &mut Spec,
+    disable_guest_empty_dir: bool,
+    emptydir_mode: &str,
+) {
+    // Treat an empty/unknown value the same as the default.
+    let mode = if emptydir_mode.is_empty() {
+        EMPTYDIR_MODE_SHARED_FS
+    } else {
+        emptydir_mode
+    };
+
     if let Some(mounts) = oci_spec.mounts_mut() {
         for m in mounts.iter_mut() {
             if let Some(typ) = &m.typ() {
@@ -73,7 +89,13 @@ pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_di
                 if is_ephemeral_volume(m) {
                     m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
                 }
-                if is_host_empty_dir(mnt_src) && !disable_guest_empty_dir {
+                // Only rewrite host emptyDirs to "local" when NOT using
+                // block-encrypted mode.  In block-encrypted mode the mount stays
+                // as "bind" and is handled downstream by EncryptedEmptyDirVolume.
+                if is_host_empty_dir(mnt_src)
+                    && !disable_guest_empty_dir
+                    && mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+                {
                     m.set_typ(Some(mount::KATA_K8S_LOCAL_STORAGE_TYPE.to_string()));
                 }
             }
