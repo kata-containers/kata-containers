@@ -19,7 +19,7 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfig, BlockDeviceAio, BlockDeviceFormat,
+    BlockConfig, BlockDeviceAio, BlockDeviceFormat, KATA_SCSI_DEV_TYPE,
 };
 use kata_types::device::{
     DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
@@ -305,6 +305,13 @@ fn extract_block_device_info(
                     pci_path.to_string()
                 } else {
                     return Err(anyhow!("block driver is blk but no pci path exists"));
+                }
+            }
+            KATA_SCSI_DEV_TYPE => {
+                if let Some(scsi_addr) = device.config.scsi_addr {
+                    scsi_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
                 }
             }
             KATA_CCW_DEV_TYPE => {
