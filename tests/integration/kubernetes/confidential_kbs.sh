@@ -8,7 +8,7 @@
 #
 set -e
 
-kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+kubernetes_dir="${kubernetes_dir:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091

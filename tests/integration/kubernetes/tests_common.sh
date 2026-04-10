@@ -8,6 +8,7 @@
 # which will contain the Kata Containers installation into a given destination
 # directory.
 #
+
 # This contains variables and functions common to all e2e tests.
 
 # Variables used by the kubernetes tests
@@ -34,6 +35,8 @@ export dragonball_limitations="https://github.com/kata-containers/kata-container
 export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
+
+source "${K8S_TEST_DIR}/../../gha-run-k8s-common.sh"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
@@ -81,13 +84,7 @@ auto_generate_policy_enabled() {
 }
 
 is_coco_platform() {
-	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|"qemu-snp-runtime-rs"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp")
-			return 0
-			;;
-		*)
-			return 1
-	esac
+	is_confidential_runtime_class "${KATA_HYPERVISOR}"
 }
 
 is_nvidia_gpu_platform() {
@@ -148,7 +145,7 @@ install_genpolicy_drop_ins() {
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 

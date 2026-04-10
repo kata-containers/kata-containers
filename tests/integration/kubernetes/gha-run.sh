@@ -11,7 +11,7 @@ set -o pipefail
 DEBUG="${DEBUG:-}"
 [[ -n "${DEBUG}" ]] && set -x
 
-kubernetes_dir="$(dirname "$(readlink -f "$0")")"
+kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/confidential_kbs.sh"
@@ -186,15 +186,11 @@ function deploy_kata() {
 	set_default_cluster_namespace
 
 	# Workaround to avoid modifying the workflow yaml files
-	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-snp|qemu-snp-runtime-rs|qemu-nvidia-gpu-*)
-			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
-			SNAPSHOTTER="nydus"
-			EXPERIMENTAL_FORCE_GUEST_PULL=false
-			;;
-		*)
-			;;
-	esac
+	if is_tdx_hypervisor "${KATA_HYPERVISOR}" || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_confidential_gpu_hypervisor "${KATA_HYPERVISOR}"; then
+		USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
+		SNAPSHOTTER="nydus"
+		EXPERIMENTAL_FORCE_GUEST_PULL=false
+	fi
 
 	ANNOTATIONS="default_vcpus"
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
@@ -447,9 +443,9 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]]; then
-	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
-	       return
+	if is_tdx_hypervisor "${KATA_HYPERVISOR}" || is_snp_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
+		return
 	fi
 
 	echo "::group::Deploying ${SNAPSHOTTER}"
@@ -461,9 +457,9 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ]]; then
-	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
-	       return
+	if is_tdx_hypervisor "${KATA_HYPERVISOR}" || is_snp_hypervisor "${KATA_HYPERVISOR}"; then
+		echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
+		return
 	fi
 
 	echo "::group::Cleanuping ${SNAPSHOTTER}"
