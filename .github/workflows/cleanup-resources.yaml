@@ -23,9 +23,9 @@ jobs:
       - name: Log into Azure
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
         with:
-          client-id: ${{ secrets.AZ_APPID }}
-          tenant-id: ${{ secrets.AZ_TENANT_ID }}
-          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZ_APPID2 }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID2 }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
 
       - name: Install Python dependencies
         run: |
@@ -35,6 +35,6 @@ jobs:
 
       - name: Cleanup resources
         env:
-          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID2 }}
           CLEANUP_AFTER_HOURS: 24 # Clean up resources created more than this many hours ago.
         run: python3 tests/cleanup_resources.py
