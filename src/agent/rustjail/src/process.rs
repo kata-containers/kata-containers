@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use libc::pid_t;
+use libc::{pid_t, pid_t as libc_pid_t};
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
 use tokio_vsock::VsockStream;
 
@@ -14,6 +14,11 @@ use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd::{self, Pid};
 use nix::Result;
+
+// pidfd_open syscall wrapper (Linux 5.3+)
+pub extern "C" fn pidfd_open(pid: libc_pid_t, flags: libc::c_int) -> libc::c_int {
+    unsafe { libc::syscall(libc::SYS_pidfd_open, pid, flags) as libc::c_int }
+}
 
 use oci::Process as OCIProcess;
 use oci_spec::runtime as oci;
@@ -93,6 +98,8 @@ pub struct Process {
     // pid of the init/exec process. since we have no command
     // struct to store pid, we must store pid here.
     pub pid: pid_t,
+    // PIDFD for process management (Linux 5.3+)
+    pub pidfd: Option<RawFd>,
 
     pub exit_code: i32,
     pub exit_watchers: Vec<Sender<i32>>,
@@ -108,6 +115,7 @@ pub struct Process {
 
 pub trait ProcessOperations {
     fn pid(&self) -> Pid;
+    fn pidfd(&self) -> Option<RawFd>;
     fn wait(&self) -> Result<WaitStatus>;
     fn signal(&self, sig: libc::c_int) -> Result<()>;
 }
@@ -117,14 +125,58 @@ impl ProcessOperations for Process {
         Pid::from_raw(self.pid)
     }
 
+    fn pidfd(&self) -> Option<RawFd> {
+        self.pidfd
+    }
+
     fn wait(&self) -> Result<WaitStatus> {
-        wait::waitpid(Some(self.pid()), None)
+        if let Some(pidfd) = self.pidfd() {
+            // Use pidfd-based wait for better security and reliability
+            // Use waitid with pidfd (Linux 5.3+)
+            let mut status: libc::c_int = 0;
+            let res = unsafe {
+                libc::syscall(
+                    libc::SYS_waitid,
+                    libc::P_PIDFD as libc::c_int,
+                    pidfd as libc::c_int,
+                    &mut status as *mut _ as libc::c_int,
+                    libc::WEXITED as libc::c_int,
+                    std::ptr::null_mut::<libc::c_void>(),
+                )
+            };
+
+            if res == 0 {
+                // Convert waitid result to nix WaitStatus
+                let wstatus = nix::sys::wait::WaitStatus::from_raw(self.pid(), status)?;
+                Ok(wstatus)
+            } else {
+                Err(Errno::from_i32(res as i32))
+            }
+        } else {
+            // Fallback to traditional pid-based wait
+            wait::waitpid(Some(self.pid()), None)
+        }
     }
 
     fn signal(&self, sig: libc::c_int) -> Result<()> {
-        let res = unsafe { libc::kill(self.pid().into(), sig) };
+        if let Some(pidfd) = self.pidfd() {
+            // Use pidfd-based signal for better error handling
+            let res = unsafe {
+                libc::syscall(
+                    libc::SYS_pidfd_send_signal,
+                    pidfd,
+                    sig,
+                    std::ptr::null_mut::<libc::c_void>(),
+                    0,
+                )
+            };
 
-        Errno::result(res).map(drop)
+            Err(Errno::from_i32(res as i32))
+        } else {
+            // Fallback to traditional pid-based signal
+            let res = unsafe { libc::kill(self.pid().into(), sig) };
+            Err(Errno::from_i32(res))
+        }
     }
 }
 
@@ -155,6 +207,7 @@ impl Process {
             parent_stderr: None,
             init,
             pid: -1,
+            pidfd: None,
             exit_code: 0,
             exit_watchers: Vec::new(),
             oci: ocip.clone(),
@@ -197,7 +250,19 @@ impl Process {
                 p.stderr = Some(stderr);
             }
         }
+
         Ok(p)
+    }
+
+    /// Set the PIDFD for this process. This should be called after fork when the process
+    /// has been created successfully.
+    pub fn set_pidfd(&mut self, pidfd: RawFd) {
+        self.pidfd = Some(pidfd);
+    }
+
+    /// Get the PIDFD for this process. Returns None if PIDFD is not available or not set.
+    pub fn get_pidfd(&self) -> Option<RawFd> {
+        self.pidfd
     }
 
     pub fn notify_term_close(&mut self) {
@@ -222,6 +287,11 @@ impl Process {
         close_process_stream!(self, parent_stdout, ParentStdout);
         close_process_stream!(self, parent_stderr, ParentStderr);
         close_process_stream!(self, term_master, TermMaster);
+
+        // Close pidfd if present
+        if let Some(pidfd) = self.pidfd.take() {
+            let _ = unsafe { std::os::unix::io::OwnedFd::from_raw_fd(pidfd) };
+        }
 
         self.notify_term_close();
     }

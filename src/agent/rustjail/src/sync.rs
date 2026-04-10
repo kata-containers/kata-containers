@@ -7,11 +7,12 @@ use nix::unistd;
 use std::mem;
 use std::os::unix::io::RawFd;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 pub const SYNC_SUCCESS: i32 = 1;
 pub const SYNC_FAILED: i32 = 2;
 pub const SYNC_DATA: i32 = 3;
+pub const SYNC_PIDFD_AVAILABLE: i32 = 4;
 
 pub const DATA_SIZE: usize = 100;
 pub const MSG_SIZE: usize = mem::size_of::<i32>();
@@ -104,6 +105,13 @@ pub fn read_sync(fd: RawFd) -> Result<Vec<u8>> {
 
             Ok(data_buf)
         }
+        SYNC_PIDFD_AVAILABLE => {
+            let buf = read_count(fd, MSG_SIZE)?;
+            let buf_array: [u8; MSG_SIZE] = [buf[0], buf[1], buf[2], buf[3]];
+            let available: i32 = i32::from_be_bytes(buf_array);
+
+            Ok(available.to_be_bytes().to_vec())
+        }
         SYNC_FAILED => {
             let mut error_buf = vec![];
             loop {
@@ -158,6 +166,15 @@ pub fn write_sync(fd: RawFd, msg_type: i32, data_str: &str) -> Result<()> {
             write_count(fd, data_str.as_bytes(), data_str.len()).or_else(|e| {
                 unistd::close(fd)?;
                 Err(anyhow!(e).context("error in send message to process"))
+            })?;
+        }
+        SYNC_PIDFD_AVAILABLE => {
+            let available: i32 = data_str
+                .parse::<i32>()
+                .context("invalid pidfd availability value")?;
+            write_count(fd, &available.to_be_bytes(), MSG_SIZE).or_else(|e| {
+                unistd::close(fd)?;
+                Err(anyhow!(e).context("error in send pidfd availability to process"))
             })?;
         }
 
