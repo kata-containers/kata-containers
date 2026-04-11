@@ -603,3 +603,14 @@ print_node_journal_since_test_start() {
 		exec_host "${node}" journalctl -t "kata" --since '"'"${node_start_time}"'"' -o cat || true
 	fi
 }
+
+# Copies file $1 to the host filesystem.
+copy_file_to_host() {
+	local_file="${1}"
+	node="$(kubectl get node -o name)"
+	kubectl debug -q "${node}" --image=alpine:latest -- sleep infinity
+	debugger_pod="$(kubectl get pods --sort-by=.metadata.creationTimestamp -o name | tail -1)"
+	kubectl wait --for=condition=Ready "${debugger_pod}"
+	kubectl cp "${local_file}" "${debugger_pod#pod/}:/host"
+	kubectl delete "${debugger_pod}"
+}
