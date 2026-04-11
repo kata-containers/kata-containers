@@ -13,6 +13,10 @@ SPDK
 upcall
 virtcontainers
 
+# Open source projects
+
+materialx
+
 # Hardware & Architecture
 AMD
 APQN
