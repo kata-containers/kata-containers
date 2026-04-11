@@ -775,7 +775,9 @@ impl Qmp {
             // add SCSI frontend device
             blkdev_add_args.insert("scsi-id".to_string(), scsi_id.into());
             blkdev_add_args.insert("lun".to_string(), lun.into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),
@@ -813,7 +815,9 @@ impl Qmp {
             let ccw_addr = subchannel.address_format_ccw_for_virt_server(slot);
 
             blkdev_add_args.insert("devno".to_owned(), devno.clone().into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),
@@ -844,7 +848,9 @@ impl Qmp {
         } else {
             let (bus, slot) = self.find_free_slot()?;
             blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),
