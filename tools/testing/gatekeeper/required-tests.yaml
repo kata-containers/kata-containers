@@ -4,8 +4,6 @@ required_tests:
   - Pull request WIP checks / WIP Check
   - Darwin tests / test
   - Shellcheck required / shellcheck-required
-  # TODO: cargo-deny-runner.yaml not yet treated as conditional
-  - Cargo Crates Check Runner / cargo-deny-runner
   - GHA security analysis / zizmor
   - Lint GHA workflows / run-actionlint
   - EditorConfig checker / editorconfig-checker
@@ -135,6 +133,7 @@ mapping:
   static:
     # Checks that static checks are passing
     names:
+      - Cargo Deny Check / cargo-deny (bans licenses sources)
       # static-checks.yaml (build-checks.yaml)
       - Static checks / build-checks / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-22.04)
       - Static checks / build-checks / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ub...
