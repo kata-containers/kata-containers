@@ -349,7 +349,7 @@ hard_coded_policy_tests_enabled() {
 		fi
 	done
 
-	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" && "${KATA_HYPERVISOR}" == "clh" ]]; then
 		enabled="yes"
 	fi
 
