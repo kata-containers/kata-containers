@@ -15,6 +15,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-kubectl-image
+  cancel-in-progress: true
+
 env:
   REGISTRY: quay.io
   IMAGE_NAME: kata-containers/kubectl

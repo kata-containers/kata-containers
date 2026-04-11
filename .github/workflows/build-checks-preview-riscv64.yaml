@@ -12,6 +12,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-riscv64
+  cancel-in-progress: true
+
 permissions: {}
 
 name: Build checks preview riscv64
@@ -63,7 +67,9 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
-
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.instance }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Adjust a permission for repo
         run: |

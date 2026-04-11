@@ -5,13 +5,17 @@ on:
         required: true
         type: string
 
-permissions: {}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-build-checks
+  cancel-in-progress: true
 
+permissions: {}
 
 name: Build checks
 jobs:
   check:
     name: check
+    timeout-minutes: 60
     runs-on: >-
       ${{
         ( contains(inputs.instance, 's390x') && matrix.component.name == 'runtime' ) && 's390x' ||
@@ -75,7 +79,9 @@ jobs:
               - protobuf-compiler
         instance:
           - ${{ inputs.instance }}
-
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.instance }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Adjust a permission for repo
         run: |

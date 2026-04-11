@@ -22,6 +22,10 @@ on:
         type: string
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-k8s-arm64
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -35,6 +39,9 @@ jobs:
           - qemu-runtime-rs
         k8s:
           - kubeadm
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: arm64-k8s
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
