@@ -137,16 +137,15 @@ add_runtime_handler_annotations() {
 		return
 	fi
 
-	case "${KATA_HYPERVISOR}" in
-		qemu-coco-dev | qemu-snp | qemu-snp-runtime-rs | qemu-tdx | qemu-coco-dev-runtime-rs)
-			info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
-			local handler_value="kata-${KATA_HYPERVISOR}"
-			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
-			do
-				add_annotations_to_yaml "${K8S_TEST_YAML}" "${handler_annotation}" "${handler_value}"
-			done
-			;;
-	esac
+	# Add runtime handler annotations for confidential computing hypervisors
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
+		local handler_value="kata-${KATA_HYPERVISOR}"
+		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+		do
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${handler_annotation}" "${handler_value}"
+		done
+	fi
 }
 
 main() {
