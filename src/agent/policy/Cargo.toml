@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 # Agent Policy
-regorus = { version = "0.2.8", default-features = false, features = [
+regorus = { version = "0.9.1", default-features = false, features = [
     "arc",
     "base64",
     "base64url",
