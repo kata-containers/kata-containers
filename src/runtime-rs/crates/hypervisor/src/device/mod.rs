@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::device::driver::vfio_device::VfioDeviceModern;
+use crate::device::driver::virtio_blk_modern::BlockDeviceModern;
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
     NetworkConfig, NetworkDevice, PCIePortDevice, PortDeviceConfig, ProtectionDevice,
@@ -57,6 +58,7 @@ pub enum DeviceType {
     Protection(ProtectionDevice),
     PortDevice(PCIePortDevice),
     VfioModern(Arc<Mutex<VfioDeviceModern>>),
+    BlockModern(Arc<Mutex<BlockDeviceModern>>),
 }
 
 impl fmt::Display for DeviceType {
