@@ -8349,6 +8349,7 @@ dependencies = [
  "nix 0.26.4",
  "oci-spec 0.8.4",
  "persist",
+ "pod-resources-rs",
  "protobuf",
  "resource",
  "runtime-spec",
