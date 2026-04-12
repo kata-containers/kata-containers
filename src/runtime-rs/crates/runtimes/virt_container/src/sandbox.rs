@@ -24,7 +24,7 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
-use hypervisor::VsockConfig;
+use hypervisor::device::topology::PCIePort;
 use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(feature = "dragonball")]
@@ -37,6 +37,7 @@ use hypervisor::{
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
+use hypervisor::{VfioDeviceBase, VsockConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
@@ -47,6 +48,7 @@ use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
+use pod_resources_rs::handle_cdi_devices;
 use protobuf::SpecialFields;
 use resource::coco_data::initdata::{
     kata_shared_init_data_path, InitDataConfig, KATA_INIT_DATA_IMAGE,
@@ -56,7 +58,7 @@ use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
@@ -161,7 +163,7 @@ impl VirtSandbox {
     async fn prepare_for_start_sandbox(
         &self,
         id: &str,
-        network_env: SandboxNetworkEnv,
+        sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
@@ -172,6 +174,7 @@ impl VirtSandbox {
             .context("failed to prepare vm socket config")?;
         resource_configs.push(vm_socket_config);
 
+        let network_env: SandboxNetworkEnv = sandbox_config.network_env.clone();
         // prepare network config
         if !network_env.network_created {
             if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
@@ -206,6 +209,17 @@ impl VirtSandbox {
         } else {
             None
         };
+
+        let vfio_devices = self.prepare_coldplug_cdi_devices(sandbox_config).await?;
+        if !vfio_devices.is_empty() {
+            info!(
+                sl!(),
+                "prepare pod devices {vfio_devices:?} for sandbox done."
+            );
+            resource_configs.extend(vfio_devices);
+        } else {
+            info!(sl!(), "no pod devices to prepare for sandbox.");
+        }
 
         // prepare protection device config
         if let Some(protection_dev_config) = self
@@ -250,6 +264,66 @@ impl VirtSandbox {
                 None
             }
         }
+    }
+
+    async fn prepare_coldplug_cdi_devices(
+        &self,
+        sandbox_config: &SandboxConfig,
+    ) -> Result<Vec<ResourceConfig>> {
+        let config = self.resource_manager.config().await;
+        let pod_resource_socket = &config.runtime.pod_resource_api_sock;
+        info!(
+            sl!(),
+            "sandbox pod_resource_socket: {:?}", pod_resource_socket
+        );
+        if pod_resource_socket.is_empty() || !Path::new(pod_resource_socket).exists() {
+            return Ok(Vec::new());
+        }
+
+        let annotations = &sandbox_config.annotations;
+        debug!(
+            sl!(),
+            "cold-plug: sandbox-name={:?} sandbox-namespace={:?}",
+            annotations.get("io.kubernetes.cri.sandbox-name"),
+            annotations.get("io.kubernetes.cri.sandbox-namespace")
+        );
+
+        let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
+            pod_resource_socket,
+            annotations,
+        )
+        .await
+        .context("failed to query Pod Resources CDI devices")?;
+        info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
+
+        let device_nodes = handle_cdi_devices(&cdi_devices).await?;
+        let paths: Vec<String> = device_nodes
+            .iter()
+            .filter_map(pod_resources_rs::device_node_host_path)
+            .collect();
+
+        // FQN: nvidia.com/gpu=X
+        let mut vfio_configs = Vec::new();
+        for path in paths.iter() {
+            let dev_info = VfioDeviceBase {
+                host_path: path.clone(),
+                // CDI passes the per-device cdev (e.g. /dev/vfio/devices/vfio0); device_manager
+                // also copies host_path here — set early so configs are self-consistent in logs
+                // and any code path that runs before that assignment still discovers VFIO correctly.
+                iommu_group_devnode: PathBuf::from(path),
+                dev_type: "c".to_string(),
+                // bus_type: bus_type.clone(),
+                port: PCIePort::RootPort,
+                hostdev_prefix: "vfio_device".to_owned(),
+                ..Default::default()
+            };
+            vfio_configs.push(dev_info);
+        }
+
+        Ok(vfio_configs
+            .into_iter()
+            .map(ResourceConfig::VfioDeviceModern)
+            .collect())
     }
 
     async fn prepare_network_resource(
@@ -602,9 +676,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
-        let resources = self
-            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
-            .await?;
+        let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
         self.resource_manager
             .prepare_before_start_vm(resources)
@@ -786,7 +858,7 @@ impl Sandbox for VirtSandbox {
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
+            .prepare_for_start_sandbox(id, sandbox_config)
             .await
             .context("prepare resources before start vm")?;
 

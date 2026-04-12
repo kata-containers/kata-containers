@@ -29,3 +29,4 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 shim = { path = "crates/shim" }
 common = { workspace = true }
 runtimes = { workspace = true }
+pod-resources-rs = { workspace = true }
