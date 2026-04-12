@@ -177,6 +177,9 @@ pub struct HostDevice {
     /// PCI device information (Domain)
     pub domain: String,
 
+    // iommufd for vfio device
+    pub iommufd: String,
+
     /// PCI device information (BDF): "bus:slot:function"
     pub bus_slot_func: String,
 
@@ -531,14 +534,7 @@ impl Device for VfioDevice {
 
         // do add device for vfio device
         match h.add_device(DeviceType::Vfio(self.clone())).await {
-            Ok(dev) => {
-                // Update device info with the one received from device attach
-                if let DeviceType::Vfio(vfio) = dev {
-                    self.config = vfio.config;
-                    self.devices = vfio.devices;
-                    self.allocated = true;
-                }
-
+            Ok(_dev) => {
                 update_pcie_device!(self, pcie_topo)?;
 
                 Ok(())
