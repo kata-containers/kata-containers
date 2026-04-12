@@ -10,14 +10,14 @@ use agent::types::Device;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct DeviceInfo {
     pub class_id: String,
     pub vendor_id: String,
     pub host_path: PathBuf,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ContainerDevice {
     pub device_info: Option<DeviceInfo>,
     pub device: Device,
