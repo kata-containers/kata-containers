@@ -1,9 +1,12 @@
-// Copyright (c) 2022-2023 Alibaba Cloud
-// Copyright (c) 2022-2023 Ant Group
+// Copyright (c) 2026 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::device::driver::BlockDeviceAio;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIeTopology;
 use crate::device::util::do_decrease_count;
@@ -13,71 +16,9 @@ use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-pub use kata_types::device::{
-    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_MMIO_TYPE as KATA_MMIO_BLK_DEV_TYPE,
-    DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE, DRIVER_NVDIMM_TYPE as KATA_NVDIMM_DEV_TYPE,
-    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
-};
-
-/// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
-pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
-pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
-pub const VIRTIO_BLOCK_CCW: &str = "virtio-blk-ccw";
-pub const VIRTIO_PMEM: &str = "virtio-pmem";
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum BlockDeviceAio {
-    // IoUring is the Linux io_uring I/O implementation.
-    #[default]
-    IoUring,
-
-    // Native is the native Linux AIO implementation.
-    Native,
-
-    // Threads is the pthread asynchronous I/O implementation.
-    Threads,
-}
-
-impl BlockDeviceAio {
-    pub fn new(aio: &str) -> Self {
-        match aio {
-            "native" => BlockDeviceAio::Native,
-            "threads" => BlockDeviceAio::Threads,
-            _ => BlockDeviceAio::IoUring,
-        }
-    }
-}
-
-impl std::fmt::Display for BlockDeviceAio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceAio::Native => "native".to_string(),
-            BlockDeviceAio::Threads => "threads".to_string(),
-            _ => "iouring".to_string(),
-        };
-        write!(f, "{to_string}")
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum BlockDeviceFormat {
-    #[default]
-    Raw,
-    Vmdk,
-}
-
-impl std::fmt::Display for BlockDeviceFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceFormat::Raw => "raw".to_string(),
-            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
-        };
-        write!(f, "{to_string}")
-    }
-}
 
 #[derive(Debug, Clone, Default)]
-pub struct BlockConfig {
+pub struct BlockConfigModern {
     /// Path of the drive.
     pub path_on_host: String,
 
@@ -87,9 +28,6 @@ pub struct BlockConfig {
 
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
-
-    /// raw, vmdk, etc. And default to raw if not set.
-    pub format: BlockDeviceFormat,
 
     /// Specifies cache-related options for block devices.
     /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
@@ -115,9 +53,6 @@ pub struct BlockConfig {
     /// scsi_addr is of the format SCSI-Id:LUN
     pub scsi_addr: Option<String>,
 
-    /// CCW device address for virtio-blk-ccw on s390x (e.g., "0.0.0005")
-    pub ccw_addr: Option<String>,
-
     /// device attach count
     pub attach_count: u64,
 
@@ -141,25 +76,47 @@ pub struct BlockConfig {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct BlockDevice {
+pub struct BlockDeviceModern {
     pub device_id: String,
     pub attach_count: u64,
-    pub config: BlockConfig,
+    pub config: BlockConfigModern,
 }
 
-impl BlockDevice {
-    // new creates a new VirtioBlkDevice
-    pub fn new(device_id: String, config: BlockConfig) -> Self {
-        BlockDevice {
-            device_id,
-            attach_count: 0,
-            config,
+#[derive(Debug, Clone)]
+pub struct BlockDeviceModernHandle {
+    inner: Arc<Mutex<BlockDeviceModern>>,
+}
+
+impl BlockDeviceModernHandle {
+    pub fn new(device_id: String, config: BlockConfigModern) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(BlockDeviceModern {
+                device_id,
+                attach_count: 0,
+                config,
+            })),
         }
+    }
+
+    pub fn arc(&self) -> Arc<Mutex<BlockDeviceModern>> {
+        self.inner.clone()
+    }
+
+    pub async fn snapshot_config(&self) -> BlockConfigModern {
+        self.inner.lock().await.config.clone()
+    }
+
+    pub async fn device_id(&self) -> String {
+        self.inner.lock().await.device_id.clone()
+    }
+
+    pub async fn attach_count(&self) -> u64 {
+        self.inner.lock().await.attach_count
     }
 }
 
 #[async_trait]
-impl Device for BlockDevice {
+impl Device for BlockDeviceModernHandle {
     async fn attach(
         &mut self,
         _pcie_topo: &mut Option<&mut PCIeTopology>,
@@ -174,18 +131,14 @@ impl Device for BlockDevice {
             return Ok(());
         }
 
-        match h.add_device(DeviceType::Block(self.clone())).await {
-            Ok(dev) => {
-                if let DeviceType::Block(blk) = dev {
-                    self.config = blk.config;
-                }
-                Ok(())
-            }
-            Err(e) => {
-                self.decrease_attach_count().await?;
-                return Err(e);
-            }
+        if let Err(e) = h.add_device(DeviceType::BlockModern(self.arc())).await {
+            error!(sl!(), "failed to attach block device: {:?}", e);
+            self.decrease_attach_count().await?;
+
+            return Err(e);
         }
+
+        Ok(())
     }
 
     async fn detach(
@@ -201,11 +154,11 @@ impl Device for BlockDevice {
         {
             return Ok(None);
         }
-        if let Err(e) = h.remove_device(DeviceType::Block(self.clone())).await {
+        if let Err(e) = h.remove_device(DeviceType::BlockModern(self.arc())).await {
             self.increase_attach_count().await?;
             return Err(e);
         }
-        Ok(Some(self.config.index))
+        Ok(Some(self.snapshot_config().await.index))
     }
 
     async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
@@ -214,14 +167,16 @@ impl Device for BlockDevice {
     }
 
     async fn get_device_info(&self) -> DeviceType {
-        DeviceType::Block(self.clone())
+        DeviceType::BlockModern(self.inner.clone())
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
-        do_increase_count(&mut self.attach_count)
+        let mut guard = self.inner.lock().await;
+        do_increase_count(&mut guard.attach_count)
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {
-        do_decrease_count(&mut self.attach_count)
+        let mut guard = self.inner.lock().await;
+        do_decrease_count(&mut guard.attach_count)
     }
 }

@@ -12,6 +12,7 @@ mod vhost_user;
 pub mod vhost_user_blk;
 mod vhost_user_net;
 mod virtio_blk;
+pub mod virtio_blk_modern;
 mod virtio_fs;
 mod virtio_net;
 mod virtio_vsock;
@@ -30,6 +31,7 @@ pub use virtio_blk::{
     KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
     VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
+pub use virtio_blk_modern::{BlockConfigModern, BlockDeviceModern, BlockDeviceModernHandle};
 pub use virtio_fs::{
     ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,
 };

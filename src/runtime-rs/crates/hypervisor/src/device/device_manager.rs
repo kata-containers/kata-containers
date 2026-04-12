@@ -255,7 +255,8 @@ impl DeviceManager {
                 | DeviceType::Vsock(_)
                 | DeviceType::Protection(_)
                 | DeviceType::PortDevice(_)
-                | DeviceType::VfioModern(_) => {
+                | DeviceType::VfioModern(_)
+                | DeviceType::BlockModern(_) => {
                     continue;
                 }
             }
