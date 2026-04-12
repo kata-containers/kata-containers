@@ -217,11 +217,35 @@ impl Container {
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
 
-            // In certain scenarios, particularly under CoCo/Agent Policy enforcement,
-            // the value of `Linux.Resources.Devices` should be empty.
+            // Only CPU and Memory constraints are supported in the guest.
+            // Clear unsupported resource fields to match the Go runtime
+            // and satisfy the agent policy checks.
             if let Some(resource) = linux.resources_mut() {
                 resource.set_devices(None);
+                resource.set_pids(None);
+                resource.set_block_io(None);
+                resource.set_network(None);
             }
+
+            // VFIO char devices are handled by the VM's device driver, not
+            // presented to the container directly. Remove them from the OCI
+            // spec to match the Go runtime (kata_agent.go:1093-1105) and
+            // satisfy the agent policy's allow_linux_devices check.
+            const VFIO_PATH: &str = "/dev/vfio/";
+            let filtered = linux.devices().as_ref().map(|devices| {
+                devices
+                    .iter()
+                    .filter(|d| {
+                        !(d.typ() == oci::LinuxDeviceType::C
+                            && d.path().to_str().is_some_and(|p| p.starts_with(VFIO_PATH)))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            });
+            linux.set_devices(match filtered {
+                Some(v) if v.is_empty() => None,
+                other => other,
+            });
         }
 
         let container_name = k8s::container_name(&spec);
