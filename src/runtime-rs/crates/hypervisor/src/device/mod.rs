@@ -5,8 +5,12 @@
 //
 
 use std::fmt;
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
 
 use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
+use crate::device::driver::vfio_device::VfioDeviceModern;
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
     NetworkConfig, NetworkDevice, PCIePortDevice, PortDeviceConfig, ProtectionDevice,
@@ -52,6 +56,7 @@ pub enum DeviceType {
     Vsock(VsockDevice),
     Protection(ProtectionDevice),
     PortDevice(PCIePortDevice),
+    VfioModern(Arc<Mutex<VfioDeviceModern>>),
 }
 
 impl fmt::Display for DeviceType {
