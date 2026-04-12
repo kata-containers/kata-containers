@@ -33,7 +33,8 @@ use std::time::Instant;
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
-const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 5000;
+const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
+const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
 pub struct Qmp {
@@ -72,7 +73,7 @@ impl Qmp {
             let stream = UnixStream::connect(qmp_sock_path)?;
 
             stream
-                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
+                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_INIT_READ_TIMEOUT)))
                 .context("set qmp read timeout")?;
 
             let mut qmp = Qmp {
@@ -290,6 +291,59 @@ impl Qmp {
         }
 
         Ok(hotplugged_mem_size)
+    }
+
+    /// Hotplug an iommufd QOM object in QEMU and return the object id.
+    #[allow(dead_code)]
+    pub fn hotplug_iommufd(
+        &mut self,
+        suffix_or_id: &str,
+        external_fdname: Option<&str>,
+    ) -> Result<String> {
+        // Object id in QEMU (also used as fdname for getfd)
+        let obj_id = if suffix_or_id.starts_with("iommufd") {
+            suffix_or_id.to_string()
+        } else {
+            format!("iommufd{suffix_or_id}")
+        };
+
+        {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open("/dev/iommu")
+                .context("open /dev/iommu failed")?;
+            self.pass_fd(file.as_raw_fd(), &obj_id)?;
+        }
+
+        let obj = match external_fdname {
+            None => qmp::object_add(qapi_qmp::ObjectOptions::iommufd {
+                id: obj_id.clone(),
+                iommufd: qapi_qmp::IOMMUFDProperties { fd: None },
+            }),
+            Some(_fdname) => qmp::object_add(qapi_qmp::ObjectOptions::iommufd {
+                id: obj_id.clone(),
+                iommufd: qapi_qmp::IOMMUFDProperties {
+                    fd: Some(obj_id.to_string()),
+                },
+            }),
+        };
+
+        match self.qmp.execute(&obj) {
+            Ok(_) => Ok(obj_id),
+            Err(e) => {
+                let msg = format!("{e:#}");
+                if msg.contains("duplicate ID")
+                    || msg.contains("already exists")
+                    || msg.contains("exists")
+                {
+                    Ok(obj_id)
+                } else {
+                    Err(anyhow!(e))
+                        .with_context(|| format!("object-add iommufd failed (id={obj_id})"))
+                }
+            }
+        }
     }
 
     pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
