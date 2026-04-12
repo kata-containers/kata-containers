@@ -680,6 +680,26 @@ impl PCIeTopology {
         // No available node found
         None
     }
+
+    /// Reserve a PCIe bus/port for a cold-plugged device.
+    ///
+    /// Full implementation is added alongside cold-plug port management;
+    /// this stub satisfies the VfioDeviceModern driver's PCIeDevice trait impl.
+    pub fn reserve_bus_for_device(
+        &mut self,
+        _device_id: &str,
+        _port: PCIePort,
+    ) -> Result<Option<(String, u32, u32)>> {
+        todo!("PCIe cold-plug port reservation not yet wired")
+    }
+
+    /// Release a previously reserved PCIe bus/port for a cold-plugged device.
+    ///
+    /// Full implementation is added alongside cold-plug port management;
+    /// this stub satisfies the VfioDeviceModern driver's PCIeDevice trait impl.
+    pub fn release_bus_for_device(&mut self, _device_id: &str) -> Result<()> {
+        todo!("PCIe cold-plug port release not yet wired")
+    }
 }
 
 // do_add_pcie_endpoint do add a device into PCIe topology with pcie endpoint
