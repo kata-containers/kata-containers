@@ -10,7 +10,7 @@ mod driver_info;
 pub use driver_info::get_driver_info;
 mod macros;
 mod manager;
-pub use manager::get_link_from_message;
+pub use manager::{get_link_from_message, Netkit};
 
 use std::os::unix::io::RawFd;
 
@@ -145,4 +145,5 @@ pub trait Link: Send + Sync {
     fn attrs(&self) -> &LinkAttrs;
     fn set_attrs(&mut self, attr: LinkAttrs);
     fn r#type(&self) -> &str;
+    fn as_any(&self) -> &dyn std::any::Any;
 }

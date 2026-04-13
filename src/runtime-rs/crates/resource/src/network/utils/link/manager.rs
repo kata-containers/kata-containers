@@ -5,7 +5,7 @@
 //
 
 use netlink_packet_route::link::{
-    InfoBridge, InfoData, InfoKind, LinkAttribute, LinkInfo, LinkMessage,
+    InfoBridge, InfoData, InfoKind, InfoNetkit, LinkAttribute, LinkInfo, LinkMessage, NetkitMode,
 };
 
 use super::{Link, LinkAttrs};
@@ -150,8 +150,8 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
                 InfoData::Bridge(ibs) => {
                     link = Some(Box::new(parse_bridge(ibs)));
                 }
-                InfoData::Netkit(_) => {
-                    link = Some(Box::new(Netkit::default()));
+                InfoData::Netkit(nks) => {
+                    link = Some(Box::new(parse_netkit(nks)));
                 }
                 _ => {
                     link = Some(Box::new(Device::default()));
@@ -171,6 +171,17 @@ fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
         }
     }
     link.unwrap()
+}
+
+fn parse_netkit(infos: Vec<InfoNetkit>) -> Netkit {
+    let mut netkit = Netkit::default();
+    for info in infos {
+        if let InfoNetkit::Mode(mode) = info {
+            netkit.mode = Some(mode);
+            break;
+        }
+    }
+    netkit
 }
 
 fn parse_bridge(mut ibs: Vec<InfoBridge>) -> Bridge {
@@ -204,6 +215,9 @@ macro_rules! impl_network_dev {
             fn r#type(&self) -> &'static str {
                 $r_type
             }
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
     };
 }
@@ -222,7 +236,13 @@ macro_rules! define_and_impl_network_dev {
 define_and_impl_network_dev!("device", Device);
 define_and_impl_network_dev!("tuntap", Tuntap);
 define_and_impl_network_dev!("veth", Veth);
-define_and_impl_network_dev!("netkit", Netkit);
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
+pub struct Netkit {
+    attrs: Option<LinkAttrs>,
+    pub mode: Option<NetkitMode>,
+}
+
+impl_network_dev!("netkit", Netkit);
 define_and_impl_network_dev!("ipvlan", IpVlan);
 define_and_impl_network_dev!("macvlan", MacVlan);
 define_and_impl_network_dev!("vlan", Vlan);
