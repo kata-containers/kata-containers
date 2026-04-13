@@ -41,6 +41,18 @@ else
 		"k8s-confidential-attestation.bats" \
 	)
 
+	K8S_TEST_SMALL_HOST_TEE_POLICY_UNION=( \
+		"k8s-policy-hard-coded.bats" \
+		"k8s-policy-deployment.bats" \
+		"k8s-policy-deployment-sc.bats" \
+		"k8s-policy-job.bats" \
+		"k8s-policy-logs.bats" \
+		"k8s-policy-pod.bats" \
+		"k8s-policy-pvc.bats" \
+		"k8s-policy-rc.bats" \
+		"k8s-trusted-ephemeral-data-storage.bats" \
+	)
+
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-empty-image.bats" \
 		"k8s-guest-pull-image.bats" \
@@ -76,14 +88,6 @@ else
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
-		"k8s-policy-hard-coded.bats" \
-		"k8s-policy-deployment.bats" \
-		"k8s-policy-deployment-sc.bats" \
-		"k8s-policy-job.bats" \
-		"k8s-policy-logs.bats" \
-		"k8s-policy-pod.bats" \
-		"k8s-policy-pvc.bats" \
-		"k8s-policy-rc.bats" \
 		"k8s-port-forward.bats" \
 		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
@@ -93,7 +97,6 @@ else
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
-		"k8s-trusted-ephemeral-data-storage.bats" \
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
@@ -108,23 +111,26 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
 			;;
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		all|baremetal)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		baremetal-attestation)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
 			;;
 		baremetal-no-attestation)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			;;
+		baremetal-small-tee)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]})
 			;;
 		*)
-			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
-			return 1
+			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal | baremetal-attestation | baremetal-no-attestation | baremetal-small-tee" >&2
+			exit 1
 			;;
 	esac
 fi

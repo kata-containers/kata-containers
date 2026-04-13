@@ -179,7 +179,7 @@ function deploy_kata() {
 	[[ "${platform}" = "kcli" ]] && \
 	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
+	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal"* ]]; then
 		cleanup_kata_deploy || true
 	fi
 
@@ -257,7 +257,7 @@ function uninstall_kbs_client() {
 }
 
 function run_tests() {
-	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
+	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal"* ]]; then
 		# Baremetal self-hosted runners end up accumulating way too much log
 		# and when those get displayed it's very hard to understand what's
 		# part of the current run and what's something from the past coming
