@@ -307,6 +307,15 @@ impl QemuInner {
             self.resume_vm().context("resume vm")?;
         }
 
+        // Setup virtio-mem for memory hotplug (matches Go's VirtioMem flag)
+        if self.config.memory_info.enable_virtio_mem {
+            if let Some(qmp) = self.qmp.as_mut() {
+                if let Err(e) = qmp.setup_virtio_mem(&self.config) {
+                    warn!(sl!(), "Failed to setup virtio-mem: {}", e);
+                }
+            }
+        }
+
         // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
             let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
@@ -691,14 +700,14 @@ impl QemuInner {
 
         let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
-            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
-                new_hotplugged_mem,
-                guest_mem_block_size,
-            )
-            .ok_or(anyhow!(format!(
-                "alignment of {} B to the block size of {} B failed",
-                new_hotplugged_mem, guest_mem_block_size
-            )))?
+            // Align to next multiple of guest_mem_block_size
+            let remainder = new_hotplugged_mem % guest_mem_block_size;
+            new_hotplugged_mem = new_hotplugged_mem
+                .checked_add(guest_mem_block_size - remainder)
+                .ok_or(anyhow!(
+                    "alignment of {} B to the block size of {} B failed (overflow)",
+                    new_hotplugged_mem, guest_mem_block_size
+                ))?;
         }
         let new_hotplugged_mem = new_hotplugged_mem;
 

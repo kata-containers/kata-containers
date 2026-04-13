@@ -151,7 +151,7 @@ memory_offset = 0
 # Please note that this option should be used with the command
 # "echo 1 > /proc/sys/vm/overcommit_memory".
 # Default false
-enable_virtio_mem = false
+enable_virtio_mem = @DEFENABLEVIRTIOMEM@
 
 # Disable block device from being used for a container's rootfs.
 # In case of a storage driver like devicemapper where a container's

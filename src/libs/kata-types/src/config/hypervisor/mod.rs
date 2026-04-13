@@ -1010,6 +1010,13 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_virtio_mem: bool,
 
+    /// Enable memory sharing between host and guest.
+    ///
+    /// Required for virtio-fs and vhost-user devices.
+    /// Automatically enabled when using virtio-fs.
+    #[serde(default)]
+    pub mem_shared: bool,
+
     /// Enable swap in guest.
     #[serde(default)]
     pub enable_guest_swap: bool,

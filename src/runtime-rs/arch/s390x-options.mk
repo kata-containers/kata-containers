@@ -10,3 +10,6 @@ MACHINEACCELERATORS :=
 CPUFEATURES :=
 
 QEMUCMD := qemu-system-s390x
+
+# Enable virtio-mem for s390x
+DEFENABLEVIRTIOMEM = true

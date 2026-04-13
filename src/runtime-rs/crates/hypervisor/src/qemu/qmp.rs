@@ -4,11 +4,20 @@
 //
 
 use crate::device::pci_path::PciPath;
+use crate::device::topology::DEFAULT_PCIE_ROOT_BUS;
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
 use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
+
+/// PCI address for ARM virt machine (decimal format)
+#[allow(dead_code)]
+const DEFAULT_PCI_ADDR_ARM: &str = "00";
+
+/// PCI address for x86 q35 machine (hex format)
+#[allow(dead_code)]
+const DEFAULT_PCI_ADDR_X86: &str = "0x0";
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
@@ -292,10 +301,53 @@ impl Qmp {
         Ok(hotplugged_mem_size)
     }
 
+    /// Hotplug memory into the VM.
+    /// Automatically detects if virtio-mem is available and uses it; otherwise falls back to pc-dimm.
+    ///
+    
     pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
-        let memdev_idx = self
-            .qmp
-            .execute(&qapi_qmp::query_memory_devices {})?
+        // Query existing memory devices to detect virtio-mem
+        let memory_devices = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+        
+        // Check if virtio-mem device exists
+        let has_virtio_mem = memory_devices.iter().any(|memdev| {
+            matches!(memdev, qapi_qmp::MemoryDeviceInfo::virtio_mem(_))
+        });
+        
+        if has_virtio_mem {
+            // Use virtio-mem: resize existing device (matches Go's hotplugAddMemory)
+            info!(sl!(), "Detected virtio-mem device, using resize method");
+            
+            // Calculate current hotplugged memory from virtio-mem device
+            let current_hotplugged_mb = memory_devices
+                .iter()
+                .filter_map(|memdev| {
+                    if let qapi_qmp::MemoryDeviceInfo::virtio_mem(vm_info) = memdev {
+                        Some(vm_info.data.size / (1024 * 1024))
+                    } else {
+                        None
+                    }
+                })
+                .sum::<u64>();
+            
+            let size_mb = size / (1024 * 1024);
+            let new_total_mb = (current_hotplugged_mb + size_mb) as i64;
+            
+            info!(
+                sl!(),
+                "Hotplugging {} MB using virtio-mem (current: {} MB, new total: {} MB)",
+                size_mb,
+                current_hotplugged_mb,
+                new_total_mb
+            );
+            
+            return self.resize_virtio_mem(new_total_mb);
+        }
+        
+        // Use pc-dimm: create new device (existing logic)
+        info!(sl!(), "No virtio-mem detected, using pc-dimm hotplug");
+        
+        let memdev_idx = memory_devices
             .into_iter()
             .filter(|memdev| {
                 if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
@@ -345,6 +397,232 @@ impl Qmp {
             arguments: mem_frontend_args,
         })?;
 
+        Ok(())
+    }
+
+    /// Setup virtio-mem device for dynamic memory management.
+    pub fn setup_virtio_mem(&mut self, config: &crate::HypervisorConfig) -> Result<()> {
+        // Calculate virtio-mem size: (max_memory - default_memory) aligned to 4MB
+        let default_memory_mb = config.memory_info.default_memory;
+        let default_max_memory_mb = config.memory_info.default_maxmemory;
+        let size_mb = ((default_max_memory_mb - default_memory_mb) >> 2 << 2) as u64;
+        let size_bytes = size_mb * 1024 * 1024;
+
+        if size_mb == 0 {
+            info!(sl!(), "virtio-mem size is 0, skipping setup");
+            return Ok(());
+        }
+
+        // Get memory backend parameters
+        let shared_fs_type = config.shared_fs.shared_fs.as_deref().unwrap_or("");
+        let (qomtype, mempath) = if shared_fs_type == "virtio-fs"
+            || shared_fs_type == "virtio-fs-nydus"
+            || !config.memory_info.file_mem_backend.is_empty()
+        {
+            (
+                "memory-backend-file",
+                if !config.memory_info.file_mem_backend.is_empty() {
+                    config.memory_info.file_mem_backend.as_str()
+                } else {
+                    "/dev/shm"
+                },
+            )
+        } else {
+            ("memory-backend-ram", "")
+        };
+
+        // Determine if memory should be shared
+        let share = config.memory_info.mem_shared
+            || shared_fs_type == "virtio-fs"
+            || shared_fs_type == "virtio-fs-nydus";
+
+        let machine_type = &config.machine_info.machine_type;
+
+        // Determine driver and addressing based on machine type
+        let (driver, devno, bus, addr, cleanup_device_id) = if machine_type == "s390-ccw-virtio" {
+            // s390x uses CCW transport
+            let device_id = "virtiomem-dev".to_string();
+
+            // Allocate CCW slot
+            let slot = match &mut self.ccw_subchannel {
+                Some(ccw) => ccw.add_device(&device_id).map_err(|e| anyhow!("Failed to add CCW device: {:?}", e))?,
+                None => return Err(anyhow!("CCW subchannel not initialized for s390x")),
+            };
+            
+            let devno = self.ccw_subchannel
+                .as_ref()
+                .map(|ccw| ccw.address_format_ccw(slot));
+            
+            ("virtio-mem-ccw", devno, None, None, Some(device_id))
+        } else {
+            // x86/aarch64 use PCI transport
+            let (bus_val, addr_val) = if machine_type == "virt" {
+                (DEFAULT_PCIE_ROOT_BUS.to_string(), DEFAULT_PCI_ADDR_ARM.to_string())
+            } else {
+                (DEFAULT_PCIE_ROOT_BUS.to_string(), DEFAULT_PCI_ADDR_X86.to_string())
+            };
+            
+            ("virtio-mem-pci", None, Some(bus_val), Some(addr_val), None)
+        };
+
+        info!(
+            sl!(),
+            "Setting up virtio-mem: driver={}, backend={}, path={}, share={}",
+            driver,
+            qomtype,
+            if mempath.is_empty() { "none" } else { mempath },
+            share
+        );
+
+        // STEP 1: Create memory backend 
+        let memory_backend_id = "virtiomem".to_string();
+        
+        let memory_backend = if mempath.is_empty() {
+            // Use memory-backend-ram (no path)
+            qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_ram {
+                id: memory_backend_id.clone(),
+                memory_backend_ram: qapi_qmp::MemoryBackendProperties {
+                    dump: None,
+                    host_nodes: None,
+                    merge: None,
+                    policy: None,
+                    prealloc: None,
+                    prealloc_context: None,
+                    prealloc_threads: None,
+                    reserve: None,
+                    share: Some(share),
+                    x_use_canonical_path_for_ramblock_id: None,
+                    size: size_bytes,
+                },
+            })
+        } else {
+            // Use memory-backend-file (with path)
+            qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
+                id: memory_backend_id.clone(),
+                memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
+                    base: qapi_qmp::MemoryBackendProperties {
+                        dump: None,
+                        host_nodes: None,
+                        merge: None,
+                        policy: None,
+                        prealloc: None,
+                        prealloc_context: None,
+                        prealloc_threads: None,
+                        reserve: None,
+                        share: Some(share),
+                        x_use_canonical_path_for_ramblock_id: None,
+                        size: size_bytes,
+                    },
+                    align: None,
+                    discard_data: None,
+                    offset: None,
+                    pmem: None,
+                    readonly: None,
+                    mem_path: mempath.to_owned(),
+                    rom: None,
+                },
+            })
+        };
+        
+        // Execute backend creation
+        if let Err(e) = self.qmp.execute(&memory_backend) {
+            // Cleanup CCW device allocation on error
+            if let Some(dev_id) = cleanup_device_id {
+                if let Some(ccw) = &mut self.ccw_subchannel {
+                    let _ = ccw.remove_device(&dev_id);
+                }
+            }
+            
+            // Provide helpful error message
+            if e.to_string().contains("Cannot allocate memory") {
+                return Err(anyhow!(
+                    "Failed to allocate {} MB for virtio-mem: {}. \
+                    Please use command 'echo 1 > /proc/sys/vm/overcommit_memory' to handle it.",
+                    size_mb, e
+                ));
+            }
+            return Err(e.into());
+        }
+
+        // STEP 2: Create memory frontend device (matches Go's ExecMemdevAdd Step 2)
+        let device_id = "virtiomem0".to_string();
+        let mut device_args = Dictionary::new();
+        device_args.insert("memdev".to_owned(), memory_backend_id.clone().into());
+        
+        // Add addressing based on transport type (matches Go's conditional logic)
+        if let Some(devno_val) = devno {
+            // CCW addressing for s390x
+            device_args.insert("devno".to_owned(), devno_val.into());
+        }
+        if let Some(bus_val) = bus {
+            // PCI bus for x86/ARM
+            device_args.insert("bus".to_owned(), bus_val.into());
+        }
+        if let Some(addr_val) = addr {
+            // PCI address for x86/ARM
+            device_args.insert("addr".to_owned(), addr_val.into());
+        }
+
+        // Execute device_add with cleanup on error (matches Go's defer cleanup)
+        if let Err(e) = self.qmp.execute(&qmp::device_add {
+            bus: None,
+            id: Some(device_id.clone()),
+            driver: driver.to_owned(),
+            arguments: device_args,
+        }) {
+            // Cleanup: remove memory backend (matches Go's defer func)
+            let _ = self.qmp.execute(&qmp::object_del {
+                id: memory_backend_id,
+            });
+            
+            // Cleanup: remove CCW device allocation
+            if let Some(dev_id) = cleanup_device_id {
+                if let Some(ccw) = &mut self.ccw_subchannel {
+                    let _ = ccw.remove_device(&dev_id);
+                }
+            }
+            
+            return Err(anyhow!("Failed to add virtio-mem device: {}", e));
+        }
+
+        info!(sl!(), "Successfully set up {} with {} MB", driver, size_mb);
+        Ok(())
+    }
+
+    /// Resize virtio-mem device to the specified size in MB.
+    /// This uses QMP qom-set to change the requested-size property.
+    ///
+    /// # Arguments
+    /// * `new_size_mb` - New size in MB for the virtio-mem device
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err` if resize fails or size is negative
+    pub fn resize_virtio_mem(&mut self, new_size_mb: i64) -> Result<()> {
+        if new_size_mb < 0 {
+            return Err(anyhow!(
+                "cannot resize virtio-mem device to negative size ({}) memory",
+                new_size_mb
+            ));
+        }
+
+        let size_bytes = (new_size_mb as u64) * 1024 * 1024;
+        
+        info!(
+            sl!(),
+            "Resizing virtio-mem device to {} MB ({} bytes)",
+            new_size_mb,
+            size_bytes
+        );
+
+        // Use qom-set to change the requested-size property of virtiomem0
+        self.qmp.execute(&qmp::qom_set {
+            path: "virtiomem0".to_owned(),
+            property: "requested-size".to_owned(),
+            value: serde_json::json!(size_bytes),
+        })?;
+
+        info!(sl!(), "Successfully resized virtio-mem to {} MB", new_size_mb);
         Ok(())
     }
 
