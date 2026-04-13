@@ -280,10 +280,22 @@ async fn create_endpoint(
                 Arc::new(ret)
             }
             "netkit" => {
-                // L3 mode netkit devices have no MAC address and are not supported.
-                if attrs.hardware_addr.is_empty() {
+                let is_l3 = link
+                    .as_any()
+                    .downcast_ref::<link::Netkit>()
+                    .and_then(|n| n.mode)
+                    .map_or_else(
+                        || {
+                            attrs.hardware_addr.is_empty()
+                            // L3 devices have no MAC address, so check for all-zero.
+                            // https://github.com/torvalds/linux/blob/master/drivers/net/netkit.c
+                                || attrs.hardware_addr.iter().all(|&b| b == 0)
+                        },
+                        |m| m == netlink_packet_route::link::NetkitMode::L3,
+                    );
+                if is_l3 {
                     return Err(anyhow!(
-                        "netkit device {} has no MAC address (L3 mode not supported - use L2 mode or veth)",
+                        "netkit device {} is in L3 mode (not supported - use L2 mode or veth)",
                         attrs.name
                     ));
                 }
