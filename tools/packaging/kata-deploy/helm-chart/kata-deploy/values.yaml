@@ -12,6 +12,20 @@ kubectlImage:
 
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
+# Containerd configuration overrides
+# These override the auto-detected paths based on k8sDistribution.
+# Use these when your containerd setup doesn't match any built-in distribution preset.
+containerd:
+  # Override the host directory where containerd config lives.
+  # When empty, derived automatically from k8sDistribution.
+  # Example: "/etc/my-containerd/"
+  configDir: ""
+  # Override the containerd config file name.
+  # When empty, the kata-deploy binary uses its built-in default ("config.toml")
+  # or auto-detects based on the runtime (k0s, microk8s, k3s/rke2).
+  # Example: "my-config.toml"
+  configFileName: ""
+
 # Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
 # Examples:
 # nodeSelector:

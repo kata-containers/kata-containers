@@ -291,6 +291,10 @@ spec:
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
           value: {{ $forceGuestPullPpc64le | quote }}
         {{- end }}
+{{- if .Values.containerd.configFileName | trim }}
+        - name: CONTAINERD_CONFIG_FILE_NAME
+          value: {{ .Values.containerd.configFileName | trim | quote }}
+{{- end }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
