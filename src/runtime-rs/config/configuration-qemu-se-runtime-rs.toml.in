@@ -666,6 +666,9 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.
 # Supported experimental features:
+# for example:
+#       experimental=["force_guest_pull"]
+# which is for enable force_guest_pull mode in CoCo scenarios.
 # (default: [])
 experimental = @DEFAULTEXPFEATURES@
 
