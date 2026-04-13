@@ -9,7 +9,7 @@ source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
-AZ_REGION="${AZ_REGION:-eastus}"
+AZ_REGION="${AZ_REGION:-eastus2}"
 AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
