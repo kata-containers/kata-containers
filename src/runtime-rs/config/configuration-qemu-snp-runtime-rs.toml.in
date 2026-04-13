@@ -628,6 +628,11 @@ agent_name="@PROJECT_TYPE@"
 # (default: true)
 disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 
+# vCPUs pinning settings
+# if enabled, each vCPU thread will be scheduled to a fixed CPU
+# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
+enable_vcpus_pinning = @DEFENABLEVCPUSPINNING_QEMU@
+
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)

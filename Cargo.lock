@@ -6030,6 +6030,7 @@ dependencies = [
  "oci-spec 0.8.4",
  "persist",
  "rand 0.10.1",
+ "rstest",
  "rtnetlink 0.19.0",
  "scopeguard",
  "serde",

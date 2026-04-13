@@ -78,6 +78,7 @@ impl Persist for CgroupsResource {
             path: Some(self.cgroup_config.path.clone()),
             overhead_path: Some(self.cgroup_config.overhead_path.clone()),
             sandbox_cgroup_only: self.cgroup_config.sandbox_cgroup_only,
+            enable_vcpus_pinning: self.cgroup_config.enable_vcpus_pinning,
         })
     }
 
