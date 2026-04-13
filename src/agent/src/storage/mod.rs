@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -26,6 +26,7 @@ use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
+use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_storage};
 use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
@@ -37,6 +38,7 @@ mod ephemeral_handler;
 mod fs_handler;
 mod image_pull_handler;
 mod local_handler;
+mod multi_layer_erofs;
 
 const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
@@ -146,6 +148,7 @@ lazy_static! {
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),
             Arc::new(ImagePullHandler {}),
+            Arc::new(self::multi_layer_erofs::MultiLayerErofsHandler {}),
         ];
 
         for handler in handlers {
@@ -154,6 +157,89 @@ lazy_static! {
 
         manager
     };
+}
+
+async fn handle_multi_layer_storage(
+    logger: &Logger,
+    storage: &Storage,
+    storages: &[Storage],
+    sandbox: &Arc<Mutex<Sandbox>>,
+    cid: &Option<String>,
+    processed_multi_layer_mount_points: &mut HashSet<String>,
+    mount_list: &mut Vec<String>,
+) -> Result<bool> {
+    if !is_multi_layer_storage(storage) {
+        return Ok(false);
+    }
+
+    if processed_multi_layer_mount_points.contains(&storage.mount_point) {
+        return Ok(true);
+    }
+
+    slog::info!(
+        logger,
+        "processing multi-layer EROFS storage from unified loop";
+        "mount-point" => &storage.mount_point,
+        "source" => &storage.source,
+        "driver" => &storage.driver,
+        "fstype" => &storage.fstype,
+    );
+
+    let result = match handle_multi_layer_erofs_group(storage, storages, cid, sandbox, logger).await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            error!(logger, "failed to handle multi-layer EROFS: {:?}", e);
+            return Err(e);
+        }
+    };
+
+    for processed_mount_point in &result.processed_mount_points {
+        processed_multi_layer_mount_points.insert(processed_mount_point.clone());
+    }
+
+    for grouped_storage in storages {
+        if !result
+            .processed_mount_points
+            .iter()
+            .any(|mp| mp == &grouped_storage.mount_point)
+        {
+            continue;
+        }
+
+        let path = grouped_storage.mount_point.clone();
+        let state = sandbox
+            .lock()
+            .await
+            .add_sandbox_storage(&path, grouped_storage.shared)
+            .await;
+
+        if state.ref_count().await > 1 {
+            continue;
+        }
+
+        let device = new_device(result.mount_point.clone())?;
+        if let Err(device) = sandbox
+            .lock()
+            .await
+            .update_sandbox_storage(&path, device.clone())
+        {
+            error!(logger, "failed to update device for multi-layer storage");
+            if let Err(e) = sandbox.lock().await.remove_sandbox_storage(&path).await {
+                warn!(logger, "failed to remove dummy sandbox storage {:?}", e);
+            }
+            if let Err(e) = device.cleanup() {
+                error!(
+                    logger,
+                    "failed to clean state for multi-layer storage device {}, {}", path, e
+                );
+            }
+            return Err(anyhow!("failed to update device for multi-layer storage"));
+        }
+    }
+
+    mount_list.push(result.mount_point);
+    Ok(true)
 }
 
 // add_storages takes a list of storages passed by the caller, and perform the
@@ -168,8 +254,22 @@ pub async fn add_storages(
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
+    let mut processed_multi_layer_mount_points = HashSet::new();
 
-    for storage in storages {
+    for storage in &storages {
+        if handle_multi_layer_storage(
+            &logger,
+            storage,
+            &storages,
+            sandbox,
+            &cid,
+            &mut processed_multi_layer_mount_points,
+            &mut mount_list,
+        )
+        .await?
+        {
+            continue;
+        }
         let path = storage.mount_point.clone();
         let state = sandbox
             .lock()
@@ -195,7 +295,7 @@ pub async fn add_storages(
                 sandbox,
             };
 
-            match handler.create_device(storage, &mut ctx).await {
+            match handler.create_device(storage.clone(), &mut ctx).await {
                 Ok(device) => {
                     match sandbox
                         .lock()
