@@ -559,7 +559,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 		return nil, err
 	}
 
-	delete(c.execs, r.ExecID)
+	c.deleteExec(r.ExecID)
 
 	return &taskAPI.DeleteResponse{
 		ExitStatus: uint32(execs.exitCode),
@@ -589,7 +589,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *e
 		return nil, err
 	}
 
-	if execs := c.execs[r.ExecID]; execs != nil {
+	if e, _ := c.getExec(r.ExecID); e != nil {
 		return nil, errdefs.ToGRPCf(errdefs.ErrAlreadyExists, "id %s", r.ExecID)
 	}
 
@@ -598,7 +598,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *e
 		return nil, errdefs.ToGRPC(err)
 	}
 
-	c.execs[r.ExecID] = execs
+	c.setExec(r.ExecID, execs)
 
 	s.send(&eventstypes.TaskExecAdded{
 		ContainerID: c.id,

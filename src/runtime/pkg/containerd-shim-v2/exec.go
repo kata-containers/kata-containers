@@ -133,6 +133,9 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 }
 
 func (c *container) getExec(id string) (*exec, error) {
+	c.execsMu.RLock()
+	defer c.execsMu.RUnlock()
+
 	if c.execs == nil {
 		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "exec does not exist %s", id)
 	}
@@ -144,4 +147,18 @@ func (c *container) getExec(id string) (*exec, error) {
 	}
 
 	return exec, nil
+}
+
+func (c *container) setExec(id string, e *exec) {
+	c.execsMu.Lock()
+	defer c.execsMu.Unlock()
+
+	c.execs[id] = e
+}
+
+func (c *container) deleteExec(id string) {
+	c.execsMu.Lock()
+	defer c.execsMu.Unlock()
+
+	delete(c.execs, id)
 }
