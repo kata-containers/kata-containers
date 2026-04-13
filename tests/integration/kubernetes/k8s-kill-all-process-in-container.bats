@@ -19,7 +19,10 @@ setup() {
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	command="ps"
+	# Use 'ps aux || ps' to ensure full process visibility if 'aux' is supported,
+	# falling back to 'ps' if the environment is highly constrained.
+	command="ps aux || ps"
+
 	add_exec_to_policy_settings "${policy_settings_dir}" "${command}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
@@ -34,10 +37,13 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
 	# Check PID from first container
+	# Use "[t]ail" to prevent grep itself from appearing in the output.
+	# We use 'sh -c' to ensure the '||' logic in $command is interpreted correctly by the shell.
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \
-		-- $command | grep "tail" || true)
+		-- sh -c "$command" | grep "[t]ail" || true)
 	# Verify that the tail process didn't exist
-	[ -z $first_pid_container ] || die "found processes pid: $first_pid_container"
+	# Quote the variable to prevent bash word splitting (fixes "too many arguments" error).
+	[ -z "$first_pid_container" ] || die "found processes pid: $first_pid_container"
 }
 
 teardown() {

@@ -868,6 +868,7 @@ impl QemuInner {
                         block_device.config.no_drop,
                         block_device.config.logical_sector_size,
                         block_device.config.physical_sector_size,
+                        &format!("{}", block_device.config.format),
                     )
                     .context("hotplug block device")?;
 

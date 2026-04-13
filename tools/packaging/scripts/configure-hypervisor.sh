@@ -379,6 +379,9 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-dmg)
 	qemu_options+=(size:--disable-parallels)
 
+	# Required by multi-layer EROFS rootfs (VMDK flat-extent descriptor)
+	qemu_options+=(functionality:--enable-vmdk)
+
 	# Disable new available features from 8.2.4
 	qemu_options+=(size:--disable-colo-proxy)
 	qemu_options+=(size:--disable-debug-graph-lock)
@@ -388,7 +391,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-pixman)
 	qemu_options+=(size:--disable-relocatable)
 	qemu_options+=(size:--disable-rutabaga-gfx)
-	qemu_options+=(size:--disable-vmdk)
 	if ! gt_eq "${qemu_version}" "10.1.0" ; then
 		qemu_options+=(size:--disable-avx512bw)
 	fi
