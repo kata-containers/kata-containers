@@ -28,6 +28,10 @@ on:
         required: false
         type: string
         default: no
+      tee-test-scope:
+        required: false
+        type: string
+        default: small
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
@@ -64,7 +68,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"
       KBS: "true"
-      K8S_TEST_HOST_TYPE: "baremetal"
+      K8S_TEST_HOST_TYPE: ${{ inputs.tee-test-scope == 'full' && 'baremetal' || 'baremetal-small-tee' }}
       KBS_INGRESS: "nodeport"
       SNAPSHOTTER: "nydus"
       PULL_TYPE: "guest-pull"
