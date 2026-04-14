@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -1114,6 +1115,140 @@ func TestBadMemoryKnobs(t *testing.T) {
 	c.appendMemoryKnobs()
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestAppendMultiNUMAMemoryKnobs(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size:   "2G",
+			Slots:  8,
+			MaxMem: "4G",
+		},
+		NUMANodes: []NUMANode{
+			{
+				NodeID:         0,
+				CPUs:           "0-3",
+				MemSize:        "1G",
+				HostNodes:      "0",
+				MemBackendType: "memory-backend-ram",
+			},
+			{
+				NodeID:         1,
+				CPUs:           "4-7",
+				MemSize:        "1G",
+				HostNodes:      "1",
+				MemBackendType: "memory-backend-ram",
+			},
+		},
+		Knobs: Knobs{
+			MemShared:   true,
+			MemPrealloc: true,
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expected := []string{
+		"-object", "memory-backend-ram,id=numa-mem0,size=1G,host-nodes=0,policy=bind,share=on,prealloc=on",
+		"-numa", "node,nodeid=0,memdev=numa-mem0,cpus=0-3",
+		"-object", "memory-backend-ram,id=numa-mem1,size=1G,host-nodes=1,policy=bind,share=on,prealloc=on",
+		"-numa", "node,nodeid=1,memdev=numa-mem1,cpus=4-7",
+	}
+	if len(c.qemuParams) != len(expected) {
+		t.Fatalf("Expected %d params, got %d: %v", len(expected), len(c.qemuParams), c.qemuParams)
+	}
+	for i, p := range expected {
+		if c.qemuParams[i] != p {
+			t.Errorf("Param %d: expected %q, got %q", i, p, c.qemuParams[i])
+		}
+	}
+}
+
+func TestAppendMultiNUMAHugePages(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size:   "2G",
+			Slots:  8,
+			MaxMem: "4G",
+		},
+		NUMANodes: []NUMANode{
+			{
+				NodeID:         0,
+				CPUs:           "0-1",
+				MemSize:        "1G",
+				HostNodes:      "0",
+				MemBackendType: "memory-backend-file",
+				MemBackendPath: "/dev/hugepages",
+			},
+			{
+				NodeID:         1,
+				CPUs:           "2-3",
+				MemSize:        "1G",
+				HostNodes:      "1",
+				MemBackendType: "memory-backend-file",
+				MemBackendPath: "/dev/hugepages",
+			},
+		},
+		Knobs: Knobs{
+			MemShared: true,
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expected := []string{
+		"-object", "memory-backend-file,id=numa-mem0,size=1G,mem-path=/dev/hugepages,host-nodes=0,policy=bind,share=on",
+		"-numa", "node,nodeid=0,memdev=numa-mem0,cpus=0-1",
+		"-object", "memory-backend-file,id=numa-mem1,size=1G,mem-path=/dev/hugepages,host-nodes=1,policy=bind,share=on",
+		"-numa", "node,nodeid=1,memdev=numa-mem1,cpus=2-3",
+	}
+	if len(c.qemuParams) != len(expected) {
+		t.Fatalf("Expected %d params, got %d: %v", len(expected), len(c.qemuParams), c.qemuParams)
+	}
+	for i, p := range expected {
+		if c.qemuParams[i] != p {
+			t.Errorf("Param %d: expected %q, got %q", i, p, c.qemuParams[i])
+		}
+	}
+}
+
+func TestAppendNUMADist(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size: "2G",
+		},
+		NUMANodes: []NUMANode{
+			{NodeID: 0, CPUs: "0-1", MemSize: "1G", MemBackendType: "memory-backend-ram"},
+			{NodeID: 1, CPUs: "2-3", MemSize: "1G", MemBackendType: "memory-backend-ram"},
+		},
+		NUMADists: []NUMADist{
+			{Src: 0, Dst: 1, Val: 20},
+			{Src: 1, Dst: 0, Val: 20},
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expectedDist := []string{
+		"-numa", "dist,src=0,dst=1,val=20",
+		"-numa", "dist,src=1,dst=0,val=20",
+	}
+	params := c.qemuParams
+	distParams := params[len(params)-4:]
+	for i, p := range expectedDist {
+		if distParams[i] != p {
+			t.Errorf("Dist param %d: expected %q, got %q", i, p, distParams[i])
+		}
 	}
 }
 
