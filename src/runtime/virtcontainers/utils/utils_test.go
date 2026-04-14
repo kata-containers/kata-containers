@@ -19,6 +19,8 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 const waitLocalProcessTimeoutSecs = 3
@@ -753,4 +755,63 @@ func TestDockerNetnsPath(t *testing.T) {
 		},
 	}
 	assert.Equal("", DockerNetnsPath(spec))
+}
+
+func TestDistributeVCPUsProportionallySymmetric(t *testing.T) {
+	assert := assert.New(t)
+	nodes := []types.GuestNUMANode{
+		{HostCPUs: "0-3"},
+		{HostCPUs: "4-7"},
+	}
+	dist, err := DistributeVCPUsProportionally(nodes, 8)
+	assert.NoError(err)
+	assert.Equal([]uint32{4, 4}, dist)
+}
+
+func TestDistributeVCPUsProportionallyAsymmetric(t *testing.T) {
+	assert := assert.New(t)
+	nodes := []types.GuestNUMANode{
+		{HostCPUs: "0-7"},
+		{HostCPUs: "8-9"},
+	}
+	dist, err := DistributeVCPUsProportionally(nodes, 10)
+	assert.NoError(err)
+	assert.Equal([]uint32{8, 2}, dist)
+}
+
+func TestDistributeVCPUsProportionallyMinOnePerNode(t *testing.T) {
+	assert := assert.New(t)
+	nodes := []types.GuestNUMANode{
+		{HostCPUs: "0-99"},
+		{HostCPUs: "100"},
+	}
+	dist, err := DistributeVCPUsProportionally(nodes, 2)
+	assert.NoError(err)
+	assert.Equal(uint32(1), dist[0])
+	assert.Equal(uint32(1), dist[1])
+}
+
+func TestDistributeVCPUsProportionallyThreeNodes(t *testing.T) {
+	assert := assert.New(t)
+	nodes := []types.GuestNUMANode{
+		{HostCPUs: "0-5"},
+		{HostCPUs: "6-8"},
+		{HostCPUs: "9"},
+	}
+	// 6+3+1=10 host CPUs, 10 vCPUs: proportional = 6, 3, 1
+	dist, err := DistributeVCPUsProportionally(nodes, 10)
+	assert.NoError(err)
+	assert.Equal([]uint32{6, 3, 1}, dist)
+}
+
+func TestDistributeVCPUsProportionallyTooFewVCPUs(t *testing.T) {
+	assert := assert.New(t)
+	nodes := []types.GuestNUMANode{
+		{HostCPUs: "0"},
+		{HostCPUs: "1"},
+		{HostCPUs: "2"},
+	}
+	_, err := DistributeVCPUsProportionally(nodes, 2)
+	assert.Error(err)
+	assert.Contains(err.Error(), "must be >= NUMA node count")
 }

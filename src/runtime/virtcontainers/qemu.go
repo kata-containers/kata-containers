@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -251,6 +252,14 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	span, _ := katatrace.Trace(ctx, q.Logger(), "setup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
+	// Right-size auto-derived NUMA topology before snapshotting the config.
+	// We mutate the caller-owned pointer so the sandbox's shared
+	// HypervisorConfig (used by vCPU pinning and cpuset.mems forwarding)
+	// observes the same trimmed topology that QEMU is launched with.
+	// No-op when numa_mapping was set explicitly or when the topology
+	// already has one or zero nodes.
+	maybeRightSizeAutoNUMA(hypervisorConfig, q.Logger())
+
 	if err := q.setConfig(hypervisorConfig); err != nil {
 		return err
 	}
@@ -326,8 +335,8 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	return nil
 }
 
-func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, q.config.NumGuestNUMANodes())
+func (q *qemu) cpuTopology(effectiveNUMANodes uint32) govmmQemu.SMP {
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, effectiveNUMANodes)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
@@ -996,7 +1005,13 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	smp := q.cpuTopology()
+	numaNodes, numaDists, err := q.buildNUMATopology()
+	if err != nil {
+		return err
+	}
+
+	effectiveNUMANodes := uint32(len(numaNodes))
+	smp := q.cpuTopology(effectiveNUMANodes)
 
 	memory, err := q.memoryTopology()
 	if err != nil {
@@ -1117,6 +1132,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		QMPSockets:     qmpSockets,
 		Knobs:          knobs,
 		Incoming:       incoming,
+		NUMANodes:      numaNodes,
+		NUMADists:      numaDists,
 		VGA:            "none",
 		GlobalParam:    "kvm-pit.lost_tick_policy=discard",
 		Bios:           firmwarePath,

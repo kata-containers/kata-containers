@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -622,4 +623,183 @@ func GetGuestNUMANodes(numaMapping []string) ([]types.GuestNUMANode, error) {
 	}
 
 	return numaNodes, nil
+}
+
+// NUMADistEntry represents a single NUMA distance measurement between two nodes.
+type NUMADistEntry struct {
+	Src uint32
+	Dst uint32
+	Val uint32
+}
+
+// GetHostNUMADistances reads the host NUMA distance matrix for the nodes
+// referenced by the given GuestNUMANode list and returns off-diagonal
+// pairwise entries (skipping self-distance src==dst).
+// The distance row from sysfs is indexed by host NUMA node ID, so we parse
+// each guest node's HostNodes to find the representative host node ID and
+// use that to index into the distance row.
+func GetHostNUMADistances(nodes []types.GuestNUMANode) []NUMADistEntry {
+	hostNodeIDs := make([]int, len(nodes))
+	for i, n := range nodes {
+		nodeSet, err := cpuset.Parse(n.HostNodes)
+		if err != nil {
+			hostNodeIDs[i] = -1
+			continue
+		}
+		ids := nodeSet.ToSlice()
+		if len(ids) == 0 {
+			hostNodeIDs[i] = -1
+			continue
+		}
+		hostNodeIDs[i] = ids[0]
+	}
+
+	var dists []NUMADistEntry
+	for srcIdx, srcNode := range nodes {
+		if hostNodeIDs[srcIdx] < 0 {
+			continue
+		}
+		distStr := getHostNUMADistance(srcNode.HostNodes)
+		if distStr == "" {
+			continue
+		}
+		fields := strings.Fields(distStr)
+		for dstIdx := range nodes {
+			if srcIdx == dstIdx {
+				continue
+			}
+			hostID := hostNodeIDs[dstIdx]
+			if hostID < 0 || hostID >= len(fields) {
+				continue
+			}
+			val, err := strconv.ParseUint(fields[hostID], 10, 32)
+			if err != nil {
+				continue
+			}
+			dists = append(dists, NUMADistEntry{
+				Src: uint32(srcIdx),
+				Dst: uint32(dstIdx),
+				Val: uint32(val),
+			})
+		}
+	}
+	return dists
+}
+
+// HostNUMANodeCapacity describes the CPU and memory capacity of a single
+// host NUMA node, as seen via sysfs.
+type HostNUMANodeCapacity struct {
+	NodeID int
+	CPUs   int
+	MemMB  uint64
+}
+
+// GetHostNUMANodeCapacity returns the CPU count and memory size (in MiB)
+// of the given host NUMA node.
+func GetHostNUMANodeCapacity(nodeID int) (HostNUMANodeCapacity, error) {
+	cap := HostNUMANodeCapacity{NodeID: nodeID}
+	cpuList, err := getHostNUMANodeCPUs(nodeID)
+	if err != nil {
+		return cap, err
+	}
+	cs, err := cpuset.Parse(cpuList)
+	if err != nil {
+		return cap, fmt.Errorf("parse host node %d cpulist %q: %w", nodeID, cpuList, err)
+	}
+	cap.CPUs = cs.Size()
+	memMB, err := getHostNUMANodeMemoryMB(nodeID)
+	if err != nil {
+		return cap, err
+	}
+	cap.MemMB = memMB
+	return cap, nil
+}
+
+// GetHostNUMANodeCapacities returns the capacities of the given host NUMA
+// node IDs in the same order. Nodes that fail to be read are skipped and
+// the corresponding error is logged via the returned error (the slice may
+// be shorter than the input).
+func GetHostNUMANodeCapacities(nodeIDs []int) ([]HostNUMANodeCapacity, error) {
+	out := make([]HostNUMANodeCapacity, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		c, err := GetHostNUMANodeCapacity(id)
+		if err != nil {
+			return out, fmt.Errorf("read host NUMA node %d capacity: %w", id, err)
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// DistributeVCPUsProportionally distributes totalVCPUs across NUMA nodes
+// proportionally to the number of host CPUs available on each node.
+// Each node is guaranteed at least 1 vCPU. Remainder vCPUs go to nodes
+// with the most host CPUs.
+func DistributeVCPUsProportionally(numaNodes []types.GuestNUMANode, totalVCPUs uint32) ([]uint32, error) {
+	numNodes := len(numaNodes)
+	if numNodes == 0 {
+		return nil, fmt.Errorf("no NUMA nodes")
+	}
+	if totalVCPUs < uint32(numNodes) {
+		return nil, fmt.Errorf("totalVCPUs (%d) must be >= NUMA node count (%d)", totalVCPUs, numNodes)
+	}
+
+	hostCPUCounts := make([]int, numNodes)
+	totalHostCPUs := 0
+	for i, gn := range numaNodes {
+		parsed, err := cpuset.Parse(gn.HostCPUs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse HostCPUs for NUMA node %d: %w", i, err)
+		}
+		if parsed.Size() == 0 {
+			return nil, fmt.Errorf("HostCPUs for NUMA node %d must not be empty", i)
+		}
+		hostCPUCounts[i] = parsed.Size()
+		totalHostCPUs += hostCPUCounts[i]
+	}
+	if totalHostCPUs == 0 {
+		return nil, fmt.Errorf("total host CPU count is 0")
+	}
+
+	vcpusPerNode := make([]uint32, numNodes)
+	var assigned uint32
+	for i := range numaNodes {
+		vcpusPerNode[i] = uint32(int(totalVCPUs) * hostCPUCounts[i] / totalHostCPUs)
+		if vcpusPerNode[i] == 0 {
+			vcpusPerNode[i] = 1
+		}
+		assigned += vcpusPerNode[i]
+	}
+
+	// Use a copy for remainder distribution to avoid mutating the original counts.
+	weights := make([]int, numNodes)
+	copy(weights, hostCPUCounts)
+
+	for assigned < totalVCPUs {
+		bestIdx := 0
+		for i := 1; i < numNodes; i++ {
+			if weights[i] > weights[bestIdx] {
+				bestIdx = i
+			}
+		}
+		vcpusPerNode[bestIdx]++
+		assigned++
+		weights[bestIdx]--
+	}
+
+	for assigned > totalVCPUs {
+		bestIdx := 0
+		for i := 1; i < numNodes; i++ {
+			if vcpusPerNode[i] > vcpusPerNode[bestIdx] {
+				bestIdx = i
+			}
+		}
+		if vcpusPerNode[bestIdx] <= 1 {
+			break
+		}
+		vcpusPerNode[bestIdx]--
+		assigned--
+	}
+
+	return vcpusPerNode, nil
 }

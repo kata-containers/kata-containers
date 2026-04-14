@@ -1071,6 +1071,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		IOMMU:                         h.IOMMU,
 		IOMMUPlatform:                 h.getIOMMUPlatform(),
 		GuestNUMANodes:                h.defaultGuestNUMANodes(),
+		NUMAMapping:                   append([]string(nil), h.NUMAMapping...),
 		FileBackedMemRootDir:          h.FileBackedMemRootDir,
 		FileBackedMemRootList:         h.FileBackedMemRootList,
 		Debug:                         h.Debug,
@@ -1994,12 +1995,35 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	if err := checkNumaConfig(config); err != nil {
+		return err
+	}
+
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
 	hypervisorType := config.HypervisorType
 	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType, hypervisorType); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func checkNumaConfig(config oci.RuntimeConfig) error {
+	if len(config.HypervisorConfig.GuestNUMANodes) <= 1 {
+		return nil
+	}
+
+	switch goruntime.GOARCH {
+	case "amd64", "arm64":
+	default:
+		return fmt.Errorf("multi-NUMA support is only available on amd64 and arm64, got %q", goruntime.GOARCH)
+	}
+
+	if !config.StaticSandboxResourceMgmt {
+		return fmt.Errorf("NUMA support requires static_sandbox_resource_mgmt to be enabled; " +
+			"NUMA topology is not compatible with dynamic CPU/memory hotplug")
 	}
 
 	return nil

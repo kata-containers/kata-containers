@@ -12,6 +12,8 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +24,8 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 )
+
+var nodeMemTotalRegexp = regexp.MustCompile(`Node\s+\d+\s+MemTotal:\s+(\d+)\s+kB`)
 
 var ioctlFunc = Ioctl
 
@@ -219,4 +223,42 @@ func getHostNUMANodeCPUs(nodeId int) (string, error) {
 		return "", err
 	}
 	return strings.TrimSuffix(string(data), "\n"), nil
+}
+
+// getHostNUMANodeMemoryMB returns the total memory in MiB for the given
+// host NUMA node, parsed from /sys/devices/system/node/nodeN/meminfo.
+func getHostNUMANodeMemoryMB(nodeId int) (uint64, error) {
+	fileName := fmt.Sprintf("/sys/devices/system/node/node%d/meminfo", nodeId)
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		return 0, err
+	}
+	m := nodeMemTotalRegexp.FindSubmatch(data)
+	if m == nil {
+		return 0, fmt.Errorf("MemTotal not found in %s", fileName)
+	}
+	kb, err := strconv.ParseUint(string(m[1]), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return kb / 1024, nil
+}
+
+// getHostNUMADistance reads the distance row for the first host NUMA node
+// in the given hostNodes specifier (e.g. "0" or "0-1").
+func getHostNUMADistance(hostNodes string) string {
+	nodeSet, err := cpuset.Parse(hostNodes)
+	if err != nil {
+		return ""
+	}
+	ids := nodeSet.ToSlice()
+	if len(ids) == 0 {
+		return ""
+	}
+	fileName := fmt.Sprintf("/sys/devices/system/node/node%d/distance", ids[0])
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(string(data), "\n")
 }

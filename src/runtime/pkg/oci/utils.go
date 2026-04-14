@@ -794,11 +794,15 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if annotation, ok := ocispec.Annotations[vcAnnotations.NUMAMapping]; ok {
-		guestNUMANodes, err := vcutils.GetGuestNUMANodes(strings.Fields(annotation))
+		mapping := strings.Fields(annotation)
+		guestNUMANodes, err := vcutils.GetGuestNUMANodes(mapping)
 		if err != nil {
 			return err
 		}
 		sbConfig.HypervisorConfig.GuestNUMANodes = guestNUMANodes
+		// Record the raw user-provided mapping so the hypervisor
+		// backend honors it verbatim instead of right-sizing.
+		sbConfig.HypervisorConfig.NUMAMapping = mapping
 	}
 
 	return nil
