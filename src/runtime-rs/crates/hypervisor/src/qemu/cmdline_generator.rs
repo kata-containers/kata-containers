@@ -2922,6 +2922,7 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         id: &str,
         firmware: &str,
+        _firmware_volume: &str,
         qgs_port: u32,
         mrconfigid: &Option<String>,
         debug: bool,
