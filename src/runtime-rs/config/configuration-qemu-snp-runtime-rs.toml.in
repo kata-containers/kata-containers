@@ -563,17 +563,17 @@ kernel_modules = []
 debug_console_enabled = false
 
 # Agent dial timeout in millisecond.
-# (default: 10)
-dial_timeout_ms = 10
+# (default: 100)
+dial_timeout_ms = 100
 
 # Agent reconnect timeout in millisecond.
-# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
+# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 450)
 # If you find pod cannot connect to the agent when starting, please
 # consider increasing this value to increase the retry times.
 # You'd better not change the value of dial_timeout_ms, unless you have an
 # idea of what you are doing.
-# (default: 3000)
-reconnect_timeout_ms = 3000
+# (default: 45000)
+reconnect_timeout_ms = 45000
 
 # Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
 # to create their Unix sockets after being spawned by the agent.
