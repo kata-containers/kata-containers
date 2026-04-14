@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -98,7 +98,7 @@ jobs:
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
       # for pushing attestations to the registry
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           registry: ghcr.io
@@ -113,7 +113,7 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
@@ -137,7 +137,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -156,7 +156,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -181,7 +181,7 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
@@ -206,7 +206,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -230,7 +230,7 @@ jobs:
           HKD_PATH: "host-key-document"
 
       - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-boot-image-se.tar.zst
@@ -249,7 +249,7 @@ jobs:
           - coco-guest-components
           - pause-image
     steps:
-      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
+      - uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # v6.0.0
         if: ${{ inputs.stage == 'release' }}
         with:
           name: kata-artifacts-s390x-${{ matrix.asset}}${{ inputs.tarball-suffix }}
@@ -264,7 +264,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -283,7 +283,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -309,7 +309,7 @@ jobs:
           MEASURED_ROOTFS: no
 
       - name: store-artifact shim-v2
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-shim-v2${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-shim-v2.tar.zst
@@ -340,7 +340,7 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -361,7 +361,7 @@ jobs:
           fi
           echo "tarball size: ${tarball_size} bytes"
       - name: store-artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.zst
