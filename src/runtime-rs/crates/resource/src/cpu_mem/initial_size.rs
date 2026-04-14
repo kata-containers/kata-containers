@@ -388,15 +388,12 @@ mod tests {
         config
             .hypervisor
             .insert("qemu".to_owned(), Hypervisor::default());
-        config
-            .hypervisor
-            .entry("qemu".to_owned())
-            .and_modify(|hv| {
-                hv.cpu_info.default_vcpus = default_vcpus;
-                hv.cpu_info.default_maxvcpus = default_maxvcpus;
-                hv.memory_info.default_memory = default_memory;
-                hv.memory_info.default_maxmemory = default_maxmemory;
-            });
+        config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
+            hv.cpu_info.default_vcpus = default_vcpus;
+            hv.cpu_info.default_maxvcpus = default_maxvcpus;
+            hv.memory_info.default_memory = default_memory;
+            hv.memory_info.default_maxmemory = default_maxmemory;
+        });
         config.runtime.hypervisor_name = "qemu".to_owned();
         config.runtime.static_sandbox_resource_mgmt = static_sandbox_resource_mgmt;
         config
