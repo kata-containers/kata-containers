@@ -300,10 +300,18 @@ block_device_cache_direct = false
 block_device_cache_noflush = false
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
-# handled in a separate IO thread. This is currently only implemented
-# for SCSI.
+# handled in a separate IO thread. This is currently implemented
+# for virtio-scsi. For virtio-blk-pci hotplug, use indep_iothreads instead.
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
+
+# Number of independent IO threads for virtio-blk-pci devices.
+# When set to a value greater than 0, creates dedicated IO threads
+# that are attached to virtio-blk-pci devices during hotplug.
+# Requires enable_iothreads = true; has no effect otherwise.
+# Default 0 (disabled).
+#
+indep_iothreads = @DEFINDEPIOTHREADS@
 
 # Virtio queue size. Size: byte. default 128
 queue_size = 128
