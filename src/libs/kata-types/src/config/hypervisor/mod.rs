@@ -1717,6 +1717,14 @@ pub struct Hypervisor {
     #[serde(default)]
     pub enable_iothreads: bool,
 
+    /// Number of independent IO threads for virtio-blk devices.
+    ///
+    /// When set to a value greater than 0, creates independent IO threads
+    /// that can be attached to virtio-blk devices during hotplug.
+    /// Requires enable_iothreads to be true for virtio-blk devices to use these threads.
+    #[serde(default)]
+    pub indep_iothreads: u32,
+
     /// Block device configuration information.
     #[serde(default, flatten)]
     pub blockdev_info: BlockDeviceInfo,
