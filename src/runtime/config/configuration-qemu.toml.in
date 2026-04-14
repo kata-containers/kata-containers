@@ -314,6 +314,11 @@ enable_iommu_platform = false
 # as is: map VM NUMA nodes to host 1:1 and bind vCPUs to related CPUs.
 # Note: To take proper advantage of NUMA, static_sandbox_resource_mgmt should
 # also be enabled for memory pre-allocation.
+#
+# When VFIO devices (e.g. GPUs) are cold-plugged and NUMA is enabled, the
+# runtime validates that each device's host NUMA node is covered by the guest
+# NUMA topology. A warning is logged if a device falls outside the configured
+# nodes, indicating potential cross-NUMA memory access overhead.
 enable_numa = false
 
 # NUMA node mapping allows customizing how VM NUMA nodes map to host NUMA nodes.
