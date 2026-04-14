@@ -477,6 +477,14 @@ pub struct BootInfo {
     #[serde(default)]
     pub firmware: String,
 
+    /// Path to the firmware volume.
+    ///
+    /// For confidential computing VMs (TDX, SEV-SNP), this is the path to the
+    /// firmware volume file (e.g., OVMF_VARS.fd) that contains UEFI variable store.
+    /// This is used together with firmware to provide separated code and variable stores.
+    #[serde(default)]
+    pub firmware_volume: String,
+
     /// Block storage driver to be used for the VM rootfs when backed by a block device.
     /// Options include:
     /// - `virtio-pmem`
@@ -493,6 +501,10 @@ impl BootInfo {
         resolve_path!(self.image, "guest boot image file {} is invalid: {}")?;
         resolve_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
         resolve_path!(self.firmware, "firmware image file {} is invalid: {}")?;
+        resolve_path!(
+            self.firmware_volume,
+            "firmware volume image file {} is invalid: {}"
+        )?;
 
         if self.vm_rootfs_driver.is_empty() {
             self.vm_rootfs_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
@@ -507,6 +519,10 @@ impl BootInfo {
         validate_path!(self.image, "guest boot image file {} is invalid: {}")?;
         validate_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
         validate_path!(self.firmware, "firmware image file {} is invalid: {}")?;
+        validate_path!(
+            self.firmware_volume,
+            "firmware volume image file {} is invalid: {}"
+        )?;
         if !self.image.is_empty() && !self.initrd.is_empty() {
             return Err(std::io::Error::other(
                 "Can not configure both initrd and image for boot",
