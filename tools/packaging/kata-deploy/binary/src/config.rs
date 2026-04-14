@@ -243,7 +243,21 @@ impl Config {
         };
         let crio_drop_in_conf_file_debug = format!("{crio_drop_in_conf_dir}/100-debug");
 
-        let containerd_conf_file = "/etc/containerd/config.toml".to_string();
+        let containerd_config_file_name = env::var("CONTAINERD_CONFIG_FILE_NAME")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "config.toml".to_string());
+        let containerd_conf_path = Path::new("/etc/containerd").join(&containerd_config_file_name);
+        if containerd_conf_path.parent() != Some(Path::new("/etc/containerd"))
+            || containerd_conf_path.file_name() != Some(containerd_config_file_name.as_ref())
+        {
+            return Err(anyhow::anyhow!(
+                "CONTAINERD_CONFIG_FILE_NAME must be a simple file name without path separators, \
+                 got: '{containerd_config_file_name}'"
+            ));
+        }
+        let containerd_conf_file = containerd_conf_path.to_string_lossy().to_string();
         let containerd_conf_file_backup = format!("{containerd_conf_file}.bak");
         let containerd_drop_in_conf_file =
             format!("{dest_dir}/containerd/config.d/kata-deploy.toml");
@@ -503,6 +517,7 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
         info!(
             "* CUSTOM_RUNTIMES_ENABLED: {}",
             self.custom_runtimes_enabled
@@ -558,7 +573,7 @@ impl Config {
                         .await
                         .ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
-                    &self.containerd_conf_file,
+                    k3s_rke2_rendered_config_path(),
                     container_runtime_version.as_deref(),
                 )?;
                 let config_file = k3s_rke2_containerd_template_path(use_v3).to_string();
@@ -801,6 +816,7 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64",
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
+            "CONTAINERD_CONFIG_FILE_NAME",
         ];
         for var in &vars {
             std::env::remove_var(var);
@@ -1192,6 +1208,134 @@ mod tests {
 
         let config = Config::from_env().unwrap();
         assert!(config.multi_install_suffix.is_none());
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_default() {
+        setup_minimal_env();
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+        assert_eq!(
+            config.containerd_conf_file_backup,
+            "/etc/containerd/config.toml.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_custom() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "my-config.toml");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/my-config.toml"
+        );
+        assert_eq!(
+            config.containerd_conf_file_backup,
+            "/etc/containerd/my-config.toml.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_empty_uses_default() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_whitespace_only_uses_default() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "   ");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_trimmed() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "  my-config.toml  ");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/my-config.toml"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_path_separator() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "../etc/shadow");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_slash() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "subdir/config.toml");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_dotdot() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "..");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_dot() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", ".");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_allows_dots_in_name() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "config.v2.toml");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/config.v2.toml"
+        );
 
         cleanup_env_vars();
     }
