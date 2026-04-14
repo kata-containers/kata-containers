@@ -1,0 +1,56 @@
+name: Create authenticated registry test image
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  REGISTRY: quay.io/kata-containers/confidential-containers-auth
+  SUPPORTED_ARCHES: "amd64 s390x arm64"
+
+jobs:
+  build-and-push:
+    name: Build and push multi-arch authenticated test image
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: quay.io
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Install buildah and skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y buildah skopeo
+
+      - name: Push multi-arch authenticated test image
+        run: |
+          set -o errexit
+          set -o pipefail
+          set -o nounset
+
+          tag="test"
+          image_name="${REGISTRY}:${tag}"
+
+          buildah manifest rm "${image_name}" || true
+          buildah manifest create "${image_name}"
+
+          for arch in ${SUPPORTED_ARCHES}; do
+            echo "Pushing authenticated test image for ${arch}"
+            skopeo copy \
+              --insecure-policy \
+              "docker://docker.io/library/busybox:latest" \
+              --override-arch "${arch}" \
+              "docker://${REGISTRY}:${arch}-${tag}"
+            buildah manifest add \
+              "${image_name}" \
+              "docker://${REGISTRY}:${arch}-${tag}"
+          done
+
+          buildah manifest push --all \
+            "${image_name}" \
+            "docker://${image_name}" \
+            --remove-signatures
