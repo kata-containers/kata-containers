@@ -495,6 +495,7 @@ impl VirtSandbox {
                 Ok(Some(ProtectionDeviceConfig::Tdx(TdxConfig {
                     id: "tdx".to_owned(),
                     firmware: hypervisor_config.boot_info.firmware.clone(),
+                    firmware_volume: hypervisor_config.boot_info.firmware_volume.clone(),
                     qgs_port: hypervisor_config.security_info.qgs_port,
                     mrconfigid: init_data,
                     debug: false,

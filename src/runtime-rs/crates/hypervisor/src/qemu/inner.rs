@@ -183,6 +183,7 @@ impl QemuInner {
                     ProtectionDeviceConfig::Tdx(tdx_config) => cmdline.add_tdx_protection_device(
                         &tdx_config.id,
                         &tdx_config.firmware,
+                        &tdx_config.firmware_volume,
                         tdx_config.qgs_port,
                         &tdx_config.mrconfigid,
                         tdx_config.debug,
