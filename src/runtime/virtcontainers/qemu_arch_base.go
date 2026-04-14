@@ -61,8 +61,9 @@ type qemuArch interface {
 	// bridges sets the number bridges for the machine type
 	bridges(number uint32)
 
-	// cpuTopology returns the CPU topology for the given amount of vcpus
-	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
+	// cpuTopology returns the CPU topology for the given amount of vcpus.
+	// numNUMANodes > 1 restructures the topology so vCPUs are grouped by socket per NUMA node.
+	cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32) govmmQemu.SMP
 
 	// cpuModel returns the CPU model for the machine type
 	cpuModel() string
@@ -324,16 +325,29 @@ func (q *qemuArchBase) bridges(number uint32) {
 	}
 }
 
-func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
-	smp := govmmQemu.SMP{
+func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32) govmmQemu.SMP {
+	if numNUMANodes > 1 {
+		coresPerSocket := (maxvcpus + numNUMANodes - 1) / numNUMANodes
+		if coresPerSocket == 0 {
+			coresPerSocket = 1
+		}
+		smpMaxCPUs := numNUMANodes * coresPerSocket * defaultThreads
+		return govmmQemu.SMP{
+			CPUs:    vcpus,
+			Sockets: numNUMANodes,
+			Cores:   coresPerSocket,
+			Threads: defaultThreads,
+			MaxCPUs: smpMaxCPUs,
+		}
+	}
+
+	return govmmQemu.SMP{
 		CPUs:    vcpus,
 		Sockets: maxvcpus,
 		Cores:   defaultCores,
 		Threads: defaultThreads,
 		MaxCPUs: maxvcpus,
 	}
-
-	return smp
 }
 
 func (q *qemuArchBase) cpuModel() string {
