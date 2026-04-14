@@ -7,7 +7,7 @@ license.workspace = true
 
 [dependencies]
 # Async runtime
-tokio.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
 
 anyhow.workspace = true
 
