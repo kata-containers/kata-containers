@@ -588,6 +588,33 @@ impl ToQemuParams for Bios {
 }
 
 #[derive(Debug)]
+struct Pflash {
+    filepath: String,
+    readonly: bool,
+}
+
+impl Pflash {
+    fn new(filepath: String, readonly: bool) -> Self {
+        Pflash { filepath, readonly }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Pflash {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        // For pflash, we use -drive if=pflash,format=raw,readonly=on/off,file=...
+        let readonly_str = if self.readonly { "on" } else { "off" };
+        Ok(vec![
+            "-drive".to_owned(),
+            format!(
+                "if=pflash,format=raw,readonly={},file={}",
+                readonly_str, self.filepath
+            ),
+        ])
+    }
+}
+
+#[derive(Debug)]
 struct Knobs {
     no_user_config: bool,
     nodefaults: bool,
@@ -2274,6 +2301,11 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_virtio_balloon();
         }
 
+        // Add pflash devices if configured (for arm64 UEFI or x86_64 with pflash)
+        if !config.machine_info.pflashes.is_empty() {
+            qemu_cmd_line.add_pflash_devices(&config.machine_info.pflashes);
+        }
+
         if let Some(seccomp_sandbox) = &config
             .security_info
             .seccomp_sandbox
@@ -2531,6 +2563,20 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(balloon_device));
     }
 
+    /// Add pflash devices for firmware.
+    /// On arm64, two pflash images are required for UEFI firmware:
+    /// - First pflash (readonly): contains the UEFI firmware code
+    /// - Second pflash (writable): contains the UEFI variable store
+    /// On x86_64, pflash can be used for OVMF firmware with confidential computing.
+    pub fn add_pflash_devices(&mut self, pflashes: &[String]) {
+        for (index, pflash_path) in pflashes.iter().enumerate() {
+            // First pflash is readonly (firmware code), subsequent ones are writable (variable store)
+            let readonly = index == 0;
+            let pflash = Pflash::new(pflash_path.clone(), readonly);
+            self.devices.push(Box::new(pflash));
+        }
+    }
+
     pub fn add_se_protection_device(&mut self) {
         let se_object = ObjectSeGuest::new("pv0");
         self.devices.push(Box::new(se_object));
@@ -2564,7 +2610,12 @@ impl<'a> QemuCmdLine<'a> {
         let sev_object = ObjectSevSnpGuest::new(false, cbitpos, phys_addr_reduction, None);
         self.devices.push(Box::new(sev_object));
 
-        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+        // SEV uses -drive if=pflash for firmware (not -bios)
+        // See: https://github.com/kata-containers/kata-containers/blob/main/src/runtime/virtcontainers/qemu_amd64.go
+        if !firmware.is_empty() {
+            let pflash = Pflash::new(firmware.to_owned(), true);
+            self.devices.push(Box::new(pflash));
+        }
 
         self.machine
             .set_confidential_guest_support("sev")
