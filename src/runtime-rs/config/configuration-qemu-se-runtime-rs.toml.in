@@ -531,7 +531,7 @@ dial_timeout_ms = 90
 # You'd better not change the value of dial_timeout_ms, unless you have an
 # idea of what you are doing.
 # (default: 3000)
-reconnect_timeout_ms = 5000
+reconnect_timeout_ms = 45000
 
 # Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
 # to create their Unix sockets after being spawned by the agent.
