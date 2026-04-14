@@ -2638,7 +2638,12 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(sev_snp_object));
 
-        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+        // SEV-SNP uses -bios for firmware (not pflash like SEV)
+        // See: https://github.com/kata-containers/kata-containers/blob/main/src/runtime/pkg/govmm/qemu/qemu.go
+        // SNP: config.Bios = object.File (line 440)
+        if !firmware.is_empty() {
+            self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+        }
 
         self.machine
             .set_kernel_irqchip("split")
@@ -2657,9 +2662,16 @@ impl<'a> QemuCmdLine<'a> {
         mrconfigid: &Option<String>,
         debug: bool,
     ) {
+        // For TDX, firmware is passed via -bios parameter (not through tdx-guest object)
+        // firmware_volume is currently not used by QEMU's tdx-guest object
+        // See: https://www.qemu.org/docs/master/system/i386/tdx.html#launching-a-td-tdx-vm
         let tdx_object = ObjectTdxGuest::new(id, mrconfigid.clone(), qgs_port, debug);
         self.devices.push(Box::new(tdx_object));
-        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        // Add -bios parameter for TDVF firmware
+        if !firmware.is_empty() {
+            self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+        }
 
         self.machine
             .set_kernel_irqchip("split")
