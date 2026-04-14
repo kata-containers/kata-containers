@@ -6,51 +6,32 @@ on:
 permissions: {}
 
 env:
-  REGISTRY: quay.io/kata-containers/confidential-containers-auth
-  SUPPORTED_ARCHES: "amd64 s390x arm64"
+  REGISTRY: quay.io
+  IMAGE_NAME: kata-containers/confidential-containers-auth
 
 jobs:
   build-and-push:
     name: Build and push multi-arch authenticated test image
     runs-on: ubuntu-24.04
     steps:
-      - name: Login to Kata Containers quay.io
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to Quay.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.AUTHENTICATED_IMAGE_USER }}
+          password: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
-      - name: Install buildah and skopeo
+      - name: Build and push multi-arch image
         run: |
-          sudo apt-get update
-          sudo apt-get install -y buildah skopeo
-
-      - name: Push multi-arch authenticated test image
-        run: |
-          set -o errexit
-          set -o pipefail
-          set -o nounset
-
-          tag="test"
-          image_name="${REGISTRY}:${tag}"
-
-          buildah manifest rm "${image_name}" || true
-          buildah manifest create "${image_name}"
-
-          for arch in ${SUPPORTED_ARCHES}; do
-            echo "Pushing authenticated test image for ${arch}"
-            skopeo copy \
-              --insecure-policy \
-              "docker://docker.io/library/busybox:latest" \
-              --override-arch "${arch}" \
-              "docker://${REGISTRY}:${arch}-${tag}"
-            buildah manifest add \
-              "${image_name}" \
-              "docker://${REGISTRY}:${arch}-${tag}"
-          done
-
-          buildah manifest push --all \
-            "${image_name}" \
-            "docker://${image_name}" \
-            --remove-signatures
+          echo 'FROM busybox:latest' | \
+            docker buildx build \
+              --platform linux/amd64,linux/s390x,linux/arm64 \
+              --tag "${REGISTRY}/${IMAGE_NAME}:test" \
+              --push \
+              -
