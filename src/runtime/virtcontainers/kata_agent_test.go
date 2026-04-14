@@ -638,7 +638,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constrainGRPCSpec(g, true, true, "", true)
+	k.constrainGRPCSpec(g, true, true, "", true, nil)
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
@@ -1369,4 +1369,52 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTranslateHostMemsToGuest(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+
+	result := translateHostMemsToGuest("0", numaNodes)
+	assert.Equal("0", result)
+
+	result = translateHostMemsToGuest("1", numaNodes)
+	assert.Equal("1", result)
+
+	result = translateHostMemsToGuest("0-1", numaNodes)
+	assert.Equal("0-1", result)
+
+	result = translateHostMemsToGuest("0,1", numaNodes)
+	assert.Equal("0-1", result)
+
+	result = translateHostMemsToGuest("42", numaNodes)
+	assert.Equal("", result)
+
+	result = translateHostMemsToGuest("invalid", numaNodes)
+	assert.Equal("", result)
+
+	result = translateHostMemsToGuest("", numaNodes)
+	assert.Equal("", result)
+}
+
+func TestTranslateHostMemsToGuestRangeNodes(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0-1", HostCPUs: "0-7"},
+		{HostNodes: "2-3", HostCPUs: "8-15"},
+	}
+
+	result := translateHostMemsToGuest("1", numaNodes)
+	assert.Equal("0", result)
+
+	result = translateHostMemsToGuest("2", numaNodes)
+	assert.Equal("1", result)
+
+	result = translateHostMemsToGuest("0,3", numaNodes)
+	assert.Equal("0-1", result)
 }

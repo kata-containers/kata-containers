@@ -1742,12 +1742,17 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		return err
 	}
 
-	// There currently isn't a notion of cpusets.cpus or mems being tracked
-	// inside of the guest. Make sure we clear these before asking agent to update
-	// the container's cgroups.
+	// Cpus/Mems in cgroup cpuset are host-relative; clear Cpus since vCPU
+	// numbering differs inside the guest. For Mems, translate host NUMA node
+	// IDs to guest node IDs when multi-NUMA is configured, otherwise clear.
 	if resources.CPU != nil {
-		resources.CPU.Mems = ""
 		resources.CPU.Cpus = ""
+		numaNodes := c.sandbox.config.HypervisorConfig.GuestNUMANodes
+		if len(numaNodes) > 1 && resources.CPU.Mems != "" {
+			resources.CPU.Mems = translateHostMemsToGuest(resources.CPU.Mems, numaNodes)
+		} else {
+			resources.CPU.Mems = ""
+		}
 	}
 
 	return c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources)

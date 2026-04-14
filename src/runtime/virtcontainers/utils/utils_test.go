@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
@@ -814,4 +815,44 @@ func TestDistributeVCPUsProportionallyTooFewVCPUs(t *testing.T) {
 	_, err := DistributeVCPUsProportionally(nodes, 2)
 	assert.Error(err)
 	assert.Contains(err.Error(), "must be >= NUMA node count")
+}
+
+func TestFilterNUMANodesByCPUSet(t *testing.T) {
+	assert := assert.New(t)
+
+	nodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-55,112-167"},
+		{HostNodes: "1", HostCPUs: "56-111,168-223"},
+	}
+
+	// Sandbox cpuset only from node 0 -> should return 1 node
+	sandboxCPUs, _ := cpuset.Parse("1-40,113-152")
+	filtered := FilterNUMANodesByCPUSet(nodes, sandboxCPUs)
+	assert.Len(filtered, 1)
+	assert.Equal("0", filtered[0].HostNodes)
+
+	// Sandbox cpuset from both nodes -> should return 2 nodes
+	sandboxCPUs, _ = cpuset.Parse("1-40,56-80")
+	filtered = FilterNUMANodesByCPUSet(nodes, sandboxCPUs)
+	assert.Len(filtered, 2)
+
+	// Sandbox cpuset only from node 1 -> should return 1 node
+	sandboxCPUs, _ = cpuset.Parse("60-70,170-180")
+	filtered = FilterNUMANodesByCPUSet(nodes, sandboxCPUs)
+	assert.Len(filtered, 1)
+	assert.Equal("1", filtered[0].HostNodes)
+
+	// Empty cpuset -> no filtering, return all
+	emptyCPUs := cpuset.NewCPUSet()
+	filtered = FilterNUMANodesByCPUSet(nodes, emptyCPUs)
+	assert.Len(filtered, 2)
+
+	// Single-node host (1 NUMA node) -> returns 1 regardless
+	singleNode := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-7"},
+	}
+	sandboxCPUs, _ = cpuset.Parse("0-3")
+	filtered = FilterNUMANodesByCPUSet(singleNode, sandboxCPUs)
+	assert.Len(filtered, 1)
+	assert.Equal("0", filtered[0].HostNodes)
 }

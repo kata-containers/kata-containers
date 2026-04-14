@@ -625,6 +625,29 @@ func GetGuestNUMANodes(numaMapping []string) ([]types.GuestNUMANode, error) {
 	return numaNodes, nil
 }
 
+// FilterNUMANodesByCPUSet returns only those guest NUMA nodes whose HostCPUs
+// intersect with the given sandbox cpuset. If sandboxCPUs is empty (size 0),
+// no filtering is applied and the original slice is returned unchanged.
+func FilterNUMANodesByCPUSet(nodes []types.GuestNUMANode, sandboxCPUs cpuset.CPUSet) []types.GuestNUMANode {
+	if sandboxCPUs.Size() == 0 {
+		return nodes
+	}
+	var filtered []types.GuestNUMANode
+	for _, n := range nodes {
+		hostCPUs, err := cpuset.Parse(n.HostCPUs)
+		if err != nil {
+			continue
+		}
+		if hostCPUs.Intersection(sandboxCPUs).Size() > 0 {
+			filtered = append(filtered, n)
+		}
+	}
+	if len(filtered) == 0 {
+		return nodes
+	}
+	return filtered
+}
+
 // NUMADistEntry represents a single NUMA distance measurement between two nodes.
 type NUMADistEntry struct {
 	Src uint32

@@ -34,6 +34,7 @@ import (
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -1018,7 +1019,36 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	return nil
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool) error {
+// translateHostMemsToGuest converts a host cpuset.mems string (e.g. "0,2")
+// into guest NUMA node IDs. Each guest NUMA node index maps to a set of host
+// nodes via GuestNUMANode.HostNodes. If a host node from `mems` appears in
+// a GuestNUMANode's HostNodes, the corresponding guest node index is included.
+func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) string {
+	hostSet, err := cpuset.Parse(hostMems)
+	if err != nil {
+		return ""
+	}
+	hostSlice := hostSet.ToSlice()
+	var guestNodes []int
+	for guestIdx, gn := range numaNodes {
+		nodeSet, err := cpuset.Parse(gn.HostNodes)
+		if err != nil {
+			continue
+		}
+		for _, hostNode := range hostSlice {
+			if nodeSet.Contains(hostNode) {
+				guestNodes = append(guestNodes, guestIdx)
+				break
+			}
+		}
+	}
+	if len(guestNodes) == 0 {
+		return ""
+	}
+	return cpuset.NewCPUSet(guestNodes...).String()
+}
+
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1060,7 +1090,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		}
 	}
 
-	// By now only CPU constraints are supported
 	// Issue: https://github.com/kata-containers/runtime/issues/158
 	// Issue: https://github.com/kata-containers/runtime/issues/204
 	grpcSpec.Linux.Resources.Devices = nil
@@ -1069,7 +1098,12 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	grpcSpec.Linux.Resources.Network = nil
 	if grpcSpec.Linux.Resources.CPU != nil {
 		grpcSpec.Linux.Resources.CPU.Cpus = ""
-		grpcSpec.Linux.Resources.CPU.Mems = ""
+		if len(numaNodes) > 1 && grpcSpec.Linux.Resources.CPU.Mems != "" {
+			guestMems := translateHostMemsToGuest(grpcSpec.Linux.Resources.CPU.Mems, numaNodes)
+			grpcSpec.Linux.Resources.CPU.Mems = guestMems
+		} else {
+			grpcSpec.Linux.Resources.CPU.Mems = ""
+		}
 	}
 
 	// Disable network and time namespaces since they are handled on the host
@@ -1495,7 +1529,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes)
 	if err != nil {
 		return nil, err
 	}
