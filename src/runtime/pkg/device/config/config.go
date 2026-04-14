@@ -418,6 +418,10 @@ type VFIODev struct {
 	// Type of VFIO device
 	Type VFIODeviceType
 
+	// NUMANode is the host NUMA node this device is attached to.
+	// -1 means no affinity or unknown.
+	NUMANode int
+
 	// IsPCIe specifies device is PCIe or PCI
 	IsPCIe bool
 
