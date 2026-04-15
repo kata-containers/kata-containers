@@ -174,6 +174,7 @@ const (
 	grpcGetIPTablesRequest                    = "grpc.GetIPTablesRequest"
 	grpcSetIPTablesRequest                    = "grpc.SetIPTablesRequest"
 	grpcSetPolicyRequest                      = "grpc.SetPolicyRequest"
+	grpcGetDiagnosticDataRequest              = "grpc.GetDiagnosticDataRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -2409,6 +2410,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
 	}
+	k.reqHandlers[grpcGetDiagnosticDataRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.GetDiagnosticData(ctx, req.(*grpc.GetDiagnosticDataRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2739,6 +2743,17 @@ func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
 		return grpcStatus.Errorf(codes.DeadlineExceeded, "SetPolicyRequest timed out")
 	}
 	return err
+}
+
+func (k *kataAgent) getDiagnosticData(ctx context.Context, logType string, containerID string) (string, error) {
+	resp, err := k.sendReq(ctx, &grpc.GetDiagnosticDataRequest{
+		LogType:     logType,
+		ContainerId: containerID,
+	})
+	if err != nil {
+		return "", err
+	}
+	return resp.(*grpc.GetDiagnosticDataResponse).Data, nil
 }
 
 // IsNydusRootFSType checks if the given mount type indicates Nydus is used.

@@ -21,6 +21,8 @@ struct ContainerdRuntimeParams {
     config_path: String,
     /// Pod annotations to allow
     pod_annotations: &'static str,
+    /// Container annotations to allow
+    container_annotations: &'static str,
     /// Optional snapshotter to configure
     snapshotter: Option<String>,
 }
@@ -120,6 +122,11 @@ fn write_containerd_runtime_config(
     )?;
     toml_utils::set_toml_value(
         config_file,
+        &format!("{runtime_table}.container_annotations"),
+        params.container_annotations,
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
         &format!("{runtime_options_table}.ConfigPath"),
         &params.config_path,
     )?;
@@ -182,6 +189,7 @@ pub async fn configure_containerd_runtime(
     );
 
     let pod_annotations = "[\"io.katacontainers.*\"]";
+    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
 
     // Determine snapshotter if configured
     let snapshotter = config
@@ -221,6 +229,7 @@ pub async fn configure_containerd_runtime(
             configuration
         ),
         pod_annotations,
+        container_annotations,
         snapshotter,
     };
 
@@ -258,6 +267,7 @@ pub async fn configure_custom_containerd_runtime(
     );
 
     let pod_annotations = "[\"io.katacontainers.*\"]";
+    let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
 
     // Determine snapshotter if specified
     let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
@@ -282,6 +292,7 @@ pub async fn configure_custom_containerd_runtime(
             config.dest_dir, custom_runtime.handler, custom_runtime.base_config
         ),
         pod_annotations,
+        container_annotations,
         snapshotter,
     };
 
@@ -611,6 +622,7 @@ mod tests {
             config_path: "\"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml\""
                 .to_string(),
             pod_annotations: "[\"io.katacontainers.*\"]",
+            container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
     }
