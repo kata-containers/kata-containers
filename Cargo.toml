@@ -163,7 +163,7 @@ opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 procfs = "0.12.0"
 prometheus = { version = "0.14.0", features = ["process"] }
 protobuf = "3.7.2"
-rand = "0.8.4"
+rand = "0.10.1"
 regex = "1.10.5"
 rstest = "0.18.0"
 rtnetlink = "0.14.0"

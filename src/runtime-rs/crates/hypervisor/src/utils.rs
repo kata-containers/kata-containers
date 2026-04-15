@@ -28,7 +28,7 @@ use nix::{
     sys::stat,
     unistd::{chown, setgroups, Gid, Uid},
 };
-use rand::{thread_rng, Rng};
+use rand::{rng, RngExt};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -253,7 +253,7 @@ pub fn create_vmm_user() -> Result<String> {
 
     let max_attempt = 5;
     for _ in 0..max_attempt {
-        let user_name = format!("kata-{}", thread_rng().gen_range(0..10000));
+        let user_name = format!("kata-{}", rng().random_range(0..10000));
         let status = Command::new(&useradd_path)
             .arg("-M")
             .arg("-s")

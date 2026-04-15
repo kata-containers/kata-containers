@@ -5,7 +5,7 @@
 //
 
 use anyhow::{Context, Result};
-use rand::Rng;
+use rand::RngExt;
 use std::os::unix::prelude::AsRawFd;
 use tokio::fs::{File, OpenOptions};
 
@@ -195,13 +195,13 @@ pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
         .context(format!(
             "failed to open {VHOST_VSOCK_DEVICE}, try to run modprobe vhost_vsock."
         ))?;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Try 50 times to find a context ID that is not in use.
     for _ in 0..CID_RETRY_COUNT {
         // First usable CID above VMADDR_CID_HOST (see vsock(7))
         let first_usable_cid = 3;
-        let rand_cid = rng.gen_range(first_usable_cid..=(u32::MAX));
+        let rand_cid = rng.random_range(first_usable_cid..=(u32::MAX));
         let guest_cid =
             unsafe { vhost_vsock_set_guest_cid(vhost_fd.as_raw_fd(), &(rand_cid as u64)) };
         match guest_cid {

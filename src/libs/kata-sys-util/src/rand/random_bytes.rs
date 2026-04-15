@@ -6,7 +6,8 @@
 
 use std::fmt;
 
-use rand::RngCore;
+use rand::rng as thread_rng;
+use rand::Rng;
 
 pub struct RandomBytes {
     pub bytes: Vec<u8>,
@@ -15,7 +16,7 @@ pub struct RandomBytes {
 impl RandomBytes {
     pub fn new(n: usize) -> Self {
         let mut bytes = vec![0u8; n];
-        rand::thread_rng().fill_bytes(&mut bytes);
+        thread_rng().fill_bytes(&mut bytes);
         Self { bytes }
     }
 }
