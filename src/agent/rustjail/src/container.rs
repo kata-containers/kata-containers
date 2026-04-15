@@ -28,8 +28,6 @@ use crate::cgroups::fs::Manager as FsManager;
 use crate::cgroups::mock::Manager as FsManager;
 use crate::cgroups::systemd::manager::Manager as SystemdManager;
 use crate::cgroups::{DevicesCgroupInfo, Manager};
-#[cfg(feature = "standard-oci-runtime")]
-use crate::console;
 use crate::log_child;
 use crate::process::Process;
 use crate::process::ProcessOperations;
@@ -266,8 +264,6 @@ pub struct LinuxContainer {
     pub status: ContainerStatus,
     pub created: SystemTime,
     pub logger: Logger,
-    #[cfg(feature = "standard-oci-runtime")]
-    pub console_socket: PathBuf,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -421,9 +417,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     // deserialize cm_str into FsManager and SystemdManager separately
     let fs_cm: Result<FsManager, serde_json::Error> = serde_json::from_str(cm_str);
     let systemd_cm: Result<SystemdManager, serde_json::Error> = serde_json::from_str(cm_str);
-
-    #[cfg(feature = "standard-oci-runtime")]
-    let csocket_fd = console::setup_console_socket(&std::env::var(CONSOLE_SOCKET_FD)?)?;
 
     let p = if spec.process().is_some() {
         spec.process().as_ref().unwrap()
@@ -791,19 +784,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let _ = unistd::close(cwfd);
 
     if oci_process.terminal().unwrap_or_default() {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "standard-oci-runtime")] {
-                if let Some(csocket_fd) = csocket_fd {
-                    console::setup_master_console(csocket_fd)?;
-                } else {
-                    return Err(anyhow!("failed to get console master socket fd"));
-                }
-            }
-            else {
-                unistd::setsid().context("create a new session")?;
-                unsafe { libc::ioctl(0, libc::TIOCSCTTY) };
-            }
-        }
+        unistd::setsid().context("create a new session")?;
+        unsafe { libc::ioctl(0, libc::TIOCSCTTY) };
     }
 
     if init {
@@ -1145,7 +1127,6 @@ impl BaseContainer for LinuxContainer {
         }
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
-        #[cfg(not(feature = "standard-oci-runtime"))]
         if !pidns.enabled {
             return Err(anyhow!("cannot find the pid ns"));
         }
@@ -1159,10 +1140,6 @@ impl BaseContainer for LinuxContainer {
 
         #[allow(unused_mut)]
         let mut console_name = PathBuf::from("");
-        #[cfg(feature = "standard-oci-runtime")]
-        if !self.console_socket.as_os_str().is_empty() {
-            console_name = self.console_socket.clone();
-        }
 
         let mut child = child
             .arg("init")
@@ -1746,15 +1723,7 @@ impl LinuxContainer {
                 .unwrap()
                 .as_secs(),
             logger: logger.new(o!("module" => "rustjail", "subsystem" => "container", "cid" => id)),
-            #[cfg(feature = "standard-oci-runtime")]
-            console_socket: Path::new("").to_path_buf(),
         })
-    }
-
-    #[cfg(feature = "standard-oci-runtime")]
-    pub fn set_console_socket(&mut self, console_socket: &Path) -> Result<()> {
-        self.console_socket = console_socket.to_path_buf();
-        Ok(())
     }
 }
 
