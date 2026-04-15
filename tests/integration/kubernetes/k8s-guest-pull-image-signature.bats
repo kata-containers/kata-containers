@@ -21,16 +21,11 @@ setup() {
         skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
     fi
 
-    tag_suffix=""
-    if [ "$(uname -m)" != "x86_64" ]; then
-        tag_suffix="-$(uname -m)"
-    fi
-
     setup_common || die "setup_common failed"
     UNSIGNED_UNPROTECTED_REGISTRY_IMAGE="quay.io/prometheus/busybox:latest"
-    UNSIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:unsigned${tag_suffix}"
-    COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed${tag_suffix}"
-    COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed-key2${tag_suffix}"
+    UNSIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:unsigned"
+    COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed"
+    COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed-key2"
     SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
 }
 
@@ -66,9 +61,8 @@ function setup_kbs_image_policy() {
 EOF
     )
 
-    # This public key is corresponding to a private key that was generated to test signed images in image-rs CI.
     # TODO: Update the CI to generate a signed image together with verification. See issue #9360
-    public_key=$(curl -sSL "https://raw.githubusercontent.com/confidential-containers/guest-components/075b9a9ee77227d9d92b6f3649ef69de5e72d204/image-rs/test_data/signature/cosign/cosign1.pub")
+    public_key=$(curl -sSL "https://raw.githubusercontent.com/confidential-containers/infra/main/container-images/keys/sign/cosign.pub")
 
     if ! is_confidential_hardware; then
         kbs_set_allow_all_resources
