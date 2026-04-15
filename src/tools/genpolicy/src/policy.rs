@@ -409,6 +409,9 @@ pub struct RequestDefaults {
 
     /// Allow Host writing to Guest containers stdin.
     pub WriteStreamRequest: bool,
+
+    /// Allow Host to retrieve diagnostic data from the Guest.
+    pub GetDiagnosticDataRequest: bool,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -803,6 +806,22 @@ impl AgentPolicy {
                         .clone(),
                 );
             }
+        }
+
+        // Whether these appear on the OCI spec depends on the container runtime configuration
+        // (e.g. containerd `container_annotations` allowlisting `io.kubernetes.container.*`).
+        // When allowed, the kubelet passes path/policy (defaults: /dev/termination-log, File).
+        // Do not put them in OCI.Annotations — that would require every CreateContainer input to
+        // carry the same keys. Optional keys are allowed via runtime_anno_patterns instead.
+        if !is_pause_container {
+            runtime_anno_patterns.insert(
+                "^io\\.kubernetes\\.container\\.terminationMessagePath$".to_string(),
+                "^/.*$".to_string(),
+            );
+            runtime_anno_patterns.insert(
+                "^io\\.kubernetes\\.container\\.terminationMessagePolicy$".to_string(),
+                "^(File|FallbackToLogsOnError)$".to_string(),
+            );
         }
 
         for default_device in &c_settings.Linux.Devices {
