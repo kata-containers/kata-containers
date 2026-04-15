@@ -46,10 +46,9 @@ jobs:
         include:
           - snapshotter: devmapper
             pull-type: default
-            deploy-cmd: configure-snapshotter
+            snapshotter-cmd: configure-snapshotter
           - snapshotter: nydus
             pull-type: guest-pull
-            deploy-cmd: deploy-snapshotter
         exclude:
           - snapshotter: overlayfs
             vmm: qemu
@@ -104,9 +103,9 @@ jobs:
       # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
         env:
-          DEPLOY_CMD: ${{ matrix.deploy-cmd }}
-        run: bash tests/integration/kubernetes/gha-run.sh "${DEPLOY_CMD}"
-        if: ${{ matrix.snapshotter != 'overlayfs' }}
+          SNAPSHOTTER_CMD: ${{ matrix.snapshotter-cmd }}
+        run: bash tests/integration/kubernetes/gha-run.sh "${SNAPSHOTTER_CMD}"
+        if: ${{ matrix.snapshotter != 'overlayfs' && matrix.snapshotter-cmd != '' }}
 
       - name: Deploy Kata
         timeout-minutes: 20
