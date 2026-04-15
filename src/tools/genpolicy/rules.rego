@@ -1153,6 +1153,33 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
     print("check_mount 3: true")
 }
 
+check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+    # Unified cgroup v2 mounts on newer kernels may add flags genpolicy does not
+    # embed (e.g. nsdelegate, memory_recursiveprot). Allow extras listed in
+    # policy_data.cluster_config.cgroup_mount_extras_allowed (from genpolicy-settings.json).
+    i_mount.type_ == "cgroup"
+    p_mount.type_ == "cgroup"
+    p_mount.destination == i_mount.destination
+    p_mount.source == i_mount.source
+
+    allowed_extras := {x | x = policy_data.cluster_config.cgroup_mount_extras_allowed[_]}
+
+    p_opts := {x | x = p_mount.options[_]}
+    i_opts := {x | x = i_mount.options[_]}
+    every opt in p_mount.options {
+        opt in i_opts
+    }
+
+    extras := i_opts - p_opts
+    every extra in extras {
+        extra in allowed_extras
+    }
+
+    mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id)
+
+    print("check_mount 4: true")
+}
+
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     print("mount_source_allows 1: regex1 =", regex1)

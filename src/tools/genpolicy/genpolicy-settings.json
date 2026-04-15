@@ -335,7 +335,11 @@
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
         "guest_pull": true,
         "pause_container_id_policy": "v1",
-        "encrypted_emptydir": true
+        "encrypted_emptydir": true,
+        "cgroup_mount_extras_allowed": [
+            "nsdelegate",
+            "memory_recursiveprot"
+        ]
     },
     "request_defaults": {
         "CreateContainerRequest": {
