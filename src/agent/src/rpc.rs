@@ -2191,8 +2191,8 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         }
 
         // Create new symbolic link
-        let src = PathBuf::from(OsStr::from_bytes(&req.data));
-        unistd::symlinkat(&src, None, &path)?;
+        let symlink_target = PathBuf::from(OsStr::from_bytes(&req.data));
+        unistd::symlinkat(&symlink_target, None, &path)?;
 
         // Set symlink ownership (permissions not supported for symlinks)
         let path_str = CString::new(path.as_os_str().as_bytes())?;
