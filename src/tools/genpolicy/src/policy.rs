@@ -64,6 +64,9 @@ pub struct PolicyData {
 
     /// Device settings read from genpolicy-settings.json.
     pub devices: Devices,
+
+    /// Cluster-level settings read from genpolicy-settings.json.
+    pub cluster_config: ClusterConfig,
 }
 
 /// OCI Container spec. This struct is very similar to the Spec struct from
@@ -470,6 +473,11 @@ pub struct ClusterConfig {
     /// Whether emptyDirs are encrypted with modified metadata in the
     /// mount and a storage object for the block device.
     pub encrypted_emptydir: bool,
+
+    /// Cgroup v2 mount options that may appear beyond what genpolicy embeds
+    /// (e.g. "nsdelegate", "memory_recursiveprot" on newer kernels).
+    #[serde(default)]
+    pub cgroup_mount_extras_allowed: Vec<String>,
 }
 
 /// Describes patterns for supported VFIO devices.
@@ -638,6 +646,7 @@ impl AgentPolicy {
             common: self.config.settings.common.clone(),
             sandbox: self.config.settings.sandbox.clone(),
             devices: self.config.settings.devices.clone(),
+            cluster_config: self.config.settings.cluster_config.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
