@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use dbs_address_space::AddressSpace;
 use dbs_device::resources::DeviceResources;
-use dbs_interrupt::{DeviceInterruptManager, DeviceInterruptMode, InterruptIndex, KvmIrqManager};
+use dbs_interrupt::{
+    DeviceInterruptManager, DeviceInterruptMode, InterruptIndex, InterruptManager,
+};
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::{IoEventAddress, NoDatamatch, VmFd};
 use log::{debug, error, info, warn};
@@ -28,7 +30,7 @@ pub struct MmioV2DeviceState<AS: GuestAddressSpace + Clone, Q: QueueT, R: GuestM
     vm_fd: Arc<VmFd>,
     vm_as: AS,
     address_space: AddressSpace,
-    intr_mgr: DeviceInterruptManager<Arc<KvmIrqManager>>,
+    intr_mgr: DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>,
     device_resources: DeviceResources,
     queues: Vec<VirtioQueueConfig<Q>>,
 
@@ -70,7 +72,7 @@ where
         vm_fd: Arc<VmFd>,
         vm_as: AS,
         address_space: AddressSpace,
-        irq_manager: Arc<KvmIrqManager>,
+        irq_manager: Arc<Box<dyn InterruptManager>>,
         device_resources: DeviceResources,
         mmio_base: u64,
         doorbell_enabled: bool,
@@ -605,6 +607,7 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use dbs_interrupt::KvmIrqManager;
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
@@ -628,7 +631,8 @@ pub(crate) mod tests {
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         vm_fd.create_irq_chip().unwrap();
 
-        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
         irq_manager.initialize().unwrap();
 
         let device = MmioDevice::new(ctrl_queue_size);

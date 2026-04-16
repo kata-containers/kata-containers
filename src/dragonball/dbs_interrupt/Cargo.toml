@@ -11,6 +11,7 @@ keywords = ["dragonball", "secure-sandbox", "device", "interrupt"]
 readme = "README.md"
 
 [dependencies]
+bilge = { workspace = true }
 dbs-device = { workspace = true }
 dbs-arch = { workspace = true }
 kvm-bindings = { workspace = true, optional = true }
@@ -32,3 +33,6 @@ kvm-irq = ["kvm-ioctls", "kvm-bindings"]
 kvm-legacy-irq = ["legacy-irq", "kvm-irq"]
 kvm-msi-generic = ["msi-irq", "kvm-irq"]
 kvm-msi-irq = ["kvm-msi-generic"]
+
+split-irq = ["kvm-ioctls", "kvm-bindings"]
+split-legacy-irq = ["legacy-irq", "split-irq"]

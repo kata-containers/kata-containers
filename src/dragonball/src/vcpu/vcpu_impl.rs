@@ -15,6 +15,8 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Barrier};
 use std::thread;
 
+#[cfg(target_arch = "x86_64")]
+use dbs_interrupt::{InterruptManager, IOAPIC_BASE, IOAPIC_SIZE};
 use dbs_utils::metric::IncMetric;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::{KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
@@ -314,6 +316,11 @@ pub struct Vcpu {
     /// Multiprocessor affinity register recorded for aarch64
     #[cfg(target_arch = "aarch64")]
     pub(crate) mpidr: u64,
+
+    // InterruptManager to handle IOAPIC operations for x86_64 CPU when userspace
+    // IOAPIC is used.
+    #[cfg(target_arch = "x86_64")]
+    irq_manager: Arc<Box<dyn InterruptManager>>,
 }
 
 // Using this for easier explicit type-casting to help IDEs interpret the code.
@@ -463,11 +470,27 @@ impl Vcpu {
                         Ok(VcpuEmulation::Handled)
                     }
                     VcpuExit::MmioRead(addr, data) => {
+                        #[cfg(target_arch = "x86_64")]
+                        if addr >= IOAPIC_BASE as u64 && addr < (IOAPIC_BASE + IOAPIC_SIZE) as u64 {
+                            let irq_manager = self.irq_manager.clone();
+                            let _ = irq_manager.ioapic_read(addr, data);
+                            self.metrics.exit_mmio_read.inc();
+                            return Ok(VcpuEmulation::Handled);
+                        }
+
                         let _ = self.io_mgr.mmio_read(addr, data);
                         self.metrics.exit_mmio_read.inc();
                         Ok(VcpuEmulation::Handled)
                     }
                     VcpuExit::MmioWrite(addr, data) => {
+                        #[cfg(target_arch = "x86_64")]
+                        if addr >= IOAPIC_BASE as u64 && addr < (IOAPIC_BASE + IOAPIC_SIZE) as u64 {
+                            let irq_manager = self.irq_manager.clone();
+                            let _ = irq_manager.ioapic_write(addr, data);
+                            self.metrics.exit_mmio_write.inc();
+                            return Ok(VcpuEmulation::Handled);
+                        }
+
                         let _ = self.io_mgr.mmio_write(addr, data);
                         self.metrics.exit_mmio_write.inc();
                         Ok(VcpuEmulation::Handled)
@@ -789,6 +812,8 @@ pub mod tests {
 
     use arc_swap::ArcSwap;
     use dbs_device::device_manager::IoManager;
+    #[cfg(target_arch = "x86_64")]
+    use dbs_interrupt::KvmIrqManager;
     use lazy_static::lazy_static;
     use test_utils::skip_if_kvm_unaccessable;
 
@@ -850,6 +875,8 @@ pub mod tests {
         let vcpu_state_event = EventFd::new(libc::EFD_NONBLOCK).unwrap();
         let (tx, rx) = channel();
         let time_stamp = TimestampUs::default();
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(Arc::new(vm))));
 
         let vcpu = Vcpu::new_x86_64(
             0,
@@ -861,6 +888,7 @@ pub mod tests {
             tx,
             time_stamp,
             false,
+            irq_manager,
         )
         .unwrap();
 

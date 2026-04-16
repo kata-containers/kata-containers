@@ -18,7 +18,7 @@ dbs-allocator = { workspace = true }
 dbs-arch = { workspace = true }
 dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
-dbs-interrupt = { workspace = true, features = ["kvm-irq"] }
+dbs-interrupt = { workspace = true, features = ["kvm-irq", "split-irq"] }
 dbs-legacy-devices = { workspace = true }
 dbs-upcall = { workspace = true, optional = true }
 dbs-utils = { workspace = true }

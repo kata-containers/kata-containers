@@ -12,9 +12,13 @@ use std::ops::Deref;
 
 use dbs_address_space::AddressSpace;
 use dbs_boot::{add_e820_entry, bootparam, layout, mptable, BootParamsWrapper, InitrdConfig};
+use dbs_interrupt::IOAPIC_MAX_NR_REDIR_ENTRIES;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
-use kvm_bindings::{kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_PIT_SPEAKER_DUMMY};
+use kvm_bindings::{
+    kvm_enable_cap, kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_CAP_SPLIT_IRQCHIP,
+    KVM_PIT_SPEAKER_DUMMY,
+};
 use linux_loader::cmdline::Cmdline;
 use linux_loader::configurator::{linux::LinuxBootConfigurator, BootConfigurator, BootParams};
 use slog::info;
@@ -264,13 +268,32 @@ impl Vm {
     pub(crate) fn setup_interrupt_controller(
         &mut self,
     ) -> std::result::Result<(), StartMicroVmError> {
-        self.vm_fd
-            .create_irq_chip()
-            .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
+        // In cases of split irqchip, we do not need to invoke KVM ioctl to create an
+        // in-kernel irqchip. We only need to enable the capability of split irqchip,
+        // and manage the interrupts in userspace.
+        if self.split_irqchip() {
+            let mut enable_split_irqchip = kvm_enable_cap {
+                cap: KVM_CAP_SPLIT_IRQCHIP,
+                ..Default::default()
+            };
+            enable_split_irqchip.args[0] = IOAPIC_MAX_NR_REDIR_ENTRIES as u64;
+            self.vm_fd()
+                .enable_cap(&enable_split_irqchip)
+                .map_err(StartMicroVmError::EnableSplitIrqchip)
+        } else {
+            self.vm_fd
+                .create_irq_chip()
+                .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
+        }
     }
 
     /// Creates an in-kernel device model for the PIT.
     pub(crate) fn create_pit(&self) -> std::result::Result<(), StartMicroVmError> {
+        // In-kernel PIT is not allowed for split irqchip
+        if self.split_irqchip() {
+            return Ok(());
+        }
+
         info!(self.logger, "VM: create pit");
         // We need to enable the emulation of a dummy speaker port stub so that writing to port 0x61
         // (i.e. KVM_SPEAKER_BASE_ADDRESS) does not trigger an exit to user space.
@@ -300,5 +323,9 @@ impl Vm {
         self.reset_eventfd = Some(reset_evt);
 
         Ok(())
+    }
+
+    pub(crate) fn split_irqchip(&self) -> bool {
+        self.shared_info.read().unwrap().split_irqchip()
     }
 }

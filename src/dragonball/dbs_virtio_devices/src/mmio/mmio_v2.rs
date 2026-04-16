@@ -10,7 +10,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use dbs_address_space::AddressSpace;
 use dbs_device::resources::{DeviceResources, Resource};
 use dbs_device::{DeviceIo, IoAddress};
-use dbs_interrupt::{InterruptStatusRegister32, KvmIrqManager};
+use dbs_interrupt::{InterruptManager, InterruptStatusRegister32};
 use kvm_ioctls::VmFd;
 use log::{debug, info, warn};
 use virtio_queue::QueueT;
@@ -62,7 +62,7 @@ where
         vm_fd: Arc<VmFd>,
         vm_as: AS,
         address_space: AddressSpace,
-        irq_manager: Arc<KvmIrqManager>,
+        irq_manager: Arc<Box<dyn InterruptManager>>,
         device: Box<dyn VirtioDevice<AS, Q, R>>,
         resources: DeviceResources,
         mut features: Option<u32>,
@@ -499,6 +499,7 @@ pub(crate) mod tests {
     use byteorder::{ByteOrder, LittleEndian};
     use dbs_device::resources::{MsiIrqType, Resource, ResourceConstraint};
     use dbs_device::{DeviceIo, IoAddress};
+    use dbs_interrupt::KvmIrqManager;
     use dbs_utils::epoll_manager::EpollManager;
     use kvm_bindings::kvm_userspace_memory_region;
     use kvm_ioctls::Kvm;
@@ -679,7 +680,8 @@ pub(crate) mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         vm_fd.create_irq_chip().unwrap();
-        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
         irq_manager.initialize().unwrap();
 
         let features = if doorbell {
@@ -717,7 +719,8 @@ pub(crate) mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         vm_fd.create_irq_chip().unwrap();
-        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
         irq_manager.initialize().unwrap();
         let address_space = create_address_space();
         let ret = MmioV2Device::new(

@@ -223,6 +223,11 @@ pub enum StartMicroVmError {
     /// Cannot build seccomp filters.
     #[error("failure while configuring seccomp filters: {0}")]
     SeccompFilters(#[source] seccompiler::Error),
+
+    #[cfg(target_arch = "x86_64")]
+    /// Cannot enable split irqchip
+    #[error("Failed to enable split irqchip: {0}")]
+    EnableSplitIrqchip(#[source] vmm_sys_util::errno::Error),
 }
 
 /// Errors associated with starting the instance.
