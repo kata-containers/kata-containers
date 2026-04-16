@@ -834,7 +834,7 @@ QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 BUILDTAGS :=
 
 # go build common flags
-BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
+BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
@@ -958,7 +958,7 @@ go-test: $(GENERATED_FILES)
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
-	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+	for s in $$(go list ./...); do if ! go test -failfast -v -p 1 $$s; then break; fi; done
 
 GOLANGCI_LINT_FILE := ../../tests/.golangci.yml
 GOLANGCI_LINT_NAME = golangci-lint
@@ -980,7 +980,7 @@ lint: all
 pre-commit: lint fast-test
 
 coverage:
-	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
+	go test -v -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
 install: all install-runtime install-containerd-shim-v2 install-monitor
@@ -1009,13 +1009,10 @@ install-scripts: $(SCRIPTS)
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
-handle_vendor:
+vendor:
 	go mod tidy
 	go mod vendor
 	go mod verify
-
-vendor: handle_vendor
-	./hack/tree_status.sh
 
 static-checks-build: $(GENERATED_FILES)
 

@@ -5,7 +5,6 @@
   "SpacesAfterTabs": false,
   "NoColor": false,
   "Exclude": [
-    "src/runtime/vendor",
     "src/runtime/virtcontainers/pkg/cloud-hypervisor/client",
     "\\.img$",
     "\\.dtb$",
