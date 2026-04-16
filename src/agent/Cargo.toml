@@ -83,6 +83,7 @@ safe-path.workspace = true
 logging.workspace = true
 pathrs.workspace = true
 vsock-exporter.workspace = true
+initdata-processor.workspace = true
 
 # Initdata
 async-compression = { features = ["gzip", "tokio"], version = "0.4.22" }
