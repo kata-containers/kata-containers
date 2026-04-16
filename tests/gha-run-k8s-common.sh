@@ -413,17 +413,42 @@ function install_system_dependencies() {
 }
 
 function load_k8s_needed_modules() {
+	# Load now and on every boot (kube CNI / overlay).
+	sudo tee /etc/modules-load.d/k8s.conf >/dev/null <<'EOF'
+overlay
+br_netfilter
+EOF
 	sudo modprobe overlay
 	sudo modprobe br_netfilter
 }
 
 function set_k8s_network_parameters() {
-	sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
-	sudo sysctl -w net.ipv4.ip_forward=1
-	sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=1
+	# Apply now and persist across reboots (kubelet requires these).
+	sudo tee /etc/sysctl.d/99-k8s.conf >/dev/null <<'EOF'
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+	sudo sysctl -p /etc/sysctl.d/99-k8s.conf
 }
 
 function disable_swap() {
+	# kubelet fails when swap is on; turn it off now and after reboot.
+	sudo swapoff -a
+	if [[ -f /etc/fstab ]]; then
+		# Keep a single restore point the first time we edit (e.g. for local runs).
+		if [[ ! -f /etc/fstab.k8s.before-kata ]]; then
+			sudo cp -a /etc/fstab /etc/fstab.k8s.before-kata
+		fi
+		# Comment swap lines only if not already commented (safe to re-run).
+		sudo sed -i '/^[[:space:]]*#/!{/[[:space:]]swap[[:space:]]/s/^/#/;}' /etc/fstab
+	fi
+	# Swap may be enabled only via systemd (e.g. zram), not listed in fstab.
+	local _u
+	while read -r _u; do
+		[[ -z "${_u}" || "${_u}" == swap.target ]] && continue
+		sudo systemctl disable --now "${_u}" 2>/dev/null || true
+	done < <(systemctl list-unit-files --type swap --state enabled --no-legend 2>/dev/null | awk '{print $1}' || true)
 	sudo swapoff -a
 }
 
@@ -470,6 +495,8 @@ runtimeRequestTimeout: "600s"
 EOF
 	sudo kubeadm init --config "${kubeadm_config}"
 	rm -f "${kubeadm_config}"
+	# kubeadm usually enables kubelet; ensure it stays enabled after reboot.
+	sudo systemctl enable kubelet
 	mkdir -p $HOME/.kube
 	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 	sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -510,7 +537,9 @@ function deploy_vanilla_k8s() {
 			;;
 		*) die "${container_engine} is not a container engine supported by this script" ;;
 	esac
-	sudo systemctl daemon-reload && sudo systemctl restart "${container_engine}"
+	sudo systemctl daemon-reload
+	sudo systemctl enable "${container_engine}"
+	sudo systemctl restart "${container_engine}"
 	local max_retries=5 retry_wait_sec=180 attempt=1
 	while true; do
 		local errexit_set=0
