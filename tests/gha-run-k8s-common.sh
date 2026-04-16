@@ -452,6 +452,37 @@ function disable_swap() {
 	sudo swapoff -a
 }
 
+# Optional containerd snapshotter requirements on the host (packages, modules, disk).
+function setup_snapshotter_host() {
+	[[ -z "${SNAPSHOTTER:-}" ]] && return 0
+
+	echo "Host snapshotter setup: SNAPSHOTTER='${SNAPSHOTTER}'"
+	case "${SNAPSHOTTER}" in
+		erofs)
+			echo "Setting up host for erofs snapshotter (packages, erofs module, fsverity)"
+			sudo apt-get update
+			sudo apt-get -y install erofs-utils fsverity
+			sudo tee /etc/modules-load.d/erofs.conf >/dev/null <<'EOF'
+erofs
+EOF
+			sudo modprobe erofs
+			# tune2fs -O verity applies only to ext4; root may be xfs, btrfs, etc. on local machines.
+			local root_src root_fs
+			root_src="$(findmnt -v -n -o SOURCE /)"
+			root_fs="$(findmnt -v -n -o FSTYPE /)"
+			if [[ "${root_fs}" == ext4 ]]; then
+				sudo tune2fs -O verity "${root_src}"
+			elif [[ "${ALLOW_UNSUPPORTED_EROFS_HOST:-false}" == "true" ]]; then
+				>&2 echo "WARN: skipping tune2fs -O verity: root is ${root_fs} (${root_src}), not ext4. Continuing only because ALLOW_UNSUPPORTED_EROFS_HOST=true; erofs/fsverity may fail later on this host."
+			else
+				>&2 echo "ERROR: SNAPSHOTTER=erofs requires fsverity support to be enabled on an ext4 root filesystem, but / is ${root_fs} (${root_src}) so 'tune2fs -O verity' cannot be applied. Set ALLOW_UNSUPPORTED_EROFS_HOST=true only for local development if you intentionally want to continue without this prerequisite."
+				exit 1
+			fi
+			;;
+		*) ;;
+	esac
+}
+
 # Always deploys the latest k8s version
 function do_deploy_k8s() {
 	# Add the pkgs.k8s.io repo
@@ -580,23 +611,7 @@ function deploy_k8s() {
 		rke2) deploy_rke2 ;;
 		microk8s) deploy_microk8s ;;
 		vanilla)
-			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# Install erofs specific dependencies
-				sudo apt-get update
-				sudo apt-get -y install erofs-utils fsverity
-
-				# Load the erofs module
-				sudo modprobe erofs
-
-				# Ensure fsverity is enabled on the disk, otherwise
-				# fsverity won't work on the erofs-snapshotter side.
-				#
-				# Get the root device to enable fsverity on the disk.
-				root_device="$(findmnt -v -n -o SOURCE /)"
-				# This command is not destructive, at all, and that's
-				# the way we should enable verity support on a live disk.
-				sudo tune2fs -O verity "${root_device}"
-			fi
+			setup_snapshotter_host
 			deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION}
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
