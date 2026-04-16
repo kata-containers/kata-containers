@@ -22,6 +22,13 @@ PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
 include ../../utils.mk
 
+##VAR RELEASE_LTO=true|false|thin|fat LTO setting used for release builds
+RELEASE_LTO ?= true
+##VAR RELEASE_CODEGEN_UNITS=<number> codegen units used for release builds
+RELEASE_CODEGEN_UNITS ?= 1
+# Apply release profile overrides only for release builds.
+RELEASE_CARGO_PROFILE_ENV = $(if $(findstring release,$(BUILD_TYPE)),CARGO_PROFILE_RELEASE_LTO=$(RELEASE_LTO) CARGO_PROFILE_RELEASE_CODEGEN_UNITS=$(RELEASE_CODEGEN_UNITS),)
+
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
@@ -718,7 +725,7 @@ static-checks-build: $(GENERATED_FILES)
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
@@ -728,7 +735,7 @@ $(GENERATED_FILES): %: %.in
 
 ##TARGET optimize: optimized  build
 optimize: $(SOURCES) | show-summary show-header
-	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
 
 ##TARGET clean: clean build
 clean: clean-generated-files
