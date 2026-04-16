@@ -6,7 +6,6 @@
   "NoColor": false,
   "Exclude": [
     "src/runtime/vendor",
-    "src/tools/log-parser/vendor",
     "src/runtime/virtcontainers/pkg/cloud-hypervisor/client",
     "\\.img$",
     "\\.dtb$",
