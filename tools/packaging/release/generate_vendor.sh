@@ -36,7 +36,7 @@ create_vendor_tarball() {
 			dir="$(dirname "${i}")"
 			pushd "${dir}"
 				[[ -d .cargo ]] || mkdir .cargo
-				cargo vendor >> .cargo/config
+				cargo vendor >> .cargo/config.toml
 				vendor_dir_list+=" ${dir}/vendor ${dir}/.cargo/config"
 				echo "${vendor_dir_list}"
 			popd
