@@ -22,6 +22,7 @@ members = [
   "src/agent/rustjail",
   "src/agent/policy",
   "src/agent/vsock-exporter",
+  "src/agent/initdata-processor",
 
   # Dragonball
   "src/dragonball",
@@ -130,6 +131,7 @@ test-utils = { path = "src/libs/test-utils" }
 kata-agent-policy = { path = "src/agent/policy" }
 rustjail = { path = "src/agent/rustjail" }
 vsock-exporter = { path = "src/agent/vsock-exporter" }
+initdata-processor = { path = "src/agent/initdata-processor" }
 
 # Outside dependencies
 actix-rt = "2.7.0"

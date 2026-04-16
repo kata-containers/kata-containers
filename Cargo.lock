@@ -3092,6 +3092,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "initdata-processor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "kata-types",
+ "slog",
+ "slog-async",
+ "slog-term",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "inotify"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3410,6 +3424,7 @@ dependencies = [
  "container-device-interface",
  "derivative",
  "futures",
+ "initdata-processor",
  "ipnetwork",
  "kata-agent-policy",
  "kata-sys-util",
