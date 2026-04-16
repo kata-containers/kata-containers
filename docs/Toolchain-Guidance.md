@@ -37,3 +37,10 @@ In practice this should mean that we bump our rust toolchain every six weeks, to
 of that version, if there were any.
 
 The rust-toolchain that we are using is recorded in [`rust-toolchain.toml`](../rust-toolchain.toml).
+
+> [!NOTE]
+> We don't currently have a firm policy on the minimum supported rust version (MSRV) for our components.
+> When bumping the toolchain version we attempt to stay up-to-date with new language features that
+> improve the current codebase (e.g. fixing new clipping warnings) and this often will result in
+> the MSRV being implicitly bumped so we can use these features, but we don't have a hard requirement
+> that bumps the MSRV to the same level as the toolchain.
