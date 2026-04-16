@@ -7,7 +7,6 @@
   "Exclude": [
     "src/runtime/vendor",
     "src/tools/log-parser/vendor",
-    "tests/metrics/cmd/checkmetrics/vendor",
     "src/runtime/virtcontainers/pkg/cloud-hypervisor/client",
     "\\.img$",
     "\\.dtb$",
