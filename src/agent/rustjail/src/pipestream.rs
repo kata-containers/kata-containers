@@ -182,7 +182,7 @@ mod tests {
 
         // if close fd in shutdown, the fd will be reused
         // and the test will failed
-        let _ = writer1.shutdown().await.unwrap();
+        writer1.shutdown().await.unwrap();
 
         // let _ = unistd::close(wfd1);
 
