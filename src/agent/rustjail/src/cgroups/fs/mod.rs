@@ -1586,14 +1586,14 @@ mod tests {
                 drop(devcg_info);
 
                 let pod_devices_list = Command::new("cat")
-                    .arg(&format!(
+                    .arg(format!(
                         "/sys/fs/cgroup/devices/{}/devices.list",
                         one_time_pod_name
                     ))
                     .output()
                     .unwrap();
                 let container_devices_list = Command::new("cat")
-                    .arg(&format!(
+                    .arg(format!(
                         "/sys/fs/cgroup/devices{}/devices.list",
                         tc.cpath[cid]
                     ))
