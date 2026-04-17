@@ -52,7 +52,7 @@ use std::time::Instant;
 
 use lazy_static::lazy_static;
 use nix::mount::{mount, MntFlags, MsFlags};
-use nix::{unistd, NixPath};
+use nix::unistd;
 use oci_spec::runtime as oci;
 
 use crate::fs::is_symlink;
@@ -225,7 +225,7 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
 /// Caller needs to ensure safety of the `dst` to avoid possible file path based attacks.
 pub fn bind_remount<P: AsRef<Path>>(dst: P, readonly: bool) -> Result<()> {
     let dst = dst.as_ref();
-    if dst.is_empty() {
+    if dst.as_os_str().is_empty() {
         return Err(Error::NullMountPointPath);
     }
     let dst = dst
@@ -262,10 +262,10 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
 
     let src = src.as_ref();
     let dst = dst.as_ref();
-    if src.is_empty() {
+    if src.as_os_str().is_empty() {
         return Err(Error::NullMountPointPath);
     }
-    if dst.is_empty() {
+    if dst.as_os_str().is_empty() {
         return Err(Error::NullMountPointPath);
     }
     let abs_src = src
@@ -760,7 +760,7 @@ pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
 /// # Safety
 /// Caller needs to ensure safety of the `path` to avoid possible file path based attacks.
 pub fn umount_all<P: AsRef<Path>>(mountpoint: P, lazy_umount: bool) -> Result<()> {
-    if mountpoint.as_ref().is_empty() || !mountpoint.as_ref().exists() {
+    if mountpoint.as_ref().as_os_str().is_empty() || !mountpoint.as_ref().exists() {
         return Ok(());
     }
 
