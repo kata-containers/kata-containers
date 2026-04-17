@@ -22,8 +22,6 @@ check_and_skip() {
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
 		if [[ "$(uname -m)" == "s390x" ]]; then
 			skip "measured rootfs tests not implemented for s390x"
-		elif [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev-runtime-rs" ]]; then
-			skip "measured rootfs not working on qemu-coco-dev-runtime-rs: https://github.com/kata-containers/kata-containers/issues/12851"
 		fi
 		return
 	else
