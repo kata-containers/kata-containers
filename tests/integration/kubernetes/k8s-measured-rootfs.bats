@@ -19,17 +19,16 @@ case "${KATA_HYPERVISOR}" in
 esac
 
 check_and_skip() {
-	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-coco-dev|qemu-snp|qemu-snp-runtime-rs)
-			if [ "$(uname -m)" == "s390x" ]; then
-				skip "measured rootfs tests not implemented for s390x"
-			fi
-			return
-			;;
-		*)
-			skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
-			;;
-	esac
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		if [[ "$(uname -m)" == "s390x" ]]; then
+			skip "measured rootfs tests not implemented for s390x"
+		elif [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev-runtime-rs" ]]; then
+			skip "measured rootfs not working on qemu-coco-dev-runtime-rs: https://github.com/kata-containers/kata-containers/issues/12851"
+		fi
+		return
+	else
+		skip "measured rootfs tests not implemented for hypervisor: ${KATA_HYPERVISOR}"
+	fi
 }
 
 setup() {

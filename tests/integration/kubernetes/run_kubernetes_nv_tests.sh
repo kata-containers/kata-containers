@@ -8,7 +8,7 @@
 set -e
 set -o pipefail
 
-kubernetes_dir=$(dirname "$(readlink -f "$0")")
+kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
 

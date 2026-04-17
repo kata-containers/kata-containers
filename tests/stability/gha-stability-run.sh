@@ -32,7 +32,6 @@ function main() {
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools "${2:-}" ;;
 		get-cluster-credentials) get_cluster_credentials ;;
-		deploy-snapshotter) deploy_snapshotter ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
 		install-kbs-client) install_kbs_client ;;
