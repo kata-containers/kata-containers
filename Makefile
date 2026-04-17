@@ -20,7 +20,7 @@ TOOLS += kata-ctl
 TOOLS += log-parser
 TOOLS += trace-forwarder
 
-STANDARD_TARGETS = build check clean install static-checks-build test vendor
+STANDARD_TARGETS = build check clean install static-checks-build test
 
 # Variables for the build-and-publish-kata-debug target
 KATA_DEBUG_REGISTRY ?= ""

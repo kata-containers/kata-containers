@@ -33,9 +33,6 @@ clean:
 	cargo clean
 	rm -f $(GENERATED_FILES)
 
-vendor:
-	cargo vendor
-
 test: $(GENERATED_FILES)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p genpolicy --all-targets --all-features --target $(TRIPLE)
 
@@ -49,5 +46,4 @@ check:  $(GENERATED_CODE) standard_rust_check
 	check \
 	clean \
 	install \
-	test \
-	vendor
+	test

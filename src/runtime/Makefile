@@ -931,8 +931,7 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	pre-commit \
 	show-header \
 	show-summary \
-	show-variables \
-	vendor
+	show-variables
 
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
@@ -1008,11 +1007,6 @@ install-scripts: $(SCRIPTS)
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
-
-vendor:
-	go mod tidy
-	go mod vendor
-	go mod verify
 
 static-checks-build: $(GENERATED_FILES)
 

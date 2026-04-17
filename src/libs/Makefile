@@ -53,4 +53,4 @@ test:
 	@echo "INFO: testing libraries for release build"
 	cargo test --release $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 
-.PHONY: install vendor
+.PHONY: install

@@ -749,9 +749,6 @@ clean: clean-generated-files
 clean-generated-files:
 	@rm -f $(GENERATED_FILES)
 
-vendor:
-	@cargo vendor
-
 ifeq ($(ARCH),x86_64)
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
@@ -863,5 +860,4 @@ install-configs: $(CONFIGS)
 	help \
 	optimize \
 	show-header \
-	show-summary \
-	vendor
+	show-summary

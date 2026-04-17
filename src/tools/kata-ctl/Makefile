@@ -33,7 +33,7 @@ GENERATED_FILES := $(GENERATED_CODE)
 .DEFAULT_GOAL := default
 
 ifeq ($(ARCH), ppc64le)
-default build check test vendor:
+default build check test:
 	@echo "Building kata-ctl on $(ARCH) is currently being skipped"
 	exit 0
 else
@@ -55,9 +55,6 @@ clean:
 	@cargo clean
 	@rm -f $(GENERATED_FILES)
 
-vendor:
-	cargo vendor
-
 test: $(GENERATED_CODE)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
@@ -73,5 +70,4 @@ endif
 	check \
 	clean \
 	install \
-	test \
-	vendor
+	test
