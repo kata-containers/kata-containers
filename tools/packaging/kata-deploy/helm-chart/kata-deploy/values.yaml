@@ -143,6 +143,7 @@ shims:
       - amd64
       - arm64
       - s390x
+      - ppc64le
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
