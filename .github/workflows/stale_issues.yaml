@@ -1,7 +1,10 @@
 name: 'Stale issues with activity before a fixed date'
 on:
   schedule:
-    - cron: '0 0 * * *'
+    # Weekdays (Mon-Fri): Run every 4 hours
+    - cron: '0 0,4,8,12,16,20 * * 1-5'
+    # Weekends (Sat-Sun): Run every hour
+    - cron: '0 * * * 0,6'
   workflow_dispatch:
     inputs:
       date:
