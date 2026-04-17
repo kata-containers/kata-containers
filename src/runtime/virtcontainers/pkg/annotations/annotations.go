@@ -369,6 +369,8 @@ const (
 
 	// IsFileBlockDevice indicates that the annotated filesystem is mounted on a block device
 	// backed by a host file.
+	// This annotation is only valid on block devices representing layers, and should thus only be
+	// used by block-based snapshotters. Code relies on that!
 	IsFileBlockDevice = kataAnnotFsOptPrefix + "block_device=file"
 )
 
