@@ -270,12 +270,12 @@ mod tests {
             let result = t.arg.clone().validate(should_check_bundle);
             let msg = format!("{}, result: {:?}", msg, result);
 
-            if t.result.is_ok() {
-                assert!(result.is_ok(), "{}", msg);
-            } else {
-                let expected_error = format!("{}", t.result.as_ref().unwrap_err());
+            if let Err(expected_err) = &t.result {
+                let expected_error = format!("{expected_err}");
                 let actual_error = format!("{}", result.unwrap_err());
                 assert!(actual_error == expected_error, "{}", msg);
+            } else {
+                assert!(result.is_ok(), "{}", msg);
             }
         }
     }
