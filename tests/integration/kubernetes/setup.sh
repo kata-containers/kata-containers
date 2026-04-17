@@ -68,21 +68,21 @@ add_annotations_to_yaml() {
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	CronJob)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".spec.jobTemplate.spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	List)
