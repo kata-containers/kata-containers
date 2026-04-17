@@ -69,6 +69,15 @@ if [ ! -d "$HOME/.docker" ]; then
 fi
 
 "${script_dir}"/kata-deploy-copy-yq-installer.sh
+
+: "${GH_TOKEN:=${GITHUB_TOKEN:-}}"
+
+# GH_TOKEN as build-arg (not BuildKit): keeps plain `docker build` working; value may appear in image history.
+docker_build_gh_token=()
+if [ -n "${GH_TOKEN}" ]; then
+	docker_build_gh_token=(--build-arg "GH_TOKEN=${GH_TOKEN}")
+fi
+
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
@@ -77,6 +86,7 @@ docker build -q -t build-kata-deploy \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	--build-arg ARCH="${ARCH}" \
+	"${docker_build_gh_token[@]}" \
 	"${script_dir}/dockerbuild/"
 
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
@@ -162,6 +172,7 @@ docker run \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
+	--env GH_TOKEN="${GH_TOKEN:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" "$@"

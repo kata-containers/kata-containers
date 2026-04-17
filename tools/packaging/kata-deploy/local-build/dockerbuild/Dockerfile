@@ -8,6 +8,9 @@ ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
 ENV TZ=Etc/UTC
 ARG ARCH
+# Optional: authenticated GitHub release downloads. Passed as ARG (not BuildKit secrets)
+# so a plain `docker build` works; the value may appear in image build history/cache metadata.
+ARG GH_TOKEN=
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 COPY install_oras.sh /usr/bin/install_oras.sh

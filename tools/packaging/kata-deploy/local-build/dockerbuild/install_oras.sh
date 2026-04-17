@@ -35,9 +35,15 @@ if [ "${arch}" = "aarch64" ]; then
 	arch="arm64"
 fi
 oras_tarball="oras_${oras_required_version#v}_linux_${arch}.tar.gz"
+oras_url="https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}"
 
 echo "Downloading ORAS ${oras_required_version}"
-curl -OL https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}
+curl_opts=(-fSL -O)
+_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ -n "${_token}" ]]; then
+	curl_opts+=(-H "Authorization: Bearer ${_token}")
+fi
+curl "${curl_opts[@]}" "${oras_url}"
 
 echo "Installing ORAS to ${install_dest}"
 sudo mkdir -p "${install_dest}"

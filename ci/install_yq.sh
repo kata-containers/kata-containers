@@ -107,7 +107,12 @@ function install_yq() {
 
 	## NOTE: ${var,,} => gives lowercase value of var
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	${precmd} curl -o "${yq_path}" -LSsf "${yq_url}" || die "Download ${yq_url} failed"
+	local gh_auth_header=()
+	local _gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+	if [[ -n "${_gh_token}" ]] && [[ "${yq_url}" =~ ^https://github\.com/ ]]; then
+		gh_auth_header=(-H "Authorization: Bearer ${_gh_token}")
+	fi
+	${precmd} curl "${gh_auth_header[@]}" -o "${yq_path}" -LSsf "${yq_url}" || die "Download ${yq_url} failed"
 	${precmd} chmod +x "${yq_path}"
 
 	if ! command -v "${yq_path}" >/dev/null; then
