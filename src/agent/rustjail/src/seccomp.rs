@@ -220,7 +220,7 @@ mod tests {
             ScmpFilterAttr::CtlTsync
         );
 
-        assert_eq!(get_filter_attr_from_flag("ERROR").is_err(), true);
+        assert!(get_filter_attr_from_flag("ERROR").is_err());
     }
 
     #[test]

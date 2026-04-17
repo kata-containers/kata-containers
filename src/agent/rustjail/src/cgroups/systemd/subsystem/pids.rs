@@ -57,7 +57,7 @@ mod tests {
 
         let mut properties: Properties = vec![];
 
-        assert_eq!(true, Pids::apply(&pids_resources, &mut properties).is_ok());
+        assert!(Pids::apply(&pids_resources, &mut properties).is_ok());
 
         assert_eq!(Value::U64(u64::MAX), properties[0].1);
     }
