@@ -1647,7 +1647,7 @@ mod tests {
         assert!(default_devices_0
             .access
             .iter()
-            .all(|&p| allowed_permissions.iter().any(|&ap| ap == p)));
+            .all(|&p| allowed_permissions.contains(&p)));
 
         let default_allowed_devices_0 = &allowed_devices[DEFAULT_DEVICES.len()];
         assert!(default_allowed_devices_0.allow);
