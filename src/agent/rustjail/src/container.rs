@@ -1979,7 +1979,7 @@ mod tests {
         (
             LinuxContainer::new(
                 "some_id",
-                &dir.path().join("rootfs").to_str().unwrap(),
+                dir.path().join("rootfs").to_str().unwrap(),
                 None,
                 create_dummy_opts(),
                 &slog_scope::logger(),
