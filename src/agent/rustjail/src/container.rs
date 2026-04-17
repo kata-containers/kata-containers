@@ -1181,8 +1181,8 @@ impl BaseContainer for LinuxContainer {
             child = child.env(FIFO_FD, format!("{fifofd}"));
         }
 
-        if pidns.fd.is_some() {
-            child = child.env(PIDNS_FD, format!("{}", pidns.fd.unwrap()));
+        if let Some(fd) = pidns.fd {
+            child = child.env(PIDNS_FD, format!("{fd}"));
         }
 
         child.spawn()?;
