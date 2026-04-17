@@ -39,6 +39,7 @@ service AgentService {
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
 	rpc ResumeContainer(ResumeContainerRequest) returns (google.protobuf.Empty);
 	rpc RemoveStaleVirtiofsShareMounts(RemoveStaleVirtiofsShareMountsRequest) returns (google.protobuf.Empty);
+	rpc GetDiagnosticData(GetDiagnosticDataRequest) returns (GetDiagnosticDataResponse);
 
 	// stdio
 	rpc WriteStdin(WriteStreamRequest) returns (WriteStreamResponse);
@@ -624,6 +625,15 @@ message ResizeVolumeRequest {
 
 message SetPolicyRequest {
 	string policy = 1;
+}
+
+message GetDiagnosticDataRequest {
+	string log_type = 1;
+	string container_id = 2;
+}
+
+message GetDiagnosticDataResponse {
+	string data = 1;
 }
 
 message MemAgentMemcgConfig {

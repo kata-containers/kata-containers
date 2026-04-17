@@ -22,6 +22,7 @@ type AgentServiceService interface {
 	PauseContainer(context.Context, *PauseContainerRequest) (*emptypb.Empty, error)
 	ResumeContainer(context.Context, *ResumeContainerRequest) (*emptypb.Empty, error)
 	RemoveStaleVirtiofsShareMounts(context.Context, *RemoveStaleVirtiofsShareMountsRequest) (*emptypb.Empty, error)
+	GetDiagnosticData(context.Context, *GetDiagnosticDataRequest) (*GetDiagnosticDataResponse, error)
 	WriteStdin(context.Context, *WriteStreamRequest) (*WriteStreamResponse, error)
 	ReadStdout(context.Context, *ReadStreamRequest) (*ReadStreamResponse, error)
 	ReadStderr(context.Context, *ReadStreamRequest) (*ReadStreamResponse, error)
@@ -139,6 +140,13 @@ func RegisterAgentServiceService(srv *ttrpc.Server, svc AgentServiceService) {
 					return nil, err
 				}
 				return svc.RemoveStaleVirtiofsShareMounts(ctx, &req)
+			},
+			"GetDiagnosticData": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
+				var req GetDiagnosticDataRequest
+				if err := unmarshal(&req); err != nil {
+					return nil, err
+				}
+				return svc.GetDiagnosticData(ctx, &req)
 			},
 			"WriteStdin": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 				var req WriteStreamRequest
@@ -448,6 +456,14 @@ func (c *agentserviceClient) ResumeContainer(ctx context.Context, req *ResumeCon
 func (c *agentserviceClient) RemoveStaleVirtiofsShareMounts(ctx context.Context, req *RemoveStaleVirtiofsShareMountsRequest) (*emptypb.Empty, error) {
 	var resp emptypb.Empty
 	if err := c.client.Call(ctx, "grpc.AgentService", "RemoveStaleVirtiofsShareMounts", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *agentserviceClient) GetDiagnosticData(ctx context.Context, req *GetDiagnosticDataRequest) (*GetDiagnosticDataResponse, error) {
+	var resp GetDiagnosticDataResponse
+	if err := c.client.Call(ctx, "grpc.AgentService", "GetDiagnosticData", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

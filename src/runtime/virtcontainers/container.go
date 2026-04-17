@@ -1541,6 +1541,35 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	// get failed if the process hasn't exited.
 	c.sandbox.agent.waitProcess(ctx, c, c.id)
 
+	if c.sandbox.config.HypervisorConfig.SharedFS == config.NoSharedFS &&
+		c.config.Annotations["io.kubernetes.container.terminationMessagePolicy"] == "File" {
+		terminationMessagePath := c.config.Annotations["io.kubernetes.container.terminationMessagePath"]
+		if terminationMessagePath != "" {
+			data, err := c.sandbox.agent.getDiagnosticData(ctx, "termination_log", c.id)
+			if err != nil {
+				c.Logger().WithError(err).Warn("Failed to get termination message from guest")
+			} else if data != "" {
+				// The kubelet bind-mounts a host file into the container at
+				// terminationMessagePath, then reads back from that host file.
+				// With shared_fs=none the guest cannot write through that mount,
+				// so we locate the host-side path from the OCI mounts and write
+				// the data there directly.
+				var hostPath string
+				for _, m := range c.mounts {
+					if m.Destination == terminationMessagePath {
+						hostPath = m.Source
+						break
+					}
+				}
+				if hostPath == "" {
+					c.Logger().Warn("No host mount found for termination message path")
+				} else if err := os.WriteFile(hostPath, []byte(data), 0644); err != nil {
+					c.Logger().WithError(err).Warn("Failed to write termination message")
+				}
+			}
+		}
+	}
+
 	defer func() {
 		// Save device and drive data.
 		// TODO: can we merge this saving with setContainerState()?

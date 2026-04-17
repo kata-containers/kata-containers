@@ -211,4 +211,7 @@ type agent interface {
 
 	// setPolicy sends a new policy to the guest agent
 	setPolicy(ctx context.Context, policy string) error
+
+	// getDiagnosticData retrieves diagnostic data from the guest
+	getDiagnosticData(ctx context.Context, logType string, containerID string) (string, error)
 }

@@ -491,6 +491,10 @@ impl Container {
     }
 
     pub async fn stop_process(&self, container_process: &ContainerProcess) -> Result<()> {
+        if container_process.process_type == ProcessType::Container {
+            self.copy_termination_log().await;
+        }
+
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
         inner
@@ -510,6 +514,77 @@ impl Container {
         }
 
         Ok(())
+    }
+
+    async fn copy_termination_log(&self) {
+        let toml_config = self.resource_manager.config().await;
+        let shared_fs = toml_config
+            .hypervisor
+            .get(&toml_config.runtime.hypervisor_name)
+            .and_then(|h| h.shared_fs.shared_fs.as_deref());
+
+        // When a shared filesystem is configured the host can read the
+        // termination log directly.  shared_fs == None means no shared
+        // filesystem (the "none" config value is normalised to None by
+        // SharedFsInfo::adjust_config).
+        if shared_fs.is_some() {
+            return;
+        }
+
+        let annotations = self.spec.annotations().clone().unwrap_or_default();
+        let policy = annotations.get("io.kubernetes.container.terminationMessagePolicy");
+        if policy.map(|p| p.as_str()) != Some("File") {
+            return;
+        }
+
+        let termination_path =
+            match annotations.get("io.kubernetes.container.terminationMessagePath") {
+                Some(p) if !p.is_empty() => p.clone(),
+                _ => return,
+            };
+
+        let req = agent::GetDiagnosticDataRequest {
+            log_type: "termination_log".to_string(),
+            container_id: self.container_id.container_id.clone(),
+        };
+
+        // The kubelet bind-mounts a host file into the container at
+        // terminationMessagePath, then reads back from that host file.
+        // With shared_fs=none the guest cannot write through that mount,
+        // so we locate the host-side source path from the OCI mounts and
+        // write the data there directly.
+        let host_path = self.spec.mounts().as_ref().and_then(|mounts| {
+            mounts
+                .iter()
+                .find(|m| m.destination() == std::path::Path::new(&termination_path))
+                .and_then(|m| m.source().clone())
+        });
+
+        let host_path = match host_path {
+            Some(p) => p,
+            None => {
+                warn!(
+                    self.logger,
+                    "No host mount found for termination message path"
+                );
+                return;
+            }
+        };
+
+        match self.agent.get_diagnostic_data(req).await {
+            Ok(resp) if !resp.data.is_empty() => {
+                if let Err(e) = tokio::fs::write(&host_path, resp.data.as_bytes()).await {
+                    warn!(self.logger, "Failed to write termination message: {}", e);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                warn!(
+                    self.logger,
+                    "Failed to get termination message from guest: {}", e
+                );
+            }
+        }
     }
 
     pub async fn pause(&self) -> Result<()> {

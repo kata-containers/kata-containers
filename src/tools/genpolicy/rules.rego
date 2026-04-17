@@ -9,6 +9,9 @@ import future.keywords.in
 import future.keywords.every
 import future.keywords.if
 
+# GetDiagnosticDataRequest is not supported yet when using the CoCo policy unless enabled in policy_data.request_defaults.
+default GetDiagnosticDataRequest := false
+
 # Default values, returned by OPA when rules cannot be evaluated to true.
 default AddARPNeighborsRequest := false
 default AddSwapRequest := false
@@ -1730,6 +1733,10 @@ UpdateEphemeralMountsRequest if {
 
 WriteStreamRequest if {
     policy_data.request_defaults.WriteStreamRequest == true
+}
+
+GetDiagnosticDataRequest if {
+    policy_data.request_defaults.GetDiagnosticDataRequest == true
 }
 
 RemoveContainerRequest:= {"ops": ops, "allowed": true} if {

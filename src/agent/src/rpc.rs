@@ -633,6 +633,69 @@ impl AgentService {
         Ok(resp)
     }
 
+    async fn do_read_termination_log(
+        &self,
+        container_id: &str,
+    ) -> Result<protocols::agent::GetDiagnosticDataResponse> {
+        let host_path = {
+            let sandbox = self.sandbox.lock().await;
+            let ctr = sandbox
+                .containers
+                .get(container_id)
+                .ok_or_else(|| anyhow!("Invalid container id: {}", container_id))?;
+
+            let spec = ctr
+                .config
+                .spec
+                .as_ref()
+                .ok_or_else(|| anyhow!("No OCI spec for container {}", container_id))?;
+
+            let annotations = spec.annotations().as_ref();
+            let termination_path = annotations
+                .and_then(|a| a.get("io.kubernetes.container.terminationMessagePath"))
+                .ok_or_else(|| anyhow!("No terminationMessagePath annotation"))?;
+
+            // The path is the *container* destination (e.g. /dev/termination-log). The agent
+            // runs outside the container mount namespace; the file is on the guest at the
+            // bind-mount source (e.g. /run/kata-containers/shared/containers/...-termination-log).
+            let term_dest = Path::new(termination_path.as_str());
+            spec.mounts()
+                .as_ref()
+                .and_then(|mounts| {
+                    mounts.iter().find_map(|m| {
+                        if m.destination() == term_dest {
+                            m.source().clone()
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .ok_or_else(|| {
+                    anyhow!(
+                        "termination message mount not found for {}",
+                        termination_path
+                    )
+                })?
+        };
+
+        // Kubernetes caps termination messages at 4 KiB; read raw bytes with
+        // the same limit so a malicious workload cannot exhaust agent memory,
+        // and handle non-UTF-8 content gracefully.
+        const MAX_TERMINATION_MSG: usize = 4096;
+        let contents = match tokio::fs::read(&host_path).await {
+            Ok(mut buf) => {
+                buf.truncate(MAX_TERMINATION_MSG);
+                String::from_utf8_lossy(&buf).into_owned()
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(anyhow!("Failed to read termination log: {}", e)),
+        };
+
+        let mut resp = protocols::agent::GetDiagnosticDataResponse::new();
+        resp.data = contents;
+        Ok(resp)
+    }
+
     async fn do_write_stream(
         &self,
         req: protocols::agent::WriteStreamRequest,
@@ -1635,6 +1698,26 @@ impl agent_ttrpc::AgentService for AgentService {
         do_set_policy(&req).await?;
 
         Ok(Empty::new())
+    }
+
+    async fn get_diagnostic_data(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::GetDiagnosticDataRequest,
+    ) -> ttrpc::Result<protocols::agent::GetDiagnosticDataResponse> {
+        trace_rpc_call!(ctx, "get_diagnostic_data", req);
+        is_allowed(&req).await?;
+
+        match req.log_type.as_str() {
+            "termination_log" => self
+                .do_read_termination_log(&req.container_id)
+                .await
+                .map_ttrpc_err(same),
+            other => Err(ttrpc_error(
+                ttrpc::Code::INVALID_ARGUMENT,
+                format!("unsupported diagnostic log_type: {other}"),
+            )),
+        }
     }
 
     async fn mem_agent_memcg_set(
