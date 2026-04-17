@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn test_subsystem_workflow() {
         let mut pids_resources = oci::LinuxPids::default();
-        pids_resources.set_limit(0 as i64);
+        pids_resources.set_limit(0_i64);
 
         let mut properties: Properties = vec![];
 

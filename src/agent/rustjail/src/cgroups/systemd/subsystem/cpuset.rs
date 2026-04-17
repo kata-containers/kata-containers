@@ -112,12 +112,12 @@ mod tests {
     #[test]
     fn test_bitmask_conversion() {
         let cpus_vec: BitMask = "2-4".try_into().unwrap();
-        assert_eq!(vec![0b11100 as u8], cpus_vec.0);
+        assert_eq!(vec![0b11100_u8], cpus_vec.0);
 
         let cpus_vec: BitMask = "1,7".try_into().unwrap();
-        assert_eq!(vec![0b10000010 as u8], cpus_vec.0);
+        assert_eq!(vec![0b10000010_u8], cpus_vec.0);
 
         let cpus_vec: BitMask = "0,2-3,7".try_into().unwrap();
-        assert_eq!(vec![0b10001101 as u8], cpus_vec.0);
+        assert_eq!(vec![0b10001101_u8], cpus_vec.0);
     }
 }
