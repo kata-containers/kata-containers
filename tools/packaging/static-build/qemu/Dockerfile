@@ -12,8 +12,15 @@ ARG DPKG_ARCH
 ARG ARCH
 ARG GCC_ARCH
 ARG PREFIX
+ARG GITHUB_ACTIONS=false
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Context is tools/packaging (see build-base-qemu.sh: docker build "${packaging_dir}").
+# apt-ci-tune.sh lives at tools/packaging/docker/apt-ci-tune.sh in the tree.
+COPY docker/apt-ci-tune.sh /tmp/apt-ci-tune.sh
+# Keep script for --mirrors-rewrite after noble.list adds archive.ubuntu.com (amd64 GHA).
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh
 
 RUN if [ "${ARCH}" != "$(uname -m)" ]; then sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list && \
     dpkg --add-architecture "${DPKG_ARCH#:}" && \
@@ -70,7 +77,7 @@ RUN apt-get update && apt-get upgrade -y && \
     if [ "${ARCH}" != s390x ]; then apt-get install -y --no-install-recommends libpmem-dev${DPKG_ARCH}; fi && \
     GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
-    apt-get clean && rm -rf /var/lib/apt/lists/
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Detect architecture and set appropriate Ubuntu mirror
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -84,7 +91,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # Backup sources list and add Noble (24.04) repository
 RUN . /etc/ubuntu_mirror.env && \
     cp /etc/apt/sources.list /etc/apt/sources.list.backup && \
-    echo "deb ${UBUNTU_MIRROR} noble main universe" > /etc/apt/sources.list.d/noble.list
+    echo "deb ${UBUNTU_MIRROR} noble main universe" > /etc/apt/sources.list.d/noble.list && \
+    GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh --mirrors-rewrite
 
 # Set up APT pinning to prefer Jammy packages by default, but allow liburing from Noble
 RUN mkdir -p /etc/apt/preferences.d && \

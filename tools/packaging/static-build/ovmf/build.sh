@@ -57,8 +57,12 @@ fi
 [ -n "$ovmf_package" ] || die "failed to get ovmf package or commit"
 [ -n "$package_output_dir" ] || die "failed to get ovmf package or commit"
 
+gha_docker_args=()
+packaging_github_actions_docker_append gha_docker_args
+
 docker pull ${container_image} || \
-	(docker build -t "${container_image}" "${script_dir}" && \
+	(packaging_copy_apt_ci_tune_to "${script_dir}" && \
+	docker build "${gha_docker_args[@]}" -t "${container_image}" "${script_dir}" && \
 	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	push_to_registry "${container_image}")
 

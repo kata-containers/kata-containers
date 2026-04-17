@@ -5,6 +5,7 @@
 
 FROM ubuntu:24.04
 ARG RUST_TOOLCHAIN
+ARG GITHUB_ACTIONS=false
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -13,6 +14,9 @@ ENV CARGO_HOME="/opt/cargo"
 ENV PATH="/opt/cargo/bin/:${PATH}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+COPY apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
 
 RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME}
 
@@ -35,7 +39,7 @@ RUN apt-get update && \
 	perl \
 	pkg-config \
 	protobuf-compiler && \
-	apt-get clean && rm -rf /var/lib/apt/lists/ && \
+	apt-get clean && rm -rf /var/lib/apt/lists/* && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
 ARG NVAT_VERSION
@@ -48,7 +52,7 @@ RUN if [ "$(uname -m)" = "x86_64" ] && [ -n "${NVAT_VERSION}" ]; then \
 	git checkout FETCH_HEAD && pushd nv-attestation-sdk-cpp && cmake . && make install && \
 	mkdir -p /usr/include && ln -sf /usr/local/include/nvat.h /usr/include/nvat.h && ldconfig && \
 	popd && popd && popd && rm -rf "$tmpdir" && \
-	apt-get clean && rm -rf /var/lib/apt/lists/; fi
+	apt-get clean && rm -rf /var/lib/apt/lists/*; fi
 
 ENV LIBC="gnu"
 RUN ARCH=$(uname -m); \

@@ -15,3 +15,7 @@ sha256sums.asc
 stage/
 typescript
 kata-linux-*
+
+# Ephemeral copies for docker build (source: docker/apt-ci-tune.sh)
+static-build/**/apt-ci-tune.sh
+kata-debug/apt-ci-tune.sh

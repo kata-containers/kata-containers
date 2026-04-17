@@ -28,8 +28,13 @@ package_output_dir="${package_output_dir:-}"
 container_image="${PAUSE_IMAGE_CONTAINER_BUILDER:-$(get_pause_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
+gha_docker_args=()
+packaging_github_actions_docker_append gha_docker_args
+
 docker pull ${container_image} || \
-	(docker $BUILDX build $PLATFORM \
+	(packaging_copy_apt_ci_tune_to "${script_dir}" && \
+	docker $BUILDX build $PLATFORM \
+		"${gha_docker_args[@]}" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")

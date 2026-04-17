@@ -72,6 +72,11 @@ fi
 
 : "${GH_TOKEN:=${GITHUB_TOKEN:-}}"
 
+docker_build_gha=()
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+	docker_build_gha=(--build-arg "GITHUB_ACTIONS=true")
+fi
+
 # GH_TOKEN as build-arg (not BuildKit): keeps plain `docker build` working; value may appear in image history.
 docker_build_gh_token=()
 if [ -n "${GH_TOKEN}" ]; then
@@ -86,6 +91,7 @@ docker build -q -t build-kata-deploy \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	--build-arg ARCH="${ARCH}" \
+	"${docker_build_gha[@]}" \
 	"${docker_build_gh_token[@]}" \
 	"${script_dir}/dockerbuild/"
 
@@ -130,6 +136,7 @@ docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v "${kata_dir}:${kata_dir}" \
+	--env GITHUB_ACTIONS="${GITHUB_ACTIONS:-false}" \
 	--env USER=${USER} \
 	--env ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY}" \
 	--env ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY}" \

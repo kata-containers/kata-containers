@@ -5,6 +5,11 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
+ARG GITHUB_ACTIONS=false
+
+COPY apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -19,4 +24,4 @@ RUN apt-get update && \
         python3 \
         python3-distutils \
         uuid-dev && \
-    apt-get clean && rm -rf /var/lib/lists/
+    apt-get clean && rm -rf /var/lib/apt/lists/*

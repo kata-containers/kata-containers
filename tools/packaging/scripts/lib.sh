@@ -56,6 +56,30 @@ warn() {
 	echo >&2 "WARN: $*"
 }
 
+# Faster Ubuntu mirrors on GitHub-hosted runners; pair with ARG GITHUB_ACTIONS in Dockerfiles.
+# Usage: gha=(); packaging_github_actions_docker_append gha; docker build "${gha[@]}" ...
+# Uses eval instead of namerefs so Bash 3.2 (e.g. macOS /bin/bash) callers do not break.
+packaging_github_actions_docker_append() {
+	local dest_name="${1:?destination array name required}"
+	[[ "${dest_name}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || die "invalid destination array name: ${dest_name}"
+	if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+		eval "${dest_name}+=(--build-arg \"GITHUB_ACTIONS=true\")"
+	fi
+}
+
+# Copy docker/apt-ci-tune.sh into a docker build context directory before building.
+packaging_copy_apt_ci_tune_to() {
+	local src dest
+	src="${this_script_dir}/../docker/apt-ci-tune.sh"
+	[[ -f "${src}" ]] || die "apt-ci-tune source missing: ${src}"
+	dest=$(readlink -f "${1}") || die "failed to resolve destination directory: ${1}"
+	[[ -d "${dest}" ]] || die "destination is not an existing directory: ${1}"
+
+	if [[ ! -f "${dest}/apt-ci-tune.sh" ]] || ! cmp -s "${src}" "${dest}/apt-ci-tune.sh"; then
+		cp "${src}" "${dest}/apt-ci-tune.sh"
+	fi
+}
+
 get_repo_hash() {
 	local repo_dir=${1:-}
 	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"

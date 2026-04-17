@@ -7,9 +7,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
 ARG ARCH
+ARG GITHUB_ACTIONS=false
 # Optional: authenticated GitHub release downloads. Passed as ARG (not BuildKit secrets)
 # so a plain `docker build` works; the value may appear in image build history/cache metadata.
 ARG GH_TOKEN=
+
+COPY apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 

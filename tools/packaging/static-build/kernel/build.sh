@@ -60,6 +60,10 @@ fi
 
 container_build+=" --build-arg ARCH=${ARCH:-}"
 
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+	container_build+=" --build-arg GITHUB_ACTIONS=true"
+fi
+
 kernel_gh_build_args=()
 # GH_TOKEN as build-arg (not BuildKit): keeps plain `docker build` working; value may appear in image history.
 if [[ -n "${GH_TOKEN:-}" ]] || [[ -n "${GITHUB_TOKEN:-}" ]]; then
@@ -69,6 +73,7 @@ fi
 
 "${container_engine}" pull "${container_image}" || \
 	{
+		packaging_copy_apt_ci_tune_to "${script_dir}"
 		${container_build} "${kernel_gh_build_args[@]}" -t "${container_image}" "${script_dir}" && \
 		# No-op unless PUSH_TO_REGISTRY is exported as "yes"
 		push_to_registry "${container_image}";

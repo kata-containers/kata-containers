@@ -22,8 +22,15 @@ IMAGE_TAG="${REGISTRY}:$(git rev-parse HEAD)-${arch}"
 
 pushd ${KATA_DEBUG_DIR}
 
+cp "${KATA_DEBUG_DIR}/../docker/apt-ci-tune.sh" "${KATA_DEBUG_DIR}/apt-ci-tune.sh"
+
+docker_gha=()
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+	docker_gha=(--build-arg "GITHUB_ACTIONS=true")
+fi
+
 echo "Building the image"
-docker build --tag ${IMAGE_TAG} .
+docker build "${docker_gha[@]}" --tag ${IMAGE_TAG} .
 
 echo "Pushing the image to the registry"
 docker push ${IMAGE_TAG}
@@ -33,7 +40,7 @@ if [ -n "${TAG}" ]; then
 
 	echo "Building the ${ADDITIONAL_TAG} image"
 
-	docker build --tag ${ADDITIONAL_TAG} .
+	docker build "${docker_gha[@]}" --tag ${ADDITIONAL_TAG} .
 
 	echo "Pushing the image ${ADDITIONAL_TAG} to the registry"
 	docker push ${ADDITIONAL_TAG}

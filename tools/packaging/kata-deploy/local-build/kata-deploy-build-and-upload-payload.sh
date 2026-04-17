@@ -50,9 +50,15 @@ IMAGE_TAG="${REGISTRY}:kata-containers-$(git -C "${REPO_ROOT}" rev-parse HEAD)-$
 
 DOCKERFILE="${REPO_ROOT}/tools/packaging/kata-deploy/Dockerfile"
 
+gha_bargs=()
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+	gha_bargs=(--build-arg "GITHUB_ACTIONS=true")
+fi
+
 echo "Building the image"
 docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
 	-f "${DOCKERFILE}" \
+	"${gha_bargs[@]}" \
 	--tag "${IMAGE_TAG}" --push .
 
 if [ -n "${TAG}" ]; then
@@ -61,6 +67,7 @@ if [ -n "${TAG}" ]; then
 	echo "Building the ${ADDITIONAL_TAG} image"
 	docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
 		-f "${DOCKERFILE}" \
+		"${gha_bargs[@]}" \
 		--tag "${ADDITIONAL_TAG}" --push .
 fi
 

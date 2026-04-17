@@ -62,10 +62,15 @@ for entry in "${verity_variants[@]}"; do
 	EXTRA_OPTS+=" ${param_var}=${root_measure_config}"
 done
 
+gha_docker_args=()
+packaging_github_actions_docker_append gha_docker_args
+
 docker pull ${container_image} || \
-	(docker ${BUILDX} build ${PLATFORM}  \
+	(packaging_copy_apt_ci_tune_to "${script_dir}" && \
+	docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
+		"${gha_docker_args[@]}" \
 		-t "${container_image}" \
 		"${script_dir}" && \
 	 push_to_registry "${container_image}")

@@ -8,17 +8,27 @@ ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
 ENV TZ=Etc/UTC
 ARG ARCH
+ARG GITHUB_ACTIONS=false
 # Optional: authenticated GitHub release downloads. Passed as ARG (not BuildKit secrets)
 # so a plain `docker build` works; the value may appear in image build history/cache metadata.
 ARG GH_TOKEN=
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 COPY install_oras.sh /usr/bin/install_oras.sh
+COPY apt-ci-tune.sh /tmp/apt-ci-tune.sh
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install yq, oras, and docker
-RUN apt-get update && \
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
+
+# Install yq, oras, and docker (retry apt-get update for transient mirror/index mismatches on CI).
+RUN set -eux; \
+    for i in 1 2 3; do \
+        apt-get update && break; \
+        echo "apt-get update failed, retry ${i}/3" >&2; \
+        [ "${i}" -eq 3 ] && exit 1; \
+        sleep 15; \
+    done; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         docker.io \
@@ -27,7 +37,7 @@ RUN apt-get update && \
         git \
         wget \
         sudo && \
-    apt-get clean && rm -rf /var/lib/apt/lists/ && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
     install_yq.sh && \
     install_oras.sh
 
@@ -51,7 +61,13 @@ RUN if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then sed -i '
     echo "deb [arch=s390x] http://ports.ubuntu.com/ jammy-updates main multiverse universe" >> /etc/apt/sources.list; fi
 
 #FIXME: gcc is required as agent is build out of a container build.
-RUN apt-get update && \
+RUN set -eux; \
+    for i in 1 2 3; do \
+        apt-get update && break; \
+        echo "apt-get update failed, retry ${i}/3" >&2; \
+        [ "${i}" -eq 3 ] && exit 1; \
+        sleep 15; \
+    done; \
     apt-get install --no-install-recommends -y \
     build-essential \
     cpio \
@@ -78,7 +94,7 @@ RUN apt-get update && \
         libglib2.0-0:s390x \
         libglib2.0-dev:s390x; \
     elif uname -m | grep -Eq 's390x'; then apt-get install -y s390-tools; fi && \
-    apt-get clean && rm -rf /var/lib/apt/lists
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then \
         git clone -b v2.25.0 https://github.com/ibm-s390-linux/s390-tools.git && cd s390-tools && \

@@ -4,6 +4,7 @@
 
 FROM ubuntu:22.04
 ARG RUST_TOOLCHAIN
+ARG GITHUB_ACTIONS=false
 
 COPY install_libseccomp.sh /usr/bin/install_libseccomp.sh
 
@@ -20,6 +21,9 @@ ENV LIBSECCOMP_LIB_PATH=${OPT_LIB}
 ENV PKG_CONFIG_PATH=${OPT_LIB}/pkgconfig:$PKG_CONFIG_PATH
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+COPY apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
 
 RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX /opt
 
@@ -38,7 +42,7 @@ RUN apt-get update && \
 		openssl \
 		perl \
 		protobuf-compiler && \
-	apt-get clean && rm -rf /var/lib/apt/lists/ && \
+	apt-get clean && rm -rf /var/lib/apt/lists/* && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
 # Install ORAS CLI for tarball caching

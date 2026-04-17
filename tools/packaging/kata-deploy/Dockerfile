@@ -27,12 +27,16 @@ FROM ubuntu:22.04 AS rust-builder
 
 # Default to Rust 1.90.0
 ARG RUST_TOOLCHAIN=1.90.0
+ARG GITHUB_ACTIONS=false
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RUSTUP_HOME="/opt/rustup"
 ENV CARGO_HOME="/opt/cargo"
 ENV PATH="/opt/cargo/bin/:${PATH}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+COPY tools/packaging/docker/apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
 
 RUN \
 	mkdir ${RUSTUP_HOME} ${CARGO_HOME} && \
@@ -46,7 +50,7 @@ RUN \
 		gcc \
 		libc6-dev \
 		musl-tools && \
-	apt-get clean && rm -rf /var/lib/apt/lists/ && \
+	apt-get clean && rm -rf /var/lib/apt/lists/* && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
 	rustup component add rustfmt clippy
 
@@ -140,14 +144,18 @@ RUN \
 FROM debian:trixie-slim AS runtime-assembler
 
 ARG DESTINATION=/opt/kata-artifacts
+ARG GITHUB_ACTIONS=false
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+COPY tools/packaging/docker/apt-ci-tune.sh /tmp/apt-ci-tune.sh
+RUN GITHUB_ACTIONS="${GITHUB_ACTIONS}" bash /tmp/apt-ci-tune.sh && rm -f /tmp/apt-ci-tune.sh
 
 RUN \
 	apt-get update && \
 	apt-get --no-install-recommends -y install \
 		util-linux && \
-	apt-get clean && rm -rf /var/lib/apt/lists/
+	apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy the built binary to analyze its dependencies
 COPY --from=rust-builder /kata-deploy/bin/kata-deploy /tmp/kata-deploy

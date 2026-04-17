@@ -27,6 +27,7 @@ dpkg_arch=":${ARCH}"
 [[ "${dpkg_arch}" == ":x86_64" ]] && dpkg_arch=""
 [[ "${dpkg_arch}" == ":ppc64le" ]] && dpkg_arch=":ppc64el"
 
+# Docker build context for qemu/Dockerfile: tools/packaging (includes docker/apt-ci-tune.sh).
 packaging_dir="${script_dir}/../.."
 qemu_destdir="/tmp/qemu-static/"
 container_engine="${USE_PODMAN:+podman}"
@@ -54,12 +55,16 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
 [[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
+gha_docker_args=()
+packaging_github_actions_docker_append gha_docker_args
+
 "${container_engine}" pull "${container_image}" || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg DPKG_ARCH="${dpkg_arch}" \
 	--build-arg ARCH="${ARCH}" \
+	"${gha_docker_args[@]}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t "${container_image}" && \

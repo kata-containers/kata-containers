@@ -53,12 +53,21 @@ esac
 container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_virtiofsd_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
+gha_docker_args=()
+packaging_github_actions_docker_append gha_docker_args
+
 docker pull ${container_image} || \
-	(docker $BUILDX build $PLATFORM \
-		--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
-		-t "${container_image}" "${script_dir}/${libc}" && \
-	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
-	 push_to_registry "${container_image}")
+	(
+		if [ "${libc}" = "gnu" ]; then
+			packaging_copy_apt_ci_tune_to "${script_dir}/gnu"
+		fi
+		docker $BUILDX build $PLATFORM \
+			--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
+			"${gha_docker_args[@]}" \
+			-t "${container_image}" "${script_dir}/${libc}" && \
+		# No-op unless PUSH_TO_REGISTRY is exported as "yes"
+		push_to_registry "${container_image}"
+	)
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
