@@ -1515,7 +1515,7 @@ mod tests {
         let one_time_cpath =
             |child: &str| -> String { format!("/{}/{}", one_time_pod_name, child) };
 
-        let test_cases = vec![
+        let test_cases = [
             TestCase {
                 cpath: vec![one_time_cpath("child1")],
                 devices: vec![vec![allow_all.clone()]],
@@ -1633,7 +1633,7 @@ mod tests {
             DEFAULT_DEVICES.len() + DEFAULT_ALLOWED_DEVICES.len()
         );
 
-        let allowed_permissions = vec![
+        let allowed_permissions = [
             DevicePermissions::Read,
             DevicePermissions::Write,
             DevicePermissions::MkNod,
