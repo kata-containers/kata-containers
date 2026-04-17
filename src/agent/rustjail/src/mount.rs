@@ -1362,7 +1362,7 @@ mod tests {
             .typ(oci::LinuxDeviceType::C)
             .major(0)
             .minor(0)
-            .file_mode(0660 as u32)
+            .file_mode(0o660_u32)
             .uid(unistd::getuid().as_raw())
             .gid(unistd::getgid().as_raw())
             .build()
