@@ -10,6 +10,7 @@ use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
+use crate::utils::remove_dir_all_if_exists;
 use crate::utils::set_groups;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
@@ -43,7 +44,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
-use std::fs::remove_dir_all;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -728,7 +728,9 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "CloudHypervisor::cleanup()");
-        remove_dir_all(get_rootless_symlink_sandbox_path(self.id.as_str()))?;
+        if is_rootless() {
+            remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(self.id.as_str()).as_str())?;
+        }
         vm_cleanup(&self.config, self.vm_path.as_str())
     }
 
