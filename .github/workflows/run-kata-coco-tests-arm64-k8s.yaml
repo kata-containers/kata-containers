@@ -1,0 +1,128 @@
+name: CI | Run kata coco tests on arm64 k8s
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: false
+
+permissions: {}
+
+jobs:
+  run-k8s-tests-coco-arm64-k8s:
+    name: run-k8s-tests-coco-arm64-k8s (${{ matrix.vmm }}, ${{ matrix.k8s }})
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu-coco-dev-runtime-rs
+        k8s:
+          - kubeadm
+    runs-on: arm64-k8s
+    environment:
+      name: ci
+      deployment: false
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: ${{ matrix.k8s }}
+      K8S_TEST_HOST_TYPE: all
+      TARGET_ARCH: "aarch64"
+      KBS: "true"
+      KBS_INGRESS: "nodeport"
+      AUTO_GENERATE_POLICY: "yes"
+      PULL_TYPE: "guest-pull"
+      SNAPSHOTTER: "nydus"
+      AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-tools-static-tarball-arm64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
+      - name: Deploy Kata
+        timeout-minutes: 20
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Uninstall previous `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
+
+      - name: Deploy CoCo KBS
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+
+      - name: Install `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Run tests
+        timeout-minutes: 90
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Collect artifacts ${{ matrix.vmm }}
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
+        continue-on-error: true
+
+      - name: Archive artifacts ${{ matrix.vmm }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: k8s-coco-arm64-${{ matrix.vmm }}-${{ matrix.k8s }}-${{ inputs.tag }}
+          path: /tmp/artifacts
+          retention-days: 1
+
+      - name: Delete kata-deploy
+        if: always()
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup

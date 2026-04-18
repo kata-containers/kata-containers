@@ -11,6 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
+    [[ "$(uname -m)" == "x86_64" ]] || skip "Image used in the tests is not multi-arch."
     setup_common || die "setup_common failed"
 
     deployment_name="policy-redis-deployment"
@@ -60,6 +61,7 @@ test_deployment_policy_error() {
 
 teardown() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
+    [[ "$(uname -m)" == "x86_64" ]] || skip "Image used in the tests is not multi-arch."
 
     # Pod debugging information. Don't print the "Message:" line because it contains a truncated policy log.
     info "Pod ${deployment_name}:"

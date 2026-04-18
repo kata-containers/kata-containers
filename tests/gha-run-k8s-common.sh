@@ -707,7 +707,9 @@ function helm_helper() {
 					yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 				elif is_snp_hypervisor "${shim}" || is_tdx_hypervisor "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
-				elif [[ "${shim}" == "qemu-runtime-rs" ]]; then
+				# qemu-coco-dev-runtime-rs is checked explicitly because
+				# qemu-coco-dev (Go runtime) does not support arm64.
+				elif [[ "${shim}" == "qemu-runtime-rs" ]] || [[ "${shim}" == "qemu-coco-dev-runtime-rs" ]]; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
 				elif is_non_tee_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"

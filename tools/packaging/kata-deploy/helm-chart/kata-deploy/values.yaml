@@ -322,6 +322,7 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
+      - arm64
       - s390x
     allowedHypervisorAnnotations: []
     containerd:

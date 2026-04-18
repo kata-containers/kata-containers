@@ -710,13 +710,18 @@ install_kernel_helper() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
-#Install kernel asset (on x86_64 and s390x built with -x for TEE/confidential; other arches without -x)
+#Install kernel asset (on x86_64, s390x, and aarch64 built with -x for TEE/confidential)
 install_kernel() {
 	local extra_cmd=""
 	case "${ARCH}" in
 		s390x)
 			export CONFIDENTIAL_GUEST="yes"
 			export MEASURED_ROOTFS="no"
+			extra_cmd="-x"
+			;;
+		aarch64)
+			export CONFIDENTIAL_GUEST="yes"
+			export MEASURED_ROOTFS="yes"
 			extra_cmd="-x"
 			;;
 		x86_64)
