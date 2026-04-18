@@ -276,6 +276,14 @@ block_device_physical_sector_size = 0
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
 
+# Number of independent IO threads for virtio-blk devices.
+# When set to a value greater than 0, creates independent IO threads
+# that can be attached to virtio-blk devices during hotplug.
+# Requires enable_iothreads to be true for virtio-blk devices to use these threads.
+# Default 0 (disabled).
+#
+indep_iothreads = @DEFINDEPIOTHREADS@
+
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked

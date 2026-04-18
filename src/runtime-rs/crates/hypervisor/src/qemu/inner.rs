@@ -852,6 +852,23 @@ impl QemuInner {
             }
             DeviceType::Block(mut block_device) => {
                 let block_driver = &self.config.blockdev_info.block_device_driver;
+
+                // Determine iothread for virtio-blk devices
+                // Only attach iothread when:
+                // 1. enable_iothreads is true
+                // 2. indep_iothreads > 0
+                // 3. block driver is not virtio-scsi (i.e., it's virtio-blk)
+                // 4. TODO: for more complex cases
+                let iothread = if self.config.enable_iothreads
+                    && self.config.indep_iothreads > 0
+                    && *block_driver != kata_types::config::hypervisor::VIRTIO_SCSI
+                {
+                    // Use the first independent iothread (indep_iothread_0)
+                    Some("indep_iothread_0")
+                } else {
+                    None
+                };
+
                 let (pci_path, addr_str) = qmp
                     .hotplug_block_device(
                         block_driver,
@@ -868,6 +885,7 @@ impl QemuInner {
                         block_device.config.no_drop,
                         block_device.config.logical_sector_size,
                         block_device.config.physical_sector_size,
+                        iothread,
                     )
                     .context("hotplug block device")?;
 
