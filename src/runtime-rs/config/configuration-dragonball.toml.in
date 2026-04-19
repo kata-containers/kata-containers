@@ -108,6 +108,34 @@ default_bridges = @DEF_DGB_BRIDGES@
 # Default false
 reclaim_guest_freed_memory = false
 
+# Memory backing override for guest RAM.
+# - "" (default): dragonball picks based on enable_hugepages
+#                 (shmem when off, hugeshmem/hugetlbfs when on).
+# - "anon":       private anonymous mapping (MAP_PRIVATE|MAP_ANONYMOUS).
+#                 Required when mem_merge = true.
+# - "shmem":      memfd + MAP_SHARED (legacy default when hugepages off).
+mem_type = ""
+
+# Enable KSM (Kernel Samepage Merging) on guest RAM.
+# When true, dragonball calls madvise(MADV_MERGEABLE) on each guest memory
+# region so the host's ksmd daemon (if /sys/kernel/mm/ksm/run=1) can
+# deduplicate identical pages across VMs on this host. Useful when many VMs
+# share a kernel/initrd/workload image; typical savings are 10s of MiB per
+# peer VM beyond the first.
+#
+# Requires mem_type = "anon" (KSM only merges anonymous pages) and is
+# incompatible with enable_hugepages = true (KSM does not merge hugetlb).
+# Has no effect if the host kernel was built without CONFIG_KSM or if ksmd
+# is off.
+#
+# Security note: KSM introduces a timing-based side channel. Tenants sharing
+# a host can in principle probe whether a specific page exists elsewhere by
+# measuring COW-fault latency. Enable only in trust domains where this is
+# acceptable.
+#
+# Default false.
+mem_merge = false
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@

@@ -589,6 +589,7 @@ impl VmmService {
         config.serial_path = machine_config.serial_path;
 
         config.pci_hotplug_enabled = machine_config.pci_hotplug_enabled;
+        config.mem_merge = machine_config.mem_merge;
 
         vm.set_vm_config(config.clone());
         self.machine_config = config;
