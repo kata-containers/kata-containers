@@ -1018,7 +1018,7 @@ VERIFICATION_POD_EOF
 	sleep 60s
 
 	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
+	kubectl_retry -n kube-system logs -l name=kata-deploy
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"
