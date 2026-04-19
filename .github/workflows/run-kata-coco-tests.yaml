@@ -383,7 +383,6 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - qemu-coco-dev
           - qemu-coco-dev-runtime-rs
         snapshotter:
           - erofs

@@ -8,12 +8,45 @@ use crate::runtime::containerd;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::Result;
-use log::info;
+use log::{info, warn};
 use std::fs;
 use std::path::Path;
 
 pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &Path) -> Result<()> {
     info!("Configuring erofs-snapshotter");
+
+    // The Go runtime does not support fsmerged EROFS (fsmeta.erofs).
+    // If the snapshotter handler mapping explicitly pairs a Go shim with
+    // erofs, that is a hard misconfiguration — bail out so the operator
+    // fixes the mapping instead of hitting cryptic runtime errors later.
+    if let Some(mapping) = config.snapshotter_handler_mapping_for_arch.as_ref() {
+        let mut go_shims_on_erofs = Vec::new();
+        for entry in mapping.split(',') {
+            let parts: Vec<&str> = entry.split(':').collect();
+            if parts.len() == 2 && parts[1] == "erofs" && !utils::is_rust_shim(parts[0]) {
+                go_shims_on_erofs.push(parts[0].to_string());
+            }
+        }
+        if !go_shims_on_erofs.is_empty() {
+            warn!("##########################################################################");
+            warn!("#                                                                        #");
+            warn!("#  Go runtime shim(s) mapped to the erofs snapshotter:                   #");
+            for s in &go_shims_on_erofs {
+                warn!("#    - {:<64} #", s);
+            }
+            warn!("#                                                                        #");
+            warn!("#  The Go runtime does NOT support fsmerged EROFS (fsmeta.erofs).         #");
+            warn!("#  Only runtime-rs shims are supported with the erofs snapshotter.        #");
+            warn!("#                                                                        #");
+            warn!("##########################################################################");
+            return Err(anyhow::anyhow!(
+                "erofs snapshotter: Go runtime shim(s) [{}] cannot be mapped to erofs. \
+                 The Go runtime does not support fsmerged EROFS. \
+                 Remove these shims from SNAPSHOTTER_HANDLER_MAPPING or switch them to runtime-rs.",
+                go_shims_on_erofs.join(", ")
+            ));
+        }
+    }
 
     toml_utils::set_toml_value(
         configuration_file,
@@ -37,43 +70,29 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
         "true",
     )?;
-    // Turn off fsmerge unless we are configuring for a Rust shim below.  Writing 0
-    // first keeps behavior explicit and resets a stale max_unmerged_layers in this
-    // drop-in after switching away from Rust / fsmerged EROFS on the same node.
+
+    // Erofs differ plugin options (requires erofs-utils >= 1.8.2 on the host).
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.differ.v1.erofs\".mkfs_options",
+        "[\"-T0\",\"--mkfs-time\",\"--sort=none\"]",
+    )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
+        "false",
+    )?;
+
+    toml_utils::set_toml_value(
+        configuration_file,
+        ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
+        "\"10G\"",
+    )?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
-        "0",
+        "1",
     )?;
-
-    // The remaining settings only apply to runtime-rs (rust shim) which
-    // supports fsmerged EROFS.  The go runtime does not, so we leave the
-    // differ and snapshotter plugins at their defaults for it.
-    let is_rust_shim = config.shims_for_arch.iter().any(|s| utils::is_rust_shim(s));
-    if is_rust_shim {
-        // Erofs differ plugin options (requires erofs-utils >= 1.8.2 on the host).
-        toml_utils::set_toml_value(
-            configuration_file,
-            ".plugins.\"io.containerd.differ.v1.erofs\".mkfs_options",
-            "[\"-T0\",\"--mkfs-time\",\"--sort=none\"]",
-        )?;
-        toml_utils::set_toml_value(
-            configuration_file,
-            ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
-            "false",
-        )?;
-
-        toml_utils::set_toml_value(
-            configuration_file,
-            ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
-            "\"10G\"",
-        )?;
-        toml_utils::set_toml_value(
-            configuration_file,
-            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
-            "1",
-        )?;
-    }
 
     Ok(())
 }
