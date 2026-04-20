@@ -27,12 +27,10 @@ pub const ERR_HVSOCK_SOC_PATH_EMPTY: &str = "Hybrid VSOCK socket path cannot be 
 #[macro_export]
 macro_rules! assert_result {
     ($expected_result:expr, $actual_result:expr, $msg:expr) => {
-        if $expected_result.is_ok() {
-            let expected_level = $expected_result.as_ref().unwrap();
+        if let Ok(expected_level) = $expected_result.as_ref() {
             let actual_level = $actual_result.unwrap();
             assert!(*expected_level == actual_level, "{}", $msg);
-        } else {
-            let expected_error = $expected_result.as_ref().unwrap_err();
+        } else if let Err(expected_error) = $expected_result.as_ref() {
             let expected_error_msg = format!("{:?}", expected_error);
 
             if let Err(actual_error) = $actual_result {
