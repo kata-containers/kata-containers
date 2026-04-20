@@ -362,12 +362,8 @@ mod tests {
             let result = get_single_cpu_info(d.cpuinfo_path, d.processor_delimiter_str);
             let msg = format!("{msg}, result: {result:?}");
 
-            if d.result.is_ok() {
-                assert_eq!(
-                    result.as_ref().unwrap(),
-                    d.result.as_ref().unwrap(),
-                    "{msg}"
-                );
+            if let Ok(d_result) = &d.result {
+                assert_eq!(result.as_ref().unwrap(), d_result, "{msg}");
                 continue;
             }
 
@@ -422,12 +418,8 @@ mod tests {
             let result = get_cpu_flags(d.cpu_info_str, d.cpu_flags_tag);
             let msg = format!("{msg}, result: {result:?}");
 
-            if d.result.is_ok() {
-                assert_eq!(
-                    result.as_ref().unwrap(),
-                    d.result.as_ref().unwrap(),
-                    "{msg}"
-                );
+            if let Ok(d_result) = &d.result {
+                assert_eq!(result.as_ref().unwrap(), d_result, "{msg}");
                 continue;
             }
 
