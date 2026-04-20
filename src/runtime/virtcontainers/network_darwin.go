@@ -100,6 +100,10 @@ func validGuestRoute(route netlink.Route) bool {
 	return true
 }
 
-func validGuestNeighbor(route netlink.Neigh) bool {
+func validGuestNeighbor(neigh netlink.Neigh, gatewaySet map[string]struct{}) bool {
 	return true
+}
+
+func gatewaySetFromRoutes(routes []netlink.Route) map[string]struct{} {
+	return make(map[string]struct{})
 }
