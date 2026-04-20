@@ -113,6 +113,13 @@ pub struct Agent {
     #[serde(default = "default_reconnect_timeout")]
     pub reconnect_timeout_ms: u32,
 
+    /// Confidential Data Hub API timeout value in seconds
+    #[serde(
+        default = "default_cdh_api_timeout",
+        deserialize_with = "deserialize_secs_to_millis"
+    )]
+    pub cdh_api_timeout: u32,
+
     /// Agent request timeout value in millisecond
     /// This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
     /// It's also used to ensure that workloads, especially those involving large image pulls within the guest,
@@ -180,9 +187,10 @@ impl std::default::Default for Agent {
             log_port: DEFAULT_AGENT_LOG_PORT,
             passfd_listener_port: DEFAULT_PASSFD_LISTENER_PORT,
             dial_timeout_ms: DEFAULT_AGENT_DIAL_TIMEOUT_MS,
-            reconnect_timeout_ms: 3_000,
-            request_timeout_ms: 30_000,
-            health_check_request_timeout_ms: 90_000,
+            reconnect_timeout_ms: default_reconnect_timeout(),
+            cdh_api_timeout: default_cdh_api_timeout(),
+            request_timeout_ms: default_request_timeout(),
+            health_check_request_timeout_ms: default_health_check_timeout(),
             kernel_modules: Default::default(),
             container_pipe_size: 0,
             launch_process_timeout: 0,
@@ -216,6 +224,11 @@ fn default_dial_timeout() -> u32 {
 fn default_reconnect_timeout() -> u32 {
     // ms
     3_000
+}
+
+fn default_cdh_api_timeout() -> u32 {
+    // ms (converted from 50 seconds)
+    50_000
 }
 
 fn default_request_timeout() -> u32 {

@@ -574,6 +574,10 @@ launch_process_timeout = 6
 # Defaults to @DEFCREATECONTAINERTIMEOUT_COCO@ second(s)
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT_COCO@
 
+# Confidential Data Hub API timeout value in seconds
+# (default: 50)
+cdh_api_timeout = 50
+
 [agent.@PROJECT_TYPE@.mem_agent]
 # Control the mem-agent function enable or disable.
 # Default to false
