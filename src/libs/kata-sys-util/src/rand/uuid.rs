@@ -7,7 +7,8 @@
 use std::{convert::From, fmt};
 
 use byteorder::{BigEndian, ByteOrder};
-use rand::RngCore;
+use rand::rng as thread_rng;
+use rand::Rng;
 
 pub struct UUID([u8; 16]);
 
@@ -20,7 +21,7 @@ impl Default for UUID {
 impl UUID {
     pub fn new() -> Self {
         let mut b = [0u8; 16];
-        rand::thread_rng().fill_bytes(&mut b);
+        thread_rng().fill_bytes(&mut b);
         b[6] = (b[6] & 0x0f) | 0x40;
         b[8] = (b[8] & 0x3f) | 0x80;
         Self(b)
