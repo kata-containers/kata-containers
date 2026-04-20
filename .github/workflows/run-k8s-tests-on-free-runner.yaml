@@ -113,7 +113,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Run tests
-        timeout-minutes: 75
+        timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Report tests
