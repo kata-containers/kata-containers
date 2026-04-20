@@ -68,21 +68,21 @@ add_annotations_to_yaml() {
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	CronJob)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq -i \
 		  ".spec.jobTemplate.spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
-		  "${K8S_TEST_YAML}"
+		  "${yaml_file}"
 		;;
 
 	List)
@@ -129,23 +129,30 @@ add_cbl_mariner_specific_annotations() {
 	fi
 }
 
-add_runtime_handler_annotations() {
-	local handler_annotation="io.containerd.cri.runtime-handler"
+add_runtime_handler_annotation_to_yaml() {
+	local -r yaml_file="$1"
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		local -r handler_annotation="io.containerd.cri.runtime-handler"
+		local -r handler_value="kata-${KATA_HYPERVISOR}"
+		add_annotations_to_yaml "${yaml_file}" "${handler_annotation}" "${handler_value}"
+	fi
+}
 
+add_runtime_handler_annotations() {
 	if [ "$PULL_TYPE" != "guest-pull" ]; then
-		info "Not adding $handler_annotation annotation for $PULL_TYPE pull type"
+		info "Not adding runtime-handler annotation for $PULL_TYPE pull type"
 		return
 	fi
 
-	# Add runtime handler annotations for confidential computing hypervisors
-	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
-		info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
-		local handler_value="kata-${KATA_HYPERVISOR}"
-		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
-		do
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${handler_annotation}" "${handler_value}"
-		done
-	fi
+	for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+	do
+		add_runtime_handler_annotation_to_yaml "${K8S_TEST_YAML}"
+	done
+
+	for K8S_TEST_YAML in runtimeclass_workloads_work/openvpn/*.yaml
+	do
+		add_runtime_handler_annotation_to_yaml "${K8S_TEST_YAML}"
+	done
 }
 
 main() {
