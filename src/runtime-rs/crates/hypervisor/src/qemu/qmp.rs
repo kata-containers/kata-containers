@@ -6,6 +6,7 @@
 use crate::device::pci_path::PciPath;
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
+use crate::BlockDeviceFormat;
 use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
@@ -14,7 +15,8 @@ use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, MigrationInfo, PciDeviceInfo,
+    BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
+    MigrationInfo, PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -644,6 +646,7 @@ impl Qmp {
         no_drop: bool,
         logical_block_size: u32,
         physical_block_size: u32,
+        format: &BlockDeviceFormat,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = format!("drive-{index}");
@@ -692,27 +695,54 @@ impl Qmp {
             }
         };
 
-        let blockdev_options_raw = BlockdevOptions::raw {
-            base: BlockdevOptionsBase {
-                detect_zeroes: None,
-                cache: None,
-                discard: None,
-                force_share: None,
-                auto_read_only: None,
-                node_name: Some(node_name.clone()),
-                read_only: None,
-            },
-            raw: BlockdevOptionsRaw {
-                base: BlockdevOptionsGenericFormat {
-                    file: BlockdevRef::definition(Box::new(blockdev_file)),
+        let blockdev_options = match format {
+            BlockDeviceFormat::Raw => BlockdevOptions::raw {
+                base: BlockdevOptionsBase {
+                    detect_zeroes: None,
+                    cache: None,
+                    discard: None,
+                    force_share: if is_readonly { Some(true) } else { None },
+                    auto_read_only: None,
+                    node_name: Some(node_name.clone()),
+                    read_only: Some(is_readonly),
                 },
-                offset: None,
-                size: None,
+                raw: BlockdevOptionsRaw {
+                    base: BlockdevOptionsGenericFormat {
+                        file: BlockdevRef::definition(Box::new(blockdev_file)),
+                    },
+                    offset: None,
+                    size: None,
+                },
             },
+            BlockDeviceFormat::Vmdk => {
+                info!(
+                    sl!(),
+                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                    path_on_host,
+                    is_readonly
+                );
+                BlockdevOptions::vmdk {
+                    base: BlockdevOptionsBase {
+                        detect_zeroes: None,
+                        cache: None,
+                        discard: None,
+                        force_share: Some(true),
+                        auto_read_only: None,
+                        node_name: Some(node_name.clone()),
+                        read_only: Some(is_readonly),
+                    },
+                    vmdk: BlockdevOptionsGenericCOWFormat {
+                        base: BlockdevOptionsGenericFormat {
+                            file: BlockdevRef::definition(Box::new(blockdev_file)),
+                        },
+                        backing: None,
+                    },
+                }
+            }
         };
 
         self.qmp
-            .execute(&qapi_qmp::blockdev_add(blockdev_options_raw))
+            .execute(&qapi_qmp::blockdev_add(blockdev_options))
             .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
             .map(|_| ())?;
 
@@ -745,7 +775,9 @@ impl Qmp {
             // add SCSI frontend device
             blkdev_add_args.insert("scsi-id".to_string(), scsi_id.into());
             blkdev_add_args.insert("lun".to_string(), lun.into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),
@@ -783,7 +815,9 @@ impl Qmp {
             let ccw_addr = subchannel.address_format_ccw_for_virt_server(slot);
 
             blkdev_add_args.insert("devno".to_owned(), devno.clone().into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),
@@ -814,7 +848,9 @@ impl Qmp {
         } else {
             let (bus, slot) = self.find_free_slot()?;
             blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
-            blkdev_add_args.insert("share-rw".to_string(), true.into());
+            if !is_readonly {
+                blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
 
             info!(
                 sl!(),

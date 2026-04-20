@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -26,6 +26,7 @@ use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
+use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_storage};
 use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
@@ -37,6 +38,7 @@ mod ephemeral_handler;
 mod fs_handler;
 mod image_pull_handler;
 mod local_handler;
+mod multi_layer_erofs;
 
 const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
@@ -146,6 +148,7 @@ lazy_static! {
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),
             Arc::new(ImagePullHandler {}),
+            Arc::new(self::multi_layer_erofs::MultiLayerErofsHandler {}),
         ];
 
         for handler in handlers {
@@ -154,6 +157,92 @@ lazy_static! {
 
         manager
     };
+}
+
+/// Result of multi-layer storage handling
+struct MultiLayerProcessResult {
+    /// The primary device created
+    device: Arc<dyn StorageDevice>,
+    /// All mount points that were processed as part of this group
+    processed_mount_points: Vec<String>,
+    /// Temporary mount points (upper/lower) backing the overlay, needed for
+    /// container-scoped cleanup via `container_mounts`.
+    temp_mount_points: Vec<String>,
+}
+
+/// Handle multi-layer storage by creating the overlay device.
+/// Returns None if the storage is not a multi-layer storage.
+/// Returns Some(Ok(result)) if successfully processed.
+/// Returns Some(Err(e)) if there was an error.
+async fn handle_multi_layer_storage(
+    logger: &Logger,
+    storage: &Storage,
+    storages: &[Storage],
+    sandbox: &Arc<Mutex<Sandbox>>,
+    cid: &Option<String>,
+    processed_mount_points: &HashSet<String>,
+) -> Result<Option<MultiLayerProcessResult>> {
+    if !is_multi_layer_storage(storage) {
+        return Ok(None);
+    }
+
+    // Skip if already processed as part of a previous multi-layer group
+    if processed_mount_points.contains(&storage.mount_point) {
+        return Ok(None);
+    }
+
+    info!(
+        logger,
+        "Processing multi-layer EROFS storage";
+        "mount-point" => &storage.mount_point,
+        "source" => &storage.source,
+        "driver" => &storage.driver,
+        "fstype" => &storage.fstype,
+    );
+
+    let result = handle_multi_layer_erofs_group(storage, storages, cid, sandbox, logger).await?;
+
+    // Create device for the mount point
+    let device = new_device(result.mount_point.clone())?;
+
+    Ok(Some(MultiLayerProcessResult {
+        device,
+        processed_mount_points: result.processed_mount_points,
+        temp_mount_points: result.temp_mount_points,
+    }))
+}
+
+/// Update sandbox storage with the created device.
+/// Handles cleanup on failure.
+async fn update_storage_device(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    mount_point: &str,
+    device: Arc<dyn StorageDevice>,
+    logger: &Logger,
+) -> Result<()> {
+    if let Err(device) = sandbox
+        .lock()
+        .await
+        .update_sandbox_storage(mount_point, device)
+    {
+        error!(logger, "failed to update device for storage"; "mount-point" => mount_point);
+        if let Err(e) = sandbox
+            .lock()
+            .await
+            .remove_sandbox_storage(mount_point)
+            .await
+        {
+            warn!(logger, "failed to remove dummy sandbox storage"; "error" => ?e);
+        }
+        if let Err(e) = device.cleanup() {
+            error!(logger, "failed to clean state for storage device"; "mount-point" => mount_point, "error" => ?e);
+        }
+        return Err(anyhow!(
+            "failed to update device for storage: {}",
+            mount_point
+        ));
+    }
+    Ok(())
 }
 
 // add_storages takes a list of storages passed by the caller, and perform the
@@ -168,8 +257,61 @@ pub async fn add_storages(
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
+    let mut processed_mount_points = HashSet::new();
 
-    for storage in storages {
+    for storage in &storages {
+        // Try multi-layer storage handling first
+        if let Some(result) = handle_multi_layer_storage(
+            &logger,
+            storage,
+            &storages,
+            sandbox,
+            &cid,
+            &processed_mount_points,
+        )
+        .await?
+        {
+            // Register all processed mount points
+            for mp in &result.processed_mount_points {
+                processed_mount_points.insert(mp.clone());
+            }
+
+            // Add sandbox storage for each mount point in the group.
+            // Derive the shared flag from the matching storage in the
+            // group rather than assuming all members share the trigger's
+            // flag.
+            for mp in &result.processed_mount_points {
+                let shared = storages
+                    .iter()
+                    .find(|s| s.mount_point == *mp)
+                    .map_or(storage.shared, |s| s.shared);
+                let state = sandbox.lock().await.add_sandbox_storage(mp, shared).await;
+
+                // Only update device for the first occurrence
+                if state.ref_count().await == 1 {
+                    update_storage_device(sandbox, mp, result.device.clone(), &logger).await?;
+                }
+            }
+
+            // Add the primary mount point to the list first, followed by
+            // the temporary backing mounts (upper, lower-*).  Cleanup
+            // iterates in order, so the overlay target is unmounted before
+            // the mounts it depends on.
+            if let Some(path) = result.device.path() {
+                if !path.is_empty() {
+                    mount_list.push(path.to_string());
+                }
+            }
+            mount_list.extend(result.temp_mount_points);
+            continue;
+        }
+
+        // Skip if already processed as part of multi-layer group
+        if processed_mount_points.contains(&storage.mount_point) {
+            continue;
+        }
+
+        // Standard storage handling
         let path = storage.mount_point.clone();
         let state = sandbox
             .lock()
@@ -177,68 +319,48 @@ pub async fn add_storages(
             .add_sandbox_storage(&path, storage.shared)
             .await;
         if state.ref_count().await > 1 {
-            if let Some(path) = state.path() {
-                if !path.is_empty() {
-                    mount_list.push(path.to_string());
+            if let Some(p) = state.path() {
+                if !p.is_empty() {
+                    mount_list.push(p.to_string());
                 }
             }
             // The device already exists.
             continue;
         }
 
-        if let Some(handler) = STORAGE_HANDLERS.handler(&storage.driver) {
+        // Create device using handler
+        let device = if let Some(handler) = STORAGE_HANDLERS.handler(&storage.driver) {
             let logger =
-                logger.new(o!( "subsystem" => "storage", "storage-type" => storage.driver.clone()));
+                logger.new(o!("subsystem" => "storage", "storage-type" => storage.driver.clone()));
             let mut ctx = StorageContext {
                 cid: &cid,
                 logger: &logger,
                 sandbox,
             };
-
-            match handler.create_device(storage, &mut ctx).await {
-                Ok(device) => {
-                    match sandbox
-                        .lock()
-                        .await
-                        .update_sandbox_storage(&path, device.clone())
-                    {
-                        Ok(d) => {
-                            if let Some(path) = device.path() {
-                                if !path.is_empty() {
-                                    mount_list.push(path.to_string());
-                                }
-                            }
-                            drop(d);
-                        }
-                        Err(device) => {
-                            error!(logger, "failed to update device for storage");
-                            if let Err(e) = sandbox.lock().await.remove_sandbox_storage(&path).await
-                            {
-                                warn!(logger, "failed to remove dummy sandbox storage {:?}", e);
-                            }
-                            if let Err(e) = device.cleanup() {
-                                error!(
-                                    logger,
-                                    "failed to clean state for storage device {}, {}", path, e
-                                );
-                            }
-                            return Err(anyhow!("failed to update device for storage"));
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(logger, "failed to create device for storage, error: {e:?}");
-                    if let Err(e) = sandbox.lock().await.remove_sandbox_storage(&path).await {
-                        warn!(logger, "failed to remove dummy sandbox storage {e:?}");
-                    }
-                    return Err(e);
-                }
-            }
+            handler.create_device(storage.clone(), &mut ctx).await
         } else {
             return Err(anyhow!(
                 "Failed to find the storage handler {}",
                 storage.driver
             ));
+        };
+
+        match device {
+            Ok(device) => {
+                update_storage_device(sandbox, &path, device.clone(), &logger).await?;
+                if let Some(p) = device.path() {
+                    if !p.is_empty() {
+                        mount_list.push(p.to_string());
+                    }
+                }
+            }
+            Err(e) => {
+                error!(logger, "failed to create device for storage"; "error" => ?e);
+                if let Err(e) = sandbox.lock().await.remove_sandbox_storage(&path).await {
+                    warn!(logger, "failed to remove dummy sandbox storage"; "error" => ?e);
+                }
+                return Err(e);
+            }
         }
     }
 

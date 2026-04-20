@@ -167,8 +167,8 @@ impl Container {
         );
 
         let mut storages = vec![];
-        if let Some(storage) = rootfs.get_storage().await {
-            storages.push(storage);
+        if let Some(mut storage_list) = rootfs.get_storage().await {
+            storages.append(&mut storage_list);
         }
         inner.rootfs.push(rootfs);
 

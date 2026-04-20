@@ -137,8 +137,8 @@ impl Rootfs for BlockRootfs {
         Ok(vec![self.mount.clone()])
     }
 
-    async fn get_storage(&self) -> Option<Storage> {
-        self.storage.clone()
+    async fn get_storage(&self) -> Option<Vec<Storage>> {
+        self.storage.clone().map(|s| vec![s])
     }
 
     async fn get_device_id(&self) -> Result<Option<String>> {

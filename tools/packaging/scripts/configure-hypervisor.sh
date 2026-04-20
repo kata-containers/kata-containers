@@ -388,7 +388,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-pixman)
 	qemu_options+=(size:--disable-relocatable)
 	qemu_options+=(size:--disable-rutabaga-gfx)
-	qemu_options+=(size:--disable-vmdk)
 	if ! gt_eq "${qemu_version}" "10.1.0" ; then
 		qemu_options+=(size:--disable-avx512bw)
 	fi
@@ -473,6 +472,9 @@ generate_qemu_options() {
 
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
+
+	# Required by multi-layer EROFS rootfs with fsmerge (VMDK flat-extent descriptor)
+	qemu_options+=(functionality:--enable-vmdk)
 
 	#---------------------------------------------------------------------
 	# Other options

@@ -1300,6 +1300,38 @@ impl BaseContainer for LinuxContainer {
         }
 
         self.status.transition(ContainerState::Stopped);
+
+        // Kill all of the processes created in this container to prevent
+        // the leak of some daemon process when this container shared pidns
+        // with the sandbox.
+        let cgm = self.cgroup_manager.as_mut();
+        let pids = cgm.get_pids().context("get cgroup pids")?;
+        info!(
+            self.logger,
+            "destroy: container {} cgroup has {} processes: {:?}",
+            self.id,
+            pids.len(),
+            pids
+        );
+        for i in &pids {
+            info!(
+                self.logger,
+                "destroy: killing process {} in container {}", i, self.id
+            );
+            if let Err(e) = signal::kill(Pid::from_raw(*i), Signal::SIGKILL) {
+                warn!(self.logger, "kill the process {} error: {:?}", i, e);
+            }
+        }
+
+        info!(
+            self.logger,
+            "destroy: destroying cgroup for container {}", self.id
+        );
+        cgm.destroy().context("destroy cgroups")?;
+
+        // Now umount and remove the container's root directory.
+        // This is done after process cleanup to ensure processes are killed
+        // even if filesystem cleanup fails (e.g., due to read-only mounts).
         mount::umount2(
             spec.root()
                 .as_ref()
@@ -1318,19 +1350,6 @@ impl BaseContainer for LinuxContainer {
             Ok(())
         })?;
         fs::remove_dir_all(&self.root)?;
-
-        let cgm = self.cgroup_manager.as_mut();
-        // Kill all of the processes created in this container to prevent
-        // the leak of some daemon process when this container shared pidns
-        // with the sandbox.
-        let pids = cgm.get_pids().context("get cgroup pids")?;
-        for i in pids {
-            if let Err(e) = signal::kill(Pid::from_raw(i), Signal::SIGKILL) {
-                warn!(self.logger, "kill the process {} error: {:?}", i, e);
-            }
-        }
-
-        cgm.destroy().context("destroy cgroups")?;
 
         Ok(())
     }
