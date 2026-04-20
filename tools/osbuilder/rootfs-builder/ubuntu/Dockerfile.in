@@ -52,6 +52,9 @@ RUN apt-get update && \
     python3-dev \
     libclang-dev \
     file \
+    semodule-utils \
+    policycoreutils \
+    checkpolicy \
     zstd && \
     apt-get clean && rm -rf /var/lib/apt/lists/&& \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
