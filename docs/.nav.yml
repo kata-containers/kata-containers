@@ -15,7 +15,7 @@ nav:
     - Use Cases:
       - NVIDIA GPU Passthrough: use-cases/NVIDIA-GPU-passthrough-and-Kata-QEMU.md
       - NVIDIA vGPU: use-cases/NVIDIA-GPU-passthrough-and-Kata.md
-      - Intel Discrete GPU: use-cases/Intel-Discrete-GPU-passthrough-and-Kata.md
+      - Intel QAT: use-cases/using-Intel-QAT-and-kata.md
     - Contributing:
       - Documentation: doc-contributing.md
   - Misc:
