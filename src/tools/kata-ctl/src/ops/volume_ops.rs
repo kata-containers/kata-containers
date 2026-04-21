@@ -7,12 +7,12 @@ use crate::args::{DirectVolSubcommand, DirectVolumeCommand};
 
 use anyhow::{anyhow, Ok, Result};
 use futures::executor;
+use hyper::StatusCode;
 use kata_types::mount::{
     get_volume_mount_info, join_path, kata_direct_volume_root_path, DirectVolumeMountInfo,
     KATA_MOUNT_INFO_FILE_NAME,
 };
 use nix;
-use reqwest::StatusCode;
 use slog::{info, o};
 use std::fs;
 use url;

@@ -60,14 +60,14 @@ chrono = { version = "0.4", features = ["serde"] }
 rstest = "0.26.1"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",
     "native-tls",
 ] }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",
     "rustls-tls",

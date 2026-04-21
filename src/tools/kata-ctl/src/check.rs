@@ -458,15 +458,15 @@ mod tests {
             // Failure scenarios
             TestData {
                 test_url: "http:",
-                expected: "builder error: empty host",
+                expected: "builder error",
             },
             TestData {
                 test_url: "_localhost_",
-                expected: "builder error: relative URL without a base",
+                expected: "builder error",
             },
             TestData {
                 test_url: "http://localhost :80",
-                expected: "builder error: invalid international domain name",
+                expected: "builder error",
             },
         ];
 
