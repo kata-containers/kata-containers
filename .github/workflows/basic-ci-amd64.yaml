@@ -225,50 +225,6 @@ jobs:
         timeout-minutes: 15
         run: bash tests/functional/tracing/gha-run.sh run
 
-  run-vfio:
-    name: run-vfio
-    strategy:
-      fail-fast: false
-      matrix:
-        vmm:
-          - clh
-          - qemu
-    # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
-    # TODO: enable with qemu when https://github.com/kata-containers/kata-containers/issues/9851 is fixed
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    runs-on: garm-ubuntu-2304
-    env:
-      GOPATH: ${{ github.workspace }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Install dependencies
-        run: bash tests/functional/vfio/gha-run.sh install-dependencies
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: get-kata-tarball
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-
-      - name: Run vfio tests
-        timeout-minutes: 15
-        run: bash tests/functional/vfio/gha-run.sh run
-
   run-docker-tests:
     name: run-docker-tests
     strategy:
