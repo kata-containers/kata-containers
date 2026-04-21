@@ -240,7 +240,13 @@ async fn create_endpoint(
             "{} network interface found: {}", &link_type, &attrs.name
         );
         match link_type {
-            "veth" => {
+            // "device" is the generic netlink type for interfaces whose
+            // drivers do not register a more specific kind. This includes
+            // mlx5 Scalable Functions (SFs) and other non-PCI backed
+            // netdevs that is_physical_iface() cannot classify via
+            // ethtool BusInfo. Handle them the same way as veth
+            // endpoints, using the configured network model.
+            "veth" | "device" => {
                 let ret = VethEndpoint::new(
                     &d,
                     handle,
@@ -250,7 +256,7 @@ async fn create_endpoint(
                     config.queues,
                 )
                 .await
-                .context("veth endpoint")?;
+                .context(anyhow!("{link_type} endpoint"))?;
                 Arc::new(ret)
             }
             "vlan" => {
