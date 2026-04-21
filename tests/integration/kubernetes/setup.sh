@@ -8,7 +8,7 @@ set -o nounset
 set -o pipefail
 
 DEBUG="${DEBUG:-}"
-[ -n "$DEBUG" ] && set -x
+[[ -n "${DEBUG}" ]] && set -x
 
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export KATA_HOST_OS="${KATA_HOST_OS:-}"
@@ -16,15 +16,18 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 export PULL_TYPE="${PULL_TYPE:-default}"
 export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
-declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
+kubernetes_dir=$(dirname "$(readlink -f "$0")")
+declare -r kubernetes_dir
 declare -r runtimeclass_workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
 declare -r runtimeclass_workloads_dir="${kubernetes_dir}/runtimeclass_workloads"
 declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+# shellcheck source=/dev/null
 source "${kubernetes_dir}/../../common.bash"
+# shellcheck source=/dev/null
 source "${kubernetes_dir}/tests_common.sh"
 
 
-if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
+if [[ -n "${K8S_TEST_POLICY_FILES:-}" ]]; then
 	K8S_TEST_POLICY_FILES=("${K8S_TEST_POLICY_FILES}")
 else
 	K8S_TEST_POLICY_FILES=( \
@@ -60,7 +63,8 @@ add_annotations_to_yaml() {
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
-	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
+	local resource_kind
+	resource_kind="$(yq .kind "${yaml_file}" | head -1 || true)"
 
 	case "${resource_kind}" in
 
@@ -139,8 +143,8 @@ add_runtime_handler_annotation_to_yaml() {
 }
 
 add_runtime_handler_annotations() {
-	if [ "$PULL_TYPE" != "guest-pull" ]; then
-		info "Not adding runtime-handler annotation for $PULL_TYPE pull type"
+	if [[ "${PULL_TYPE}" != "guest-pull" ]]; then
+		info "Not adding runtime-handler annotation for ${PULL_TYPE} pull type"
 		return
 	fi
 
