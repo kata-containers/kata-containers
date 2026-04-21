@@ -10,7 +10,7 @@ SE_HYPERVISORS=("qemu-se" "qemu-se-runtime-rs")
 GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
 NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
-FIRECRACKER_HYPERVISORS=("firecracker" "fc")
+FIRECRACKER_HYPERVISORS=("firecracker" "fc" "fc-runtime-rs")
 # CPU-only NVIDIA classes: boot the verity-backed nvidia base image, no GPU.
 NVIDIA_CPU_HYPERVISORS=("qemu-nvidia-cpu" "qemu-nvidia-cpu-runtime-rs")
 # All non-confidential NVIDIA classes (CPU-only + plain GPU passthrough).

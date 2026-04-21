@@ -29,6 +29,7 @@ kata_static_tarball_inputs() {
 		amd64)
 			cat <<'EOF'
 kata-static-cloud-hypervisor.tar.zst
+kata-static-firecracker.tar.zst
 kata-static-kernel-debug.tar.zst
 kata-static-kernel-dragonball-experimental.tar.zst
 kata-static-kernel-nvidia-gpu.tar.zst
