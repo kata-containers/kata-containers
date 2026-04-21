@@ -12,6 +12,7 @@ set -x
 
 cidir=$(dirname "$0")
 
+# shellcheck source=/dev/null
 source "${cidir}/common_stability.bash"
 
 # Environment variables
@@ -21,21 +22,23 @@ PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 
 function setup {
 	clean_env_ctr
+	# shellcheck disable=SC2154
 	sudo "${CTR_EXE}" image pull "${IMAGE}"
+	# shellcheck disable=SC2154
 	sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 }
 
 function exec_loop {
-	cmd="sudo $CTR_EXE t exec --exec-id $(random_name) $CONTAINER_NAME sh -c"
-	$cmd "echo 'hello world' > file"
-	$cmd "ls /file"
-	$cmd "rm -rf /file"
-	$cmd "touch /tmp/execWorks"
-	$cmd "ls /tmp | grep execWorks"
-	$cmd "rm -rf /tmp/execWorks"
-	$cmd "ls /etc/foo" || echo "Fail expected"
-	$cmd "cat /tmp/one" || echo "Fail expected"
-	$cmd "exit 42" || echo "Fail expected"
+	cmd="sudo ${CTR_EXE} t exec --exec-id $(random_name) ${CONTAINER_NAME} sh -c"
+	${cmd} "echo 'hello world' > file"
+	${cmd} "ls /file"
+	${cmd} "rm -rf /file"
+	${cmd} "touch /tmp/execWorks"
+	${cmd} "ls /tmp | grep execWorks"
+	${cmd} "rm -rf /tmp/execWorks"
+	${cmd} "ls /etc/foo" || echo "Fail expected"
+	${cmd} "cat /tmp/one" || echo "Fail expected"
+	${cmd} "exit 42" || echo "Fail expected"
 }
 
 function teardown {
