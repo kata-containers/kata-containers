@@ -9,13 +9,14 @@ set -e
 
 typeset -r script_name=${0##*/}
 
+# shellcheck disable=SC2034,SC2155
 typeset -r cidir=$(dirname "$0")
 
 function usage() {
 	cat <<EOF
 Description: Display host architecture name in various formats.
 
-Usage: $script_name [options]
+Usage: ${script_name} [options]
 
 Options:
 
@@ -32,12 +33,12 @@ EOF
 function arch_to_golang() {
 	local -r arch="$1"
 
-	case "$arch" in
+	case "${arch}" in
 		aarch64) echo "arm64";;
-		ppc64le) echo "$arch";;
+		ppc64le) echo "${arch}";;
 		x86_64) echo "amd64";;
 		s390x) echo "s390x";;
-		*) die "unsupported architecture: $arch";;
+		*) die "unsupported architecture: ${arch}";;
 	esac
 }
 
@@ -45,7 +46,7 @@ function arch_to_golang() {
 function arch_to_rust() {
 	local arch="$1"
 
-	if [ "${arch}" == "ppc64le" ]; then
+	if [[ "${arch}" == "ppc64le" ]]; then
 		arch="powerpc64le"
 	fi
 
@@ -56,12 +57,12 @@ function arch_to_rust() {
 function arch_to_kernel() {
 	local -r arch="$1"
 
-	case "$arch" in
+	case "${arch}" in
 		aarch64) echo "arm64";;
 		ppc64le) echo "powerpc";;
-		x86_64) echo "$arch";;
+		x86_64) echo "${arch}";;
 		s390x) echo "s390x";;
-		*) die "unsupported architecture: $arch";;
+		*) die "unsupported architecture: ${arch}";;
 	esac
 }
 
@@ -71,19 +72,23 @@ function main() {
 	local getopt_cmd="getopt"
 
 	# macOS default getopt does not recognize GNU options
-	[ "$(uname -s)" == "Darwin" ] && getopt_cmd="/usr/local/opt/gnu-getopt/bin/${getopt_cmd}"
+	[[ "$(uname -s)" == "Darwin" ]] && getopt_cmd="/usr/local/opt/gnu-getopt/bin/${getopt_cmd}"
 
-	local args=$("$getopt_cmd" \
-		-n "$script_name" \
+	local args
+	args=$("${getopt_cmd}" \
+		-n "${script_name}" \
 		-a \
 		--options="dgrhk" \
 		--longoptions="default golang  rust help kernel" \
 		-- "$@")
 
-	eval set -- "$args"
-	[ $? -ne 0 ] && { usage >&2; exit 1; }
+	eval set -- "${args}"
+	# The eval+set above will always succeed; $? here reflects `getopt` exit status
+	# which was already captured. This guard is a legacy no-op kept for safety.
+	# shellcheck disable=SC2181
+	[[ $? -ne 0 ]] && { usage >&2; exit 1; }
 
-	while [ $# -gt 1 ]
+	while [[ $# -gt 1 ]]
 	do
 		case "$1" in
 			-d|--default) ;;
@@ -109,11 +114,11 @@ function main() {
 
 	local -r arch=$(uname -m)
 
-	case "$type" in
-		default) echo "$arch";;
-		golang) arch_to_golang "$arch";;
+	case "${type}" in
+		default) echo "${arch}";;
+		golang) arch_to_golang "${arch}";;
 		rust) arch_to_rust "${arch}";;
-		kernel) arch_to_kernel "$arch";;
+		kernel) arch_to_kernel "${arch}";;
 	esac
 }
 
