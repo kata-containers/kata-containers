@@ -26,6 +26,7 @@ get_chart_path() {
 # Arguments:
 #   $1 - Output file path
 #   $2 - (Optional) Additional values file to merge
+# shellcheck disable=SC2154
 generate_base_values() {
 	local output_file="$1"
 	local extra_values_file="${2:-}"
@@ -108,7 +109,7 @@ deploy_kata() {
 
 	if [[ ${ret} -ne 0 ]]; then
 		echo "Helm install failed with exit code ${ret}" >&2
-		return ${ret}
+		return "${ret}"
 	fi
 
 	# Wait for daemonset to be ready
