@@ -5,9 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
 source "${tests_dir}/common.bash"
+# shellcheck source=/dev/null
 source "${tests_dir}/hypervisor_helpers.sh"
 : "${kubernetes_dir:=${tests_dir}/integration/kubernetes}"
+# repo_root_dir is set by common.bash
+# shellcheck disable=SC2154
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
 AZ_REGION="${AZ_REGION:-eastus2}"
@@ -52,7 +56,7 @@ wait_for_api_and_retry_uninstall() {
 
 	local api_wait=0
 	local api_timeout=300
-	while [ "$api_wait" -lt "$api_timeout" ]; do
+	while [[ "${api_wait}" -lt "${api_timeout}" ]]; do
 		if kubectl get nodes --request-timeout=5s &>/dev/null; then
 			echo "Kubernetes API is available after uninstall"
 			break
@@ -504,9 +508,9 @@ runtimeRequestTimeout: "600s"
 EOF
 	sudo kubeadm init --config "${kubeadm_config}"
 	rm -f "${kubeadm_config}"
-	mkdir -p $HOME/.kube
-	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-	sudo chown $(id -u):$(id -g) $HOME/.kube/config
+	mkdir -p "${HOME}/.kube"
+	sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
+	sudo chown "$(id -u):$(id -g)" "${HOME}/.kube/config"
 
 	# Deploy flannel
 	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
@@ -621,7 +625,9 @@ function deploy_k8s() {
 				# the way we should enable verity support on a live disk.
 				sudo tune2fs -O verity "${root_device}"
 			fi
-			deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION}
+			# CONTAINER_ENGINE and CONTAINER_ENGINE_VERSION are set by the caller
+			# shellcheck disable=SC2153,SC2154
+			deploy_vanilla_k8s "${CONTAINER_ENGINE}" "${CONTAINER_ENGINE_VERSION}"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
@@ -670,7 +676,7 @@ function helm_helper() {
 	ensure_helm
 
 	# Update dependencies before configuring values
-	pushd ${helm_chart_dir}
+	pushd "${helm_chart_dir}"
 	helm dependencies update
 	popd
 
@@ -747,6 +753,7 @@ function helm_helper() {
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
+			# shellcheck disable=SC2034
 			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
@@ -826,7 +833,8 @@ function helm_helper() {
 					converted_annotations+=" "
 				fi
 				# Convert space-separated to comma-separated: "foo bar" -> "foo,bar"
-				local annotations_comma=$(echo "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" | sed 's/ /,/g')
+				local annotations_comma
+			annotations_comma="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS// /,}"
 				converted_annotations+="${shim}:${annotations_comma}"
 			done
 			HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${converted_annotations}"
@@ -996,13 +1004,14 @@ VERIFICATION_POD_EOF
 		echo "Enabling deployment verification with runtimeClass: ${runtime_class}"
 		helm_set_file_args="--set-file verification.pod=${verification_yaml}"
 		# Clean up temp file on exit
-		trap "rm -f ${verification_yaml}" EXIT
+		trap 'rm -f '"${verification_yaml}"'' EXIT
 	fi
 
 	echo "::group::Final kata-deploy manifests used in the test"
 	cat "${values_yaml}"
 	echo ""
 	# ${helm_set_file_args} is intentionally left unquoted
+	# shellcheck disable=SC2086
 	helm template "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system
 	[[ "$(yq .image.reference "${values_yaml}")" = "${HELM_IMAGE_REFERENCE}" ]] || die "Failed to set image reference"
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
@@ -1019,6 +1028,7 @@ VERIFICATION_POD_EOF
 	set +e # Disable immediate exit on failure
 	while true; do
 		# ${helm_set_file_args} is intentionally left unquoted
+		# shellcheck disable=SC2086
 		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system --debug
 		ret=${?}
 		if [[ ${ret} -eq 0 ]]; then
