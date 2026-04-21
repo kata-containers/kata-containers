@@ -12,7 +12,7 @@ set -x
 
 cidir=$(dirname "$0")
 
-source "${cidir}/../metrics/lib/common.bash"
+source "${cidir}/common_stability.bash"
 
 # Environment variables
 IMAGE="${IMAGE:-quay.io/prometheus/busybox:latest}"

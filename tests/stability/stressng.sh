@@ -8,7 +8,7 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-source "${SCRIPT_PATH}/../metrics/lib/common.bash"
+source "${SCRIPT_PATH}/common_stability.bash"
 
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 CONTAINER_NAME="${CONTAINER_NAME:-stressng_test}"

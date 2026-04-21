@@ -8,7 +8,7 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-source "${SCRIPT_PATH}/../metrics/lib/common.bash"
+source "${SCRIPT_PATH}/common_stability.bash"
 
 NUM_CONTAINERS="$1"
 TIMEOUT_LAUNCH="$2"
