@@ -6,9 +6,10 @@ set -o errexit -o pipefail -o nounset
 
 HYPERVISOR_PATH="protocols/hypervisor"
 
+# shellcheck disable=SC2154
 protoc \
-    -I=$GOPATH/src \
-    --proto_path=$HYPERVISOR_PATH \
-    --go_out=$HYPERVISOR_PATH \
-    --go-ttrpc_out=$HYPERVISOR_PATH \
-    $HYPERVISOR_PATH/hypervisor.proto
+    -I="${GOPATH}/src" \
+    --proto_path="${HYPERVISOR_PATH}" \
+    --go_out="${HYPERVISOR_PATH}" \
+    --go-ttrpc_out="${HYPERVISOR_PATH}" \
+    "${HYPERVISOR_PATH}/hypervisor.proto"
