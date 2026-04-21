@@ -130,9 +130,11 @@ impl FcInner {
                 if !jailed {
                     if let Some(netns_path) = &netns {
                         debug!(sl(), "set netns for vmm master {:?}", &netns_path);
-                        let netns_fd = std::fs::File::open(netns_path);
-                        let _ = setns(netns_fd?.as_raw_fd(), CloneFlags::CLONE_NEWNET)
-                            .context("set netns failed");
+                        let netns_fd = std::fs::File::open(netns_path)?;
+                        setns(netns_fd.as_raw_fd(), CloneFlags::CLONE_NEWNET)
+                            .map_err(|e| std::io::Error::other(
+                                format!("setns into {:?} failed: {}", netns_path, e),
+                            ))?;
                     }
                 }
                 if let Some(label) = selinux_label.as_ref() {

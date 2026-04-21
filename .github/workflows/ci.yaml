@@ -403,11 +403,13 @@ jobs:
           { containerd_version: lts,    vmm: qemu             },
           { containerd_version: lts,    vmm: clh-runtime-rs   },
           { containerd_version: lts,    vmm: qemu-runtime-rs  },
+          { containerd_version: lts,    vmm: fc-rs            },
           { containerd_version: active, vmm: clh              },
           { containerd_version: active, vmm: dragonball       },
           { containerd_version: active, vmm: qemu             },
           { containerd_version: active, vmm: clh-runtime-rs   },
           { containerd_version: active, vmm: qemu-runtime-rs  },
+          { containerd_version: active, vmm: fc-rs            },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ toJSON(matrix) }}
