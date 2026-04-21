@@ -12,11 +12,13 @@ set -e
 
 script_name=${0##*/}
 
-source "/etc/os-release" || "source /usr/lib/os-release"
+# shellcheck source=/dev/null
+source "/etc/os-release" || source "/usr/lib/os-release"
 
 self_dir=$(dirname "$(readlink -f "$0")")
 yqdir="${self_dir}/../../../ci"
 cidir="${self_dir}/../.."
+# shellcheck source=/dev/null
 source "${cidir}/common.bash"
 
 typeset -r labels_file="labels.yaml"
@@ -31,8 +33,9 @@ typeset -r default_color="ffffff"
 
 need_yq() {
 	# install yq if not exist
-	${yqdir}/install_yq.sh
+	"${yqdir}/install_yq.sh"
 
+	# shellcheck disable=SC2016
 	command -v yq &>/dev/null || \
 		die 'yq command not found. Ensure "$GOPATH/bin" is in your $PATH.'
 }
@@ -43,32 +46,34 @@ merge_yaml()
 	local -r file2="$2"
 	local -r out="$3"
 
-	[ -n "$file1" ] || die "need 1st file"
-	[ -n "$file2" ] || die "need 2nd file"
-	[ -n "$out" ] || die "need output file"
+	[[ -n "${file1}" ]] || die "need 1st file"
+	[[ -n "${file2}" ]] || die "need 2nd file"
+	[[ -n "${out}" ]] || die "need output file"
 
 	need_yq
-  yq eval-all '. as $item ireduce ({}; . *+ $item)' "$file1" "$file2" > "$out"
+	# shellcheck disable=SC2016
+	yq eval-all '. as $item ireduce ({}; . *+ $item)' "${file1}" "${file2}" > "${out}"
 }
 
 check_yaml()
 {
 	local -r file="$1"
 
-	[ -n "$file" ] || die "need file to check"
+	[[ -n "${file}" ]] || die "need file to check"
 
 	need_yq
-	yq "$file" >/dev/null
+	yq "${file}" >/dev/null
 
-	[ -z "$(command -v yamllint)" ] && die "need yamllint installed"
+	[[ -z "$(command -v yamllint)" ]] && die "need yamllint installed"
 
-	# Deal with different versions of the tool
 	local opts=""
-	local has_strict_opt=$(yamllint --help 2>&1|grep -- --strict)
+	local has_strict_opt
+	has_strict_opt=$(yamllint --help 2>&1|grep -- --strict || true)
 
-	[ -n "$has_strict_opt" ] && opts+="--strict"
+	[[ -n "${has_strict_opt}" ]] && opts+="--strict"
 
-	yamllint $opts "$file"
+	# shellcheck disable=SC2248
+	yamllint ${opts} "${file}"
 }
 
 # Expand the variables in the labels database.
@@ -78,18 +83,19 @@ generate_yaml()
 	local template="$2"
 	local out="$3"
 
-	[ -n "$repo" ] || die "need repo"
-	[ -n "$template" ] || die "need template"
-	[ -n "$out" ] || die "need output file"
+	[[ -n "${repo}" ]] || die "need repo"
+	[[ -n "${template}" ]] || die "need template"
+	[[ -n "${out}" ]] || die "need output file"
 
-	local repo_slug=$(echo "${repo}"|sed 's!github.com/!!g')
+	local repo_slug
+	repo_slug="${repo//github.com\//}"
 
 	sed \
 		-e "s|REPO_SLUG|${repo_slug}|g" \
 		-e "s|DEFAULT_COLOUR|${default_color}|g" \
-		"$template" > "$out"
+		"${template}" > "${out}"
 
-	check_yaml "$out"
+	check_yaml "${out}"
 }
 
 cmd_generate()
@@ -97,8 +103,8 @@ cmd_generate()
 	local repo="$1"
 	local out_file="$2"
 
-	[ -n "$repo" ] || die "need repo"
-	[ -n "$out_file" ] || die "need output file"
+	[[ -n "${repo}" ]] || die "need repo"
+	[[ -n "${out_file}" ]] || die "need output file"
 
 	# Create the master database from the template
 	generate_yaml \
@@ -106,11 +112,12 @@ cmd_generate()
 		"${master_labels_template}" \
 		"${master_labels_file}"
 
+	# shellcheck disable=SC2154
 	local -r repo_labels_template="${GOPATH}/src/${repo}/${labels_template}"
 	local -r repo_labels_file="${GOPATH}/src/${repo}/${labels_file}"
 
 	# Check for a repo-specific set of labels
-	if [ -e "${repo_labels_template}" ]; then
+	if [[ -e "${repo_labels_template}" ]]; then
 		info "Found repo-specific labels database"
 
 		# Generate repo-specific labels from template
