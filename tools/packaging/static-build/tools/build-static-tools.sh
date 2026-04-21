@@ -10,10 +10,11 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
 build_tool_from_source() {
-	RUSTFLAGS=" -C link-self-contained=yes"
+	export RUSTFLAGS=" -C link-self-contained=yes"
 	export LIBC=musl
 
 	/usr/bin/install_libseccomp.sh /opt /opt
