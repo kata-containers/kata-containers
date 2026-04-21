@@ -88,7 +88,7 @@ HYPERVISOR_DB = dragonball
 HYPERVISOR_FC = firecracker
 HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = clh-runtime-rs
-HYPERVISOR_NAME_CLH = cloud-hypervisor
+HYPERVISOR_NAME_CLH = clh
 HYPERVISOR_REMOTE = remote
 
 ARCH_SUPPORT_DB := x86_64 aarch64

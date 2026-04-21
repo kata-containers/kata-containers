@@ -9,7 +9,7 @@
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
-[hypervisor.cloud-hypervisor]
+[hypervisor.clh]
 path = "@CLHPATH@"
 kernel = "@KERNELPATH_CLH@"
 image = "@IMAGEPATH@"

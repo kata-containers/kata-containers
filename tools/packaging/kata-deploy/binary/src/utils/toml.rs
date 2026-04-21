@@ -953,8 +953,8 @@ kernel_params = "console=hvc0"
     }
 
     #[test]
-    fn test_runtime_rs_cloud_hypervisor_config() {
-        // Test with actual cloud-hypervisor config from runtime-rs
+    fn test_runtime_rs_clh_config() {
+        // Test with actual clh config from runtime-rs
         let config_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(|p| p.parent())
@@ -996,7 +996,7 @@ kernel_params = "console=hvc0"
                     .replace("@DEFVIRTIOFSEXTRAARGS@", "[]")
                     .replace("@DEFVIRTIOFSDAEMON@", "virtiofsd")
                     .replace("@DEFSHAREDFS_CLH_VIRTIOFS@", "virtio-fs")
-                    .replace("@HYPERVISOR_NAME_CLH@", "cloud-hypervisor")
+                    .replace("@HYPERVISOR_NAME_CLH@", "clh")
                     .replace("@PROJECT_NAME@", "kata-containers")
                     .replace("@PROJECT_TYPE@", "kata")
                     .replace("@RUNTIMENAME@", "kata-runtime")
@@ -1018,24 +1018,19 @@ kernel_params = "console=hvc0"
                 let temp_path = temp_file.path();
                 std::fs::write(temp_path, content).unwrap();
 
-                // Verify cloud-hypervisor specific fields exist
-                let vm_rootfs =
-                    get_toml_value(temp_path, "hypervisor.cloud-hypervisor.vm_rootfs_driver");
+                // Verify clh-specific fields exist
+                let vm_rootfs = get_toml_value(temp_path, "hypervisor.clh.vm_rootfs_driver");
                 assert!(
                     vm_rootfs.is_ok(),
                     "Should have vm_rootfs_driver field: {:?}",
                     vm_rootfs.err()
                 );
 
-                // Test modifying cloud-hypervisor config
-                let result = set_toml_value(
-                    temp_path,
-                    "hypervisor.cloud-hypervisor.enable_debug",
-                    "true",
-                );
+                // Test modifying clh config
+                let result = set_toml_value(temp_path, "hypervisor.clh.enable_debug", "true");
                 assert!(
                     result.is_ok(),
-                    "Should be able to set enable_debug on cloud-hypervisor config"
+                    "Should be able to set enable_debug on clh config"
                 );
             }
         }

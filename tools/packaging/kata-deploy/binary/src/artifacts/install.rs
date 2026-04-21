@@ -58,8 +58,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     }
 
     match shim {
-        "clh" => Ok("clh"),
-        "clh-runtime-rs" => Ok("cloud-hypervisor"),
+        "clh" | "clh-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
         "fc" | "firecracker" => Ok("firecracker"),
         "remote" => Ok("remote"),
@@ -1068,7 +1067,7 @@ mod tests {
 
     #[rstest]
     #[case("clh", "clh")]
-    #[case("clh-runtime-rs", "cloud-hypervisor")]
+    #[case("clh-runtime-rs", "clh")]
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
     #[case("firecracker", "firecracker")]

@@ -57,7 +57,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
-const CH_NAME: &str = "cloud-hypervisor";
+const CH_NAME: &str = "clh";
 
 /// Number of milliseconds to wait before retrying a CH operation.
 const CH_POLL_TIME_MS: u64 = 50;
