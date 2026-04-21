@@ -45,6 +45,7 @@ in separate profiles packaged with the chart:
 | [try-kata-nvidia-cpu.values.yaml](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-cpu.values.yaml) | `kata-qemu-nvidia-cpu` and `kata-qemu-nvidia-cpu-runtime-rs` | EROFS container storage for the Rust class. |
 | [try-kata-nvidia-gpu.values.yaml](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml) | The six `kata-qemu-nvidia-gpu*` classes | GPU passthrough setup; EROFS for the standard Rust class, nydus and a matching TEE for confidential variants. |
 | [try-kata-fc.values.yaml](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-fc.values.yaml) | `kata-fc` | A devmapper snapshotter and host thin-pool configured by the operator. |
+| [try-kata-fc-runtime-rs.values.yaml](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-fc-runtime-rs.values.yaml) | `kata-fc-runtime-rs` | The runtime-rs Firecracker shim; same devmapper thin-pool requirement as `kata-fc`. |
 | [try-kata-remote.values.yaml](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-remote.values.yaml) | `kata-remote` | Nydus, guest image pulling, and an external peer-pods provider. |
 
 Use the profile for the class you want; setting its `enabled` field alone does

@@ -21,7 +21,7 @@ function main() {
 	check_cmds "${cmds[@]}"
 	# CTR_EXE, CTR_RUNTIME, and IMAGE are set by common.bash's init_env
 	# shellcheck disable=SC2154
-	sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
+	sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 
 	# Run 1 iomix stressor (mix of I/O operations) for 20 seconds with verbose output
 	info "Running iomix stressor test"

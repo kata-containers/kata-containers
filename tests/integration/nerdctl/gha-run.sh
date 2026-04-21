@@ -87,6 +87,9 @@ function run() {
 	# uses it when told to, per command.
 	local -a snapshotter=()
 	kata_hypervisor_runs_without_shared_fs && snapshotter=(--snapshotter erofs)
+	# The Firecracker runtime-rs class takes its rootfs from the devmapper
+	# thin-pool set up by configure_devmapper_for_containerd.
+	[[ "${KATA_HYPERVISOR}" == "fc-runtime-rs" ]] && snapshotter=(--snapshotter devmapper)
 
 	info "Running nerdctl smoke test tests using RunC"
 
@@ -137,11 +140,23 @@ function run() {
 	sudo nerdctl network rm "${macvlan_net_name}" "${ipvlan_net_name}"
 }
 
+function install_kata_for_nerdctl() {
+	install_kata
+
+	# Firecracker (fc-runtime-rs) uses block devices and requires the devmapper
+	# snapshotter; other hypervisors work fine with the default overlayfs.
+	# Must run AFTER install_kata since install_kata may overwrite the
+	# containerd config via overwrite_containerd_config.
+	if [[ "${KATA_HYPERVISOR:-}" == "fc-runtime-rs" ]]; then
+		configure_devmapper_for_containerd
+	fi
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) install_kata ;;
+		install-kata) install_kata_for_nerdctl ;;
 		run) run ;;
 		collect-artifacts) collect_artifacts ;;
 		*) >&2 die "Invalid argument" ;;
