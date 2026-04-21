@@ -9,6 +9,7 @@ set -e
 set -o pipefail
 
 kata_deploy_dir=$(dirname "$(readlink -f "$0")")
+# shellcheck source=/dev/null
 source "${kata_deploy_dir}/../../common.bash"
 
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
