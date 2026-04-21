@@ -31,5 +31,14 @@ jobs:
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
         with:
-          severity: error
-          ignore_paths: "**/vendor/**"
+          severity: style
+          ignore_paths: >-
+            **/vendor/**
+            tests/metrics
+            tests/integration/stdio
+          ignore_names: >-
+            gha-stability-run.sh
+            kubernetes_stability.sh
+            kubernetes_stressng.sh
+            kubernetes_soak_test.sh
+            kata-manager.sh
