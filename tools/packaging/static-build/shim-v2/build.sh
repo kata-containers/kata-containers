@@ -10,11 +10,14 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
 VMM_CONFIGS="qemu fc"
 
+# shellcheck disable=SC2269
 GO_VERSION=${GO_VERSION}
+# shellcheck disable=SC2269
 RUST_VERSION=${RUST_VERSION}
 CC=""
 
@@ -35,13 +38,15 @@ case "${RUNTIME_CHOICE}" in
 		;;
 esac
 
-[ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
+# shellcheck disable=SC2154
+[[ "${CROSS_BUILD}" == "true" ]] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 
 # Variants (targets) that build a measured rootfs as of now are:
 # - rootfs-image-confidential
 # - rootfs-image-nvidia-gpu
 # - rootfs-image-nvidia-gpu-confidential
 #
+# shellcheck disable=SC2154
 root_hash_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 verity_variants=(
 	"confidential:KERNELVERITYPARAMS"
@@ -62,7 +67,8 @@ for entry in "${verity_variants[@]}"; do
 	EXTRA_OPTS+=" ${param_var}=${root_measure_config}"
 done
 
-docker pull ${container_image} || \
+# shellcheck disable=SC2154,SC2086
+docker pull "${container_image}" || \
 	(docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
@@ -72,7 +78,7 @@ docker pull ${container_image} || \
 
 arch=${ARCH:-$(uname -m)}
 GCC_ARCH=${arch}
-if [ ${arch} = "ppc64le" ]; then
+if [[ "${arch}" = "ppc64le" ]]; then
 	GCC_ARCH="powerpc64le"
 	arch="ppc64"
 fi
@@ -83,8 +89,8 @@ case "${RUNTIME_CHOICE}" in
 		[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-			--env CROSS_BUILD=${CROSS_BUILD} \
-			--env ARCH=${ARCH} \
+			--env CROSS_BUILD="${CROSS_BUILD}" \
+			--env ARCH="${ARCH}" \
 			--env CC="${CC}" \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
@@ -92,19 +98,19 @@ case "${RUNTIME_CHOICE}" in
 			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-			--env CROSS_BUILD=${CROSS_BUILD} \
-		        --env ARCH=${ARCH} \
+			--env CROSS_BUILD="${CROSS_BUILD}" \
+		        --env ARCH="${ARCH}" \
 		        --env CC="${CC}" \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
-			bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" ${EXTRA_OPTS} install"
+			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS} install"
 		;;
 esac
 
 case "${RUNTIME_CHOICE}" in
 	"go"|"both")
-		[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image_bk}-cross-build"
+		[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image_bk}-cross-build"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			-w "${repo_root_dir}/src/runtime" \
@@ -116,16 +122,16 @@ case "${RUNTIME_CHOICE}" in
 			-w "${repo_root_dir}/src/runtime" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
-			bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" ${EXTRA_OPTS} install"
+			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS} install"
 		;;
 esac
 
 for vmm in ${VMM_CONFIGS}; do
 	for config_file in "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}"*.toml; do
-		if [ -f "${config_file}" ]; then
-			if [ ${ARCH} == "ppc64le" ]; then
+		if [[ -f "${config_file}" ]]; then
+			if [[ "${ARCH}" == "ppc64le" ]]; then
 				# On ppc64le, replace image line with initrd line
-				sed -i -e 's|^image = .*|initrd = "'${PREFIX}'/share/kata-containers/kata-containers-initrd.img"|' "${config_file}"
+				sed -i -e 's|^image = .*|initrd = "'"${PREFIX}"'/share/kata-containers/kata-containers-initrd.img"|' "${config_file}"
 			fi
 		fi
 	done
