@@ -36,7 +36,7 @@ impl FcInner {
             DeviceType::Network(network) => {
                 // Firecracker rejects PUT /network-interfaces once the VM runs
                 // and has no network hotplug. Network devices are buffered here
-                // and sent by start_vm(), right before InstanceStart.
+                // and sent by boot_vm(), right before InstanceStart.
                 if self.state == VmmState::VmRunning {
                     return Err(anyhow!(
                         "cannot add network interface {} to a running Firecracker VM: no hotplug",
