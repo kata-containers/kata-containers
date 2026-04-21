@@ -64,11 +64,9 @@ dragonball = { workspace = true, features = [
 dbs-utils = { workspace = true }
 
 [features]
-default = []
+default = ["cloud-hypervisor"]
 
 dragonball = ["dep:dragonball"]
-# Feature is not yet complete, so not enabled by default.
-# See https://github.com/kata-containers/kata-containers/issues/6264.
 cloud-hypervisor = ["ch-config"]
 
 [dev-dependencies]
@@ -76,9 +74,7 @@ serial_test = "2.0.0"
 tempfile = { workspace = true }
 
 # Local dev-dependencies
-# Force the CH tests to run, even when the feature is not enabled for
-# a normal build.
-hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+hypervisor = { workspace = true }
 test-utils = { workspace = true }
 
 [build-dependencies]
