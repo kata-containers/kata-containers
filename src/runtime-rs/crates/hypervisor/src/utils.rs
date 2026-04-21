@@ -36,6 +36,14 @@ use crate::device::Tap;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
+pub fn remove_dir_all_if_exists(path: &str) -> Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
     let path_name = format!("/proc/{pid}/task");
@@ -283,7 +291,7 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
 }
 
 pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
-    std::fs::remove_dir_all(vm_path)?;
+    remove_dir_all_if_exists(vm_path)?;
     if kata_types::rootless::is_rootless() {
         let user = &config
             .security_info

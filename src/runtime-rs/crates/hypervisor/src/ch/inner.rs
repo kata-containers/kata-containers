@@ -13,8 +13,8 @@ use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use persist::sandbox_persist::Persist;
+use ch_config::ch_api::ApiSocket;
 use std::collections::HashMap;
-use std::os::unix::net::UnixStream;
 use tokio::sync::watch::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::{process::Child, sync::mpsc};
@@ -24,7 +24,7 @@ pub struct CloudHypervisorInner {
     pub(crate) state: VmmState,
     pub(crate) id: String,
 
-    pub(crate) api_socket: Option<UnixStream>,
+    pub(crate) api_socket: ApiSocket,
     pub(crate) extra_args: Option<Vec<String>>,
 
     pub(crate) config: HypervisorConfig,
@@ -95,7 +95,7 @@ impl CloudHypervisorInner {
         let (tx, rx) = channel(true);
 
         Self {
-            api_socket: None,
+            api_socket: ApiSocket::new(None),
             extra_args: None,
 
             process: None,

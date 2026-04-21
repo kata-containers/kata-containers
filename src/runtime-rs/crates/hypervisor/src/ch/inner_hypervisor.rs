@@ -10,6 +10,7 @@ use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
+use crate::utils::remove_dir_all_if_exists;
 use crate::utils::set_groups;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
@@ -43,7 +44,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
-use std::fs::remove_dir_all;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -190,12 +190,6 @@ impl CloudHypervisorInner {
         let (shared_fs_devices, network_devices, host_devices, protection_device) =
             self.get_shared_devices().await?;
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         let sandbox_path = get_sandbox_path(&self.id);
 
         create_dir_all_with_inherit_owner(sandbox_path.clone(), 0o750)
@@ -232,9 +226,7 @@ impl CloudHypervisorInner {
             "CH specific VmConfig configuration (JSON): {:?}", serialised
         );
 
-        let response =
-            cloud_hypervisor_vm_create(socket.try_clone().context("failed to clone socket")?, cfg)
-                .await?;
+        let response = cloud_hypervisor_vm_create(&self.api_socket, cfg).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "vm boot response: {:?}", detail);
@@ -243,13 +235,10 @@ impl CloudHypervisorInner {
         if let Some(network_devices) = network_devices {
             for net in network_devices {
                 let vm_fds = net.fds.clone().unwrap_or_default();
-                let response = cloud_hypervisor_vm_netdev_add_with_fds(
-                    socket.try_clone().context("failed to clone socket")?,
-                    net,
-                    vm_fds.clone(),
-                )
-                .await
-                .context("failed to add vm netdev with fds")?;
+                let response =
+                    cloud_hypervisor_vm_netdev_add_with_fds(&self.api_socket, net, vm_fds.clone())
+                        .await
+                        .context("failed to add vm netdev with fds")?;
 
                 if let Some(detail) = response {
                     debug!(sl!(), "vm netdev add response: {:?}", detail);
@@ -262,9 +251,7 @@ impl CloudHypervisorInner {
             }
         }
 
-        let response =
-            cloud_hypervisor_vm_start(socket.try_clone().context("failed to clone socket")?)
-                .await?;
+        let response = cloud_hypervisor_vm_start(&self.api_socket).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "vm start response: {:?}", detail);
@@ -311,7 +298,7 @@ impl CloudHypervisorInner {
 
         let api_socket = result?;
 
-        self.api_socket = Some(api_socket);
+        *self.api_socket.lock().await = Some(api_socket);
 
         Ok(())
     }
@@ -471,14 +458,9 @@ impl CloudHypervisorInner {
     }
 
     async fn cloud_hypervisor_shutdown(&mut self) -> Result<()> {
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
-        let response =
-            cloud_hypervisor_vmm_shutdown(socket.try_clone().context("shutdown failed")?).await?;
+        let response = cloud_hypervisor_vmm_shutdown(&self.api_socket)
+            .await
+            .context("shutdown failed")?;
 
         if let Some(detail) = response {
             debug!(sl!(), "shutdown response: {:?}", detail);
@@ -564,17 +546,10 @@ impl CloudHypervisorInner {
     }
 
     async fn cloud_hypervisor_ping_until_ready(&mut self, _poll_time_ms: u64) -> Result<()> {
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         loop {
-            let response =
-                cloud_hypervisor_vmm_ping(socket.try_clone().context("failed to clone socket")?)
-                    .await
-                    .context("ping failed");
+            let response = cloud_hypervisor_vmm_ping(&self.api_socket)
+                .await
+                .context("ping failed");
 
             if let Ok(response) = response {
                 if let Some(detail) = response {
@@ -753,7 +728,9 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "CloudHypervisor::cleanup()");
-        remove_dir_all(get_rootless_symlink_sandbox_path(self.id.as_str()))?;
+        if is_rootless() {
+            remove_dir_all_if_exists(get_rootless_symlink_sandbox_path(self.id.as_str()).as_str())?;
+        }
         vm_cleanup(&self.config, self.vm_path.as_str())
     }
 
@@ -782,23 +759,14 @@ impl CloudHypervisorInner {
             return Ok((old_vcpus, new_vcpus));
         }
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         let vmresize = VmResize {
             desired_vcpus: Some(new_vcpus as u8),
             ..Default::default()
         };
 
-        cloud_hypervisor_vm_resize(
-            socket.try_clone().context("failed to clone socket")?,
-            vmresize,
-        )
-        .await
-        .context("resize vcpus")?;
+        cloud_hypervisor_vm_resize(&self.api_socket, vmresize)
+            .await
+            .context("resize vcpus")?;
 
         Ok((old_vcpus, new_vcpus))
     }
@@ -877,16 +845,9 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
-        let vminfo =
-            cloud_hypervisor_vm_info(socket.try_clone().context("failed to clone socket")?)
-                .await
-                .context("get vminfo")?;
+        let vminfo = cloud_hypervisor_vm_info(&self.api_socket)
+            .await
+            .context("get vminfo")?;
 
         let current_mem_size = vminfo.config.memory.size;
         let new_total_mem = megs_to_bytes(new_mem_mb);
@@ -954,12 +915,9 @@ impl CloudHypervisorInner {
             ..Default::default()
         };
 
-        cloud_hypervisor_vm_resize(
-            socket.try_clone().context("failed to clone socket")?,
-            vmresize,
-        )
-        .await
-        .context("resize memory")?;
+        cloud_hypervisor_vm_resize(&self.api_socket, vmresize)
+            .await
+            .context("resize memory")?;
 
         Ok((new_mem_mb, MemoryConfig::default()))
     }
