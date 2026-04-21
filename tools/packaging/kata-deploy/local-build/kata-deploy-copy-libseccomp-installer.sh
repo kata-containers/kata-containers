@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ] || set -x
+[[ -z "${DEBUG}" ]] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -19,4 +19,4 @@ cp "${install_libseccomp_script_src}" "${install_libseccomp_script_dest}"
 
 # We don't have to import any other file, as we're passing
 # the env vars needed for installing libseccomp and gperf.
-sed -i -e '/^source.*$/d' ${install_libseccomp_script_dest}
+sed -i -e '/^source.*$/d' "${install_libseccomp_script_dest}"
