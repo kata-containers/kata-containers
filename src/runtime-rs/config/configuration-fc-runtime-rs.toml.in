@@ -300,12 +300,15 @@ kernel_modules = []
 debug_console_enabled = false
 
 # Sleep between agent connection retries, in milliseconds.
-# (default: 45000)
-dial_timeout_ms = 45000
+# (default: 100)
+dial_timeout_ms = 100
 
-# Confidential Data Hub API timeout value in milliseconds
-# (default: 50000)
-cdh_api_timeout_ms = 50000
+# Overall time budget for establishing the agent connection, in milliseconds.
+# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 450)
+# Firecracker needs up to 45s for the VM to boot and the agent to come up.
+# (default: 45000)
+reconnect_timeout_ms = 45000
+
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -404,19 +407,18 @@ sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY_FC@
 static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_FC@
 
 # Specifies how Kubernetes emptyDir volumes are handled.
+# Firecracker has no shared filesystem, so the emptyDir folder cannot be
+# shared with the guest: it is plugged as a block device instead, and each
+# one takes a slot in the Firecracker disk pool.
 # Options:
 #
-#   - shared-fs (default)
-#     Shares the emptyDir folder with the guest using the method given
-#     by the `shared_fs` setting.
+#   - block-plain (default)
+#     Plugs a block device to be mounted directly in the guest.
 #
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
 #
-#   - block-plain
-#     Plugs a block device to be mounted directly in the guest.
-#
-emptydir_mode = "@DEFEMPTYDIRMODE@"
+emptydir_mode = "@DEFEMPTYDIRMODE_FC@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
