@@ -10,32 +10,33 @@ set -e
 set -o pipefail
 
 BASE_DIR=$(dirname "$0")
-DEPLOY_DIR=${BASE_DIR}/kata-directvolume
+DEPLOY_DIR="${BASE_DIR}/kata-directvolume"
 
 TEMP_DIR="$( mktemp -d )"
-trap 'rm -rf ${TEMP_DIR}' EXIT
+trap 'rm -rf "${TEMP_DIR}"' EXIT
 
-: ${UPDATE_RBAC_RULES:=true}
+: "${UPDATE_RBAC_RULES:=true}"
 function rbac_version () {
     yaml="$1"
     image="$2"
     update_rbac="$3"
 
     # get version from `image: quay.io/k8scsi/csi-attacher:v1.0.1`, ignoring comments
-    version="$(sed -e 's/ *#.*$//' "$yaml" | grep "image:.*$image" | sed -e 's/ *#.*//' -e 's/.*://')"
+    version="$(sed -e 's/ *#.*$//' "${yaml}" | grep "image:.*${image}" | sed -e 's/ *#.*//' -e 's/.*://')"
 
-    if $update_rbac; then
+    if ${update_rbac}; then
         # apply overrides
-        varname=$(echo $image | tr - _ | tr a-z A-Z)
-        eval version=\${${varname}_TAG:-\${IMAGE_TAG:-\$version}}
+        varname=$(echo "${image}" | tr - _ | tr '[:lower:]' '[:upper:]')
+        eval "version=\${${varname}_TAG:-\${IMAGE_TAG:-\${version}}}"
     fi
 
-    echo "$version"
+    echo "${version}"
 }
 
 # https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/${VERSION}/deploy/kubernetes/rbac.yaml
+# shellcheck disable=SC2034
 CSI_PROVISIONER_RBAC_YAML="https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/$(rbac_version "${BASE_DIR}/kata-directvolume/csi-directvol-plugin.yaml" csi-provisioner false)/deploy/kubernetes/rbac.yaml"
-: ${CSI_PROVISIONER_RBAC:=https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/$(rbac_version "${BASE_DIR}/kata-directvolume/csi-directvol-plugin.yaml" csi-provisioner "${UPDATE_RBAC_RULES}")/deploy/kubernetes/rbac.yaml}
+: "${CSI_PROVISIONER_RBAC:=https://raw.githubusercontent.com/kubernetes-csi/external-provisioner/$(rbac_version "${BASE_DIR}/kata-directvolume/csi-directvol-plugin.yaml" csi-provisioner "${UPDATE_RBAC_RULES}")/deploy/kubernetes/rbac.yaml}"
 
 run () {
     echo "$@" >&2
@@ -66,9 +67,12 @@ echo "Namespace kata-directvolume created Done !"
 echo "Applying RBAC rules ..."
 
 eval component="CSI_PROVISIONER"
+# shellcheck disable=SC2154
 eval current="\${${component}_RBAC}"
+# shellcheck disable=SC2154
 eval original="\${${component}_RBAC_YAML}"
 
+# shellcheck disable=SC2154
 if [[ "${current}" =~ ^http:// ]] || [[ "${current}" =~ ^https:// ]]; then
     run curl "${current}" --output "${TEMP_DIR}"/rbac.yaml --silent --location
 fi
