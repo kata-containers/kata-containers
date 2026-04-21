@@ -23,6 +23,7 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source the main helper (which sources lib.sh)
+# shellcheck source=/dev/null
 source "${script_dir}/download-with-oras-cache.sh"
 
 DRY_RUN="${DRY_RUN:-no}"
