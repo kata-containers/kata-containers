@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn test_multiple_shims_with_suffix() {
         // Test different shims with suffix
-        let shims = vec!["qemu", "qemu-tdx", "cloud-hypervisor", "fc"];
+        let shims = vec!["qemu", "qemu-tdx", "clh-runtime-rs", "fc"];
         let suffix = Some("staging".to_string());
 
         for shim in shims {

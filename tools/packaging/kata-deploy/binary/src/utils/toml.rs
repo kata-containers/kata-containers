@@ -960,7 +960,7 @@ kernel_params = "console=hvc0"
             .and_then(|p| p.parent())
             .and_then(|p| p.parent())
             .and_then(|p| p.parent())
-            .map(|p| p.join("src/runtime-rs/config/configuration-cloud-hypervisor.toml.in"));
+            .map(|p| p.join("src/runtime-rs/config/configuration-clh-runtime-rs.toml.in"));
 
         if let Some(ref path) = config_path {
             if path.exists() {
@@ -996,7 +996,7 @@ kernel_params = "console=hvc0"
                     .replace("@DEFVIRTIOFSEXTRAARGS@", "[]")
                     .replace("@DEFVIRTIOFSDAEMON@", "virtiofsd")
                     .replace("@DEFSHAREDFS_CLH_VIRTIOFS@", "virtio-fs")
-                    .replace("@HYPERVISOR_CLH@", "cloud-hypervisor")
+                    .replace("@HYPERVISOR_NAME_CLH@", "cloud-hypervisor")
                     .replace("@PROJECT_NAME@", "kata-containers")
                     .replace("@PROJECT_TYPE@", "kata")
                     .replace("@RUNTIMENAME@", "kata-runtime")
@@ -1142,7 +1142,7 @@ kernel_params = "console=hvc0"
             let go_config = base.join("src/runtime/config/configuration-qemu.toml.in");
             // Rust runtime config
             let rust_config =
-                base.join("src/runtime-rs/config/configuration-cloud-hypervisor.toml.in");
+                base.join("src/runtime-rs/config/configuration-clh-runtime-rs.toml.in");
 
             if go_config.exists() && rust_config.exists() {
                 // Create temp copies

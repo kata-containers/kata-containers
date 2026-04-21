@@ -98,7 +98,7 @@ shims:
     containerd:
       snapshotter: ""
 
-  cloud-hypervisor:
+  clh-runtime-rs:
     enabled: ~
     supportedArches:
       - amd64
@@ -455,7 +455,7 @@ verification:
 #   Then deploy with:
 #     helm install kata-deploy ./kata-deploy -f custom-runtimes.values.yaml
 #
-# Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, cloud-hypervisor, fc, etc.
+# Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, clh-runtime-rs, fc, etc.
 # The correct shim binary is automatically selected based on the baseConfig.
 #
 customRuntimes:

@@ -44,8 +44,8 @@ jobs:
           { vmm: qemu, containerd_version: active },
           { vmm: qemu-runtime-rs, containerd_version: lts },
           { vmm: qemu-runtime-rs, containerd_version: active },
-          { vmm: cloud-hypervisor, containerd_version: lts },
-          { vmm: cloud-hypervisor, containerd_version: active },
+          { vmm: clh-runtime-rs, containerd_version: lts },
+          { vmm: clh-runtime-rs, containerd_version: active },
         ]
     runs-on: ubuntu-24.04
     permissions:

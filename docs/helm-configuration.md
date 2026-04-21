@@ -177,7 +177,7 @@ Now verify the installation by examining the `runtimeClasses`:
 $ kubectl get runtimeClasses
 NAME                            HANDLER                         AGE
 kata-clh-cicd                   kata-clh-cicd                   77s
-kata-cloud-hypervisor-cicd      kata-cloud-hypervisor-cicd      77s
+kata-clh-runtime-rs-cicd        kata-clh-runtime-rs-cicd        77s
 kata-dragonball-cicd            kata-dragonball-cicd            77s
 kata-fc-cicd                    kata-fc-cicd                    77s
 kata-qemu-cicd                  kata-qemu-cicd                  77s

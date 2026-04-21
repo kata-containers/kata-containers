@@ -312,7 +312,7 @@ function run_tests() {
 		echo "start_time=${start_time}" >> "${GITHUB_ENV}"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+	if [[ "${KATA_HYPERVISOR}" = "clh-runtime-rs" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		if [[ -n "${GITHUB_ENV}" ]]; then
 			KATA_TEST_VERBOSE=true
 			export KATA_TEST_VERBOSE

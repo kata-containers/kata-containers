@@ -461,7 +461,7 @@ keep_abnormal = false
 internetworking_model = "@DEFNETWORKMODEL_CLH@"
 
 name = "@RUNTIMENAME@"
-hypervisor_name = "@HYPERVISOR_CLH@"
+hypervisor_name = "@HYPERVISOR_NAME_CLH@"
 agent_name = "@PROJECT_TYPE@"
 
 # disable guest seccomp
