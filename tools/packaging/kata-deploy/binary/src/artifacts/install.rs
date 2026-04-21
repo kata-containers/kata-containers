@@ -22,6 +22,7 @@ const ALL_SHIMS: &[&str] = &[
     "cloud-hypervisor",
     "dragonball",
     "fc",
+    "fc-rs",
     "firecracker",
     "remote",
     // QEMU shims
@@ -61,7 +62,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
         "clh" => Ok("clh"),
         "cloud-hypervisor" => Ok("cloud-hypervisor"),
         "dragonball" => Ok("dragonball"),
-        "fc" | "firecracker" => Ok("firecracker"),
+        "fc" | "fc-rs" | "firecracker" => Ok("firecracker"),
         "remote" => Ok("remote"),
         _ => anyhow::bail!(
             "Unknown shim '{}'. Valid shims are: {}",
@@ -723,7 +724,7 @@ fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
         // For non-QEMU shims, use the appropriate hypervisor binary
         let binary = match shim {
             "clh" | "cloud-hypervisor" => "cloud-hypervisor",
-            "fc" | "firecracker" => "firecracker",
+            "fc" | "fc-rs" | "firecracker" => "firecracker",
             "dragonball" => "dragonball",
             "stratovirt" => "stratovirt",
             // Remote and other shims don't have a local hypervisor binary
@@ -1071,6 +1072,7 @@ mod tests {
     #[case("cloud-hypervisor", "cloud-hypervisor")]
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
+    #[case("fc-rs", "firecracker")]
     #[case("firecracker", "firecracker")]
     #[case("remote", "remote")]
     fn test_get_hypervisor_name_other_hypervisors(#[case] shim: &str, #[case] expected: &str) {

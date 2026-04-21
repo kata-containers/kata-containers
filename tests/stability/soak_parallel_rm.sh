@@ -124,7 +124,7 @@ function go() {
 		local i
 		for ((i=1; i<= ${MAX_CONTAINERS}; i++)); do
 			containers+=($(random_name))
-			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
+			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
 			((how_many++))
 		done
 
@@ -177,7 +177,10 @@ function init() {
 	nginx_digest=$("${GOPATH}/bin/yq" ".docker_images.nginx.digest" "${versions_file}")
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
-	# Pull nginx image
+	# Pull nginx image into the content store.  Do not pass --snapshotter
+	# here: pulling a digest-based reference with --snapshotter devmapper
+	# fails ("no unpack platforms defined").  Instead we rely on
+	# 'ctr run --snapshotter devmapper' to unpack into devmapper on demand.
 	sudo "${CTR_EXE}" image pull "${nginx_image}"
 	if [ $? != 0 ]; then
 		die "Unable to retry docker image ${nginx_image}"

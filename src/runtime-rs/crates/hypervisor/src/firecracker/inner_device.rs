@@ -33,7 +33,7 @@ impl FcInner {
                 .context("add block device"),
             DeviceType::Network(network) => {
                 // Buffer network devices and send them to FC just before InstanceStart
-                // in start_vm(). Firecracker rejects PUT /network-interfaces after the
+                // in boot_vm(). Firecracker rejects PUT /network-interfaces after the
                 // VM has started, so we must ensure they arrive before InstanceStart.
                 // This mirrors the Go runtime's batch-configuration approach.
                 //

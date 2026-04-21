@@ -40,9 +40,17 @@ export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
-	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
-	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
+	sudo truncate --size 30G /var/lib/containerd/devmapper/data-disk.img
+	sudo truncate --size 2G  /var/lib/containerd/devmapper/meta-disk.img
 
+	# Allocate loop devices dynamically to avoid conflicts with pre-existing ones
+	# (e.g. snap loop mounts on ubuntu-24.04).
+	local loop_data loop_meta
+	loop_data=$(sudo losetup --find --show /var/lib/containerd/devmapper/data-disk.img)
+	loop_meta=$(sudo losetup --find --show /var/lib/containerd/devmapper/meta-disk.img)
+	info "devmapper: data=${loop_data} meta=${loop_meta}"
+
+	# Persist the loop device mapping across reboots / containerd restarts.
 	cat<<EOF | sudo tee /etc/systemd/system/containerd-devmapper.service
 [Unit]
 Description=Setup containerd devmapper device
@@ -53,14 +61,14 @@ Wants=systemd-udev-settle.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=-/sbin/losetup /dev/loop20 /var/lib/containerd/devmapper/data-disk.img
-ExecStart=-/sbin/losetup /dev/loop21 /var/lib/containerd/devmapper/meta-disk.img
+ExecStart=-/sbin/losetup ${loop_data} /var/lib/containerd/devmapper/data-disk.img
+ExecStart=-/sbin/losetup ${loop_meta} /var/lib/containerd/devmapper/meta-disk.img
 [Install]
 WantedBy=local-fs.target
 EOF
 
 	sudo systemctl daemon-reload
-	sudo systemctl enable --now containerd-devmapper
+	sudo systemctl enable containerd-devmapper
 
 	# Time to setup the thin pool for consumption.
 	# The table arguments are such.
@@ -72,15 +80,17 @@ EOF
 	# low_water_mark. Copied this from containerd snapshotter test setup
 	# no. of feature arguments
 	# Skip zeroing blocks for new volumes.
+	local data_sectors
+	data_sectors=$(sudo blockdev --getsz "${loop_data}")
 	sudo dmsetup create contd-thin-pool \
-		--table "0 20971520 thin-pool /dev/loop21 /dev/loop20 512 32768 1 skip_block_zeroing"
+		--table "0 ${data_sectors} thin-pool ${loop_meta} ${loop_data} 512 32768 1 skip_block_zeroing"
 
 	case "${KUBERNETES}" in
 		k3s)
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
 			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
-		kubeadm)
+		kubeadm|vanilla)
 			containerd_config_file="/etc/containerd/config.toml"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
@@ -101,7 +111,7 @@ EOF
 	config_tmp_file="$(sudo mktemp)"
 	sudo cat "${containerd_config_file}" | tomlq -t --arg platform "linux/${containerd_arch}" '
 		.plugins["io.containerd.snapshotter.v1.devmapper"].pool_name = "contd-thin-pool"
-		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
+		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "10240MB"
 		| .plugins["io.containerd.transfer.v1.local"].unpack_config =
 			[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
 		| if .version == 3 then
@@ -120,7 +130,7 @@ EOF
 	case "${KUBERNETES}" in
 		k3s)
 			sudo systemctl restart k3s ;;
-		kubeadm)
+		kubeadm|vanilla)
 			sudo systemctl restart containerd ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
@@ -157,6 +167,57 @@ function configure_snapshotter() {
 	esac
 
 	echo "::endgroup::"
+}
+
+# Pre-label the node with CPU virtualisation feature labels so that the
+# kata-deploy DaemonSet (which has a required nodeAffinity for these labels
+# set by node-feature-discovery) can be scheduled immediately after Helm
+# install, without waiting for NFD to detect and apply the labels.
+# This is needed when devmapper is the global CRI snapshotter: NFD pod image
+# pulls are slower with devmapper, causing kata-deploy scheduling to miss the
+# 900-second KATA_DEPLOY_WAIT_TIMEOUT.
+function prelabel_node_for_kata_deploy() {
+	local node
+	node=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+
+	if lsmod | grep -q 'kvm_amd'; then
+		info "AMD SVM detected via kvm_amd — labelling node ${node}"
+		kubectl label node "${node}" \
+			feature.node.kubernetes.io/cpu-cpuid.SVM=true --overwrite
+	elif lsmod | grep -q 'kvm_intel'; then
+		info "Intel VMX detected via kvm_intel — labelling node ${node}"
+		kubectl label node "${node}" \
+			feature.node.kubernetes.io/cpu-cpuid.VMX=true --overwrite
+	else
+		warn "Neither kvm_amd nor kvm_intel loaded; kata-deploy scheduling may be delayed"
+	fi
+}
+
+# Pre-pull the kata-deploy and NFD images into the containerd k8s.io namespace
+# using the devmapper snapshotter, so the kata-deploy DaemonSet pod can start
+# without waiting for slow devmapper image pulls inside the 900 s
+# KATA_DEPLOY_WAIT_TIMEOUT window.
+function prepull_kata_deploy_images() {
+	local kata_deploy_image="${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}"
+
+	info "Pre-pulling kata-deploy image (devmapper): ${kata_deploy_image}"
+	sudo ctr -n k8s.io images pull --snapshotter devmapper "${kata_deploy_image}"
+
+	# Resolve NFD image version from the helm dependency lock file
+	pushd "${helm_chart_dir}" > /dev/null
+	helm dependency update 2>&1 | tail -5 || true
+	popd > /dev/null
+
+	if [[ -f "${helm_chart_dir}/Chart.lock" ]]; then
+		local nfd_version
+		nfd_version=$(grep -A3 "name: node-feature-discovery" "${helm_chart_dir}/Chart.lock" \
+			| grep "version:" | awk '{print $2}')
+		if [[ -n "${nfd_version}" ]]; then
+			local nfd_image="registry.k8s.io/nfd/node-feature-discovery:v${nfd_version}"
+			info "Pre-pulling NFD image (devmapper): ${nfd_image}"
+			sudo ctr -n k8s.io images pull --snapshotter devmapper "${nfd_image}" || true
+		fi
+	fi
 }
 
 function delete_coco_kbs() {
@@ -470,6 +531,8 @@ function main() {
 		create-cluster) create_cluster "" ;;
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
+		prelabel-node) prelabel_node_for_kata_deploy ;;
+		prepull-kata-images) prepull_kata_deploy_images ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
 		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
 		install-bats) install_bats ;;

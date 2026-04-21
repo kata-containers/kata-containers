@@ -274,7 +274,7 @@ disable_selinux = @DEFDISABLESELINUX@
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
-enable_debug = false
+enable_debug = true
 
 # Enable agent tracing.
 #
@@ -311,12 +311,18 @@ kernel_modules = []
 debug_console_enabled = false
 
 # Agent connection dialing timeout value in milliseconds
-# (default: 45000)
-dial_timeout_ms = 45000
+# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 450)
+# dial_timeout_ms is the sleep between each retry attempt.
+# You'd better not change the value of dial_timeout_ms, unless you have an
+# experience to know what you're doing.
+# (default: 100)
+dial_timeout_ms = 100
 
-# Confidential Data Hub API timeout value in seconds
-# (default: 50)
-cdh_api_timeout = 50
+# Agent reconnection timeout value in milliseconds
+# Total connection budget = reconnect_timeout_ms (retry_times * dial_timeout_ms).
+# FC needs up to ~45s for VM boot + agent startup.
+# (default: 45000)
+reconnect_timeout_ms = 45000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -335,7 +341,7 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
-enable_debug = false
+enable_debug = true
 
 #
 # Internetworking model

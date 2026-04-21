@@ -415,7 +415,7 @@ endif
 
 ifneq (,$(FCCMD))
     KNOWN_HYPERVISORS += $(HYPERVISOR_FC)
-    CONFIG_FILE_FC = configuration-rs-fc.toml
+    CONFIG_FILE_FC = configuration-fc-rs.toml
     CONFIG_FC = config/$(CONFIG_FILE_FC)
     CONFIG_FC_IN = $(CONFIG_FC).in
     CONFIG_PATH_FC = $(abspath $(CONFDIR)/$(CONFIG_FILE_FC))
