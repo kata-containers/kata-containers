@@ -11,6 +11,7 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly coco_guest_components_builder="${script_dir}/build-static-coco-guest-components.sh"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
 DESTDIR=${DESTDIR:-${PWD}}
@@ -20,22 +21,24 @@ coco_guest_components_version="${coco_guest_components_version:-}"
 coco_guest_components_toolchain="${coco_guest_components_toolchain:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${coco_guest_components_repo}" ] || coco_guest_components_repo=$(get_from_kata_deps ".externals.coco-guest-components.url")
-[ -n "${coco_guest_components_version}" ] || coco_guest_components_version=$(get_from_kata_deps ".externals.coco-guest-components.version")
-[ -n "${coco_guest_components_toolchain}" ] || coco_guest_components_toolchain=$(get_from_kata_deps ".externals.coco-guest-components.toolchain")
+[[ -n "${coco_guest_components_repo}" ]] || coco_guest_components_repo=$(get_from_kata_deps ".externals.coco-guest-components.url")
+[[ -n "${coco_guest_components_version}" ]] || coco_guest_components_version=$(get_from_kata_deps ".externals.coco-guest-components.version")
+[[ -n "${coco_guest_components_toolchain}" ]] || coco_guest_components_toolchain=$(get_from_kata_deps ".externals.coco-guest-components.toolchain")
 
-[ -n "${coco_guest_components_repo}" ] || die "Failed to get coco-guest-components repo"
-[ -n "${coco_guest_components_version}" ] || die "Failed to get coco-guest-components version or commit"
-[ -n "${coco_guest_components_toolchain}" ] || die "Failed to get the rust toolchain to build coco-guest-components"
+[[ -n "${coco_guest_components_repo}" ]] || die "Failed to get coco-guest-components repo"
+[[ -n "${coco_guest_components_version}" ]] || die "Failed to get coco-guest-components version or commit"
+[[ -n "${coco_guest_components_toolchain}" ]] || die "Failed to get the rust toolchain to build coco-guest-components"
 
 nvat_version="${nvat_version:-}"
-[ -n "${nvat_version}" ] || nvat_version=$(get_from_kata_deps ".externals.nvidia.nvat.version" 2>/dev/null || true)
+[[ -n "${nvat_version}" ]] || nvat_version=$(get_from_kata_deps ".externals.nvidia.nvat.version" 2>/dev/null || true)
 
 container_image="${COCO_GUEST_COMPONENTS_CONTAINER_BUILDER:-$(get_coco_guest_components_image_name)}"
-[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
+# shellcheck disable=SC2154
+[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
-	(docker $BUILDX build $PLATFORM \
+# shellcheck disable=SC2154,SC2086
+docker pull "${container_image}" || \
+	(docker ${BUILDX} build ${PLATFORM} \
 	    	--build-arg RUST_TOOLCHAIN="${coco_guest_components_toolchain}" \
 		--build-arg NVAT_VERSION="${nvat_version}" \
 		-t "${container_image}" "${script_dir}" && \
@@ -55,13 +58,14 @@ case "$(uname -m)" in
 	*) ATTESTER="none" ;;
 esac
 
+# shellcheck disable=SC2154
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env TEE_PLATFORM=${TEE_PLATFORM:+"all"} \
-	--env RESOURCE_PROVIDER=${RESOURCE_PROVIDER:-} \
-	--env ATTESTER=${ATTESTER:-} \
-	--env NV_ATTESTER=${NV_ATTESTER:-} \
+	--env RESOURCE_PROVIDER="${RESOURCE_PROVIDER:-}" \
+	--env ATTESTER="${ATTESTER:-}" \
+	--env NV_ATTESTER="${NV_ATTESTER:-}" \
 	--env coco_guest_components_repo="${coco_guest_components_repo}" \
 	--env coco_guest_components_version="${coco_guest_components_version}" \
 	--user "$(id -u)":"$(id -g)" \
