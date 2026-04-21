@@ -31,13 +31,14 @@ build_rootfs() {
 	check_root
 	mkdir -p "${ROOTFS_DIR}"
 
+	# shellcheck disable=SC2154,SC2086
 	/sbin/apk.static \
-	    -X ${MIRROR}/v${OS_VERSION}/main \
+	    -X "${MIRROR}/v${OS_VERSION}/main" \
 	    -U \
 	    --allow-untrusted \
-	    --root ${ROOTFS_DIR} \
+	    --root "${ROOTFS_DIR}" \
 	    --initdb add ${BASE_PACKAGES} ${EXTRA_PKGS} ${PACKAGES}
 
-	mkdir -p ${ROOTFS_DIR}{/root,/etc/apk,/proc}
-	echo "${MIRROR}/v${OS_VERSION}/main" >  ${ROOTFS_DIR}/etc/apk/repositories
+	mkdir -p "${ROOTFS_DIR}"{/root,/etc/apk,/proc}
+	echo "${MIRROR}/v${OS_VERSION}/main" >  "${ROOTFS_DIR}/etc/apk/repositories"
 }
