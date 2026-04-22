@@ -33,5 +33,6 @@ oci-spec = { version = "0.8.1", features = ["runtime"] }
 runtime-spec = { path = "../runtime-spec" }
 
 [dev-dependencies]
+rstest = { workspace = true }
 tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
