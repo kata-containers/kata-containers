@@ -653,6 +653,20 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::WaitProcess(exit_status))
             }
             TaskRequest::StartProcess(process_id) => {
+                // Docker 26+ configures the veth between the Create and Start
+                // RPCs.  Rescan now so interfaces are wired before the process
+                // starts.  The rescan uses a lightweight netlink probe during
+                // polling and only does the expensive endpoint setup once
+                // interfaces are detected.
+                if process_id.process_type == ProcessType::Container {
+                    if let Err(e) = sandbox.rescan_network().await {
+                        error!(
+                            sl!(),
+                            "network rescan failed; container may lack networking: {:?}", e
+                        );
+                    }
+                }
+
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await
