@@ -18,6 +18,7 @@ mod network_model;
 pub use network_model::NetworkModel;
 mod network_with_netns;
 pub use network_with_netns::NetworkWithNetNsConfig;
+pub(crate) use network_with_netns::netns_has_interfaces;
 use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;

@@ -33,7 +33,7 @@ use super::{
 };
 use crate::network::NetworkInfo;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NetworkWithNetNsConfig {
     pub network_model: String,
     pub netns_path: String,
@@ -157,6 +157,35 @@ impl Network for NetworkWithNetns {
         fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
         Ok(())
     }
+}
+
+/// Lightweight probe: enter the netns and check whether any non-loopback
+/// interface with at least one IP address exists.  Does NOT create endpoints
+/// or attach anything to the hypervisor.
+pub(crate) async fn netns_has_interfaces(netns_path: &str) -> Result<bool> {
+    let _netns_guard =
+        netns::NetnsGuard::new(netns_path).context("netns guard for scan")?;
+    let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+    let thread_handler = tokio::spawn(connection);
+    defer!({
+        thread_handler.abort();
+    });
+
+    let mut links = handle.link().get().execute();
+    while let Some(msg) = links.try_next().await? {
+        let link = link::get_link_from_message(msg);
+        let attrs = link.attrs();
+        if (attrs.flags & libc::IFF_LOOPBACK as u32) != 0 {
+            continue;
+        }
+        let addrs = handle_addresses(&handle, attrs)
+            .await
+            .context("handle addresses")?;
+        if !addrs.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 async fn get_entity_from_netns(
