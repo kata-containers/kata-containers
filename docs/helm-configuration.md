@@ -35,7 +35,6 @@ Shims can also have configuration options specific to them:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -107,7 +106,6 @@ Includes:
 - `qemu-tdx` - Intel TDX (amd64)
 - `qemu-se` - IBM Secure Execution for Linux (SEL) (s390x)
 - `qemu-se-runtime-rs` - IBM Secure Execution for Linux (SEL) Rust runtime (s390x)
-- `qemu-cca` - Arm Confidential Compute Architecture (arm64)
 - `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
 - `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, arm64, s390x)
 
@@ -123,7 +121,7 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 Includes:
 
-- `qemu-nvidia-gpu` - Standard NVIDIA GPU support (amd64, arm64)
+- `qemu-nvidia-gpu` - Standard NVIDIA GPU support (amd64)
 - `qemu-nvidia-gpu-snp` - NVIDIA GPU with AMD SEV-SNP (amd64)
 - `qemu-nvidia-gpu-tdx` - NVIDIA GPU with Intel TDX (amd64)
 

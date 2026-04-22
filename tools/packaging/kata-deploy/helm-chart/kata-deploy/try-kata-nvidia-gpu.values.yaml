@@ -21,7 +21,6 @@ shims:
     enabled: true
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -78,7 +77,6 @@ shims:
 # Default shim per architecture (prefer NVIDIA GPU shims)
 defaultShim:
   amd64: qemu-nvidia-gpu  # Can be changed to qemu-nvidia-gpu-snp or qemu-nvidia-gpu-tdx if preferred
-  arm64: qemu-nvidia-gpu
 
 runtimeClasses:
   enabled: true
