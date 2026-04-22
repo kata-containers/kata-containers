@@ -389,6 +389,20 @@ impl RuntimeHandlerManager {
             }
         }
 
+        // Invalid placeholder PID 0 in `/proc/0/ns/net` (e.g. Docker before Start).
+        if let Some(ref p) = netns {
+            if p.contains("/proc/0/") {
+                netns = None;
+            }
+        }
+        // Docker 26+ may not publish the network namespace in `linux.namespaces` at create; use
+        // `libnetwork-setkey` hook args (see Go `DockerNetnsPath` and #9340).
+        if netns.is_none() {
+            if let Some(p) = kata_sys_util::oci_docker::docker_netns_path(spec) {
+                netns = Some(p);
+            }
+        }
+
         // A nerdctl network namespace to let nerdctl know which namespace to use when calling the
         // selected CNI plugin.
         if let Some(netns_path) = &netns {
