@@ -94,7 +94,6 @@ shims:
     enabled: ~  # null = use disableAll setting (enabled when false, disabled when true)
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -103,7 +102,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -112,7 +110,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -121,7 +118,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "devmapper" # requires pre-configuration on the user side
@@ -151,7 +147,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -279,20 +274,6 @@ shims:
     enabled: ~
     supportedArches:
       - s390x
-    allowedHypervisorAnnotations: []
-    containerd:
-      snapshotter: nydus
-      forceGuestPull: false
-    crio:
-      guestPull: true
-    agent:
-      httpsProxy: ""
-      noProxy: ""
-
-  qemu-cca:
-    enabled: ~
-    supportedArches:
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: nydus

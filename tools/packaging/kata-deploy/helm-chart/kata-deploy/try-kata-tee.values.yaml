@@ -1,5 +1,5 @@
 # Example values file to enable Trusted Execution Environment (TEE) shims
-# This includes confidential computing shims: SNP, TDX, SE, CCA, and COCO-dev
+# This includes confidential computing shims: SNP, TDX, SE, and COCO-dev
 #
 # Usage:
 #   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -16,7 +16,7 @@ snapshotter:
 shims:
   disableAll: true
 
-  # Enable TEE shims (qemu-snp, qemu-snp-runtime-rs, qemu-tdx, qemu-tdx-runtime-rs, qemu-se, qemu-se-runtime-rs, qemu-cca, qemu-coco-dev, qemu-coco-dev-runtime-rs)
+  # Enable TEE shims (qemu-snp, qemu-snp-runtime-rs, qemu-tdx, qemu-tdx-runtime-rs, qemu-se, qemu-se-runtime-rs, qemu-coco-dev, qemu-coco-dev-runtime-rs)
   # NFD TEE labels (snp, tdx, se) are auto-injected into RuntimeClasses when NFD is detected; no need to set nodeSelector here.
   qemu-snp:
     enabled: true
@@ -102,20 +102,6 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-cca:
-    enabled: true
-    supportedArches:
-      - arm64
-    allowedHypervisorAnnotations: []
-    containerd:
-      snapshotter: nydus
-      forceGuestPull: false
-    crio:
-      guestPull: true
-    agent:
-      httpsProxy: ""
-      noProxy: ""
-
   qemu-coco-dev:
     enabled: true
     supportedArches:
@@ -150,7 +136,7 @@ shims:
 # Default shim per architecture (prefer TEE shims)
 defaultShim:
   amd64: qemu-snp  # Can be changed to qemu-tdx if preferred
-  arm64: qemu-cca
+  arm64: qemu-coco-dev-runtime-rs
   s390x: qemu-se
 
 runtimeClasses:
