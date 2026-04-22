@@ -132,7 +132,9 @@ jobs:
       # all due to a single flaky instance.
       fail-fast: false
       matrix:
-        vmm: ['qemu']
+        vmm:
+          - qemu
+          - qemu-runtime-rs
     runs-on: s390x-large
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
