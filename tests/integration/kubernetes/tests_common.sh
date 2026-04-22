@@ -128,7 +128,7 @@ get_kubelet_data_dir() {
 }
 
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs || "${KATA_HYPERVISOR}" == "cloud-hypervisor" ]]
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
 }
 
 # Copy the right combination of drop-ins from drop-in-examples/ into
