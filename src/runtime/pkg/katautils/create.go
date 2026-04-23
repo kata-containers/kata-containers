@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -139,6 +140,14 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 			rootFs.Source = realPath
 		}
 		sandboxConfig.Containers[0].RootFs = rootFs
+	} else if rootFs.Mounted && len(sandboxConfig.Containers) == 1 && filepath.IsAbs(ociSpec.Root.Path) {
+		// CRI-O with containers/storage sets root.path to an absolute overlay merged/
+		// directory path, but checkAndMount() mounts the rootfs at <bundle>/rootfs.
+		// Use the actual mount point if it exists.
+		bundleRootfs := filepath.Join(bundlePath, "rootfs")
+		if _, statErr := os.Stat(bundleRootfs); statErr == nil {
+			sandboxConfig.Containers[0].RootFs.Target = bundleRootfs
+		}
 	}
 
 	// Docker 26+ may set up networking before task creation instead of using
@@ -272,6 +281,14 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 			rootFs.Source = realPath
 		}
 		contConfig.RootFs = rootFs
+	} else if filepath.IsAbs(ociSpec.Root.Path) {
+		// CRI-O with containers/storage sets root.path to an absolute overlay merged/
+		// directory path, but checkAndMount() mounts the rootfs at <bundle>/rootfs.
+		// Use the actual mount point if it exists.
+		bundleRootfs := filepath.Join(bundlePath, "rootfs")
+		if _, statErr := os.Stat(bundleRootfs); statErr == nil {
+			contConfig.RootFs.Target = bundleRootfs
+		}
 	}
 	sandboxID, err := oci.SandboxID(ociSpec)
 	if err != nil {
