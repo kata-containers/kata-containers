@@ -336,6 +336,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_NETWORK_QUEUES: &str =
 /// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 pub const KATA_ANNO_CFG_SANDBOX_CGROUP_ONLY: &str =
     "io.katacontainers.config.runtime.sandbox_cgroup_only";
+/// A sandbox annotation that controls pinning of vCPU threads to host CPUs.
+pub const KATA_ANNO_CFG_ENABLE_VCPUS_PINNING: &str =
+    "io.katacontainers.config.runtime.enable_vcpus_pinning";
 /// A sandbox annotation that determines if create a netns for hypervisor process.
 pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
     "io.katacontainers.config.runtime.disable_new_netns";
@@ -1143,6 +1146,14 @@ impl Annotation {
                     KATA_ANNO_CFG_SANDBOX_CGROUP_ONLY => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.sandbox_cgroup_only = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_ENABLE_VCPUS_PINNING => match self.get_value::<bool>(key) {
+                        Ok(r) => {
+                            config.runtime.enable_vcpus_pinning = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);

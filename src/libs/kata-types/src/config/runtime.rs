@@ -100,6 +100,15 @@ pub struct Runtime {
     #[serde(default)]
     pub sandbox_cgroup_only: bool,
 
+    /// If enabled, each vCPU thread will be pinned to a fixed host CPU.
+    ///
+    /// Pinning is only applied when the number of vCPU threads equals
+    /// the number of CPUs in the sandbox's cpuset. When the counts
+    /// diverge (e.g. after hotplug or container removal), pinning is
+    /// reset so all vCPU threads float across the full cpuset.
+    #[serde(default)]
+    pub enable_vcpus_pinning: bool,
+
     /// If enabled, the runtime will create opentracing.io traces and spans.
     /// See https://www.jaegertracing.io/docs/getting-started.
     #[serde(default)]
@@ -342,6 +351,7 @@ internetworking_model = "macvtap"
 disable_new_netns = true
 sandbox_bind_mounts = []
 sandbox_cgroup_only = true
+enable_vcpus_pinning = true
 enable_tracing = true
 jaeger_endpoint = "localhost:1234"
 jaeger_user = "user"
@@ -362,6 +372,7 @@ field_should_be_ignored = true
         assert!(config.runtime.disable_new_netns);
         assert_eq!(config.runtime.sandbox_bind_mounts.len(), 0);
         assert!(config.runtime.sandbox_cgroup_only);
+        assert!(config.runtime.enable_vcpus_pinning);
         assert!(config.runtime.enable_tracing);
         assert!(config.runtime.is_experiment_enabled("a"));
         assert!(config.runtime.is_experiment_enabled("b"));
