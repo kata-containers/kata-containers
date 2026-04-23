@@ -21,7 +21,12 @@ use oci_client::{
     Client, Reference,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io::Read, io::Write, path::Path};
+use std::{
+    collections::BTreeMap,
+    io::{Read, Write},
+    path::Path,
+    time::Duration,
+};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
@@ -138,19 +143,30 @@ impl Container {
             ..Default::default()
         });
 
-        let (manifest, digest_hash, config_layer_str) = match client
-            .pull_manifest_and_config(&reference, &auth)
-            .await
-        {
-            Ok((m, d, c)) => (m, d, c),
-            Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
-                panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
-            }
-            Err(e) => {
-                panic!(
-                    "Failed to pull container image manifest and config - error: {:#?}",
-                    &e
-                );
+        let mut pull_attempt: u8 = 0;
+        let (manifest, digest_hash, config_layer_str) = loop {
+            match client.pull_manifest_and_config(&reference, &auth).await {
+                Ok((m, d, c)) => break (m, d, c),
+
+                Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
+                    panic!(
+                        "Container image registry authentication failure ({}). Are docker credentials set up for current user?",
+                        message
+                    );
+                }
+
+                Err(e) => {
+                    pull_attempt += 1;
+                    if pull_attempt >= config.max_pull_attempts {
+                        panic!("Failed to pull container image manifest and config after {} pull_attempt: {:#?}", config.max_pull_attempts, e);
+                    }
+                    let backoff = 2_u64.pow(pull_attempt.into());
+                    info!(
+                        "Attempt {}/{} unsuccessful, retrying after {}s...",
+                        pull_attempt, config.max_pull_attempts, backoff
+                    );
+                    tokio::time::sleep(Duration::from_secs(backoff)).await;
+                }
             }
         };
 
@@ -172,15 +188,35 @@ impl Container {
         if config.settings.cluster_config.guest_pull && (v1_policy || !is_pause_container) {
             info!("Guest pull is enabled, skipping passwd/group file parsing");
         } else {
-            let image_layers = get_image_layers(
-                &config.layers_cache,
-                &mut client,
-                &reference,
-                &manifest,
-                &config_layer,
-            )
-            .await
-            .unwrap();
+            pull_attempt = 0;
+            let image_layers = loop {
+                match get_image_layers(
+                    &config.layers_cache,
+                    &mut client,
+                    &reference,
+                    &manifest,
+                    &config_layer,
+                )
+                .await
+                {
+                    Ok(image_layers) => break image_layers,
+                    Err(e) => {
+                        pull_attempt += 1;
+                        if pull_attempt >= config.max_pull_attempts {
+                            panic!(
+                                "Failed to pull image layers after {} pull_attempt: {:#?}",
+                                config.max_pull_attempts, e
+                            );
+                        }
+                        let backoff = 2_u64.pow(pull_attempt.into());
+                        info!(
+                            "Attempt {}/{} unsuccessful, retrying after {}s...",
+                            pull_attempt, config.max_pull_attempts, backoff,
+                        );
+                        tokio::time::sleep(Duration::from_secs(backoff)).await;
+                    }
+                }
+            };
 
             // Find the last layer with an /etc/* file, respecting whiteouts.
             info!("Parsing users and groups in image layers");
