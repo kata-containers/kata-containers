@@ -49,6 +49,11 @@ test_deployment_policy_error() {
 }
 
 @test "Policy failure: unexpected UID = 0" {
+    if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
+        echo "# Skipping: not supported in AKS because kubectl describe behaviour has changed and we can no longer assess this test" >&3
+        return 0
+    fi
+
     # Change the pod UID to 0 after the policy has been generated using a different
     # runAsUser value. The policy would use UID = 0 by default, if there weren't
     # a different runAsUser value in the YAML file.
