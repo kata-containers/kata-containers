@@ -412,6 +412,12 @@ type VFIODev struct {
 	// Bus of VFIO PCIe device
 	Bus string
 
+	// Addr is the guest PCI address on the parent bus.
+	Addr string
+
+	// MultiFunction enables multifunction on the first function in the guest slot.
+	MultiFunction bool
+
 	// Guest PCI path of device
 	GuestPciPath vcTypes.PciPath
 

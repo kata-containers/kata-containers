@@ -1187,8 +1187,9 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // devID is the id of the device to add. Must be valid QMP identifier.
 // bdf is the PCI bus-device-function of the pci device.
 // bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
+// addr is optional. When set, it describes the guest PCI address on the parent bus.
 // iommufdID is the ID of the iommufd object to be created for this device. If empty, no iommufd object will be created.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string) error {
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, addr, romfile string, multifunction bool, iommufdID string) error {
 	var driver string
 	var transport VirtioTransport
 
@@ -1206,6 +1207,12 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 	}
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if addr != "" {
+		args["addr"] = addr
+	}
+	if multifunction {
+		args["multifunction"] = true
 	}
 	if iommufdID != "" {
 		iommufdIDFull := "iommufd" + iommufdID

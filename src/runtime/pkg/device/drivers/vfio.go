@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -38,6 +39,8 @@ type VFIODevice struct {
 	VfioDevs []*config.VFIODev
 }
 
+const vfioMultiFunctionGuestSlot = "00"
+
 // NewVFIODevice create a new VFIO device
 func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 	return &VFIODevice{
@@ -45,6 +48,74 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 			ID:         devInfo.ID,
 			DeviceInfo: devInfo,
 		},
+	}
+}
+
+func hostPCISlotKey(bdf string) (string, int, bool) {
+	functionSep := strings.LastIndexByte(bdf, '.')
+	if functionSep == -1 || functionSep == len(bdf)-1 {
+		return "", 0, false
+	}
+
+	function, err := strconv.ParseUint(bdf[functionSep+1:], 16, 3)
+	if err != nil {
+		return "", 0, false
+	}
+
+	return bdf[:functionSep], int(function), true
+}
+
+func findPCIeBusForHostSlot(port config.PCIePort, slotKey string) string {
+	for _, vfio := range config.PCIeDevicesPerPort[port] {
+		existingSlotKey, _, ok := hostPCISlotKey(vfio.BDF)
+		if ok && existingSlotKey == slotKey {
+			return vfio.Bus
+		}
+	}
+
+	return ""
+}
+
+func assignPCIeTopology(vfioDevs []*config.VFIODev) {
+	slotCounts := make(map[string]int)
+
+	for _, vfio := range vfioDevs {
+		if !vfio.IsPCIe {
+			continue
+		}
+
+		slotKey, _, ok := hostPCISlotKey(vfio.BDF)
+		if ok {
+			slotCounts[slotKey]++
+		}
+	}
+
+	for _, vfio := range vfioDevs {
+		if !vfio.IsPCIe {
+			continue
+		}
+
+		vfio.Addr = ""
+		vfio.MultiFunction = false
+
+		existingBus := ""
+		slotKey, function, ok := hostPCISlotKey(vfio.BDF)
+		if ok {
+			existingBus = findPCIeBusForHostSlot(vfio.Port, slotKey)
+			vfio.Bus = existingBus
+		}
+
+		if vfio.Bus == "" {
+			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
+			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+		}
+
+		if ok && (slotCounts[slotKey] > 1 || existingBus != "") {
+			vfio.Addr = fmt.Sprintf("%s.%x", vfioMultiFunctionGuestSlot, function)
+			vfio.MultiFunction = function == 0
+		}
+
+		config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
 	}
 }
 
@@ -88,16 +159,9 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		if vfio.Port == "" {
 			return fmt.Errorf("cold_plug_vfio= or hot_plug_vfio= port is not set for device %s (BridgePort | RootPort | SwitchPort)", vfio.BDF)
 		}
-
-		if vfio.IsPCIe {
-			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
-			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
-			// We need to keep track the number of devices per port to deduce
-			// the corectu bus number, additionally we can use the VFIO device
-			// info to act upon different Vendor IDs and Device IDs.
-			config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
-		}
 	}
+
+	assignPCIeTopology(device.VfioDevs)
 
 	coldPlug := device.DeviceInfo.ColdPlug
 	deviceLogger().WithField("cold-plug", coldPlug).Info("Attaching VFIO device")

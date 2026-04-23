@@ -1244,7 +1244,7 @@ func TestExecuteVFIODeviceAdd(t *testing.T) {
 			q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 			checkVersion(t, connectedCh)
 
-			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", romfile, tc.iommufdID)
+			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", "00.1", romfile, true, tc.iommufdID)
 			if err != nil {
 				t.Fatalf("Unexpected error %v", err)
 			}
