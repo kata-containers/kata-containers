@@ -427,27 +427,61 @@ function disable_swap() {
 	sudo swapoff -a
 }
 
-# Always deploys the latest k8s version
+# Deploys the latest k8s version, falling back to the previous minor if
+# the latest has broken/missing package dependencies.
 function do_deploy_k8s() {
-	# Add the pkgs.k8s.io repo
-	curl -fsSL https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/Release.key | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+	local k8s_version
+	k8s_version=$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)
+	[[ -z "${k8s_version}" ]] && die "Failed to fetch Kubernetes stable version"
 
-	# Pin the packages to ensure they'll be downloaded from the pkgs.k8s.io repo
-	#
-	# This is needed as the github runner uses the azure repo which already has
-	# kubernetes packages, and those packages simply don't work well with the
-	# runner.
-	cat <<EOF | sudo tee /etc/apt/preferences.d/kubernetes
-Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
-Pin: origin pkgs.k8s.io
-Pin-Priority: 1000
-EOF
+	local major minor prev_version
+	major="${k8s_version%%.*}"
+	minor="${k8s_version##*.}"
+	if [[ "${minor}" -eq 0 ]]; then
+		die "Cannot fallback from ${k8s_version} (minor version is 0)"
+	fi
+	prev_version="${major}.$((minor - 1))"
 
-	# Install the packages
-	sudo apt-get update
-   	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
-   	sudo apt-mark hold kubeadm kubelet kubectl
+	local version=""
+	local candidate
+	for candidate in "${k8s_version}" "${prev_version}"; do
+		info "Trying Kubernetes ${candidate}"
+
+		curl -fsSL "https://pkgs.k8s.io/core:/stable:/${candidate}/deb/Release.key" \
+			| sudo gpg --batch --yes --no-tty --dearmor \
+				-o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+		echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${candidate}/deb/ /" \
+			| sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+		# Pin the packages to ensure they'll be downloaded from the
+		# pkgs.k8s.io repo.
+		#
+		# This is needed as the github runner uses the azure repo which
+		# already has kubernetes packages, and those packages simply
+		# don't work well with the runner.
+		cat <<-EOF | sudo tee /etc/apt/preferences.d/kubernetes
+		Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
+		Pin: origin pkgs.k8s.io
+		Pin-Priority: 1000
+		EOF
+
+		sudo apt-get update
+		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl \
+			--allow-downgrades >/dev/null 2>&1; then
+			version="${candidate}"
+			break
+		fi
+		warn "Kubernetes ${candidate} packages have unmet dependencies, trying previous minor version"
+	done
+
+	if [[ -z "${version}" ]]; then
+		echo "Failed to find a Kubernetes version with installable packages (tried ${k8s_version} and ${prev_version})" >&2
+		return 1
+	fi
+
+	info "Installing Kubernetes ${version}"
+	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
+	sudo apt-mark hold kubeadm kubelet kubectl
 
 	# Deploy k8s using kubeadm with CreateContainerRequest (CRI) timeout set to 600s,
 	# mainly for CoCo (Confidential Containers) tests (attestation, policy, image pull, VM start).
