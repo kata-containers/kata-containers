@@ -75,6 +75,9 @@ pub struct CpusConfig {
     pub topology: Option<CpuTopology>,
     #[serde(default)]
     pub kvm_hyperv: bool,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nested: Option<bool>,
     #[serde(skip_serializing_if = "u8_is_zero")]
     pub max_phys_bits: u8,
     #[serde(default)]
