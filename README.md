@@ -153,10 +153,6 @@ Kata Containers is now
 
 See the [tests documentation](tests/README.md).
 
-## Metrics tests
-
-See the [metrics documentation](tests/metrics/README.md).
-
 ## Glossary of Terms
 
 See the [glossary of terms](https://github.com/kata-containers/kata-containers/wiki/Glossary) related to Kata Containers.

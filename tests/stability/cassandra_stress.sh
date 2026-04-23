@@ -8,7 +8,7 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-source "${SCRIPT_PATH}/../metrics/lib/common.bash"
+source "${SCRIPT_PATH}/common_stability.bash"
 
 IMAGE="docker.io/library/cassandra:latest"
 CONTAINER_NAME="${CONTAINER_NAME:-cassandra_test}"

@@ -22,9 +22,6 @@ import (
 )
 
 // kataSpanExporter is used to ensure that Jaeger logs each span.
-// This is essential as it is used by:
-//
-// https://github.com/kata-containers/kata-containers/blob/main/tests/functional/tracing/tracing-test.sh
 type kataSpanExporter struct{}
 
 var _ sdktrace.SpanExporter = (*kataSpanExporter)(nil)
@@ -151,8 +148,6 @@ func Trace(parent context.Context, logger *logrus.Entry, name string, tags ...ma
 	// are still created - but the tracer used is a NOP. Therefore, only
 	// display the message when tracing is really enabled.
 	if tracing {
-		// This log message is *essential*: it is used by:
-		// https://github.com/kata-containers/kata-containers/blob/main/tests/functional/tracing/tracing-test.sh
 		kataTraceLogger.Debugf("created span %v", span)
 	}
 

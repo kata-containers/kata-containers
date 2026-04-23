@@ -13,7 +13,7 @@
 # - catch any hang ups
 
 cidir=$(dirname "$0")
-source "${cidir}/../metrics/lib/common.bash"
+source "${cidir}/common_stability.bash"
 source "/etc/os-release" || source "/usr/lib/os-release"
 set -x
 

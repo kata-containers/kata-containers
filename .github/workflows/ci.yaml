@@ -458,22 +458,3 @@ jobs:
       arch: ppc64le
       containerd_version: ${{ matrix.params.containerd_version }}
       vmm: ${{ matrix.params.vmm }}
-
-  run-cri-containerd-tests-arm64:
-    if: false
-    needs: build-kata-static-tarball-arm64
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: active, vmm: qemu },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: arm64-non-k8s
-      arch: arm64
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
