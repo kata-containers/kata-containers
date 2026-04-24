@@ -19,7 +19,7 @@ use kata_types::config::hypervisor::{
 };
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::errors::*;
 
@@ -36,6 +36,17 @@ pub const DEFAULT_NUM_PCI_SEGMENTS: u16 = 1;
 
 pub const DEFAULT_DISK_QUEUES: usize = 1;
 pub const DEFAULT_DISK_QUEUE_SIZE: u16 = 128;
+
+const MSHV_DEVICE_PATH: &str = "/dev/mshv";
+
+fn cpu_nested_config() -> Option<bool> {
+    if Path::new(MSHV_DEVICE_PATH).exists() {
+        // Nested vCPUs are not supported on MSHV yet.
+        Some(false)
+    } else {
+        None
+    }
+}
 
 // TDX requires all rootfs's be mounted using a block device. This test
 // ensures that the user has a correct set of values for the following Kata
@@ -354,6 +365,7 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
         let cfg = CpusConfig {
             boot_vcpus,
             max_vcpus,
+            nested: cpu_nested_config(),
             max_phys_bits,
             topology: Some(topology),
             features,
@@ -647,6 +659,7 @@ mod tests {
         let cpus_config = CpusConfig {
             boot_vcpus: cpu_default,
             max_vcpus,
+            nested: cpu_nested_config(),
             topology: Some(CpuTopology {
                 cores_per_die: max_vcpus,
 
@@ -1219,6 +1232,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
+                    nested: cpu_nested_config(),
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 
@@ -1239,6 +1253,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 3,
+                    nested: cpu_nested_config(),
                     topology: Some(CpuTopology {
                         cores_per_die: 3,
 
@@ -1259,6 +1274,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
+                    nested: cpu_nested_config(),
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 
