@@ -187,7 +187,7 @@ cleanup_and_fail_shim_v2_specifics() {
 		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
 
-	return "$(cleanup_and_fail "${1:-}" "${2:-}")"
+	cleanup_and_fail "${1:-}" "${2:-}"; return $?
 }
 
 cleanup_and_fail() {
@@ -271,12 +271,12 @@ install_cached_tarball_component() {
 	rm -f "${component}"-version
 	rm -f "${component}"-builder-image-version
 
-	[[ "${cached_image_version}" != "${current_image_version}" ]] && return "$(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")"
-	[[ "${cached_version}" != "${current_version}" ]] && return "$(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")"
-	sha256sum -c "${component}-sha256sum" || return "$(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")"
+	[[ "${cached_image_version}" != "${current_image_version}" ]] && { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return $?; }
+	[[ "${cached_version}" != "${current_version}" ]] && { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return $?; }
+	sha256sum -c "${component}-sha256sum" || { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return $?; }
 
 	if [[ "${component}" = "shim-v2" ]]; then
-		install_cached_shim_v2_tarball_compare_root_hashes || return "$(cleanup_and_fail_shim_v2_specifics "${component_tarball_path}" "${extra_tarballs}")"
+		install_cached_shim_v2_tarball_compare_root_hashes || { cleanup_and_fail_shim_v2_specifics "${component_tarball_path}" "${extra_tarballs}"; return $?; }
 	fi
 
 	info "Using cached tarball of ${component}"
