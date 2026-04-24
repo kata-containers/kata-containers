@@ -101,6 +101,7 @@ impl BrandString {
 
     /// Creates a brand string, initialized from the CPUID leaves 0x80000002 through 0x80000004
     /// of the host CPU.
+    #[allow(unused_unsafe)]
     fn from_host_cpuid() -> Result<Self, Error> {
         let mut this = Self::new();
         let mut cpuid_regs = unsafe { host_cpuid(0x8000_0000) };
@@ -311,6 +312,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(unused_unsafe)]
     fn test_brand_string() {
         #[inline]
         fn pack_u32(src: &[u8]) -> u32 {
