@@ -19,7 +19,9 @@ use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerCo
 use dbs_device::resources::DeviceResources;
 use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;
-use dbs_interrupt::KvmIrqManager;
+#[cfg(target_arch = "x86_64")]
+use dbs_interrupt::UserspaceIoapicManager;
+use dbs_interrupt::{InterruptManager, KvmIrqManager};
 use dbs_legacy_devices::ConsoleHandler;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_pci::CAPABILITY_BAR_SIZE;
@@ -209,6 +211,10 @@ pub enum DeviceMgrError {
     /// Unsupported pci device type
     #[error("unsupported pci device type")]
     InvalidPciDeviceType,
+    #[cfg(target_arch = "x86_64")]
+    /// Error from Userspace IOAPIC
+    #[error("Userspace IOAPIC error: {0}")]
+    UserspaceIoapicError(#[source] std::io::Error),
 }
 
 /// Specialized version of `std::result::Result` for device manager operations.
@@ -306,7 +312,7 @@ impl IoManagerContext for DeviceManagerContext {
 pub struct DeviceOpContext {
     epoll_mgr: Option<EpollManager>,
     io_context: DeviceManagerContext,
-    irq_manager: Arc<KvmIrqManager>,
+    irq_manager: Arc<Box<dyn InterruptManager>>,
     res_manager: Arc<ResourceManager>,
     vm_fd: Arc<VmFd>,
     vm_as: Option<GuestAddressSpaceImpl>,
@@ -632,7 +638,7 @@ impl DeviceOpContext {
 pub struct DeviceManager {
     io_manager: Arc<ArcSwap<IoManager>>,
     io_lock: Arc<Mutex<()>>,
-    irq_manager: Arc<KvmIrqManager>,
+    irq_manager: Arc<Box<dyn InterruptManager>>,
     res_manager: Arc<ResourceManager>,
     vm_fd: Arc<VmFd>,
     pub(crate) logger: slog::Logger,
@@ -681,7 +687,19 @@ impl DeviceManager {
         logger: &slog::Logger,
         shared_info: Arc<RwLock<InstanceInfo>>,
     ) -> Result<Self> {
-        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        #[cfg(not(target_arch = "x86_64"))]
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
+        #[cfg(target_arch = "x86_64")]
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            if shared_info.read().unwrap().split_irqchip() {
+                Arc::new(Box::new(
+                    UserspaceIoapicManager::create_default_ioapic_manager(vm_fd.clone())
+                        .map_err(DeviceMgrError::UserspaceIoapicError)?,
+                ))
+            } else {
+                Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())))
+            };
         let io_manager = Arc::new(ArcSwap::new(Arc::new(IoManager::new())));
         let io_lock = Arc::new(Mutex::new(()));
         #[cfg(feature = "host-device")]
@@ -744,6 +762,11 @@ impl DeviceManager {
     /// Get the underlying IoManager to dispatch IO read/write requests.
     pub fn io_manager(&self) -> IoManagerCached {
         IoManagerCached::new(self.io_manager.clone())
+    }
+
+    /// Get the irq manager to handle interrupt
+    pub fn irq_manager(&self) -> Arc<Box<dyn InterruptManager>> {
+        self.irq_manager.clone()
     }
 
     /// Create the underline interrupt manager for the device manager.
@@ -1598,9 +1621,11 @@ mod tests {
             let shared_info = Arc::new(RwLock::new(InstanceInfo::new(
                 String::from("dragonball"),
                 String::from("1"),
+                None,
             )));
 
-            let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+            let irq_manager: Arc<Box<dyn InterruptManager>> =
+                Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
             let io_manager = Arc::new(ArcSwap::new(Arc::new(IoManager::new())));
             let io_lock = Arc::new(Mutex::new(()));
 

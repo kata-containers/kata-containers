@@ -136,6 +136,7 @@ actix-rt = "2.7.0"
 anyhow = "1.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
+bilge = "0.3.0"
 capctl = "0.2.0"
 cfg-if = "1.0.0"
 cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }

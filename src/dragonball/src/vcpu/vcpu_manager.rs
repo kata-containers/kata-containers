@@ -16,6 +16,8 @@ use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::time::Duration;
 
 use dbs_arch::VpmuFeatureLevel;
+#[cfg(target_arch = "x86_64")]
+use dbs_interrupt::InterruptManager;
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
 use dbs_utils::epoll_manager::{EpollManager, EventOps, EventSet, Events, MutEventSubscriber};
@@ -235,6 +237,9 @@ pub struct VcpuManager {
     // X86 specific fields.
     #[cfg(target_arch = "x86_64")]
     pub(crate) supported_cpuid: kvm_bindings::CpuId,
+
+    #[cfg(target_arch = "x86_64")]
+    irq_manager: Arc<Box<dyn InterruptManager>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -249,6 +254,7 @@ impl VcpuManager {
         shared_info: Arc<RwLock<InstanceInfo>>,
         io_manager: IoManagerCached,
         epoll_manager: EpollManager,
+        #[cfg(target_arch = "x86_64")] irq_manager: Arc<Box<dyn InterruptManager>>,
     ) -> Result<Arc<Mutex<Self>>> {
         let support_immediate_exit = kvm_context.kvm().check_extension(Cap::ImmediateExit);
         let max_vcpu_count = vm_config_info.max_vcpu_count;
@@ -324,6 +330,8 @@ impl VcpuManager {
             upcall_channel: None,
             #[cfg(target_arch = "x86_64")]
             supported_cpuid,
+            #[cfg(target_arch = "x86_64")]
+            irq_manager,
         }));
 
         let handler = Box::new(VcpuEpollHandler {
@@ -787,6 +795,7 @@ impl VcpuManager {
             self.vcpu_state_sender.clone(),
             request_ts,
             self.support_immediate_exit,
+            self.irq_manager.clone(),
         )
         .map_err(VcpuManagerError::Vcpu)
     }

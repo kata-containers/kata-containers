@@ -425,6 +425,8 @@ impl Vm {
             self.shared_info.clone(),
             self.device_manager.io_manager(),
             self.epoll_manager.clone(),
+            #[cfg(target_arch = "x86_64")]
+            self.device_manager.irq_manager(),
         )?;
         self.vcpu_manager = Some(vcpu_manager);
 

@@ -7,7 +7,7 @@ use dbs_boot::layout::{GUEST_MEM_END, GUEST_PHYS_END};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use dbs_device::resources::Resource;
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
-use dbs_interrupt::KvmIrqManager;
+use dbs_interrupt::InterruptManager;
 #[cfg(target_arch = "aarch64")]
 use dbs_pci::ECAM_SPACE_LENGTH;
 use dbs_pci::{create_pci_root_bus, PciBus, PciDevice, PciRootDevice, PciSystemContext};
@@ -25,7 +25,7 @@ const PCI_MMIO_DEFAULT_SIZE: u64 = 2048u64 << 30;
 /// PCI pass-through device manager.
 #[derive(Clone)]
 pub struct PciSystemManager {
-    pub irq_manager: Arc<KvmIrqManager>,
+    pub irq_manager: Arc<Box<dyn InterruptManager>>,
     pub io_context: DeviceManagerContext,
     pub pci_root: Arc<PciRootDevice>,
     pub pci_root_bus: Arc<PciBus>,
@@ -34,7 +34,7 @@ pub struct PciSystemManager {
 impl PciSystemManager {
     /// Create a new PCI pass-through device manager.
     pub fn new(
-        irq_manager: Arc<KvmIrqManager>,
+        irq_manager: Arc<Box<dyn InterruptManager>>,
         io_context: DeviceManagerContext,
         res_manager: Arc<ResourceManager>,
     ) -> std::result::Result<Self, DeviceMgrError> {
@@ -176,7 +176,7 @@ impl PciSystemContext for PciSystemManager {
         self.io_context.clone()
     }
 
-    fn get_interrupt_manager(&self) -> Arc<KvmIrqManager> {
+    fn get_interrupt_manager(&self) -> Arc<Box<dyn InterruptManager>> {
         self.irq_manager.clone()
     }
 }

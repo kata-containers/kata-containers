@@ -375,7 +375,7 @@ pub mod tests {
         AddressSpace, AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType,
     };
     use dbs_boot::layout::{GUEST_MEM_END, GUEST_MEM_START, GUEST_PHYS_END};
-    use dbs_interrupt::KvmIrqManager;
+    use dbs_interrupt::{InterruptManager, KvmIrqManager};
     use kvm_ioctls::{Kvm, VmFd};
     use virtio_queue::{QueueSync, QueueT};
     use vm_memory::{

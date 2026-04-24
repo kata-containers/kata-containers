@@ -75,13 +75,6 @@ impl KvmIrqManager {
         }
     }
 
-    /// Prepare the interrupt manager for generating interrupts into the target VM.
-    pub fn initialize(&self) -> Result<()> {
-        // Safe to unwrap because there's no legal way to break the mutex.
-        let mgr = self.mgr.lock().unwrap();
-        mgr.initialize()
-    }
-
     /// Set maximum supported MSI interrupts per device.
     pub fn set_max_msi_irqs(&self, max_msi_irqs: InterruptIndex) {
         let mut mgr = self.mgr.lock().unwrap();
@@ -90,6 +83,12 @@ impl KvmIrqManager {
 }
 
 impl InterruptManager for KvmIrqManager {
+    fn initialize(&self) -> Result<()> {
+        // Safe to unwrap because there's no legal way to break the mutex.
+        let mgr = self.mgr.lock().unwrap();
+        mgr.initialize()
+    }
+
     fn create_group(
         &self,
         ty: InterruptSourceType,

@@ -25,7 +25,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use dbs_address_space::AddressSpace;
 use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::{DeviceIo, IoAddress};
-use dbs_interrupt::{DeviceInterruptManager, DeviceInterruptMode, KvmIrqManager};
+use dbs_interrupt::{DeviceInterruptManager, DeviceInterruptMode, InterruptManager};
 use kvm_ioctls::{IoEventAddress, NoDatamatch, VmFd};
 use virtio_queue::QueueT;
 use vm_memory::{Address, ByteValued, GuestAddress, GuestAddressSpace, GuestMemoryRegion, Le32};
@@ -367,7 +367,7 @@ pub struct VirtioPciDevice<AS: GuestAddressSpace + Clone + 'static, Q: QueueT, R
 
     // MSI-X interrupts.
     msix_state: Mutex<MsixState>,
-    intr_mgr: Mutex<DeviceInterruptManager<Arc<KvmIrqManager>>>,
+    intr_mgr: Mutex<DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>>,
     msix_num: u16,
     // This is the index of MSI-X capability register in the PCI configuration space.
     // Inited when alloc_bars.
@@ -397,7 +397,7 @@ where
         vm_fd: Arc<VmFd>,
         vm_as: AS,
         address_space: AddressSpace,
-        irq_manager: Arc<KvmIrqManager>,
+        irq_manager: Arc<Box<dyn InterruptManager>>,
         device_resource: DeviceResources,
         dev_id: u8,
         device: Box<dyn VirtioDevice<AS, Q, R>>,
@@ -691,7 +691,9 @@ where
         self.msix_state.lock().expect("Poisoned lock of msix_state")
     }
 
-    pub fn intr_mgr(&self) -> MutexGuard<'_, DeviceInterruptManager<Arc<KvmIrqManager>>> {
+    pub fn intr_mgr(
+        &self,
+    ) -> MutexGuard<'_, DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>> {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.intr_mgr.lock().expect("Poisoned lock of intr_mgr")
     }
@@ -1161,7 +1163,7 @@ pub(crate) mod tests {
     #[cfg(target_arch = "aarch64")]
     use dbs_arch::gic::create_gic;
     use dbs_device::resources::MsiIrqType;
-    use dbs_interrupt::kvm::KvmIrqManager;
+    use dbs_interrupt::{InterruptManager, KvmIrqManager};
     use dbs_utils::epoll_manager::EpollManager;
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_kvm_unaccessable;
@@ -1364,7 +1366,8 @@ pub(crate) mod tests {
         #[cfg(target_arch = "x86_64")]
         vm_fd.create_irq_chip().unwrap();
 
-        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        let irq_manager: Arc<Box<dyn InterruptManager>> =
+            Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())));
         irq_manager.initialize().unwrap();
 
         let vm_as = Arc::new(GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x1000)]).unwrap());

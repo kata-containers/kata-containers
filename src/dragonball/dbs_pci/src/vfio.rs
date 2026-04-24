@@ -17,7 +17,7 @@ use dbs_device::resources::{DeviceResources, MsiIrqType, Resource, ResourceConst
 use dbs_device::PioAddress;
 use dbs_device::{DeviceIo, IoAddress};
 use dbs_interrupt::{
-    DeviceInterruptManager, DeviceInterruptMode, InterruptSourceGroup, KvmIrqManager,
+    DeviceInterruptManager, DeviceInterruptMode, InterruptManager, InterruptSourceGroup,
 };
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
@@ -146,7 +146,7 @@ impl VfioMsix {
 
 struct Interrupt {
     vfio_dev: Arc<VfioDevice>,
-    irq_manager: Option<DeviceInterruptManager<Arc<KvmIrqManager>>>,
+    irq_manager: Option<DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>>,
     resources: DeviceResources,
     legacy_enabled: bool,
     // the ability of msi is enabled or not
@@ -181,7 +181,7 @@ impl Interrupt {
         }
     }
 
-    pub(crate) fn initialize(&mut self, irq_mgr: Arc<KvmIrqManager>) -> Result<()> {
+    pub(crate) fn initialize(&mut self, irq_mgr: Arc<Box<dyn InterruptManager>>) -> Result<()> {
         let mut irq_manager = DeviceInterruptManager::new(irq_mgr, &self.resources)
             .map_err(VfioPciError::InterruptManager)?;
 
@@ -474,7 +474,7 @@ impl Interrupt {
         vfio_dev: &Arc<VfioDevice>,
         index: u32,
         count: u32,
-        irq_mgr: &DeviceInterruptManager<Arc<KvmIrqManager>>,
+        irq_mgr: &DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>,
     ) -> Result<Arc<Box<dyn InterruptSourceGroup>>> {
         if let Some(group) = irq_mgr.get_group() {
             if count > group.len() {
