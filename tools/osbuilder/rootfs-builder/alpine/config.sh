@@ -17,7 +17,7 @@ BASE_PACKAGES="alpine-base"
 # shellcheck disable=SC2034
 MIRROR=http://dl-cdn.alpinelinux.org/alpine/
 
-PACKAGES="bash iptables ip6tables"
+PACKAGES="bash iptables ip6tables kmod"
 
 # Init process must be one of {systemd,kata-agent}
 # shellcheck disable=SC2034
