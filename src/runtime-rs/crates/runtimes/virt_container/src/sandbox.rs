@@ -8,7 +8,8 @@ use crate::health_check::HealthCheck;
 use agent::kata::KataAgent;
 use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
-    self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest,
+    self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, Storage,
+    VolumeStatsRequest,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -192,6 +193,12 @@ impl VirtSandbox {
         {
             let vm_rootfs = ResourceConfig::VmRootfs(block_config);
             resource_configs.push(vm_rootfs);
+        }
+
+        // prepare kernel modules images device configs
+        let modules_images = self.prepare_modules_images_config().await;
+        if !modules_images.is_empty() {
+            resource_configs.push(ResourceConfig::KernelModulesImages(modules_images));
         }
 
         // prepare protection device config
@@ -378,6 +385,21 @@ impl VirtSandbox {
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         }))
+    }
+
+    async fn prepare_modules_images_config(&self) -> Vec<BlockConfig> {
+        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
+        boot_info
+            .kernel_modules_images
+            .iter()
+            .filter(|img| !img.path.is_empty())
+            .map(|img| BlockConfig {
+                path_on_host: img.path.clone(),
+                is_readonly: true,
+                driver_option: boot_info.vm_rootfs_driver.clone(),
+                ..Default::default()
+            })
+            .collect()
     }
 
     async fn set_agent_policy(&self) -> Result<()> {
@@ -682,14 +704,54 @@ impl Sandbox for VirtSandbox {
         // create sandbox in vm
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
+        let mut storages = self
+            .resource_manager
+            .get_storage_for_sandbox(self.shm_size)
+            .await
+            .context("get storages for sandbox")?;
+
+        let hyp_config = self.hypervisor.hypervisor_config().await;
+        let blk_offset: u8 = if hyp_config.blockdev_info.disable_image_nvdimm {
+            b'b'
+        } else {
+            b'a'
+        };
+
+        let rootfs_has_verity =
+            !hyp_config.boot_info.kernel_verity_params.trim().is_empty();
+        let dm_offset: usize = if rootfs_has_verity { 1 } else { 0 };
+        let mut dm_idx = dm_offset;
+
+        for (i, img) in hyp_config
+            .boot_info
+            .kernel_modules_images
+            .iter()
+            .filter(|img| !img.path.is_empty())
+            .enumerate()
+        {
+            let has_verity = !img.verity_params.trim().is_empty();
+            let source = if has_verity {
+                let dm_dev = format!("/dev/dm-{dm_idx}");
+                dm_idx += 1;
+                dm_dev
+            } else {
+                let dev_name = format!("vd{}", (blk_offset + i as u8) as char);
+                format!("/dev/{dev_name}")
+            };
+            storages.push(Storage {
+                driver: "blk".to_string(),
+                source,
+                fs_type: "ext4".to_string(),
+                mount_point: format!("/run/kata-modules-{i}"),
+                options: vec!["ro".to_string()],
+                ..Default::default()
+            });
+        }
+
         let req = agent::CreateSandboxRequest {
             hostname: sandbox_config.hostname.clone(),
             dns: sandbox_config.dns.clone(),
-            storages: self
-                .resource_manager
-                .get_storage_for_sandbox(self.shm_size)
-                .await
-                .context("get storages for sandbox")?,
+            storages,
             sandbox_pidns: false,
             sandbox_id: id.to_string(),
             guest_hook_path: self

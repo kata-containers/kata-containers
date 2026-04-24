@@ -6,11 +6,15 @@
 
 use anyhow::{anyhow, Result};
 
+use std::collections::HashMap;
+
 use crate::{
     VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_BLK_CCW, VM_ROOTFS_DRIVER_MMIO, VM_ROOTFS_DRIVER_PMEM,
     VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
 };
-use kata_types::config::hypervisor::{parse_kernel_verity_params, VERITY_BLOCK_SIZE_BYTES};
+use kata_types::config::hypervisor::{
+    parse_kernel_verity_params, KernelModulesImageConfig, VERITY_BLOCK_SIZE_BYTES,
+};
 use kata_types::config::LOG_VPORT_OPTION;
 use kata_types::fs::{
     VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
@@ -252,6 +256,64 @@ impl KernelParams {
         }
 
         Ok(params)
+    }
+
+    /// Generate dm-mod.create kernel parameters for module images that have
+    /// dm-verity configured. Module images use a single block device with the
+    /// hash tree appended after the data section, so both the data device and
+    /// hash device are the same /dev/vdX and hash_start_block equals data_blocks.
+    ///
+    /// `dm_offset` is the first dm device index to use (e.g. 1 when the rootfs
+    /// already occupies dm-0). `blk_offset` is the virtio-blk letter offset
+    /// (b'a' when nvdimm is used, b'b' when virtio-blk rootfs takes vda).
+    ///
+    /// Returns the params and a mapping from image index to the dm device path.
+    pub(crate) fn new_modules_verity_params(
+        images: &[KernelModulesImageConfig],
+        dm_offset: usize,
+        blk_offset: u8,
+    ) -> Result<(Self, HashMap<usize, String>)> {
+        let mut params = Vec::new();
+        let mut dm_devices: HashMap<usize, String> = HashMap::new();
+        let mut dm_idx = dm_offset;
+
+        for (i, img) in images.iter().enumerate() {
+            if img.verity_params.trim().is_empty() {
+                continue;
+            }
+            let cfg = match new_kernel_verity_params(&img.verity_params)? {
+                Some(cfg) => cfg,
+                None => continue,
+            };
+
+            let dev_letter = (blk_offset + i as u8) as char;
+            let dev = format!("/dev/vd{dev_letter}");
+
+            let data_sectors =
+                (cfg.data_block_size / VERITY_BLOCK_SIZE_BYTES) * cfg.data_blocks;
+            let dm_cmd = format!(
+                "dm-modules-{},,,ro,0 {} verity 1 {} {} {} {} {} {} sha256 {} {}",
+                i,
+                data_sectors,
+                dev,
+                dev,
+                cfg.data_block_size,
+                cfg.hash_block_size,
+                cfg.data_blocks,
+                cfg.data_blocks,
+                cfg.root_hash,
+                cfg.salt,
+            );
+
+            params.push(Param {
+                key: "dm-mod.create".to_string(),
+                value: format!("\"{}\"", dm_cmd),
+            });
+            dm_devices.insert(i, format!("/dev/dm-{}", dm_idx));
+            dm_idx += 1;
+        }
+
+        Ok((Self { params }, dm_devices))
     }
 
     pub(crate) fn append(&mut self, params: &mut KernelParams) {

@@ -183,6 +183,13 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device failed.")?;
                 }
+                ResourceConfig::KernelModulesImages(images) => {
+                    for img in images {
+                        do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(img))
+                            .await
+                            .context("do handle kernel modules image device failed.")?;
+                    }
+                }
                 ResourceConfig::HybridVsock(hv) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::HybridVsockCfg(hv))
                         .await
