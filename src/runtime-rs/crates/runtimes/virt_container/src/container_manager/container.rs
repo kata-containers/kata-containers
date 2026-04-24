@@ -456,8 +456,13 @@ impl Container {
         stdout: Option<String>,
         stderr: Option<String>,
         terminal: bool,
-        oci_process: OCIProcess,
+        mut oci_process: OCIProcess,
     ) -> Result<()> {
+        let toml_config = self.resource_manager.config().await;
+        if get_disable_guest_selinux(&toml_config) {
+            oci_process.set_selinux_label(None);
+        }
+
         let process = Process::new(
             container_process,
             self.pid,
