@@ -19,6 +19,7 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
     annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
+    config::TomlConfig,
     container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
     k8s::{self, container_type},
 };
@@ -103,17 +104,7 @@ impl Container {
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
-        let disable_guest_selinux = match toml_config
-            .hypervisor
-            .get(&toml_config.runtime.hypervisor_name)
-        {
-            Some(hypervisor_config) => hypervisor_config.disable_guest_selinux,
-            // This shouldn't happen due to how logic in the config crate works
-            // but we need to handle it anyway so we stick with the default
-            // value of disable_guest_selinux in configuration.toml which
-            // is 'true'.
-            None => true,
-        };
+        let disable_guest_selinux = get_disable_guest_selinux(&toml_config);
         let annotations = spec.annotations().clone().unwrap_or_default();
         let container_typ = container_type(&spec);
         let pod_type_anno = if container_typ.is_pod_container() {
@@ -770,6 +761,20 @@ fn amend_spec(
     }
 
     Ok(())
+}
+
+fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
+    match toml_config
+        .hypervisor
+        .get(&toml_config.runtime.hypervisor_name)
+    {
+        Some(hypervisor_config) => hypervisor_config.disable_guest_selinux,
+        // This shouldn't happen due to how logic in the config crate works
+        // but we need to handle it anyway so we stick with the default
+        // value of disable_guest_selinux in configuration.toml which
+        // is 'true'.
+        None => true,
+    }
 }
 
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox
