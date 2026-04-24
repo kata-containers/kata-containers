@@ -796,6 +796,25 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
 
+	if len(config.KernelModulesImages) > 0 {
+		rootfsHasVerity := strings.TrimSpace(config.KernelVerityParams) != ""
+		dmOffset := 0
+		if rootfsHasVerity {
+			dmOffset = 1
+		}
+		blkOffset := 0
+		if q.disableNvdimm {
+			blkOffset = 1
+		}
+		modVerityParams, _, err := GetKernelModulesVerityParams(
+			config.KernelModulesImages, dmOffset, blkOffset,
+		)
+		if err != nil {
+			return err
+		}
+		q.kernelParams = append(q.kernelParams, modVerityParams...)
+	}
+
 	return nil
 }
 

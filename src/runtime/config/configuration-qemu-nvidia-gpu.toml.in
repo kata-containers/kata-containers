@@ -56,6 +56,12 @@ kernel_params = "@KERNELPARAMS_NV@"
 # These are used by the runtime to assemble dm-verity kernel params.
 kernel_verity_params = "@KERNELVERITYPARAMS_NV@"
 
+# Optional: list of disk images containing kernel modules to attach.
+# Each entry specifies a path and optional dm-verity params.
+# [[hypervisor.qemu.kernel_modules_images]]
+# path = "/opt/kata/share/kata-containers/modules-volume.img"
+# verity_params = ""
+
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWAREPATH_NV@"
