@@ -81,7 +81,7 @@ class Checks:
         :param target_branch: branch/commit to compare to
         :returns: List of set-of-tests
         """
-        cmd = ["git", "diff", "--name-only", f"origin/{target_branch}"]
+        cmd = ["git", "diff", "--name-only", f"origin/{target_branch}..HEAD"]
         changed_files = [_.decode("utf-8")
                          for _ in subprocess.check_output(cmd).split(b'\n')
                          if _.strip()]
