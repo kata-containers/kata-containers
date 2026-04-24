@@ -81,6 +81,7 @@ safe-path.workspace = true
 # to be modified at runtime.
 logging.workspace = true
 vsock-exporter.workspace = true
+initdata-processor.workspace = true
 
 # Initdata
 base64 = "0.22"
