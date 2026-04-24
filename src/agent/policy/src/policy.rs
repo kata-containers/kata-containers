@@ -276,11 +276,20 @@ pub enum FileType {
 }
 
 impl From<u32> for FileType {
+    // libc::S_IF* are mode_t, which is u16 on Darwin/BSD and u32 on Linux. The
+    // `as u32` cast is required for Darwin but a no-op on Linux, which trips
+    // clippy::unnecessary_cast. This is the documented libc-portability case
+    // from https://github.com/rust-lang/rust-clippy/issues/6466.
+    #[allow(clippy::unnecessary_cast)]
     fn from(raw_mode: u32) -> Self {
-        match raw_mode & libc::S_IFMT {
-            libc::S_IFREG => Self::Regular,
-            libc::S_IFDIR => Self::Directory,
-            libc::S_IFLNK => Self::Symlink,
+        const S_IFMT: u32 = libc::S_IFMT as u32;
+        const S_IFREG: u32 = libc::S_IFREG as u32;
+        const S_IFDIR: u32 = libc::S_IFDIR as u32;
+        const S_IFLNK: u32 = libc::S_IFLNK as u32;
+        match raw_mode & S_IFMT {
+            S_IFREG => Self::Regular,
+            S_IFDIR => Self::Directory,
+            S_IFLNK => Self::Symlink,
             _ => Self::Unknown,
         }
     }
@@ -338,6 +347,10 @@ impl std::convert::TryFrom<&CopyFileRequest> for PolicyCopyFileRequest {
 }
 
 #[cfg(test)]
+// libc::S_IF* constants are u16 on Darwin/BSD and u32 on Linux, and the test
+// cases below cast them to u32 to match the file_mode field type. The cast is
+// a no-op on Linux (see https://github.com/rust-lang/rust-clippy/issues/6466).
+#[allow(clippy::unnecessary_cast)]
 mod tests {
     use super::*;
     use std::convert::TryInto;
@@ -356,12 +369,12 @@ mod tests {
             TestCase {
                 name: "regular".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFREG,
+                    file_mode: libc::S_IFREG as u32,
                     path: "/foo/bar".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFREG,
+                    file_mode: libc::S_IFREG as u32,
                     file_type: FileType::Regular,
                     path: "/foo/bar".to_owned(),
                     ..Default::default()
@@ -370,12 +383,12 @@ mod tests {
             TestCase {
                 name: "directory".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFDIR,
+                    file_mode: libc::S_IFDIR as u32,
                     path: "/foo".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFDIR,
+                    file_mode: libc::S_IFDIR as u32,
                     file_type: FileType::Directory,
                     path: "/foo".to_owned(),
                     ..Default::default()
@@ -384,12 +397,12 @@ mod tests {
             TestCase {
                 name: "socket".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFSOCK,
+                    file_mode: libc::S_IFSOCK as u32,
                     path: "/foo/sock".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFSOCK,
+                    file_mode: libc::S_IFSOCK as u32,
                     file_type: FileType::Unknown,
                     path: "/foo/sock".to_owned(),
                     ..Default::default()
@@ -398,12 +411,12 @@ mod tests {
             TestCase {
                 name: "mixed".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFDIR | libc::S_IFREG,
+                    file_mode: libc::S_IFDIR as u32 | libc::S_IFREG as u32,
                     path: "/foo/dunno".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFDIR | libc::S_IFREG,
+                    file_mode: libc::S_IFDIR as u32 | libc::S_IFREG as u32,
                     file_type: FileType::Unknown,
                     path: "/foo/dunno".to_owned(),
                     ..Default::default()
@@ -412,12 +425,12 @@ mod tests {
             TestCase {
                 name: "all".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFMT,
+                    file_mode: libc::S_IFMT as u32,
                     path: "/wat".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFMT,
+                    file_mode: libc::S_IFMT as u32,
                     file_type: FileType::Unknown,
                     path: "/wat".to_owned(),
                     ..Default::default()
@@ -441,12 +454,12 @@ mod tests {
                 name: "link/valid".to_owned(),
                 input: CopyFileRequest {
                     data: b"..data/foo".to_vec(),
-                    file_mode: libc::S_IFLNK,
+                    file_mode: libc::S_IFLNK as u32,
                     path: "/foo/lnk".to_owned(),
                     ..Default::default()
                 },
                 output: Some(PolicyCopyFileRequest {
-                    file_mode: libc::S_IFLNK,
+                    file_mode: libc::S_IFLNK as u32,
                     file_type: FileType::Symlink,
                     symlink_target: Some("..data/foo".to_owned()),
                     path: "/foo/lnk".to_owned(),
@@ -456,7 +469,7 @@ mod tests {
             TestCase {
                 name: "link/invalid".to_owned(),
                 input: CopyFileRequest {
-                    file_mode: libc::S_IFLNK,
+                    file_mode: libc::S_IFLNK as u32,
                     data: vec![0x00, 0xFF, 0xFF, 0x00],
                     ..Default::default()
                 },
