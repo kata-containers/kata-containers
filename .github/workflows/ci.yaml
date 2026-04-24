@@ -266,7 +266,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && inputs.pr-number == 'nightly' }}
     needs: publish-kata-deploy-payload-arm64
     uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
     with:
@@ -278,7 +278,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-kata-coco-tests-on-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: ${{ inputs.skip-test != 'yes' && inputs.pr-number == 'nightly' }}
     needs:
       - publish-kata-deploy-payload-arm64
       - build-and-publish-tee-confidential-unencrypted-image
