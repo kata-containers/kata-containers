@@ -100,7 +100,7 @@ else
         Specify "USE_BUILTIN_DB=true" to force enable.)
 endif
 
-HYPERVISOR ?= $(HYPERVISOR_DB)
+HYPERVISOR ?= $(HYPERVISOR_QEMU)
 
 ##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
 HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH) $(HYPERVISOR_REMOTE)
