@@ -39,7 +39,7 @@ ifeq ($(filter $(ARCH), $(UNSUPPORTED_ARCHS)),$(ARCH))
 default: runtime show-header
 test:
 	@echo "$(ARCH) is not currently supported"
-	exit 0
+	exit 1
 install: install-runtime install-configs
 else
 ##TARGET default: build code
