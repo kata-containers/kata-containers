@@ -35,6 +35,12 @@ function install_dependencies() {
 function run() {
 	info "Running soak parallel stability tests using ${KATA_HYPERVISOR} hypervisor"
 
+	enabling_hypervisor
+	export CTR_RUNTIME="io.containerd.kata-${KATA_HYPERVISOR}.v2"
+	if [ "${KATA_HYPERVISOR}" = "fc-rs" ]; then
+		export CTR_SNAPSHOTTER="devmapper"
+	fi
+
 	export ITERATIONS=2 MAX_CONTAINERS=20
 	bash "${stability_dir}/soak_parallel_rm.sh"
 
@@ -48,11 +54,21 @@ function run() {
 #	bash "${stability_dir}/agent_stability_test.sh"
 }
 
+function install_kata_for_stability() {
+	install_kata
+
+	# Firecracker (fc-rs) uses block devices and requires the devmapper
+	# snapshotter; other hypervisors work fine with the default overlayfs.
+	if [ "${KATA_HYPERVISOR:-}" = "fc-rs" ]; then
+		configure_devmapper_for_containerd
+	fi
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) install_kata ;;
+		install-kata) install_kata_for_stability ;;
 		enabling-hypervisor) enabling_hypervisor ;;
 		run) run ;;
 		*) >&2 die "Invalid argument" ;;

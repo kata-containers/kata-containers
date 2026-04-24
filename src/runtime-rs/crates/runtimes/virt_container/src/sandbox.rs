@@ -613,7 +613,6 @@ impl Sandbox for VirtSandbox {
 
         // start vm
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
-        info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
@@ -660,6 +659,18 @@ impl Sandbox for VirtSandbox {
                     .context("set up device after start vm")?;
             }
         }
+
+        // Give the hypervisor a chance to finalize boot now that OCI hooks and
+        // the post-hooks network rescan have completed.  For hypervisors that
+        // require all devices (including network) to be registered before the
+        // guest boots (e.g. Firecracker), start_vm defers the actual boot
+        // command to this call.  For hypervisors that boot the guest in
+        // start_vm (QEMU, dragonball, cloud-hypervisor), this is a no-op.
+        self.hypervisor
+            .boot_vm()
+            .await
+            .context("boot vm")?;
+        info!(sl!(), "start vm");
 
         // connect agent
         // set agent socket

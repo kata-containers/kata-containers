@@ -51,7 +51,7 @@ function install_dependencies() {
 
 	# Create the default containerd configuration
 	sudo mkdir -p /etc/containerd
-	containerd config default > sudo tee /etc/containerd/config.toml
+	containerd config default | sudo tee /etc/containerd/config.toml
 	sudo systemctl restart containerd
 }
 
@@ -106,27 +106,46 @@ function run() {
 
 	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
+	# fc-rs uses devmapper block devices; nerdctl must be told to use the
+	# devmapper snapshotter explicitly so images are unpacked into the pool.
+	local snapshotter_flag=""
+	if [ "${KATA_HYPERVISOR}" = "fc-rs" ]; then
+		snapshotter_flag="--snapshotter devmapper"
+	fi
+
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
-	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+	sudo nerdctl run --rm ${snapshotter_flag} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and multiple bridge nwtorks"
-	sudo nerdctl run --rm --net ${net1} --net ${net2} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a
+	sudo nerdctl run --rm ${snapshotter_flag} --net ${net1} --net ${net2} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
-	sudo nerdctl run  --rm --net ${ipvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
+	sudo nerdctl run --rm ${snapshotter_flag} --net ${ipvlan_net_name} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and macvlan network"
-	sudo nerdctl run  --rm --net ${macvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
+	sudo nerdctl run --rm ${snapshotter_flag} --net ${macvlan_net_name} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
 
 	info "Removing networks"
 	sudo nerdctl network rm ${macvlan_net_name} ${ipvlan_net_name}
+}
+
+function install_kata_for_nerdctl() {
+	install_kata
+
+	# Firecracker (fc-rs) uses block devices and requires the devmapper
+	# snapshotter; other hypervisors work fine with the default overlayfs.
+	# Must run AFTER install_kata since install_kata may overwrite the
+	# containerd config via overwrite_containerd_config.
+	if [ "${KATA_HYPERVISOR:-}" = "fc-rs" ]; then
+		configure_devmapper_for_containerd
+	fi
 }
 
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) install_kata ;;
+		install-kata) install_kata_for_nerdctl ;;
 		run) run ;;
 		collect-artifacts) collect_artifacts ;;
 		*) >&2 die "Invalid argument" ;;
