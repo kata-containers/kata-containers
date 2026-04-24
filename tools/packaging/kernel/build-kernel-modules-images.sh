@@ -46,6 +46,7 @@ The script builds the kernel with all module-set config fragments,
 then splits the resulting modules into per-set disk images:
 
   - mlx5:  Mellanox MLX5 + InfiniBand drivers
+  - ntfs:  NTFS3 filesystem driver
 
 EOF
 	exit "${1:-0}"
@@ -55,10 +56,12 @@ EOF
 # that belong to this set.
 declare -A MODULE_SETS
 MODULE_SETS[mlx5]="drivers/net/ethernet/mellanox drivers/infiniband"
+MODULE_SETS[ntfs]="fs/ntfs3"
 
 # Module set config fragments (relative to fragments/modules/)
 declare -A MODULE_FRAGMENTS
 MODULE_FRAGMENTS[mlx5]="mlx5.conf"
+MODULE_FRAGMENTS[ntfs]="ntfs.conf"
 
 output_dir="${PWD}"
 enable_verity="false"
