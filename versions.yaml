@@ -299,11 +299,9 @@ externals:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
     version: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
-    # image / ita_image and image_tag / ita_image_tag must be in sync
+    # image and image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
     image_tag: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
-    ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "22788122660d6e9be3e4bf52704282de5fcc0a2a-x86_64"
     toolchain: "1.90.0"
 
   containerd:

@@ -19,7 +19,6 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-ITA_KEY="${ITA_KEY:-}"
 HTTPS_PROXY="${HTTPS_PROXY:-}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
@@ -320,9 +319,7 @@ ensure_snphost() {
 #
 function kbs_k8s_delete() {
 	pushd "${COCO_KBS_DIR}"
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		kubectl delete -k config/kubernetes/ita
-	elif [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
+	if [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
 		kubectl delete -k config/kubernetes/overlays/ibm-se
 	else
 		kubectl delete -k config/kubernetes/overlays/
@@ -358,12 +355,6 @@ function kbs_k8s_deploy() {
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
 	image=$(get_from_kata_deps ".externals.coco-trustee.image")
 	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
-
-	# Image tag for TDX
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		image=$(get_from_kata_deps ".externals.coco-trustee.ita_image")
-		image_tag=$(get_from_kata_deps ".externals.coco-trustee.ita_image_tag")
-	fi
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -411,14 +402,6 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		echo "::group::Setting up ITA/ITTS for TDX"
-		pushd "${COCO_KBS_DIR}/config/kubernetes/ita/"
-			# Let's replace the "tBfd5kKX2x9ahbodKV1..." sample
-			# `api_key`property by a valid ITA/ITTS API key, in the
-			# ITA/ITTS specific configuration
-			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
-		popd
-
 		if [[ -n "${HTTPS_PROXY}" ]]; then
 			# Ideally this should be something kustomizable on trustee side.
 			#
@@ -431,8 +414,6 @@ function kbs_k8s_deploy() {
 				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"${HTTPS_PROXY}\"}]" -i deployment.yaml
 			popd
 		fi
-
-		export DEPLOYMENT_DIR=ita
 	fi
 
 	./deploy-kbs.sh
