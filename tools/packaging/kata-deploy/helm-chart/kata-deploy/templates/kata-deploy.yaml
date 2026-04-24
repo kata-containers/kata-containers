@@ -303,6 +303,10 @@ spec:
         - name: CUSTOM_RUNTIMES_ENABLED
           value: "true"
 {{- end }}
+{{- if include "kata-deploy.hasKernelModulesImages" . }}
+        - name: KERNEL_MODULES_IMAGES_ENABLED
+          value: "true"
+{{- end }}
         securityContext:
           privileged: true
         volumeMounts:
@@ -315,6 +319,11 @@ spec:
 {{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
         - name: custom-configs
           mountPath: /custom-configs/
+          readOnly: true
+{{- end }}
+{{- if include "kata-deploy.hasKernelModulesImages" . }}
+        - name: kernel-modules-configs
+          mountPath: /kernel-modules-configs/
           readOnly: true
 {{- end }}
       volumes:
@@ -334,6 +343,15 @@ spec:
           name: {{ .Chart.Name }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
           name: {{ .Chart.Name }}-custom-configs
+{{- end }}
+{{- end }}
+{{- if include "kata-deploy.hasKernelModulesImages" . }}
+      - name: kernel-modules-configs
+        configMap:
+{{- if .Values.env.multiInstallSuffix }}
+          name: {{ .Chart.Name }}-kernel-modules-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+          name: {{ .Chart.Name }}-kernel-modules
 {{- end }}
 {{- end }}
 {{- with .Values.updateStrategy }}

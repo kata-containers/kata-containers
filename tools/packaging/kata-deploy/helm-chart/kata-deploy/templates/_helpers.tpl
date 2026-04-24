@@ -421,3 +421,19 @@ Note: EXPERIMENTAL_FORCE_GUEST_PULL only checks containerd.forceGuestPull, not c
 {{- end -}}
 {{- join "," $shimNames -}}
 {{- end -}}
+
+{{/*
+Check if any shim has kernelModulesImages configured.
+Returns "true" if at least one shim has a non-empty kernelModulesImages list.
+*/}}
+{{- define "kata-deploy.hasKernelModulesImages" -}}
+{{- $found := false -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if and (ne $shimName "disableAll") (hasKey $shimConfig "kernelModulesImages") -}}
+{{- if $shimConfig.kernelModulesImages -}}
+{{- $found = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $found -}}true{{- end -}}
+{{- end -}}
