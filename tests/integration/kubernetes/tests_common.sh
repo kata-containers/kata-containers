@@ -36,6 +36,7 @@ export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 
+# shellcheck source=/dev/null
 source "${K8S_TEST_DIR}/../../gha-run-k8s-common.sh"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"

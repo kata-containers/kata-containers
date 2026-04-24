@@ -9,9 +9,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# shellcheck disable=SC2034
 kata_tarball_dir="${2:-kata-artifacts}"
 stability_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${stability_dir}/../common.bash"
+# shellcheck source=/dev/null
 source "${stability_dir}/common_stability.bash"
 DOCKERFILE="${stability_dir}/stressng_dockerfile/Dockerfile"
 IMAGE="docker.io/library/local-stressng:latest"
@@ -33,6 +36,7 @@ function install_dependencies() {
 }
 
 function run() {
+	# shellcheck disable=SC2154
 	info "Running soak parallel stability tests using ${KATA_HYPERVISOR} hypervisor"
 
 	export ITERATIONS=2 MAX_CONTAINERS=20

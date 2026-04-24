@@ -9,6 +9,7 @@ set -eou pipefail
 [[ -n "${DEBUG:-}" ]] && set -o xtrace
 
 test_dir=$(realpath "$(dirname "${BASH_SOURCE[0]}")")
+# shellcheck source=/dev/null
 source "${test_dir}/common.bash"
 
 install_opa()

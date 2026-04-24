@@ -8,6 +8,7 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
+# shellcheck source=/dev/null
 source "${SCRIPT_PATH}/common_stability.bash"
 
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
@@ -18,6 +19,8 @@ function main() {
 
 	init_env
 	check_cmds "${cmds[@]}"
+	# CTR_EXE, CTR_RUNTIME, and IMAGE are set by common.bash's init_env
+	# shellcheck disable=SC2154
 	sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 
 	# Run 1 iomix stressor (mix of I/O operations) for 20 seconds with verbose output

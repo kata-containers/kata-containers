@@ -8,7 +8,8 @@
 #
 set -e
 
-script_dir="$(realpath $(dirname $0))"
+script_dir="$(realpath "$(dirname "$0")")"
+# shellcheck source=/dev/null
 source "${script_dir}/../qemu.blacklist"
 
 if [[ -z "${QEMU_TARBALL}" || -z "${QEMU_DESTDIR}" ]]; then
@@ -17,20 +18,22 @@ if [[ -z "${QEMU_TARBALL}" || -z "${QEMU_DESTDIR}" ]]; then
 fi
 
 pushd "${QEMU_DESTDIR}"
-# Remove files to reduce the surface.
-echo "INFO: remove uneeded files"
+# shellcheck disable=SC2154
 for pattern in "${qemu_black_list[@]}"; do
-	find . -path "$pattern" | xargs rm -rfv
+	find . -path "${pattern}" -print0 | xargs -0 --no-run-if-empty rm -rfv
 done
 
 if [[ -n "${BUILD_SUFFIX}" ]]; then
-	echo "Rename binaries using $BUILD_SUFFIX"
-	find -name 'qemu-system-*' -exec mv {} {}-$BUILD_SUFFIX \;
-	if [[ ${ARCH} != "x86_64" ]]; then
-		find -name 'virtiofsd' -exec mv {} {}-$BUILD_SUFFIX \;
+	echo "Rename binaries using ${BUILD_SUFFIX}"
+	# shellcheck disable=SC2154,SC1083,SC2086
+	find . -name 'qemu-system-*' -exec mv {} {}-${BUILD_SUFFIX} \;
+	# shellcheck disable=SC2154
+	if [[ "${ARCH}" != "x86_64" ]]; then
+		# shellcheck disable=SC1083,SC2086
+		find . -name 'virtiofsd' -exec mv {} {}-${BUILD_SUFFIX} \;
 	fi
 fi
 
 echo "INFO: create the tarball"
-tar -czvf "${QEMU_TARBALL}" *
+tar -czvf "${QEMU_TARBALL}" ./*
 popd

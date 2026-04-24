@@ -57,7 +57,7 @@ recognised_tags=(
 #
 gt_eq() {
 	format='^[0-9]+(\.[0-9]+)*$'
-	if [[ ! ("$1" =~ $format && "$2" =~ $format) ]]; then
+	if [[ ! ("$1" =~ ${format} && "$2" =~ ${format}) ]]; then
 		echo "ERROR: Malformed version string"
 	fi
 	echo -e "$1\n$2" | sort -V -r -C
@@ -66,7 +66,7 @@ gt_eq() {
 # Display message to stderr and exit indicating script failed.
 die() {
 	local msg="$*"
-	echo >&2 "$script_name: ERROR: $msg"
+	echo >&2 "${script_name}: ERROR: ${msg}"
 	exit 1
 }
 
@@ -80,7 +80,7 @@ Overview:
 
 Usage:
 
-	$script_name [options] <hypervisor-name>
+	${script_name} [options] <hypervisor-name>
 
 Options:
 
@@ -92,7 +92,7 @@ Options:
 
 Example:
 
-	$ $script_name qemu
+	$ ${script_name} qemu
 
 EOF
 }
@@ -108,12 +108,12 @@ show_tags_header() {
 EOF
 
 	# sort the tags
-	keys=${!recognised_tags[@]}
-	keys=$(echo "$keys" | tr ' ' '\n' | sort -u)
+	keys=${!recognised_tags[*]}
+	keys=$(echo "${keys}" | tr ' ' '\n' | sort -u)
 
-	for key in $keys; do
-		value="${recognised_tags[$key]}"
-		printf "#    %s\t%s.\n" "$key" "$value"
+	for key in ${keys}; do
+		value="${recognised_tags[${key}]}"
+		printf "#    %s\t%s.\n" "${key}" "${value}"
 	done
 
 	printf "#\n\n"
@@ -123,28 +123,28 @@ check_tag() {
 	local tag="$1"
 	local entry="$2"
 
-	[[ -z "$tag" ]] && die "no tag for entry '$entry'"
-	[[ -z "$entry" ]] && die "no entry for tag '$tag'"
+	[[ -z "${tag}" ]] && die "no tag for entry '${entry}'"
+	[[ -z "${entry}" ]] && die "no entry for tag '${tag}'"
 
-	value="${recognised_tags[$tag]}"
+	value="${recognised_tags[${tag}]}"
 
 	# each tag MUST have a description
-	[[ -n "$value" ]] && return
+	[[ -n "${value}" ]] && return
 
-	die "invalid tag '$tag' found for entry '$entry'"
+	die "invalid tag '${tag}' found for entry '${entry}'"
 }
 
 check_tags() {
 	local tags="$1"
 	local entry="$2"
 
-	[[ -z "$tags" ]] && die "entry '$entry' doesn't have any tags"
-	[[ -z "$entry" ]] && die "no entry for tags '$tags'"
+	[[ -z "${tags}" ]] && die "entry '${entry}' doesn't have any tags"
+	[[ -z "${entry}" ]] && die "no entry for tags '${tags}'"
 
-	tags=$(echo "$tags" | tr ',' '\n')
+	tags=$(echo "${tags}" | tr ',' '\n')
 
-	for tag in $tags; do
-		check_tag "$tag" "$entry"
+	for tag in ${tags}; do
+		check_tag "${tag}" "${entry}"
 	done
 }
 
@@ -173,45 +173,46 @@ show_array() {
 	local suffix
 	local one_line="no"
 
-	[[ "$action" = "dump" ]] && show_tags_header
+	[[ "${action}" = "dump" ]] && show_tags_header
 
 	for entry in "${_array[@]}"; do
-		[[ -z "$entry" ]] && die "found empty entry"
+		[[ -z "${entry}" ]] && die "found empty entry"
 
-		tags=$(echo "$entry" | cut -s -d: -f1)
-		elem=$(echo "$entry" | cut -s -d: -f2-)
+		tags=$(echo "${entry}" | cut -s -d: -f1)
+		elem=$(echo "${entry}" | cut -s -d: -f2-)
 
-		[[ -z "$elem" ]] && die "no option for entry '$entry'"
+		[[ -z "${elem}" ]] && die "no option for entry '${entry}'"
 
-		check_tags "$tags" "$entry"
+		check_tags "${tags}" "${entry}"
 
-		if [[ "$action" = "dump" ]]; then
-			printf "%s\t\t%s\n" "$tags" "$elem"
-		elif [[ "$action" = "multi" ]]; then
-			if [[ $i -eq $size ]]; then
+		if [[ "${action}" = "dump" ]]; then
+			printf "%s\t\t%s\n" "${tags}" "${elem}"
+		elif [[ "${action}" = "multi" ]]; then
+			if [[ ${i} -eq ${size} ]]; then
 				suffix=""
 			else
+				# shellcheck disable=SC1003
 				suffix=' \'
 			fi
 
-			printf '%s%s\n' "$elem" "$suffix"
+			printf '%s%s\n' "${elem}" "${suffix}"
 		else
 			one_line="yes"
-			echo -n "$elem "
+			echo -n "${elem} "
 		fi
 
 		i+=1
 	done
 
-	[[ "$one_line" = yes ]] && echo
+	[[ "${one_line}" = yes ]] && echo
 }
 
 generate_qemu_options() {
 	#---------------------------------------------------------------------
 	#check if cross-compile is needed
 	host=$(uname -m)
-	if [[ "$arch" != "$host" ]]; then
-		case $arch in
+	if [[ "${arch}" != "${host}" ]]; then
+		case ${arch} in
 			aarch64) qemu_options+=(size:--cross-prefix=aarch64-linux-gnu-);;
 			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64le-linux-gnu-);;
 			s390x) exit;;
@@ -272,7 +273,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-usb-redir)
 
 	# Disable TCG support
-	case "$arch" in
+	case "${arch}" in
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
 	ppc64le) qemu_options+=(size:--disable-tcg) ;;
@@ -284,7 +285,7 @@ generate_qemu_options() {
 	fi
 
 	# Disable debug is always passed to the qemu binary so not required.
-	case "$arch" in
+	case "${arch}" in
 	aarch64)
 		;;
 	x86_64)
@@ -452,7 +453,7 @@ generate_qemu_options() {
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
 	if ! gt_eq "${qemu_version}" "10.1.0" ; then
-		if [ "$arch" == x86_64 ]; then
+		if [[ "${arch}" == x86_64 ]]; then
 			qemu_options+=(speed:--enable-avx2)
 			qemu_options+=(speed:--enable-avx512bw)
 		else
@@ -512,6 +513,7 @@ generate_qemu_options() {
 	_qemu_cflags+=" -D_FORTIFY_SOURCE=2"
 
 	# Set compile options
+	# shellcheck disable=SC2054
 	qemu_options+=(functionality,security,speed,size:"--extra-cflags=\"${_qemu_cflags}\"")
 
 	unset _qemu_cflags
@@ -534,16 +536,16 @@ generate_qemu_options() {
 	unset _qemu_ldflags
 
 	# Where to install qemu helper binaries
-	qemu_options+=(misc:--prefix=${prefix})
+	qemu_options+=("misc:--prefix=${prefix}")
 
 	# Where to install qemu libraries
-	qemu_options+=(arch:--libdir=${prefix}/lib/${hypervisor})
+	qemu_options+=("arch:--libdir=${prefix}/lib/${hypervisor}")
 
 	# Where to install qemu helper binaries
-	qemu_options+=(misc:--libexecdir=${prefix}/libexec/${hypervisor})
+	qemu_options+=("misc:--libexecdir=${prefix}/libexec/${hypervisor}")
 
 	# Where to install data files
-	qemu_options+=(misc:--datadir=${prefix}/share/${hypervisor})
+	qemu_options+=("misc:--datadir=${prefix}/share/${hypervisor}")
 
 }
 
@@ -552,7 +554,7 @@ main() {
 	action=""
 
 	while getopts "dhms" opt; do
-		case "$opt" in
+		case "${opt}" in
 		d)
 			action="dump"
 			;;
@@ -568,6 +570,9 @@ main() {
 		s)
 			static="true"
 			;;
+		*)
+			die "Invalid option: -${OPTARG:-${opt}}"
+			;;
 		esac
 	done
 
@@ -577,27 +582,29 @@ main() {
 	hypervisor="$1"
 
 	local qemu_version_file="VERSION"
-	[[ -f ${qemu_version_file} ]] || die "QEMU version file '$qemu_version_file' not found"
+	[[ -f ${qemu_version_file} ]] || die "QEMU version file '${qemu_version_file}' not found"
 
 	# Remove any pre-release identifier so that it returns the version on
 	# major.minor.patch format (e.g 5.2.0-rc4 becomes 5.2.0)
-	qemu_version="$(awk 'BEGIN {FS = "-"} {print $1}' ${qemu_version_file})"
+	qemu_version="$(awk 'BEGIN {FS = "-"} {print $1}' "${qemu_version_file}")"
 
 	[[ -n "${qemu_version}" ]] ||
-		die "cannot determine qemu version from file $qemu_version_file"
+		die "cannot determine qemu version from file ${qemu_version_file}"
 
 	if ! gt_eq "${qemu_version}" "6.1.0" ; then
 		die "Kata requires QEMU >= 6.1.0"
 	fi
 
-	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
+	local gcc_version_major
+	gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
 	[[ -n "${gcc_version_major}" ]] ||
 		die "cannot determine gcc major version, please ensure it is installed"
 	# -dumpversion only returns the major version since GCC 7.0
+	local gcc_version_minor
 	if gt_eq "${gcc_version_major}" "7.0.0" ; then
-		local gcc_version_minor=$(gcc -dumpfullversion | cut -f2 -d.)
+		gcc_version_minor=$(gcc -dumpfullversion | cut -f2 -d.)
 	else
-		local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
+		gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
 	fi
 	[[ -n "${gcc_version_minor}" ]] ||
 		die "cannot determine gcc minor version, please ensure it is installed"
@@ -606,7 +613,7 @@ main() {
 	# Generate qemu options
 	generate_qemu_options
 
-	show_array "$action" "${qemu_options[@]}"
+	show_array "${action}" "${qemu_options[@]}"
 
 	exit 0
 }

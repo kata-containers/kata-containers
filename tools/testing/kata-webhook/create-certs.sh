@@ -8,11 +8,13 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-webhook_dir=$(dirname $0)
+webhook_dir=$(dirname "$0")
+# shellcheck source=/dev/null
 source "${webhook_dir}/common.bash"
 
-[ -n "${1:-}" ] && WEBHOOK_NS="$1"
-[ -n "${2:-}" ] && WEBHOOK_NAME="$2"
+[[ -n "${1:-}" ]] && WEBHOOK_NS="$1"
+# shellcheck disable=SC2034
+[[ -n "${2:-}" ]] && WEBHOOK_NAME="$2"
 
 if ! command -v openssl &>/dev/null; then
 	echo "ERROR: command 'openssl' not found."
@@ -23,18 +25,19 @@ elif ! command -v kubectl &>/dev/null; then
 fi
 
 cleanup() {
-	rm -rf *.key *.crt *.csr *.srl
-	[ -n "${CSR_CONFIG_FILE:-}" ] && rm -f ${CSR_CONFIG_FILE}
+	rm -rf ./*.key ./*.crt ./*.csr ./*.srl
+	[[ -n "${CSR_CONFIG_FILE:-}" ]] && rm -f "${CSR_CONFIG_FILE}"
 }
 
 trap cleanup EXIT
 
 # Create certs for our webhook
-touch $HOME/.rnd
+touch "${HOME}"/.rnd
 
 # Create a Certificate Signing Request configuration file.
 CSR_CONFIG_FILE="$(mktemp)"
-cat << EOF >$CSR_CONFIG_FILE
+# shellcheck disable=SC2154
+cat << EOF >"${CSR_CONFIG_FILE}"
 [ req ]
 default_bits = 2048
 prompt = no
@@ -70,7 +73,7 @@ openssl x509 -req -in webhook.csr -CA webhookCA.crt -CAkey webhookCA.key \
 
 # Create certs secrets for k8s
 kubectl create secret generic \
-    ${WEBHOOK_SVC}-certs \
+    "${WEBHOOK_SVC}-certs" \
     --from-file=key.pem=./webhook.key \
     --from-file=cert.pem=./webhook.crt \
     --dry-run=client -o yaml > ./deploy/webhook-certs.yaml
@@ -78,4 +81,3 @@ kubectl create secret generic \
 # Set the CABundle on the webhook registration
 CA_BUNDLE=$(cat ./webhookCA.crt ./webhook.crt | base64 -w0)
 sed "s/CA_BUNDLE/${CA_BUNDLE}/" ./deploy/webhook-registration.yaml.tpl > ./deploy/webhook-registration.yaml
-

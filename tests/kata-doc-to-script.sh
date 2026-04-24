@@ -8,7 +8,7 @@ license="
 
 set -e
 
-[ -n "$DEBUG" ] && set -x
+[[ -n "${DEBUG}" ]] && set -x
 
 script_name="${0##*/}"
 
@@ -111,7 +111,7 @@ die()
 {
 	local msg="$*"
 
-	echo "ERROR: $msg" >&2
+	echo "ERROR: ${msg}" >&2
 	exit 1
 }
 
@@ -123,13 +123,13 @@ script_header()
 	#!/bin/bash
 	${license}
 	#----------------------------------------------
-	# WARNING: Script auto-generated from '$file'.
+	# WARNING: Script auto-generated from '${file}'.
 	#
 	# ${warning}
 	#----------------------------------------------
 
 	#----------------------------------------------
-	# Description: $description
+	# Description: ${description}
 	#----------------------------------------------
 
 	# fail the entire script if any simple command fails
@@ -147,83 +147,84 @@ doc_to_script()
 	description="$3"
 	invert="$4"
 
-	[ -n "$file" ] || die "need file"
+	[[ -n "${file}" ]] || die "need file"
 
-	[ "${check_only}" = "no" ] && [ -z "$outfile" ] && die "need output file"
-	[ "$outfile" = '-' ] && outfile="/dev/stdout"
+	[[ "${check_only}" = "no" ]] && [[ -z "${outfile}" ]] && die "need output file"
+	[[ "${outfile}" = '-' ]] && outfile="/dev/stdout"
 
-	if [ "$invert" = "yes" ]
+	if [[ "${invert}" = "yes" ]]
 	then
 		# First, remove code blocks.
 		# Next, remove inline code in backticks.
 		# Finally, remove a metadata block as used in GitHub issue
 		# templates.
-		cat "$file" |\
-			sed -e "/^[ \>]*${block_open}/,/^[ \>]*${block_close}/d" \
-			    -e "s/${backtick}[^${backtick}]*${backtick}//g" \
-			    -e "/^${metadata_block}$/,/^${metadata_block}$/d" \
-			     > "$outfile"
+		sed -e "/^[ \>]*${block_open}/,/^[ \>]*${block_close}/d" \
+		    -e "s/${backtick}[^${backtick}]*${backtick}//g" \
+		    -e "/^${metadata_block}$/,/^${metadata_block}$/d" \
+		     < "${file}" > "${outfile}"
 		return
 	fi
 
 	all=$(mktemp)
 	body=$(mktemp)
 
-	cat "$file" |\
-		sed -n "/^ *${bash_block_open}/,/^ *${block_close}/ p" |\
+	sed -n "/^ *${bash_block_open}/,/^ *${block_close}/ p" < "${file}" |\
 		sed -e "/^ *${block_close}/ d" \
 		-e "s/^ *${code_prompt}//g" \
-		-e 's/^ *//g' > "$body"
+		-e 's/^ *//g' > "${body}"
 
-	[ "$require_commands" = "yes" ] && [ ! -s "$body" ] && die "no commands found in file '$file'"
+	[[ "${require_commands}" = "yes" ]] && [[ ! -s "${body}" ]] && die "no commands found in file '${file}'"
 
-	script_header "$description" > "$all"
-	cat "$body" >> "$all"
+	script_header "${description}" > "${all}"
+	cat "${body}" >> "${all}"
 
 	# sanity check
-	[ "$check_only" = "yes" ] && redirect="1>/dev/null 2>/dev/null"
+	[[ "${check_only}" = "yes" ]] && redirect="1>/dev/null 2>/dev/null"
 
-	{ local ret; eval bash -n "$all" $redirect; ret=$?; } || true
-	[ "$ret" -ne 0 ] && die "shell code in file '$file' is not valid"
+	# $redirect is intentionally unquoted; it contains redirections interpreted by eval
+	# shellcheck disable=SC2086
+	{ local ret; eval bash -n "${all}" ${redirect}; ret=$?; } || true
+	[[ "${ret}" -ne 0 ]] && die "shell code in file '${file}' is not valid"
 
 	# create output file
-	[ "$check_only" = "no" ] && cp "$all" "$outfile"
+	[[ "${check_only}" = "no" ]] && cp "${all}" "${outfile}"
 
 	# clean up
-	rm -f "$body" "$all"
+	rm -f "${body}" "${all}"
 }
 
 main()
 {
 	while getopts "chirsv" opt
 	do
-		case $opt in
+		case ${opt} in
 			c)	check_only="yes" ;;
 			h)	usage ;;
 			i)	invert="yes" ;;
 			r)	require_commands="yes" ;;
 			s)	strict="yes" ;;
 			v)	verbose="yes" ;;
+			*)	die "invalid option: -${OPTARG}" ;;
 		esac
 	done
 
-	shift $(($OPTIND - 1))
+	shift $((OPTIND - 1))
 
 	file="$1"
 	outfile="$2"
 	description="$3"
 
-	[ -n "$file" ] || die "need file"
+	[[ -n "${file}" ]] || die "need file"
 
-	[ "$verbose" = "yes" ] && echo "INFO: processing file '$file'"
+	[[ "${verbose}" = "yes" ]] && echo "INFO: processing file '${file}'"
 
-	if [ "$strict" = "yes" ]
+	if [[ "${strict}" = "yes" ]]
 	then
-		echo "$file"|grep -q "$extension_regex" ||\
-			die "file '$file' doesn't match pattern '$extension_regex'"
+		echo "${file}"|grep -q "${extension_regex}" ||\
+			die "file '${file}' doesn't match pattern '${extension_regex}'"
 	fi
 
-	doc_to_script "$file" "$outfile" "$description" "$invert"
+	doc_to_script "${file}" "${outfile}" "${description}" "${invert}"
 }
 
 main "$@"

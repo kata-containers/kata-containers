@@ -13,7 +13,9 @@
 # - catch any hang ups
 
 cidir=$(dirname "$0")
+# shellcheck source=/dev/null
 source "${cidir}/common_stability.bash"
+# shellcheck source=/dev/null
 source "/etc/os-release" || source "/usr/lib/os-release"
 set -x
 
@@ -29,7 +31,8 @@ MEM_CUTOFF="${MEM_CUTOFF:-(2*1024*1024*1024)}"
 COMMAND="${COMMAND:-tail -f /dev/null}"
 
 # Runtime path
-RUNTIME_PATH=$(command -v $RUNTIME)
+# shellcheck disable=SC2154
+RUNTIME_PATH=$(command -v "${RUNTIME}")
 
 # The place where virtcontainers keeps its active pod info
 # This is ultimately what 'kata-runtime list' uses to get its info, but
@@ -43,9 +46,9 @@ MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 function check_vsock_active() {
-	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
-	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
-	if [ "$vsock_configured" == true ] && [ "$vsock_supported" == true ]; then
+	vsock_configured=$("${RUNTIME_PATH}" kata-env | awk '/UseVSock/ {print $3}')
+	vsock_supported=$("${RUNTIME_PATH}" kata-env | awk '/SupportVSock/ {print $3}')
+	if [[ "${vsock_configured}" == true ]] && [[ "${vsock_supported}" == true ]]; then
 		return 0
 	else
 		return 1
@@ -53,6 +56,7 @@ function check_vsock_active() {
 }
 
 function count_containers() {
+	# shellcheck disable=SC2154
 	sudo "${CTR_EXE}" c list -q | wc -l
 }
 
@@ -64,38 +68,40 @@ function check_all_running() {
 	# check what docker thinks
 	how_many_running=$(count_containers)
 
-	if (( ${how_many_running} != ${how_many} )); then
+	if (( how_many_running != how_many )); then
 		info "Wrong number of containers running (${how_many_running} != ${how_many}) - stopping"
 		((goterror++))
 	fi
 
 	# Only check for Kata components if we are using a Kata runtime
-	if (( $check_kata_components )); then
+	if (( check_kata_components )); then
 
 		# check we have the right number of shims
-		how_many_shims=$(pgrep -a -f ${SHIM_PATH} | grep containerd.sock | wc -l)
+		# shellcheck disable=SC2154
+		how_many_shims=$(pgrep -a -f "${SHIM_PATH}" | grep -c containerd.sock)
 		# one shim process per container...
-		if (( ${how_many_running} != ${how_many_shims} )); then
+		if (( how_many_running != how_many_shims )); then
 			info "Wrong number of shims running (${how_many_running} != ${how_many_shims}) - stopping"
 			((goterror++))
 		fi
 
 		# check we have the right number of vm's
-		if [[ "$KATA_HYPERVISOR" != "dragonball" ]]; then
-			how_many_vms=$(pgrep -a $(basename ${HYPERVISOR_PATH} | cut -d '-' -f1) | wc -l)
-			if (( ${how_many_running} != ${how_many_vms} )); then
-				info "Wrong number of $KATA_HYPERVISOR running (${how_many_running} != ${how_many_vms}) - stopping"
+		if [[ "${KATA_HYPERVISOR}" != "dragonball" ]]; then
+			# shellcheck disable=SC2154
+			how_many_vms=$(pgrep -a "$(basename "${HYPERVISOR_PATH}" | cut -d '-' -f1)" | wc -l)
+			if (( how_many_running != how_many_vms )); then
+				info "Wrong number of ${KATA_HYPERVISOR} running (${how_many_running} != ${how_many_vms}) - stopping"
 				((goterror++))
 			fi
 		fi
 
 		# if this is kata-runtime, check how many pods virtcontainers thinks we have
-		if [[ "$RUNTIME" == "containerd-shim-kata-v2" ]]; then
-			if [ -d "${VC_POD_DIR}" ]; then
-				num_vc_pods=$(sudo ls -1 ${VC_POD_DIR} | wc -l)
+		if [[ "${RUNTIME}" == "containerd-shim-kata-v2" ]]; then
+			if [[ -d "${VC_POD_DIR}" ]]; then
+				num_vc_pods=$(sudo ls -1 "${VC_POD_DIR}" | wc -l)
 
-				if (( ${how_many_running} != ${num_vc_pods} )); then
-					info "Wrong number of pods in $VC_POD_DIR (${how_many_running} != ${num_vc_pods}) - stopping)"
+				if (( how_many_running != num_vc_pods )); then
+					info "Wrong number of pods in ${VC_POD_DIR} (${how_many_running} != ${num_vc_pods}) - stopping)"
 					((goterror++))
 				fi
 			fi
@@ -104,13 +110,13 @@ function check_all_running() {
 
 	if (( goterror != 0 )); then
 		show_system_ctr_state
-		die "Got $goterror errors, quitting"
+		die "Got ${goterror} errors, quitting"
 	fi
 }
 
 # reported system 'available' memory
 function get_system_avail() {
-	echo $(free -b | head -2 | tail -1 | awk '{print $7}')
+	free -b | head -2 | tail -1 | awk '{print $7}'
 }
 
 function go() {
@@ -122,19 +128,22 @@ function go() {
 		check_all_running
 
 		local i
-		for ((i=1; i<= ${MAX_CONTAINERS}; i++)); do
-			containers+=($(random_name))
+		for ((i=1; i<= MAX_CONTAINERS; i++)); do
+			local name
+			name=$(random_name)
+			containers+=("${name}")
+			# shellcheck disable=SC2154
 			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
 			((how_many++))
 		done
 
-		if (( ${how_many} >= ${MAX_CONTAINERS} )); then
+		if (( how_many >= MAX_CONTAINERS )); then
 			info "And we have hit the max ${how_many} containers"
 			return
 		fi
 
 		how_much=$(get_system_avail)
-		if (( ${how_much} < ${MEM_CUTOFF} )); then
+		if (( how_much < MEM_CUTOFF )); then
 			info "And we are out of memory on container ${how_many} (${how_much} < ${MEM_CUTOFF})"
 			return
 		fi
@@ -143,13 +152,13 @@ function go() {
 }
 
 function count_mounts() {
-	echo $(mount | wc -l)
+	mount | wc -l
 }
 
 function check_mounts() {
 	final_mount_count=$(count_mounts)
 
-	if [[ $final_mount_count < $initial_mount_count ]]; then
+	if [[ "${final_mount_count}" -lt "${initial_mount_count}" ]]; then
 		info "Final mount count does not match initial count (${final_mount_count} != ${initial_mount_count})"
 	fi
 }
@@ -164,7 +173,7 @@ function init() {
 	initial_mount_count=$(count_mounts)
 
 	# Only check Kata items if we are using a Kata runtime
-	if [[ "$RUNTIME" == "containerd-shim-kata-v2" ]]; then
+	if [[ "${RUNTIME}" == "containerd-shim-kata-v2" ]]; then
 		info "Checking Kata runtime"
 		check_kata_components=1
 	else
@@ -173,13 +182,13 @@ function init() {
 	fi
 
 	versions_file="${cidir}/../../versions.yaml"
+	# shellcheck disable=SC2154
 	nginx_registry=$("${GOPATH}/bin/yq" ".docker_images.nginx.registry" "${versions_file}")
 	nginx_digest=$("${GOPATH}/bin/yq" ".docker_images.nginx.digest" "${versions_file}")
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	# Pull nginx image
-	sudo "${CTR_EXE}" image pull "${nginx_image}"
-	if [ $? != 0 ]; then
+	if ! sudo "${CTR_EXE}" image pull "${nginx_image}"; then
 		die "Unable to retry docker image ${nginx_image}"
 	fi
 }
@@ -187,7 +196,7 @@ function init() {
 function spin() {
 	local i
 	for ((i=1; i<= ITERATIONS; i++)); do {
-		info "Start iteration $i of $ITERATIONS"
+		info "Start iteration ${i} of ${ITERATIONS}"
 		#spin them up
 		go
 		#check we are in a sane state

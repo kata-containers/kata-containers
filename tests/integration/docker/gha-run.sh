@@ -9,8 +9,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# shellcheck disable=SC2034
 kata_tarball_dir="${2:-kata-artifacts}"
 docker_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${docker_dir}/../../common.bash"
 image="${image:-instrumentisto/nmap:latest}"
 
@@ -21,6 +23,7 @@ function install_dependencies() {
 }
 
 function run() {
+	# shellcheck disable=SC2154
 	info "Running docker smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
@@ -29,7 +32,7 @@ function run() {
 	sudo docker run --rm --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
 
 	info "Running docker with Kata Containers (${KATA_HYPERVISOR})"
-	sudo docker run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
+	sudo docker run --rm --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
 }
 
 function main() {

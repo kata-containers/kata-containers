@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # List of distros not to test, when running all tests with test_images.sh
+# shellcheck disable=SC2034
 typeset -a skipWhenTestingAll
 typeset -a distros
+# shellcheck disable=SC2034
 arch="$(uname -m)"
 sdir="${BASH_SOURCE[0]%/*}"
-for distro in $(${sdir}/../rootfs-builder/rootfs.sh -l); do
+for distro in $("${sdir}"/../rootfs-builder/rootfs.sh -l); do
 	distros+=("${distro}")
 done
 test_distros=()
@@ -27,7 +29,7 @@ distro_in_set() {
 	shift
 	local dt
 	for dt in "$@"; do
-		if [ "${dt}" == "${d}" ]; then
+		if [[ "${dt}" == "${d}" ]]; then
 			return 0
 		fi
 	done

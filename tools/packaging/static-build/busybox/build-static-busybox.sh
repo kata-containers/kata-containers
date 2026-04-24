@@ -24,6 +24,7 @@ USE_ORAS_CACHE="${USE_ORAS_CACHE:-yes}"
 
 download_busybox_tarball()
 {
+	# shellcheck disable=SC2034
 	local tarball_name="busybox-${BUSYBOX_VERSION:?}.tar.bz2"
 
 	# Use ORAS cache if available and enabled
@@ -74,8 +75,7 @@ build_busybox_from_source()
 
 	cp "${BUSYBOX_CONF_DIR:?}/${BUSYBOX_CONF_FILE:?}" .config
 
-	# we do not want to install to CONFIG_PREFIX="./_install"
-	# we want CONFIG_PREFIX="${DESTDIR}"
+	# shellcheck disable=SC2154
 	sed -i "s|CONFIG_PREFIX=\"./_install\"|CONFIG_PREFIX=\"${DESTDIR}\"|g" .config
 
 	make -j "$(nproc)"

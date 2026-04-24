@@ -8,9 +8,11 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
+# shellcheck source=/dev/null
 source "${SCRIPT_PATH}/common_stability.bash"
 
 NUM_CONTAINERS="$1"
+# shellcheck disable=SC2034
 TIMEOUT_LAUNCH="$2"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 IMAGE="${IMAGE:-quay.io/prometheus/busybox:latest}"
@@ -29,7 +31,7 @@ EOF
 
 function main() {
 	# Verify enough arguments
-	if [ $# != 2 ]; then
+	if [[ $# != 2 ]]; then
 		echo >&2 "error: Not enough arguments [$*]"
 		help
 		exit 1
@@ -40,15 +42,19 @@ function main() {
 	local not_started_count="${NUM_CONTAINERS}"
 
 	clean_env_ctr
+	# shellcheck disable=SC2154
 	sudo -E "${CTR_EXE}" i pull "${IMAGE}"
 
 	info "Creating ${NUM_CONTAINERS} containers"
 
 	for ((i=1; i<= "${NUM_CONTAINERS}"; i++)); do
-		containers+=($(random_name))
+		local name
+		name=$(random_name)
+		containers+=("${name}")
+		# shellcheck disable=SC2154
 		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
 		((not_started_count--))
-		info "$not_started_count remaining containers"
+		info "${not_started_count} remaining containers"
 	done
 
 	# Check that the requested number of containers are running

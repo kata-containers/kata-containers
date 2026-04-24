@@ -8,6 +8,7 @@ set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
+# shellcheck source=/dev/null
 source "${SCRIPT_PATH}/common_stability.bash"
 
 IMAGE="docker.io/library/cassandra:latest"
@@ -21,10 +22,14 @@ function main() {
 
 	init_env
 	check_cmds "${cmds[@]}"
+	# DOCKER_EXE, CTR_EXE, and CTR_RUNTIME are set by common.bash's init_env
+	# shellcheck disable=SC2154
 	sudo -E "${DOCKER_EXE}" pull "${DOCKER_IMAGE}"
 	sudo -E "${DOCKER_EXE}" save -o "${DOCKER_IMAGE}.tar" "${DOCKER_IMAGE}"
+	# shellcheck disable=SC2154
 	sudo -E "${CTR_EXE}" i import "${DOCKER_IMAGE}.tar"
 
+	# shellcheck disable=SC2154
 	sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 	sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${CONTAINER_NAME}" sh -c "${CMD}"
 	info "Write one million rows"

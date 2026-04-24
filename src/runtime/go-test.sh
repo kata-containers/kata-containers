@@ -16,17 +16,19 @@ long_options=(
 )
 
 # Set up go test flags
+# shellcheck disable=SC2154
 go_test_flags="${KATA_GO_TEST_FLAGS}"
-if [ -z "$go_test_flags" ]; then
+if [[ -z "${go_test_flags}" ]]; then
     # KATA_GO_TEST_TIMEOUT can be set to any value accepted by
     # "go test -timeout X"
     go_test_flags="-timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
 
     # -race flag is not supported on s390x and riscv64
-    [ "$(go env GOARCH)" != "s390x" ] && [ "$(go env GOARCH)" != "riscv64" ] && go_test_flags+=" -race"
+    [[ "$(go env GOARCH)" != "s390x" ]] && [[ "$(go env GOARCH)" != "riscv64" ]] && go_test_flags+=" -race"
 
     # s390x requires special linker flags
-    [ "$(go env GOARCH)" = s390x ] && go_test_flags+=" -ldflags '-extldflags -Wl,--s390-pgste'"
+    # shellcheck disable=SC2089
+    [[ "$(go env GOARCH)" = s390x ]] && go_test_flags+=" -ldflags '-extldflags -Wl,--s390-pgste'"
 fi
 
 # The "master" coverage file that contains the coverage results for
@@ -40,14 +42,14 @@ tmp_coverage_file="${test_coverage_file}.tmp"
 warn()
 {
 	local msg="$*"
-	echo >&2 "WARNING: $msg"
+	echo >&2 "WARNING: ${msg}"
 }
 
 usage()
 {
 	cat <<EOF
 
-Usage: $script_name [options]
+Usage: ${script_name} [options]
 
 Options:
 
@@ -56,21 +58,21 @@ EOF
 	local option
 	local description
 
-	local long_option_names="${!long_options[@]}"
+	local long_option_names="${!long_options[*]}"
 
 	# Sort space-separated list by converting to newline separated list
 	# and back again.
-	long_option_names=$(echo "$long_option_names"|tr ' ' '\n'|sort|tr '\n' ' ')
+	long_option_names=$(echo "${long_option_names}"|tr ' ' '\n'|sort|tr '\n' ' ')
 
 	# Display long options
 	for option in ${long_option_names}
 	do
-		description=${long_options[$option]}
+		description=${long_options[${option}]}
 
 		# Remove any trailing colon which is for getopt(1) alone.
-		option=$(echo "$option"|sed 's/:$//g')
+		option=${option%:}
 
-		printf "    --%-10.10s # %s\n" "$option" "$description"
+		printf "    --%-10.10s # %s\n" "${option}" "${description}"
 	done
 }
 
@@ -86,11 +88,11 @@ run_as_user()
 
 	local cmd=$*
 
-	if [ "$user" = root ]; then
+	if [[ "${user}" = root ]]; then
 		# use a shell to ensure PATH is correct.
-		sudo -E PATH="$PATH" sh -c "$cmd"
+		sudo -E PATH="${PATH}" sh -c "${cmd}"
 	else
-		eval "$cmd"
+		eval "${cmd}"
 	fi
 }
 
@@ -101,23 +103,24 @@ test_go_package()
 	local -r user="$2"
 
 	printf "INFO: Running 'go test' as %s user on package '%s' with flags '%s'\n" \
-		"$user" "$pkg" "$go_test_flags"
+		"${user}" "${pkg}" "${go_test_flags}"
 
-	run_as_user "$user" go test "$go_test_flags" -covermode=atomic -coverprofile=$tmp_coverage_file "$pkg"
+	# shellcheck disable=SC2086,SC2090
+	run_as_user "${user}" go test ${go_test_flags} -covermode=atomic -coverprofile="${tmp_coverage_file}" "${pkg}"
 
 	# Merge test results into the master coverage file.
-	run_as_user "$user" tail -n +2 "$tmp_coverage_file" >> "$test_coverage_file"
-	rm -f "$tmp_coverage_file"
+	run_as_user "${user}" tail -n +2 "${tmp_coverage_file}" >> "${test_coverage_file}"
+	rm -f "${tmp_coverage_file}"
 }
 
 # Run all tests and generate a test coverage file.
 test_coverage()
 {
-	echo "mode: atomic" > "$test_coverage_file"
+	echo "mode: atomic" > "${test_coverage_file}"
 
 	users="current"
 
-	if [ "$(id -u)" -eq 0 ]; then
+	if [[ "$(id -u)" -eq 0 ]]; then
 		warn "Already running as root so will not re-run tests as non-root user."
 		warn "As a result, only a subset of tests will be run"
 		warn "(run this script as a non-privileged to ensure all tests are run)."
@@ -129,28 +132,28 @@ test_coverage()
 	fi
 
 	echo "INFO: Currently running as user '$(id -un)'"
-	for user in $users; do
-	    test_go_package "$package" "$user"
+	for user in ${users}; do
+	    test_go_package "${package}" "${user}"
 	done
 }
 
 main()
 {
-	local long_option_names="${!long_options[@]}"
+	local long_option_names="${!long_options[*]}"
 
-	local args=$(getopt \
-		-n "$script_name" \
+	local args
+	args=$(getopt \
+		-n "${script_name}" \
 		-a \
 		--options="h" \
-		--longoptions="$long_option_names" \
+		--longoptions="${long_option_names}" \
 		-- "$@")
 
 	package="./..."
 
-	eval set -- "$args"
-	[ $? -ne 0 ] && { usage >&2; exit 1; }
+	if ! eval set -- "${args}"; then usage >&2; exit 1; fi
 
-	while [ $# -gt 1 ]
+	while [[ $# -gt 1 ]]
 	do
 		case "$1" in
 			-h|--help) usage; exit 0 ;;

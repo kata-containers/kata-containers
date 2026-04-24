@@ -10,6 +10,7 @@ set -o nounset
 set -o pipefail
 
 kata_deploy_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${kata_deploy_dir}/../../gha-run-k8s-common.sh"
 
 function run_tests() {
@@ -49,6 +50,7 @@ function main() {
     export KATA_HOST_OS="${KATA_HOST_OS:-}"
 
     platform="aks"
+    # shellcheck disable=SC2154
     if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
 	    platform="tdx"
     fi

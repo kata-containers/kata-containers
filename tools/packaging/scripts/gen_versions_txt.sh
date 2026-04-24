@@ -4,17 +4,21 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ] || set -x
+[[ -z "${DEBUG}" ]] || set -x
 set -e
 set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly script_name="$(basename "${BASH_SOURCE[0]}")"
-readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_name="$(basename "${BASH_SOURCE[0]}")"
+readonly script_name
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly script_dir
 readonly versions_txt="versions.txt"
+# shellcheck disable=SC2034
 project="kata-containers"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../scripts/lib.sh"
 
 ARCH=${ARCH:-$(arch_to_golang "$(uname -m)")}
@@ -28,10 +32,11 @@ gen_version_file() {
 	local kata_version="$2"
 	local ref="refs/heads/${branch}"
 
-	if  [ "${kata_version}" == "HEAD" ]; then
+	if  [[ "${kata_version}" == "HEAD" ]]; then
 		kata_version="${branch}"
 		ref="refs/heads/${branch}"
 	else
+		# shellcheck disable=SC2034
 		ref="refs/tags/${kata_version}^{}"
 	fi
 
@@ -55,7 +60,7 @@ gen_version_file() {
 	# see https://github.com/semver/semver/issues/145
 	kata_version=$(get_kata_version)
 	kata_version=${kata_version/-/\~}
-	cat > "$versions_txt" <<EOF
+	cat > "${versions_txt}" <<EOF
 # This is a generated file from ${script_name}
 
 kata_version=${kata_version}
@@ -76,11 +81,11 @@ EOF
 die() {
 	local msg="${1:-}"
 	local print_usage=$"${2:-}"
-	if [ -n "${msg}" ]; then
+	if [[ -n "${msg}" ]]; then
 		echo -e "ERROR: ${msg}\n"
 	fi
 
-	[ -n "${print_usage}" ] && usage 1
+	[[ -n "${print_usage}" ]] && usage 1
 }
 
 usage() {
@@ -130,54 +135,57 @@ main() {
 	esac
 
 	local kata_version=
-	if [ -n "$use_tag" ]; then
-		if [ -n "${use_head}" ]; then
+	if [[ -n "${use_tag}" ]]; then
+		if [[ -n "${use_head}" ]]; then
 		       die "tag and head options are mutually exclusive"
 		fi
 
 		# We are generating versions based on the provided tag
 		local tag="${1:-}"
-		[ -n "${tag}" ] || die "No tag specified" "1"
+		[[ -n "${tag}" ]] || die "No tag specified" "1"
 
 		# use the runtime's repository to determine branch information
 		local repo="github.com/kata-containers/kata-containers"
 		local repo_dir="kata-containers"
 		git clone --quiet "https://${repo}.git" "${repo_dir}"
 		pushd "${repo_dir}" >> /dev/null
-		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable|main" | grep -v HEAD)
+		local branch
+		branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable|main" | grep -v HEAD || true)
 
 		popd >> /dev/null
-		rm -rf ${repo_dir}
+		rm -rf "${repo_dir}"
 
-		[ -n "${branch}" ] || die "branch for tag ${tag} not found"
+		[[ -n "${branch}" ]] || die "branch for tag ${tag} not found"
 
 		# in the event this is on master as well as stable, or multiple stables, just pick the first branch
 		# (ie, 1.8.0-alpha0 may live on stable-1.8 as well as master: we'd just use master in this case)
-		branch=$(echo ${branch} | awk -F" " '{print $1}')
+		branch=$(echo "${branch}" | awk -F" " '{print $1}')
 
 		# format will be origin/<branch-name> - let's drop origin:
-		branch=$(echo ${branch} | awk -F"/" '{print $2}')
+		branch=$(echo "${branch}" | awk -F"/" '{print $2}')
 
 		echo "generating versions for tag ${tag} which is on branch ${branch}"
 		kata_version=${tag}
 	else
 		local branch="${1:-}"
-		[ -n "${branch}" ] || die "No branch specified" "1"
+		[[ -n "${branch}" ]] || die "No branch specified" "1"
 
-		if [ -n "${use_head}" ]; then
+		if [[ -n "${use_head}" ]]; then
 			kata_version="HEAD"
 		else
 			kata_version=$(get_kata_version)
 		fi
 	fi
 
-	if [ -n "$compareOnly" ]; then
+	if [[ -n "${compareOnly}" ]]; then
+		# shellcheck source=/dev/null
 		source "./${versions_txt}" || exit 1
 		kata_version=${kata_version/\~/-}
-		[ -n "${kata_version}" ] || die "${version_file} does not contain a valid kata_version variable"
+		# shellcheck disable=SC2154
+		[[ -n "${kata_version}" ]] || die "${version_file} does not contain a valid kata_version variable"
 		# Replacing ~ with -, as - is not a valid char for rpmbuild
 		# see https://github.com/semver/semver/issues/145
-		[ "$(get_kata_version)" = "${kata_version/\~/-}" ] && compare_result="matches" || compare_result="is different from"
+		[[ "$(get_kata_version)" = "${kata_version/\~/-}" ]] && compare_result="matches" || compare_result="is different from"
 		echo "${kata_version} in ${versions_txt} ${compare_result} the version at branch ${branch}"
 		return
 	fi

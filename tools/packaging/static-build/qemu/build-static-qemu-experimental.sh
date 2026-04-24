@@ -10,6 +10,7 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
 qemu_repo="${qemu_repo:-}"
@@ -17,9 +18,9 @@ qemu_version="${qemu_version:-}"
 qemu_suffix="${qemu_suffix:-}"
 qemu_tarball_name="${qemu_tarball_name:-}"
 
-[ -n "$qemu_repo" ] || die "failed to get qemu repo"
-[ -n "$qemu_version" ] || die "failed to get qemu version"
-[ -n "$qemu_suffix" ] || die "failed to get qemu suffix"
-[ -n "$qemu_tarball_name" ] || die "failed to get qemu tarball name"
+[[ -n "${qemu_repo}" ]] || die "failed to get qemu repo"
+[[ -n "${qemu_version}" ]] || die "failed to get qemu version"
+[[ -n "${qemu_suffix}" ]] || die "failed to get qemu suffix"
+[[ -n "${qemu_tarball_name}" ]] || die "failed to get qemu tarball name"
 
 "${script_dir}/build-base-qemu.sh" "${qemu_repo}" "${qemu_version}" "${qemu_suffix}" "${qemu_tarball_name}"

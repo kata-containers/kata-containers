@@ -42,13 +42,13 @@ cleanup()
 
 	stop_agent
 
-	sudo rm $local_policy_file
+	sudo rm -f "${local_policy_file}"
 
 	local sandbox_dir="/run/sandbox-ns/"
 	sudo umount -f "${sandbox_dir}/uts" "${sandbox_dir}/ipc" &>/dev/null || true
 	sudo rm -rf "${sandbox_dir}" &>/dev/null || true
 
-	if [ "$failure_ret" -eq 0 ] && [ "$keep_logs" = 'true' ]
+	if [[ "${failure_ret}" -eq 0 ]] && [[ "${keep_logs}" = 'true' ]]
 	then
 		info "SUCCESS: Test passed, but leaving logs:"
 		info ""
@@ -57,7 +57,7 @@ cleanup()
 		return 0
 	fi
 
-	if [ $failure_ret -ne 0 ]; then
+	if [[ "${failure_ret}" -ne 0 ]]; then
 		warn "ERROR: Test failed"
 		warn ""
 		warn "Not cleaning up to help debug failure:"
@@ -69,20 +69,21 @@ cleanup()
 	fi
 
 	sudo rm -f \
-		"$agent_log_file" \
-		"$ctl_log_file"
+		"${agent_log_file}" \
+		"${ctl_log_file}"
 }
 
 run_agent_ctl()
 {
 	local cmds="${1:-}"
 
-	[ -n "$cmds" ] || die "need commands for agent control tool"
+	[[ -n "${cmds}" ]] || die "need commands for agent control tool"
 
 	local redirect=">> ${ctl_log_file} 2>&1"
 
 	local server_address="--server-address ${local_agent_server_addr}"
 
+	# shellcheck disable=SC2086
 	eval \
 		sudo \
 		RUST_BACKTRACE=full \
@@ -99,18 +100,18 @@ get_agent_pid()
 	local pids
 
 	local name
-	name=$(basename "$agent_binary")
+	name=$(basename "${agent_binary}")
 
-	pids=$(pgrep "$name" || true)
-	[ -z "$pids" ] && return 0
+	pids=$(pgrep "${name}" || true)
+	[[ -z "${pids}" ]] && return 0
 
 	local count
-	count=$(echo "$pids"|wc -l)
+	count=$(echo "${pids}"|wc -l)
 
-	[ "$count" -gt 1 ] && \
-		die "too many agent processes running ($count, '$pids')"
+	[[ "${count}" -gt 1 ]] && \
+		die "too many agent processes running (${count}, '${pids}')"
 
-	echo $pids
+	echo "${pids}"
 }
 
 check_agent_alive()
@@ -133,9 +134,9 @@ wait_for_agent_to_start()
 	info "Waiting for agent process to start.."
 
 	waitForProcess \
-		"$wait_time_secs" \
-		"$sleep_time_secs" \
-		"$cmd"
+		"${wait_time_secs}" \
+		"${sleep_time_secs}" \
+		"${cmd}"
 
 	info "Kata agent process running."
 }
@@ -151,21 +152,21 @@ stop_agent() {
 start_agent()
 {
 	local log_file="${1:-}"
-	[ -z "$log_file" ] && die "need agent log file"
+	[[ -z "${log_file}" ]] && die "need agent log file"
 
 	local running
 	running=$(get_agent_pid || true)
 
-	[ -n "$running" ] && die "agent already running: '$running'"
+	[[ -n "${running}" ]] && die "agent already running: '${running}'"
 
 	eval \
 		sudo \
 			RUST_BACKTRACE=full \
-			KATA_AGENT_LOG_LEVEL=${agent_log_level} \
-			KATA_AGENT_SERVER_ADDR=${local_agent_server_addr} \
-			KATA_AGENT_POLICY_FILE=${local_policy_file} \
-			${agent_binary} \
-			&> ${log_file} \
+			KATA_AGENT_LOG_LEVEL="${agent_log_level}" \
+			KATA_AGENT_SERVER_ADDR="${local_agent_server_addr}" \
+			KATA_AGENT_POLICY_FILE="${local_policy_file}" \
+			"${agent_binary}" \
+			&> "${log_file}" \
 			&
 
     wait_for_agent_to_start
@@ -174,7 +175,7 @@ start_agent()
 setup_agent() {
 	info "Starting a single kata agent process."
 
-	start_agent $agent_log_file
+	start_agent "${agent_log_file}"
 
 	info "Setup done."
 }
@@ -186,10 +187,11 @@ install_policy_doc()
 {
 	info "Installing local policy document"
 
+	# shellcheck disable=SC2154
 	allow_all_rego_file="${repo_root_dir}/src/kata-opa/allow-all.rego"
-	[ ! -f $allow_all_rego_file ] && die "Failed to locate allow-all.rego file"
+	[[ ! -f "${allow_all_rego_file}" ]] && die "Failed to locate allow-all.rego file"
 
-	sudo cp $allow_all_rego_file $local_policy_file
+	sudo cp "${allow_all_rego_file}" "${local_policy_file}"
 }
 
 # Same reason as above, we do not have the necessary components to start the coco processes
@@ -202,7 +204,9 @@ try_and_remove_coco_attestation_procs()
 
 	for i in "${coco_procs[@]}"; do
 		info "Moving ${i} to /tmp"
-		[ -f "${procs_path}${i}" ] && sudo mv "${procs_path}${i}" /tmp || true
+		if [[ -f "${procs_path}${i}" ]]; then
+			sudo mv "${procs_path}${i}" /tmp || true
+		fi
 	done
 }
 
@@ -212,9 +216,9 @@ deny_single_api_in_policy()
 	local pol_file=$1
 	local deny_req=$2
 
-	[ ! -f $local_policy_file ] && install_policy_doc
+	[[ ! -f "${local_policy_file}" ]] && install_policy_doc
 
 	info "Not allowing ${deny_req}"
-	sudo cp $local_policy_file $pol_file
-	sed -i "s/\(.*$deny_req.*:= \)\(.*\)/\1false/" $pol_file
+	sudo cp "${local_policy_file}" "${pol_file}"
+	sed -i "s/\(.*${deny_req}.*:= \)\(.*\)/\1false/" "${pol_file}"
 }
