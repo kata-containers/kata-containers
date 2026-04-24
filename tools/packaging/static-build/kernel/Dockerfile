@@ -30,6 +30,7 @@ RUN apt-get update && \
 	    gettext \
 	    rsync \
 	    cpio \
+	    cryptsetup-bin \
 	    patch \
 	    python3 && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${ARCH}"-linux-gnu binutils-"${ARCH}"-linux-gnu; fi && \
