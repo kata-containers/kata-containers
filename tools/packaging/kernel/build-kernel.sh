@@ -322,9 +322,18 @@ get_kernel_frag_path() {
 		local tmpfs_configs
 		tmpfs_configs="$(ls "${common_path}"/confidential_containers/tmpfs.conf)"
 		all_configs="${all_configs} ${tmpfs_configs}"
+
+		info "Enabling module loading and signing for '${conf_guest}' guest"
+		local modules_configs
+		modules_configs="$(ls "${common_path}"/modules/modules.conf)"
+		all_configs="${all_configs} ${modules_configs}"
+
+		local sign_configs
+		sign_configs="$(ls "${common_path}"/signing/module_signing.conf)"
+		all_configs="${all_configs} ${sign_configs}"
 	fi
 
-	if [[ "${KBUILD_SIGN_PIN}" != "" ]]; then
+	if [[ "${KBUILD_SIGN_PIN}" != "" ]] && [[ "${conf_guest}" == "" ]]; then
 		info "Enabling config for module signing"
 		local sign_configs
 		sign_configs="$(ls "${common_path}"/signing/module_signing.conf)"
