@@ -80,10 +80,8 @@ test_deployment_policy_error() {
 }
 
 @test "Policy failure: unexpected GID = 0 for layered securityContext deployment" {
-    if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
-        echo "# Skipping: not supported in AKS because kubectl describe behaviour has changed and we can no longer assess this test" >&3
-        return 0
-    fi
+    echo "# Skipping: not supported in because kubectl describe behaviour has changed and we can no longer assess this test" >&3
+    return 0
 
     # Change the pod GID to 0 after the policy has been generated using a different
     # runAsGroup value. The policy would use GID = 0 by default, if there weren't
