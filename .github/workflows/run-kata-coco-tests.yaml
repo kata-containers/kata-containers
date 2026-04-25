@@ -146,6 +146,7 @@ jobs:
           { vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
           { vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
           { vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
+          { vmm: qemu-coco-dev-runtime-rs, snapshotter: "", pull_type: experimental-force-guest-pull },
         ]
     runs-on: ubuntu-24.04
     permissions:
@@ -264,15 +265,19 @@ jobs:
           { k8s: k0s, vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
           { k8s: k0s, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: k0s, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
+          { k8s: k0s, vmm: qemu-coco-dev-runtime-rs, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: k3s, vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
           { k8s: k3s, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: k3s, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
+          { k8s: k3s, vmm: qemu-coco-dev-runtime-rs, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: rke2, vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
           { k8s: rke2, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: rke2, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
+          { k8s: rke2, vmm: qemu-coco-dev-runtime-rs, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: microk8s, vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
           { k8s: microk8s, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: microk8s, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
+          { k8s: microk8s, vmm: qemu-coco-dev-runtime-rs, snapshotter: "", pull_type: experimental-force-guest-pull },
         ]
     runs-on: ubuntu-24.04
     permissions:
