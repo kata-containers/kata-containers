@@ -340,8 +340,8 @@ fn validate_group_basic(devices: &[DeviceInfo]) -> bool {
         if let DeviceAddress::Pci(bdf) = &device.addr {
             // filter host or PCI bridge
             let bdf_str = bdf.to_string();
-            // Filter out host or PCI bridges (cannot be passed through)
-            if filter_bridge_device(&bdf_str, 0x0600).is_some() {
+            // Filter out devices that cannot be passed through (bridges, audio, etc.)
+            if filter_bridge_device(&bdf_str, IOMMU_IGNORE).is_some() {
                 continue;
             }
         }
@@ -362,9 +362,13 @@ fn get_device_property(device_bdf: &str, property: &str) -> Result<String> {
     Ok(cfg_path.trim().to_string())
 }
 
-/// Filters for Host or PCI bridges within an IOMMU group.
-/// PCI Bridge: Class 0x0604, Host Bridge: Class 0x0600.
-fn filter_bridge_device(bdf: &str, bitmask: u64) -> Option<u64> {
+/// PCI class bitmasks for devices that must be ignored when enumerating an IOMMU group.
+/// Host Bridge: 0x0600, Audio device: 0x0403.
+const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
+
+/// Filters for devices that cannot or should not be passed through within an IOMMU group
+/// (Host/PCI bridges, audio controllers that share the GPU's IOMMU group, etc.).
+fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
     let device_class = get_device_property(bdf, "class").unwrap_or_default();
 
     if device_class.is_empty() {
@@ -375,11 +379,12 @@ fn filter_bridge_device(bdf: &str, bitmask: u64) -> Option<u64> {
         Ok(cid_u32) => {
             // PCI class code is 24 bits, shift right 8 to get base+sub class
             let class_code = u64::from(cid_u32) >> 8;
-            if class_code & bitmask == bitmask {
-                Some(class_code)
-            } else {
-                None
+            for &bitmask in bitmasks {
+                if class_code & bitmask == bitmask {
+                    return Some(class_code);
+                }
             }
+            None
         }
         _ => None,
     }
