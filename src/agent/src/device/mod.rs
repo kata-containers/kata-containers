@@ -409,7 +409,7 @@ pub fn update_env_pci(
     // Below code updates both of them in two passes:
     // - 1st pass updates PCIDEVICE_<prefix>_<resource-name> and collects host to guest PCI address mapping
     let mut pci_dev_map: HashMap<String, HashMap<String, String>> = HashMap::new();
-    for envvar in env.iter_mut() {
+    'env_loop: for envvar in env.iter_mut() {
         let eqpos = envvar
             .find('=')
             .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
@@ -424,8 +424,17 @@ pub fn update_env_pci(
         let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
         for host_addr_str in val.split(',') {
-            let host_addr = pci::Address::from_str(host_addr_str)
-                .with_context(|| format!("Can't parse {name} environment variable"))?;
+            let host_addr = match pci::Address::from_str(host_addr_str) {
+                Ok(addr) => addr,
+                Err(_) => {
+                    tracing::info!(
+                        name,
+                        host_addr_str,
+                        "skipping non-PCI address in PCIDEVICE env var"
+                    );
+                    continue 'env_loop;
+                }
+            };
             let host_guest = pcimap
                 .get(cid)
                 .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
@@ -1084,6 +1093,42 @@ mod tests {
         assert_eq!(env[1], pci_dev_info_expected);
         assert_eq!(env[2], "PCIDEVICE_y=ffff:02:1f.7");
         assert_eq!(env[3], "NOTAPCIDEVICE_blah=abcd:ef:01.0");
+    }
+
+    #[test]
+    fn test_update_env_pci_non_pci_addresses() {
+        let mut env = vec![
+            "PCIDEVICE_NVIDIA_COM_BF_SF=mlx5_core.sf.10".to_string(),
+            "PCIDEVICE_NVIDIA_COM_BF_SF_INFO={\"mlx5_core.sf.10\":{}}".to_string(),
+            "PCIDEVICE_REAL=0000:1a:01.0".to_string(),
+        ];
+
+        let example_map = [("0000:1a:01.0", "0000:01:01.0")];
+        let _pci_fixups: HashMap<pci::Address, pci::Address> = example_map
+            .iter()
+            .map(|(h, g)| {
+                (
+                    pci::Address::from_str(h).unwrap(),
+                    pci::Address::from_str(g).unwrap(),
+                )
+            })
+            .collect();
+
+        let cid = "0".to_string();
+        let mut pci_fixups: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pci_fixups.insert(cid.clone(), _pci_fixups);
+
+        let res = update_env_pci(&cid, &mut env, &pci_fixups);
+        assert!(res.is_ok(), "error: {}", res.err().unwrap());
+
+        // Non-PCI addresses should be left untouched
+        assert_eq!(env[0], "PCIDEVICE_NVIDIA_COM_BF_SF=mlx5_core.sf.10");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_NVIDIA_COM_BF_SF_INFO={\"mlx5_core.sf.10\":{}}"
+        );
+        // Real PCI addresses should still be translated
+        assert_eq!(env[2], "PCIDEVICE_REAL=0000:01:01.0");
     }
 
     #[test]
