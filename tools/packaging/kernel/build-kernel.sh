@@ -660,6 +660,12 @@ build_modules_images() {
 	[[ -d "${modules_tree}/kernel" ]] || die "No modules installed at ${modules_tree}/kernel"
 	info "Modules installed at ${modules_tree}"
 
+	local combined_staging
+	combined_staging=$(mktemp -d)
+	local combined_modules="${combined_staging}/lib/modules/${mod_version}"
+	mkdir -p "${combined_modules}/kernel"
+	local has_any_modules="false"
+
 	for name in "${!module_sets[@]}"; do
 		local paths="${module_sets[${name}]}"
 		local staging
@@ -675,6 +681,10 @@ build_modules_images() {
 				mkdir -p "$(dirname "${dst}")"
 				cp -a "${src}" "${dst}"
 				has_modules="true"
+
+				local combined_dst="${combined_modules}/kernel/${subpath}"
+				mkdir -p "$(dirname "${combined_dst}")"
+				cp -a "${src}" "${combined_dst}"
 			fi
 		done
 
@@ -683,6 +693,7 @@ build_modules_images() {
 			rm -rf "${staging}"
 			continue
 		fi
+		has_any_modules="true"
 
 		for f in modules.order modules.builtin; do
 			[[ -f "${modules_tree}/${f}" ]] && cp "${modules_tree}/${f}" "${staging_modules}/"
