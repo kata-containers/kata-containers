@@ -374,15 +374,19 @@ get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
-get_latest_ctk_version() {
+get_latest_nvidia_driver_version() {
+	get_from_kata_deps ".externals.nvidia.driver.version"
+}
+
+get_latest_nvidia_ctk_version() {
 	get_from_kata_deps ".externals.nvidia.ctk.version"
 }
 
-get_latest_nvrc_version() {
+get_latest_nvidia_nvrc_version() {
 	get_from_kata_deps ".externals.nvrc.version"
 }
 
-get_latest_nvat_version() {
+get_latest_nvidia_nvat_version() {
 	get_from_kata_deps ".externals.nvidia.nvat.version"
 }
 
@@ -425,9 +429,10 @@ install_image() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
-			latest_artefact+="-$(get_latest_ctk_version)"
-			latest_artefact+="-$(get_latest_nvrc_version)"
-			latest_artefact+="-$(get_latest_nvat_version)"
+			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -439,8 +444,9 @@ install_image() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the image
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
-		latest_artefact+="-$(get_latest_ctk_version)"
-		latest_artefact+="-$(get_latest_nvrc_version)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 	fi
 
 	latest_builder_image=""
@@ -547,9 +553,10 @@ install_initrd() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
-			latest_artefact+="-$(get_latest_ctk_version)"
-			latest_artefact+="-$(get_latest_nvrc_version)"
-			latest_artefact+="-$(get_latest_nvat_version)"
+			latest_artefact+="-$(get_latest_nvidia_driver_version)"
+			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -560,8 +567,9 @@ install_initrd() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
-		latest_artefact+="-$(get_latest_ctk_version)"
-		latest_artefact+="-$(get_latest_nvrc_version)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 	fi
 
 	latest_builder_image=""
@@ -653,7 +661,7 @@ install_image_nvidia_gpu() {
 	export AGENT_POLICY
 	export MEASURED_ROOTFS="yes"
 	local version
-	version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	version=$(get_latest_nvidia_driver_version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
 	install_image "nvidia-gpu"
@@ -665,7 +673,7 @@ install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	export MEASURED_ROOTFS="yes"
 	local version
-	version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	version=$(get_latest_nvidia_driver_version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
 	install_image "nvidia-gpu-confidential"
