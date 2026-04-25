@@ -615,7 +615,7 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
         .experimental_force_guest_pull_for_arch
         .contains(&shim.to_string())
     {
-        configure_experimental_force_guest_pull(&kata_config_file).await?;
+        configure_experimental_force_guest_pull(&kata_config_file, shim).await?;
     }
 
     Ok(())
@@ -987,8 +987,16 @@ async fn configure_hypervisor_annotations(
     Ok(())
 }
 
-async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<()> {
-    set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
+async fn configure_experimental_force_guest_pull(config_file: &Path, shim: &str) -> Result<()> {
+    if utils::is_rust_shim(shim) {
+        toml_utils::append_to_toml_array(
+            config_file,
+            "runtime.experimental",
+            "\"force_guest_pull\"",
+        )
+    } else {
+        set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
+    }
 }
 
 async fn configure_mariner(config: &Config) -> Result<()> {
