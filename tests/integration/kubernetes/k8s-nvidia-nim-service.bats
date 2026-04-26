@@ -206,7 +206,9 @@ setup() {
 
 teardown() {
     if kubectl get nimservice "${NIM_SERVICE_NAME}" &>/dev/null; then
-        POD_NAME=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" | head -1)
+        POD_NAME=$(kubectl get pods --no-headers \
+            -l "app.kubernetes.io/instance=${NIM_SERVICE_NAME}" \
+            -o custom-columns=":metadata.name" | head -1)
         if [[ -n "${POD_NAME}" ]]; then
             echo "=== NIMService pod logs ==="
             kubectl logs "${POD_NAME}" || true
@@ -215,7 +217,41 @@ teardown() {
         kubectl describe nimservice "${NIM_SERVICE_NAME}" || true
     fi
 
-    [ -f "${NIM_YAML}" ] && kubectl delete -f "${NIM_YAML}" --ignore-not-found=true
+    # Delete the NIMService (and Secrets) and wait for the NIM Operator to
+    # garbage-collect the Deployment/Service/Pod it spawned from the CR,
+    # before we tear the operator down. --cascade=foreground makes kubectl
+    # block on dependent removal; otherwise the operator's children would
+    # be stranded once the operator is gone.
+    if [ -f "${NIM_YAML}" ]; then
+        kubectl delete -f "${NIM_YAML}" --ignore-not-found=true \
+            --cascade=foreground --wait=true --timeout=300s || true
+    fi
+
+    # The NIM Operator (depending on chart version / configuration) does not
+    # always co-locate the resources it spawns from a NIMService with the CR
+    # itself: in particular we have observed the rendered Deployment / Service
+    # / Pod landing in the `default` namespace even when the NIMService CR
+    # lives in the kata test namespace. Clean both namespaces up explicitly so
+    # we don't leak workload objects across runs.
+    cleanup_nim_service_resources() {
+        local ns="$1"
+        kubectl delete -n "${ns}" deployment "${NIM_SERVICE_NAME}" \
+            --ignore-not-found=true --timeout=120s || true
+        kubectl delete -n "${ns}" service "${NIM_SERVICE_NAME}" \
+            --ignore-not-found=true --timeout=60s || true
+        kubectl delete -n "${ns}" pod \
+            -l "app.kubernetes.io/instance=${NIM_SERVICE_NAME}" \
+            --ignore-not-found=true --timeout=120s || true
+    }
+
+    local current_ns
+    current_ns=$(kubectl config view --minify -o jsonpath='{..namespace}')
+    [[ -n "${current_ns}" ]] || current_ns="default"
+
+    cleanup_nim_service_resources "${current_ns}"
+    if [[ "${current_ns}" != "default" ]]; then
+        cleanup_nim_service_resources "default"
+    fi
 
     uninstall_nim_operator || true
     print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}"
