@@ -2280,8 +2280,11 @@ func (s *Sandbox) AppendDevice(ctx context.Context, device api.Device) error {
 	case config.DeviceVFIO:
 		vfioDevs := device.GetDeviceInfo().([]*config.VFIODev)
 		for _, d := range vfioDevs {
-			return s.hypervisor.AddDevice(ctx, *d, VfioDev)
+			if err := s.hypervisor.AddDevice(ctx, *d, VfioDev); err != nil {
+				return err
+			}
 		}
+		return nil
 	default:
 		s.Logger().WithField("device-type", device.DeviceType()).
 			Warn("Could not append device: unsupported device type")

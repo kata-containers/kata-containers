@@ -48,3 +48,38 @@ func TestGetVFIODetails(t *testing.T) {
 	}
 
 }
+
+func TestAssignPCIeTopologyKeepsMultifunctionDevicesOnSameBus(t *testing.T) {
+	saved := config.PCIeDevicesPerPort
+	config.PCIeDevicesPerPort = map[config.PCIePort][]config.VFIODev{
+		config.RootPort:   {},
+		config.SwitchPort: {},
+		config.BridgePort: {},
+	}
+	defer func() {
+		config.PCIeDevicesPerPort = saved
+	}()
+
+	vfioDevs := []*config.VFIODev{
+		{
+			BDF:    "0000:01:00.0",
+			IsPCIe: true,
+			Port:   config.RootPort,
+		},
+		{
+			BDF:    "0000:01:00.1",
+			IsPCIe: true,
+			Port:   config.RootPort,
+		},
+	}
+
+	assignPCIeTopology(vfioDevs)
+
+	assert.Equal(t, "rp0", vfioDevs[0].Bus)
+	assert.Equal(t, "rp0", vfioDevs[1].Bus)
+	assert.Equal(t, "00.0", vfioDevs[0].Addr)
+	assert.Equal(t, "00.1", vfioDevs[1].Addr)
+	assert.True(t, vfioDevs[0].MultiFunction)
+	assert.False(t, vfioDevs[1].MultiFunction)
+	assert.Len(t, config.PCIeDevicesPerPort[config.RootPort], 2)
+}

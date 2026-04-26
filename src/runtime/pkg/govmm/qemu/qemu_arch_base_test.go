@@ -21,6 +21,7 @@ var (
 	devicePCIeRootPortFullString   = "-device pcie-root-port,id=rp2,bus=pcie.0,chassis=0x0,slot=0x1,addr=0x2,multifunction=on,bus-reserve=0x3,pref64-reserve=16G,mem-reserve=1G,io-reserve=512M,romfile=efi-virtio.rom"
 	deviceVFIOPCIeSimpleString     = "-device vfio-pci,host=02:00.0,bus=rp0"
 	deviceVFIOPCIeFullString       = "-device vfio-pci,host=02:00.0,x-pci-vendor-id=0x10de,x-pci-device-id=0x15f8,romfile=efi-virtio.rom,bus=rp1"
+	deviceVFIOPCIeMultiString      = "-device vfio-pci,host=02:00.0,bus=rp1,addr=00.0,multifunction=on"
 	deviceSCSIControllerStr        = "-device virtio-scsi-pci,id=foo,disable-modern=false,romfile=efi-virtio.rom"
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
 	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
@@ -211,4 +212,12 @@ func TestAppendDeviceVFIOPCIe(t *testing.T) {
 		DeviceID: "0x15f8",
 	}
 	testAppend(vfioDevice, deviceVFIOPCIeFullString, t)
+
+	vfioDevice = VFIODevice{
+		BDF:           "02:00.0",
+		Bus:           "rp1",
+		Addr:          "00.0",
+		MultiFunction: true,
+	}
+	testAppend(vfioDevice, deviceVFIOPCIeMultiString, t)
 }
