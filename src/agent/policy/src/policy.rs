@@ -6,12 +6,26 @@
 
 //! Policy evaluation for the kata-agent.
 
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
 
 use anyhow::{bail, Error, Result};
 use protocols::agent::CopyFileRequest;
+use regorus::PolicyLengthConfig;
 use slog::{debug, error, info, warn};
 use tokio::io::AsyncWriteExt;
+
+// Regorus' built-in policy length limits (1024 cols / 1 MiB / 20 000 lines)
+// reject realistic policies emitted by `genpolicy`. In particular, container
+// `Env` values such as NVIDIA_REQUIRE_CUDA on the upstream NVIDIA CUDA images
+// can exceed 1 KiB on a single line. These constants raise the per-engine
+// limits to values that comfortably fit any policy we expect to evaluate
+// while still rejecting pathological/minified input.
+//
+// See microsoft/regorus#624 for the upstream API.
+const POLICY_MAX_COL: u32 = 64 * 1024; // 64 KiB per line
+const POLICY_MAX_FILE_BYTES: usize = 16 * 1024 * 1024; // 16 MiB per file
+const POLICY_MAX_LINES: usize = 200_000;
 
 static POLICY_LOG_FILE: &str = "/tmp/policy.jsonl";
 static POLICY_DEFAULT_FILE: &str = "/etc/kata-opa/default-policy.rego";
@@ -56,6 +70,11 @@ impl AgentPolicy {
         let mut engine = regorus::Engine::new();
         engine.set_strict_builtin_errors(false);
         engine.set_gather_prints(true);
+        engine.set_policy_length_config(PolicyLengthConfig {
+            max_col: NonZeroU32::new(POLICY_MAX_COL).unwrap(),
+            max_file_bytes: NonZeroUsize::new(POLICY_MAX_FILE_BYTES).unwrap(),
+            max_lines: NonZeroUsize::new(POLICY_MAX_LINES).unwrap(),
+        });
         // assign a slice of the engine data "pstate" to be used as policy state
         engine
             .add_data(
