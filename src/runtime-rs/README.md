@@ -145,7 +145,7 @@ Specify hypervisor during installation:
 ```bash
 sudo make install HYPERVISOR=qemu
 # or
-sudo make install HYPERVISOR=cloud-hypervisor
+sudo make install HYPERVISOR=clh-runtime-rs
 ```
 
 ## Configuration
@@ -156,7 +156,7 @@ Configuration files in `config/`:
 |-------------|------------|-------|
 | `configuration-dragonball.toml.in` | Dragonball | Built-in VMM |
 | `configuration-qemu-runtime-rs.toml.in` | QEMU | Default external |
-| `configuration-cloud-hypervisor.toml.in` | Cloud Hypervisor | Modern VMM |
+| `configuration-clh-runtime-rs.toml.in` | Cloud Hypervisor | Modern VMM |
 | `configuration-rs-fc.toml.in` | Firecracker | Lightweight microVM |
 | `configuration-remote.toml.in` | Remote | Remote hypervisor |
 | `configuration-qemu-tdx-runtime-rs.toml.in` | QEMU + TDX | Intel TDX confidential computing |

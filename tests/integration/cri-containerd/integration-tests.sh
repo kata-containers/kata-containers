@@ -683,7 +683,7 @@ function main() {
 
 	passing_test="TestContainerStats|TestContainerRestart|TestContainerListStatsWithIdFilter|TestContainerListStatsWithIdSandboxIdFilter|TestDuplicateName|TestImageLoad|TestImageFSInfo|TestSandboxCleanRemove"
 
-	if [[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" || \
+	if [[ "${KATA_HYPERVISOR}" == "clh-runtime-rs" || \
 		"${KATA_HYPERVISOR}" == "qemu" ]]; then
 		issue="https://github.com/kata-containers/tests/issues/2318"
 		info "${KATA_HYPERVISOR} fails with TestContainerListStatsWithSandboxIdFilter }"

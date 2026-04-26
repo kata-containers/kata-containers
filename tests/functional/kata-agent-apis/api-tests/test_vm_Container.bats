@@ -32,15 +32,15 @@ setup_file() {
     rm -rf $test_dir
 }
 
-@test "Test Container Lifecycle: Boot cloud hypervisor pod vm and run a container" {
-    info "Boot cloud hypervisor vm, establish connection with agent inside the vm and send container commands"
+@test "Test Container Lifecycle: Boot clh pod vm and run a container" {
+    info "Boot clh vm, establish connection with agent inside the vm and send container commands"
     sandbox_id=$RANDOM
     container_id="test_container_${RANDOM}"
 
     local image="ghcr.io/linuxcontainers/alpine:latest"
 
     local cmds=()
-    cmds+=("--vm cloud-hypervisor")
+    cmds+=("--vm clh")
     cmds+=" -c 'CreateSandbox json://{\"sandbox_id\": \"$sandbox_id\"}'"
     cmds+=" 'CreateContainer json://{\"image\": \"$image\", \"id\": \"$container_id\"}'"
     cmds+=" 'StartContainer json://{\"container_id\": \"$container_id\"}'"

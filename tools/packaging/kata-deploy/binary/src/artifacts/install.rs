@@ -19,7 +19,7 @@ use walkdir::WalkDir;
 const ALL_SHIMS: &[&str] = &[
     // Non-QEMU shims
     "clh",
-    "cloud-hypervisor",
+    "clh-runtime-rs",
     "dragonball",
     "fc",
     "firecracker",
@@ -58,8 +58,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     }
 
     match shim {
-        "clh" => Ok("clh"),
-        "cloud-hypervisor" => Ok("cloud-hypervisor"),
+        "clh" | "clh-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
         "fc" | "firecracker" => Ok("firecracker"),
         "remote" => Ok("remote"),
@@ -722,7 +721,7 @@ fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
     } else {
         // For non-QEMU shims, use the appropriate hypervisor binary
         let binary = match shim {
-            "clh" | "cloud-hypervisor" => "cloud-hypervisor",
+            "clh" | "clh-runtime-rs" => "cloud-hypervisor",
             "fc" | "firecracker" => "firecracker",
             "dragonball" => "dragonball",
             "stratovirt" => "stratovirt",
@@ -1068,7 +1067,7 @@ mod tests {
 
     #[rstest]
     #[case("clh", "clh")]
-    #[case("cloud-hypervisor", "cloud-hypervisor")]
+    #[case("clh-runtime-rs", "clh")]
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
     #[case("firecracker", "firecracker")]

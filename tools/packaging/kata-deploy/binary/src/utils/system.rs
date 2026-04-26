@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use std::process::Command;
 
 pub const RUST_SHIMS: &[&str] = &[
-    "cloud-hypervisor",
+    "clh-runtime-rs",
     "dragonball",
     "qemu-runtime-rs",
     "qemu-coco-dev-runtime-rs",
@@ -102,7 +102,7 @@ mod tests {
     #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("clh", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case(
-        "cloud-hypervisor",
+        "clh-runtime-rs",
         "/opt/kata",
         "/opt/kata/share/defaults/kata-containers/runtime-rs"
     )]
@@ -113,7 +113,7 @@ mod tests {
     )]
     #[case("qemu", "/custom/path", "/custom/path/share/defaults/kata-containers")]
     #[case(
-        "cloud-hypervisor",
+        "clh-runtime-rs",
         "/custom/path",
         "/custom/path/share/defaults/kata-containers/runtime-rs"
     )]
@@ -146,9 +146,9 @@ mod tests {
         "/opt/kata/share/defaults/kata-containers/runtimes/fc"
     )]
     #[case(
-        "cloud-hypervisor",
+        "clh-runtime-rs",
         "/opt/kata",
-        "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor"
+        "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/clh-runtime-rs"
     )]
     #[case(
         "qemu-runtime-rs",
@@ -195,7 +195,7 @@ mod tests {
             "/custom/path/bin/containerd-shim-kata-v2",
         );
         assert_runtime_paths(
-            &["cloud-hypervisor"],
+            &["clh-runtime-rs"],
             "/custom/path",
             "/custom/path/runtime-rs/bin/containerd-shim-kata-v2",
         );
@@ -265,7 +265,7 @@ mod tests {
     fn test_full_deployment_paths_rust_runtime() {
         // Test complete deployment structure for Rust runtime
         let dest_dir = "/opt/kata";
-        let shim = "cloud-hypervisor";
+        let shim = "clh-runtime-rs";
 
         let config_path = get_kata_containers_config_path(shim, dest_dir);
         let original_path = get_kata_containers_original_config_path(shim, dest_dir);
@@ -274,7 +274,7 @@ mod tests {
         // Expected paths for Rust runtime with per-shim directory
         assert_eq!(
             config_path,
-            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor"
+            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/clh-runtime-rs"
         );
         assert_eq!(
             original_path,
@@ -289,7 +289,7 @@ mod tests {
         let config_file = format!("{}/configuration-{}.toml", config_path, shim);
         assert_eq!(
             config_file,
-            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor/configuration-cloud-hypervisor.toml"
+            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/clh-runtime-rs/configuration-clh-runtime-rs.toml"
         );
     }
 
@@ -303,8 +303,8 @@ mod tests {
         let qemu_binary = get_kata_containers_runtime_path("qemu", dest_dir);
 
         // Rust runtime
-        let clh_config = get_kata_containers_config_path("cloud-hypervisor", dest_dir);
-        let clh_binary = get_kata_containers_runtime_path("cloud-hypervisor", dest_dir);
+        let clh_config = get_kata_containers_config_path("clh-runtime-rs", dest_dir);
+        let clh_binary = get_kata_containers_runtime_path("clh-runtime-rs", dest_dir);
 
         // Both should have different paths
         assert_ne!(qemu_config, clh_config);
@@ -315,7 +315,7 @@ mod tests {
         assert!(qemu_binary.ends_with("/bin/containerd-shim-kata-v2"));
 
         // Verify Rust runtime paths include per-shim directory
-        assert!(clh_config.contains("/runtimes/cloud-hypervisor"));
+        assert!(clh_config.contains("/runtimes/clh-runtime-rs"));
         assert!(clh_binary.ends_with("/runtime-rs/bin/containerd-shim-kata-v2"));
     }
 }

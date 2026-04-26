@@ -55,10 +55,10 @@ jobs:
             vmm: clh
             instance-type: normal
           - host_os: cbl-mariner
-            vmm: cloud-hypervisor
+            vmm: clh-runtime-rs
             instance-type: small
           - host_os: cbl-mariner
-            vmm: cloud-hypervisor
+            vmm: clh-runtime-rs
             instance-type: normal
     runs-on: ubuntu-22.04
     permissions:

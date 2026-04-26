@@ -197,7 +197,7 @@ Cloud Hypervisor is a Rust-based VMM designed for modern cloud workloads with a 
 - Applications requiring memory/CPU resizing
 - Security-sensitive deployments (seccomp isolation)
 
-**Configuration:** See [`configuration-cloud-hypervisor.toml`](../../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in)
+**Configuration:** See [`configuration-clh-runtime-rs.toml`](../../src/runtime-rs/config/configuration-clh-runtime-rs.toml.in)
 
 ### Firecracker/KVM
 
@@ -274,7 +274,7 @@ Each hypervisor has a dedicated configuration file:
 | Hypervisor | Rust Runtime Configuration | Go Runtime Configuration |
 |------------|----------------|-----------------|
 | QEMU |`configuration-qemu-runtime-rs.toml` |`configuration-qemu.toml` |
-| Cloud Hypervisor | `configuration-cloud-hypervisor.toml` | `configuration-clh.toml` |
+| Cloud Hypervisor | `configuration-clh-runtime-rs.toml` | `configuration-clh.toml` |
 | Firecracker | `configuration-rs-fc.toml` | `configuration-fc.toml` |
 | Dragonball | `configuration-dragonball.toml` (default) | `No` |
 
