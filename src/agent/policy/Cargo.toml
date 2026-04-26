@@ -16,7 +16,18 @@ serde.workspace = true
 serde_json.workspace = true
 
 # Agent Policy
-regorus = { version = "0.9.1", default-features = false, features = [
+#
+# Pinned to an upstream commit on `main` instead of a published crate version
+# because the 0.9.1 release hard-caps policy lines at 1024 characters and
+# files at 1 MiB / 20 000 lines, which rejects realistic policies generated
+# by `genpolicy` (e.g. the NVIDIA_REQUIRE_CUDA environment variable on
+# `nvcr.io/nvidia/k8s/cuda-sample` images is ~1.3 KiB on a single line).
+#
+# The pinned commit is microsoft/regorus#624 ("feat: make policy length
+# limits configurable per engine"), which adds Engine::set_policy_length_config.
+# Switch back to a crates.io version once a release > 0.9.1 containing #624
+# is published.
+regorus = { git = "https://github.com/microsoft/regorus", rev = "898643129e3652efd43e596f978d99f85e770235", default-features = false, features = [
     "arc",
     "base64",
     "base64url",
