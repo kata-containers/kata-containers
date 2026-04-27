@@ -4,7 +4,7 @@ module module-path
 go 1.25.9
 
 require (
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/slok/kubewebhook/v2 v2.5.0
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
