@@ -292,6 +292,13 @@ impl Container {
                 if let Err(err) = inner.start_container(&process.container_id).await {
                     let device_manager = self.resource_manager.get_device_manager().await;
                     let _ = inner.stop_process(process, true, &device_manager).await;
+
+                    let _ = self.resource_manager
+                        .update_linux_resource(
+                            &self.config.container_id,
+                            inner.linux_resources.as_ref(),
+                            ResourceUpdateOp::Del,
+                        ).await;
                     return Err(err);
                 }
 
@@ -704,13 +711,26 @@ impl Container {
     pub async fn cleanup(&mut self) -> Result<()> {
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
-        inner
+        let res = inner
             .cleanup_container(
                 self.container_id.container_id.as_str(),
                 true,
                 &device_manager,
             )
+            .await;
+
+        if let Err(e) = self.resource_manager
+            .update_linux_resource(
+                &self.config.container_id,
+                inner.linux_resources.as_ref(),
+                ResourceUpdateOp::Del,
+            )
             .await
+        {
+            warn!(sl!(), "failed to cleanup linux resources: {:?}", e);
+        }
+
+        res
     }
 }
 
