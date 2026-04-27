@@ -292,12 +292,18 @@ algorithm = "sha256"
 [token_configs]
 [token_configs.kbs]
 url = "${CC_KBS_ADDRESS}"
+
+[log]
+level = "debug"
 '''
 
 "cdh.toml" = '''
 [kbc]
 name = "cc_kbc"
 url = "${CC_KBS_ADDRESS}"
+
+[log]
+level = "debug"
 
 ${CDH_IMAGE_SECTION}
 '''
