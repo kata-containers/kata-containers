@@ -330,9 +330,17 @@ struct Smp {
 
 impl Smp {
     fn new(config: &HypervisorConfig) -> Smp {
+        let num_vcpus = config.cpu_info.default_vcpus.ceil() as u32;
+        let max_num_vcpus = if config.security_info.confidential_guest {
+            // Disable CPU hotplug when confidential guest is enabled
+            num_vcpus
+        } else {
+            config.cpu_info.default_maxvcpus
+        };
+
         Smp {
-            num_vcpus: config.cpu_info.default_vcpus.ceil() as u32,
-            max_num_vcpus: config.cpu_info.default_maxvcpus,
+            num_vcpus,
+            max_num_vcpus,
         }
     }
 }
@@ -344,7 +352,11 @@ impl ToQemuParams for Smp {
         // CpuInfo::adjust_config() seems to ensure that both vcpu numbers
         // will have sanitised non-zero values
         params.push(format!("{}", self.num_vcpus));
-        params.push(format!("maxcpus={}", self.max_num_vcpus));
+
+        // Only add maxcpus if it differs from num_vcpus (enables CPU hotplug)
+        if self.max_num_vcpus != self.num_vcpus {
+            params.push(format!("maxcpus={}", self.max_num_vcpus));
+        }
 
         Ok(vec!["-smp".to_owned(), params.join(",")])
     }
