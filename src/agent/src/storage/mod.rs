@@ -26,7 +26,9 @@ use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
-use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_storage};
+use self::multi_layer_erofs::{
+    handle_multi_layer_erofs_group, is_multi_layer_storage, LuksStorageDevice,
+};
 use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
@@ -203,7 +205,18 @@ async fn handle_multi_layer_storage(
     let result = handle_multi_layer_erofs_group(storage, storages, cid, sandbox, logger).await?;
 
     // Create device for the mount point
-    let device = new_device(result.mount_point.clone())?;
+    let base_device = new_device(result.mount_point.clone())?;
+    // Wrap with LUKS storage device if there are encrypted devices
+    let device: Arc<dyn StorageDevice> = if result.luks_devices.is_empty() {
+        base_device
+    } else {
+        Arc::new(LuksStorageDevice::new(
+            base_device,
+            result.luks_devices.clone(),
+            result.upper_mount_path.clone(),
+            logger.clone(),
+        ))
+    };
 
     Ok(Some(MultiLayerProcessResult {
         device,
