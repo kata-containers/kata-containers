@@ -104,6 +104,5 @@ lto = true
 
 [features]
 seccomp = ["rustjail/seccomp"]
-standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["kata-agent-policy"]
 init-data = []
