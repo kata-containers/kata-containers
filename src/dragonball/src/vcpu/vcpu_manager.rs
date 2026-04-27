@@ -16,7 +16,7 @@ use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::time::Duration;
 
 use dbs_arch::VpmuFeatureLevel;
-#[cfg(target_arch = "x86_64")]
+use dbs_boot::FirmwareType;
 use dbs_interrupt::InterruptManager;
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
@@ -392,7 +392,7 @@ impl VcpuManager {
         } else {
             self.vcpu_config.boot_vcpu_count
         };
-        self.create_vcpus(boot_vcpu_count, Some(request_ts), Some(entry_addr))?;
+        self.create_vcpus(boot_vcpu_count, Some(request_ts), Some(entry_addr), None)?;
 
         Ok(())
     }
@@ -413,6 +413,7 @@ impl VcpuManager {
         vcpu_count: u8,
         request_ts: Option<TimestampUs>,
         entry_addr: Option<GuestAddress>,
+        firmware_type: Option<FirmwareType>,
     ) -> Result<Vec<u8>> {
         info!("create vcpus");
         if vcpu_count > self.vcpu_config.max_vcpu_count {
@@ -422,7 +423,7 @@ impl VcpuManager {
         let request_ts = request_ts.unwrap_or_default();
         let mut created_cpus = Vec::new();
         for cpu_id in self.calculate_available_vcpus(vcpu_count) {
-            self.create_vcpu(cpu_id, request_ts.clone(), entry_addr)?;
+            self.create_vcpu(cpu_id, request_ts.clone(), entry_addr, firmware_type)?;
             created_cpus.push(cpu_id);
         }
 
@@ -527,6 +528,7 @@ impl VcpuManager {
         &mut self,
         entry_addr: Option<GuestAddress>,
         vcpu: &mut Vcpu,
+        firmware_type: Option<FirmwareType>,
     ) -> std::result::Result<(), VcpuError> {
         vcpu.configure(
             &self.vcpu_config,
@@ -534,6 +536,7 @@ impl VcpuManager {
             &self.vm_as,
             entry_addr,
             None,
+            firmware_type,
         )
     }
 
@@ -542,6 +545,7 @@ impl VcpuManager {
         cpu_index: u8,
         request_ts: TimestampUs,
         entry_addr: Option<GuestAddress>,
+        firmware_type: Option<FirmwareType>,
     ) -> Result<()> {
         info!("creating vcpu {cpu_index}");
         if self.vcpu_infos.get(cpu_index as usize).is_none() {
@@ -564,7 +568,7 @@ impl VcpuManager {
             .unwrap()
             .vcpu
             .insert(cpu_index as u32, vcpu.metrics());
-        self.configure_single_vcpu(entry_addr, &mut vcpu)
+        self.configure_single_vcpu(entry_addr, &mut vcpu, firmware_type)
             .map_err(VcpuManagerError::Vcpu)?;
         self.vcpu_infos[cpu_index as usize].vcpu = Some(vcpu);
 
@@ -896,7 +900,7 @@ mod hotplug {
             }
 
             let created_vcpus = self
-                .create_vcpus(vcpu_count, None, None)
+                .create_vcpus(vcpu_count, None, None, None)
                 .map_err(VcpuResizeError::Vcpu)?;
             let cpu_ids = self
                 .activate_vcpus(vcpu_count, true)
@@ -1246,11 +1250,11 @@ mod tests {
         let mut vcpu_manager = vm.vcpu_manager().unwrap();
 
         // test create vcpu more than max
-        let res = vcpu_manager.create_vcpus(20, None, None);
+        let res = vcpu_manager.create_vcpus(20, None, None, None);
         assert!(matches!(res, Err(VcpuManagerError::ExpectedVcpuExceedMax)));
 
         // test create vcpus
-        assert!(vcpu_manager.create_vcpus(2, None, None).is_ok());
+        assert!(vcpu_manager.create_vcpus(2, None, None, None).is_ok());
         assert_eq!(vcpu_manager.present_vcpus_count(), 0);
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
         assert_eq!(vcpu_manager.vcpus().len(), 2);

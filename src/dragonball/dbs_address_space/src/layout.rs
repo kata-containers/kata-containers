@@ -74,6 +74,7 @@ impl AddressSpaceLayout {
                     return false;
                 }
             }
+            _ => {}
         }
 
         true

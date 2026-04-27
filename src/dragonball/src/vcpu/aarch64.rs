@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 
 use dbs_arch::{regs, VpmuFeatureLevel};
-use dbs_boot::get_fdt_addr;
+use dbs_boot::{get_fdt_addr, FirmwareType};
 use dbs_utils::time::TimestampUs;
 use kvm_ioctls::{VcpuFd, VmFd};
 use vm_memory::{Address, GuestAddress, GuestAddressSpace};
@@ -88,6 +88,7 @@ impl Vcpu {
         vm_as: &GuestAddressSpaceImpl,
         kernel_load_addr: Option<GuestAddress>,
         _pgtable_addr: Option<GuestAddress>,
+        _firmware_type: Option<FirmwareType>,
     ) -> Result<()> {
         let mut kvi: kvm_bindings::kvm_vcpu_init = kvm_bindings::kvm_vcpu_init::default();
 
