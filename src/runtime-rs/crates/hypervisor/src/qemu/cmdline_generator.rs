@@ -195,6 +195,24 @@ impl Kernel {
             kernel_params.append(&mut rootfs_params);
         }
 
+        if !config.boot_info.kernel_modules_images.is_empty() {
+            let rootfs_has_verity =
+                !config.boot_info.kernel_verity_params.trim().is_empty();
+            let dm_offset: usize = if rootfs_has_verity { 1 } else { 0 };
+            let blk_offset: u8 = if config.blockdev_info.disable_image_nvdimm {
+                b'b'
+            } else {
+                b'a'
+            };
+            let (mut mod_params, _) = KernelParams::new_modules_verity_params(
+                &config.boot_info.kernel_modules_images,
+                dm_offset,
+                blk_offset,
+            )
+            .context("adding module verity params failed")?;
+            kernel_params.append(&mut mod_params);
+        }
+
         kernel_params.append(&mut KernelParams::from_string(
             &config.boot_info.kernel_params,
         ));

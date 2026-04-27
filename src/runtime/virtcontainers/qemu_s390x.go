@@ -10,6 +10,7 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -95,6 +96,21 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		q.kernelParams = append(q.kernelParams, kernelParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
+	}
+
+	if len(config.KernelModulesImages) > 0 {
+		rootfsHasVerity := strings.TrimSpace(config.KernelVerityParams) != ""
+		dmOffset := 0
+		if rootfsHasVerity {
+			dmOffset = 1
+		}
+		modVerityParams, _, err := GetKernelModulesVerityParams(
+			config.KernelModulesImages, dmOffset, 1,
+		)
+		if err != nil {
+			return nil, err
+		}
+		q.kernelParams = append(q.kernelParams, modVerityParams...)
 	}
 
 	return q, nil

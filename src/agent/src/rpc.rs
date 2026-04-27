@@ -1407,10 +1407,6 @@ impl agent_ttrpc::AgentService for AgentService {
                 s.id = req.sandbox_id.clone();
             }
 
-            for m in req.kernel_modules.iter() {
-                load_kernel_module(m).map_ttrpc_err(same)?;
-            }
-
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
@@ -1418,6 +1414,24 @@ impl agent_ttrpc::AgentService for AgentService {
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
+
+        let modules_dirs: Vec<String> = req
+            .storages
+            .iter()
+            .filter(|s| s.mount_point.starts_with("/run/kata-modules-"))
+            .map(|s| s.mount_point.clone())
+            .collect();
+
+        let use_modules_root = if !modules_dirs.is_empty() {
+            setup_modules_search_paths(&modules_dirs).map_ttrpc_err(same)?;
+            true
+        } else {
+            false
+        };
+
+        for m in req.kernel_modules.iter() {
+            load_kernel_module(m, use_modules_root).map_ttrpc_err(same)?;
+        }
 
         // Scan guest hooks upon creating new sandbox and append
         // them to guest OCI spec before running containers.
@@ -2348,7 +2362,10 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     Ok(olddir)
 }
 
-fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
+fn load_kernel_module(
+    module: &protocols::agent::KernelModule,
+    use_modules_root: bool,
+) -> Result<()> {
     if module.name.is_empty() {
         return Err(anyhow!("Kernel module name is empty"));
     }
@@ -2358,14 +2375,18 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         "load_kernel_module {}: {:?}", module.name, module.parameters
     );
 
-    let mut args = vec!["-v", &module.name];
+    let mut args = vec!["-v".to_string()];
+    if use_modules_root {
+        args.extend(["-d".to_string(), MODULES_ROOT.to_string()]);
+    }
+    args.push(module.name.clone());
 
     if !module.parameters.is_empty() {
-        args.extend(module.parameters.iter().map(String::as_str));
+        args.extend(module.parameters.iter().cloned());
     }
 
     let output = Command::new(MODPROBE_PATH)
-        .args(args.as_slice())
+        .args(&args)
         .stdout(Stdio::piped())
         .output()?;
 
@@ -2384,6 +2405,67 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         }
         None => Err(anyhow!("Process terminated by signal")),
     }
+}
+
+const DEPMOD_PATH: &str = "/sbin/depmod";
+
+const MODULES_ROOT: &str = "/run";
+
+fn setup_modules_search_paths(modules_dirs: &[String]) -> Result<()> {
+    // Build the module tree under /run/lib/modules/<ver>/ to avoid
+    // writing to the read-only rootfs. modprobe and depmod are invoked
+    // with `-d /run` so they look under /run/lib/modules/ instead of
+    // /lib/modules/.
+    let run_lib_modules = format!("{}/lib/modules", MODULES_ROOT);
+    fs::create_dir_all(&run_lib_modules)?;
+
+    for mount_dir in modules_dirs {
+        let modules_base = format!("{}/lib/modules", mount_dir);
+        let base_path = Path::new(&modules_base);
+        if !base_path.exists() {
+            warn!(sl(), "No lib/modules/ in {}, skipping", mount_dir);
+            continue;
+        }
+        for entry in fs::read_dir(base_path)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                let ver = entry.file_name();
+                let target = Path::new(&run_lib_modules).join(&ver);
+                fs::create_dir_all(&target)?;
+                let src_kernel = entry.path().join("kernel");
+                if src_kernel.is_dir() {
+                    for sub in fs::read_dir(&src_kernel)? {
+                        let sub = sub?;
+                        let link_path = target.join("kernel").join(sub.file_name());
+                        fs::create_dir_all(target.join("kernel"))?;
+                        std::os::unix::fs::symlink(sub.path(), &link_path)?;
+                    }
+                }
+                for meta in &["modules.order", "modules.builtin"] {
+                    let src = entry.path().join(meta);
+                    if src.exists() {
+                        fs::copy(&src, target.join(meta))?;
+                    }
+                }
+            }
+        }
+    }
+
+    let output = Command::new(DEPMOD_PATH)
+        .args(["-a", "-b", MODULES_ROOT])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(
+            sl(),
+            "depmod -a -b {} returned non-zero: {}", MODULES_ROOT, stderr
+        );
+    }
+
+    Ok(())
 }
 
 fn is_sealed_secret_path(source_path: &str) -> bool {
@@ -2641,19 +2723,19 @@ mod tests {
         };
 
         // case 1: module not exists
-        let result = load_kernel_module(&m);
+        let result = load_kernel_module(&m, false);
         assert!(result.is_err(), "load module should failed");
 
         // case 2: module name is empty
         m.name = "".to_string();
-        let result = load_kernel_module(&m);
+        let result = load_kernel_module(&m, false);
         assert!(result.is_err(), "load module should failed");
 
         skip_if_not_root!();
         // case 3: normal module.
         // normally this module should eixsts...
         m.name = "bridge".to_string();
-        let result = load_kernel_module(&m);
+        let result = load_kernel_module(&m, false);
 
         // Skip test if loading kernel modules is not permitted
         // or kernel module is not found

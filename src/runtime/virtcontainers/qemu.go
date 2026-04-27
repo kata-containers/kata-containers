@@ -446,6 +446,13 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 		kernel.InitrdPath = ""
 	}
 
+	for _, img := range q.config.KernelModulesImages {
+		devices, err = q.arch.appendBlockImage(ctx, devices, img.Path)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
 	if q.config.IOMMU {
 		devices, err = q.arch.appendIOMMU(devices)
 		if err != nil {

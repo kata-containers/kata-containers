@@ -1,0 +1,32 @@
+{{- $hasModules := false -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if and (ne $shimName "disableAll") (hasKey $shimConfig "kernelModulesImages") -}}
+{{- if $shimConfig.kernelModulesImages -}}
+{{- $hasModules = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $hasModules }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-kernel-modules-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-kernel-modules
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+data:
+  # Format: shim:path:verity_params:mod1,mod2,...
+  kernel-modules-images.list: |
+{{- range $shimName, $shimConfig := .Values.shims }}
+{{- if and (ne $shimName "disableAll") (hasKey $shimConfig "kernelModulesImages") }}
+{{- range $shimConfig.kernelModulesImages }}
+    {{ $shimName }}:{{ .path }}:{{ .verityParams | default "" }}:{{ join "," (.modules | default list) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -967,6 +967,49 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 		storages = append(storages, shmStorage)
 	}
 
+	// When the rootfs uses virtio-blk (DisableImageNvdimm), vda is taken
+	// by the rootfs image, so module images start at vdb (offset 1).
+	// When nvdimm is used for rootfs (default), vda is free.
+	blkOffset := 0
+	if sandbox.config.HypervisorConfig.DisableImageNvdimm {
+		blkOffset = 1
+	}
+
+	// Determine which module images use dm-verity so we can mount
+	// /dev/dm-N instead of the raw /dev/vdX for those.
+	rootfsHasVerity := strings.TrimSpace(sandbox.config.HypervisorConfig.KernelVerityParams) != ""
+	dmOffset := 0
+	if rootfsHasVerity {
+		dmOffset = 1
+	}
+	_, dmDevices, _ := GetKernelModulesVerityParams(
+		sandbox.config.HypervisorConfig.KernelModulesImages, dmOffset, blkOffset,
+	)
+
+	for i := range sandbox.config.HypervisorConfig.KernelModulesImages {
+		var devPath string
+		if dmPath, ok := dmDevices[i]; ok {
+			devPath = dmPath
+		} else {
+			driveName, err := utils.GetVirtDriveName(i + blkOffset)
+			if err != nil {
+				break
+			}
+			devPath = filepath.Join("/dev", driveName)
+		}
+		mountPoint := fmt.Sprintf("/run/kata-modules-%d", i)
+
+		modStorage := &grpc.Storage{
+			Driver:     kataBlkDevType,
+			Source:     devPath,
+			Fstype:     "ext4",
+			MountPoint: mountPoint,
+			Options:    []string{"ro"},
+		}
+
+		storages = append(storages, modStorage)
+	}
+
 	return storages
 }
 

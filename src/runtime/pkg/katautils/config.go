@@ -81,6 +81,11 @@ type factory struct {
 	Template        bool   `toml:"enable_template"`
 }
 
+type kernelModulesImage struct {
+	Path         string `toml:"path"`
+	VerityParams string `toml:"verity_params"`
+}
+
 type hypervisor struct {
 	Path                           string                    `toml:"path"`
 	JailerPath                     string                    `toml:"jailer_path"`
@@ -94,6 +99,7 @@ type hypervisor struct {
 	CPUFeatures                    string                    `toml:"cpu_features"`
 	KernelParams                   string                    `toml:"kernel_params"`
 	KernelVerityParams             string                    `toml:"kernel_verity_params"`
+	KernelModulesImages            []kernelModulesImage      `toml:"kernel_modules_images"`
 	MachineType                    string                    `toml:"machine_type"`
 	QgsPort                        uint32                    `toml:"tdx_quote_generation_service_socket_port"`
 	BlockDeviceDriver              string                    `toml:"block_device_driver"`
@@ -413,6 +419,19 @@ func (h hypervisor) kernelParams() string {
 
 func (h hypervisor) kernelVerityParams() string {
 	return h.KernelVerityParams
+}
+
+func (h hypervisor) kernelModulesImages() []vc.KernelModulesImageConfig {
+	var images []vc.KernelModulesImageConfig
+	for _, img := range h.KernelModulesImages {
+		if img.Path != "" {
+			images = append(images, vc.KernelModulesImageConfig{
+				Path:         img.Path,
+				VerityParams: img.VerityParams,
+			})
+		}
+	}
+	return images
 }
 
 func (h hypervisor) machineType() string {
@@ -873,6 +892,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:    h.kernelVerityParams(),
+		KernelModulesImages:   h.kernelModulesImages(),
 		NumVCPUsF:             h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
@@ -1044,6 +1064,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		CPUFeatures:                   cpuFeatures,
 		KernelParams:                  vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:            h.kernelVerityParams(),
+		KernelModulesImages:           h.kernelModulesImages(),
 		HypervisorMachineType:         machineType,
 		QgsPort:                       h.qgsPort(),
 		NumVCPUsF:                     h.defaultVCPUs(),
@@ -1188,6 +1209,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MachineAccelerators:            machineAccelerators,
 		KernelParams:                   vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		KernelVerityParams:             h.kernelVerityParams(),
+		KernelModulesImages:            h.kernelModulesImages(),
 		HypervisorMachineType:          machineType,
 		NumVCPUsF:                      h.defaultVCPUs(),
 		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
@@ -1265,11 +1287,12 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	kernelParams := h.kernelParams()
 
 	return vc.HypervisorConfig{
-		KernelPath:         kernel,
-		ImagePath:          image,
-		RootfsType:         rootfsType,
-		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		KernelVerityParams: h.kernelVerityParams(),
+		KernelPath:          kernel,
+		ImagePath:           image,
+		RootfsType:          rootfsType,
+		KernelParams:        vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:  h.kernelVerityParams(),
+		KernelModulesImages: h.kernelModulesImages(),
 		NumVCPUsF:          h.defaultVCPUs(),
 		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
 		MemorySize:         h.defaultMemSz(),
@@ -1365,6 +1388,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:                    rootfsType,
 		KernelParams:                  vc.DeserializeParams(strings.Fields(kernelParams)),
 		KernelVerityParams:            h.kernelVerityParams(),
+		KernelModulesImages:           h.kernelModulesImages(),
 		HypervisorMachineType:         machineType,
 		NumVCPUsF:                     h.defaultVCPUs(),
 		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),

@@ -80,6 +80,11 @@ snapshotter:
 #       agent:
 #         httpsProxy: ""             # HTTPS proxy for the Kata agent
 #         noProxy: ""                # no-proxy list for the Kata agent
+#       kernelModulesImages:         # per-shim kernel module images
+#         - path: "/opt/kata/share/kata-containers/kata-modules-ntfs.img"
+#           verityParams: ""
+#           modules:
+#             - ntfs3
 #       runtimeClass:
 #         nodeSelector:              # extra node selectors added to the RuntimeClass
 #           example.io/feature: "true"
@@ -132,6 +137,19 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    # Kernel modules images to attach to guest VMs as additional block devices.
+    # Each entry specifies a path to a disk image, optional dm-verity params,
+    # and a list of module names to load from that image.
+    # kernelModulesImages:
+    #   - path: "/opt/kata/share/kata-containers/kata-modules-ntfs.img"
+    #     verityParams: ""
+    #     modules:
+    #       - ntfs3
+    #   - path: "/opt/kata/share/kata-containers/kata-modules-mlx5.img"
+    #     verityParams: ""
+    #     modules:
+    #       - mlx5_core
+    #       - mlx5_ib
 
   qemu-runtime-rs:
     enabled: ~
@@ -349,6 +367,7 @@ runtimeClasses:
 env:
   installationPrefix: ""
   hostOS: ""
+
   # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
   # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
   #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).

@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -158,6 +159,14 @@ pub struct Config {
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
+    pub kernel_modules_images: HashMap<String, Vec<KernelModulesImageEntry>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct KernelModulesImageEntry {
+    pub path: String,
+    pub verity_params: String,
+    pub modules: Vec<String>,
 }
 
 impl Config {
@@ -287,6 +296,15 @@ impl Config {
             Vec::new()
         };
 
+        let kernel_modules_images_enabled = env::var("KERNEL_MODULES_IMAGES_ENABLED")
+            .unwrap_or_else(|_| "false".to_string())
+            == "true";
+        let kernel_modules_images = if kernel_modules_images_enabled {
+            parse_kernel_modules_images()?
+        } else {
+            HashMap::new()
+        };
+
         let config = Config {
             node_name,
             debug,
@@ -313,6 +331,7 @@ impl Config {
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
+            kernel_modules_images,
         };
 
         // Validate the configuration
@@ -639,6 +658,70 @@ fn get_arch() -> Result<String> {
         _ => arch,
     }
     .to_string())
+}
+
+/// Parse kernel modules images from the mounted ConfigMap at /kernel-modules-configs/
+/// Each line has format: shim:path:verity_params:mod1,mod2,...
+/// The shim field identifies which runtime class the image belongs to.
+/// The modules field is optional; when present, those modules will be added
+/// to the kernel_modules list so the agent loads them at sandbox creation.
+fn parse_kernel_modules_images() -> Result<HashMap<String, Vec<KernelModulesImageEntry>>> {
+    let list_file = "/kernel-modules-configs/kernel-modules-images.list";
+
+    let content = match std::fs::read_to_string(list_file) {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!(
+                "Could not read kernel modules images list at {}: {}",
+                list_file,
+                e
+            );
+            return Ok(HashMap::new());
+        }
+    };
+
+    let mut map: HashMap<String, Vec<KernelModulesImageEntry>> = HashMap::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.splitn(4, ':').collect();
+        let shim = parts.first().map(|s| s.trim()).unwrap_or("");
+        if shim.is_empty() {
+            continue;
+        }
+
+        let path = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        if path.is_empty() {
+            continue;
+        }
+
+        let verity_params = parts
+            .get(2)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        let modules = parts
+            .get(3)
+            .map(|s| {
+                s.split(',')
+                    .map(|m| m.trim().to_string())
+                    .filter(|m| !m.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        map.entry(shim.to_string())
+            .or_default()
+            .push(KernelModulesImageEntry {
+                path: path.to_string(),
+                verity_params,
+                modules,
+            });
+    }
+
+    Ok(map)
 }
 
 /// Parse custom runtimes from the mounted ConfigMap at /custom-configs/

@@ -36,6 +36,7 @@ pub enum ResourceConfig {
     Network(NetworkConfig),
     ShareFs(SharedFsInfo),
     VmRootfs(BlockConfig),
+    KernelModulesImages(Vec<BlockConfig>),
     HybridVsock(HybridVsockConfig),
     Vsock(VsockConfig),
     Protection(ProtectionDeviceConfig),

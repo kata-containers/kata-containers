@@ -2,10 +2,10 @@
 # It's used to enable the MMIO access method for PCIe devices.
 CONFIG_PCI_MMCONFIG=y
 
-# Support for loading modules and firmware
+# Support for loading firmware.
 # It is used to support loading GPU drivers.
-CONFIG_MODULES=y
-CONFIG_MODULE_UNLOAD=y
+# CONFIG_MODULES and CONFIG_MODULE_UNLOAD come from
+# common/modules/modules.conf (included for confidential builds).
 CONFIG_FW_LOADER=y
 
 # Linux kernel version suffix
@@ -24,8 +24,8 @@ CONFIG_CRYPTO_ECC=y
 CONFIG_CRYPTO_ECDH=y
 CONFIG_CRYPTO_ECDSA=y
 
-# Dependency of _CRYPTO_
-CONFIG_MODULE_SIG=y
+# CONFIG_MODULE_SIG comes from common/signing/module_signing.conf
+# (included for confidential builds).
 
 # HGX/DGX platform
 CONFIG_INFINIBAND=m

@@ -322,9 +322,18 @@ get_kernel_frag_path() {
 		local tmpfs_configs
 		tmpfs_configs="$(ls "${common_path}"/confidential_containers/tmpfs.conf)"
 		all_configs="${all_configs} ${tmpfs_configs}"
+
+		info "Enabling module loading and signing for '${conf_guest}' guest"
+		local modules_configs
+		modules_configs="$(ls "${common_path}"/modules/modules.conf)"
+		all_configs="${all_configs} ${modules_configs}"
+
+		local sign_configs
+		sign_configs="$(ls "${common_path}"/signing/module_signing.conf)"
+		all_configs="${all_configs} ${sign_configs}"
 	fi
 
-	if [[ "${KBUILD_SIGN_PIN}" != "" ]]; then
+	if [[ "${KBUILD_SIGN_PIN}" != "" ]] && [[ "${conf_guest}" == "" ]]; then
 		info "Enabling config for module signing"
 		local sign_configs
 		sign_configs="$(ls "${common_path}"/signing/module_signing.conf)"
@@ -579,6 +588,165 @@ build_kernel_headers() {
 	popd >>/dev/null
 }
 
+build_modules_images() {
+	local kernel_path=${1:-}
+	[[ -n "${kernel_path}" ]] || die "kernel_path not provided"
+	[[ -d "${kernel_path}" ]] || die "path to kernel does not exist, use ${script_name} setup"
+
+	if [[ "${gpu_vendor}" != "" ]]; then
+		info "Skipping module images for gpu-vendor kernel (modules are built in-tree)"
+		return 0
+	fi
+
+	if ! grep -q '^CONFIG_MODULES=y' "${kernel_path}/.config" 2>/dev/null; then
+		info "Skipping module images: CONFIG_MODULES not enabled for this kernel"
+		return 0
+	fi
+
+	[[ -n "${arch_target}" ]] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
+
+	local verity_flag=""
+	if [[ "${measured_rootfs}" == "true" ]]; then
+		verity_flag="-V"
+	fi
+
+	local modules_frag_dir="${default_config_frags_dir}/modules"
+	[[ -d "${modules_frag_dir}" ]] || die "No modules fragment directory at ${modules_frag_dir}"
+
+	local install_path
+	install_path=$(readlink -m "${DESTDIR}/${PREFIX}/share/${project_name}")
+	mkdir -p "${install_path}"
+
+	local build_modules_volume="${script_dir}/build-modules-volume.sh"
+	[[ -x "${build_modules_volume}" ]] || die "build-modules-volume.sh not found at ${build_modules_volume}"
+
+	declare -A module_sets
+	module_sets[mlx5]="drivers/net/ethernet/mellanox drivers/infiniband"
+	module_sets[ntfs]="fs/ntfs3"
+
+	declare -A module_frags
+	module_frags[mlx5]="mlx5.conf"
+	module_frags[ntfs]="ntfs.conf"
+
+	local frags_to_apply=""
+	for name in "${!module_frags[@]}"; do
+		local frag="${modules_frag_dir}/${module_frags[${name}]}"
+		[[ -f "${frag}" ]] || die "Config fragment not found: ${frag}"
+		frags_to_apply="${frags_to_apply} ${frag}"
+	done
+
+	pushd "${kernel_path}" >>/dev/null
+
+	for frag in ${frags_to_apply}; do
+		info "  Appending: ${frag}"
+		cat "${frag}" >> .config
+	done
+	# shellcheck disable=SC2086
+	make ARCH="${arch_target}" olddefconfig
+
+	info "Rebuilding kernel with module fragment dependencies"
+	# shellcheck disable=SC2086
+	make -j "$(nproc)" ARCH="${arch_target}" ${CROSS_BUILD_ARG}
+
+	info "Installing modules"
+	make -j "$(nproc)" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${kernel_path}" modules_install
+
+	local modules_base="${kernel_path}/lib/modules"
+	local mod_version
+	mod_version=$(ls "${modules_base}" | head -1)
+	local modules_tree="${modules_base}/${mod_version}"
+
+	[[ -d "${modules_tree}/kernel" ]] || die "No modules installed at ${modules_tree}/kernel"
+	info "Modules installed at ${modules_tree}"
+
+	local combined_staging
+	combined_staging=$(mktemp -d)
+	local combined_modules="${combined_staging}/lib/modules/${mod_version}"
+	mkdir -p "${combined_modules}/kernel"
+	local has_any_modules="false"
+
+	for name in "${!module_sets[@]}"; do
+		local paths="${module_sets[${name}]}"
+		local staging
+		staging=$(mktemp -d)
+		local staging_modules="${staging}/lib/modules/${mod_version}"
+		mkdir -p "${staging_modules}/kernel"
+
+		local has_modules="false"
+		for subpath in ${paths}; do
+			local src="${modules_tree}/kernel/${subpath}"
+			if [[ -d "${src}" ]]; then
+				local dst="${staging_modules}/kernel/${subpath}"
+				mkdir -p "$(dirname "${dst}")"
+				cp -a "${src}" "${dst}"
+				has_modules="true"
+
+				local combined_dst="${combined_modules}/kernel/${subpath}"
+				mkdir -p "$(dirname "${combined_dst}")"
+				cp -a "${src}" "${combined_dst}"
+			fi
+		done
+
+		if [[ "${has_modules}" == "false" ]]; then
+			info "No modules found for set '${name}', skipping"
+			rm -rf "${staging}"
+			continue
+		fi
+		has_any_modules="true"
+
+		for f in modules.order modules.builtin; do
+			[[ -f "${modules_tree}/${f}" ]] && cp "${modules_tree}/${f}" "${staging_modules}/"
+		done
+
+		depmod -b "${staging}" "${mod_version}"
+
+		local tarball
+		tarball=$(mktemp --suffix=".tar.gz")
+		tar -czf "${tarball}" -C "${staging}" .
+
+		# shellcheck disable=SC2086
+		"${build_modules_volume}" -m "${tarball}" -o "${install_path}" ${verity_flag}
+		rm -f "${tarball}"
+
+		mv "${install_path}/kata-modules-volume.img" "${install_path}/kata-modules-${name}.img"
+		if [[ -f "${install_path}/modules_verity_params.txt" ]]; then
+			mv "${install_path}/modules_verity_params.txt" "${install_path}/kata-modules-${name}-verity-params.txt"
+			info "Verity params: ${install_path}/kata-modules-${name}-verity-params.txt"
+		fi
+		info "Module image created: ${install_path}/kata-modules-${name}.img"
+		rm -rf "${staging}"
+	done
+
+	if [[ "${has_any_modules}" == "true" ]]; then
+		info "Building combined module image (all module sets)"
+		for f in modules.order modules.builtin; do
+			[[ -f "${modules_tree}/${f}" ]] && cp "${modules_tree}/${f}" "${combined_modules}/"
+		done
+
+		depmod -b "${combined_staging}" "${mod_version}"
+
+		local combined_tarball
+		combined_tarball=$(mktemp --suffix=".tar.gz")
+		tar -czf "${combined_tarball}" -C "${combined_staging}" .
+
+		# shellcheck disable=SC2086
+		"${build_modules_volume}" -m "${combined_tarball}" -o "${install_path}" ${verity_flag}
+		rm -f "${combined_tarball}"
+
+		mv "${install_path}/kata-modules-volume.img" "${install_path}/kata-modules-all.img"
+		if [[ -f "${install_path}/modules_verity_params.txt" ]]; then
+			mv "${install_path}/modules_verity_params.txt" "${install_path}/kata-modules-all-verity-params.txt"
+			info "Verity params: ${install_path}/kata-modules-all-verity-params.txt"
+		fi
+		info "Combined module image created: ${install_path}/kata-modules-all.img"
+	fi
+	rm -rf "${combined_staging}"
+
+	popd >>/dev/null
+	info "All module images built successfully"
+}
+
 install_kata() {
 	local kernel_path=${1:-}
 	[[ -n "${kernel_path}" ]] || die "kernel_path not provided"
@@ -785,6 +953,9 @@ main() {
 			;;
 		build-headers)
 			build_kernel_headers "${kernel_path}"
+			;;
+		build-modules-images)
+			build_modules_images "${kernel_path}"
 			;;
 		install)
 			install_kata "${kernel_path}"

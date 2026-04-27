@@ -444,6 +444,18 @@ pub fn validate_block_device_sector_size(size: u32) -> Result<()> {
     Ok(())
 }
 
+/// Configuration for a disk image containing kernel modules.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct KernelModulesImageConfig {
+    /// Path to the modules disk image on the host.
+    #[serde(default)]
+    pub path: String,
+
+    /// Optional dm-verity parameters for integrity verification.
+    #[serde(default)]
+    pub verity_params: String,
+}
+
 /// Guest kernel boot information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BootInfo {
@@ -458,6 +470,10 @@ pub struct BootInfo {
     /// Guest kernel dm-verity parameters.
     #[serde(default)]
     pub kernel_verity_params: String,
+
+    /// List of disk images containing kernel modules to attach.
+    #[serde(default)]
+    pub kernel_modules_images: Vec<KernelModulesImageConfig>,
 
     /// Path to initrd file on host.
     #[serde(default)]

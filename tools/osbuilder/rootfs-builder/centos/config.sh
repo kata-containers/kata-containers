@@ -6,7 +6,7 @@
 # shellcheck disable=SC2034
 OS_NAME=centos
 OS_VERSION=${OS_VERSION:-stream9}
-PACKAGES="chrony iptables"
+PACKAGES="chrony iptables kmod"
 # shellcheck disable=SC2154
 [[ "${AGENT_INIT}" = no ]] && PACKAGES+=" systemd"
 # shellcheck disable=SC2154

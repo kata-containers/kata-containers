@@ -26,6 +26,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/sirupsen/logrus"
 )
@@ -102,6 +103,12 @@ var (
 // TODO (dcantah): Find a suitable value for darwin/vfw. Seems perf degrades if > number of host
 // cores.
 var defaultMaxVCPUs = govmm.MaxVCPUs()
+
+// KernelModulesImageConfig describes a disk image containing kernel modules.
+type KernelModulesImageConfig struct {
+	Path         string
+	VerityParams string
+}
 
 // RootfsDriver describes a rootfs driver.
 type RootfsDriver string
@@ -301,6 +308,65 @@ func ParseKernelVerityParams(params string) (*kernelVerityConfig, error) {
 	cfg.hashBlockSize = hashBlockSize
 
 	return cfg, nil
+}
+
+// GetKernelModulesVerityParams generates dm-mod.create parameters for module
+// images that have dm-verity configured. Module images use a single block
+// device with the hash tree appended after the data, so both the data device
+// and hash device are the same /dev/vdX and hash_start_block equals data_blocks.
+//
+// dmOffset is the first dm device index to use (e.g. 1 when the rootfs already
+// occupies dm-0). blkOffset is the first virtio-blk index for module images.
+//
+// Returns a list of Params (one dm-mod.create per verity-protected image) and
+// a mapping from image index to the dm device path the agent should mount.
+func GetKernelModulesVerityParams(images []KernelModulesImageConfig, dmOffset int, blkOffset int) ([]Param, map[int]string, error) {
+	var params []Param
+	dmDevices := make(map[int]string)
+
+	dmIdx := dmOffset
+	for i, img := range images {
+		if strings.TrimSpace(img.VerityParams) == "" {
+			continue
+		}
+
+		cfg, err := ParseKernelVerityParams(img.VerityParams)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid verity_params for kernel_modules_images[%d]: %w", i, err)
+		}
+		if cfg == nil {
+			continue
+		}
+
+		driveName, err := utils.GetVirtDriveName(i + blkOffset)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot determine device name for kernel_modules_images[%d]: %w", i, err)
+		}
+		dev := fmt.Sprintf("/dev/%s", driveName)
+
+		dataSectors := (cfg.dataBlockSize / 512) * cfg.dataBlocks
+		verityCmd := fmt.Sprintf(
+			"dm-modules-%d,,,ro,0 %d verity 1 %s %s %d %d %d %d sha256 %s %s",
+			i,
+			dataSectors,
+			dev, dev,
+			cfg.dataBlockSize,
+			cfg.hashBlockSize,
+			cfg.dataBlocks,
+			cfg.dataBlocks,
+			cfg.rootHash,
+			cfg.salt,
+		)
+
+		params = append(params, Param{
+			Key:   "dm-mod.create",
+			Value: fmt.Sprintf("\"%s\"", verityCmd),
+		})
+		dmDevices[i] = fmt.Sprintf("/dev/dm-%d", dmIdx)
+		dmIdx++
+	}
+
+	return params, dmDevices, nil
 }
 
 func kernelVerityRootFlags(rootfstype string) (string, error) {
@@ -631,6 +697,11 @@ type HypervisorConfig struct {
 
 	// KernelVerityParams are additional guest dm-verity parameters.
 	KernelVerityParams string
+
+	// KernelModulesImages is a list of disk images containing kernel modules
+	// to attach as additional block devices. Each image is mounted inside the
+	// guest and its modules made available via depmod.
+	KernelModulesImages []KernelModulesImageConfig
 
 	// HypervisorParams are additional hypervisor parameters.
 	HypervisorParams []Param
