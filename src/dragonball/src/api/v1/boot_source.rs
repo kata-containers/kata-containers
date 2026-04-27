@@ -30,6 +30,9 @@ pub struct BootSourceConfig {
     /// The boot arguments to pass to the kernel.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boot_args: Option<String>,
+    /// The path to firmware file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firmware_path: Option<String>,
 }
 
 /// Errors associated with actions on `BootSourceConfig`.
@@ -48,6 +51,10 @@ pub enum BootSourceConfigError {
     /// The kernel command line is invalid.
     #[error("the kernel command line is invalid: {0}")]
     InvalidKernelCommandLine(#[source] linux_loader::cmdline::Error),
+
+    /// The firmware file cannot be opened.
+    #[error("the firmware file cannot be opened due to invalid path or invalid permissions: {0}")]
+    InvalidFirmwarePath(#[source] std::io::Error),
 
     /// The boot source cannot be update post boot.
     #[error("the update operation is not allowed after boot")]

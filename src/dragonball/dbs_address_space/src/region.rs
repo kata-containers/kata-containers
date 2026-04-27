@@ -30,6 +30,8 @@ pub enum AddressSpaceRegionType {
     DeviceMemory,
     /// DAX address region for virtio-fs/virtio-pmem.
     DAXMemory,
+    /// Address region where virtual firmwares are loaded.
+    FirmwareMemory,
 }
 
 /// Struct to maintain configuration information about a guest address region.
@@ -269,6 +271,31 @@ impl AddressSpaceRegion {
             None,
             0,
             0,
+            false,
+        ))
+    }
+
+    /// Create an address space region for virtual firmware.
+    ///
+    /// # Arguments
+    /// * `base` - Base address in VM to map content
+    /// * `size` - Length of content to map
+    /// * `prot_flags` - mmap protection flags
+    pub fn create_firmware_region(
+        base: GuestAddress,
+        size: GuestUsize,
+        prot_flags: i32,
+    ) -> Result<AddressSpaceRegion, AddressSpaceError> {
+        // Firmware region currently only supports anonymous mmap
+        let perm_flags = libc::MAP_PRIVATE | libc::MAP_ANONYMOUS;
+        Ok(Self::build(
+            AddressSpaceRegionType::FirmwareMemory,
+            base,
+            size,
+            None,
+            None,
+            perm_flags,
+            prot_flags,
             false,
         ))
     }

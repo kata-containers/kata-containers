@@ -11,6 +11,8 @@
 
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::pmu::PmuError;
+#[cfg(target_arch = "x86_64")]
+use dbs_boot::tdshim::TdvfError;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtioError;
 
@@ -228,6 +230,28 @@ pub enum StartMicroVmError {
     /// Cannot enable split irqchip
     #[error("Failed to enable split irqchip: {0}")]
     EnableSplitIrqchip(#[source] vmm_sys_util::errno::Error),
+
+    /// Missing firmware file
+    #[error("Cannot start microvm due to missing firmware file")]
+    MissingFirmwareFile,
+
+    #[cfg(target_arch = "x86_64")]
+    /// TDVF errors
+    #[error("TDVF error: {0}")]
+    TdvfError(#[source] TdvfError),
+
+    /// Kernel file is too large
+    #[error("Payload file is too large")]
+    PayloadTooLarge,
+
+    #[cfg(target_arch = "x86_64")]
+    /// Missing tdshim section
+    #[error("Missing tdshim section: {0}")]
+    MissingTdshimSection(&'static str),
+
+    /// Guest address space not initialized
+    #[error("Guest address space not initialized")]
+    GuestMemoryNotInitialized,
 }
 
 /// Errors associated with starting the instance.

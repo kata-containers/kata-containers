@@ -91,7 +91,7 @@ impl Vm {
         // setting up the IRQ chip because the `KVM_CREATE_VCPU` ioctl will return error if the IRQCHIP
         // was already initialized.
         // Search for `kvm_arch_vcpu_create` in arch/arm/kvm/arm.c.
-        let kernel_loader_result = self.load_kernel(vm_as.memory().deref())?;
+        let kernel_loader_result = self.load_kernel(vm_as.memory().deref(), None)?;
         self.vcpu_manager()
             .map_err(StartMicroVmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)

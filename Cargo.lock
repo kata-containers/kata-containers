@@ -1798,6 +1798,7 @@ dependencies = [
  "arc-swap",
  "bytes 1.11.1",
  "crossbeam-channel",
+ "dbs-acpi",
  "dbs-address-space",
  "dbs-allocator",
  "dbs-arch",

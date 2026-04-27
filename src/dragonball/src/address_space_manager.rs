@@ -27,6 +27,7 @@ use dbs_address_space::{
     AddressSpaceRegionType, NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED,
 };
 use dbs_allocator::Constraint;
+use dbs_boot::layout::{BIOS_MEM_SIZE, BIOS_MEM_START};
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, warn};
@@ -164,11 +165,12 @@ pub struct AddressSpaceMgrBuilder<'a> {
     mem_prealloc: bool,
     dirty_page_logging: bool,
     vmfd: Option<Arc<VmFd>>,
+    use_firmware: bool,
 }
 
 impl<'a> AddressSpaceMgrBuilder<'a> {
     /// Create a new [`AddressSpaceMgrBuilder`] object.
-    pub fn new(mem_type: &'a str, mem_file: &'a str) -> Result<Self> {
+    pub fn new(mem_type: &'a str, mem_file: &'a str, use_firmware: bool) -> Result<Self> {
         if mem_type.is_empty() {
             return Err(AddressManagerError::TypeInvalid(mem_type.to_string()));
         }
@@ -180,6 +182,7 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
             mem_prealloc: false,
             dirty_page_logging: false,
             vmfd: None,
+            use_firmware,
         })
     }
 
@@ -317,17 +320,31 @@ impl AddressSpaceMgr {
             }
         }
 
+        if param.use_firmware {
+            let region = Arc::new(
+                AddressSpaceRegion::create_firmware_region(
+                    GuestAddress(BIOS_MEM_START),
+                    BIOS_MEM_SIZE,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                )
+                .map_err(AddressManagerError::CreateAddressSpaceRegion)?,
+            );
+            regions.push(region);
+        }
+
         // Create GuestMemory object
         let mut vm_memory = GuestMemoryMmap::new();
         for reg in regions.iter() {
-            // Allocate used guest memory addresses.
-            // These addresses are statically allocated, resource allocation/update should not fail.
-            let constraint = Constraint::new(reg.len())
-                .min(reg.start_addr().raw_value())
-                .max(reg.last_addr().raw_value());
-            let _key = res_mgr
-                .allocate_mem_address(&constraint)
-                .ok_or(AddressManagerError::NoAvailableMemAddress)?;
+            if reg.region_type() != AddressSpaceRegionType::FirmwareMemory {
+                // Allocate used guest memory addresses.
+                // These addresses are statically allocated, resource allocation/update should not fail.
+                let constraint = Constraint::new(reg.len())
+                    .min(reg.start_addr().raw_value())
+                    .max(reg.last_addr().raw_value());
+                let _key = res_mgr
+                    .allocate_mem_address(&constraint)
+                    .ok_or(AddressManagerError::NoAvailableMemAddress)?;
+            }
             let mmap_reg = self.create_mmap_region(reg.clone())?;
 
             vm_memory = vm_memory
@@ -713,7 +730,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
         }];
-        let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+        let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         let vm_as = as_mgr.get_vm_as().unwrap();
         let guard = vm_as.memory();
@@ -760,7 +777,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
         }];
-        let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+        let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         let vm_as = as_mgr.get_vm_as().unwrap();
         let guard = vm_as.memory();
@@ -780,7 +797,7 @@ mod tests {
                 guest_numa_node_id: Some(0),
                 vcpu_ids: vec![1, 2],
             }];
-            let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+            let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
             let _as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         }
         let file = TempFile::new().unwrap().into_file();
@@ -804,7 +821,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
         }];
-        let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+        let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         assert_eq!(as_mgr.get_layout().unwrap(), layout);
     }
@@ -820,7 +837,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: cpu_vec.clone(),
         }];
-        let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+        let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         let mut numa_node = NumaNode::new();
         numa_node.add_info(&NumaNodeInfo {
@@ -843,7 +860,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: cpu_vec,
         }];
-        let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "").unwrap();
+        let mut builder = AddressSpaceMgrBuilder::new("hugeshmem", "", false).unwrap();
         builder.toggle_prealloc(true);
         let mut as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         as_mgr.wait_prealloc(false).unwrap();
@@ -851,7 +868,7 @@ mod tests {
 
     #[test]
     fn test_address_space_mgr_builder() {
-        let mut builder = AddressSpaceMgrBuilder::new("shmem", "/tmp/shmem").unwrap();
+        let mut builder = AddressSpaceMgrBuilder::new("shmem", "/tmp/shmem", false).unwrap();
 
         assert_eq!(builder.mem_type, "shmem");
         assert_eq!(builder.mem_file, "/tmp/shmem");
@@ -887,7 +904,7 @@ mod tests {
             guest_numa_node_id: Some(0),
             vcpu_ids: vec![1, 2],
         }];
-        let builder = AddressSpaceMgrBuilder::new("shmem", "").unwrap();
+        let builder = AddressSpaceMgrBuilder::new("shmem", "", false).unwrap();
         let as_mgr = builder.build(&res_mgr, &numa_region_infos).unwrap();
         let mmap_reg = MmapRegion::new(8).unwrap();
 

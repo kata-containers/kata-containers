@@ -15,6 +15,9 @@ mod aarch64;
 #[cfg(target_arch = "aarch64")]
 pub use aarch64::*;
 
+mod firmware;
+pub use firmware::*;
+
 /// Specialized [std::result::Result] for boot related operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
