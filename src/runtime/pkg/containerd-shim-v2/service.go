@@ -242,7 +242,6 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 	}
 
 	socket, err := cdshim.NewSocket(address)
-
 	if err != nil {
 		if !cdshim.SocketEaddrinuse(err) {
 			return "", err
@@ -349,10 +348,10 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Cleanup", shimTracingTags)
 	defer span.End()
 
-	//Since the binary cleanup will return the DeleteResponse from stdout to
-	//containerd, thus we must make sure there is no any outputs in stdout except
-	//the returned response, thus here redirect the log to stderr in case there's
-	//any log output to stdout.
+	// Since the binary cleanup will return the DeleteResponse from stdout to
+	// containerd, thus we must make sure there is no any outputs in stdout except
+	// the returned response, thus here redirect the log to stderr in case there's
+	// any log output to stdout.
 	logrus.SetOutput(os.Stderr)
 
 	defer func() {
@@ -376,6 +375,13 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	containerType, err := oci.ContainerType(ociSpec)
 	if err != nil {
 		return nil, err
+	}
+	if containerType != vc.PodContainer {
+		defer func() {
+			if address, addrErr := cdshim.ReadAddress("address"); addrErr == nil {
+				_ = cdshim.RemoveSocket(address)
+			}
+		}()
 	}
 
 	switch containerType {
@@ -486,7 +492,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 	s.eventSendMu.Lock()
 	defer s.eventSendMu.Unlock()
 
-	//start a container
+	// start a container
 	if r.ExecID == "" {
 		err = startContainer(spanCtx, s, c)
 		if err != nil {
@@ -497,7 +503,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 			Pid:         s.hpid,
 		})
 	} else {
-		//start an exec
+		// start an exec
 		_, err = startExec(spanCtx, s, r.ID, r.ExecID)
 		if err != nil {
 			return nil, errdefs.ToGRPC(err)
@@ -553,7 +559,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 			Pid:        s.hpid,
 		}, nil
 	}
-	//deal with the exec case
+	// deal with the exec case
 	execs, err := c.getExec(r.ExecID)
 	if err != nil {
 		return nil, err
@@ -685,7 +691,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 		}, nil
 	}
 
-	//deal with exec case
+	// deal with exec case
 	execs, err := c.getExec(r.ExecID)
 	if err != nil {
 		return nil, err
@@ -952,7 +958,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 
 	return &taskAPI.ConnectResponse{
 		ShimPid: s.pid,
-		//Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
+		// Since kata cannot get the container's pid in VM, thus only return the hypervisor's pid.
 		TaskPid: s.hpid,
 	}, nil
 }
@@ -1090,14 +1096,14 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 		return nil, err
 	}
 
-	//wait for container
+	// wait for container
 	if r.ExecID == "" {
 		ret = <-c.exitCh
 
 		// refill the exitCh with the container process's exit code in case
 		// there were other waits on this process.
 		c.exitCh <- ret
-	} else { //wait for exec
+	} else { // wait for exec
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
 			return nil, err
