@@ -1,5 +1,0 @@
-*.coverprofile
-coverage.txt
-node_modules/
-vendor
-.idea

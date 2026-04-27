@@ -6,7 +6,7 @@
 
 PREFIX := /usr
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-GOBUILD_FLAGS := -mod=vendor
+GOBUILD_FLAGS :=
 
 #
 # Pretty printing
@@ -23,7 +23,7 @@ QUIET_GOBUILD = $(Q:@=@echo    '     GOBUILD  '$@;)
 all: build
 
 build:
-	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) $(go list ./... | grep -v /vendor/)
+	$(QUIET_GOBUILD)go build $(GOBUILD_FLAGS) $(go list ./...)
 
 #
 # Tests

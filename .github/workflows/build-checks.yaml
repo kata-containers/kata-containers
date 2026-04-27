@@ -22,7 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         command:
-          - "make vendor"
           - "make check"
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
@@ -119,7 +118,7 @@ jobs:
         if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
         run: sudo apt-get update && sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
-        if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make vendor' && matrix.command != 'make check'
+        if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make check'
         run: |
           libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
           gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -128,7 +127,7 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> "$GITHUB_ENV"
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
-        if: contains(matrix.component.needs, 'protobuf-compiler') && matrix.command != 'make vendor'
+        if: contains(matrix.component.needs, 'protobuf-compiler')
         run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: contains(matrix.component.needs, 'clang') && matrix.command == 'make check'

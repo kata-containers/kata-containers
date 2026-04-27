@@ -147,10 +147,6 @@ clean:
 	@rm -f $(GENERATED_FILES)
 	@rm -f tarpaulin-report.html
 
-vendor:
-	@cargo vendor
-
-
 #TARGET test: run cargo tests
 test: $(GENERATED_FILES)
 	@RUST_LIB_BACKTRACE=0 RUST_BACKTRACE=1 cargo test -p kata-agent --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
@@ -220,8 +216,7 @@ codecov-html: check_tarpaulin
 	help \
 	optimize \
 	show-header \
-	show-summary \
-	vendor
+	show-summary
 
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
