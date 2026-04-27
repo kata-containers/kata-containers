@@ -16,6 +16,9 @@ pub enum Error {
 }
 
 /// Get CPUID value for (`function`, `count`).
+// TODO: Remove `unsafe` / `#[allow(unused_unsafe)]` when every rustc we build with matches the
+// stdarch change where these intrinsics are safe (rustc 1.94+); keep for older toolchains.
+#[allow(unused_unsafe)]
 pub fn get_cpuid(function: u32, count: u32) -> Result<CpuidResult, Error> {
     #[cfg(target_env = "sgx")]
     {

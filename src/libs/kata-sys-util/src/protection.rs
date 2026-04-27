@@ -126,6 +126,10 @@ pub fn arch_guest_protection(
         // shouldn't hurt to double-check and have better logging if anything
         // goes wrong.
 
+        // TODO: Remove `unsafe` / `#[allow(unused_unsafe)]` when every rustc we build with treats
+        // `core::arch::x86_64::__cpuid` as a safe function (see rust-lang/stdarch#1935); keep for
+        // older toolchains that still require `unsafe` here.
+        #[allow(unused_unsafe)]
         let fn0 = unsafe { x86_64::__cpuid(0) };
         // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
         // interpreted byte-wise as ASCII.  No need to bother here with an
@@ -138,7 +142,8 @@ pub fn arch_guest_protection(
             ));
         }
 
-        // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
+        // AMD64 Architecture Programmer's Manual Fn8000_001f docs on pg. 640
+        #[allow(unused_unsafe)]
         let fn8000_001f = unsafe { x86_64::__cpuid(0x8000_001f) };
         if fn8000_001f.eax & 0x10 == 0 {
             return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));

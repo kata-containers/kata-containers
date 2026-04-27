@@ -760,7 +760,8 @@ pub fn umount_timeout<P: AsRef<Path>>(path: P, timeout: u64) -> Result<()> {
 /// # Safety
 /// Caller needs to ensure safety of the `path` to avoid possible file path based attacks.
 pub fn umount_all<P: AsRef<Path>>(mountpoint: P, lazy_umount: bool) -> Result<()> {
-    if mountpoint.as_ref().as_os_str().is_empty() || !mountpoint.as_ref().exists() {
+    let mp = mountpoint.as_ref();
+    if mp.as_os_str().is_empty() || !mp.exists() {
         return Ok(());
     }
 
