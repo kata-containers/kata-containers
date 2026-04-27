@@ -56,7 +56,7 @@ pub const IRQ_BASE: u32 = 5;
 pub const IRQ_MAX: u32 = 15;
 
 /// Address for the TSS setup.
-pub const KVM_TSS_ADDRESS: u64 = 0xfffb_d000;
+pub const KVM_TSS_ADDRESS: u64 = 0xfefb_d000;
 
 /// Where BIOS/VGA magic would live on a real PC.
 pub const EBDA_START: u64 = 0x9fc00;
@@ -69,6 +69,11 @@ pub const MMIO_LOW_END: u64 = (4u64 << 30) - 1;
 pub const GUEST_MEM_START: u64 = 0u64;
 /// Size of memory below MMIO hole.
 pub const GUEST_MEM_LOW_SIZE: u64 = MMIO_LOW_START - GUEST_MEM_START;
+
+/// Lower bound of BIOS memory.
+pub const BIOS_MEM_START: u64 = MMIO_LOW_END - BIOS_MEM_SIZE + 1;
+/// Size of BIOS memory.
+pub const BIOS_MEM_SIZE: u64 = 16u64 << 20;
 
 /// Max retry times for reading /proc/cpuinfo
 const CPUINFO_READ_RETRY: u64 = 5;
