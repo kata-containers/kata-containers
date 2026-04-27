@@ -190,6 +190,7 @@ jobs:
       matrix:
         vmm:
           - qemu
+          - qemu-runtime-rs
     runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}

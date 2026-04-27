@@ -563,6 +563,46 @@ impl VirtSandbox {
     ) -> bool {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
+
+    /// Build a network rescan config targeting the hypervisor's network
+    /// namespace.  Docker 26+ bind-mounts `/proc/<vmm_pid>/ns/net` and
+    /// configures veth pairs there between Create and Start, so the
+    /// hypervisor netns is where the interfaces will appear — regardless
+    /// of whether we earlier created a placeholder netns (network_created)
+    /// or not.  This mirrors the Go shim's `detectHypervisorNetns` logic
+    /// inside `addAllEndpoints` (commit f7878cc).
+    async fn netns_rescan_config(&self) -> Option<NetworkWithNetNsConfig> {
+        let toml = self.resource_manager.config().await;
+        if toml.runtime.disable_new_netns {
+            return None;
+        }
+        if dan_config_path(&toml, &self.sid).exists() {
+            return None;
+        }
+        self.sandbox_config.as_ref()?;
+
+        let vmm_pid = match self.hypervisor.get_vmm_master_tid().await {
+            Ok(pid) => pid,
+            Err(e) => {
+                warn!(sl!(), "netns_rescan_config: cannot get VMM PID: {:?}", e);
+                return None;
+            }
+        };
+        let netns_path = format!("/proc/{}/ns/net", vmm_pid);
+
+        let queues = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .network_info
+            .network_queues as usize;
+        Some(NetworkWithNetNsConfig {
+            network_model: toml.runtime.internetworking_model.clone(),
+            netns_path,
+            queues,
+            network_created: false,
+        })
+    }
 }
 
 #[async_trait]
@@ -748,6 +788,7 @@ impl Sandbox for VirtSandbox {
         });
         self.monitor.start(id, self.agent.clone());
         self.save().await.context("save state")?;
+
         Ok(())
     }
 
@@ -874,6 +915,20 @@ impl Sandbox for VirtSandbox {
             .context("resource clean up")?;
 
         // TODO: cleanup other sandbox resource
+        Ok(())
+    }
+
+    async fn rescan_network(&self) -> Result<()> {
+        if let Some(net_cfg) = self.netns_rescan_config().await {
+            info!(
+                sl!(),
+                "rescan_network: scanning netns={}", net_cfg.netns_path
+            );
+            self.resource_manager
+                .rescan_network_if_unconfigured(net_cfg)
+                .await
+                .context("network rescan during start")?;
+        }
         Ok(())
     }
 

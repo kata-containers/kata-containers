@@ -51,6 +51,10 @@ pub trait Sandbox: Send + Sync {
         shim_pid: u32,
     ) -> Result<()>;
 
+    // Docker 26+ network rescan: discover interfaces that Docker configured
+    // between the Create and Start RPCs.
+    async fn rescan_network(&self) -> Result<()>;
+
     // metrics function
     async fn agent_metrics(&self) -> Result<String>;
     async fn hypervisor_metrics(&self) -> Result<String>;

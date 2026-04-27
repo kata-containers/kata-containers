@@ -3555,6 +3555,7 @@ dependencies = [
  "oci-spec 0.8.4",
  "pci-ids",
  "rand 0.10.1",
+ "rstest",
  "runtime-spec",
  "serde",
  "serde_json",

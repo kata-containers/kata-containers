@@ -81,8 +81,10 @@ impl VirtContainerManager {
 impl ContainerManager for VirtContainerManager {
     #[instrument]
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
+        let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
+
         let mut container = Container::new(
-            self.pid,
+            vmm_master_tid,
             config.clone(),
             spec.clone(),
             self.agent.clone(),
@@ -96,7 +98,6 @@ impl ContainerManager for VirtContainerManager {
         // * should be run in vmm namespace (hook path in runtime namespace)
         // * should be run after the vm is started, before container is created, and after CreateRuntime Hooks
         // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createcontainer-hooks
-        let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
         let vmm_ns_path = self.hypervisor.get_ns_path().await?;
         let vmm_netns_path = format!("{}/{}", vmm_ns_path, "net");
         let state = spec::State {
@@ -128,7 +129,9 @@ impl ContainerManager for VirtContainerManager {
         }
 
         containers.insert(container.container_id.to_string(), container);
-        Ok(PID { pid: self.pid })
+        Ok(PID {
+            pid: vmm_master_tid,
+        })
     }
 
     #[instrument]
@@ -343,7 +346,9 @@ impl ContainerManager for VirtContainerManager {
             poststart_hook_states.execute_hooks(from_hooks(hooks.poststart()), Some(state))?;
         }
 
-        Ok(PID { pid: self.pid })
+        Ok(PID {
+            pid: vmm_master_tid,
+        })
     }
 
     #[instrument]
@@ -356,11 +361,11 @@ impl ContainerManager for VirtContainerManager {
         if let Some(c) = containers.get(container_id) {
             c.state_process(process).await.context("state process")
         } else if container_id == &self.sid {
-            // Sandbox container state - return synthetic state
+            let vmm_pid = self.hypervisor.get_vmm_master_tid().await?;
             Ok(ProcessStateInfo {
                 container_id: self.sid.clone(),
                 exec_id: String::new(),
-                pid: PID { pid: self.pid },
+                pid: PID { pid: vmm_pid },
                 bundle: String::new(),
                 stdin: None,
                 stdout: None,
@@ -433,12 +438,14 @@ impl ContainerManager for VirtContainerManager {
 
     #[instrument]
     async fn pid(&self) -> Result<PID> {
-        Ok(PID { pid: self.pid })
+        let vmm_pid = self.hypervisor.get_vmm_master_tid().await?;
+        Ok(PID { pid: vmm_pid })
     }
 
     #[instrument]
     async fn connect_container(&self, _id: &ContainerID) -> Result<PID> {
-        Ok(PID { pid: self.pid })
+        let vmm_pid = self.hypervisor.get_vmm_master_tid().await?;
+        Ok(PID { pid: vmm_pid })
     }
 
     #[instrument]

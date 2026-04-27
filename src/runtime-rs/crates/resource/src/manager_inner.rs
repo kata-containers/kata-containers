@@ -37,7 +37,7 @@ use crate::{
         cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource, swap::SwapResource,
     },
     manager::ManagerArgs,
-    network::{self, Network, NetworkConfig},
+    network::{self, dan_config_path, Network, NetworkConfig, NetworkWithNetNsConfig},
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
@@ -325,6 +325,59 @@ impl ResourceManagerInner {
         }
 
         Ok(())
+    }
+
+    pub async fn apply_network_to_agent(&self, network: &dyn Network) -> Result<()> {
+        self.handle_interfaces(network).await.context("handle interfaces")?;
+        self.handle_neighbours(network)
+            .await
+            .context("handle neighbors")?;
+        self.handle_routes(network).await.context("handle routes")?;
+        Ok(())
+    }
+
+    /// Check whether a rescan is needed at all (early-out conditions).
+    pub fn rescan_should_skip(&self, net_cfg: &NetworkWithNetNsConfig) -> bool {
+        self.toml_config.runtime.disable_new_netns
+            || net_cfg.network_model == "none"
+            || net_cfg.netns_path.is_empty()
+            || dan_config_path(&self.toml_config, &self.sid).exists()
+    }
+
+    /// Check whether the network already has interfaces configured.
+    pub async fn network_has_interfaces(&self) -> Result<bool> {
+        match self.network.as_ref() {
+            Some(n) => Ok(!n
+                .interfaces()
+                .await
+                .context("check existing interfaces")?
+                .is_empty()),
+            None => Ok(false),
+        }
+    }
+
+    /// Perform a single network scan attempt.  Returns `Some(network)` when
+    /// new interfaces were found and need to be applied to the guest agent,
+    /// `None` when no interfaces were found yet (caller should retry).
+    /// The caller is responsible for calling `apply_network_to_agent` on
+    /// the returned network **after** releasing the write lock.
+    pub async fn rescan_network_once(
+        &mut self,
+        net_cfg: NetworkWithNetNsConfig,
+    ) -> Result<Option<Arc<dyn Network>>> {
+        self.handle_network(NetworkConfig::NetNs(net_cfg))
+            .await
+            .context("rescan handle network")?;
+
+        let n = self
+            .network
+            .as_ref()
+            .ok_or_else(|| anyhow!("network missing after rescan setup"))?;
+        let ifs = n.interfaces().await.context("rescan get interfaces")?;
+        if !ifs.is_empty() {
+            return Ok(Some(Arc::clone(n)));
+        }
+        Ok(None)
     }
 
     pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
