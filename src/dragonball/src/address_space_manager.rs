@@ -162,6 +162,7 @@ pub struct AddressSpaceMgrBuilder<'a> {
     mem_index: u32,
     mem_suffix: bool,
     mem_prealloc: bool,
+    mem_merge: bool,
     dirty_page_logging: bool,
     vmfd: Option<Arc<VmFd>>,
 }
@@ -178,6 +179,7 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
             mem_index: 0,
             mem_suffix: true,
             mem_prealloc: false,
+            mem_merge: false,
             dirty_page_logging: false,
             vmfd: None,
         })
@@ -194,6 +196,12 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
     /// Disable this feature may influence performance stability but the cpu resource consumption and start-up time will decrease.
     pub fn toggle_prealloc(&mut self, prealloc: bool) {
         self.mem_prealloc = prealloc;
+    }
+
+    /// Enable/disable KSM page merging via madvise(MADV_MERGEABLE).
+    /// Only effective on anonymous guest memory regions.
+    pub fn toggle_mem_merge(&mut self, mem_merge: bool) {
+        self.mem_merge = mem_merge;
     }
 
     /// Enable/disable KVM dirty page logging.
@@ -241,6 +249,7 @@ pub struct AddressSpaceMgr {
     prealloc_handlers: Vec<thread::JoinHandle<()>>,
     prealloc_exit: Arc<AtomicBool>,
     numa_nodes: BTreeMap<u32, NumaNode>,
+    mem_merge: bool,
 }
 
 impl AddressSpaceMgr {
@@ -269,6 +278,8 @@ impl AddressSpaceMgr {
         numa_region_infos: &[NumaRegionInfo],
         mut param: AddressSpaceMgrBuilder,
     ) -> Result<()> {
+        self.mem_merge = param.mem_merge;
+
         let mut regions = Vec::new();
         let mut start_addr = dbs_boot::layout::GUEST_MEM_START;
 
@@ -484,6 +495,9 @@ impl AddressSpaceMgr {
 
         if region.is_anonpage() {
             self.configure_anon_mem(&mmap_reg)?;
+            if self.mem_merge {
+                self.configure_mergeable(&mmap_reg);
+            }
         }
         if let Some(node_id) = region.host_numa_node_id() {
             self.configure_numa(&mmap_reg, node_id)?;
@@ -509,6 +523,31 @@ impl AddressSpaceMgr {
             )
         }
         .map_err(AddressManagerError::Madvise)
+    }
+
+    fn configure_mergeable(&self, mmap_reg: &MmapRegion) {
+        // SAFETY: MmapRegion's invariants guarantee as_ptr() points to the
+        // start of a valid mapping of exactly size() bytes, which is what
+        // madvise requires. MADV_MERGEABLE is an advisory hint and does not
+        // alter the mapping's address or length. Failure is non-fatal (e.g.
+        // kernel built without CONFIG_KSM): this is an opt-in feature and
+        // the VM runs correctly un-merged.
+        let ret = unsafe {
+            mman::madvise(
+                mmap_reg.as_ptr() as *mut libc::c_void,
+                mmap_reg.size(),
+                mman::MmapAdvise::MADV_MERGEABLE,
+            )
+        };
+        if let Err(e) = ret {
+            warn!(
+                "madvise(MADV_MERGEABLE) failed for region addr {:x?} len {:x?}: {} \
+                 (KSM disabled in kernel? continuing without dedup)",
+                mmap_reg.as_ptr(),
+                mmap_reg.size(),
+                e
+            );
+        }
     }
 
     fn configure_numa(&self, mmap_reg: &MmapRegion, node_id: u32) -> Result<()> {
@@ -689,6 +728,7 @@ impl Default for AddressSpaceMgr {
             prealloc_handlers: Vec::new(),
             prealloc_exit: Arc::new(AtomicBool::new(false)),
             numa_nodes: BTreeMap::new(),
+            mem_merge: false,
         }
     }
 }

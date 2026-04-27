@@ -144,6 +144,11 @@ pub struct VmConfigInfo {
 
     /// Enable PCI device hotplug or not
     pub pci_hotplug_enabled: bool,
+
+    /// Call madvise(MADV_MERGEABLE) on guest memory regions before vCPUs
+    /// start, so host KSM can dedupe identical pages across VMs. Only
+    /// effective when backing is anonymous (e.g. `mem_type = "anon"`).
+    pub mem_merge: bool,
 }
 
 impl Default for VmConfigInfo {
@@ -164,6 +169,7 @@ impl Default for VmConfigInfo {
             mem_size_mib: 128,
             serial_path: None,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         }
     }
 }
@@ -597,6 +603,7 @@ impl Vm {
         let mut address_space_param = AddressSpaceMgrBuilder::new(&mem_type, &mem_file_path)
             .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
+        address_space_param.toggle_mem_merge(self.vm_config.mem_merge);
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
             .map_err(StartMicroVmError::AddressManagerError)?;
@@ -967,6 +974,7 @@ pub mod tests {
             },
             vpmu_feature: 0,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         };
 
         let mut vm = create_vm_instance();
@@ -1000,6 +1008,7 @@ pub mod tests {
             },
             vpmu_feature: 0,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         };
         vm.set_vm_config(vm_config);
         assert!(vm.init_guest_memory().is_ok());
@@ -1049,6 +1058,7 @@ pub mod tests {
             },
             vpmu_feature: 0,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         };
 
         vm.set_vm_config(vm_config);
@@ -1126,6 +1136,7 @@ pub mod tests {
             },
             vpmu_feature: 0,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         };
 
         vm.set_vm_config(vm_config);
@@ -1159,6 +1170,174 @@ pub mod tests {
                 io::stdout().write_all(b"KVM_EXIT_HLT\n").unwrap();
             }
             r => panic!("unexpected exit reason: {:?}", r),
+        }
+    }
+
+    // --- mem_merge kernel-smoke tests ---------------------------------------
+    //
+    // These exercise the full path:
+    //     VmmService::set_vm_configuration(mem_merge, mem_type)
+    //         -> VmConfigInfo
+    //             -> Vm::init_guest_memory
+    //                 -> AddressSpaceMgr (toggle_mem_merge)
+    //                     -> create_region -> configure_mergeable
+    //                         -> madvise(MADV_MERGEABLE)
+    // and validate the *kernel-visible* outcome via /proc/self/smaps VmFlags.
+    //
+    // The "true" case needs CONFIG_KSM (otherwise madvise returns EINVAL and
+    // the kernel never sets the `mg` flag); on CI runners this is universal,
+    // but the test gates on /sys/kernel/mm/ksm/run being present so it
+    // silently no-ops on exotic kernels rather than flaking.
+
+    #[cfg(target_os = "linux")]
+    fn vmflags_for_host_addr(target: usize) -> Option<String> {
+        let smaps = std::fs::read_to_string("/proc/self/smaps").ok()?;
+        let mut cur_range: Option<(usize, usize)> = None;
+        let mut cur_flags: Option<String> = None;
+        for line in smaps.lines() {
+            if let Some((lo, hi)) = line
+                .split_whitespace()
+                .next()
+                .and_then(|r| r.split_once('-'))
+                .and_then(|(l, h)| {
+                    Some((
+                        usize::from_str_radix(l, 16).ok()?,
+                        usize::from_str_radix(h, 16).ok()?,
+                    ))
+                })
+            {
+                if let (Some((rl, rh)), Some(f)) = (cur_range, cur_flags.as_ref()) {
+                    if target >= rl && target < rh {
+                        return Some(f.clone());
+                    }
+                }
+                cur_range = Some((lo, hi));
+                cur_flags = None;
+            } else if let Some(rest) = line.strip_prefix("VmFlags:") {
+                cur_flags = Some(rest.trim().to_string());
+            }
+        }
+        if let (Some((rl, rh)), Some(f)) = (cur_range, cur_flags) {
+            if target >= rl && target < rh {
+                return Some(f);
+            }
+        }
+        None
+    }
+
+    #[cfg(target_os = "linux")]
+    fn host_addrs_of_guest_memory(vm: &Vm) -> Vec<(usize, usize)> {
+        use vm_memory::{GuestMemoryRegion, MemoryRegionAddress};
+        let mem = match vm.address_space.vm_memory() {
+            Some(m) => m,
+            None => return Vec::new(),
+        };
+        let mut out = Vec::new();
+        mem.iter().for_each(|region| {
+            if let Ok(ptr) = region.get_host_address(MemoryRegionAddress(0)) {
+                out.push((ptr as usize, region.len() as usize));
+            }
+        });
+        out
+    }
+
+    #[cfg(target_os = "linux")]
+    fn ksm_supported() -> bool {
+        std::path::Path::new("/sys/kernel/mm/ksm/run").exists()
+    }
+
+    #[cfg(target_os = "linux")]
+    fn build_vm_with_mem_merge(mem_merge: bool) -> (Arc<Mutex<crate::vmm::Vmm>>, VmConfigInfo) {
+        use crate::vmm::tests::create_vmm_instance;
+        use dbs_utils::epoll_manager::EpollManager;
+        let vmm = Arc::new(Mutex::new(create_vmm_instance(EpollManager::default())));
+        let vm_config = VmConfigInfo {
+            mem_type: "anon".to_string(),
+            mem_merge,
+            mem_size_mib: 16,
+            vcpu_count: 1,
+            max_vcpu_count: 1,
+            ..VmConfigInfo::default()
+        };
+        (vmm, vm_config)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn apply_config_and_init(
+        vmm: &Arc<Mutex<crate::vmm::Vmm>>,
+        vm_config: VmConfigInfo,
+    ) -> Vec<(usize, usize)> {
+        use crate::api::v1::VmmService;
+        use crossbeam_channel::unbounded;
+        let (_tx_req, rx_req) = unbounded();
+        let (tx_resp, _rx_resp) = unbounded();
+        let mut vservice = VmmService::new(rx_req, tx_resp);
+        let mut v = vmm.lock().unwrap();
+        vservice
+            .set_vm_configuration(&mut v, vm_config.clone())
+            .expect("set_vm_configuration");
+        let vm = v.get_vm_mut().unwrap();
+        // Regression guard for vmm_action.rs set_vm_configuration: if a future
+        // change drops this field from the per-field copy, init_guest_memory
+        // would silently see mem_merge=false and the kernel check below would
+        // fail with a less obvious diagnostic.
+        assert_eq!(
+            vm.vm_config().mem_merge,
+            vm_config.mem_merge,
+            "set_vm_configuration did not propagate mem_merge to the Vm config",
+        );
+        vm.init_guest_memory().expect("init_guest_memory");
+        host_addrs_of_guest_memory(vm)
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_mem_merge_enabled_sets_kernel_mergeable_flag() {
+        skip_if_kvm_unaccessable!();
+        if !ksm_supported() {
+            // CONFIG_KSM missing; madvise(MADV_MERGEABLE) returns EINVAL and
+            // the kernel cannot set the `mg` flag. Feature is opt-in and
+            // non-fatal in this configuration, so nothing to assert.
+            return;
+        }
+
+        let (vmm, vm_config) = build_vm_with_mem_merge(true);
+        let ranges = apply_config_and_init(&vmm, vm_config);
+        assert!(!ranges.is_empty(), "no guest memory regions after init");
+
+        let mergeable = ranges.iter().any(|(addr, _)| {
+            vmflags_for_host_addr(*addr)
+                .map(|flags| flags.split_whitespace().any(|f| f == "mg"))
+                .unwrap_or(false)
+        });
+        assert!(
+            mergeable,
+            "expected MADV_MERGEABLE (`mg` VmFlag) on at least one guest-memory \
+             VMA when mem_merge=true; ranges={:?}",
+            ranges,
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_mem_merge_disabled_no_kernel_mergeable_flag() {
+        skip_if_kvm_unaccessable!();
+
+        let (vmm, vm_config) = build_vm_with_mem_merge(false);
+        let ranges = apply_config_and_init(&vmm, vm_config);
+        assert!(!ranges.is_empty(), "no guest memory regions after init");
+
+        for (addr, size) in &ranges {
+            if let Some(flags) = vmflags_for_host_addr(*addr) {
+                assert!(
+                    !flags.split_whitespace().any(|f| f == "mg"),
+                    "mem_merge=false guest memory VMA at {:#x}+{:#x} has `mg` \
+                     VmFlag (MADV_MERGEABLE) set; flags={:?}",
+                    addr,
+                    size,
+                    flags
+                );
+            }
         }
     }
 }
