@@ -645,9 +645,9 @@ impl Region {
         }
 
         // NOTE:
-        // Support for VFIO sparse mapping. Code here and the vfio-ioctls crate assumes that
-        // there's one sparse mapping area in each region at most. The assumption doesn't
-        // follow the VFIO specification, but may be acceptable for real PCI hardware.
+        // Support for VFIO sparse mapping with multiple areas per region.
+        // When the MSI-X table sits in the middle of a BAR, VFIO kernel returns
+        // multiple sparse mmap areas to exclude the table region.
         for i in 0..self.mmaps.len() {
             let mmap = &self.mmaps[i];
             let offset = vfio_dev.get_region_offset(self.bar_index) + mmap.mmap_offset;
@@ -1084,21 +1084,28 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 let region_flags = self.vfio_dev.get_region_flags(bar_id);
                 let region_size = self.vfio_dev.get_region_size(bar_id);
                 let caps = self.vfio_dev.get_region_caps(bar_id);
+                let mut sparse_mmaps: Vec<PciRegionMmap> = Vec::new();
                 mmap_size = region_size;
                 for cap in caps {
                     if let VfioRegionInfoCap::SparseMmap(m) = cap {
-                        // assume there is only one mmap area
-                        mmap_offset = m.areas[0].offset;
-                        mmap_size = m.areas[0].size;
+                        for area in &m.areas {
+                            sparse_mmaps.push(PciRegionMmap {
+                                slot: 0,
+                                mmap_offset: area.offset,
+                                mmap_size: area.size,
+                                mmap_host_addr: 0,
+                                prot_flags: 0,
+                            });
+                        }
                     }
                 }
                 is_sparse_mmap =
-                    region_flags & VFIO_REGION_INFO_FLAG_CAPS != 0 && mmap_size != region_size;
+                    region_flags & VFIO_REGION_INFO_FLAG_CAPS != 0 && !sparse_mmaps.is_empty();
                 mappable = region_flags & VFIO_REGION_INFO_FLAG_MMAP != 0 || is_sparse_mmap;
                 if mappable {
                     self.sys_constraints.push(ResourceConstraint::KvmMemSlot {
                         slot: None,
-                        size: 1,
+                        size: if is_sparse_mmap { sparse_mmaps.len() as u32 } else { 1 },
                     })
                 }
                 let mut align = if (bar_id == VFIO_PCI_ROM_REGION_INDEX) || mappable {
@@ -1149,6 +1156,18 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
 
             log::info!("mmap_size {mmap_size}, mmap_offset {mmap_offset} ");
 
+            let mmaps = if is_sparse_mmap {
+                sparse_mmaps
+            } else {
+                vec![PciRegionMmap {
+                    slot: 0,
+                    mmap_offset,
+                    mmap_size,
+                    mmap_host_addr: 0,
+                    prot_flags: 0,
+                }]
+            };
+
             self.regions.push(Region {
                 bar_index: bar_id,
                 reg_index: bar_offset >> 2,
@@ -1159,13 +1178,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 is_mmio_bar: !io_bar,
                 mappable,
                 mapped: false,
-                mmaps: vec![PciRegionMmap {
-                    slot: 0,
-                    mmap_offset,
-                    mmap_size,
-                    mmap_host_addr: 0,
-                    prot_flags: 0,
-                }],
+                mmaps,
                 msix_table: None,
                 is_sparse_mmap,
                 prefetchable: is_prefetchable,
@@ -1194,38 +1207,42 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 let align_to_pagesize = |address| address & !(PAGE_SIZE as u64 - 1);
                 let start = align_to_pagesize(msix.table_offset);
                 let end = align_to_pagesize(start + msix.table_size + PAGE_SIZE as u64 - 1);
-                let region_size = region.mmaps[0].mmap_size;
 
                 log::info!(
-                    "{} fixup region, bar {}, msix table offset 0x{:x}, msix table end 0x{:x}",
+                    "{} fixup region, bar {}, msix table offset 0x{:x}, msix table end 0x{:x}, sparse_mmap {}, mmaps {}",
                     self.vfio_path,
                     region.bar_index,
                     start,
-                    end
+                    end,
+                    region.is_sparse_mmap,
+                    region.mmaps.len()
                 );
 
-                if start == 0 {
-                    if end >= region_size {
-                        region.mappable = false;
+                if !region.is_sparse_mmap {
+                    let region_size = region.mmaps[0].mmap_size;
+                    if start == 0 {
+                        if end >= region_size {
+                            region.mappable = false;
+                        } else {
+                            region.mmaps[0].mmap_offset = end;
+                            region.mmaps[0].mmap_size = region_size - end;
+                        }
+                    } else if end >= region_size {
+                        region.mmaps[0].mmap_size = start;
                     } else {
-                        region.mmaps[0].mmap_offset = end;
-                        region.mmaps[0].mmap_size = region_size - end;
+                        region.mmaps[0].mmap_size = start;
+                        region.mmaps.push(PciRegionMmap {
+                            slot: 0,
+                            mmap_offset: end,
+                            mmap_size: region_size - end,
+                            mmap_host_addr: 0,
+                            prot_flags: 0,
+                        });
+                        self.sys_constraints.push(ResourceConstraint::KvmMemSlot {
+                            slot: None,
+                            size: 1,
+                        });
                     }
-                } else if end >= region_size {
-                    region.mmaps[0].mmap_size = start;
-                } else {
-                    region.mmaps[0].mmap_size = start;
-                    region.mmaps.push(PciRegionMmap {
-                        slot: 0,
-                        mmap_offset: end,
-                        mmap_size: region_size - end,
-                        mmap_host_addr: 0,
-                        prot_flags: 0,
-                    });
-                    self.sys_constraints.push(ResourceConstraint::KvmMemSlot {
-                        slot: None,
-                        size: 1,
-                    });
                 }
                 region.msix_table = Some(MsixTable {
                     offset: start,
