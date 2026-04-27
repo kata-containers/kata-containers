@@ -615,20 +615,24 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
-// Add any mount based block devices to the device manager and Save the
-// device ID for the particular mount. This'll occur when the mountpoint source
-// is a block device.
-func (c *Container) createBlockDevices(ctx context.Context) error {
-	// iterate all mounts and create block device if it's block based.
-	for i := range c.mounts {
-		// If block devices are disabled, we selectively only hotplug if
-		// the mount is an encrypted block-based emptyDir, to avoid
-		// cases that could regress 20ca4d2.
-		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !Isk8sHostEmptyDir(c.mounts[i].Source)) {
-			c.Logger().Warn("Block device not supported")
-			continue
-		}
+// createBlockDevicesForMounts identifies mounts that could be attached as block devices.
+//
+// This function deals with the following classes of mounts:
+// - layers for a block-based snapshotter
+// - directly attached volumes
+// - pmem-backed volumes
+// If a volume is identified to be attachable, this function adds it to the device manager and
+// adjusts the mount description, if necessary.
+// This function does nothing if the hypervisor does not support attaching devices.
+func (c *Container) createBlockDevicesForMounts(ctx context.Context) error {
+	// We can only attach block devices for guest-side mounts if block devices are supported by the
+	// hypervisor.
+	if !c.checkBlockDeviceSupport(ctx) {
+		c.Logger().Info("Block devices not supported by hypervisor, skipping rootfs layers and directly attached volumes")
+		return nil
+	}
 
+	for i := range c.mounts {
 		if len(c.mounts[i].BlockDeviceID) > 0 {
 			// Non-empty m.BlockDeviceID indicates there's already one device
 			// associated with the mount,so no need to create a new device for it
@@ -637,9 +641,25 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		}
 
 		isBlockFile := HasOption(c.mounts[i].Options, vcAnnotations.IsFileBlockDevice)
-		if c.mounts[i].Type != "bind" && !isBlockFile {
-			// We only handle for bind and block device mounts.
-			continue
+
+		// Now we need to check whether this block device should really be added as a disk.
+
+		if isBlockFile {
+			// This is a rootfs layer which we could add as a device to the guest, unless we're
+			// configured otherwise.
+			if !c.checkBlockDeviceSupportForRootFS(ctx) {
+				c.Logger().Debug("Block-based snapshotter detected, but configuration prevents attaching layer devices.")
+				continue
+			}
+		} else {
+			// This mount is unrelated to the rootfs. All other volumes that could possibly result
+			// in a block device are:
+			// - directly attached volume
+			// - pmem-backed volume
+			// Both would come as bind mounts.
+			if !slices.Contains([]string{"bind", "rbind"}, c.mounts[i].Type) {
+				continue
+			}
 		}
 
 		// Handle directly assigned volume. Update the mount info based on the mount info json.
@@ -701,11 +721,15 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
 		di, err := c.createDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination, c.mounts[i].ReadOnly, isBlockFile)
-		if err == nil && di != nil {
+		if err != nil {
+			return fmt.Errorf("createDeviceInfo for %q: %w", c.mounts[i].Source, err)
+		}
+		if di != nil {
 			b, err := c.sandbox.devManager.NewDevice(*di)
 			if err != nil {
 				// Do not return an error, try to create
 				// devices for other mounts
+				// TODO(burgerdev): why is this ok or desirable?
 				c.Logger().WithError(err).WithField("mount-source", c.mounts[i].Source).
 					Error("device manager failed to create new device")
 				continue
@@ -714,6 +738,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 			c.mounts[i].BlockDeviceID = b.DeviceID()
 		}
+		// else: not an attachable device
 	}
 
 	return nil
@@ -786,12 +811,14 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		return nil, err
 	}
 
-	if err := c.createEphemeralDisks(); err != nil {
+	// Create ephemeral disks first, as they use directly-attached volumes which are handled in
+	// createBlockDevicesForMounts.
+	if err := c.createEphemeralDisks(ctx); err != nil {
 		return nil, err
 	}
 
 	// If mounts are block devices, add to devmanager
-	if err := c.createMounts(ctx); err != nil {
+	if err := c.createBlockDevicesForMounts(ctx); err != nil {
 		return nil, err
 	}
 
@@ -803,41 +830,51 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	return c, nil
 }
 
-// Create Device Information about the block device
-func (c *Container) createDeviceInfo(source, destination string, readonly, isBlockFile bool) (*config.DeviceInfo, error) {
+// createDeviceInfo creates a DeviceInfo object for the given mount source, if possible.
+//
+// This function handles two types of mount sources:
+// - a block device (or, if treatRegularAsBlock is true, a regular file treated as such)
+// - a mount backed by a local pmem device
+// If the mount matches neither of these, the function returns nil, nil! The only case in which an
+// error is returned is when the file can't be statted. It's the callers responsibility to check
+// that DeviceInfo is not nil.
+func (c *Container) createDeviceInfo(source, destination string, readonly, treatRegularAsBlock bool) (*config.DeviceInfo, error) {
 	var stat unix.Stat_t
 	if err := unix.Stat(source, &stat); err != nil {
 		return nil, fmt.Errorf("stat %q failed: %v", source, err)
 	}
 
-	var di *config.DeviceInfo
-	var err error
-
 	if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
-		di = &config.DeviceInfo{
+		return &config.DeviceInfo{
 			HostPath:      source,
 			ContainerPath: destination,
 			DevType:       "b",
 			Major:         int64(unix.Major(uint64(stat.Rdev))),
 			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
 			ReadOnly:      readonly,
-		}
-	} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
-		di = &config.DeviceInfo{
+		}, nil
+	} else if treatRegularAsBlock && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+		return &config.DeviceInfo{
 			HostPath:      source,
 			ContainerPath: destination,
 			DevType:       "b",
 			Major:         -1,
 			Minor:         0,
 			ReadOnly:      readonly,
-		}
+		}, nil
 		// Check whether source can be used as a pmem device
-	} else if di, err = config.PmemDeviceInfo(source, destination); err != nil {
+	}
+	// We checked the candidate device path itself, let's see whether what's mounted there is
+	// backed by a device we can use.
+	// TODO(burgerdev): consider deprecating this feature, might be unexpected.
+	di, err := config.PmemDeviceInfo(source, destination)
+	if err != nil {
 		c.Logger().WithError(err).
 			WithField("mount-source", source).
-			Debug("no loop device")
+			Debug("not a pmem device")
+		return nil, nil
 	}
-	return di, err
+	return di, nil
 }
 
 // call hypervisor to create device about KataVirtualVolume.
@@ -865,8 +902,12 @@ func getFilesystemCapacity(path string) (uint64, error) {
 	return stat.Blocks * uint64(stat.Bsize), nil
 }
 
-func (c *Container) createEphemeralDisks() error {
-	if c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+// createEphemeralDisks creates an ephemeral disk for each k8s emptyDir present
+// in the container mounts, and attaches it to the sandbox.
+//
+// This function does nothing if the emptyDir mode is not block-encrypted.
+func (c *Container) createEphemeralDisks(ctx context.Context) error {
+	if c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !c.checkBlockDeviceSupport(ctx) {
 		return nil
 	}
 
@@ -958,11 +999,6 @@ func (c *Container) setupEphemeralDisk(emptyDirPath string) (diskPath string, er
 	return
 }
 
-func (c *Container) createMounts(ctx context.Context) error {
-	// Create block devices for newly created container
-	return c.createBlockDevices(ctx)
-}
-
 func findErofsMountSource(mounts []*mountinfo.Info, mnt string) (string, error) {
 	for _, m := range mounts {
 		if m.FSType == "erofs" && m.Mountpoint == mnt {
@@ -1007,6 +1043,8 @@ func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo
 			di, err := c.createDeviceInfo(s, s, true, true)
 			if err != nil {
 				return nil, err
+			} else if di == nil {
+				return nil, fmt.Errorf("createDeviceInfo thinks %q is not an attachable device", s)
 			}
 			deviceInfos = append(deviceInfos, *di)
 		}
@@ -1035,6 +1073,8 @@ func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo
 				di, err := c.createDeviceInfo(s, s, false, true)
 				if err != nil {
 					return nil, err
+				} else if di == nil {
+					return nil, fmt.Errorf("createDeviceInfo thinks %q is not an attachable device", s)
 				}
 				deviceInfos = append(deviceInfos, *di)
 			}
@@ -1169,17 +1209,25 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 	}
 }
 
-func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
+// checkBlockDeviceSupportForRootFS returns true if the hypervisor supports block devices and the
+// configuration allows plugging the rootfs block layers into the guest.
+//
+// Note: this function applies to rootfs layers only. It is _not_ intended to check for block
+// device support, use checkBlockDeviceSupport instead.
+func (c *Container) checkBlockDeviceSupportForRootFS(ctx context.Context) bool {
 	if !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse {
-		agentCaps := c.sandbox.agent.capabilities()
-		hypervisorCaps := c.sandbox.hypervisor.Capabilities(ctx)
-
-		if agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported() {
-			return true
-		}
+		// Allowed by config, check technical capabilities.
+		return c.checkBlockDeviceSupport(ctx)
 	}
-
 	return false
+}
+
+// checkBlockDeviceSupport checks whether the guest supports hot-plugging block devices.
+func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
+	agentCaps := c.sandbox.agent.capabilities()
+	hypervisorCaps := c.sandbox.hypervisor.Capabilities(ctx)
+
+	return agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported()
 }
 
 // Sort the devices starting with device #1 being the VFIO control group
@@ -1405,7 +1453,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsErofsRootFS(c.rootFs) {
+	if c.checkBlockDeviceSupportForRootFS(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsErofsRootFS(c.rootFs) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
@@ -1851,14 +1899,17 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 	return c.setStateFstype(fsType)
 }
 
-// plugDevice will attach the rootfs if blockdevice is supported (this is rootfs specific)
+// plugDevice registers the given block device with the device manager and attaches it to the
+// guest.
+// This function assumes block devices are supported by the hypervisor and allowed by config.
 func (c *Container) plugDevice(ctx context.Context, devicePath string) error {
 	var stat unix.Stat_t
 	if err := unix.Stat(devicePath, &stat); err != nil {
 		return fmt.Errorf("stat %q failed: %v", devicePath, err)
 	}
 
-	if c.checkBlockDeviceSupport(ctx) && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+	// TODO(burgerdev); why do we have that check, and why is it ok to ignore the else branch?
+	if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
 			HostPath:      devicePath,
 			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
