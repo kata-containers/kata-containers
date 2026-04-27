@@ -28,6 +28,10 @@ on:
       NGC_API_KEY:
         required: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-nvidia-gpu
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -40,6 +44,9 @@ jobs:
           { name: nvidia-gpu,     vmm: qemu-nvidia-gpu,     runner: amd64-nvidia-a100 },
           { name: nvidia-gpu-snp, vmm: qemu-nvidia-gpu-snp, runner: amd64-nvidia-h100-snp },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.environment.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}

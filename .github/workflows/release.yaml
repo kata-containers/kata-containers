@@ -2,6 +2,10 @@ name: Release Kata Containers
 on:
   workflow_dispatch
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false # Note - don't cancel the in progress build as we could end up with inconsistent results
+
 permissions: {}
 
 jobs:

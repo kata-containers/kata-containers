@@ -29,10 +29,13 @@ on:
       AZ_APPID:
         required: true
       AZ_TENANT_ID:
-       required: true
+        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-aks
+  cancel-in-progress: true
 
 permissions: {}
 
@@ -60,6 +63,9 @@ jobs:
           - host_os: cbl-mariner
             vmm: cloud-hypervisor
             instance-type: normal
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-k8s-tests-aks-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     permissions:
       contents: read
