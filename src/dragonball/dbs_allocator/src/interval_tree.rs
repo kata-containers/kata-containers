@@ -298,12 +298,16 @@ impl<T> Node<T> {
     fn search_superset(&self, key: &Range) -> Option<&Self> {
         if self.0.key.contain(key) {
             Some(self)
-        } else if key.max < self.0.key.min && self.0.left.is_some() {
-            // Safe to unwrap() because we have just checked it.
-            self.0.left.as_ref().unwrap().search_superset(key)
-        } else if key.min > self.0.key.max && self.0.right.is_some() {
-            // Safe to unwrap() because we have just checked it.
-            self.0.right.as_ref().unwrap().search_superset(key)
+        } else if key.max < self.0.key.min {
+            self.0
+                .left
+                .as_ref()
+                .and_then(|left| left.search_superset(key))
+        } else if key.min > self.0.key.max {
+            self.0
+                .right
+                .as_ref()
+                .and_then(|right| right.search_superset(key))
         } else {
             None
         }
@@ -313,12 +317,16 @@ impl<T> Node<T> {
     fn search_superset_mut(&mut self, key: &Range) -> Option<&mut Self> {
         if self.0.key.contain(key) {
             Some(self)
-        } else if key.max < self.0.key.min && self.0.left.is_some() {
-            // Safe to unwrap() because we have just checked it.
-            self.0.left.as_mut().unwrap().search_superset_mut(key)
-        } else if key.min > self.0.key.max && self.0.right.is_some() {
-            // Safe to unwrap() because we have just checked it.
-            self.0.right.as_mut().unwrap().search_superset_mut(key)
+        } else if key.max < self.0.key.min {
+            self.0
+                .left
+                .as_mut()
+                .and_then(|left| left.search_superset_mut(key))
+        } else if key.min > self.0.key.max {
+            self.0
+                .right
+                .as_mut()
+                .and_then(|right| right.search_superset_mut(key))
         } else {
             None
         }
@@ -514,17 +522,21 @@ impl<T> Node<T> {
     }
 
     fn first_match(&self, constraint: &Constraint) -> Option<&Self> {
-        let mut candidate = if self.0.left.is_some() {
-            self.0.left.as_ref().unwrap().first_match(constraint)
-        } else {
-            None
-        };
+        let mut candidate = self
+            .0
+            .left
+            .as_ref()
+            .and_then(|left| left.first_match(constraint));
 
         if candidate.is_none() && self.check_constraint(constraint) {
             candidate = Some(self);
         }
-        if candidate.is_none() && self.0.right.is_some() {
-            candidate = self.0.right.as_ref().unwrap().first_match(constraint);
+        if candidate.is_none() {
+            candidate = self
+                .0
+                .right
+                .as_ref()
+                .and_then(|right| right.first_match(constraint));
         }
         candidate
     }

@@ -1515,7 +1515,7 @@ mod tests {
         let one_time_cpath =
             |child: &str| -> String { format!("/{}/{}", one_time_pod_name, child) };
 
-        let test_cases = vec![
+        let test_cases = [
             TestCase {
                 cpath: vec![one_time_cpath("child1")],
                 devices: vec![vec![allow_all.clone()]],
@@ -1586,14 +1586,14 @@ mod tests {
                 drop(devcg_info);
 
                 let pod_devices_list = Command::new("cat")
-                    .arg(&format!(
+                    .arg(format!(
                         "/sys/fs/cgroup/devices/{}/devices.list",
                         one_time_pod_name
                     ))
                     .output()
                     .unwrap();
                 let container_devices_list = Command::new("cat")
-                    .arg(&format!(
+                    .arg(format!(
                         "/sys/fs/cgroup/devices{}/devices.list",
                         tc.cpath[cid]
                     ))
@@ -1633,7 +1633,7 @@ mod tests {
             DEFAULT_DEVICES.len() + DEFAULT_ALLOWED_DEVICES.len()
         );
 
-        let allowed_permissions = vec![
+        let allowed_permissions = [
             DevicePermissions::Read,
             DevicePermissions::Write,
             DevicePermissions::MkNod,
@@ -1647,7 +1647,7 @@ mod tests {
         assert!(default_devices_0
             .access
             .iter()
-            .all(|&p| allowed_permissions.iter().any(|&ap| ap == p)));
+            .all(|&p| allowed_permissions.contains(&p)));
 
         let default_allowed_devices_0 = &allowed_devices[DEFAULT_DEVICES.len()];
         assert!(default_allowed_devices_0.allow);

@@ -1362,7 +1362,7 @@ mod tests {
             .typ(oci::LinuxDeviceType::C)
             .major(0)
             .minor(0)
-            .file_mode(0660 as u32)
+            .file_mode(0o660_u32)
             .uid(unistd::getuid().as_raw())
             .gid(unistd::getgid().as_raw())
             .build()
@@ -1600,7 +1600,7 @@ mod tests {
             },
             TestData {
                 mountinfo_data: Some(
-                    "22 933 0:20 /foo\040-\040bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
+                    "22 933 0:20 /foo\x20-\x20bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
                 ),
                 result: Ok(vec![Info {
                     mount_point: "/sys".to_string(),

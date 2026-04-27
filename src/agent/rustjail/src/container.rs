@@ -1181,8 +1181,8 @@ impl BaseContainer for LinuxContainer {
             child = child.env(FIFO_FD, format!("{fifofd}"));
         }
 
-        if pidns.fd.is_some() {
-            child = child.env(PIDNS_FD, format!("{}", pidns.fd.unwrap()));
+        if let Some(fd) = pidns.fd {
+            child = child.env(PIDNS_FD, format!("{fd}"));
         }
 
         child.spawn()?;
@@ -1979,7 +1979,7 @@ mod tests {
         (
             LinuxContainer::new(
                 "some_id",
-                &dir.path().join("rootfs").to_str().unwrap(),
+                dir.path().join("rootfs").to_str().unwrap(),
                 None,
                 create_dummy_opts(),
                 &slog_scope::logger(),
