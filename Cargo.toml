@@ -11,6 +11,7 @@ members = [
   "src/libs/kata-types",
   "src/libs/logging",
   "src/libs/mem-agent",
+  "src/libs/pod-resources-rs",
   "src/libs/protocols",
   "src/libs/runtime-spec",
   "src/libs/safe-path",
@@ -76,8 +77,8 @@ kvm-bindings = "0.14.0"
 kvm-ioctls = "0.24.0"
 linux-loader = "0.13.0"
 seccompiler = "0.5.0"
-vfio-bindings = "0.6.1"
-vfio-ioctls = "0.5.0"
+vfio-bindings = "0.6.2"
+vfio-ioctls = "0.6.0"
 virtio-bindings = "0.2.0"
 virtio-queue = "0.17.0"
 vm-fdt = "0.3.0"
@@ -117,6 +118,7 @@ wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
 
 # Local dependencies from `src/lib`
 kata-sys-util = { path = "src/libs/kata-sys-util" }
+pod-resources-rs = { path = "src/libs/pod-resources-rs" }
 kata-types = { path = "src/libs/kata-types", features = ["safe-path"] }
 logging = { path = "src/libs/logging" }
 mem-agent = { path = "src/libs/mem-agent" }

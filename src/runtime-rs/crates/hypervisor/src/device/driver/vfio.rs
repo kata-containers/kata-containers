@@ -36,6 +36,10 @@ pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
 pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
 pub const MAX_DEV_ID_SIZE: usize = 31;
 
+/// PCI class bitmasks for devices that must be ignored when enumerating an IOMMU group.
+/// Host Bridge: 0x0600, Audio device: 0x0403.
+const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
+
 const VFIO_PCI_DRIVER_NEW_ID: &str = "/sys/bus/pci/drivers/vfio-pci/new_id";
 const VFIO_PCI_DRIVER_UNBIND: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
 const SYS_CLASS_IOMMU: &str = "/sys/class/iommu";
@@ -176,6 +180,9 @@ pub struct HostDevice {
 
     /// PCI device information (Domain)
     pub domain: String,
+
+    // iommufd for vfio device
+    pub iommufd: String,
 
     /// PCI device information (BDF): "bus:slot:function"
     pub bus_slot_func: String,
@@ -434,10 +441,9 @@ impl VfioDevice {
         }
     }
 
-    // filter Host or PCI Bridges that are in the same IOMMU group as the
-    // passed-through devices. One CANNOT pass-through a PCI bridge or Host
-    // bridge. Class 0x0604 is PCI bridge, 0x0600 is Host bridge
-    fn filter_bridge_device(&self, bdf: &str, bitmask: u64) -> Option<u64> {
+    // filter Host or PCI Bridges and audio devices that are in the same IOMMU
+    // group as the passed-through devices.
+    fn filter_bridge_device(&self, bdf: &str, bitmasks: &[u64]) -> Option<u64> {
         let device_class = match get_device_property(bdf, "class") {
             Ok(dev_class) => dev_class,
             Err(_) => "".to_string(),
@@ -451,11 +457,12 @@ impl VfioDevice {
             Ok(cid_u32) => {
                 // class code is 16 bits, remove the two trailing zeros
                 let class_code = u64::from(cid_u32) >> 8;
-                if class_code & bitmask == bitmask {
-                    Some(class_code)
-                } else {
-                    None
+                for &bitmask in bitmasks {
+                    if class_code & bitmask == bitmask {
+                        return Some(class_code);
+                    }
                 }
+                None
             }
             _ => None,
         }
@@ -488,8 +495,8 @@ impl VfioDevice {
 
         // pass all devices in iommu group, and use index to identify device.
         for (index, device) in iommu_devices.iter().enumerate() {
-            // filter host or PCI bridge
-            if self.filter_bridge_device(device, 0x0600).is_some() {
+            // filter host/PCI bridge, audio, etc.
+            if self.filter_bridge_device(device, IOMMU_IGNORE).is_some() {
                 continue;
             }
 
@@ -531,14 +538,7 @@ impl Device for VfioDevice {
 
         // do add device for vfio device
         match h.add_device(DeviceType::Vfio(self.clone())).await {
-            Ok(dev) => {
-                // Update device info with the one received from device attach
-                if let DeviceType::Vfio(vfio) = dev {
-                    self.config = vfio.config;
-                    self.devices = vfio.devices;
-                    self.allocated = true;
-                }
-
+            Ok(_dev) => {
                 update_pcie_device!(self, pcie_topo)?;
 
                 Ok(())

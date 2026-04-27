@@ -48,6 +48,7 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
+              - protobuf-compiler
           - name: libs
             path: src/libs
             needs:

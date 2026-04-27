@@ -499,9 +499,11 @@ impl VfioDeviceMgr {
             "readonly" => readonly,
         );
         //FIXME: add readonly flag when related commit is pushed to upstream vfio-ioctls
-        self.get_vfio_container()?
-            .vfio_dma_map(iova, size, user_addr)
-            .map_err(VfioDeviceError::VfioIoctlError)?;
+        unsafe {
+            self.get_vfio_container()?
+                .vfio_dma_map(iova, size as usize, user_addr as *mut u8)
+        }
+        .map_err(VfioDeviceError::VfioIoctlError)?;
         self.locked_vm_size += size;
         Ok(())
     }
@@ -516,7 +518,7 @@ impl VfioDeviceMgr {
         let size = region.len();
 
         self.get_vfio_container()?
-            .vfio_dma_unmap(gpa, size)
+            .vfio_dma_unmap(gpa, size as usize)
             .map_err(VfioDeviceError::VfioIoctlError)?;
 
         self.locked_vm_size -= size;

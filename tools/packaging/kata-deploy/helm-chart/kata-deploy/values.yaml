@@ -156,6 +156,20 @@ shims:
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
   qemu-nvidia-gpu-snp:
     enabled: ~
     supportedArches:
@@ -178,6 +192,24 @@ shims:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
   qemu-nvidia-gpu-tdx:
     enabled: ~
     supportedArches:
@@ -196,6 +228,24 @@ shims:
       # respectively. Override if you want to use a different label.
       # If you don't have NFD, you need to add the tdx label by other
       # means to your TDX nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
