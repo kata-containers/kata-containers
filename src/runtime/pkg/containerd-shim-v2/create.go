@@ -210,6 +210,20 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
 		}
 
+		// CRI-O with containers/storage does not pass overlay mount specs for
+		// workload containers (r.Rootfs is empty). The overlay is mounted in
+		// CRI-O's mount namespace, which the shim cannot access. Pre-mount the
+		// overlay here using the layer metadata so bundle/rootfs exists when
+		// ShareRootFilesystem later bind-mounts it into the VM share directory.
+		if len(r.Rootfs) == 0 {
+			bundleRootfsPath := filepath.Join(bundlePath, "rootfs")
+			if _, statErr := os.Stat(bundleRootfsPath); os.IsNotExist(statErr) {
+				if mountErr := preMountOverlayRootfs(ociSpec.Root.Path, bundleRootfsPath); mountErr != nil {
+					shimLog.WithError(mountErr).Debug("pre-mount overlay rootfs skipped")
+				}
+			}
+		}
+
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
 			return nil, err
 		}
@@ -305,6 +319,53 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 	}
 
 	return &runtimeConfig, nil
+}
+
+// preMountOverlayRootfs mounts a containers/storage overlay at destPath.
+// CRI-O mounts workload container overlays only in its own mount namespace;
+// the shim's namespace never sees the merged/ directory. This function reads
+// the layer metadata from the containers/storage layout and mounts the overlay
+// directly so that bundle/rootfs is accessible to the shim.
+func preMountOverlayRootfs(mergedPath, destPath string) error {
+	if !strings.HasSuffix(mergedPath, "/merged") {
+		return fmt.Errorf("not a containers/storage overlay path: %s", mergedPath)
+	}
+	overlayDir := filepath.Dir(mergedPath)
+	storageRoot := filepath.Dir(overlayDir)
+
+	lowerData, err := os.ReadFile(filepath.Join(overlayDir, "lower"))
+	if err != nil {
+		return fmt.Errorf("reading overlay lower file: %w", err)
+	}
+
+	var lowerDirs []string
+	for _, l := range strings.Split(strings.TrimSpace(string(lowerData)), ":") {
+		if l != "" {
+			lowerDirs = append(lowerDirs, filepath.Join(storageRoot, l))
+		}
+	}
+
+	workDir := filepath.Join(overlayDir, "work")
+	// Remove overlayfs internal state left from a previous mount so the kernel
+	// accepts a fresh mount without EBUSY / EINVAL.
+	if err := os.RemoveAll(filepath.Join(workDir, "work")); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cleaning overlay work state: %w", err)
+	}
+
+	if err := os.MkdirAll(destPath, 0755); err != nil {
+		return fmt.Errorf("creating mount destination: %w", err)
+	}
+
+	m := mount.Mount{
+		Type:   "overlay",
+		Source: "overlay",
+		Options: []string{
+			"lowerdir=" + strings.Join(lowerDirs, ":"),
+			"upperdir=" + filepath.Join(overlayDir, "diff"),
+			"workdir=" + workDir,
+		},
+	}
+	return m.Mount(destPath)
 }
 
 func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
