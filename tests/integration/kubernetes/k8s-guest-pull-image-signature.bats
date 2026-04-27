@@ -156,7 +156,6 @@ EOF
 
 @test "Create a pod from an unsigned image, on an insecureAcceptAnything registry works (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
@@ -174,7 +173,6 @@ EOF
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' is rejected (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
@@ -192,7 +190,6 @@ EOF
 
 @test "Create a pod from a signed image, on a 'restricted registry' is successful (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
@@ -210,7 +207,6 @@ EOF
 
 @test "Create a pod from a signed image, on a 'restricted registry', but with the wrong key is rejected (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
@@ -228,7 +224,6 @@ EOF
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' works if policy files isn't set (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"

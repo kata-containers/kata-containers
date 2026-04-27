@@ -132,7 +132,6 @@ EOF
 
 @test "Test that creating a container from an authenticated image, with correct credentials works (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} ${AUTHENTICATED_IMAGE_PASSWORD}
 
@@ -150,7 +149,6 @@ EOF
 
 @test "Test that creating a container from an authenticated image, with incorrect credentials fails (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} "junk"
 
@@ -168,7 +166,6 @@ EOF
 
 @test "Test that creating a container from an authenticated image, with no credentials fails (with initdata)" {
 
-    [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "https://github.com/kata-containers/kata-containers/issues/11945"
 
     # Create pod config, but don't add image_registry_auth to initdata
     initdata=$(get_initdata_with_cdh_image_section "")
