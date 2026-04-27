@@ -201,7 +201,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	}
 
 	ociMounts = append(ociMounts, mount)
-	epheStorages, err := k.handleEphemeralStorage(ociMounts)
+	epheStorages, err := k.handleEphemeralStorage(ociMounts, nil)
 	assert.Nil(t, err)
 
 	epheMountPoint := epheStorages[0].MountPoint
@@ -707,7 +707,7 @@ func TestHandleShm(t *testing.T) {
 	assert.Equal(ociMounts[0].Type, KataEphemeralDevType)
 	assert.NotEmpty(ociMounts[0].Source, mountSource)
 
-	epheStorages, err := k.handleEphemeralStorage(ociMounts)
+	epheStorages, err := k.handleEphemeralStorage(ociMounts, nil)
 	assert.Nil(err)
 
 	epheMountPoint := epheStorages[0].MountPoint
