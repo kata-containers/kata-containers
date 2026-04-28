@@ -1726,6 +1726,7 @@ mod tests {
             },
             vpmu_feature: 0,
             pci_hotplug_enabled: false,
+            mem_merge: false,
         };
         vm.set_vm_config(vm_config.clone());
         vm.init_guest_memory().unwrap();

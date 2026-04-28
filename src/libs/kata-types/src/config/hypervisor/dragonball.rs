@@ -197,6 +197,29 @@ impl ConfigPlugin for DragonballConfig {
                     "dragonball hypervisor has minimal memory limitation {MIN_DRAGONBALL_MEMORY_SIZE_MB}",
                 )));
             }
+
+            if db.memory_info.mem_merge {
+                if db.memory_info.enable_hugepages {
+                    return Err(std::io::Error::other(
+                        "dragonball: mem_merge is incompatible with enable_hugepages \
+                         (KSM does not merge hugetlb pages)",
+                    ));
+                }
+                match db.memory_info.mem_type.as_str() {
+                    "anon" | "mmap" => {}
+                    "" | "shmem" | "hugeshmem" | "hugetlbfs" => {
+                        return Err(std::io::Error::other(
+                            "dragonball: mem_merge requires mem_type = \"anon\" \
+                             (KSM only merges anonymous private mappings)",
+                        ));
+                    }
+                    other => {
+                        return Err(std::io::Error::other(format!(
+                            "dragonball: unknown mem_type {other:?}"
+                        )));
+                    }
+                }
+            }
         }
 
         Ok(())

@@ -1025,6 +1025,21 @@ pub struct MemoryInfo {
     /// Threshold in seconds before creating swap device.
     #[serde(default = "default_guest_swap_create_threshold_secs")]
     pub guest_swap_create_threshold_secs: u64,
+
+    /// Memory backing override for guest RAM. Dragonball only; other
+    /// drivers ignore this field.
+    /// - `""` (default): driver picks based on `enable_hugepages`.
+    /// - `"anon"` / `"mmap"`: MAP_PRIVATE | MAP_ANONYMOUS (required for
+    ///   `mem_merge`).
+    /// - `"shmem"`: memfd + MAP_SHARED.
+    #[serde(default)]
+    pub mem_type: String,
+
+    /// Enable KSM merging (MADV_MERGEABLE) on guest RAM. Dragonball only
+    /// in v1. Requires `mem_type = "anon"` and is incompatible with
+    /// `enable_hugepages`. Off by default.
+    #[serde(default)]
+    pub mem_merge: bool,
 }
 
 fn default_guest_swap_size_percent() -> u64 {

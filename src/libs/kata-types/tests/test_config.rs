@@ -21,8 +21,9 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
         KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
     };
+    use kata_types::config::ConfigPlugin;
     use kata_types::config::KataConfig;
-    use kata_types::config::{QemuConfig, TomlConfig};
+    use kata_types::config::{DragonballConfig, QemuConfig, TomlConfig};
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
@@ -567,6 +568,75 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
         assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    fn dragonball_toml(body: &str) -> TomlConfig {
+        let content = format!(
+            r#"
+[hypervisor.dragonball]
+kernel = "/dev/null"
+initrd = "/dev/null"
+default_memory = 2048
+disable_block_device_use = true
+{body}
+"#
+        );
+        toml::from_str::<TomlConfig>(&content).expect("toml parse")
+    }
+
+    #[test]
+    fn test_dragonball_mem_merge_parses() {
+        let config = dragonball_toml(
+            r#"mem_type = "anon"
+mem_merge = true
+"#,
+        );
+        let hv = config
+            .hypervisor
+            .get("dragonball")
+            .expect("dragonball section");
+        assert_eq!(hv.memory_info.mem_type, "anon");
+        assert!(hv.memory_info.mem_merge);
+    }
+
+    #[test]
+    fn test_dragonball_mem_merge_defaults_off() {
+        let config = dragonball_toml("");
+        let hv = config.hypervisor.get("dragonball").unwrap();
+        assert_eq!(hv.memory_info.mem_type, "");
+        assert!(!hv.memory_info.mem_merge);
+    }
+
+    #[test]
+    fn test_dragonball_mem_merge_requires_anon_backing() {
+        let config = dragonball_toml("mem_merge = true\n");
+        let err = DragonballConfig::new()
+            .validate(&config)
+            .expect_err("validation should fail when mem_type is not anon");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("mem_merge") && msg.contains("anon"),
+            "unexpected error: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_dragonball_mem_merge_rejects_hugepages() {
+        let config = dragonball_toml(
+            r#"mem_type = "anon"
+mem_merge = true
+enable_hugepages = true
+"#,
+        );
+        let err = DragonballConfig::new()
+            .validate(&config)
+            .expect_err("validation should fail with hugepages + mem_merge");
+        assert!(
+            err.to_string().contains("enable_hugepages"),
+            "unexpected error: {}",
+            err
+        );
     }
 
     #[test]

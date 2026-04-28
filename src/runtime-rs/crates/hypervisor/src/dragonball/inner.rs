@@ -223,7 +223,10 @@ impl DragonballInner {
 
     fn set_vm_base_config(&mut self) -> Result<()> {
         let serial_path = [&self.run_dir, "console.sock"].join("/");
-        let (mem_type, mem_file_path) = if self.config.memory_info.enable_hugepages {
+        let user_mem_type = self.config.memory_info.mem_type.trim();
+        let (mem_type, mem_file_path) = if !user_mem_type.is_empty() {
+            (user_mem_type.to_string(), String::from(""))
+        } else if self.config.memory_info.enable_hugepages {
             match self.config.memory_info.hugepage_type {
                 HugePageType::THP => (String::from(HUGE_SHMEM), String::from("")),
                 HugePageType::Hugetlbfs => (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES)),
@@ -238,6 +241,7 @@ impl DragonballInner {
             max_vcpu_count: self.config.cpu_info.default_maxvcpus as u8,
             mem_type,
             mem_file_path,
+            mem_merge: self.config.memory_info.mem_merge,
             pci_hotplug_enabled: true,
             ..Default::default()
         };
