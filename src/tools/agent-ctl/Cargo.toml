@@ -50,6 +50,7 @@ kata-types = { path = "../../libs/kata-types" }
 
 # hypervisor crate from runtime-rs
 hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = [
+    "qemu",
     "cloud-hypervisor",
 ] }
 kata-sys-util = { path = "../../libs/kata-sys-util" }
@@ -58,7 +59,10 @@ safe-path = { path = "../../libs/safe-path" }
 tokio = { version = "1.44.2", features = ["signal"] }
 
 [features]
-default = ["cloud-hypervisor"]
+default = ["qemu", "cloud-hypervisor"]
+
+# Enable the QEMU driver
+qemu = []
 
 # Enable the Cloud Hypervisor driver
 cloud-hypervisor = []

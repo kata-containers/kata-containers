@@ -33,7 +33,9 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::ch::CloudHypervisor;
 #[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
+use hypervisor::HYPERVISOR_QEMU;
+#[cfg(feature = "qemu")]
+use hypervisor::qemu::Qemu;
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
@@ -1070,6 +1072,7 @@ impl Persist for VirtSandbox {
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
                 #[cfg(feature = "firecracker")]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
+                #[cfg(feature = "qemu")]
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
                 _ => Err(anyhow!(
@@ -1120,6 +1123,7 @@ impl Persist for VirtSandbox {
                     Arc::new(Firecracker::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
+            #[cfg(feature = "qemu")]
             HYPERVISOR_QEMU => {
                 let hypervisor = Arc::new(Qemu::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)

@@ -99,6 +99,14 @@ else
     $(info Dragonball, Firecracker, and Cloud Hypervisor are disabled in the Rust build on $(ARCH) (supported: $(ARCH_SUPPORT_LIGHTWEIGHT_HV)). Set USE_BUILTIN_DB=true, USE_BUILTIN_FC=true, or USE_BUILTIN_CLH=true to force enable.)
 endif
 
+##VAR USE_BUILTIN_QEMU=true|false Include the QEMU driver in the Rust build (default: on when QEMUCMD is set in arch/*-options.mk).
+# QEMU driver is built when this architecture defines a QEMU binary (see arch/*-options.mk).
+ifneq (,$(QEMUCMD))
+    USE_BUILTIN_QEMU := true
+else
+    USE_BUILTIN_QEMU := false
+endif
+
 HYPERVISOR ?= $(HYPERVISOR_QEMU)
 
 ##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
@@ -478,6 +486,7 @@ USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILTIN_DB
 USER_VARS += USE_BUILTIN_FC
 USER_VARS += USE_BUILTIN_CLH
+USER_VARS += USE_BUILTIN_QEMU
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -651,6 +660,10 @@ ifeq ($(USE_BUILTIN_FC),true)
 endif
 ifeq ($(USE_BUILTIN_CLH),true)
     EXTRA_RUSTFEATURES += cloud-hypervisor
+endif
+
+ifeq ($(USE_BUILTIN_QEMU),true)
+    EXTRA_RUSTFEATURES += qemu
 endif
 
 ifneq ($(EXTRA_RUSTFEATURES),)

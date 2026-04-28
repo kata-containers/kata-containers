@@ -80,13 +80,14 @@ default = []
 dragonball = ["dep:dragonball"]
 cloud-hypervisor = ["dep:ch-config"]
 firecracker = []
+qemu = []
 
 [dev-dependencies]
 serial_test = "2.0.0"
 tempfile = { workspace = true }
 
 # Local dev-dependencies
-hypervisor = { workspace = true }
+hypervisor = { workspace = true, features = ["qemu", "cloud-hypervisor"] }
 test-utils = { workspace = true }
 
 [build-dependencies]

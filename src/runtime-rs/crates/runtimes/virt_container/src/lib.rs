@@ -27,7 +27,9 @@ use hypervisor::Hypervisor;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(feature = "firecracker")]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
-use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
+use hypervisor::HYPERVISOR_QEMU;
+#[cfg(feature = "qemu")]
+use hypervisor::qemu::Qemu;
 use hypervisor::{remote::Remote, HYPERVISOR_REMOTE};
 #[cfg(feature = "dragonball")]
 use kata_types::config::DragonballConfig;
@@ -72,8 +74,11 @@ impl RuntimeHandler for VirtContainer {
             register_hypervisor_plugin("firecracker", firecracker_config);
         }
 
-        let qemu_config = Arc::new(QemuConfig::new());
-        register_hypervisor_plugin("qemu", qemu_config);
+        #[cfg(feature = "qemu")]
+        {
+            let qemu_config = Arc::new(QemuConfig::new());
+            register_hypervisor_plugin("qemu", qemu_config);
+        }
 
         #[cfg(feature = "cloud-hypervisor")]
         {
@@ -204,6 +209,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             }
             Ok(Arc::new(hypervisor))
         }
+        #[cfg(feature = "qemu")]
         HYPERVISOR_QEMU => {
             let hypervisor = Qemu::new();
             hypervisor
@@ -278,6 +284,7 @@ agent_name="kata"
         assert!(res.is_ok());
     }
 
+    #[cfg(feature = "qemu")]
     #[tokio::test]
     async fn test_new_hypervisor() {
         VirtContainer::init().unwrap();

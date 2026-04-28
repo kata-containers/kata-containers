@@ -18,6 +18,7 @@ pub mod dragonball;
 #[cfg(feature = "firecracker")]
 pub mod firecracker;
 mod kernel_param;
+#[cfg(feature = "qemu")]
 pub mod qemu;
 pub mod remote;
 pub mod selinux;

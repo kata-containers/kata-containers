@@ -48,6 +48,9 @@ dragonball = ["hypervisor/dragonball"]
 # Enable the Firecracker driver
 firecracker = ["hypervisor/firecracker"]
 
+# Enable the QEMU driver
+qemu = ["hypervisor/qemu"]
+
 
 [package.metadata.cargo-machete]
 ignored = ["slog-scope"]
