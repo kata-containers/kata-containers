@@ -48,7 +48,7 @@ tests_utils = { workspace = true }
 # Cloud Hypervisor. They are listed only for x86_64/aarch64 so unsupported
 # targets never resolve those crates even if a developer enables a driver
 # feature by mistake. Which features are enabled is controlled from
-# `src/runtime-rs/Makefile` (EXTRA_RUSTFEATURES / USE_BUILTIN_* / ARCH); Rust
+# `src/runtime-rs/Makefile` (EXTRA_RUSTFEATURES / USE_BUILTIN_DB / USE_EXTERNAL_* / ARCH); Rust
 # code gates drivers with `cfg(feature = "...")` only (no `target_arch` cfgs).
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
 # Cloud Hypervisor REST schema / client (driver is x86_64+aarch64 only in Kata).

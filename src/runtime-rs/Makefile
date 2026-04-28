@@ -81,30 +81,31 @@ HYPERVISOR_CLH = clh-runtime-rs
 HYPERVISOR_NAME_CLH = clh
 HYPERVISOR_REMOTE = remote
 
-# Dragonball, Firecracker, and Cloud Hypervisor drivers are only built for
+# Dragonball is the only built-in VMM; Firecracker and Cloud Hypervisor are
+# external binaries. Those three are only wired into the Rust build for
 # x86_64/aarch64 (same scope as DBCMD, FCCMD, and CLHCMD in arch/*-options.mk).
-# USE_BUILTIN_* selects which Cargo features are passed via EXTRA_RUSTFEATURES.
-##VAR USE_BUILTIN_DB=true|false Include Dragonball in the Rust build (default: on x86_64/aarch64 only).
-##VAR USE_BUILTIN_FC=true|false Include Firecracker in the Rust build (default: on x86_64/aarch64 only).
-##VAR USE_BUILTIN_CLH=true|false Include Cloud Hypervisor in the Rust build (default: on x86_64/aarch64 only).
+# USE_BUILTIN_DB / USE_EXTERNAL_* select which Cargo features are passed via EXTRA_RUSTFEATURES.
+##VAR USE_BUILTIN_DB=true|false Include the built-in Dragonball VMM in the Rust build (default: on x86_64/aarch64 only).
+##VAR USE_EXTERNAL_FC=true|false Include the external Firecracker hypervisor in the Rust build (default: on x86_64/aarch64 only).
+##VAR USE_EXTERNAL_CLH=true|false Include the external Cloud Hypervisor (CLH) in the Rust build (default: on x86_64/aarch64 only).
 ARCH_SUPPORT_LIGHTWEIGHT_HV := x86_64 aarch64
 ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_LIGHTWEIGHT_HV)),)
     USE_BUILTIN_DB := true
-    USE_BUILTIN_FC := true
-    USE_BUILTIN_CLH := true
+    USE_EXTERNAL_FC := true
+    USE_EXTERNAL_CLH := true
 else
     USE_BUILTIN_DB := false
-    USE_BUILTIN_FC := false
-    USE_BUILTIN_CLH := false
-    $(info Dragonball, Firecracker, and Cloud Hypervisor are disabled in the Rust build on $(ARCH) (supported: $(ARCH_SUPPORT_LIGHTWEIGHT_HV)). Set USE_BUILTIN_DB=true, USE_BUILTIN_FC=true, or USE_BUILTIN_CLH=true to force enable.)
+    USE_EXTERNAL_FC := false
+    USE_EXTERNAL_CLH := false
+    $(info Dragonball, Firecracker, and Cloud Hypervisor are disabled in the Rust build on $(ARCH) (supported: $(ARCH_SUPPORT_LIGHTWEIGHT_HV)). Set USE_BUILTIN_DB=true, USE_EXTERNAL_FC=true, or USE_EXTERNAL_CLH=true to force enable.)
 endif
 
-##VAR USE_BUILTIN_QEMU=true|false Include the QEMU driver in the Rust build (default: on when QEMUCMD is set in arch/*-options.mk).
-# QEMU driver is built when this architecture defines a QEMU binary (see arch/*-options.mk).
+##VAR USE_EXTERNAL_QEMU=true|false Include the external QEMU hypervisor in the Rust build (default: on when QEMUCMD is set in arch/*-options.mk).
+# QEMU is an external binary; enable the Rust driver when this architecture defines QEMUCMD (arch/*-options.mk).
 ifneq (,$(QEMUCMD))
-    USE_BUILTIN_QEMU := true
+    USE_EXTERNAL_QEMU := true
 else
-    USE_BUILTIN_QEMU := false
+    USE_EXTERNAL_QEMU := false
 endif
 
 HYPERVISOR ?= $(HYPERVISOR_QEMU)
@@ -484,9 +485,9 @@ USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILTIN_DB
-USER_VARS += USE_BUILTIN_FC
-USER_VARS += USE_BUILTIN_CLH
-USER_VARS += USE_BUILTIN_QEMU
+USER_VARS += USE_EXTERNAL_FC
+USER_VARS += USE_EXTERNAL_CLH
+USER_VARS += USE_EXTERNAL_QEMU
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -650,19 +651,19 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 
 EXTRA_RUSTFEATURES :=
 
-# Pass hypervisor Cargo features for drivers supported on this architecture
-# (see USE_BUILTIN_* / ARCH_SUPPORT_LIGHTWEIGHT_HV above).
+# Pass hypervisor Cargo features (USE_BUILTIN_DB for Dragonball; USE_EXTERNAL_* for QEMU, CLH, FC).
+# See ARCH_SUPPORT_LIGHTWEIGHT_HV and QEMUCMD above.
 ifeq ($(USE_BUILTIN_DB),true)
     EXTRA_RUSTFEATURES += dragonball
 endif
-ifeq ($(USE_BUILTIN_FC),true)
+ifeq ($(USE_EXTERNAL_FC),true)
     EXTRA_RUSTFEATURES += firecracker
 endif
-ifeq ($(USE_BUILTIN_CLH),true)
+ifeq ($(USE_EXTERNAL_CLH),true)
     EXTRA_RUSTFEATURES += cloud-hypervisor
 endif
 
-ifeq ($(USE_BUILTIN_QEMU),true)
+ifeq ($(USE_EXTERNAL_QEMU),true)
     EXTRA_RUSTFEATURES += qemu
 endif
 
@@ -775,10 +776,10 @@ vendor:
 	@cargo vendor
 
 # utils.mk defines `standard_rust_check` with `cargo clippy --all-features`, which
-# would enable Dragonball / Firecracker / Cloud Hypervisor on every architecture.
-# Those drivers use optional dependencies that only exist for x86_64/aarch64 in
-# `crates/hypervisor/Cargo.toml`. Override here so clippy uses the same feature
-# set as the build (EXTRA_RUSTFEATURES / USE_BUILTIN_* / ARCH).
+# would enable Dragonball and the external-hypervisor drivers on every architecture.
+# Firecracker and Cloud Hypervisor use optional dependencies that only exist for
+# x86_64/aarch64 in `crates/hypervisor/Cargo.toml`. Override here so clippy uses the same feature
+# set as the build (EXTRA_RUSTFEATURES / USE_BUILTIN_DB / USE_EXTERNAL_* / ARCH).
 .PHONY: standard_rust_check
 standard_rust_check:
 	@echo "standard rust check..."
