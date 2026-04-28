@@ -28,7 +28,7 @@ uuid = { version = "1", features = ["v4"] }
 # Local dependencies
 agent = { workspace = true }
 common = { workspace = true }
-hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+hypervisor = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
@@ -37,13 +37,16 @@ persist = { workspace = true }
 resource = { workspace = true }
 
 [features]
-default = ["cloud-hypervisor"]
+default = []
 
 # Enable the Cloud Hypervisor driver
 cloud-hypervisor = ["hypervisor/cloud-hypervisor"]
 
 # Enable the build-in VMM Dragtonball
 dragonball = ["hypervisor/dragonball"]
+
+# Enable the Firecracker driver
+firecracker = ["hypervisor/firecracker"]
 
 
 [package.metadata.cargo-machete]

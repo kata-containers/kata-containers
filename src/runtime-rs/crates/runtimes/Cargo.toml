@@ -61,3 +61,4 @@ wasm = ["wasm_container"]
 
 dragonball = ["virt_container/dragonball"]
 cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+firecracker = ["virt_container/firecracker"]

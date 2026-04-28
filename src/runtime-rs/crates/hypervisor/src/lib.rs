@@ -13,16 +13,9 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "dragonball")]
 pub mod dragonball;
-// Firecracker upstream only releases binaries for x86_64 and aarch64
-// (see https://github.com/firecracker-microvm/firecracker/releases), so there
-// is no point compiling the in-tree driver on other architectures. Use the
-// same architecture gate as `ch` (further down in this file) for consistency.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(feature = "firecracker")]
 pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
@@ -32,10 +25,7 @@ pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
 
-#[cfg(all(
-    feature = "cloud-hypervisor",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "cloud-hypervisor")]
 pub mod ch;
 
 use anyhow::Result;
@@ -61,23 +51,12 @@ const VM_ROOTFS_ROOT_PMEM: &str = "/dev/pmem0p1";
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
 pub const HUGETLBFS: &str = "hugetlbfs";
-// Constants required for Dragonball VMM when enabled.
-// Gated on both feature and arch so they activate together with `pub mod
-// dragonball;` above (the dragonball crate only builds on x86_64/aarch64).
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+// Constants required for Dragonball VMM when enabled (feature is Makefile-gated).
+#[cfg(feature = "dragonball")]
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "dragonball")]
 const SHMEM: &str = "shmem";
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "dragonball")]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
@@ -92,12 +71,13 @@ pub const JAILER_ROOT: &str = "root";
 #[allow(dead_code)]
 const DEFAULT_HOTPLUG_TIMEOUT: u64 = 250;
 
-// Used only by the dragonball, cloud-hypervisor and firecracker drivers, all
-// of which are gated to `target_arch = "x86_64"|"aarch64"`. Without the gate
-// here, `cargo clippy --all-features -- -D warnings` (i.e. what `make check`
-// runs via utils.mk's `standard_rust_check`) fails on s390x/ppc64le/riscv64gc
-// with `enum VmmState is never used`.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+// Used only by the dragonball, cloud-hypervisor and firecracker drivers
+// (Makefile-gated Cargo features).
+#[cfg(any(
+    feature = "dragonball",
+    feature = "firecracker",
+    feature = "cloud-hypervisor"
+))]
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,

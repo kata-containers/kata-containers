@@ -19,6 +19,7 @@ path = "crates/shim-ctl/src/main.rs"
 [features]
 dragonball = ["runtimes/dragonball"]
 cloud-hypervisor = ["runtimes/cloud-hypervisor"]
+firecracker = ["runtimes/firecracker"]
 
 [dependencies]
 anyhow = { workspace = true }
