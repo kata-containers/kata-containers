@@ -20,6 +20,12 @@ PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
                     jq -r '.packages[] | select(.manifest_path | contains("runtime-rs")) | .name')
 PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
+# `cargo test -p A -p B --features X` requires every listed package to define feature X.
+# Only these workspace members expose the hypervisor driver features; the rest are tested without --features.
+HYPERVISOR_FEATURE_PACKAGES := runtime-rs hypervisor runtimes virt_container
+HV_PACKAGE_FLAGS := $(patsubst %,-p %,$(HYPERVISOR_FEATURE_PACKAGES))
+OTHER_PACKAGE_FLAGS := $(patsubst %,-p %,$(filter-out $(HYPERVISOR_FEATURE_PACKAGES),$(PACKAGES)))
+
 include ../../utils.mk
 
 ##VAR RELEASE_LTO=true|false|thin|fat LTO setting used for release builds
@@ -37,7 +43,9 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 default: runtime show-header
 ##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
 test: static-checks-build
-	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
+	@set -e; \
+	cargo test $(HV_PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture --skip bindgen; \
+	cargo test $(OTHER_PACKAGE_FLAGS) --target $(TRIPLE) -- --nocapture --skip bindgen;
 install: install-runtime install-configs
 
 ifeq (,$(realpath $(ARCH_FILE)))
