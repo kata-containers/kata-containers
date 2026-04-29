@@ -9,7 +9,7 @@ include ../../../utils.mk
 default: build
 
 build:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p kata-agent-ctl --target $(TRIPLE) --$(BUILD_TYPE)
 
 static-checks-build:
 	@echo "INFO: static-checks-build do nothing.."
@@ -18,6 +18,7 @@ clean:
 	cargo clean
 
 test:
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p kata-agent-ctl --target $(TRIPLE)
 
 install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
