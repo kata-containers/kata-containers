@@ -6,11 +6,13 @@
 //! The async version of sync module used for IPC
 
 use crate::pipestream::PipeStream;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::errno::Errno;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::sync::{DATA_SIZE, MSG_SIZE, SYNC_DATA, SYNC_FAILED, SYNC_SUCCESS};
+use crate::sync::{
+    DATA_SIZE, MSG_SIZE, SYNC_DATA, SYNC_FAILED, SYNC_PIDFD_AVAILABLE, SYNC_SUCCESS,
+};
 
 async fn write_count(pipe_w: &mut PipeStream, buf: &[u8], count: usize) -> Result<usize> {
     let mut len = 0;
@@ -81,6 +83,13 @@ pub async fn read_async(pipe_r: &mut PipeStream) -> Result<Vec<u8>> {
 
             Ok(data_buf)
         }
+        SYNC_PIDFD_AVAILABLE => {
+            let buf = read_count(pipe_r, MSG_SIZE).await?;
+            let buf_array: [u8; MSG_SIZE] = [buf[0], buf[1], buf[2], buf[3]];
+            let available: i32 = i32::from_be_bytes(buf_array);
+
+            Ok(available.to_be_bytes().to_vec())
+        }
         SYNC_FAILED => {
             let mut error_buf = vec![];
             loop {
@@ -131,6 +140,14 @@ pub async fn write_async(pipe_w: &mut PipeStream, msg_type: i32, data_str: &str)
             write_count(pipe_w, data_str.as_bytes(), data_str.len())
                 .await
                 .map_err(|e| anyhow!(e).context("error in send message to process"))?;
+        }
+        SYNC_PIDFD_AVAILABLE => {
+            let available: i32 = data_str
+                .parse::<i32>()
+                .context("invalid pidfd availability value")?;
+            write_count(pipe_w, &available.to_be_bytes(), MSG_SIZE)
+                .await
+                .map_err(|e| anyhow!(e).context("error in send pidfd availability to process"))?;
         }
 
         _ => (),
