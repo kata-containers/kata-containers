@@ -2405,6 +2405,11 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
             .any(|suffix| source_path.ends_with(suffix))
 }
 
+// CDH formats unwiped dm-integrity devices. Make ext4 initialize inode tables
+// during mkfs so later metadata operations do not read blocks without integrity
+// tags and fail with EIO.
+const TRUSTED_IMAGE_STORAGE_MKFS_OPTS: &str = "-E lazy_journal_init,lazy_itable_init=0";
+
 async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
     let linux = oci
         .linux()
@@ -2420,7 +2425,7 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                     &dev_major_minor,
                     "luks2",
                     KATA_IMAGE_WORK_DIR,
-                    "-E lazy_journal_init",
+                    TRUSTED_IMAGE_STORAGE_MKFS_OPTS,
                 )
                 .await?;
                 break;

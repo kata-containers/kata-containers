@@ -86,8 +86,6 @@ setup_langchain_flow() {
 # generated policy.rego to it and set it as the cc_init_data annotation.
 # We must overwrite the default empty file AFTER create_tmp_policy_settings_dir()
 # copies it to the temp directory.
-# As we use multiple vCPUs we set `max_concurrent_layer_downloads_per_image = 1`,
-# see: https://github.com/kata-containers/kata-containers/issues/12721
 create_nim_initdata_file() {
     local output_file="$1"
     local cc_kbs_address
@@ -110,7 +108,6 @@ name = "cc_kbc"
 url = "${cc_kbs_address}"
 
 [image]
-max_concurrent_layer_downloads_per_image = 1
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
 image_security_policy_uri = "kbs:///default/security-policy/nim"
 '''

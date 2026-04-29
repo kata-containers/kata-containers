@@ -37,6 +37,12 @@ use slog::Logger;
 #[cfg(target_arch = "s390x")]
 use std::str::FromStr;
 
+// CDH formats an unwiped dm-integrity device. Make ext4 initialize inode tables
+// during mkfs so later metadata operations do not read blocks without integrity
+// tags and fail with EIO.
+const SECURE_EPHEMERAL_MKFS_OPTS: &str =
+    "-O ^has_journal -m 0 -i 163840 -I 128 -E lazy_itable_init=0";
+
 fn get_device_number(dev_path: &str, metadata: Option<&fs::Metadata>) -> Result<String> {
     let dev_id = match metadata {
         Some(m) => m.rdev(),
@@ -64,7 +70,7 @@ async fn handle_block_storage(
             dev_num,
             "luks2",
             &storage.mount_point,
-            "-O ^has_journal -m 0 -i 163840 -I 128",
+            SECURE_EPHEMERAL_MKFS_OPTS,
         )
         .await?;
         set_ownership(logger, storage)?;
