@@ -198,6 +198,100 @@ chisseled_dcgm() {
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
 }
 
+# Require kata-nvidia-cdi-list/go.mod CTK pin to match versions.yaml externals.nvidia.ctk.version.
+# The yaml value is often deb-style (e.g. 1.18.1-1); compare only the semver prefix to the Go module tag (v1.18.1).
+check_kata_nvidia_cdi_list_go_mod_ctk_version() {
+	local -r src="${1:?}"
+	local ctk_raw ctk_semver gomod_line gomod_ver
+
+	ctk_raw=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+	[[ -n "${ctk_raw}" ]] || die "kata-nvidia-cdi-list: cannot read externals.nvidia.ctk.version from versions.yaml"
+	ctk_semver="${ctk_raw%%-*}"
+	gomod_line=$(grep -E '^[[:space:]]*github.com/NVIDIA/nvidia-container-toolkit[[:space:]]' "${src}/go.mod" | head -1) || true
+	[[ -n "${gomod_line}" ]] || die "kata-nvidia-cdi-list: go.mod has no nvidia-container-toolkit require"
+	gomod_ver=$(echo "${gomod_line}" | awk '{print $2}')
+	[[ "v${ctk_semver}" == "${gomod_ver}" ]] || die "kata-nvidia-cdi-list: go.mod pins nvidia-container-toolkit at ${gomod_ver} but versions.yaml externals.nvidia.ctk.version is ${ctk_raw} (expected module v${ctk_semver}); update go.mod and go.sum (e.g. go get github.com/NVIDIA/nvidia-container-toolkit@v${ctk_semver})"
+}
+
+# Build kata-nvidia-cdi-list when needed (nvcdi + go-nvml mock; no GPU on build host).
+# Optional: export KATA_NVIDIA_CDI_LIST=/path/to/built/binary to skip building from source.
+build_kata_nvidia_cdi_list_if_needed() {
+	local -r src="${SCRIPT_DIR}/kata-nvidia-cdi-list"
+	local -r bin_default="${src}/kata-nvidia-cdi-list"
+
+	if [[ -n "${KATA_NVIDIA_CDI_LIST:-}" ]]; then
+		[[ -x "${KATA_NVIDIA_CDI_LIST}" ]] || return 1
+		return 0
+	fi
+	if [[ -x "${bin_default}" ]]; then
+		return 0
+	fi
+	if ! command -v go &>/dev/null; then
+		return 1
+	fi
+	check_kata_nvidia_cdi_list_go_mod_ctk_version "${src}"
+	echo "nvidia: building kata-nvidia-cdi-list (Go)"
+	# -buildvcs=false: osbuilder containers often lack a usable .git (mount/copy), and Go 1.18+ VCS stamping fails with "error obtaining VCS status: exit status 128".
+	( cd "${src}" && go build -buildvcs=false -o kata-nvidia-cdi-list . )
+}
+
+# Copy driver libraries/binaries into the chiseled rootfs using the same CDI common
+# edits as the NVIDIA Container Toolkit (via kata-nvidia-cdi-list).
+copy_driver_files_from_cdi_list() {
+	local driver_root="${1:?}"
+	local rootfs_dir="${2:?}"
+	local lister
+
+	if [[ -n "${KATA_NVIDIA_CDI_LIST:-}" ]]; then
+		lister="${KATA_NVIDIA_CDI_LIST}"
+	else
+		lister="${SCRIPT_DIR}/kata-nvidia-cdi-list/kata-nvidia-cdi-list"
+	fi
+	[[ -x "${lister}" ]] || return 1
+
+	echo "nvidia: copying driver files from CDI list (driver-root=${driver_root})"
+	local out kind host_path container_path link_spec link_target link_path
+	out=$(mktemp) || return 1
+	if ! "${lister}" -driver-root="${driver_root}" >"${out}"; then
+		rm -f "${out}"
+		return 1
+	fi
+	while IFS=$'\t' read -r kind host_path container_path || [[ -n "${kind:-}" ]]; do
+		[[ -z "${kind}" ]] && continue
+		case "${kind}" in
+		mount)
+			[[ -z "${host_path}" || "${host_path}" == "null" ]] && continue
+			[[ -z "${container_path}" || "${container_path}" == "null" ]] && continue
+			if [[ ! -e "${host_path}" ]]; then
+				echo "nvidia: skip missing mount source: ${host_path}"
+				continue
+			fi
+			container_path="${container_path#/}"
+			mkdir -p "${rootfs_dir}/${container_path%/*}"
+			[[ -n "${DEBUG:-}" ]] && echo "nvidia: cdi copy ${host_path} -> ${rootfs_dir}/${container_path}"
+			cp -a "${host_path}" "${rootfs_dir}/${container_path}"
+			;;
+		device)
+			# Device nodes are provided at runtime; do not copy into the chiseled tree.
+			;;
+		link)
+			link_spec="${host_path}"
+			[[ -z "${link_spec}" || "${link_spec}" == "null" ]] && continue
+			if [[ "${link_spec}" != *"::"* ]]; then
+				continue
+			fi
+			link_target="${link_spec%%::*}"
+			link_path="${link_spec#*::}"
+			link_path="${link_path#/}"
+			mkdir -p "${rootfs_dir}/${link_path%/*}"
+			[[ -n "${DEBUG:-}" ]] && echo "nvidia: cdi link ${rootfs_dir}/${link_path} -> ${link_target}"
+			ln -sf "${link_target}" "${rootfs_dir}/${link_path}"
+			;;
+		esac
+	done < "${out}"
+	rm -f "${out}"
+}
+
 # copute always includes utility per default
 chisseled_compute() {
 	echo "nvidia: chisseling GPU"
@@ -229,9 +323,9 @@ chisseled_compute() {
 
 	cp -aL "${stage_one}/${libdir}"/ld-linux-* "${libdir}"/.
 
-	libdir=usr/lib/"${machine_arch}"-linux-gnu
-	cp -a "${stage_one}/${libdir}"/libnv*        lib/"${machine_arch}"-linux-gnu/.
-	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
+	# Driver files only via kata-nvidia-cdi-list (nvcdi + mock). This file is sourced only for BUILD_VARIANT=nvidia-gpu* (rootfs.sh).
+	build_kata_nvidia_cdi_list_if_needed || die "kata-nvidia-cdi-list: failed to build helper (need Go in the osbuilder image, or set KATA_NVIDIA_CDI_LIST to a prebuilt executable)"
+	copy_driver_files_from_cdi_list "${stage_one}" "$(pwd)" || die "kata-nvidia-cdi-list: failed to generate or apply CDI driver file list"
 
 	# basic GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
@@ -338,7 +432,13 @@ compress_rootfs() {
 			continue
 		fi
 		strip "${file}"
-		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
+		# Compression is best-effort: upx exits non-zero (e.g. NotCompressibleException,
+		# seen for nvidia-cuda-mps-server on aarch64) for binaries it can't shrink. It
+		# leaves the original file untouched in that case, so skip and continue rather
+		# than aborting the whole rootfs build under `set -e`.
+		if ! "${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"; then
+			echo "nvidia: skip compressing executable (upx could not compress): ${file} ($(file -b "${file}"))"
+		fi
 	done
 
  	# While I was playing with compression the executable flag on
