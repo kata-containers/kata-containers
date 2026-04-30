@@ -42,6 +42,15 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
         if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
             vcpu = get_nr_vcpu(&cpu_resource);
         }
+
+        // When neither quota/period nor cpuset constrain CPU, fall back to CPU shares annotation
+        let shares = annotation.get_sandbox_cpu_shares();
+        if vcpu == 0.0 {
+            if shares > 0 {
+                vcpu = shares as f32 / 1024.0;
+            }
+        }
+
         let mem_mb = convert_memory_to_mb(memory);
 
         Ok(Self {
@@ -265,6 +274,71 @@ mod tests {
             },
         ]
         .to_vec()
+    }
+
+    // Test that sandbox CPU-shares annotation is used as vcpu fallback when
+    // quota and period are absent.
+    #[test]
+    fn test_initial_size_sandbox_cpu_shares_fallback() {
+        let cases: &[(&str, u64, f32)] = &[
+            ("1024 shares = 1.0 vcpu", 1024, 1.0),
+            ("2048 shares = 2.0 vcpu", 2048, 2.0),
+            ("512 shares = 0.5 vcpu", 512, 0.5),
+            ("0 shares = 0.0 vcpu (no fallback)", 0, 0.0),
+        ];
+
+        for (desc, shares, expected_vcpu) in cases {
+            let annotations = HashMap::from([
+                (
+                    cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    cri_containerd::SANDBOX.to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                    format!("{}", shares),
+                ),
+            ]);
+
+            let initial_size = InitialSize::try_from(&annotations).unwrap();
+            assert_eq!(
+                initial_size.vcpu, *expected_vcpu,
+                "{}: got vcpu={}, expected {}",
+                desc, initial_size.vcpu, expected_vcpu
+            );
+        }
+    }
+
+    // Verify quota/period take precedence over shares when both are present.
+    #[test]
+    fn test_initial_size_sandbox_quota_wins_over_shares() {
+        let annotations = HashMap::from([
+            (
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::SANDBOX.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                "220000".to_string(),
+            ),
+            // shares set too - quota should win
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                "4096".to_string(), // would be 4.0 if shares were used
+            ),
+        ]);
+
+        let initial_size = InitialSize::try_from(&annotations).unwrap();
+        // 220_000/100_000 = 2.2 -> ceil = 3.0, not 4.0 from shares
+        assert_eq!(
+            initial_size.vcpu.ceil(),
+            3.0,
+            "quota should take precedence over shares, got vcpu={}",
+            initial_size.vcpu
+        );
     }
 
     #[test]
