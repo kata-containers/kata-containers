@@ -95,6 +95,15 @@ pub enum SandboxState {
     Stopped,
 }
 
+impl SandboxState {
+    fn to_cri_state(self) -> &'static str {
+        match self {
+            SandboxState::Running => "SANDBOX_READY",
+            SandboxState::Init | SandboxState::Stopped => "SANDBOX_NOTREADY",
+        }
+    }
+}
+
 struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
@@ -183,7 +192,7 @@ impl VirtSandbox {
         self.hypervisor.clone()
     }
 
-    async fn record_stop(&self, exit_status: u32, exited_at: SystemTime) {
+    async fn record_stop(&self, exit_status: u32, exited_at: std::time::SystemTime) {
         let mut inner = self.inner.write().await;
         if inner.state == SandboxState::Stopped {
             return;
@@ -997,9 +1006,8 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn status(&self) -> Result<SandboxStatus> {
-        info!(sl!(), "get sandbox status");
         let inner = self.inner.read().await;
-        let state = inner.state.to_string();
+        let state = inner.state.to_cri_state().to_string();
 
         Ok(SandboxStatus {
             sandbox_id: self.sid.clone(),
