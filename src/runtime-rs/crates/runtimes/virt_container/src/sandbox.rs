@@ -77,7 +77,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 use strum::Display;
-use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
@@ -118,6 +118,7 @@ pub struct VirtSandbox {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     monitor: Arc<HealthCheck>,
+    exit_notify_tx: watch::Sender<bool>,
     sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
     factory: Option<Factory>,
@@ -133,6 +134,7 @@ impl std::fmt::Debug for VirtSandbox {
             .field("agent", &"<Agent>")
             .field("hypervisor", &self.hypervisor)
             .field("monitor", &"<HealthCheck>")
+            .field("exit_notify_tx", &"<watch::Sender<bool>>")
             .field("sandbox_config", &self.sandbox_config)
             .field("factory", &self.factory)
             .finish()
@@ -151,6 +153,7 @@ impl VirtSandbox {
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
+        let (exit_notify_tx, _) = watch::channel(false);
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
@@ -159,6 +162,7 @@ impl VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            exit_notify_tx,
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
@@ -1254,6 +1258,7 @@ impl Persist for VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            exit_notify_tx: watch::channel(false).0,
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
