@@ -1461,7 +1461,7 @@ func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) err
 // be added to the VM if sandbox annotations are provided with this sizing details
 func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
-	var period uint64
+	var shares, period uint64
 	var err error
 
 	if spec == nil || spec.Annotations == nil {
@@ -1492,6 +1492,15 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUShares]
+	if ok {
+		shares, err = strconv.ParseUint(annotation, 10, 64)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUShares: %s", annotation)
+			shares = 0
+		}
+	}
+
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
 		memory, err = strconv.ParseInt(annotation, 10, 64)
@@ -1501,7 +1510,16 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
-	return calculateVMResources(period, quota, memory)
+	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
+
+	// When cpuManagerPolicy=static is in use, kubelet sets quota=-1
+	// (unconstrained) and assigns CPUs via cpuset instead. Fall back
+	// to deriving the CPU count from shares (1024 shares per CPU).
+	if numCPU == 0 && shares > 0 {
+		numCPU = float32(math.Ceil(float64(shares) / 1024.0))
+	}
+
+	return numCPU, memSizeMB
 }
 
 // CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed
