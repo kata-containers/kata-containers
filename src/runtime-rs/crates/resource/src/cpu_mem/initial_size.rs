@@ -32,7 +32,7 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
 
         let annotation = Annotation::new(an.clone());
         let (period, quota, memory) =
-            get_sizing_info(annotation).context("failed to get sizing info")?;
+            get_sizing_info(&annotation).context("failed to get sizing info")?;
         let mut cpu = oci::LinuxCpu::default();
         cpu.set_period(Some(period));
         cpu.set_quota(Some(quota));
@@ -200,7 +200,7 @@ fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
 
 // from the upper layer runtime's annotation (e.g. crio, k8s), get the *cpu quota,
 // cpu period and memory limit* for a sandbox/container
-fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
+fn get_sizing_info(annotation: &Annotation) -> Result<(u64, i64, i64)> {
     // since we are *adding* our result to the config, a value of 0 will cause no change
     // and if the annotation is not assigned (but static resource management is), we will
     // log a *warning* to fill that with zero value
