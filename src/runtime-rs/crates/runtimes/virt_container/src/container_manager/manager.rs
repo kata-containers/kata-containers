@@ -460,7 +460,7 @@ impl ContainerManager for VirtContainerManager {
 
     #[instrument]
     async fn need_shutdown_sandbox(&self, req: &ShutdownRequest) -> bool {
-        req.is_now || self.containers.read().await.is_empty() || self.sid == req.container_id
+        req.is_now || self.sid == req.container_id
     }
 
     #[instrument]
