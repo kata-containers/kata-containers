@@ -16,6 +16,7 @@ repo_root_dir="$(cd "${this_script_dir}/../../../../" && pwd)"
 kata_build_dir=${1:-build}
 kata_versions_yaml_file=${2:-""}
 output_tarball_name=${3:-kata-static.tar.zst}
+known_tarballs=${4:-""}
 
 tar_path=$(readlink -f "${output_tarball_name}")
 [[ -n "${kata_versions_yaml_file}" ]] && kata_versions_yaml_file=$(readlink -f "${kata_versions_yaml_file}")
@@ -25,8 +26,18 @@ tarball_content_dir="${PWD}/kata-tarball-content"
 rm -rf "${tarball_content_dir}"
 mkdir "${tarball_content_dir}"
 
-for c in kata-static-*.tar.zst
-do
+for c in ${known_tarballs:-kata-static-*.tar.zst}; do
+	if [[ ! -f "${c}" ]]; then
+		# When the caller provided an explicit allowlist, a missing entry
+		# means the build produced an incomplete artifact set; fail loudly
+		# instead of silently shipping a partial final tarball.
+		if [[ -n "${known_tarballs}" ]]; then
+			echo "ERROR: required tarball \"${c}\" is missing in ${PWD}" >&2
+			exit 1
+		fi
+		echo "skipping missing tarball \"${c}\""
+		continue
+	fi
 	echo "untarring tarball \"${c}\" into ${tarball_content_dir}"
 	tar --zstd -xvf "${c}" -C "${tarball_content_dir}"
 done
