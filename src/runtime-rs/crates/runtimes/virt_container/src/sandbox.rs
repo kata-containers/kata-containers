@@ -75,6 +75,7 @@ use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -96,12 +97,14 @@ pub enum SandboxState {
 
 struct SandboxInner {
     state: SandboxState,
+    exit_info: Option<SandboxExitInfo>,
 }
 
 impl SandboxInner {
     pub fn new() -> Self {
         Self {
             state: SandboxState::Init,
+            exit_info: None,
         }
     }
 }
