@@ -24,7 +24,8 @@ use tokio::sync::RwLock;
 
 use super::{
     endpoint::{
-        Endpoint, IPVlanEndpoint, MacVlanEndpoint, PhysicalEndpoint, VethEndpoint, VlanEndpoint,
+        Endpoint, IPVlanEndpoint, MacVlanEndpoint, NetkitEndpoint, PhysicalEndpoint, VethEndpoint,
+        VlanEndpoint,
     },
     network_entity::NetworkEntity,
     network_info::network_info_from_link::{handle_addresses, NetworkInfoFromLink},
@@ -276,6 +277,38 @@ async fn create_endpoint(
                 )
                 .await
                 .context("macvlan endpoint")?;
+                Arc::new(ret)
+            }
+            "netkit" => {
+                let is_l3 = link
+                    .as_any()
+                    .downcast_ref::<link::Netkit>()
+                    .and_then(|n| n.mode)
+                    .map_or_else(
+                        || {
+                            attrs.hardware_addr.is_empty()
+                            // L3 devices have no MAC address, so check for all-zero.
+                            // https://github.com/torvalds/linux/blob/master/drivers/net/netkit.c
+                                || attrs.hardware_addr.iter().all(|&b| b == 0)
+                        },
+                        |m| m == netlink_packet_route::link::NetkitMode::L3,
+                    );
+                if is_l3 {
+                    return Err(anyhow!(
+                        "netkit device {} is in L3 mode (not supported - use L2 mode or veth)",
+                        attrs.name
+                    ));
+                }
+                let ret = NetkitEndpoint::new(
+                    &d,
+                    handle,
+                    &attrs.name,
+                    idx,
+                    &config.network_model,
+                    config.queues,
+                )
+                .await
+                .context("netkit endpoint")?;
                 Arc::new(ret)
             }
             _ => return Err(anyhow!("unsupported link type: {}", link_type)),

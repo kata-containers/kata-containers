@@ -34,6 +34,12 @@ pub struct VethEndpointState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
+pub struct NetkitEndpointState {
+    pub if_name: String,
+    pub network_qos: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct IpVlanEndpointState {
     pub if_name: String,
     pub network_qos: bool,
@@ -54,6 +60,7 @@ pub struct VhostUserEndpointState {
 pub struct EndpointState {
     pub physical_endpoint: Option<PhysicalEndpointState>,
     pub veth_endpoint: Option<VethEndpointState>,
+    pub netkit_endpoint: Option<NetkitEndpointState>,
     pub ipvlan_endpoint: Option<IpVlanEndpointState>,
     pub macvlan_endpoint: Option<MacvlanEndpointState>,
     pub vlan_endpoint: Option<VlanEndpointState>,
