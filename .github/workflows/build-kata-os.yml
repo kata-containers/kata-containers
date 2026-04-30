@@ -12,9 +12,11 @@ jobs:
           - runner: ubuntu-22.04
             arch: amd64
             kernel_version: 6.8
+            musl_arch: x86_64
           - runner: arm-8core-linux
             arch: arm64
             kernel_version: 6.8
+            musl_arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out repository code
@@ -22,8 +24,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ">=1.24.0"
+      - name: Install rust
+        run: ./tests/install_rust.sh
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison libssl-dev pahole
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison libssl-dev pahole g++ cmake musl-tools
+
+      - name: Build containerd-shim-kata-v2
+        run: |
+          cd src/runtime
+          make -j$(nproc) containerd-shim-v2
+      - name: Build containerd-shim-kata-v2-rs
+        env:
+          CC_${{ matrix.musl_arch }}-unknown-linux-musl: musl-gcc
+          CARGO_TARGET_${{ matrix.musl_arch }}_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: |
+          rustup target add ${{ matrix.musl_arch }}-unknown-linux-musl
+          cd src/runtime-rs
+          make clean-generated-files
+          make PREFIX=/opt/kata
+          cp ../../target/${{ matrix.musl_arch }}-unknown-linux-musl/release/containerd-shim-kata-v2 /tmp/containerd-shim-kata-v2-rs
       - name: Build Ubuntu image ${{ matrix.arch }}
         run: cd tools/osbuilder && sudo make USE_DOCKER=true OS_VERSION=jammy image-ubuntu
       - name: Build Kernel ${{ matrix.kernel_version }}
@@ -31,10 +50,6 @@ jobs:
           cd tools/packaging/kernel
           sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} setup
           sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} build
-      - name: Build containerd-shim-kata-v2
-        run: |
-          cd src/runtime
-          make -j$(nproc) containerd-shim-v2
       - name: Bundle artifacts
         run: |
           if [[ "${{ matrix.arch }}" == "amd64" ]]
@@ -47,7 +62,7 @@ jobs:
           cp sbom.cdx.gz /tmp/sbom.cdx.gz
           cp src/runtime/containerd-shim-kata-v2 /tmp/containerd-shim-kata-v2
           mkdir -p /tmp/artifacts
-          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.cdx.gz /tmp/containerd-shim-kata-v2
+          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.cdx.gz /tmp/containerd-shim-kata-v2 /tmp/containerd-shim-kata-v2-rs
           cd /tmp/artifacts
           sha256sum artifacts-${{ matrix.arch }}.zip > checksum-${{ matrix.arch }}.sha256
       - name: Upload Artifact
