@@ -9,7 +9,9 @@ use agent::{kata::KataAgent, Agent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 use hypervisor::device::driver::{VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_PCI};
-use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
+use hypervisor::{Hypervisor, HYPERVISOR_QEMU};
+#[cfg(feature = "qemu")]
+use hypervisor::qemu::Qemu;
 use kata_types::config::{
     default, Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig,
 };
@@ -190,6 +192,7 @@ impl TemplateVm {
     /// Initializes the QEMU hypervisor for Kata
     async fn new_hypervisor(config: &VmConfig) -> Result<Arc<dyn Hypervisor>> {
         let hypervisor: Arc<dyn Hypervisor> = match config.hypervisor_name.as_str() {
+            #[cfg(feature = "qemu")]
             HYPERVISOR_QEMU => {
                 let h = Qemu::new();
                 h.set_hypervisor_config(config.hypervisor_config.clone())

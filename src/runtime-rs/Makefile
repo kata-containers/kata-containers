@@ -20,6 +20,12 @@ PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
                     jq -r '.packages[] | select(.manifest_path | contains("runtime-rs")) | .name')
 PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
+# `cargo test -p A -p B --features X` requires every listed package to define feature X.
+# Only these workspace members expose the hypervisor driver features; the rest are tested without --features.
+HYPERVISOR_FEATURE_PACKAGES := runtime-rs hypervisor runtimes virt_container
+HV_PACKAGE_FLAGS := $(patsubst %,-p %,$(HYPERVISOR_FEATURE_PACKAGES))
+OTHER_PACKAGE_FLAGS := $(patsubst %,-p %,$(filter-out $(HYPERVISOR_FEATURE_PACKAGES),$(PACKAGES)))
+
 include ../../utils.mk
 
 ##VAR RELEASE_LTO=true|false|thin|fat LTO setting used for release builds
@@ -37,7 +43,9 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 default: runtime show-header
 ##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
 test: static-checks-build
-	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
+	@set -e; \
+	cargo test $(HV_PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture --skip bindgen; \
+	cargo test $(OTHER_PACKAGE_FLAGS) --target $(TRIPLE) -- --nocapture --skip bindgen;
 install: install-runtime install-configs
 
 ifeq (,$(realpath $(ARCH_FILE)))
@@ -81,14 +89,31 @@ HYPERVISOR_CLH = clh-runtime-rs
 HYPERVISOR_NAME_CLH = clh
 HYPERVISOR_REMOTE = remote
 
-ARCH_SUPPORT_DB := x86_64 aarch64
-ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_DB)),)
-    # When set to true, builds the built-in Dragonball hypervisor
+# Dragonball is the only built-in VMM; Firecracker and Cloud Hypervisor are
+# external binaries. Those three are only wired into the Rust build for
+# x86_64/aarch64 (same scope as DBCMD, FCCMD, and CLHCMD in arch/*-options.mk).
+# USE_BUILTIN_DB / USE_EXTERNAL_* select which Cargo features are passed via EXTRA_RUSTFEATURES.
+##VAR USE_BUILTIN_DB=true|false Include the built-in Dragonball VMM in the Rust build (default: on x86_64/aarch64 only).
+##VAR USE_EXTERNAL_FC=true|false Include the external Firecracker hypervisor in the Rust build (default: on x86_64/aarch64 only).
+##VAR USE_EXTERNAL_CLH=true|false Include the external Cloud Hypervisor (CLH) in the Rust build (default: on x86_64/aarch64 only).
+ARCH_SUPPORT_LIGHTWEIGHT_HV := x86_64 aarch64
+ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_LIGHTWEIGHT_HV)),)
     USE_BUILTIN_DB := true
+    USE_EXTERNAL_FC := true
+    USE_EXTERNAL_CLH := true
 else
     USE_BUILTIN_DB := false
-    $(info Dragonball does not support ARCH $(ARCH), disabled. \
-        Specify "USE_BUILTIN_DB=true" to force enable.)
+    USE_EXTERNAL_FC := false
+    USE_EXTERNAL_CLH := false
+    $(info Dragonball, Firecracker, and Cloud Hypervisor are disabled in the Rust build on $(ARCH) (supported: $(ARCH_SUPPORT_LIGHTWEIGHT_HV)). Set USE_BUILTIN_DB=true, USE_EXTERNAL_FC=true, or USE_EXTERNAL_CLH=true to force enable.)
+endif
+
+##VAR USE_EXTERNAL_QEMU=true|false Include the external QEMU hypervisor in the Rust build (default: on when QEMUCMD is set in arch/*-options.mk).
+# QEMU is an external binary; enable the Rust driver when this architecture defines QEMUCMD (arch/*-options.mk).
+ifneq (,$(QEMUCMD))
+    USE_EXTERNAL_QEMU := true
+else
+    USE_EXTERNAL_QEMU := false
 endif
 
 HYPERVISOR ?= $(HYPERVISOR_QEMU)
@@ -468,6 +493,9 @@ USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILTIN_DB
+USER_VARS += USE_EXTERNAL_FC
+USER_VARS += USE_EXTERNAL_CLH
+USER_VARS += USE_EXTERNAL_QEMU
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -631,9 +659,20 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 
 EXTRA_RUSTFEATURES :=
 
-# if use dragonball hypervisor, add the feature to build dragonball in runtime
+# Pass hypervisor Cargo features (USE_BUILTIN_DB for Dragonball; USE_EXTERNAL_* for QEMU, CLH, FC).
+# See ARCH_SUPPORT_LIGHTWEIGHT_HV and QEMUCMD above.
 ifeq ($(USE_BUILTIN_DB),true)
-    EXTRA_RUSTFEATURES +=  dragonball
+    EXTRA_RUSTFEATURES += dragonball
+endif
+ifeq ($(USE_EXTERNAL_FC),true)
+    EXTRA_RUSTFEATURES += firecracker
+endif
+ifeq ($(USE_EXTERNAL_CLH),true)
+    EXTRA_RUSTFEATURES += cloud-hypervisor
+endif
+
+ifeq ($(USE_EXTERNAL_QEMU),true)
+    EXTRA_RUSTFEATURES += qemu
 endif
 
 ifneq ($(EXTRA_RUSTFEATURES),)
@@ -743,6 +782,23 @@ clean-generated-files:
 
 vendor:
 	@cargo vendor
+
+# utils.mk defines `standard_rust_check` with `cargo clippy --all-features`, which
+# would enable Dragonball and the external-hypervisor drivers on every architecture.
+# Firecracker and Cloud Hypervisor use optional dependencies that only exist for
+# x86_64/aarch64 in `crates/hypervisor/Cargo.toml`. Override here so clippy uses the same feature
+# set as the build (EXTRA_RUSTFEATURES / USE_BUILTIN_DB / USE_EXTERNAL_* / ARCH).
+.PHONY: standard_rust_check
+standard_rust_check:
+	@echo "standard rust check..."
+	@cargo fmt -- --check
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" \
+		cargo clippy --all-targets --release --locked \
+		-p runtime-rs \
+		--target $(TRIPLE) \
+		$(EXTRA_RUSTFEATURES) \
+		-- \
+		-D warnings
 
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check

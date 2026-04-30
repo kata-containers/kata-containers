@@ -59,9 +59,7 @@ ifeq ($(STANDARD_OCI_RUNTIME),yes)
     override EXTRA_RUSTFEATURES += standard-oci-runtime
 endif
 
-ifneq ($(EXTRA_RUSTFEATURES),)
-    override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
-endif
+override EXTRA_RUSTFEATURES := $(EXTRA_RUSTFEATURES:%=--features %)
 
 TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 

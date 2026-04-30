@@ -623,7 +623,7 @@ pub async fn get_block_device_info(d: &RwLock<DeviceManager>) -> BlockDeviceInfo
     d.read().await.get_block_device_info().await
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "qemu"))]
 mod tests {
     use super::DeviceManager;
     use crate::{

@@ -25,21 +25,17 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(feature = "firecracker")]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::remote::Remote;
 use hypervisor::HYPERVISOR_REMOTE;
-#[cfg(all(
-    feature = "cloud-hypervisor",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "cloud-hypervisor")]
 use hypervisor::ch::CloudHypervisor;
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
+use hypervisor::HYPERVISOR_QEMU;
+#[cfg(feature = "qemu")]
+use hypervisor::qemu::Qemu;
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
@@ -52,10 +48,7 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-#[cfg(all(
-    feature = "cloud-hypervisor",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+#[cfg(feature = "cloud-hypervisor")]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
@@ -1073,18 +1066,13 @@ impl Persist for VirtSandbox {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
-                #[cfg(all(
-                    feature = "dragonball",
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(feature = "dragonball")]
                 HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
-                #[cfg(all(
-                    feature = "cloud-hypervisor",
-                    any(target_arch = "x86_64", target_arch = "aarch64")
-                ))]
+                #[cfg(feature = "cloud-hypervisor")]
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
-                #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+                #[cfg(feature = "firecracker")]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
+                #[cfg(feature = "qemu")]
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
                 _ => Err(anyhow!(
@@ -1118,29 +1106,24 @@ impl Persist for VirtSandbox {
         let r = sandbox_state.resource.unwrap_or_default();
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
-            #[cfg(all(
-                feature = "dragonball",
-                any(target_arch = "x86_64", target_arch = "aarch64")
-            ))]
+            #[cfg(feature = "dragonball")]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
-            #[cfg(all(
-                feature = "cloud-hypervisor",
-                any(target_arch = "x86_64", target_arch = "aarch64")
-            ))]
+            #[cfg(feature = "cloud-hypervisor")]
             HYPERVISOR_NAME_CH => {
                 let hypervisor =
                     Arc::new(CloudHypervisor::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
-            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            #[cfg(feature = "firecracker")]
             HYPERVISOR_FIRECRACKER => {
                 let hypervisor =
                     Arc::new(Firecracker::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
+            #[cfg(feature = "qemu")]
             HYPERVISOR_QEMU => {
                 let hypervisor = Arc::new(Qemu::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
