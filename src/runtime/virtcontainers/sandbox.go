@@ -1226,8 +1226,9 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 		}
 	}()
 
-	// Add network for vm
-	inf.DevicePath = endpoints[0].PciPath().String()
+	// Add network for vm — the newly added endpoint is the last one
+	// in the returned slice (AddEndpoints returns the full n.eps list).
+	inf.DevicePath = endpoints[len(endpoints)-1].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
@@ -1244,7 +1245,10 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 // RemoveInterface removes a nic of the sandbox.
 func (s *Sandbox) RemoveInterface(ctx context.Context, inf *pbTypes.Interface) (*pbTypes.Interface, error) {
 	for _, endpoint := range s.network.Endpoints() {
-		if endpoint.HardwareAddr() == inf.HwAddr {
+		// Match by MAC address or by interface name. Name matching is
+		// needed for hot-unplug because the endpoint's HardwareAddr()
+		// returns the TAP MAC which differs from the host-side veth MAC.
+		if endpoint.HardwareAddr() == inf.HwAddr || (inf.Name != "" && endpoint.Name() == inf.Name) {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
 			if err := s.network.RemoveEndpoints(ctx, s, []Endpoint{endpoint}, true); err != nil {
 				return inf, err

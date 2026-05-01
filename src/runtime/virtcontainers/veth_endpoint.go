@@ -156,17 +156,19 @@ func (endpoint *VethEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 
 // HotDetach for the veth endpoint uses hot pull device
 func (endpoint *VethEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
-	if !netNsCreated {
-		return nil
-	}
-
 	span, ctx := vethTrace(ctx, "HotDetach", endpoint)
 	defer span.End()
 
-	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xDisconnectVMNetwork(ctx, endpoint)
-	}); err != nil {
-		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
+	// Only attempt to disconnect the bridge/TC filters if we own the
+	// network namespace AND the interface still exists. When an
+	// interface is hot-unplugged (e.g. veth peer deleted), the
+	// interface may already be gone from the netns.
+	if netNsCreated {
+		if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
+			return xDisconnectVMNetwork(ctx, endpoint)
+		}); err != nil {
+			networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
+		}
 	}
 
 	h := s.hypervisor

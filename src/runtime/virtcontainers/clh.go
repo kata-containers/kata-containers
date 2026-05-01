@@ -1058,28 +1058,156 @@ func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
 		return err
 	}
 
-	pciInfo, err := clh.vmAddNetPut()
+	mac := e.HardwareAddr()
 
-	if err != nil || len(pciInfo) == 0 {
+	// Send only the new device to CLH, not all netDevices.
+	// vmAddNetPut() sends every entry in clh.netDevices which
+	// causes already-attached devices to be rejected and prevents
+	// CLH from returning PCI info for the new device.
+	pciInfo, err := clh.vmAddSingleNet(mac)
+	if err != nil {
+		// Clean up the entries that addNet created so a retry
+		// doesn't leave stale state.
+		clh.cleanupNetDevice(mac)
 		return err
 	}
 
-	// Set the pci Path for the network endpoint
-	for i, netdev := range *clh.netDevices {
-		if e.HardwareAddr() == *netdev.Mac {
-			if i >= len(pciInfo) {
+	if pciInfo == nil {
+		return nil
+	}
+
+	pciPath, err := clhPciInfoToPath(*pciInfo)
+	if err != nil {
+		return err
+	}
+	e.SetPciPath(pciPath)
+	clh.devicesIds[mac] = pciInfo.GetId()
+
+	return nil
+}
+
+// cleanupNetDevice removes a net device's bookkeeping entries from
+// netDevices and netDevicesFiles. Used for rollback on hot-plug failure
+// and for cleanup after hot-unplug.
+func (clh *cloudHypervisor) cleanupNetDevice(mac string) {
+	delete(clh.netDevicesFiles, mac)
+	if clh.netDevices != nil {
+		filtered := (*clh.netDevices)[:0]
+		for _, nd := range *clh.netDevices {
+			if nd.Mac != nil && *nd.Mac == mac {
 				continue
 			}
-			pciPath, err := clhPciInfoToPath(pciInfo[i])
-			if err != nil {
-				return err
-			}
-			e.SetPciPath(pciPath)
+			filtered = append(filtered, nd)
+		}
+		*clh.netDevices = filtered
+	}
+}
+
+// vmAddSingleNet sends a single network device (identified by MAC) to CLH
+// via the /vm.add-net API with FD passing. Unlike vmAddNetPut which sends
+// all netDevices, this is used for hot-plug after the VM is already running.
+func (clh *cloudHypervisor) vmAddSingleNet(mac string) (*chclient.PciDeviceInfo, error) {
+	if clh.netDevices == nil {
+		return nil, fmt.Errorf("no net devices configured")
+	}
+
+	// Find the NetConfig for this MAC
+	var netDevice *chclient.NetConfig
+	for i := range *clh.netDevices {
+		if *(*clh.netDevices)[i].Mac == mac {
+			netDevice = &(*clh.netDevices)[i]
 			break
 		}
 	}
+	if netDevice == nil {
+		return nil, fmt.Errorf("net device with MAC %s not found in netDevices", mac)
+	}
 
-	return nil
+	addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.DialUnix("unix", nil, addr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	clh.Logger().Infof("Hot-plugging net device to Cloud Hypervisor: %+v", netDevice)
+
+	netDeviceAsJson, err := json.Marshal(netDevice)
+	if err != nil {
+		return nil, err
+	}
+	netDeviceAsIoReader := bytes.NewBuffer(netDeviceAsJson)
+
+	req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.add-net", netDeviceAsIoReader)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Length", strconv.Itoa(int(netDeviceAsIoReader.Len())))
+
+	payload, err := httputil.DumpRequest(req, true)
+	if err != nil {
+		return nil, err
+	}
+
+	files, ok := clh.netDevicesFiles[mac]
+	if !ok || len(files) == 0 {
+		return nil, fmt.Errorf("no TAP file descriptors found for MAC %s", mac)
+	}
+	var fds []int
+	for _, f := range files {
+		fds = append(fds, int(f.Fd()))
+	}
+	oob := syscall.UnixRights(fds...)
+	payloadn, oobn, err := conn.WriteMsgUnix([]byte(payload), oob, nil)
+	if err != nil {
+		return nil, err
+	}
+	if payloadn != len(payload) || oobn != len(oob) {
+		return nil, fmt.Errorf("failed to send full request to cloud hypervisor: payload %d/%d, oob %d/%d", payloadn, len(payload), oobn, len(oob))
+	}
+
+	reader := bufio.NewReader(conn)
+	resp, err := http.ReadResponse(reader, req)
+	if err != nil {
+		return nil, err
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return nil, fmt.Errorf("clh vm.add-net failed with status %d for device %s", resp.StatusCode, mac)
+	}
+
+	// 204 No Content means the device was accepted but no PCI info
+	// is available (e.g. pre-boot). Post-boot, CLH returns 200 with
+	// PCI info in the body.
+	if resp.StatusCode == 204 || len(respBody) == 0 {
+		return nil, nil
+	}
+
+	var pciInfo chclient.PciDeviceInfo
+	if err := json.Unmarshal(respBody, &pciInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse vm.add-net PCI response for %s: %w", mac, err)
+	}
+
+	clh.Logger().WithFields(log.Fields{
+		"mac": mac,
+		"id":  pciInfo.GetId(),
+		"bdf": pciInfo.GetBdf(),
+	}).Info("vm.add-net returned PCI info")
+
+	return &pciInfo, nil
 }
 
 func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
@@ -1113,6 +1241,31 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 		deviceID = clhDriveIndexToID(devInfo.(*config.BlockDrive).Index)
 	case VfioDev:
 		deviceID = devInfo.(*config.VFIODev).ID
+	case NetDev:
+		ep, ok := devInfo.(Endpoint)
+		if !ok || ep == nil {
+			return nil, fmt.Errorf("cannot hot remove net device: invalid endpoint")
+		}
+		mac := ep.HardwareAddr()
+		clhDeviceID, found := clh.devicesIds[mac]
+		if !found || clhDeviceID == "" {
+			return nil, fmt.Errorf("cannot hot remove net device: no CLH device ID found for MAC %q", mac)
+		}
+		// For net devices, we resolve the CLH device ID here (keyed by MAC)
+		// and pass it directly, bypassing the generic devicesIds lookup below
+		// which is designed for block/VFIO devices.
+		cl := clh.client()
+		ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+		defer cancel()
+		remove := *chclient.NewVmRemoveDevice()
+		remove.Id = &clhDeviceID
+		_, err := cl.VmRemoveDevicePut(ctx, remove)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hotplug remove net device: %s", openAPIClientError(err))
+		}
+		delete(clh.devicesIds, mac)
+		clh.cleanupNetDevice(mac)
+		return nil, nil
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
