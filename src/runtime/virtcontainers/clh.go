@@ -112,6 +112,10 @@ type clhClient interface {
 	VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
+	// Pause the VM
+	VmPausePut(ctx context.Context) (*http.Response, error)
+	// Create a snapshot of the VM
+	VmSnapshotPut(ctx context.Context, vmSnapshotConfig chclient.VmSnapshotConfig) (*http.Response, error)
 	// Remove a device from the VM
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 }
@@ -151,6 +155,14 @@ func (c *clhClientApi) VmAddDevicePut(ctx context.Context, deviceConfig chclient
 
 func (c *clhClientApi) VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error) {
 	return c.ApiInternal.VmAddDiskPut(ctx).DiskConfig(diskConfig).Execute()
+}
+
+func (c *clhClientApi) VmPausePut(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.PauseVM(ctx).Execute()
+}
+
+func (c *clhClientApi) VmSnapshotPut(ctx context.Context, vmSnapshotConfig chclient.VmSnapshotConfig) (*http.Response, error) {
+	return c.ApiInternal.VmSnapshotPut(ctx).VmSnapshotConfig(vmSnapshotConfig).Execute()
 }
 
 func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
@@ -1287,11 +1299,41 @@ func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 
 func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
 	clh.Logger().WithField("function", "PauseVM").Info("Pause Sandbox")
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
+	defer cancel()
+
+	_, err := cl.VmPausePut(ctx)
+	if err != nil {
+		clh.Logger().WithError(err).Error("Failed to pause VM")
+		return openAPIClientError(err)
+	}
+
 	return nil
 }
 
 func (clh *cloudHypervisor) SaveVM() error {
-	clh.Logger().WithField("function", "saveSandboxC").Info("Save Sandbox")
+	clh.Logger().WithField("function", "SaveVM").Info("Save Sandbox")
+
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
+	defer cancel()
+
+	// Create snapshot config with file URL to template path
+	// Use MemoryPath as base for snapshot destination
+	// When creating a template, the MemoryPath is set to the template path, so we can use it to save the snapshot.
+	fileURL := "file://" + filepath.Dir(clh.config.MemoryPath)
+
+	vmSnapshotConfig := *chclient.NewVmSnapshotConfig()
+	vmSnapshotConfig.SetDestinationUrl(fileURL)
+
+	_, err := cl.VmSnapshotPut(ctx, vmSnapshotConfig)
+	if err != nil {
+		clh.Logger().WithError(err).Error("Failed to save VM snapshot")
+		return openAPIClientError(err)
+	}
+
 	return nil
 }
 

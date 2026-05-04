@@ -116,6 +116,16 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 }
 
 //nolint:golint
+func (c *clhClientMock) VmPausePut(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
+func (c *clhClientMock) VmSnapshotPut(ctx context.Context, vmSnapshotConfig chclient.VmSnapshotConfig) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
 func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
 	return nil, nil
 }
