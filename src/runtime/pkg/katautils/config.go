@@ -2062,12 +2062,6 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 
 // checkFactoryConfig ensures the VM factory configuration is valid.
 func checkFactoryConfig(config oci.RuntimeConfig) error {
-	if config.FactoryConfig.Template {
-		if config.HypervisorConfig.InitrdPath == "" {
-			return errors.New("Factory option enable_template requires an initrd image")
-		}
-	}
-
 	if config.FactoryConfig.VMCacheNumber > 0 {
 		if config.HypervisorType != vc.QemuHypervisor {
 			return errors.New("VM cache just support qemu")
