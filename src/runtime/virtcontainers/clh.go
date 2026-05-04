@@ -585,28 +585,57 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 	}
 
-	// Create the VM memory config via the constructor to ensure default values are properly assigned
-	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
-	// Memory config shared is to be enabled when using vhost_user backends, ex. virtio-fs
-	// or when using HugePages.
-	// If such features are disabled, turn off shared memory config.
-	if clh.config.SharedFS == config.NoSharedFS && !clh.config.HugePages {
-		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
-	} else {
-		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
-	}
-	// Enable hugepages if needed
-	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
-	if !clh.config.ConfidentialGuest {
-		hotplugSize := clh.config.DefaultMaxMemorySize
-		// OpenAPI only supports int64 values
-		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+	// If the VM is booting from a template, or if the VM is going to be used as a template
+	// the memory is to be backed by a file, so we need to configure the memory zones accordingly.
+	if clh.config.BootFromTemplate || clh.config.BootToBeTemplate {
+		// Double-check that the clh.config.MemoryPath file exists before using it in the VM config, to avoid hitting a less clear error from cloud hypervisor when it tries to access the non-existing memory file.
+		if _, err := os.Stat(clh.config.MemoryPath); os.IsNotExist(err) {
+			return fmt.Errorf("memory file %s does not exist", clh.config.MemoryPath)
+		}
 
-		if clh.config.ReclaimGuestFreedMemory {
-			// Create VM with a balloon config so we can enable free page reporting (size of the balloon can be set to zero)
-			clh.vmconfig.Balloon = chclient.NewBalloonConfig(0)
-			// Set the free page reporting flag for ballooning to be true
-			clh.vmconfig.Balloon.SetFreePageReporting(true)
+		// Set the size to be 0 since we are going to configure actual size via zones
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(0)
+
+		memoryZoneConfig := chclient.NewMemoryZoneConfig("mem0", int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		if clh.config.BootToBeTemplate {
+			// When BootToBeTemplate is true, the memory file backing the VM memory is shared between multiple VMs created from the same template.
+			// So we need to set shared to true in this case.
+			memoryZoneConfig.SetShared(true)
+			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+		} else {
+			// When BootFromTemplate is true, set shared=false to ensure Copy-On-Write is used for the memory file.
+			// So that the VM can have its own private memory.
+			memoryZoneConfig.SetShared(false)
+			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
+		}
+		memoryZoneConfig.SetFile(clh.config.MemoryPath)
+		clh.vmconfig.Memory.Zones = &[]chclient.MemoryZoneConfig{
+			*memoryZoneConfig,
+		}
+	} else { // Normal (non-template) VM creation
+		// Create the VM memory config via the constructor to ensure default values are properly assigned
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		// Memory config shared is to be enabled when using vhost_user backends, ex. virtio-fs
+		// or when using HugePages.
+		// If such features are disabled, turn off shared memory config.
+		if clh.config.SharedFS == config.NoSharedFS && !clh.config.HugePages {
+			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
+		} else {
+			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+		}
+		// Enable hugepages if needed
+		clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+		if !clh.config.ConfidentialGuest {
+			hotplugSize := clh.config.DefaultMaxMemorySize
+			// OpenAPI only supports int64 values
+			clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+
+			if clh.config.ReclaimGuestFreedMemory {
+				// Create VM with a balloon config so we can enable free page reporting (size of the balloon can be set to zero)
+				clh.vmconfig.Balloon = chclient.NewBalloonConfig(0)
+				// Set the free page reporting flag for ballooning to be true
+				clh.vmconfig.Balloon.SetFreePageReporting(true)
+			}
 		}
 	}
 
