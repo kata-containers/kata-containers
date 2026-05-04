@@ -1377,6 +1377,56 @@ func (clh *cloudHypervisor) SaveVM() error {
 		return openAPIClientError(err)
 	}
 
+	if clh.config.BootToBeTemplate {
+		// Update the config.json file in the snapshotDir to set memory shared=false
+		snapshotConfigPath := filepath.Join(snapshotDir, "config.json")
+		snapshotConfig, err := os.ReadFile(snapshotConfigPath)
+		if err != nil {
+			clh.Logger().WithError(err).Error("Failed to read snapshot config")
+			return err
+		}
+
+		var snapshotConfigData map[string]interface{}
+		if err := json.Unmarshal(snapshotConfig, &snapshotConfigData); err != nil {
+			clh.Logger().WithError(err).Error("Failed to unmarshal snapshot config")
+			return err
+		}
+
+		// Access the memory section and cast it to a map
+		if memorySection, ok := snapshotConfigData["memory"].(map[string]interface{}); ok {
+			memorySection["shared"] = false
+			// Do the same update for each element fo the "zones" array in the memorySection
+			if zones, ok := memorySection["zones"].([]interface{}); ok {
+				for _, zone := range zones {
+					if zoneMap, ok := zone.(map[string]interface{}); ok {
+						zoneMap["shared"] = false
+					} else {
+						clh.Logger().Error("Unable to access zone in snapshot config memory section")
+						return fmt.Errorf("invalid snapshot config structure: zone in memory section not found or invalid")
+					}
+				}
+			} else {
+				clh.Logger().Error("Unable to access zones array in snapshot config memory section")
+				return fmt.Errorf("invalid snapshot config structure: zones array in memory section not found or invalid")
+			}
+		} else {
+			clh.Logger().Error("Unable to access memory section in snapshot config")
+			return fmt.Errorf("invalid snapshot config structure: memory section not found or invalid")
+		}
+
+		// Write the modified config back to file
+		modifiedConfig, err := json.Marshal(snapshotConfigData)
+		if err != nil {
+			clh.Logger().WithError(err).Error("Failed to marshal modified snapshot config")
+			return err
+		}
+
+		if err := os.WriteFile(snapshotConfigPath, modifiedConfig, 0644); err != nil {
+			clh.Logger().WithError(err).Error("Failed to write modified snapshot config")
+			return err
+		}
+	}
+
 	return nil
 }
 
