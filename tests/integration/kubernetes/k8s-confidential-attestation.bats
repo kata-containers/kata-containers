@@ -80,16 +80,23 @@ setup() {
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout="$timeout" pod "${pod_name}"
 
-	# Wait 5s for connecting with remote KBS
-	sleep 5
+	# pod-attestable-gpu becomes Ready once curl is installed; CDH fetch and GPU
+	# attestation (e.g. remote NRAS) run afterward and routinely exceed a short
+	# fixed sleep. Poll logs until the resource appears (or timeout).
+	if is_confidential_gpu_hardware; then
+		waitForProcess "180" "5" "kubectl logs ${pod_name} 2>/dev/null | grep -q \"${test_key}\""
+		waitForProcess "120" "5" "kubectl logs ${pod_name} 2>/dev/null | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
+	else
+		sleep 5
+	fi
 
-	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	kubectl logs "${pod_name}"
+	cmd="kubectl logs ${pod_name} | grep -q ${test_key}"
 	run bash -c "$cmd"
 	[ "$status" -eq 0 ]
 
 	if is_confidential_gpu_hardware; then
-		cmd="kubectl logs aa-test-cc | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
+		cmd="kubectl logs ${pod_name} | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
 		run bash -c "$cmd"
 		[ "$status" -eq 0 ]
 	fi
