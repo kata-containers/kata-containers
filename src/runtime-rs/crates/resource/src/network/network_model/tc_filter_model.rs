@@ -111,8 +111,7 @@ async fn add_ingress_qdisc(handle: &Handle, index: i32) -> Result<(), rtnetlink:
 fn is_ebusy(err: &rtnetlink::Error) -> bool {
     match err {
         rtnetlink::Error::NetlinkError(msg) => {
-            msg.code
-                .map_or(false, |c| c.get() == -(libc::EBUSY as i32))
+            msg.code.is_some_and(|c| c.get() == -libc::EBUSY)
         }
         _ => false,
     }
