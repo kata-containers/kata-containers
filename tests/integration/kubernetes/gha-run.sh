@@ -169,6 +169,8 @@ function delete_coco_kbs() {
 # Environment variables:
 #	KBS_INGRESS - (optional) specify the ingress implementation to expose the
 #	              service externally
+#	NVIDIA_VERIFIER_MODE - (optional) remote (default) | local: overrides the
+#	                       NVIDIA verifier type for nvidia-gpu hypervisors.
 #
 function deploy_coco_kbs() {
 	kbs_k8s_deploy "${KBS_INGRESS}"

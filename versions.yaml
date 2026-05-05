@@ -297,12 +297,16 @@ externals:
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
-    url: "https://github.com/confidential-containers/trustee"
-    version: "d4e317620c4039c89779b725f74974d8f005da66"
-    # image and image_tag must be in sync
+    url: "https://github.com/fidencio/trustee"
+    version: "601d2cdb6ca92e813bae3ac9d7b35fc13e16bed5"
+    # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
     image_tag: "d4e317620c4039c89779b725f74974d8f005da66"
     toolchain: "1.90.0"
+    # Helm chart deploys three separate images (kbs, as, rvps)
+    image_kbs: "ghcr.io/fidencio/trustee:helm-tests-kbs-grpc-as"
+    image_as: "ghcr.io/fidencio/trustee:helm-tests-coco-as-grpc"
+    image_rvps: "ghcr.io/fidencio/trustee:helm-tests-rvps"
 
   containerd:
     description: |
