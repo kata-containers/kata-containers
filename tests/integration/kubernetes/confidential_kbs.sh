@@ -19,19 +19,36 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-HTTPS_PROXY="${HTTPS_PROXY:-}"
+# Only the Attestation Service reaches out to the public Intel DCAP collateral
+# endpoint (api.trustedservices.intel.com) when verifying TDX quotes, so on the
+# Intel TDX CI runner it needs the corporate HTTPS proxy. HTTP_PROXY is
+# deliberately ignored: the KBS <-> AS <-> RVPS gRPC/HTTP traffic is in-cluster
+# and routing it through the proxy breaks those connections.
+HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
 readonly COCO_KBS_DIR="${COCO_TRUSTEE_DIR}/kbs"
+# The Helm chart directory inside the trustee repo
+readonly COCO_HELM_CHART_DIR="${COCO_TRUSTEE_DIR}/deployment/helm-chart"
+# The Helm release name
+readonly HELM_RELEASE_NAME="trustee"
+# The admin bearer-token file used for kbs-client authentication. The chart's
+# bootstrap job mints this JWT (signed with the admin key) and stores it in the
+# bootstrap secret; KBS runs with authorization_mode = "AuthenticatedAuthorization",
+# so admin requests must carry it.
+readonly KBS_ADMIN_TOKEN_FILE="${KBS_ADMIN_TOKEN_FILE:-/opt/trustee/install/kbs-admin-token}"
+# The bootstrap secret name holding admin keys
+readonly KBS_BOOTSTRAP_SECRET="trustee-bootstrap-user-keys"
+
 # The k8s namespace where the kbs service is deployed
-readonly KBS_NS="coco-tenant"
-# The private key file used for CLI authentication
-readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
-# The kbs service name
-readonly KBS_SVC_NAME="kbs"
+readonly KBS_NS="coco-trustee"
+# The kbs service name (Helm chart names it <release>-kbs)
+readonly KBS_SVC_NAME="trustee-kbs"
+# The kbs service exposed via NodePort (Helm chart names it <svc>-nodeport)
+readonly KBS_NODEPORT_SVC_NAME="trustee-kbs-nodeport"
 # The kbs ingress name
-readonly KBS_INGRESS_NAME="kbs"
+readonly KBS_INGRESS_NAME="trustee-kbs"
 # Workdir for installing snphost
 readonly SNPHOST_DIR="/tmp/snphost-workdir"
 
@@ -110,19 +127,23 @@ kbs_set_resources_policy() {
 	fi
 
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-		--auth-private-key "${KBS_PRIVATE_KEY}" set-resource-policy \
+		--admin-token-file "${KBS_ADMIN_TOKEN_FILE}" \
+		set-resource-policy \
 		--policy-file "${file}"
 }
 
-# Execute an admin command via the KBS client using the correct
-# URI and admin authentication key.
+# Execute an admin command via the KBS client.
+#
+# Admin requests are authenticated with the bearer token minted by the chart's
+# bootstrap job (KBS runs with authorization_mode = "AuthenticatedAuthorization").
 #
 # Parameters:
 #	$1 - config command to run
 #
 kbs_config_command() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-                --auth-private-key "${KBS_PRIVATE_KEY}" "$@"
+		--admin-token-file "${KBS_ADMIN_TOKEN_FILE}" \
+		"$@"
 }
 
 # Set resource data in base64 encoded.
@@ -215,14 +236,28 @@ kbs_set_resource_from_file() {
 	path+="${tag}"
 
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-		--auth-private-key "${KBS_PRIVATE_KEY}" set-resource \
+		--admin-token-file "${KBS_ADMIN_TOKEN_FILE}" \
+		set-resource \
 		--path "${path}" --resource-file "${file}"
 }
 
-# Build and install the kbs-client binary, unless it is already present.
+# Build and install the kbs-client binary, unless a compatible one is already
+# present.
+#
+# Reused (self-hosted / baremetal) CI runners can carry a kbs-client left over
+# from an older Trustee whose admin API predates the bearer-token flag this
+# script relies on. Reusing it makes every 'config' command fail with
+# "unexpected argument '--admin-token-file'". Only skip the (re)build when the
+# installed client actually understands --admin-token-file; otherwise rebuild it
+# from the pinned Trustee sources cloned by kbs_k8s_deploy().
 #
 kbs_install_cli() {
-	command -v kbs-client >/dev/null && return
+	if command -v kbs-client >/dev/null; then
+		if kbs-client config --help 2>&1 | grep -q -- '--admin-token-file'; then
+			return
+		fi
+		echo "Existing kbs-client lacks --admin-token-file; rebuilding from ${COCO_KBS_DIR}"
+	fi
 
 	source /etc/os-release || source /usr/lib/os-release
 	case "${ID}" in
@@ -315,46 +350,44 @@ ensure_snphost() {
 
 # Delete the kbs on Kubernetes
 #
-# Note: assume the kbs sources were cloned to $COCO_TRUSTEE_DIR
-#
 function kbs_k8s_delete() {
-	pushd "${COCO_KBS_DIR}"
-	if [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
-		kubectl delete -k config/kubernetes/overlays/ibm-se
-	else
-		kubectl delete -k config/kubernetes/overlays/
-	fi
+	helm uninstall "${HELM_RELEASE_NAME}" -n "${KBS_NS}" || true
 
 	# Verify that KBS namespace resources were properly deleted
-	cmd="kubectl get all -n ${KBS_NS} 2>&1 | grep 'No resources found'"
+	local cmd="kubectl get all -n ${KBS_NS} 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "${cmd}"
-	popd
+
+	kubectl delete ns "${KBS_NS}" --ignore-not-found --wait=false
 }
 
-# Deploy the kbs on Kubernetes
+# Deploy the kbs on Kubernetes via the Trustee Helm chart.
 #
 # Parameters:
-#	$1 - apply the specificed ingress handler to expose the service externally
+#	$1 - ingress type to expose the service externally (nodeport|aks|"")
+#
+# Environment (optional):
+#	NVIDIA_VERIFIER_MODE - remote (default) | local: overrides the NVIDIA verifier
+#	                       type when KATA_HYPERVISOR matches *nvidia-gpu*.
 #
 function kbs_k8s_deploy() {
-	local image
-	local image_tag
 	local ingress=${1:-}
 	local repo
+	local version
+	local image_kbs
+	local image_as
+	local image_rvps
 	local svc_host
 	local timeout
-	local kbs_ip
-	local kbs_port
-	local version
 
-	# yq is needed by get_from_kata_deps
 	ensure_yq
+	ensure_helm
 
 	# Read from versions.yaml
 	repo=$(get_from_kata_deps ".externals.coco-trustee.url")
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
-	image=$(get_from_kata_deps ".externals.coco-trustee.image")
-	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
+	image_kbs=$(get_from_kata_deps ".externals.coco-trustee.image_kbs")
+	image_as=$(get_from_kata_deps ".externals.coco-trustee.image_as")
+	image_rvps=$(get_from_kata_deps ".externals.coco-trustee.image_rvps")
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -369,103 +402,265 @@ function kbs_k8s_deploy() {
 		rm -rf "${COCO_TRUSTEE_DIR}"
 	fi
 
-	echo "::group::Clone the kbs sources"
+	echo "::group::Clone the trustee sources"
 	git clone --depth 1 "${repo}" "${COCO_TRUSTEE_DIR}"
 	pushd "${COCO_TRUSTEE_DIR}"
 	git fetch --depth=1 origin "${version}"
-	git checkout FETCH_HEAD -b kbs_$$
+	git checkout FETCH_HEAD -b trustee_$$
 	popd
 	echo "::endgroup::"
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/"
+	# Split image references into repository and tag.
+	# Format is "repo:tag" (e.g. "ghcr.io/confidential-containers/staged-images/kbs-grpc-as:<sha>")
+	local kbs_repo="${image_kbs%:*}"
+	local kbs_tag="${image_kbs##*:}"
+	local as_repo="${image_as%:*}"
+	local as_tag="${image_as##*:}"
+	local rvps_repo="${image_rvps%:*}"
+	local rvps_tag="${image_rvps##*:}"
 
-	# Tests should fill kbs resources later, however, the deployment
-	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/key.bin
+	# Build Helm --set arguments for verifier configuration.
+	# These supplement the values file and avoid embedding YAML inside the heredoc.
+	#
+	# The AS auto-selects a verifier per evidence type; the chart configures the
+	# NVIDIA and Intel DCAP verifiers by default (DCAP already points at the
+	# public Intel collateral service), so SNP and TDX need no extra knobs. Only
+	# NVIDIA requires overriding the verifier type (Local vs Remote).
+	local helm_set_args=()
 
-	# For qemu-se* runtime, prepare the necessary resources
-	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
-		mv overlays/key.bin overlays/ibm-se/key.bin
-		prepare_credentials_for_qemu_se
-		# SE_SKIP_CERTS_VERIFICATION should be set to true
-		# to skip the verification of the certificates
-		sed -i "s/false/true/g" overlays/ibm-se/patch.yaml
+	if [[ "${KATA_HYPERVISOR}" == *nvidia-gpu* ]]; then
+		local nvidia_verifier_type
+		nvidia_verifier_type="$(printf '%s' "${NVIDIA_VERIFIER_MODE:-remote}" | sed 's/./\u&/')"
+		helm_set_args+=(--set "as.verifier.nvidia.type=${nvidia_verifier_type}")
 	fi
 
-	echo "::group::Update the kbs container image"
-	install_kustomize
-	pushd base
-	kustomize edit set image "kbs-container-image=${image}:${image_tag}"
-	popd
+	# Build Helm values override.
+	#
+	# The chart's default CPU/memory *requests* (kbs 250m, as 500m, rvps 100m)
+	# reserve ~850m of CPU across the three Trustee Pods. On the small
+	# single-node non-TEE CI runners that leaves too little allocatable CPU for
+	# the test workloads (some request 2 full CPUs with Guaranteed QoS), so they
+	# stay Pending with "Insufficient cpu". The builtin-AS kustomize deployment
+	# ran a single Pod and did not reserve this much. Shrink the requests (which
+	# is what the scheduler accounts for) to a minimum while leaving generous
+	# limits so the AS can still burst during TDX quote verification.
+	local values_file
+	values_file=$(mktemp -t trustee-helm-values-XXXXX.yaml)
+	cat > "${values_file}" <<-EOF
+	# Enable debug logging on all Trustee components (kbs, as, rvps) to help
+	# debug attestation / resource-retrieval failures in CI.
+	log_level: debug
+	kbs:
+	  image:
+	    repository: "${kbs_repo}"
+	    tag: "${kbs_tag}"
+	  service:
+	    exposeLoadBalancer: false
+	  resources:
+	    requests:
+	      cpu: 50m
+	      memory: 128Mi
+	    limits:
+	      cpu: "1"
+	      memory: 1Gi
+	as:
+	  image:
+	    repository: "${as_repo}"
+	    tag: "${as_tag}"
+	  resources:
+	    requests:
+	      cpu: 50m
+	      memory: 256Mi
+	    limits:
+	      cpu: "2"
+	      memory: 2Gi
+	rvps:
+	  image:
+	    repository: "${rvps_repo}"
+	    tag: "${rvps_tag}"
+	  resources:
+	    requests:
+	      cpu: 50m
+	      memory: 64Mi
+	    limits:
+	      cpu: "1"
+	      memory: 512Mi
+	EOF
+
+	# Handle ingress / nodeport
+	if [[ "${ingress}" = "nodeport" ]]; then
+		cat >> "${values_file}" <<-EOF
+		nodePort:
+		  enabled: true
+		EOF
+	elif [[ "${ingress}" = "aks" ]]; then
+		echo "::group::Enable approuting (application routing) add-on"
+		enable_cluster_approuting ""
+		echo "::endgroup::"
+
+		cat >> "${values_file}" <<-EOF
+		ingress:
+		  enabled: true
+		  className: "webapprouting.kubernetes.azure.com"
+		  host: ""
+		EOF
+	fi
+
+	# Proxy handling (Intel TDX CI): only the Attestation Service reaches out to
+	# the public Intel DCAP collateral endpoint (api.trustedservices.intel.com)
+	# when verifying TDX quotes, so it is the only component that needs the
+	# corporate proxy. We set https_proxy only: the KBS <-> AS <-> RVPS traffic is
+	# plain HTTP/gRPC and in-cluster, and routing it through the proxy (via
+	# HTTP_PROXY) breaks those connections. This mirrors the simple legacy setup,
+	# which set https_proxy on the (then builtin) AS and no no_proxy at all.
+	# Helm --set treats commas as key separators; escape them with \, for literal
+	# commas.
+	local as_env_idx=0
+	if [[ -n "${HTTPS_PROXY}" ]]; then
+		local helm_https_proxy="${HTTPS_PROXY//,/\\,}"
+		helm_set_args+=(--set "as.extraEnvVars[${as_env_idx}].name=HTTPS_PROXY")
+		helm_set_args+=(--set "as.extraEnvVars[${as_env_idx}].value=${helm_https_proxy}")
+		as_env_idx=$((as_env_idx + 1))
+		helm_set_args+=(--set "as.extraEnvVars[${as_env_idx}].name=https_proxy")
+		helm_set_args+=(--set "as.extraEnvVars[${as_env_idx}].value=${helm_https_proxy}")
+		as_env_idx=$((as_env_idx + 1))
+	fi
+
+	# Handle IBM SE (s390x): the SE verifier runs inside the gRPC Attestation
+	# Service, so the SE materials are mounted on the AS Pod (not KBS) via the
+	# chart's as.ibmse.* knobs, which create a node-local PV/PVC pointing at
+	# ${IBM_SE_CREDS_DIR} on the target node.
+	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
+		local node_name
+		node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+		prepare_credentials_for_qemu_se
+		helm_set_args+=(--set "as.ibmse.credsDir=${IBM_SE_CREDS_DIR:-}")
+		helm_set_args+=(--set "as.ibmse.nodeName=${node_name}")
+		# fsGroup must match the owning GID of the files under credsDir so the
+		# non-root AS container (CAP_DAC_OVERRIDE dropped) can read them.
+		helm_set_args+=(--set "as.podSecurityContext.fsGroup=1000")
+		# Development materials: skip the HKD certificate chain verification.
+		helm_set_args+=(--set "as.extraEnvVars[${as_env_idx}].name=SE_SKIP_CERTS_VERIFICATION")
+		helm_set_args+=(--set-string "as.extraEnvVars[${as_env_idx}].value=true")
+		as_env_idx=$((as_env_idx + 1))
+	fi
+
+	# Baremetal / self-hosted CI clusters keep the same Kubernetes API; a prior
+	# run may leave the Helm release secret behind (e.g. pending-install after a
+	# timeout), which would make a subsequent upgrade fail. Clean it up so the
+	# 'helm upgrade --install' below always starts from a known state.
+	if helm status "${HELM_RELEASE_NAME}" -n "${KBS_NS}" &>/dev/null; then
+		echo "Removing existing Helm release ${HELM_RELEASE_NAME} in namespace ${KBS_NS}"
+		helm uninstall "${HELM_RELEASE_NAME}" -n "${KBS_NS}" --wait --timeout 5m
+	fi
+
+	# The chart declares a (condition-gated, disabled-by-default) postgresql
+	# dependency, which helm still requires to be present under charts/ before
+	# install. Fetch it from the versions pinned in the chart's Chart.lock.
+	echo "::group::Build Helm chart dependencies"
+	helm dependency build "${COCO_HELM_CHART_DIR}"
 	echo "::endgroup::"
-	[[ -n "${ingress}" ]] && _handle_ingress "${ingress}"
 
-	echo "::group::Deploy the KBS"
-	./deploy-kbs.sh
+	echo "::group::Deploy Trustee via Helm"
+	echo "Helm values override:"
+	cat "${values_file}"
 
-	# Set proxy env vars and enable debug logging on the KBS deployment.
-	# Using 'kubectl set env' avoids patching the trustee source tree.
-	# All vars are set in a single call to avoid triggering two rolling restarts.
-	local kbs_env_args=(RUST_LOG=debug)
-	is_tdx_hypervisor && [[ -n "${HTTPS_PROXY}" ]] && kbs_env_args+=(https_proxy="${HTTPS_PROXY}")
-	kubectl set env deployment/kbs -n "${KBS_NS}" "${kbs_env_args[@]}"
-
-	# Check the private key used to install the KBS exist and save it in a
-	# well-known location. That's the access key used by the kbs-client.
-	local install_key="${PWD}/base/kbs.key"
-	if [[ ! -f "${install_key}" ]]; then
-		echo "ERROR: KBS private key not found at ${install_key}"
+	if ! helm upgrade --install "${HELM_RELEASE_NAME}" "${COCO_HELM_CHART_DIR}" \
+		--namespace "${KBS_NS}" --create-namespace \
+		-f "${values_file}" \
+		"${helm_set_args[@]}" \
+		--wait --timeout 5m --debug 2>&1; then
+		echo "ERROR: helm upgrade --install failed"
+		echo "::group::DEBUG - helm status"
+		helm status "${HELM_RELEASE_NAME}" -n "${KBS_NS}" 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - all resources"
+		kubectl -n "${KBS_NS}" get all 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - pods"
+		kubectl -n "${KBS_NS}" get pods -o wide 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - describe pods"
+		kubectl -n "${KBS_NS}" describe pods 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - services"
+		kubectl -n "${KBS_NS}" get svc -o wide 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - endpoints"
+		kubectl -n "${KBS_NS}" get endpoints 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - secrets"
+		kubectl -n "${KBS_NS}" get secrets 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - deployments"
+		kubectl -n "${KBS_NS}" get deployments -o wide 2>&1 || true
+		kubectl -n "${KBS_NS}" describe deployments 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - jobs"
+		kubectl -n "${KBS_NS}" get jobs 2>&1 || true
+		kubectl -n "${KBS_NS}" describe jobs 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - events"
+		kubectl -n "${KBS_NS}" get events --sort-by='.lastTimestamp' 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - kbs logs"
+		kubectl -n "${KBS_NS}" logs -l app=kbs --all-containers 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - as logs"
+		kubectl -n "${KBS_NS}" logs -l app=attestation-service --all-containers 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - rvps logs"
+		kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - node status"
+		kubectl get nodes -o wide 2>&1 || true
+		kubectl describe nodes 2>&1 || true
+		echo "::endgroup::"
+		rm -f "${values_file}"
 		return 1
 	fi
-	sudo mkdir -p "$(dirname "${KBS_PRIVATE_KEY}")"
-	sudo cp -f "${install_key}" "${KBS_PRIVATE_KEY}"
 
-	popd
+	rm -f "${values_file}"
 
-	if ! waitForProcess "120" "10" "kubectl -n \"${KBS_NS}\" get pods | \
-		grep -q '^kbs-.*Running.*'"; then
-		echo "ERROR: KBS service pod isn't running"
-		echo "::group::DEBUG - describe kbs deployments"
-		kubectl -n "${KBS_NS}" get deployments || true
+	# Extract the admin bearer token minted by the chart's bootstrap job so
+	# kbs-client can authenticate against the KBS admin API.
+	sudo mkdir -p "$(dirname "${KBS_ADMIN_TOKEN_FILE}")"
+	kubectl get secret "${KBS_BOOTSTRAP_SECRET}" -n "${KBS_NS}" \
+		-o jsonpath='{.data.KBS_ADMIN_TOKEN}' | \
+		base64 -d | sudo tee "${KBS_ADMIN_TOKEN_FILE}" > /dev/null
+	echo "::endgroup::"
+
+	# Verify all three pods are running
+	echo "::group::Verify pods are running"
+	if ! waitForProcess "120" "10" \
+		"kubectl -n ${KBS_NS} wait --for=condition=Ready pod -l app.kubernetes.io/instance=trustee --timeout=0 2>/dev/null"; then
+		echo "ERROR: Not all Trustee pods are running"
+		echo "::group::DEBUG - pods"
+		kubectl -n "${KBS_NS}" get pods || true
 		echo "::endgroup::"
-		echo "::group::DEBUG - describe kbs pod"
-		kubectl -n "${KBS_NS}" describe pod -l app=kbs || true
+		echo "::group::DEBUG - describe pods"
+		kubectl -n "${KBS_NS}" describe pods || true
 		echo "::endgroup::"
 		echo "::group::DEBUG - kbs logs"
 		kubectl -n "${KBS_NS}" logs -l app=kbs || true
 		echo "::endgroup::"
+		echo "::group::DEBUG - as logs"
+		kubectl -n "${KBS_NS}" logs -l app=attestation-service || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - rvps logs"
+		kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service || true
+		echo "::endgroup::"
 		return 1
 	fi
+	echo "All Trustee pods are running"
 	echo "::endgroup::"
 
 	echo "::group::Post deploy actions"
 	_post_deploy "${ingress}"
 	echo "::endgroup::"
 
-	# By default, the KBS service is reachable within the cluster only,
-	# thus the following healthy checker should run from a pod. So start a
-	# debug pod where it will try to get a response from the service. The
-	# expected response is '404 Not Found' because it will request an endpoint
-	# that does not exist.
-	#
-	echo "::group::Check the service healthy"
-	kbs_ip=$(kubectl get -o jsonpath='{.spec.clusterIP}' svc "${KBS_SVC_NAME}" -n "${KBS_NS}" 2>/dev/null)
-	kbs_port=$(kubectl get -o jsonpath='{.spec.ports[0].port}' svc "${KBS_SVC_NAME}" -n "${KBS_NS}" 2>/dev/null)
-
-	local pod=kbs-checker-$$
-	kubectl run "${pod}" --image=quay.io/prometheus/busybox --restart=Never -- \
-		sh -c "wget -O- --timeout=60 \"${kbs_ip}:${kbs_port}\" || true"
-	if ! waitForProcess "60" "10" "kubectl logs \"${pod}\" 2>/dev/null | grep -q \"404 Not Found\""; then
-		echo "ERROR: KBS service is not responding to requests"
-		echo "::group::DEBUG - kbs logs"
-		kubectl -n "${KBS_NS}" logs -l app=kbs || true
-		echo "::endgroup::"
-		kubectl delete pod "${pod}"
-		return 1
-	fi
-	kubectl delete pod "${pod}"
-	echo "KBS service respond to requests"
-	echo "::endgroup::"
+	# The KBS readiness probe hits /healthz, so a Ready pod (verified
+	# above) already confirms the endpoint is working.
 
 	if [[ -n "${ingress}" ]]; then
 		echo "::group::Check the kbs service is exposed"
@@ -479,9 +674,9 @@ function kbs_k8s_deploy() {
 		# the host name will take a while to start resolving.
 		timeout=350
 		echo "Trying to connect at ${svc_host}. Timeout=${timeout}"
-		if ! waitForProcess "${timeout}" "30" "curl -s -I \"${svc_host}\" | grep -q \"404 Not Found\""; then
+		if ! waitForProcess "${timeout}" "30" "curl -s \"${svc_host}/healthz\" -o /dev/null -w '%{http_code}' | grep -q '200'"; then
 			echo "ERROR: service seems to not respond on ${svc_host} host"
-			curl -I "${svc_host}"
+			curl -I "${svc_host}/healthz"
 			return 1
 		fi
 		echo "KBS service respond to requests at ${svc_host}"
@@ -504,10 +699,10 @@ kbs_k8s_svc_host() {
 			sleep 5
 		done
 		echo "${host}"
-	elif kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
-			local host
-			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "${KBS_NS}")
-			echo "${host}"
+	elif kubectl get svc "${KBS_NODEPORT_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
+		local host
+		host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+		echo "${host}"
 	else
 		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" \
 			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
@@ -521,8 +716,8 @@ kbs_k8s_svc_port() {
 	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep -q kbs; then
 		# Assume served on default HTTP port 80
 		echo "80"
-	elif kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
-		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" -o jsonpath='{.spec.ports[0].nodePort}'
+	elif kubectl get svc "${KBS_NODEPORT_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
+		kubectl get svc "${KBS_NODEPORT_SVC_NAME}" -n "${KBS_NS}" -o jsonpath='{.spec.ports[0].nodePort}'
 	else
 		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" \
 			-o jsonpath='{.spec.ports[0].port}' 2>/dev/null
@@ -550,6 +745,12 @@ kbs_k8s_print_logs() {
 
 	echo "::group::DEBUG - kbs logs since ${start_time}"
 	kubectl -n "${KBS_NS}" logs -l app=kbs --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
+	echo "::group::DEBUG - as logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=attestation-service --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
+	echo "::group::DEBUG - rvps logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service --since-time="${iso_start_time}" --timestamps=true || true
 	echo "::endgroup::"
 }
 
@@ -582,52 +783,6 @@ _ensure_rust() {
 			return 1
 		fi
 	fi
-}
-
-# Choose the appropriated ingress handler.
-#
-# To add a new handler, create a function named as _handle_ingress_NAME where
-# NAME is the handler name. This is enough for this method to pick up the right
-# implementation.
-#
-_handle_ingress() {
-	local ingress="$1"
-
-	type -a "_handle_ingress_${ingress}" &>/dev/null || {
-		echo "ERROR: ingress '${ingress}' handler not implemented";
-		return 1;
-	}
-
-	"_handle_ingress_${ingress}"
-}
-
-# Implement the ingress handler for AKS.
-#
-_handle_ingress_aks() {
-	echo "::group::Enable approuting (application routing) add-on"
-	enable_cluster_approuting ""
-	echo "::endgroup::"
-
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
-
-	echo "::group::$(pwd)/ingress.yaml"
-	# We don't use a cluster DNS zone, instead get the ingress public IP,
-	# thus KBS_INGRESS_HOST is set empty.
-	KBS_INGRESS_CLASS="webapprouting.kubernetes.azure.com" \
-		KBS_INGRESS_HOST="\"\"" \
-		envsubst < ingress.yaml | tee ingress.yaml.tmp
-	echo "::endgroup::"
-	mv ingress.yaml.tmp ingress.yaml
-
-	kustomize edit add resource ingress.yaml
-	popd
-}
-
-# Implements the ingress handler for servernode
-#
-_handle_ingress_nodeport() {
-	# By exporting this variable the kbs deploy script will install the nodeport service
-	export DEPLOYMENT_DIR=nodeport
 }
 
 # Run further actions after the kbs was deployed, usually to apply further

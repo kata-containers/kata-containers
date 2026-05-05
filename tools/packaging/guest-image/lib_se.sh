@@ -131,6 +131,9 @@ function repack_secure_image() {
 	if [[ "${for_kbs}" == "true" ]]; then
 		# Rename kata-containers-se.img to hdr.bin and clean up kernel and initrd
 		mv "${build_dir}/hdr/kata-containers-se.img" "${build_dir}/hdr/hdr.bin"
+		# The Attestation Service reads hdr.bin as a non-root user via a group
+		# (fsGroup) mount, so make sure it is group/other readable.
+		chmod +r "${build_dir}/hdr/hdr.bin"
 		rm -f "${build_dir}"/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
 	else
 		# Clean up the build directory completely
