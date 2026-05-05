@@ -16,7 +16,7 @@ use crate::secret;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use log::debug;
 use oci_spec::runtime as oci;
 use protocols::agent;
@@ -379,6 +379,20 @@ pub struct AddARPNeighborsRequestDefaults {
     allowed_states: Vec<u32>,
 }
 
+fn validate_id_verification_policy(policy: &str) -> Result<()> {
+    match policy {
+        "verify-host-input" | "policy-provided" => Ok(()),
+        _ => bail!(
+            "Unsupported id_verification_policy = {} - must be verify-host-input or policy-provided in the settings file",
+            policy
+        ),
+    }
+}
+
+fn default_id_verification_policy() -> String {
+    "verify-host-input".to_string()
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -458,9 +472,16 @@ pub struct ClusterConfig {
     pub pause_container_image: String,
 
     /// Whether or not the cluster uses the guest pull mechanism
-    /// In guest pull, host can't look into layers to determine GID.
-    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
     pub guest_pull: bool,
+
+    /// Supported values:
+    ///
+    /// "verify-host-input" - The Agent verifies that the CreateContainerRequest
+    ///         user/group IDs match the IDs calculated by genpolicy.
+    /// "policy-provided" - The Agent uses the user/group IDs calculated by
+    ///         genpolicy and ignores the IDs from CreateContainerRequest.
+    #[serde(default = "default_id_verification_policy")]
+    pub id_verification_policy: String,
 
     /// Supported values:
     ///
@@ -539,6 +560,14 @@ enum K8sEnvFromSource {
 
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
+        validate_id_verification_policy(
+            config
+                .settings
+                .cluster_config
+                .id_verification_policy
+                .as_str(),
+        )?;
+
         let mut config_maps = Vec::new();
         let mut secrets = Vec::new();
         let mut resources = Vec::new();

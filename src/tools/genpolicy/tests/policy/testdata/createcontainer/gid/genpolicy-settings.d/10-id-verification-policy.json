@@ -1,0 +1,7 @@
+[
+  {
+    "op": "replace",
+    "path": "/cluster_config/id_verification_policy",
+    "value": "policy-provided"
+  }
+]

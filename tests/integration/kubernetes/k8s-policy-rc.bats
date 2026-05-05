@@ -149,6 +149,8 @@ test_rc_policy() {
 }
 
 @test "Policy failure: unexpected UID = 1000" {
+    [[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided UID values"
+
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
       '.spec.template.spec.securityContext.runAsUser = 1000' \

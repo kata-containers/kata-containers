@@ -80,6 +80,8 @@ test_deployment_policy_error() {
 }
 
 @test "Policy failure: unexpected GID = 0 for layered securityContext deployment" {
+    [[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided GID values"
+
     # Change the pod GID to 0 after the policy has been generated using a different
     # runAsGroup value. The policy would use GID = 0 by default, if there weren't
     # a different runAsGroup value in the YAML file.
@@ -91,6 +93,8 @@ test_deployment_policy_error() {
 }
 
 @test "Policy failure: malicious root group added via supplementalGroups deployment" {
+    [[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided supplementalGroups values"
+
     # Inject a supplementalGroup of 0 (root) after the policy has been generated
     yq -i \
         '.spec.template.spec.securityContext.supplementalGroups += 0' \

@@ -49,6 +49,8 @@ test_deployment_policy_error() {
 }
 
 @test "Policy failure: unexpected UID = 0" {
+    [[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided UID values"
+
     # Change the pod UID to 0 after the policy has been generated using a different
     # runAsUser value. The policy would use UID = 0 by default, if there weren't
     # a different runAsUser value in the YAML file.

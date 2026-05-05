@@ -113,9 +113,7 @@ mod tests {
             raw_out: false,
             rego_rules_path: workdir.join("rules.rego").to_str().unwrap().to_string(),
             runtime_class_names: Vec::new(),
-            settings: genpolicy::settings::Settings::new(
-                workdir.join("genpolicy-settings.json").to_str().unwrap(),
-            ),
+            settings: genpolicy::settings::Settings::new(workdir.to_str().unwrap()),
             silent_unsupported_fields: false,
             use_cache: false,
             version: false,
@@ -217,7 +215,12 @@ mod tests {
         // Make sure that workdir is empty.
         for entry in fs::read_dir(&workdir).expect("should be able to read directories") {
             let entry = entry.expect("should be able to read directory entries");
-            fs::remove_file(entry.path()).expect("should be able to remove files");
+            let path = entry.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path).expect("should be able to remove directories");
+            } else {
+                fs::remove_file(path).expect("should be able to remove files");
+            }
         }
 
         for file in files_to_copy {
@@ -240,6 +243,21 @@ mod tests {
                     workdir.join(base)
                 ))
                 .expect("copying files around should not fail");
+        }
+
+        let drop_in_dir = testdata_dir.join("genpolicy-settings.d");
+        if drop_in_dir.is_dir() {
+            let workdir_drop_in_dir = workdir.join("genpolicy-settings.d");
+            fs::create_dir_all(&workdir_drop_in_dir)
+                .expect("should be able to create settings drop-in dir");
+
+            for entry in fs::read_dir(&drop_in_dir).expect("should be able to read drop-in dir") {
+                let entry = entry.expect("should be able to read drop-in entries");
+                if entry.path().is_file() {
+                    fs::copy(entry.path(), workdir_drop_in_dir.join(entry.file_name()))
+                        .expect("copying settings drop-in should not fail");
+                }
+            }
         }
 
         (workdir, testdata_dir)
@@ -303,6 +321,11 @@ mod tests {
     #[tokio::test]
     async fn test_state_exec_process() {
         runtests("state/execprocess").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_exec_process_policy_provided() {
+        runtests("state/execprocess_policy_provided").await;
     }
 
     #[tokio::test]

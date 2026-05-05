@@ -16,12 +16,7 @@ metadata:
     # cc_init_data annotation will be added by genpolicy with CDH configuration
     # from the custom default-initdata.toml created by create_nim_initdata_file()
 spec:
-  # Explicit user/group/supplementary groups to support nydus guest-pull.
-  # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
-  # other references to this issue in the genpolicy source folder.
   securityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
     fsGroup: 1000
   restartPolicy: Always
   runtimeClassName: kata

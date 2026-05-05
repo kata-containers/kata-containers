@@ -627,11 +627,9 @@ struct TopologySpreadConstraint {
 }
 
 impl Container {
-    pub async fn init(&mut self, config: &Config, is_pause_container: bool) {
+    pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
-        self.registry = registry::get_container(config, &self.image, is_pause_container)
-            .await
-            .unwrap();
+        self.registry = registry::get_container(config, &self.image).await.unwrap();
     }
 
     pub fn get_env_variables(
@@ -1182,8 +1180,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
         }),
         ..Default::default()
     };
-    let is_pause_container = true;
-    pause_container.init(config, is_pause_container).await;
+    pause_container.init(config).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }

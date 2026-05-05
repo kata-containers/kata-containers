@@ -142,6 +142,8 @@ test_job_policy_error() {
 }
 
 @test "Policy failure: unexpected UID = 222" {
+    [[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided UID values"
+
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
         '.spec.template.spec.securityContext.runAsUser = 222' \

@@ -60,7 +60,7 @@ S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
-CreateContainerRequest := {"ops": ops, "allowed": true} if {
+CreateContainerRequest := {"ops": ops, "allowed": true, "policy_user": policy_user} if {
     # Check if the input request should be rejected even before checking the
     # policy_data.containers information.
     allow_create_container_input
@@ -111,6 +111,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
 
     ret := allow_linux(ops_builder2, p_oci, i_oci)
     ret.allowed
+    policy_user := request_policy_user(p_oci.Process)
 
     # save to policy state
     # key: input.container_id
@@ -822,10 +823,28 @@ allow_process_common(p_process, i_process, s_name, s_namespace) if {
     p_process.Cwd == i_process.Cwd
     p_process.NoNewPrivileges == i_process.NoNewPrivileges
 
-    allow_user(p_process, i_process)
+    allow_process_user(p_process, i_process)
     allow_env(p_process, i_process, s_name, s_namespace)
 
     print("allow_process_common: true")
+}
+
+allow_process_user(p_process, i_process) if {
+    policy_data.cluster_config.id_verification_policy == "verify-host-input"
+    allow_user(p_process, i_process)
+}
+
+allow_process_user(p_process, i_process) if {
+    policy_data.cluster_config.id_verification_policy == "policy-provided"
+    print("allow_process_user: using policy user")
+}
+
+request_policy_user(p_process) = null if {
+    policy_data.cluster_config.id_verification_policy == "verify-host-input"
+}
+
+request_policy_user(p_process) = p_process.User if {
+    policy_data.cluster_config.id_verification_policy == "policy-provided"
 }
 
 # Compare the OCI Process field of a policy container with the input OCI Process from a CreateContainerRequest
@@ -1636,7 +1655,7 @@ get_state_container(container_id):= p_container if {
     p_container := policy_data.containers[idx]
 }
 
-ExecProcessRequest if {
+ExecProcessRequest := {"allowed": true, "policy_user": policy_user} if {
     print("ExecProcessRequest 1: input =", input)
     allow_exec_process_input
 
@@ -1646,10 +1665,11 @@ ExecProcessRequest if {
 
     p_container := get_state_container(input.container_id)
     allow_interactive_exec(p_container, input.process)
+    policy_user := request_policy_user(p_container.OCI.Process)
 
     print("ExecProcessRequest 1: true")
 }
-ExecProcessRequest if {
+ExecProcessRequest := {"allowed": true, "policy_user": policy_user} if {
     print("ExecProcessRequest 2: input =", input)
     allow_exec_process_input
 
@@ -1661,10 +1681,11 @@ ExecProcessRequest if {
     p_command == input.process.Args
 
     allow_exec(p_container, input.process)
+    policy_user := request_policy_user(p_container.OCI.Process)
 
     print("ExecProcessRequest 2: true")
 }
-ExecProcessRequest if {
+ExecProcessRequest := {"allowed": true, "policy_user": policy_user} if {
     print("ExecProcessRequest 3: input =", input)
     allow_exec_process_input
 
@@ -1679,6 +1700,7 @@ ExecProcessRequest if {
     p_container := get_state_container(input.container_id)
 
     allow_interactive_exec(p_container, input.process)
+    policy_user := request_policy_user(p_container.OCI.Process)
 
     print("ExecProcessRequest 3: true")
 }

@@ -26,6 +26,7 @@ Drop-ins are layered: `10-*` files set the platform base, `20-*` files overlay O
 | `20-oci-1.2.0-drop-in.json` | OCI bundle version 1.2.0 |
 | `20-oci-1.2.1-drop-in.json` | OCI bundle version 1.2.1 (e.g. k3s, rke2, NVIDIA GPU, CBL-Mariner) |
 | `20-oci-1.3.0-drop-in.json` | OCI bundle version 1.3.0 (e.g. containerd 2.2.x) |
+| `20-guest-pull-policy-provided-drop-in.json` | Use policy-provided ID values for guest-pull configurations where the host cannot resolve image users/groups |
 | `20-experimental-force-guest-pull-drop-in.json` | Disable guest pull |
 
 Request/exec overrides (e.g. allowing `kubectl exec` or specific ttRPC requests) are not shipped as drop-in examples; build your own drop-in or merge the needed `request_defaults` into a local file in `genpolicy-settings.d/`.

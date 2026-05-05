@@ -91,7 +91,9 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::{do_set_policy, is_allowed, is_allowed_with_entrypoint};
+use crate::policy::{
+    do_set_policy, is_allowed, is_allowed_with_entrypoint, is_allowed_with_policy_user,
+};
 
 use opentelemetry::global;
 use tracing::span;
@@ -872,9 +874,17 @@ impl agent_ttrpc::AgentService for AgentService {
     async fn create_container(
         &self,
         ctx: &TtrpcContext,
-        req: protocols::agent::CreateContainerRequest,
+        mut req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
+        #[cfg(feature = "agent-policy")]
+        {
+            let policy_user = is_allowed_with_policy_user(&req).await?;
+            if let Some(user) = policy_user {
+                req.mut_OCI().mut_Process().set_User(user);
+            }
+        }
+        #[cfg(not(feature = "agent-policy"))]
         is_allowed(&req).await?;
         self.do_create_container(req).await.map_ttrpc_err(same)?;
         Ok(Empty::new())
@@ -905,9 +915,17 @@ impl agent_ttrpc::AgentService for AgentService {
     async fn exec_process(
         &self,
         ctx: &TtrpcContext,
-        req: protocols::agent::ExecProcessRequest,
+        mut req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
+        #[cfg(feature = "agent-policy")]
+        {
+            let policy_user = is_allowed_with_policy_user(&req).await?;
+            if let Some(user) = policy_user {
+                req.mut_process().set_User(user);
+            }
+        }
+        #[cfg(not(feature = "agent-policy"))]
         is_allowed(&req).await?;
         self.do_exec_process(req).await.map_ttrpc_err(same)?;
         Ok(Empty::new())

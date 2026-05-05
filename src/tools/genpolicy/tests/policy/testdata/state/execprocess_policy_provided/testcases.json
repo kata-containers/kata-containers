@@ -632,8 +632,7 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "GID": 0,
           "UID": 0,
@@ -832,7 +831,7 @@
     }
   },
   {
-    "allowed": false,
+    "allowed": true,
     "description": "test exec process in first container with non-null/different User",
     "kind": "ExecProcessRequest",
     "request": {

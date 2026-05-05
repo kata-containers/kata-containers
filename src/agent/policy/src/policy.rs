@@ -10,7 +10,7 @@ use std::num::{NonZeroU32, NonZeroUsize};
 use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
 
 use anyhow::{bail, Error, Result};
-use protocols::agent::CopyFileRequest;
+use protocols::{agent::CopyFileRequest, oci::User};
 use regorus::PolicyLengthConfig;
 use slog::{debug, error, info, warn};
 use tokio::io::AsyncWriteExt;
@@ -54,6 +54,15 @@ pub struct AgentPolicy {
 struct MetadataResponse {
     allowed: bool,
     ops: Option<json_patch::Patch>,
+    policy_user: Option<User>,
+}
+
+/// Response from evaluating an agent policy request.
+#[derive(Debug)]
+pub struct PolicyRequestResponse {
+    pub allowed: bool,
+    pub prints: String,
+    pub policy_user: Option<User>,
 }
 
 impl AgentPolicy {
@@ -146,7 +155,11 @@ impl AgentPolicy {
     }
 
     /// Ask regorus if an API call should be allowed or not.
-    pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+    pub async fn allow_request_with_metadata(
+        &mut self,
+        ep: &str,
+        ep_input: &str,
+    ) -> Result<PolicyRequestResponse> {
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
 
@@ -163,7 +176,11 @@ impl AgentPolicy {
         if results.result.len() != 1 {
             // Results are empty when AllowRequestsFailingPolicy is used to allow a Request that hasn't been defined in the policy
             if self.allow_failures {
-                return Ok((true, prints));
+                return Ok(PolicyRequestResponse {
+                    allowed: true,
+                    prints,
+                    policy_user: None,
+                });
             }
             bail!(
                 "policy check: unexpected eval_query result len {:?}",
@@ -178,8 +195,8 @@ impl AgentPolicy {
             );
         }
 
-        let mut allow = match &results.result[0].expressions[0].value {
-            regorus::Value::Bool(b) => *b,
+        let (mut allow, mut policy_user) = match &results.result[0].expressions[0].value {
+            regorus::Value::Bool(b) => (*b, None),
 
             // Match against a specific variant that could be interpreted as MetadataResponse
             regorus::Value::Object(obj) => {
@@ -188,13 +205,18 @@ impl AgentPolicy {
                 self.log_eval_input(ep, &json_str).await;
 
                 let metadata_response: MetadataResponse = serde_json::from_str(&json_str)?;
+                let MetadataResponse {
+                    allowed,
+                    ops,
+                    policy_user,
+                } = metadata_response;
 
-                if metadata_response.allowed {
-                    if let Some(ops) = metadata_response.ops {
+                if allowed {
+                    if let Some(ops) = ops {
                         self.apply_patch_to_state(ops).await?;
                     }
                 }
-                metadata_response.allowed
+                (allowed, policy_user)
             }
 
             _ => {
@@ -209,9 +231,20 @@ impl AgentPolicy {
         if !allow && self.allow_failures {
             warn!(sl!(), "policy: ignoring error for {ep}");
             allow = true;
+            policy_user = None;
         }
 
-        Ok((allow, prints))
+        Ok(PolicyRequestResponse {
+            allowed: allow,
+            prints,
+            policy_user,
+        })
+    }
+
+    /// Ask regorus if an API call should be allowed or not.
+    pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+        let response = self.allow_request_with_metadata(ep, ep_input).await?;
+        Ok((response.allowed, response.prints))
     }
 
     /// Replace the Policy in regorus.
@@ -489,6 +522,46 @@ mod tests {
                     output_res
                 )
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_allow_request_with_policy_user_metadata() {
+        let mut policy = AgentPolicy::new();
+        policy
+            .set_policy(
+                r#"
+package agent_policy
+
+default AllowRequestsFailingPolicy := false
+
+CreateContainerRequest := {
+    "allowed": true,
+    "policy_user": {
+        "UID": 1000,
+        "GID": 1000,
+        "AdditionalGids": [1000, 2000],
+        "Username": ""
+    }
+}
+
+ExecProcessRequest := CreateContainerRequest
+"#,
+            )
+            .await
+            .unwrap();
+
+        for ep in ["CreateContainerRequest", "ExecProcessRequest"] {
+            let response = policy.allow_request_with_metadata(ep, "{}").await.unwrap();
+
+            assert!(response.allowed);
+            let user = response
+                .policy_user
+                .expect("policy user should be returned");
+            assert_eq!(user.UID, 1000);
+            assert_eq!(user.GID, 1000);
+            assert_eq!(user.AdditionalGids, vec![1000, 2000]);
+            assert_eq!(user.Username, "");
         }
     }
 }

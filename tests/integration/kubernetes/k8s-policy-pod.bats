@@ -255,6 +255,7 @@ test_pod_policy_error() {
 
 @test "Policy failure: unexpected UID = 0" {
 	prometheus_image_supported || skip "Test case not supported due to ${issue}"
+	[[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided UID values"
 
 	# Change the container UID to 0 after the policy has been generated, and verify that the
 	# change gets rejected by the policy. UID = 0 is the default value from genpolicy, but
@@ -267,6 +268,8 @@ test_pod_policy_error() {
 }
 
 @test "Policy failure: unexpected UID = 1234" {
+	[[ "${SNAPSHOTTER:-}" == "nydus" ]] && skip "Policy-provided ID mode ignores host-provided UID values"
+
 	# Change the container UID to 1234 after the policy has been generated, and verify that the
 	# change gets rejected by the policy. This container image specifies user = "nobody" that
 	# corresponds to UID = 65534.
