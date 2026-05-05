@@ -1,4 +1,4 @@
-include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-delivery.yml
+include: https://gitlab-templates.ddbuild.io/compute-delivery/v3/compute-delivery.yml
 
 variables:
   CI_IMAGE: 3
@@ -84,7 +84,7 @@ build-shim-arm64:
     expire_in: 1 week
 
 build-shim-rust-amd64:
-  image: registry.ddbuild.io/images/base/gbi-ubuntu_2404:release@sha256:a04120f71143d0f1c95de47c2c8d57963209b4857b7c309fbea3a414def7c0e8
+  image: registry.ddbuild.io/images/mirror/rust:1.91
   stage: build
   tags: [ "arch:amd64" ]
   script:
@@ -102,7 +102,7 @@ build-shim-rust-amd64:
     expire_in: 1 week
 
 build-shim-rust-arm64:
-  image: registry.ddbuild.io/images/base/gbi-ubuntu_2404:release@sha256:a04120f71143d0f1c95de47c2c8d57963209b4857b7c309fbea3a414def7c0e8
+  image: registry.ddbuild.io/images/mirror/rust:1.91
   stage: build
   tags: [ "arch:arm64" ]
   script:
