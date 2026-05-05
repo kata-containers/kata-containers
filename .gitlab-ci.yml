@@ -90,8 +90,10 @@ build-shim-rust-amd64:
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
     - rustup target add x86_64-unknown-linux-musl
+    - rustup component add rustfmt clippy
     - cd src/runtime-rs
     - make clean-generated-files
+    - make check
     - make PREFIX=/opt/kata QEMUCMD=qemu-system-x86_64
     - cp ../../target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2 containerd-shim-kata-v2-rust-amd64
   artifacts:
@@ -106,8 +108,10 @@ build-shim-rust-arm64:
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
     - rustup target add aarch64-unknown-linux-musl
+    - rustup component add rustfmt clippy
     - cd src/runtime-rs
     - make clean-generated-files
+    - make check
     - ARCH=aarch64 make PREFIX=/opt/kata QEMUCMD=qemu-system-aarch64
     - cp ../../target/aarch64-unknown-linux-musl/release/containerd-shim-kata-v2 containerd-shim-kata-v2-rust-arm64
   artifacts:
