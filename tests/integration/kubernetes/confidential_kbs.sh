@@ -559,6 +559,12 @@ kbs_k8s_print_logs() {
 	echo "::group::DEBUG - kbs logs since ${start_time}"
 	kubectl -n "${KBS_NS}" logs -l app=kbs --since-time="${iso_start_time}" --timestamps=true || true
 	echo "::endgroup::"
+	echo "::group::DEBUG - as logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=attestation-service --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
+	echo "::group::DEBUG - rvps logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
 }
 
 # Ensure rust is installed in the host.
