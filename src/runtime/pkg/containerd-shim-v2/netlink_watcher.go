@@ -293,6 +293,11 @@ func handleNewLinks(ctx context.Context, s *service, knownIfaces *knownIfaceSet,
 
 		// Check that the interface has at least one address configured,
 		// otherwise the CNI plugin hasn't finished setting it up.
+		// Note: we only subscribe to link events, not address events
+		// (RTM_NEWADDR). In practice CNI plugins assign addresses before
+		// or atomically with setting the link UP, so the debounced scan
+		// sees them. If a CNI assigns addresses much later without a
+		// NEWLINK, the interface would be missed until the next event.
 		addrs, err := nlHandle.AddrList(link, netlink.FAMILY_ALL)
 		if err != nil {
 			shimLog.WithError(err).WithField("link", attrs.Name).Warn("failed to list addresses")

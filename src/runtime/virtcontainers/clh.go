@@ -1090,6 +1090,11 @@ func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
 // netDevices and netDevicesFiles. Used for rollback on hot-plug failure
 // and for cleanup after hot-unplug.
 func (clh *cloudHypervisor) cleanupNetDevice(mac string) {
+	if files, ok := clh.netDevicesFiles[mac]; ok {
+		for _, f := range files {
+			f.Close()
+		}
+	}
 	delete(clh.netDevicesFiles, mac)
 	if clh.netDevices != nil {
 		filtered := (*clh.netDevices)[:0]
@@ -1133,6 +1138,11 @@ func (clh *cloudHypervisor) vmAddSingleNet(mac string) (*chclient.PciDeviceInfo,
 		return nil, err
 	}
 	defer conn.Close()
+
+	deadline := time.Now().Add(clhHotPlugAPITimeout * time.Second)
+	if err := conn.SetDeadline(deadline); err != nil {
+		return nil, err
+	}
 
 	clh.Logger().Infof("Hot-plugging net device to Cloud Hypervisor: %+v", netDevice)
 
@@ -1255,7 +1265,7 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 		// and pass it directly, bypassing the generic devicesIds lookup below
 		// which is designed for block/VFIO devices.
 		cl := clh.client()
-		ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, clhHotPlugAPITimeout*time.Second)
 		defer cancel()
 		remove := *chclient.NewVmRemoveDevice()
 		remove.Id = &clhDeviceID

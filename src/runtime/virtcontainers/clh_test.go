@@ -688,6 +688,7 @@ func TestCloudHypervisorCleanupNetDevice(t *testing.T) {
 	mac := "aa:bb:cc:dd:ee:ff"
 	file, err := os.CreateTemp("", "netFd")
 	assert.NoError(err)
+	defer file.Close()
 	defer os.Remove(file.Name())
 
 	clh := cloudHypervisor{}

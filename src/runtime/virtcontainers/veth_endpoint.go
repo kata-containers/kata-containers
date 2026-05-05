@@ -160,9 +160,10 @@ func (endpoint *VethEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCr
 	defer span.End()
 
 	// Only attempt to disconnect the bridge/TC filters if we own the
-	// network namespace AND the interface still exists. When an
-	// interface is hot-unplugged (e.g. veth peer deleted), the
-	// interface may already be gone from the netns.
+	// network namespace. When netNsCreated is false (CRI-created netns),
+	// skip the disconnect since the interface may already be gone.
+	// Errors are logged as warnings and do not prevent
+	// HotplugRemoveDevice from running.
 	if netNsCreated {
 		if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 			return xDisconnectVMNetwork(ctx, endpoint)
