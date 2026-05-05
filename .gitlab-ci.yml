@@ -84,13 +84,13 @@ build-shim-arm64:
     expire_in: 1 week
 
 build-shim-rust-amd64:
-  image: registry.ddbuild.io/images/mirror/rust:1.91
+  image: registry.ddbuild.io/images/base/gbi-ubuntu_2404:release@sha256:a04120f71143d0f1c95de47c2c8d57963209b4857b7c309fbea3a414def7c0e8
   stage: build
   tags: [ "arch:amd64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - rustup target add x86_64-unknown-linux-musl
-    - rustup component add rustfmt clippy
+    - INSTALL_IN_GOPATH=false ci/install_yq.sh
+    - tests/install_rust.sh
     - cd src/runtime-rs
     - make clean-generated-files
     - make check
@@ -102,13 +102,13 @@ build-shim-rust-amd64:
     expire_in: 1 week
 
 build-shim-rust-arm64:
-  image: registry.ddbuild.io/images/mirror/rust:1.91
+  image: registry.ddbuild.io/images/base/gbi-ubuntu_2404:release@sha256:a04120f71143d0f1c95de47c2c8d57963209b4857b7c309fbea3a414def7c0e8
   stage: build
   tags: [ "arch:arm64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - rustup target add aarch64-unknown-linux-musl
-    - rustup component add rustfmt clippy
+    - INSTALL_IN_GOPATH=false ci/install_yq.sh
+    - tests/install_rust.sh
     - cd src/runtime-rs
     - make clean-generated-files
     - make check
