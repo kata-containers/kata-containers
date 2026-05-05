@@ -45,10 +45,8 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
 
         // When neither quota/period nor cpuset constrain CPU, fall back to CPU shares annotation
         let shares = annotation.get_sandbox_cpu_shares();
-        if vcpu == 0.0 {
-            if shares > 0 {
-                vcpu = shares as f32 / 1024.0;
-            }
+        if vcpu == 0.0 && shares > 0 {
+            vcpu = shares as f32 / 1024.0;
         }
 
         let mem_mb = convert_memory_to_mb(memory);

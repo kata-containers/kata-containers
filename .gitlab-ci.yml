@@ -1,4 +1,4 @@
-include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-delivery.yml
+include: https://gitlab-templates.ddbuild.io/compute-delivery/v3/compute-delivery.yml
 
 variables:
   CI_IMAGE: 3
@@ -89,8 +89,8 @@ build-shim-rust-amd64:
   tags: [ "arch:amd64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - rustup target add x86_64-unknown-linux-musl
-    - rustup component add rustfmt clippy
+    - INSTALL_IN_GOPATH=false ci/install_yq.sh
+    - tests/install_rust.sh
     - cd src/runtime-rs
     - make clean-generated-files
     - make check
@@ -107,8 +107,8 @@ build-shim-rust-arm64:
   tags: [ "arch:arm64" ]
   script:
     - apt-get update -q && apt-get install -yq musl-tools g++ cmake
-    - rustup target add aarch64-unknown-linux-musl
-    - rustup component add rustfmt clippy
+    - INSTALL_IN_GOPATH=false ci/install_yq.sh
+    - tests/install_rust.sh
     - cd src/runtime-rs
     - make clean-generated-files
     - make check
