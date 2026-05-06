@@ -27,6 +27,8 @@ use kata_types::device::{
 use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
 use std::fs;
+use std::fs::OpenOptions;
+use std::io;
 use std::io::{BufWriter, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -37,6 +39,8 @@ pub(crate) const EROFS_ROOTFS_TYPE: &str = "erofs";
 /// RW layer rootfs type identifier, used for multi-layer EROFS as the writable upper layer
 /// Typically ext4 format, but can be extended to other fs types in the future.
 pub(crate) const RW_LAYER_ROOTFS_TYPE: &str = "ext4";
+/// MKFS type prefix for unformatted rwlayer (to be formatted in VM guest)
+pub(crate) const MKFS_TYPE_PREFIX: &str = "mkfs/";
 /// VMDK file extension for merged EROFS image
 const EROFS_MERGED_VMDK: &str = "merged_fs.vmdk";
 /// Maximum number of virtio-blk devices allowed for multi-layer EROFS rootfs.
@@ -65,6 +69,50 @@ const DEFAULT_KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
 const X_CONTAINERD_MKDIR_PATH: &str = "X-containerd.mkdir.path=";
 /// Template for mkdir option passed to guest agent (X-kata.mkdir.path)
 const X_KATA_MKDIR_PATH: &str = "X-kata.mkdir.path=";
+/// Template for mkfs size option (X-containerd.mkfs.size)
+const X_CONTAINERD_MKFS_SIZE: &str = "X-containerd.mkfs.size=";
+/// Template for mkfs filesystem type option (X-containerd.mkfs.fs)
+const X_CONTAINERD_MKFS_FS: &str = "X-containerd.mkfs.fs=";
+/// Template for mkfs UUID option (X-containerd.mkfs.uuid)
+const X_CONTAINERD_MKFS_UUID: &str = "X-containerd.mkfs.uuid=";
+/// Template for mkfs options passed to guest agent (X-kata.mkfs.*)
+const X_KATA_MKFS_SIZE: &str = "X-kata.mkfs.size=";
+const X_KATA_MKFS_FS: &str = "X-kata.mkfs.fs=";
+const X_KATA_MKFS_UUID: &str = "X-kata.mkfs.uuid=";
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+pub enum RawFileMode {
+    Sparse,
+    #[cfg(target_os = "linux")]
+    Allocate,
+}
+
+pub fn create_raw_file<P: AsRef<Path>>(path: P, size: u64, mode: RawFileMode) -> io::Result<()> {
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .truncate(true)
+        .open(path)?;
+
+    match mode {
+        RawFileMode::Sparse => {
+            file.set_len(size)?;
+        }
+        #[cfg(target_os = "linux")]
+        RawFileMode::Allocate => {
+            use std::os::fd::AsRawFd;
+            let ret = unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, size as libc::off_t) };
+            if ret != 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+    }
+
+    file.sync_all()?;
+    Ok(())
+}
 
 /// Generate merged VMDK file from multiple EROFS devices
 ///
@@ -546,6 +594,95 @@ impl ErofsMultiLayerRootfs {
                         }
                     }
                 }
+                fmt if fmt.starts_with(MKFS_TYPE_PREFIX) => {
+                    // mkfs/* type: unformatted rwlayer to be formatted in VM guest
+                    // This is an alternative to the pre-formatted ext4 rwlayer.
+                    // containerd creates an unformatted image, kata-agent formats it in VM.
+                    info!(
+                        sl!(),
+                        "multi-layer erofs: adding mkfs rw layer (unformatted): {}", mount.source
+                    );
+
+                    let rwlayer_path = PathBuf::from(&mount.source);
+                    if !rwlayer_path.exists() {
+                        // Create an empty file for the unformatted rw layer if it doesn't exist.
+                        // The file will be formatted in the VM guest, so it can start as an empty file.
+                        info!(
+                            sl!(),
+                            "multi-layer erofs: creating unformatted rw layer file: {}",
+                            rwlayer_path.display()
+                        );
+                        // 10GB is an arbitrary default size for the unformatted rw layer; it can be adjusted as needed.
+                        create_raw_file(rwlayer_path, 10 * 1024 * 1024 * 1024, RawFileMode::Sparse)
+                            .context(format!(
+                                "failed to create unformatted rw layer file: {}",
+                                mount.source
+                            ))?;
+                    }
+                    let device_config = &mut BlockConfig {
+                        driver_option: block_driver.clone(),
+                        format: BlockDeviceFormat::Raw, // raw format, unformatted content
+                        path_on_host: mount.source.clone(),
+                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        ..Default::default()
+                    };
+
+                    let device_info = do_handle_device(
+                        device_manager,
+                        &DeviceConfig::BlockCfg(device_config.clone()),
+                    )
+                    .await
+                    .context("failed to attach mkfs block device")?;
+
+                    let (mut rwlayer, device_id) =
+                        extract_block_device_info(&device_info, false)
+                            .context("failed to get block device for mkfs layer")?;
+                    info!(
+                        sl!(),
+                        "mkfs block device attached - device_id: {} guest_path: {}",
+                        device_id,
+                        rwlayer.source
+                    );
+
+                    // Filter out "loop" option and containerd mkfs options
+                    // Convert X-containerd.mkfs.* to X-kata.mkfs.* for guest agent
+                    let mut options: Vec<String> = mount
+                        .options
+                        .iter()
+                        .filter(|o| {
+                            *o != "loop"
+                                && !o.starts_with(X_CONTAINERD_MKFS_SIZE)
+                                && !o.starts_with(X_CONTAINERD_MKFS_FS)
+                                && !o.starts_with(X_CONTAINERD_MKFS_UUID)
+                        })
+                        .cloned()
+                        .collect();
+
+                    // Parse X-containerd.mkfs.* options and convert to X-kata.mkfs.*
+                    for opt in &mount.options {
+                        if let Some(size) = opt.strip_prefix(X_CONTAINERD_MKFS_SIZE) {
+                            options.push(format!("{}{}", X_KATA_MKFS_SIZE, size));
+                        } else if let Some(fs) = opt.strip_prefix(X_CONTAINERD_MKFS_FS) {
+                            options.push(format!("{}{}", X_KATA_MKFS_FS, fs));
+                        } else if let Some(uuid) = opt.strip_prefix(X_CONTAINERD_MKFS_UUID) {
+                            options.push(format!("{}{}", X_KATA_MKFS_UUID, uuid));
+                        }
+                    }
+
+                    // Mark as overlay upper layer and multi-layer
+                    options.push("X-kata.overlay-upper".to_string());
+                    options.push("X-kata.multi-layer=true".to_string());
+                    // Mark as mkfs type - guest agent should format this device
+                    options.push("X-kata.mkfs=true".to_string());
+
+                    // Set up storage for mkfs rw layer
+                    rwlayer.fs_type = fmt.to_string(); // Keep mkfs/* type for guest agent
+                    rwlayer.mount_point = container_path.clone();
+                    rwlayer.options = options;
+
+                    rwlayer_storage = Some(rwlayer);
+                    device_ids.push(device_id);
+                }
                 _ => {
                     info!(
                         sl!(),
@@ -557,6 +694,15 @@ impl ErofsMultiLayerRootfs {
 
         if device_ids.is_empty() {
             return Err(anyhow!("no devices attached for multi-layer erofs rootfs"));
+        }
+
+        // Check device count limit
+        if device_ids.len() > MAX_VIRTIO_BLK_DEVICES {
+            return Err(anyhow!(
+                "exceeded maximum virtio disk count: {} > {}",
+                device_ids.len(),
+                MAX_VIRTIO_BLK_DEVICES
+            ));
         }
 
         // Add mkdir directives to rwlayer storage options for guest agent
@@ -646,7 +792,11 @@ pub fn is_erofs_multi_layer(rootfs_mounts: &[Mount]) -> bool {
     }
 
     let has_rwlayer = rootfs_mounts.iter().any(|m| {
-        m.fs_type.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE) && m.options.iter().any(|o| o == "rw")
+        // Match pre-formatted ext4 rwlayer (with "rw" option)
+        (m.fs_type.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE)
+            && m.options.iter().any(|o| o == "rw"))
+            // Match unformatted mkfs/* rwlayer (e.g., mkfs/ext4)
+            || m.fs_type.starts_with(MKFS_TYPE_PREFIX)
     });
 
     let has_erofs = rootfs_mounts

@@ -140,7 +140,7 @@ fn show_info() -> Result<()> {
     info.version = Some(version).into();
     info.annotations.insert(
         RUNTIME_ALLOW_MOUNTS.to_string(),
-        "mkdir/*,format/*,erofs".to_string(),
+        "mkdir/*,format/*,mkfs/*,erofs".to_string(),
     );
 
     let data = info
