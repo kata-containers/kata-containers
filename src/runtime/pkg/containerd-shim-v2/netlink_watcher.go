@@ -49,15 +49,15 @@ func watchNetworkInterfaces(ctx context.Context, s *service) {
 	updates := make(chan netlink.LinkUpdate, 64)
 	done := make(chan struct{})
 
-	go func() {
-		<-ctx.Done()
-		close(done)
-	}()
-
 	if err := netlink.LinkSubscribeAt(nsHandle, updates, done); err != nil {
 		shimLog.WithError(err).Error("failed to subscribe to netlink events")
 		return
 	}
+
+	go func() {
+		<-ctx.Done()
+		close(done)
+	}()
 
 	shimLog.WithField("netns", netNsPath).Warn("netlink watcher started")
 
@@ -171,6 +171,9 @@ func (k *knownIfaceSet) getEndpointMAC(name string) string {
 func (k *knownIfaceSet) remove(mac, name string) {
 	delete(k.byMAC, mac)
 	delete(k.byName, name)
+	if k.epMACs != nil {
+		delete(k.epMACs, name)
+	}
 }
 
 func (k *knownIfaceSet) hasMACOrName(mac, name string) bool {
