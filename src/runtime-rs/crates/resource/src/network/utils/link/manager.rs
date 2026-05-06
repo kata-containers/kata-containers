@@ -173,7 +173,7 @@ fn parse_bridge(mut ibs: Vec<InfoBridge>) -> Bridge {
                 bridge.hello_time = ht;
             }
             InfoBridge::MulticastSnooping(m) => {
-                bridge.multicast_snooping = m == 1;
+                bridge.multicast_snooping = m;
             }
             InfoBridge::VlanFiltering(v) => {
                 bridge.vlan_filtering = v;

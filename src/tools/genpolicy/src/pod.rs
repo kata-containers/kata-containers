@@ -770,58 +770,98 @@ impl EnvVar {
         annotations: &Option<BTreeMap<String, String>>,
         service_account_name: &str,
     ) -> String {
+        // When neither `value` nor `valueFrom` were specified, the default value is an empty string:
+        // https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#environment-variables
         if let Some(value) = &self.value {
-            return value.clone();
+            value.clone()
+        } else {
+            self.get_value_from(
+                config_maps,
+                secrets,
+                namespace,
+                annotations,
+                service_account_name,
+            )
+            .unwrap_or_default()
         }
+    }
 
+    fn get_value_from(
+        &self,
+        config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
+        namespace: &str,
+        annotations: &Option<BTreeMap<String, String>>,
+        service_account_name: &str,
+    ) -> Option<String> {
         if let Some(value_from) = &self.valueFrom {
             if let Some(value) = config_map::get_value(value_from, config_maps) {
-                return value.clone();
+                return Some(value);
             }
 
             if let Some(value) = secret::get_value(value_from, secrets) {
-                return value.clone();
+                return Some(value);
             }
 
-            if let Some(field_ref) = &value_from.fieldRef {
-                let path: &str = &field_ref.fieldPath;
-                match path {
-                    "metadata.name" => return "$(sandbox-name)".to_string(),
-                    "metadata.namespace" => {
-                        return if namespace.is_empty() {
-                            "$(sandbox-namespace)".to_string()
-                        } else {
-                            namespace.to_string()
-                        };
-                    }
-                    "metadata.uid" => return "$(pod-uid)".to_string(),
-                    "status.hostIP" => return "$(host-ip)".to_string(),
-                    "status.podIP" => return "$(pod-ip)".to_string(),
-                    "spec.nodeName" => return "$(node-name)".to_string(),
-                    "spec.serviceAccountName" => return service_account_name.to_string(),
-                    _ => {
-                        if let Some(value) = self.get_annotation_value(path, annotations) {
-                            return value;
-                        } else {
-                            panic!(
-                                "Env var: unsupported field reference: {}",
-                                &field_ref.fieldPath
-                            )
-                        }
-                    }
-                }
+            if let Some(value) = self.get_value_from_field_ref(
+                value_from,
+                namespace,
+                annotations,
+                service_account_name,
+            ) {
+                return Some(value);
             }
 
             if value_from.resourceFieldRef.is_some() {
                 // TODO: should resource fields such as "limits.cpu" or "limits.memory"
                 // be handled in a different way?
-                return "$(resource-field)".to_string();
+                return Some("$(resource-field)".to_string());
             }
-        } else {
-            panic!("Environment variable without value or valueFrom!");
+
+            panic!("Couldn't get the value of env var: {}", &self.name);
         }
 
-        panic!("Couldn't get the value of env var: {}", &self.name);
+        None
+    }
+
+    fn get_value_from_field_ref(
+        &self,
+        value_from: &EnvVarSource,
+        namespace: &str,
+        annotations: &Option<BTreeMap<String, String>>,
+        service_account_name: &str,
+    ) -> Option<String> {
+        if let Some(field_ref) = &value_from.fieldRef {
+            let path: &str = &field_ref.fieldPath;
+            let v = match path {
+                "metadata.name" => "$(sandbox-name)",
+                "metadata.namespace" => {
+                    if namespace.is_empty() {
+                        "$(sandbox-namespace)"
+                    } else {
+                        namespace
+                    }
+                }
+                "metadata.uid" => "$(pod-uid)",
+                "status.hostIP" => "$(host-ip)",
+                "status.podIP" => "$(pod-ip)",
+                "spec.nodeName" => "$(node-name)",
+                "spec.serviceAccountName" => service_account_name,
+                _ => {
+                    if let Some(value) = self.get_annotation_value(path, annotations) {
+                        &value.to_string()
+                    } else {
+                        panic!(
+                            "Env var: unsupported field reference: {}",
+                            &field_ref.fieldPath
+                        )
+                    }
+                }
+            };
+            Some(v.to_string())
+        } else {
+            None
+        }
     }
 
     fn get_annotation_value(
@@ -1018,7 +1058,9 @@ impl Container {
                 let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
                     Ok(gid) => gid,
                     Err(e) => {
-                        debug!("get_process_fields: no GID for UID = {new_uid} in container image, error {e}");
+                        debug!(
+                            "get_process_fields: no GID for UID = {new_uid} in container image, error {e}"
+                        );
                         process.User.GID
                     }
                 };

@@ -8,6 +8,7 @@ spec:
     spec:
       template:
         spec:
+          runtimeClassName: kata
           containers:
           - name: pi
             image: quay.io/prometheus/busybox:latest

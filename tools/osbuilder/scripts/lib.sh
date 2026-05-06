@@ -272,12 +272,14 @@ get_package_version_from_kata_yaml()
 	local yq_path="$1"
 	local yq_version
 	local yq_args
+	local yq
 
 	# shellcheck disable=SC2154
-	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
-	if [[ ! -f "${yq}" ]]; then
+	yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || true)
+	if [[ -z "${yq}" ]] || [[ ! -f "${yq}" ]]; then
 		# shellcheck source=/dev/null
 		source "${yq_file}"
+		yq=$(command -v yq || command -v "${GOPATH}/bin/yq") || die "yq not found after running install_yq.sh"
 	fi
 
 	yq_version=$(${yq} -V)

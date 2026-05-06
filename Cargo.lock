@@ -4258,9 +4258,9 @@ dependencies = [
 
 [[package]]
 name = "netlink-packet-route"
-version = "0.26.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ea06a7cec15a9df94c58bddc472b1de04ca53bd32e72da7da2c5dd1c3885edc"
+checksum = "be8919612f6028ab4eacbbfe1234a9a43e3722c6e0915e7ff519066991905092"
 dependencies = [
  "bitflags 2.11.0",
  "libc",
@@ -6250,14 +6250,14 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "netlink-packet-route 0.26.0",
+ "netlink-packet-route 0.30.0",
  "netns-rs",
  "nix 0.26.4",
  "oci-spec 0.8.4",
  "persist",
  "rand 0.10.1",
  "rstest 0.18.2",
- "rtnetlink 0.19.0",
+ "rtnetlink 0.21.0",
  "scopeguard",
  "serde",
  "serde_json",
@@ -6423,15 +6423,15 @@ dependencies = [
 
 [[package]]
 name = "rtnetlink"
-version = "0.19.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3ee907fdcec9200d13b9cdb64dfc8179cb4ac16ead6ae0ac76333dc41981fc"
+checksum = "dc19f84f710fa2f337617f9bc0400260a94224bde7bae28fd8879f3771ca5784"
 dependencies = [
  "futures-channel",
  "futures-util",
  "log",
  "netlink-packet-core 0.8.1",
- "netlink-packet-route 0.26.0",
+ "netlink-packet-route 0.30.0",
  "netlink-proto 0.12.0",
  "netlink-sys 0.8.8",
  "nix 0.30.1",

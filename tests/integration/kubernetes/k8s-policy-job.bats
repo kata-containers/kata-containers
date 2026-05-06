@@ -77,6 +77,15 @@ test_job_policy_error() {
     test_job_policy_error
 }
 
+@test "Policy failure: unexpected environment variable value" {
+    # Changing the job spec after generating its policy will cause CreateContainer to be denied.
+    yq -i \
+        '.spec.template.spec.containers[0].env[1] = {"name": "var2", "value": "hello"}' \
+        "${incorrect_yaml}"
+
+    test_job_policy_error
+}
+
 @test "Policy failure: unexpected command line argument" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
