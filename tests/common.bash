@@ -767,6 +767,14 @@ function get_latest_patch_release_from_a_github_project() {
           | grep "${regex}" -m1
 }
 
+# GitHub Actions' setup-go often sets GOTOOLCHAIN=local, which forbids fetching a newer
+# toolchain required by cloned containerd (e.g. v2.3 go.mod vs Kata's pinned Go). Use
+# automatic toolchain selection only while building upstream containerd.
+function export_go_toolchain_for_containerd_source_builds() {
+	export GOTOOLCHAIN=auto
+	info "GOTOOLCHAIN=auto so containerd is built with the toolchain its go.mod requires"
+}
+
 # base_version: The version to be intalled in the ${major}.${minor} format
 function clone_cri_containerd() {
 	base_version="${1}"

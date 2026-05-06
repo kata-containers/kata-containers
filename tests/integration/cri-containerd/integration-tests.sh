@@ -113,7 +113,7 @@ function create_containerd_config() {
 	fi
 
 	# check containerd config version
-	if containerd config default | grep -q "version = 3\>"; then
+	if containerd config default | grep -qE "^version = [34]"; then
 		pluginid=\"io.containerd.cri.v1.runtime\"
 	else
 		pluginid="cri"
@@ -668,6 +668,8 @@ function main() {
 	ci_config
 
 	pushd "containerd"
+
+	export_go_toolchain_for_containerd_source_builds
 
 	# Make sure the right artifacts are going to be built
 	sudo make clean
