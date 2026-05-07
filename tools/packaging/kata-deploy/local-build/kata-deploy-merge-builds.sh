@@ -19,7 +19,14 @@ output_tarball_name=${3:-kata-static.tar.zst}
 known_tarballs=${4:-""}
 
 tar_path=$(readlink -f "${output_tarball_name}")
-[[ -n "${kata_versions_yaml_file}" ]] && kata_versions_yaml_file=$(readlink -f "${kata_versions_yaml_file}")
+if [[ -n "${kata_versions_yaml_file}" ]]; then
+	# We pushd into ${kata_build_dir} below, so resolve this path before that.
+	case "${kata_versions_yaml_file}" in
+		/*) ;;
+		*) kata_versions_yaml_file="${PWD}/${kata_versions_yaml_file}" ;;
+	esac
+	kata_versions_yaml_file=$(readlink -f "${kata_versions_yaml_file}")
+fi
 
 pushd "${kata_build_dir}"
 tarball_content_dir="${PWD}/kata-tarball-content"
