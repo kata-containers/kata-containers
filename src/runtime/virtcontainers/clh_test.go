@@ -118,6 +118,7 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 
 //nolint:golint
 func (c *clhClientMock) VmPausePut(ctx context.Context) (*http.Response, error) {
+	c.vmInfo.State = clhStatePaused
 	return nil, nil
 }
 
@@ -139,6 +140,7 @@ func (c *clhClientMock) VmRestorePut(ctx context.Context, restoreConfig chclient
 }
 
 func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
+	c.vmInfo.State = clhStateRunning
 	return nil, nil
 }
 
