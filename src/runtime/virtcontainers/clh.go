@@ -122,6 +122,8 @@ type clhClient interface {
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 	// Restore VM from a snapshot
 	VmRestorePut(ctx context.Context, restoreConfig chclient.RestoreConfig) (*http.Response, error)
+	// Resume a paused VM
+	ResumeVM(ctx context.Context) (*http.Response, error)
 }
 
 type clhClientApi struct {
@@ -175,6 +177,10 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 
 func (c *clhClientApi) VmRestorePut(ctx context.Context, restoreConfig chclient.RestoreConfig) (*http.Response, error) {
 	return c.ApiInternal.VmRestorePut(ctx).RestoreConfig(restoreConfig).Execute()
+}
+
+func (c *clhClientApi) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.ResumeVM(ctx).Execute()
 }
 
 // This is done in order to be able to override such a function as part of
@@ -1347,6 +1353,16 @@ func (clh *cloudHypervisor) SaveVM() error {
 
 func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 	clh.Logger().WithField("function", "ResumeVM").Info("Resume Sandbox")
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
+	defer cancel()
+
+	_, err := cl.ResumeVM(ctx)
+	if err != nil {
+		clh.Logger().WithError(err).Error("Failed to resume VM")
+		return openAPIClientError(err)
+	}
+
 	return nil
 }
 
