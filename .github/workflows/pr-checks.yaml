@@ -1,0 +1,119 @@
+name: PR Checks
+
+# Slim PR validation suite for the clode-labs fork. Replaces the upstream
+# gatekeeper / ci-on-push workflows which require infrastructure the fork
+# does not have (s390x/arm64/ppc64le runners, AKS, NVIDIA GPU runners,
+# Confidential Computing TEEs, etc).
+#
+# This runs the build/vet/test loop for the components actually changed in
+# the fork (kata-monitor lives in src/runtime/pkg/kata-monitor; EIO/symlink
+# work lives in src/agent and src/runtime).
+
+on:
+  pull_request:
+    branches:
+      - 'clode-dev'
+      - 'main'
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Quick lint of any workflow file changes
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.7
+        with:
+          args: -color
+
+  # Build + vet + unit-test the Go runtime tree (where kata-monitor lives)
+  runtime-checks:
+    name: src/runtime ${{ matrix.command }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        command:
+          - "make vendor"
+          - "make check"
+          - "make test"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libdevmapper-dev \
+            libseccomp-dev \
+            pkg-config \
+            protobuf-compiler
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/runtime/go.mod
+          cache-dependency-path: src/runtime/go.sum
+
+      - name: ${{ matrix.command }}
+        working-directory: src/runtime
+        env:
+          XDG_RUNTIME_DIR: /tmp/xdg-runtime
+        run: |
+          mkdir -p "${XDG_RUNTIME_DIR}"
+          ${{ matrix.command }}
+
+  # Compile-check the Rust agent tree (EIO retry / symlink work lands here)
+  # without linking the final musl-static binary. Full agent compilation +
+  # linking is handled by build-and-release.yaml on push to feat/** or tag,
+  # which provides musl-cross / libgcc / linker setup that we don't try to
+  # replicate here. This step catches typecheck/borrow/lint errors in PRs
+  # in ~1-2 min; deeper validation happens at integration time.
+  agent-check:
+    name: src/agent cargo check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            libdevmapper-dev \
+            libseccomp-dev \
+            pkg-config \
+            protobuf-compiler
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate version.rs (otherwise mod version; fails)
+        working-directory: src/agent
+        run: make src/version.rs
+
+      - name: Cargo check (host triple, no link)
+        working-directory: src/agent
+        run: cargo check --all-targets --all-features

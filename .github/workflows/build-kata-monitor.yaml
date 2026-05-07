@@ -6,6 +6,7 @@ on:
       - 'v*'
     branches:
       - 'feat/**'
+      - 'clode-dev'
   workflow_dispatch:
 
 permissions:

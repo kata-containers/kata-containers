@@ -44,7 +44,12 @@ func getConnection(endPoint string) (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
+	// Use the "passthrough" resolver so gRPC hands the address straight to the
+	// custom ContextDialer below instead of trying to DNS-resolve it.
+	// grpc.NewClient defaults to the dns resolver (unlike the deprecated grpc.Dial
+	// which used passthrough), so a bare unix-socket path produces the error
+	// "name resolver error: produced zero addresses". See kata-containers#12398.
+	conn, err = grpc.NewClient("passthrough:///"+addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
 	if err != nil {
 		errMsg := errors.Wrapf(err, "connect endpoint '%s', make sure you are running as root and the endpoint has been started", endPoint)
 		return nil, errMsg
