@@ -82,19 +82,18 @@ jobs:
           mkdir -p "${XDG_RUNTIME_DIR}"
           ${{ matrix.command }}
 
-  # Build-only smoke test for the Rust agent tree (EIO retry / symlink work
-  # lands here). Uses `make` (not raw cargo) because the build generates
-  # src/agent/src/version.rs from VERSION metadata before compiling.
-  # Skipping `make test` to keep PR-time CI under ~10 min; full agent test
-  # coverage runs in the existing build-and-release pipeline on push to
-  # feat/** or tag.
-  agent-build:
-    name: src/agent build
+  # Compile-check the Rust agent tree (EIO retry / symlink work lands here)
+  # without linking the final musl-static binary. Full agent compilation +
+  # linking is handled by build-and-release.yaml on push to feat/** or tag,
+  # which provides musl-cross / libgcc / linker setup that we don't try to
+  # replicate here. This step catches typecheck/borrow/lint errors in PRs
+  # in ~1-2 min; deeper validation happens at integration time.
+  agent-check:
+    name: src/agent cargo check
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Install system dependencies
@@ -106,19 +105,15 @@ jobs:
             libdevmapper-dev \
             libseccomp-dev \
             pkg-config \
-            protobuf-compiler \
-            musl-tools
+            protobuf-compiler
 
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install musl target
-        # kata-agent links statically against musl since it runs inside the
-        # Firecracker microVM rootfs (TRIPLE = x86_64-unknown-linux-musl,
-        # set in utils.mk). Done as a separate step to defeat any earlier
-        # rustup install in the runner image that masks dtolnay's targets.
-        run: rustup target add x86_64-unknown-linux-musl
-
-      - name: make build
+      - name: Generate version.rs (otherwise mod version; fails)
         working-directory: src/agent
-        run: make
+        run: make src/version.rs
+
+      - name: Cargo check (host triple, no link)
+        working-directory: src/agent
+        run: cargo check --all-targets --all-features
