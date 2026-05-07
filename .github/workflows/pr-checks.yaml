@@ -109,12 +109,15 @@ jobs:
             protobuf-compiler \
             musl-tools
 
-      - name: Set up Rust toolchain (matches src/agent/rust-toolchain.toml)
+      - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          # kata-agent links statically against musl since it runs inside the
-          # Firecracker microVM rootfs.
-          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl target
+        # kata-agent links statically against musl since it runs inside the
+        # Firecracker microVM rootfs (TRIPLE = x86_64-unknown-linux-musl,
+        # set in utils.mk). Done as a separate step to defeat any earlier
+        # rustup install in the runner image that masks dtolnay's targets.
+        run: rustup target add x86_64-unknown-linux-musl
 
       - name: make build
         working-directory: src/agent
