@@ -83,15 +83,18 @@ jobs:
           ${{ matrix.command }}
 
   # Build-only smoke test for the Rust agent tree (EIO retry / symlink work
-  # lands here). Skipping `make test` to keep PR-time CI under ~10 min;
-  # full agent test coverage runs in the existing build-and-release pipeline
-  # on push to feat/** or tag.
+  # lands here). Uses `make` (not raw cargo) because the build generates
+  # src/agent/src/version.rs from VERSION metadata before compiling.
+  # Skipping `make test` to keep PR-time CI under ~10 min; full agent test
+  # coverage runs in the existing build-and-release pipeline on push to
+  # feat/** or tag.
   agent-build:
     name: src/agent build
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install system dependencies
@@ -106,9 +109,9 @@ jobs:
             protobuf-compiler \
             musl-tools
 
-      - name: Set up Rust
+      - name: Set up Rust toolchain (matches src/agent/rust-toolchain.toml)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cargo build
+      - name: make build
         working-directory: src/agent
-        run: cargo build --release
+        run: make
