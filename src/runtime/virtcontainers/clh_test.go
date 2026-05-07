@@ -74,8 +74,9 @@ func newClhConfig() (HypervisorConfig, error) {
 }
 
 type clhClientMock struct {
-	vmInfo         chclient.VmInfo
-	restoreRequest *chclient.RestoreConfig
+	vmInfo          chclient.VmInfo
+	restoreRequest  *chclient.RestoreConfig
+	snapshotRequest *chclient.VmSnapshotConfig
 }
 
 func (c *clhClientMock) VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error) {
@@ -124,6 +125,7 @@ func (c *clhClientMock) VmPausePut(ctx context.Context) (*http.Response, error) 
 
 //nolint:golint
 func (c *clhClientMock) VmSnapshotPut(ctx context.Context, vmSnapshotConfig chclient.VmSnapshotConfig) (*http.Response, error) {
+	c.snapshotRequest = &vmSnapshotConfig
 	return nil, nil
 }
 
@@ -584,6 +586,34 @@ func TestClhRestoreVM(t *testing.T) {
 	info, err := clh.vmInfo()
 	assert.NoError(err)
 	assert.Equal(clhStatePaused, info.State)
+}
+
+func TestClhSaveVM(t *testing.T) {
+	assert := assert.New(t)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+	// For testing, assume the memory path is located within the VM store path.
+	clhConfig.MemoryPath = filepath.Join(store.RunVMStoragePath(), "memory")
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
+	mockClient := &clhClientMock{}
+	clh := &cloudHypervisor{
+		config:    clhConfig,
+		APIClient: mockClient,
+	}
+
+	err = clh.SaveVM()
+	assert.NoError(err)
+
+	if assert.NotNil(mockClient.snapshotRequest) {
+		expectedDestinationURL := "file://" + filepath.Dir(clhConfig.MemoryPath)
+		assert.Equal(expectedDestinationURL, mockClient.snapshotRequest.GetDestinationUrl())
+	}
 }
 
 func TestCloudHypervisorStartSandbox(t *testing.T) {
