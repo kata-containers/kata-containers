@@ -441,11 +441,16 @@ function restart_systemd_service_with_no_burst_limit() {
 		sudo systemctl daemon-reload
 	fi
 
-	sudo systemctl restart "${service}"
+	sudo systemctl restart "${service}" || true
 
 	local state
 	state=$(systemctl show "${service}.service" -p SubState | cut -d'=' -f2) || true
-	[[ "${state}" == "running" ]] || { warn "Can't restart the ${service} service"; return 1; }
+	if [[ "${state}" != "running" ]]; then
+		warn "Can't restart the ${service} service (SubState=${state})"
+		warn "journalctl output for ${service}:"
+		sudo journalctl -xeu "${service}.service" --no-pager -n 50 || true
+		return 1
+	fi
 
 	start_burst=$(systemctl show "${service}.service" -p StartLimitBurst | cut -d'=' -f2) || true
 	[[ "${start_burst}" -eq 0 ]] || { warn "Can't set start burst limit for ${service} service"; return 1; }
@@ -464,7 +469,12 @@ function restart_containerd_service() {
 		((counter++))
 	done
 
-	[[ "${counter}" -ge "${retries}" ]] && { warn "Can't connect to containerd socket"; return 1; }
+	if [[ "${counter}" -ge "${retries}" ]]; then
+		warn "Can't connect to containerd socket after ${retries} retries"
+		warn "journalctl output for containerd:"
+		sudo journalctl -xeu containerd.service --no-pager -n 50 || true
+		return 1
+	fi
 
 	clean_env_ctr
 	return 0
