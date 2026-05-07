@@ -146,7 +146,7 @@ copy-scripts-for-the-tools-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "tools"
 
 all-parallel:
-	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
+	${MAKE} -f $(MK_PATH) all -j $(shell nproc) --output-sync=target V=
 	${MAKE} -f $(MK_PATH) shim-v2-go-tarball shim-v2-rust-tarball V=
 
 all: ${BASE_TARBALLS}
