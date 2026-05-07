@@ -1042,13 +1042,19 @@ function install_cri_containerd() {
 	rm -f "${tarball_name}"
 
 	sudo mkdir -p /etc/containerd
-	containerd config default | sudo tee /etc/containerd/config.toml
+	sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+	ensure_containerd_conf_d_rootful_api_sockets
 
+	# Always write the service file pointing at the just-installed binary and
+	# reload systemd so the correct binary is used on the next start.
+	# The runner image may have a pre-installed containerd unit pointing at a
+	# different (older) binary; leaving that in place causes systemd to start
+	# the wrong binary with a config it cannot parse, leading to a panic in
+	# MigrateConfigTo (index out of range because the old binary's migrations
+	# slice is shorter than the config schema version requires).
 	containerd_service="/etc/systemd/system/containerd.service"
-
-	if [[ ! -f "${containerd_service}" ]]; then
-		sudo mkdir -p /etc/systemd/system
-		sudo tee "${containerd_service}"  <<EOF
+	sudo mkdir -p /etc/systemd/system
+	sudo tee "${containerd_service}" > /dev/null <<EOF
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -1076,7 +1082,7 @@ OOMScoreAdjust=-999
 [Install]
 WantedBy=multi-user.target
 EOF
-	fi
+	sudo systemctl daemon-reload
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
