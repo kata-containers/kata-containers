@@ -484,6 +484,151 @@ function restart_crio_service() {
 	sudo systemctl restart crio
 }
 
+# Extracts numeric schema from a config blob (effective or file content). Returns 0 when missing/invalid.
+function _containerd_blob_schema_version() {
+	local line val
+	line="$(grep -m1 -E '^[[:space:]]*version[[:space:]]*=' <<< "${1:-}" 2>/dev/null || true)"
+	val="$(sed -e 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*//' -e 's/[[:space:]]*\(#.*\)\?$//' <<< "${line}")"
+	val="${val//\'/}"
+	val="${val//\"/}"
+	val="${val//[[:space:]]/}"
+
+	[[ "${val}" =~ ^[0-9]+$ ]] || { echo "0" && return; }
+	echo "${val}"
+}
+
+# Reads numeric schema version from a containerd config file (leading "version = N" line).
+function _containerd_config_schema_version() {
+	local cfg="${1:?}"
+
+	[[ ! -f "${cfg}" ]] && echo "0" && return
+	_containerd_blob_schema_version "$(cat "${cfg}" 2>/dev/null || sudo cat "${cfg}" 2>/dev/null || true)"
+}
+
+# Requires merged effective config (preferred) or main config file to use schema >= 3.
+function require_containerd_config_schema_v3_plus() {
+	local dump schema
+
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump 2>/dev/null || true)"
+	if [[ -n "${dump}" ]]; then
+		schema="$(_containerd_blob_schema_version "${dump}")"
+	else
+		schema="$(_containerd_config_schema_version "/etc/containerd/config.toml")"
+	fi
+
+	[[ "${schema}" =~ ^[0-9]+$ ]] || die "containerd: could not determine config schema version (expected >= 3)"
+	[[ "${schema}" -ge 3 ]] || die "containerd: config schema version ${schema} is not supported; require version >= 3 (refusing legacy v1/v2)"
+}
+
+# Requires the installed containerd's default config to use schema >= 3 (containerd 2.x).
+function require_containerd_binary_default_schema_v3_plus() {
+	local blob schema
+
+	blob="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config default 2>/dev/null || true)"
+	schema="$(_containerd_blob_schema_version "${blob}")"
+	[[ "${schema}" =~ ^[0-9]+$ ]] || die "containerd: could not read schema from config default (expected >= 3)"
+	[[ "${schema}" -ge 3 ]] || die "containerd defaults to config schema version ${schema}; these tests require containerd 2.x (schema >= 3)"
+}
+
+# Effective config schema: on-disk main (/etc/containerd/config.toml), else merged dump,
+# else binary config default (used to pick [grpc]/[ttrpc] vs server plugin layout).
+function _containerd_resolved_schema_version() {
+	local schema cdbin
+
+	cdbin="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" command -v containerd || true)"
+	[[ -n "${cdbin}" ]] || { echo "0"; return 0; }
+
+	schema="$(_containerd_config_schema_version "/etc/containerd/config.toml")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 3 ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	schema="$(_containerd_blob_schema_version "$("${cdbin}" config dump 2>/dev/null || true)")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 3 ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	schema="$(_containerd_blob_schema_version "$("${cdbin}" config default 2>/dev/null || true)")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	echo "0"
+}
+
+# Emit TOML to stdout: force uid/gid 0 on API sockets for this config schema ($1).
+# Schema v3 uses top-level [grpc]/[ttrpc]; v4+ uses io.containerd.server.v1.* plugins (see containerd-config.toml.5).
+function containerd_emit_rootful_api_socket_overrides() {
+	local schema="${1:?schema argument required}"
+
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 4 ]]; then
+		cat <<'EOF'
+[plugins.'io.containerd.server.v1.grpc']
+  uid = 0
+  gid = 0
+
+[plugins.'io.containerd.server.v1.ttrpc']
+  uid = 0
+  gid = 0
+EOF
+	else
+		cat <<'EOF'
+[grpc]
+  uid = 0
+  gid = 0
+
+[ttrpc]
+  uid = 0
+  gid = 0
+EOF
+	fi
+}
+
+# Rootful systemd must own API sockets (see containerd "config default" using non-root
+# uid/gid under listeners on newer releases, e.g. 2.3 on amd64).
+#
+# Only containerd 2.x (schema v3+) emits a non-root uid/gid in "config default" and
+# honours conf.d drop-ins, so the override is written as a conf.d fragment there.
+# containerd 1.x (schema v2) already uses root-owned API sockets and does not honour
+# conf.d the same way, so there is nothing to do.
+function ensure_containerd_conf_d_rootful_api_sockets() {
+	local drop_in="/etc/containerd/conf.d/99-kata-ci-rootful-api-sockets.toml"
+	local schema
+
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || return 0
+
+	sudo mkdir -p "$(dirname "${drop_in}")"
+	containerd_emit_rootful_api_socket_overrides "${schema}" | sudo tee "${drop_in}" >/dev/null
+}
+
+# Writes containerd's config default to $1, replacing the imports line so fragments load from $2.
+function containerd_render_config_default_with_imports() {
+	local out="$1"
+	local abs_conf_d="$2"
+	local cd_bin imp_line
+
+	abs_conf_d="${abs_conf_d%/}"
+	cd_bin="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" command -v containerd)"
+	[[ -n "${cd_bin}" ]] || die "containerd not found in PATH"
+
+	imp_line="imports = [\"${abs_conf_d}/*.toml\"]"
+
+	"${cd_bin}" config default | awk -v imp="${imp_line}" '
+		/^imports[[:space:]]*=/ && !did { print imp; did=1; next }
+		{ print }
+		END {
+			if (!did) {
+				print "containerd_render_config_default_with_imports: no imports= line in config default" > "/dev/stderr"
+				exit 2
+			}
+		}
+	' >"${out}"
+}
+
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
