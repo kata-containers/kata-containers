@@ -111,6 +111,10 @@ jobs:
 
       - name: Set up Rust toolchain (matches src/agent/rust-toolchain.toml)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # kata-agent links statically against musl since it runs inside the
+          # Firecracker microVM rootfs.
+          targets: x86_64-unknown-linux-musl
 
       - name: make build
         working-directory: src/agent
