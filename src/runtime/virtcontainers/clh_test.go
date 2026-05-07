@@ -74,7 +74,8 @@ func newClhConfig() (HypervisorConfig, error) {
 }
 
 type clhClientMock struct {
-	vmInfo chclient.VmInfo
+	vmInfo         chclient.VmInfo
+	restoreRequest *chclient.RestoreConfig
 }
 
 func (c *clhClientMock) VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error) {
@@ -127,6 +128,13 @@ func (c *clhClientMock) VmSnapshotPut(ctx context.Context, vmSnapshotConfig chcl
 
 //nolint:golint
 func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *clhClientMock) VmRestorePut(ctx context.Context, restoreConfig chclient.RestoreConfig) (*http.Response, error) {
+	c.restoreRequest = &restoreConfig
+	// restoreVM() verifies Paused after restore.
+	c.vmInfo.State = clhStatePaused
 	return nil, nil
 }
 
@@ -524,6 +532,52 @@ func TestClhCreateVM(t *testing.T) {
 			assert.Exactly(d.config, clh.config, msg)
 		}
 	}
+}
+
+func TestClhRestoreVM(t *testing.T) {
+	assert := assert.New(t)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
+	mockClient := &clhClientMock{}
+	clh := &cloudHypervisor{
+		config:    clhConfig,
+		APIClient: mockClient,
+	}
+
+	// First call restoreVM without the VM snapshot files (state.json, config.json) present.
+	err = clh.restoreVM(context.Background())
+	// An error is expected because restoreVM expects the VM snapshot files to be present.
+	assert.Error(err)
+	assert.Contains(err.Error(), filepath.Join(clhConfig.VMStorePath, "state.json"))
+
+	// Now create the VM snapshot files and call restoreVM again.
+	os.MkdirAll(clhConfig.VMStorePath, os.ModePerm)
+	stateFile := filepath.Join(clhConfig.VMStorePath, "state.json")
+	configFile := filepath.Join(clhConfig.VMStorePath, "config.json")
+	err = os.WriteFile(stateFile, []byte("{}"), 0o600)
+	assert.NoError(err)
+	err = os.WriteFile(configFile, []byte("{}"), 0o600)
+	assert.NoError(err)
+
+	// Call restoreVM again, this time it should succeed.
+	err = clh.restoreVM(context.Background())
+	assert.NoError(err)
+
+	if assert.NotNil(mockClient.restoreRequest) {
+		expectedSourceURL := "file://" + clhConfig.VMStorePath
+		assert.Equal(expectedSourceURL, mockClient.restoreRequest.GetSourceUrl())
+	}
+
+	info, err := clh.vmInfo()
+	assert.NoError(err)
+	assert.Equal(clhStatePaused, info.State)
 }
 
 func TestCloudHypervisorStartSandbox(t *testing.T) {
