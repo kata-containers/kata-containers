@@ -6,7 +6,8 @@
 //! Multi-layer EROFS storage handler
 //!
 //! This handler implements the guest-side processing of multi-layer EROFS rootfs:
-//! - Storage with X-kata.overlay-upper: ext4 rw layer (upperdir)
+//! - Optional Storage with X-kata.overlay-upper: ext4 rw layer (upperdir)
+//! - If no upper storage is provided, a directory under /run/kata-containers is used
 //! - Storage with X-kata.overlay-lower: erofs layers (lowerdir)
 //! - Creates overlay to combine them
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
@@ -23,6 +24,7 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use crate::mount::baremount;
+use crate::rpc::CONTAINER_BASE;
 use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
@@ -36,7 +38,7 @@ use tokio::sync::Mutex;
 
 /// EROFS Type
 const EROFS_TYPE: &str = "erofs";
-/// ext4 Type
+/// ext4 Type (upper virtio disk based rw layer)
 const EXT4_TYPE: &str = "ext4";
 /// Overlay Type
 const OVERLAY_TYPE: &str = "overlay";
@@ -59,8 +61,8 @@ pub struct MultiLayerErofsHandler {}
 pub struct MultiLayerErofsResult {
     pub mount_point: String,
     pub processed_mount_points: Vec<String>,
-    /// Temporary mount points (upper, lower-0, lower-1, …) that back the
-    /// overlay.  These must be tracked so they are unmounted *after* the
+    /// Temporary mount points (explicit upper, lower-0, lower-1, …) that back
+    /// the overlay. These must be tracked so they are unmounted *after* the
     /// overlay target during container teardown.
     pub temp_mount_points: Vec<String>,
     /// dm-verity device paths that need to be destroyed during cleanup
@@ -131,26 +133,33 @@ pub async fn handle_multi_layer_erofs_group(
         return Err(anyhow!("no multi-layer storages found"));
     }
 
-    let mut ext4_storage: Option<&Storage> = None;
+    let mut upper_storage: Option<&Storage> = None;
     let mut erofs_storages: Vec<&Storage> = Vec::new();
     let mut mkdir_dirs: Vec<MkdirDirective> = Vec::new();
     let mut has_gpt_partition: bool = false;
 
     for storage in &multi_layer_storages {
+        // Collect all X-kata.mkdir.path directives from this multi-layer EROFS group.
+        for opt in &storage.options {
+            if let Some(mkdir_spec) = opt.strip_prefix(OPT_MKDIR_PATH) {
+                mkdir_dirs.push(parse_mkdir_directive(mkdir_spec)?);
+            }
+        }
+
+        if storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER) && storage.fstype != EXT4_TYPE {
+            return Err(anyhow!(
+                "multi-layer erofs explicit upper layer must be ext4, got '{}'; omit the upper storage for the implicit /run-backed upper",
+                storage.fstype
+            ));
+        }
+
         if is_upper_storage(storage) {
-            if ext4_storage.is_some() {
+            if upper_storage.is_some() {
                 return Err(anyhow!(
-                    "multi-layer erofs currently supports exactly one ext4 upper layer"
+                    "multi-layer erofs currently supports exactly one explicit ext4 upper layer"
                 ));
             }
-            ext4_storage = Some(*storage);
-
-            // Extract mkdir directories from X-kata.mkdir.path options
-            for opt in &storage.options {
-                if let Some(mkdir_spec) = opt.strip_prefix(OPT_MKDIR_PATH) {
-                    mkdir_dirs.push(parse_mkdir_directive(mkdir_spec)?);
-                }
-            }
+            upper_storage = Some(*storage);
         } else if is_lower_storage(storage) {
             // Each GPT partition is provided as a separate storage entry by the host
             if !has_gpt_partition && is_gpt_partitioned(storage) {
@@ -176,36 +185,57 @@ pub async fn handle_multi_layer_erofs_group(
         erofs_storages.sort_by_key(|storage| get_partition_number(storage).unwrap_or(u32::MAX));
     }
 
-    let ext4 = ext4_storage
-        .ok_or_else(|| anyhow!("multi-layer erofs missing ext4 upper layer storage"))?;
+    // With an explicit upper layer, the upper Storage carries the final overlay
+    // target. With an implicit /run-backed upper, the runtime puts that target
+    // on the first EROFS lower Storage.
+    let target_mount_point = upper_storage
+        .map(|upper| upper.mount_point.clone())
+        .unwrap_or_else(|| erofs_storages[0].mount_point.clone());
+    // Explicit uppers have a device source, while the implicit
+    // layout uses a directory under /run rather than a block device.
+    let upper_source = upper_storage
+        .map(|upper| upper.source.as_str())
+        .unwrap_or("run-backed directory");
 
     info!(
         logger,
         "Handling multi-layer erofs group";
-        "ext4-device" => &ext4.source,
+        "upper-source" => upper_source,
         "erofs-devices" => erofs_storages
             .iter()
             .map(|s| s.source.as_str())
             .collect::<Vec<_>>()
             .join(","),
-        "mount-point" => &ext4.mount_point,
+        "mount-point" => &target_mount_point,
         "mkdir-dirs-count" => mkdir_dirs.len(),
     );
 
-    // Create temporary mount points for upper and lower layers
+    // Create temporary backing paths for upper and lower layers
     let cid_str = cid.as_deref().unwrap_or("sandbox");
     // Validate container ID to prevent path traversal via crafted cid values
     validate_container_id(cid_str)?;
-    let temp_base = PathBuf::from(format!("/run/kata-containers/{}/multi-layer", cid_str));
+    let container_base =
+        scoped_join(CONTAINER_BASE, cid_str).context("failed to build container temporary path")?;
+    fs::create_dir_all(&container_base).context("failed to create container temporary path")?;
+    let temp_base =
+        scoped_join(&container_base, "multi-layer").context("failed to build multi-layer path")?;
     fs::create_dir_all(&temp_base).context("failed to create temp mount base")?;
 
     // Validate mount point to prevent path traversal via crafted mount_point values
-    validate_mount_point(&ext4.mount_point)?;
+    validate_mount_point(&target_mount_point)?;
 
     let upper_mount = temp_base.join("upper");
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger, None).await?;
+    if let Some(upper) = upper_storage {
+        wait_and_mount_layer(upper, &upper_mount, sandbox, &logger, None).await?;
+    } else {
+        info!(
+            logger,
+            "Using /run-backed upper directory";
+            "mount-point" => upper_mount.display(),
+        );
+    }
 
     for mkdir_dir in &mkdir_dirs {
         // As {{ mount 1 }} refers to the first lower layer, which is not available until we mount it.
@@ -302,12 +332,12 @@ pub async fn handle_multi_layer_erofs_group(
         "upperdir" => upperdir.display(),
         "lowerdir" => &lowerdir,
         "workdir" => workdir.display(),
-        "target" => &ext4.mount_point,
+        "target" => &target_mount_point,
     );
 
     create_mount_destination(
         Path::new(OVERLAY_TYPE),
-        Path::new(&ext4.mount_point),
+        Path::new(&target_mount_point),
         "",
         OVERLAY_TYPE,
     )
@@ -315,7 +345,7 @@ pub async fn handle_multi_layer_erofs_group(
 
     let overlay_mount = kata_types::mount::Mount {
         source: OVERLAY_TYPE.to_string(),
-        destination: PathBuf::from(&ext4.mount_point),
+        destination: PathBuf::from(&target_mount_point),
         fs_type: OVERLAY_TYPE.to_string(),
         options: vec![
             format!("upperdir={}", upperdir.display()),
@@ -326,13 +356,13 @@ pub async fn handle_multi_layer_erofs_group(
     };
 
     overlay_mount
-        .mount(Path::new(&ext4.mount_point))
+        .mount(Path::new(&target_mount_point))
         .context("failed to mount overlay")?;
 
     info!(
         logger,
         "Multi-layer EROFS overlay mounted successfully";
-        "mount-point" => &ext4.mount_point,
+        "mount-point" => &target_mount_point,
     );
 
     // Collect all unique mount points to maintain a clean resource state.
@@ -352,16 +382,19 @@ pub async fn handle_multi_layer_erofs_group(
         acc
     });
 
-    // Collect the temporary mount points (upper first, then lowers) so the
-    // caller can register them in container_mounts for proper cleanup.
-    let mut temp_mount_points = Vec::with_capacity(1 + lower_mounts.len());
-    temp_mount_points.push(upper_mount.display().to_string());
+    // Collect temporary backing mounts. The implicit /run-backed upper is just
+    // a directory under the container bundle and is removed with that bundle.
+    let mut temp_mount_points =
+        Vec::with_capacity(usize::from(upper_storage.is_some()) + lower_mounts.len());
+    if upper_storage.is_some() {
+        temp_mount_points.push(upper_mount.display().to_string());
+    }
     for lm in &lower_mounts {
         temp_mount_points.push(lm.display().to_string());
     }
 
     Ok(MultiLayerErofsResult {
-        mount_point: ext4.mount_point.clone(),
+        mount_point: target_mount_point,
         processed_mount_points,
         temp_mount_points,
         verity_devices,
@@ -393,8 +426,9 @@ async fn track_temporary_mount_for_cleanup(
 }
 
 fn is_upper_storage(storage: &Storage) -> bool {
-    storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER)
-        || (storage.fstype == EXT4_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+    storage.fstype == EXT4_TYPE
+        && (storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER)
+            || storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
 }
 
 fn is_lower_storage(storage: &Storage) -> bool {
@@ -508,6 +542,7 @@ fn resolve_mkdir_path(
     Ok(safe)
 }
 
+/// Wait for a block-backed layer device, then mount it at `layer_mount`.
 async fn wait_and_mount_layer(
     layer: &Storage,
     layer_mount: &Path,
@@ -821,6 +856,7 @@ mod tests {
         let mut s = Storage::default();
         assert!(!is_upper_storage(&s));
 
+        s.fstype = EXT4_TYPE.to_string();
         s.options.push(OPT_OVERLAY_UPPER.to_string());
         assert!(is_upper_storage(&s));
 
@@ -830,6 +866,13 @@ mod tests {
             ..Default::default()
         };
         assert!(is_upper_storage(&s2));
+
+        let s3 = Storage {
+            fstype: "tmpfs".to_string(),
+            options: vec![OPT_OVERLAY_UPPER.to_string(), OPT_MULTI_LAYER.to_string()],
+            ..Default::default()
+        };
+        assert!(!is_upper_storage(&s3));
     }
 
     #[test]
