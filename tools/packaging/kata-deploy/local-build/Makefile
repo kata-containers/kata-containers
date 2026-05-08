@@ -247,6 +247,7 @@ nydus-snapshotter-for-coco-guest-pull-tarball:
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
 
+.PHONY: install-prebuilt-artifacts
 install-prebuilt-artifacts:
 	mv kata-artifacts $(MK_DIR)/build
 
