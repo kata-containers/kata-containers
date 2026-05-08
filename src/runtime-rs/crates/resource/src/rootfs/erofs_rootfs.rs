@@ -2,10 +2,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Handle multi-layer EROFS rootfs:
-// Mount[0]: ext4 rw layer -> virtio-blk device (writable)
-// Mount[1]: erofs with device= -> virtio-blk via VMDK (read-only)
-// Mount[2]: overlay (format/mkdir/overlay) -> host mount OR guest agent
+// Handle multi-layer EROFS rootfs.
+//
+// The containerd erofs snapshotter sends the active snapshot as either:
+// - ext4 rwlayer.img + erofs lower + overlay when host rw backing is enabled.
+// - erofs lower + overlay when default_size="0"; the agent then uses a
+//   guest-memory upper directory under /run.
+//
 // The overlay mount may be handled by the guest agent if it contains "{{"
 // templates in upperdir/workdir.
 
@@ -504,13 +507,14 @@ fn extract_block_device_info(
 /// EROFS Multi-Layer Rootfs with overlay support
 ///
 /// Handles the EROFS Multi-Layer where rootfs consists of:
-/// - Mount[0]: ext4 rw layer (writable container layer) -> virtio-blk device
-/// - Mount[1]: erofs layers (fsmeta + flattened layers) -> virtio-blk via VMDK
-/// - Mount[2]: overlay (to combine ext4 upper + erofs lower)
+/// - Optional ext4 rw disk -> virtio-blk when host rw backing exists.
+/// - EROFS layers (fsmeta + flattened layers) -> virtio-blk via VMDK.
+/// - Overlay metadata that combines the writable upper with the EROFS lower.
 pub(crate) struct ErofsMultiLayerRootfs {
     guest_path: String,
     device_ids: Vec<String>,
-    // Writable layer storage (upper layer), typically ext4
+    // Writable layer storage (upper layer), typically ext4 and optional when
+    // the agent creates a /run-backed upper.
     rwlayer_storage: Option<Storage>,
     // Read-only EROFS layer storages (lower layers), one per partition in GPT mode
     erofs_storages: Vec<Storage>,
@@ -553,7 +557,10 @@ impl ErofsMultiLayerRootfs {
         // Check block device count limit
         let expected_device_count = rootfs_mounts
             .iter()
-            .filter(|m| matches!(m.fs_type.as_str(), RW_LAYER_ROOTFS_TYPE | EROFS_ROOTFS_TYPE))
+            .filter(|m| {
+                m.fs_type.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE)
+                    || m.fs_type.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE)
+            })
             .count();
 
         // TODO(Alex Lyn): fsmerge mode with single erofs mount and multiple device= options
@@ -900,13 +907,15 @@ impl ErofsMultiLayerRootfs {
             return Err(anyhow!("no devices attached for multi-layer erofs rootfs"));
         }
 
-        // Add mkdir directives to rwlayer storage options for guest agent
-        if let Some(ref mut rwlayer) = rwlayer_storage {
-            rwlayer.options.extend(
-                mkdir_dirs
-                    .iter()
-                    .map(|dir| format!("{}{}", X_KATA_MKDIR_PATH, dir)),
-            );
+        // Forward overlay mkdir hints on the EROFS Storage only. The guest agent scans
+        // every multi-layer storage for X-kata.mkdir.path; attaching here avoids splitting
+        // the same metadata across rwlayer vs erofs when an ext4 upper exists.
+        let mkdir_options = mkdir_dirs
+            .iter()
+            .map(|dir| format!("{}{}", X_KATA_MKDIR_PATH, dir))
+            .collect::<Vec<_>>();
+        if let Some(erofs) = erofs_storages.first_mut() {
+            erofs.options.extend(mkdir_options);
         }
 
         Ok(Self {
@@ -936,9 +945,9 @@ impl Rootfs for ErofsMultiLayerRootfs {
     }
 
     async fn get_storage(&self) -> Option<Vec<Storage>> {
-        // Return all storages for multi-layer EROFS (rw layer + erofs layers) to guest agent.
-        // Guest agent needs all of them to create overlay mount.
-        // In GPT mode, each partition has its own storage entry.
+        // Return all storages for multi-layer EROFS. The rw layer is optional;
+        // when absent, the agent creates a /run-backed upper dir. In GPT mode,
+        // each partition has its own EROFS storage entry.
         let mut storages = Vec::new();
 
         if let Some(rwlayer) = self.rwlayer_storage.clone() {
@@ -989,23 +998,102 @@ impl Rootfs for ErofsMultiLayerRootfs {
     }
 }
 
+fn overlay_like(fs_type: &str) -> bool {
+    matches!(
+        fs_type.to_ascii_lowercase().as_str(),
+        "overlay" | "format/overlay" | "format/mkdir/overlay"
+    )
+}
+
 /// Check if mounts represent a multi-layer EROFS rootfs.
 ///
-/// Returns `true` when `rootfs_mounts` contains at least two entries:
-/// an ext4 rw layer (upper) and an erofs layer (lower).
+/// Matches what the containerd erofs snapshotter sends for an active snapshot:
+/// an EROFS lower layer plus an overlay mount. With host rw backing enabled,
+/// the mount list also includes an ext4 `rwlayer.img`; with `default_size="0"`
+/// it does not, and the agent creates the writable upper under `/run`.
+///
+/// This is only the coarse dispatcher check; `ErofsMultiLayerRootfs::new`
+/// parses the optional rwlayer and overlay metadata.
 pub fn is_erofs_multi_layer(rootfs_mounts: &[Mount]) -> bool {
     if rootfs_mounts.len() < 2 {
         return false;
     }
 
-    let has_rwlayer = rootfs_mounts.iter().any(|m| {
-        m.fs_type.eq_ignore_ascii_case(RW_LAYER_ROOTFS_TYPE) && m.options.iter().any(|o| o == "rw")
-    });
-
     let has_erofs = rootfs_mounts
         .iter()
         .any(|m| m.fs_type.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE));
 
-    // Must have rwlayer + erofs (multi-layer or single-layer)
-    has_rwlayer && has_erofs
+    if !has_erofs {
+        return false;
+    }
+
+    rootfs_mounts.iter().any(|m| overlay_like(&m.fs_type))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_erofs_multi_layer, EROFS_ROOTFS_TYPE, RW_LAYER_ROOTFS_TYPE};
+    use kata_types::mount::Mount;
+    use std::path::PathBuf;
+
+    fn mount(fs_type: &str, options: &[&str]) -> Mount {
+        Mount {
+            fs_type: fs_type.to_string(),
+            options: options.iter().map(|s| (*s).to_string()).collect(),
+            destination: PathBuf::from("/"),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_rejects_short_list() {
+        assert!(!is_erofs_multi_layer(&[]));
+        assert!(!is_erofs_multi_layer(&[mount(EROFS_ROOTFS_TYPE, &[])]));
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_requires_erofs() {
+        let mounts = vec![mount(RW_LAYER_ROOTFS_TYPE, &["rw"]), mount("overlay", &[])];
+        assert!(!is_erofs_multi_layer(&mounts));
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_ext4_rw_erofs_and_overlay() {
+        let mounts = vec![
+            mount(RW_LAYER_ROOTFS_TYPE, &["rw"]),
+            mount(EROFS_ROOTFS_TYPE, &[]),
+            mount("overlay", &[]),
+        ];
+        assert!(is_erofs_multi_layer(&mounts));
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_implicit_upper_erofs_and_overlay_variants() {
+        for overlay_type in ["overlay", "format/overlay", "format/mkdir/overlay"] {
+            let mounts = vec![mount(EROFS_ROOTFS_TYPE, &[]), mount(overlay_type, &[])];
+            assert!(
+                is_erofs_multi_layer(&mounts),
+                "expected multi-layer for overlay type {}",
+                overlay_type
+            );
+        }
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_erofs_without_overlay_or_rw_is_false() {
+        let mounts = vec![mount(EROFS_ROOTFS_TYPE, &[]), mount("btrfs", &[])];
+        assert!(!is_erofs_multi_layer(&mounts));
+    }
+
+    #[test]
+    fn is_erofs_multi_layer_does_not_validate_optional_rwlayer_options() {
+        // The dispatcher only requires EROFS + overlay. Detailed rwlayer
+        // interpretation is handled by ErofsMultiLayerRootfs::new.
+        let mounts = vec![
+            mount(RW_LAYER_ROOTFS_TYPE, &["ro"]),
+            mount(EROFS_ROOTFS_TYPE, &[]),
+            mount("overlay", &[]),
+        ];
+        assert!(is_erofs_multi_layer(&mounts));
+    }
 }
