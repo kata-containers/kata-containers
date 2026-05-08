@@ -1077,12 +1077,15 @@ func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
 		return fmt.Errorf("clh vm.add-net returned no PCI info for device %s", mac)
 	}
 
+	// Store the device ID before PCI path conversion so the device
+	// can be removed via HotplugRemoveDevice even if path parsing fails.
+	clh.devicesIds[mac] = pciInfo.GetId()
+
 	pciPath, err := clhPciInfoToPath(*pciInfo)
 	if err != nil {
 		return err
 	}
 	e.SetPciPath(pciPath)
-	clh.devicesIds[mac] = pciInfo.GetId()
 
 	return nil
 }

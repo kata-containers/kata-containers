@@ -204,9 +204,10 @@ func TestKnownIfaceSetEndpointMAC(t *testing.T) {
 	// Unknown name
 	assert.Equal("", k.getEndpointMAC("net2"))
 
-	// Remove clears host tracking but not endpoint MAC mapping
+	// Remove clears all tracking including endpoint MAC mapping
 	k.remove("aa:bb:cc:dd:ee:ff", "net1")
 	assert.False(k.hasMACOrName("aa:bb:cc:dd:ee:ff", "net1"))
+	assert.Equal("", k.getEndpointMAC("net1"))
 }
 
 func TestKnownIfaceSetLookupMACByName(t *testing.T) {
