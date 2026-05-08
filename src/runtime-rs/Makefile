@@ -15,9 +15,9 @@ PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = containerd-shim-kata-v2
 CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
-# This snippet finds all packages inside runtime-rs. Used for tessting.
+# Find all packages of this component
 PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
-                    jq -r '.packages[] | select(.manifest_path | contains("runtime-rs")) | .name')
+                jq -r --arg d "$(CURDIR)/" '.packages[] | select(.manifest_path | startswith($$d)) | .name')
 PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
 include ../../utils.mk
