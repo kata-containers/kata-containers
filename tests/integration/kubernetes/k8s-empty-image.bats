@@ -43,7 +43,7 @@ setup() {
 	kubectl create -f "${yaml_file}"
 
 	local -r command="kubectl describe pod/${pod_name} | grep -E \
-		'the file sleep was not found|\[CDH\] \[ERROR\]: Image Pull error|ENOENT|unsupported rootfs mounts count 2'"
+		'the file sleep was not found|\[CDH\] \[ERROR\]: Image Pull error|ENOENT|unsupported rootfs mounts count 2|unsupported rootfs Mount'"
 	info "Waiting ${wait_time} seconds for: ${command}"
 	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
