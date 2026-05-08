@@ -287,8 +287,17 @@ async fn create_endpoint(
             &attrs.name,
             nix::unistd::gettid()
         );
-        let t = PhysicalEndpoint::new(&attrs.name, &attrs.hardware_addr, d)
-            .context("new physical endpoint")?;
+        let t = PhysicalEndpoint::new(
+            handle,
+            &attrs.name,
+            &attrs.hardware_addr,
+            idx,
+            &config.network_model,
+            config.queues,
+            d,
+        )
+        .await
+        .context("new physical endpoint")?;
         Arc::new(t)
     } else {
         info!(
@@ -359,9 +368,7 @@ fn is_physical_iface(name: &str) -> Result<bool> {
     if name == "lo" {
         return Ok(false);
     }
-    let driver_info = link::get_driver_info(name)?;
-    if driver_info.bus_info.split(':').count() != 3 {
-        return Ok(false);
-    }
-    Ok(true)
+    // A physical interface is one backed by a PCI or VMBus device.
+    // This mirrors Go's isPhysicalIface which checks ParentDevBus == "pci" || "vmbus".
+    Ok(link::get_bus_type(name)?.is_some())
 }
