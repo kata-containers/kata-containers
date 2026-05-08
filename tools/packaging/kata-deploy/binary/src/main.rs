@@ -10,9 +10,14 @@ mod k8s;
 mod runtime;
 mod utils;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
+
+/// Env var name used to thread the detected container runtime through the
+/// post-install re-exec. Avoids re-querying the apiserver after we've already
+/// committed to a runtime.
+const DETECTED_RUNTIME_ENV: &str = "KATA_DEPLOY_DETECTED_RUNTIME";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -26,9 +31,28 @@ enum Action {
     Install,
     Cleanup,
     Reset,
+    /// Internal: entered via re-exec after install completes. Holds the
+    /// DaemonSet pod alive waiting for SIGTERM, then runs cleanup. Hidden
+    /// from `--help`; users should never invoke this directly.
+    #[clap(name = "internal-post-install-wait", hide = true)]
+    InternalPostInstallWait,
 }
 
-#[tokio::main]
+// Cap the tokio runtime to a small fixed number of worker threads. The default
+// multi-thread runtime allocates `num_cpus()` workers (each with a ~2 MiB
+// stack), which on a 200+ vCPU GPU node is the dominant contributor to the
+// DaemonSet pod's VmData reservation (~440 MiB). Two workers is plenty:
+//
+//   - the install path is overwhelmingly I/O-bound,
+//   - it shells out to `nsenter ... systemctl restart …` (synchronous,
+//     blocking calls that wedge the thread they run on for tens of seconds);
+//     a second worker keeps the health server able to answer kubelet probes
+//     within timeoutSeconds while the first is blocked.
+//
+// `current_thread` would be tighter still, but starves the health server the
+// moment a host_systemctl call runs — the kubelet then fails the readiness
+// probe and the pod is restarted before install can finish.
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
     // Set log level based on DEBUG environment variable
     // This must be done before initializing the logger
@@ -58,11 +82,22 @@ async fn main() -> Result<()> {
         Action::Install => "install",
         Action::Cleanup => "cleanup",
         Action::Reset => "reset",
+        Action::InternalPostInstallWait => "internal-post-install-wait",
     };
     config.print_info(action_str);
 
-    let runtime = runtime::get_container_runtime(&config).await?;
-    info!("Detected container runtime: {runtime}");
+    // After re-exec we already know which runtime we committed to during
+    // install — trust the env var and skip the apiserver round-trip. For
+    // every other action we always detect from the cluster.
+    let runtime = match args.action {
+        Action::InternalPostInstallWait => std::env::var(DETECTED_RUNTIME_ENV)
+            .with_context(|| format!("missing {DETECTED_RUNTIME_ENV} env var after re-exec"))?,
+        _ => {
+            let r = runtime::get_container_runtime(&config).await?;
+            info!("Detected container runtime: {r}");
+            r
+        }
+    };
 
     match args.action {
         Action::Install => {
@@ -82,6 +117,12 @@ async fn main() -> Result<()> {
             let health_state = health::HealthState::new();
             let health_port = health::health_port_from_env();
             let health_listener = health::bind_health(health_port).await?;
+            // Clear FD_CLOEXEC now (before we hand the listener to the
+            // spawned task) so that the kernel keeps the socket open across
+            // the post-install re-exec below. Without this, the child
+            // process would have to re-bind the port, briefly exposing
+            // the kubelet's startup/liveness probes to bind races.
+            let health_fd = health::prepare_listener_for_exec(&health_listener)?;
             tokio::spawn(health::serve_health(health_listener, health_state.clone()));
 
             // Race install against SIGTERM so cleanup always runs, even if
@@ -101,16 +142,62 @@ async fn main() -> Result<()> {
             install_result?;
             health_state.set(health::State::Ready);
 
-            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to maintain
-            // the kata-runtime label and artifacts. On SIGTERM (pod termination),
-            // run cleanup to undo install before exiting.
-            info!("Install completed, daemonset mode: waiting for SIGTERM");
+            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to
+            // maintain the kata-runtime label and artifacts. On SIGTERM
+            // (pod termination), run cleanup to undo install before exit.
+            //
+            // Memory note: `install` builds up substantial peak heap
+            // (kube clients, deserialised Node/RuntimeClass objects, TLS
+            // pools). Neither musl nor glibc returns most of that to the
+            // kernel after free, so a long-running idle wait here would
+            // pin the DaemonSet's RSS at the install peak for the
+            // lifetime of the pod. Re-exec into a tiny post-install
+            // waiter instead: the kernel discards the entire address
+            // space and we come back up holding only what cleanup
+            // actually needs.
+            //
+            // The health-server listening socket is inherited across the
+            // exec so kubelet probes don't see a single failure during
+            // the handover.
+            info!("Install completed, re-exec'ing into post-install waiter");
+            reexec_into_post_install_wait(&runtime, health_fd)?;
+            // reexec_into_post_install_wait only returns on failure —
+            // bubble that up so the pod restarts and retries install.
+            unreachable!("reexec_into_post_install_wait returned unexpectedly");
+        }
+        Action::InternalPostInstallWait => {
+            use tokio::signal::unix::{signal, SignalKind};
+
+            // Resume the health server on the listener inherited from the
+            // install process so the kubelet keeps seeing /readyz=200
+            // across the re-exec. The state is `Ready` from the start —
+            // we only ever reach this action *after* a successful install.
+            if let Some(fd_str) = std::env::var(health::HEALTH_FD_ENV)
+                .ok()
+                .filter(|s| !s.is_empty())
+            {
+                let fd: std::os::fd::RawFd = fd_str.parse().with_context(|| {
+                    format!("invalid {} value: {fd_str:?}", health::HEALTH_FD_ENV)
+                })?;
+                let listener = health::listener_from_inherited_fd(fd)?;
+                let state = health::HealthState::new();
+                state.set(health::State::Ready);
+                tokio::spawn(health::serve_health(listener, state));
+            } else {
+                log::warn!(
+                    "{} not set on re-exec; post-install waiter will not serve health probes",
+                    health::HEALTH_FD_ENV
+                );
+            }
+
+            let mut sigterm = signal(SignalKind::terminate())
+                .context("failed to register SIGTERM handler in post-install waiter")?;
+            info!("Post-install waiter ready, blocking on SIGTERM");
             sigterm.recv().await;
             info!("Received SIGTERM, running cleanup before exit");
             if let Err(e) = cleanup(&config, &runtime).await {
                 error!("Cleanup on SIGTERM failed: {}", e);
             }
-            return Ok(());
         }
         Action::Cleanup => {
             cleanup(&config, &runtime).await?;
@@ -135,8 +222,30 @@ async fn main() -> Result<()> {
         }
     }
 
-    #[allow(unreachable_code)]
     Ok(())
+}
+
+/// Re-exec the current binary into the hidden `internal-post-install-wait`
+/// action. Propagates the detected runtime (so we don't have to re-query the
+/// apiserver) and the health-listener FD (so kubelet probes don't see a gap
+/// during the handover) through the environment. Only returns on failure.
+fn reexec_into_post_install_wait(
+    runtime: &str,
+    health_fd: std::os::fd::RawFd,
+) -> Result<std::convert::Infallible> {
+    use std::os::unix::process::CommandExt;
+
+    let me = std::env::current_exe().context("failed to resolve current_exe for re-exec")?;
+    let err = std::process::Command::new(&me)
+        .arg("internal-post-install-wait")
+        .env(DETECTED_RUNTIME_ENV, runtime)
+        .env(health::HEALTH_FD_ENV, health_fd.to_string())
+        .exec();
+    Err(anyhow::anyhow!(
+        "failed to re-exec {} into post-install waiter: {}",
+        me.display(),
+        err
+    ))
 }
 
 async fn install(config: &config::Config, runtime: &str) -> Result<()> {

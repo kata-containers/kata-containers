@@ -74,32 +74,26 @@ pub fn annotate_container_devices(
     grouped_devices
         .iter_mut()
         .for_each(|(vendor_class, container_devices)| {
-            // The *offset* is a monotonically increasing counter that keeps track of the number of devices
-            // within an IOMMU group. It increments by total_of whenever a new IOMMU group is processed.
-            let offset: &mut usize = &mut 0;
-
             sort_devices_by_guest_pcipath(container_devices);
             container_devices
                 .iter()
                 .enumerate()
-                .for_each(|(base, container_device)| {
-                    let total_of = container_device.device.options.len();
-                    // annotate device with cdi information in OCI Spec.
-                    for index in 0..total_of {
-                        if let Some(iommu_grpid) =
-                            Path::new(&container_device.device.container_path)
-                                .file_name()
-                                .and_then(|name| name.to_str())
-                        {
-                            spec.annotations_mut().as_mut().unwrap().insert(
-                                format!("{CDI_PREFIX}/vfio{iommu_grpid}.{index}"), // cdi.k8s.io/vfioX.y
-                                format!("{}={}", vendor_class, base + *offset), // vendor/class=name
-                            );
-                        }
+                .for_each(|(index, container_device)| {
+                    if let Some(iommu_grpid) =
+                        Path::new(&container_device.device.container_path)
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                    {
+                        // iommufd cdev paths use "/dev/vfio/devices/vfio<N>" —
+                        // strip the "vfio" prefix so the annotation key is
+                        // "cdi.k8s.io/vfio<N>", matching the Go runtime.
+                        let vfio_num =
+                            iommu_grpid.strip_prefix("vfio").unwrap_or(iommu_grpid);
+                        spec.annotations_mut().as_mut().unwrap().insert(
+                            format!("{CDI_PREFIX}/vfio{vfio_num}"),
+                            format!("{}={}", vendor_class, index),
+                        );
                     }
-
-                    // update the offset with *total_of*.
-                    *offset += total_of - 1;
                 });
         });
 
@@ -234,10 +228,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x1002".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device2"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio2"),
                 }),
                 device: Device {
-                    container_path: "/dev/device2".to_string(),
+                    container_path: "/dev/vfio/devices/vfio2".to_string(),
                     options: vec!["pci_host_path02=BB:DD02.F02".to_string()],
                     ..Default::default()
                 },
@@ -246,10 +240,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x1002".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device3"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio0"),
                 }),
                 device: Device {
-                    container_path: "/dev/device3".to_string(),
+                    container_path: "/dev/vfio/devices/vfio0".to_string(),
                     options: vec!["pci_host_path03=BB:DD03.F03".to_string()],
                     ..Default::default()
                 },
@@ -258,10 +252,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x1002".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device1"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio1"),
                 }),
                 device: Device {
-                    container_path: "/dev/device1".to_string(),
+                    container_path: "/dev/vfio/devices/vfio1".to_string(),
                     options: vec!["pci_host_path01=BB:DD01.F01".to_string()],
                     ..Default::default()
                 },
@@ -289,15 +283,15 @@ mod tests {
 
         let expected_annotations: HashMap<String, String> = vec![
             (
-                "cdi.k8s.io/vfiodevice3.0".to_owned(),
+                "cdi.k8s.io/vfio0".to_owned(),
                 "amd.com/gpu=2".to_owned(),
             ),
             (
-                "cdi.k8s.io/vfiodevice1.0".to_owned(),
+                "cdi.k8s.io/vfio1".to_owned(),
                 "amd.com/gpu=0".to_owned(),
             ),
             (
-                "cdi.k8s.io/vfiodevice2.0".to_owned(),
+                "cdi.k8s.io/vfio2".to_owned(),
                 "amd.com/gpu=1".to_owned(),
             ),
         ]
@@ -324,10 +318,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x10de".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device2"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio1"),
                 }),
                 device: Device {
-                    container_path: "/dev/device2".to_string(),
+                    container_path: "/dev/vfio/devices/vfio1".to_string(),
                     options: vec!["pci_host_path02=BB:DD02.F02".to_string()],
                     ..Default::default()
                 },
@@ -336,10 +330,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x10de".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device3"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio2"),
                 }),
                 device: Device {
-                    container_path: "/dev/device3".to_string(),
+                    container_path: "/dev/vfio/devices/vfio2".to_string(),
                     options: vec!["pci_host_path03=BB:DD03.F03".to_string()],
                     ..Default::default()
                 },
@@ -348,10 +342,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x8086".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device1"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio0"),
                 }),
                 device: Device {
-                    container_path: "/dev/device1".to_string(),
+                    container_path: "/dev/vfio/devices/vfio0".to_string(),
                     options: vec!["pci_host_path01=BB:DD01.F01".to_string()],
                     ..Default::default()
                 },
@@ -360,10 +354,10 @@ mod tests {
                 device_info: Some(DeviceInfo {
                     vendor_id: "0x8086".to_string(),
                     class_id: "0x0302".to_string(),
-                    host_path: PathBuf::from("/dev/device4"),
+                    host_path: PathBuf::from("/dev/vfio/devices/vfio3"),
                 }),
                 device: Device {
-                    container_path: "/dev/device4".to_string(),
+                    container_path: "/dev/vfio/devices/vfio3".to_string(),
                     options: vec!["pci_host_path04=BB:DD01.F04".to_string()],
                     ..Default::default()
                 },
@@ -390,19 +384,19 @@ mod tests {
 
         let expected_annotations: HashMap<String, String> = vec![
             (
-                "cdi.k8s.io/vfiodevice1.0".to_owned(),
+                "cdi.k8s.io/vfio0".to_owned(),
                 "intel.com/gpu=0".to_owned(),
             ),
             (
-                "cdi.k8s.io/vfiodevice2.0".to_owned(),
+                "cdi.k8s.io/vfio1".to_owned(),
                 "nvidia.com/gpu=0".to_owned(),
             ),
             (
-                "cdi.k8s.io/vfiodevice3.0".to_owned(),
+                "cdi.k8s.io/vfio2".to_owned(),
                 "nvidia.com/gpu=1".to_owned(),
             ),
             (
-                "cdi.k8s.io/vfiodevice4.0".to_owned(),
+                "cdi.k8s.io/vfio3".to_owned(),
                 "intel.com/gpu=1".to_owned(),
             ),
         ]

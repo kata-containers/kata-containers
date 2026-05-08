@@ -20,8 +20,6 @@ use crate::device::{
 pub struct PortDeviceConfig {
     pub port_type: PCIePort,
     pub total_ports: u32,
-    pub memsz_reserve: u64,
-    pub pref64_reserve: u64,
 }
 
 impl PortDeviceConfig {
@@ -29,11 +27,6 @@ impl PortDeviceConfig {
         Self {
             port_type,
             total_ports,
-            // FIXME:
-            // A method to automatically determine the maximum memory size
-            // based on all vfio devices' information on the host is coming soon.
-            memsz_reserve: 33554432_u64,
-            pref64_reserve: 536870912_u64,
         }
     }
 }

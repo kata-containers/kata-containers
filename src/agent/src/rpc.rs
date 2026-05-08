@@ -71,7 +71,7 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::network_device_handler::wait_for_pci_net_interface;
-use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
+use crate::device::{add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -250,6 +250,7 @@ impl AgentService {
         // or other entities for a specifc device.
         // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
         // readonly
+        dump_nvidia_cdi_yaml(&sl())?;
         handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
 
         // Handle trusted storage configuration before mounting any storage

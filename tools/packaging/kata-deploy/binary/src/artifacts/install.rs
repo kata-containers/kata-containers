@@ -30,8 +30,11 @@ const ALL_SHIMS: &[&str] = &[
     "qemu-coco-dev",
     "qemu-coco-dev-runtime-rs",
     "qemu-nvidia-gpu",
+    "qemu-nvidia-gpu-runtime-rs",
     "qemu-nvidia-gpu-snp",
+    "qemu-nvidia-gpu-snp-runtime-rs",
     "qemu-nvidia-gpu-tdx",
+    "qemu-nvidia-gpu-tdx-runtime-rs",
     "qemu-runtime-rs",
     "qemu-se",
     "qemu-se-runtime-rs",
@@ -664,7 +667,9 @@ fn get_qemu_share_name(shim: &str) -> Option<String> {
     let share_name = match shim {
         "qemu-cca" => "qemu-cca-experimental",
         "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
+        "qemu-nvidia-gpu-snp-runtime-rs" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
+        "qemu-nvidia-gpu-tdx-runtime-rs" => "qemu-tdx-experimental",
         _ => "qemu",
     };
 
@@ -1062,8 +1067,11 @@ mod tests {
     #[case("qemu-coco-dev", "qemu")]
     #[case("qemu-cca", "qemu")]
     #[case("qemu-nvidia-gpu", "qemu")]
-    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-runtime-rs", "qemu")]
     #[case("qemu-nvidia-gpu-snp", "qemu")]
+    #[case("qemu-nvidia-gpu-snp-runtime-rs", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx-runtime-rs", "qemu")]
     #[case("qemu-runtime-rs", "qemu")]
     #[case("qemu-coco-dev-runtime-rs", "qemu")]
     #[case("qemu-se-runtime-rs", "qemu")]

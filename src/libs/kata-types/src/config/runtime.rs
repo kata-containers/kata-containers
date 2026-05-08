@@ -190,6 +190,26 @@ pub struct Runtime {
     /// If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.
     #[serde(default = "default_passfd_listener_port")]
     pub passfd_listener_port: u32,
+
+    /// pod_resource_api_sock specifies the unix socket for the Kubelet's
+    /// PodResource API endpoint. If empty, kubernetes based cold plug
+    /// will not be attempted. In order for this feature to work, the
+    /// KubeletPodResourcesGet featureGate must be enabled in Kubelet,
+    /// if using Kubelet older than 1.34.
+
+    /// The pod resource API's socket is relative to the Kubelet's root-dir,
+    /// which is defined by the cluster admin, and its location is:
+    /// ${KubeletRootDir}/pod-resources/kubelet.sock
+
+    /// cold_plug_vfio (see hypervisor config) acts as a feature gate:
+    ///      cold_plug_vfio = "no-port" (default) => no cold plug
+    ///      cold_plug_vfio != "no-port" AND pod_resource_api_sock = "" => need
+    ///              explicit CDI annotation for cold plug (applies mainly
+    ///              to non-k8s cases)
+    ///      cold_plug_vfio != "no-port" AND pod_resource_api_sock != "" => kubelet
+    ///              based cold plug.
+    #[serde(default)]
+    pub pod_resource_api_sock: String,
 }
 
 fn default_passfd_listener_port() -> u32 {

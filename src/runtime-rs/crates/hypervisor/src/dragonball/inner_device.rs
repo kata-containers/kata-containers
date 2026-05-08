@@ -114,7 +114,7 @@ impl DragonballInner {
                     .context("add vhost-user-net device")?;
                 Ok(DeviceType::VhostUserNetwork(dev))
             }
-            DeviceType::Vsock(_) | DeviceType::Protection(_) | DeviceType::PortDevice(_) => todo!(),
+            _ => Err(anyhow!("unsupported device {:?}", device)),
         }
     }
 

@@ -45,8 +45,10 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { name: nvidia-gpu,     vmm: qemu-nvidia-gpu,     runner: amd64-nvidia-a100 },
-          { name: nvidia-gpu-snp, vmm: qemu-nvidia-gpu-snp, runner: amd64-nvidia-h100-snp },
+          { name: nvidia-gpu,                  vmm: qemu-nvidia-gpu,                runner: amd64-nvidia-a100,     coco: false },
+          { name: nvidia-gpu-runtime-rs,       vmm: qemu-nvidia-gpu-runtime-rs,     runner: amd64-nvidia-a100,     coco: false },
+          { name: nvidia-gpu-snp,              vmm: qemu-nvidia-gpu-snp,            runner: amd64-nvidia-h100-snp, coco: true },
+          { name: nvidia-gpu-snp-runtime-rs,   vmm: qemu-nvidia-gpu-snp-runtime-rs, runner: amd64-nvidia-h100-snp, coco: true },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
@@ -59,9 +61,9 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
-      KBS: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'true' || 'false' }}
-      SNAPSHOTTER: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'nydus' || '' }}
-      USE_EXPERIMENTAL_SNAPSHOTTER_SETUP: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'true' || 'false' }}
+      KBS: ${{ matrix.environment.coco && 'true' || 'false' }}
+      SNAPSHOTTER: ${{ matrix.environment.coco && 'nydus' || '' }}
+      USE_EXPERIMENTAL_SNAPSHOTTER_SETUP: ${{ matrix.environment.coco && 'true' || 'false' }}
       K8S_TEST_HOST_TYPE: baremetal
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -86,12 +88,12 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Uninstall previous `kbs-client`
-        if: matrix.environment.name != 'nvidia-gpu'
+        if: matrix.environment.coco
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
 
       - name: Deploy CoCo KBS
-        if: matrix.environment.name != 'nvidia-gpu'
+        if: matrix.environment.coco
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
         env:
@@ -99,7 +101,7 @@ jobs:
           KBS_INGRESS: nodeport
 
       - name: Install `kbs-client`
-        if: matrix.environment.name != 'nvidia-gpu'
+        if: matrix.environment.coco
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
@@ -139,7 +141,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
 
       - name: Delete CoCo KBS
-        if: always() && matrix.environment.name != 'nvidia-gpu'
+        if: always() && matrix.environment.coco
         timeout-minutes: 10
         run: |
           bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs

@@ -787,6 +787,14 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub hotplug_vfio_on_root_bus: bool,
 
+    /// Cold-plug VFIO devices to a PCIe port type.
+    ///
+    /// Accepted values: `"no-port"` (default, disabled), `"root-port"`.
+    /// In confidential compute environments hot-plugging can compromise
+    /// security, so devices are cold-plugged instead.
+    #[serde(default)]
+    pub cold_plug_vfio: String,
+
     /// Number of PCIe root ports to create during VM creation.
     ///
     /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.

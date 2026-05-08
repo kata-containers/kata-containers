@@ -107,7 +107,6 @@ long_options=(
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[repo-path:]="Specify path to repository to check (default: \$GOPATH/src/\$repo)"
 	[scripts]="Check script files"
-	[vendor]="Check vendor files"
 	[versions]="Check versions files"
 	[xml]="Check XML files"
 )
@@ -933,49 +932,6 @@ static_check_files()
 	exit 1
 }
 
-# Perform vendor checks:
-#
-# - Ensure that changes to vendored code are accompanied by an update to the
-#   vendor tooling config file. If not, the user simply hacked the vendor files
-#   rather than following the correct process:
-#
-#   https://github.com/kata-containers/community/blob/main/VENDORING.md
-#
-# - Ensure vendor metadata is valid.
-static_check_vendor()
-{
-	pushd "${repo_path}"
-
-	local files
-	local files_arr=()
-
-	files=$(find . -type f -name "go.mod")
-
-	while IFS= read -r line; do
-		files_arr+=("${line}")
-	done <<< "${files}"
-
-	for file in "${files_arr[@]}"; do
-		local dir
-		dir="${file//go.mod/}"
-
-		pushd "${dir}"
-
-		# Check if directory has been changed to use go modules
-		if [[ -f "go.mod" ]]; then
-			info "go.mod file found in ${dir}, running go mod verify instead"
-			# This verifies the integrity of modules in the local cache.
-			# This does not really verify the integrity of vendored code:
-			# https://github.com/golang/go/issues/27348
-			# Once that is added we need to add an extra step to verify vendored code.
-			go mod verify
-		fi
-		popd
-	done
-
-	popd
-}
-
 static_check_xml()
 {
 	local all_xml
@@ -1449,7 +1405,6 @@ main()
 			--repo) repo="$2"; shift ;;
 			--repo-path) repo_path="$2"; shift ;;
 			--scripts) func=static_check_shell ;;
-			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
 			--xml) func=static_check_xml ;;
 			--) shift; break ;;

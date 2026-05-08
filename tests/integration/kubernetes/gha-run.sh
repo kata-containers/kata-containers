@@ -410,11 +410,22 @@ function collect_artifacts() {
 function cleanup_kata_deploy() {
 	ensure_helm
 
+	local release_name="kata-deploy"
+	local namespace="kube-system"
+
+	# Avoid helm uninstall --wait (up to 10m) on fresh clusters: free-runner jobs
+	# set K8S_TEST_HOST_TYPE=baremetal-* for test selection only and often have
+	# no prior release in kube-system.
+	if ! helm status "${release_name}" -n "${namespace}" &>/dev/null; then
+		info "No Helm release '${release_name}' in '${namespace}'; skipping kata-deploy uninstall"
+		return 0
+	fi
+
 	# Do not return after deleting only the parent object cascade=foreground
 	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug || true
+	helm uninstall "${release_name}" --ignore-not-found --wait --cascade foreground --timeout 10m --namespace "${namespace}" --debug || true
 
-	wait_for_api_and_retry_uninstall "kata-deploy" "kube-system"
+	wait_for_api_and_retry_uninstall "${release_name}" "${namespace}"
 }
 
 function cleanup() {

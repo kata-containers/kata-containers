@@ -17,9 +17,6 @@ static-checks-build:
 clean:
 	cargo clean
 
-vendor:
-	cargo vendor
-
 test:
 	@cargo test -p kata-trace-forwarder -- --nocapture
 
@@ -32,5 +29,4 @@ check: standard_rust_check
 	check \
 	clean \
 	install \
-	test \
-	vendor
+	test

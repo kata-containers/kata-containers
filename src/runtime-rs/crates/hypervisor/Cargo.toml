@@ -35,7 +35,8 @@ qapi = { version = "0.15", features = ["qmp", "async-tokio-all"] }
 qapi-spec = "0.3.2"
 qapi-qmp = "0.15.0"
 hyper = { workspace = true, features = ["client"] }
-
+regex = "1"
+once_cell = "1.21.3"
 # Local dependencies
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }

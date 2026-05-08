@@ -52,6 +52,28 @@ updateStrategy:
   rollingUpdate:
     maxUnavailable: 1
 
+# Resource requests/limits for the kata-deploy container.
+#
+# kata-deploy does its real work (host file copies, kubeconfig parsing,
+# apiserver calls, snapshotter setup) once at pod start and then re-execs
+# into a tiny waiter that just blocks on SIGTERM.
+#
+# Defaults sized from real measurements: VmRSS of the unpatched binary on
+# a ~220-vCPU node tops out under 10 MiB, and the patched post-re-exec
+# waiter is smaller still. 16Mi is roughly 2x that headroom.
+#
+# No memory limit is set by default. During the install phase the kernel
+# page cache for artifact copies can peak well above any reasonable fixed
+# limit (e.g. the CoCo/nydus CI image is ~1.6 GiB), causing OOMKill if a
+# limit is applied. Operators who want to cap memory on the post-install
+# waiter can override this field.
+#
+# Set to {} to remove all requests/limits, or override individual fields.
+resources:
+  requests:
+    cpu: 25m
+    memory: 16Mi
+
 debug: false
 
 # Health probes for the kata-deploy DaemonSet.
@@ -61,8 +83,15 @@ debug: false
 #
 # The startup probe uses /readyz so it only passes once install completes. While
 # the startup probe is active the liveness probe is suppressed, giving install up
-# to failureThreshold * periodSeconds (default 10 min) before the kubelet kills
+# to failureThreshold * periodSeconds (default 20 min) before the kubelet kills
 # the container. Without a startup probe the liveness probe would fire immediately.
+#
+# The 20-min budget covers slow GitHub-hosted free runners — single-node kubeadm
+# clusters on small Azure VMs, where artifact extraction and `systemctl restart
+# containerd` (which restarts the apiserver static pod with it) can push install
+# past the 15-min mark (seen on dragonball + lts containerd matrix jobs). On
+# real multi-node clusters install completes in tens of seconds, so the only cost
+# of the wider deadline is a longer wait on a genuinely-broken pod.
 #
 # The readiness probe makes rolling updates safer: the DaemonSet controller waits for
 # a pod to become ready before proceeding to the next node (respecting maxUnavailable).
@@ -187,6 +216,20 @@ shims:
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
   qemu-nvidia-gpu-snp:
     enabled: ~
     supportedArches:
@@ -209,6 +252,24 @@ shims:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
   qemu-nvidia-gpu-tdx:
     enabled: ~
     supportedArches:
@@ -227,6 +288,24 @@ shims:
       # respectively. Override if you want to use a different label.
       # If you don't have NFD, you need to add the tdx label by other
       # means to your TDX nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"

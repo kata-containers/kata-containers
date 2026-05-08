@@ -7,10 +7,12 @@
 mod port_device;
 mod protection_device;
 mod vfio;
+pub mod vfio_device;
 mod vhost_user;
 pub mod vhost_user_blk;
 mod vhost_user_net;
 mod virtio_blk;
+pub mod virtio_blk_modern;
 mod virtio_fs;
 mod virtio_net;
 mod virtio_vsock;
@@ -21,6 +23,7 @@ pub use vfio::{
     bind_device_to_host, bind_device_to_vfio, get_vfio_device, HostDevice, VfioBusMode, VfioConfig,
     VfioDevice,
 };
+pub use vfio_device::{VfioDeviceBase, VfioDeviceModern, VfioDeviceModernHandle};
 pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};
 pub use vhost_user_net::VhostUserNetDevice;
 pub use virtio_blk::{
@@ -28,6 +31,7 @@ pub use virtio_blk::{
     KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
     VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
+pub use virtio_blk_modern::{BlockConfigModern, BlockDeviceModern, BlockDeviceModernHandle};
 pub use virtio_fs::{
     ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,
 };

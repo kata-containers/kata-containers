@@ -1065,7 +1065,16 @@ VERIFICATION_POD_EOF
 		fi
 		sleep 1
 	done
-	kubectl -n kube-system wait pod -l name=kata-deploy --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"
+	if ! kubectl -n kube-system wait pod -l name=kata-deploy --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
+		echo "::group::kata-deploy pod describe (install timed out)"
+		kubectl -n kube-system describe pod -l name=kata-deploy || true
+		echo "::endgroup::"
+		echo "::group::kata-deploy logs (install timed out)"
+		kubectl -n kube-system logs -l name=kata-deploy --all-containers --previous 2>/dev/null || true
+		kubectl -n kube-system logs -l name=kata-deploy --all-containers 2>/dev/null || true
+		echo "::endgroup::"
+		return 1
+	fi
 
 	echo "::group::kata-deploy logs"
 	kubectl_retry -n kube-system logs -l name=kata-deploy

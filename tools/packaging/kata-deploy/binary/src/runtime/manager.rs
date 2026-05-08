@@ -36,13 +36,14 @@ fn is_containerd_based(runtime: &str) -> bool {
 }
 
 pub async fn get_container_runtime(config: &Config) -> Result<String> {
-    let runtime_version = k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion")
+    let runtime_version = k8s::get_container_runtime_version(config)
         .await
         .context("Failed to get container runtime version")?;
 
-    let microk8s = k8s::get_node_field(config, r".metadata.labels.microk8s\.io/cluster")
+    let microk8s = k8s::get_node_label(config, "microk8s.io/cluster")
         .await
-        .ok();
+        .ok()
+        .flatten();
     if microk8s.as_deref() == Some("true") {
         return Ok("microk8s".to_string());
     }
@@ -127,8 +128,7 @@ pub async fn is_containerd_capable_of_using_drop_in_files(
     }
 
     // Check containerd version - only 2.0+ supports drop-in files properly
-    let runtime_version =
-        k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion").await?;
+    let runtime_version = k8s::get_container_runtime_version(config).await?;
 
     Ok(check_containerd_version_supports_drop_in(&runtime_version).is_ok())
 }

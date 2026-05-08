@@ -182,6 +182,13 @@ setup_file() {
     export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml.in"
     export POD_EMBEDQA_YAML="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml"
 
+    # runtime-rs does not support trusted storage yet, so use alternative
+    # TEE templates without emptyDir/PVC volumes and higher memory.
+    if is_runtime_rs && [[ "${TEE}" = "true" ]]; then
+        export POD_INSTRUCT_YAML_IN="${pod_config_dir}/${POD_NAME_INSTRUCT}-no-trusted-storage.yaml.in"
+        export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}-no-trusted-storage.yaml.in"
+    fi
+
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
     setup_langchain_flow
@@ -198,27 +205,29 @@ setup_file() {
         # file and BEFORE auto_generate_policy() runs.
         create_nim_initdata_file "${policy_settings_dir}/default-initdata.toml"
 
-        # Container image layer storage: one block device and PV/PVC per pod.
-        storage_config_template="${pod_config_dir}/confidential/trusted-storage.yaml.in"
+        if ! is_runtime_rs; then
+            # Container image layer storage: one block device and PV/PVC per pod.
+            storage_config_template="${pod_config_dir}/confidential/trusted-storage.yaml.in"
 
-        instruct_storage_mib=57344
-        local_device_instruct=$(create_loop_device /tmp/trusted-image-storage-instruct.img "$instruct_storage_mib")
-        storage_config_instruct=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").instruct.XXX")
-        PV_NAME=trusted-block-pv-instruct PVC_NAME=trusted-pvc-instruct \
-            PV_STORAGE_CAPACITY="${instruct_storage_mib}Mi" PVC_STORAGE_REQUEST="${instruct_storage_mib}Mi" \
-            LOCAL_DEVICE="$local_device_instruct" NODE_NAME="$node" \
-            envsubst < "$storage_config_template" > "$storage_config_instruct"
-        retry_kubectl_apply "$storage_config_instruct"
+            instruct_storage_mib=57344
+            local_device_instruct=$(create_loop_device /tmp/trusted-image-storage-instruct.img "$instruct_storage_mib")
+            storage_config_instruct=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").instruct.XXX")
+            PV_NAME=trusted-block-pv-instruct PVC_NAME=trusted-pvc-instruct \
+                PV_STORAGE_CAPACITY="${instruct_storage_mib}Mi" PVC_STORAGE_REQUEST="${instruct_storage_mib}Mi" \
+                LOCAL_DEVICE="$local_device_instruct" NODE_NAME="$node" \
+                envsubst < "$storage_config_template" > "$storage_config_instruct"
+            retry_kubectl_apply "$storage_config_instruct"
 
-        if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
-            embedqa_storage_mib=8192
-            local_device_embedqa=$(create_loop_device /tmp/trusted-image-storage-embedqa.img "$embedqa_storage_mib")
-            storage_config_embedqa=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").embedqa.XXX")
-            PV_NAME=trusted-block-pv-embedqa PVC_NAME=trusted-pvc-embedqa \
-                PV_STORAGE_CAPACITY="${embedqa_storage_mib}Mi" PVC_STORAGE_REQUEST="${embedqa_storage_mib}Mi" \
-                LOCAL_DEVICE="$local_device_embedqa" NODE_NAME="$node" \
-                envsubst < "$storage_config_template" > "$storage_config_embedqa"
-            retry_kubectl_apply "$storage_config_embedqa"
+            if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
+                embedqa_storage_mib=8192
+                local_device_embedqa=$(create_loop_device /tmp/trusted-image-storage-embedqa.img "$embedqa_storage_mib")
+                storage_config_embedqa=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").embedqa.XXX")
+                PV_NAME=trusted-block-pv-embedqa PVC_NAME=trusted-pvc-embedqa \
+                    PV_STORAGE_CAPACITY="${embedqa_storage_mib}Mi" PVC_STORAGE_REQUEST="${embedqa_storage_mib}Mi" \
+                    LOCAL_DEVICE="$local_device_embedqa" NODE_NAME="$node" \
+                    envsubst < "$storage_config_template" > "$storage_config_embedqa"
+                retry_kubectl_apply "$storage_config_embedqa"
+            fi
         fi
     fi
 
@@ -490,7 +499,7 @@ teardown_file() {
         [ -f "${POD_EMBEDQA_YAML}" ] && kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
     fi
 
-    if [[ "${TEE}" = "true" ]]; then
+    if [[ "${TEE}" = "true" ]] && ! is_runtime_rs; then
         kubectl delete --ignore-not-found pvc trusted-pvc-instruct trusted-pvc-embedqa
         kubectl delete --ignore-not-found pv trusted-block-pv-instruct trusted-block-pv-embedqa
         kubectl delete --ignore-not-found storageclass local-storage

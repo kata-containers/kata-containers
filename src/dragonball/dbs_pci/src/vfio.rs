@@ -706,11 +706,13 @@ impl Region {
 
             // FIXME: add readonly flag into vfio_dma_map in future PR when it is needed.
             // issue #8725
-            if let Err(e) = vfio_container.vfio_dma_map(
-                self.start.raw_value() + self.mmaps[i].mmap_offset,
-                self.mmaps[i].mmap_size,
-                host_addr as u64,
-            ) {
+            if let Err(e) = unsafe {
+                vfio_container.vfio_dma_map(
+                    self.start.raw_value() + self.mmaps[i].mmap_offset,
+                    self.mmaps[i].mmap_size as usize,
+                    host_addr as *mut u8,
+                )
+            } {
                 error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
             }
         }
@@ -744,7 +746,7 @@ impl Region {
 
             if let Err(e) = vfio_container.vfio_dma_unmap(
                 self.start.raw_value() + self.mmaps[i].mmap_offset,
-                self.mmaps[i].mmap_size,
+                self.mmaps[i].mmap_size as usize,
             ) {
                 error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
             }
@@ -771,7 +773,7 @@ impl Region {
             for i in 0..self.mmaps.len() {
                 if let Err(e) = vfio_container.vfio_dma_unmap(
                     self.start.raw_value() + self.mmaps[i].mmap_offset,
-                    self.mmaps[i].mmap_size,
+                    self.mmaps[i].mmap_size as usize,
                 ) {
                     error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
                 }
@@ -779,11 +781,13 @@ impl Region {
                 self.set_user_memory_region(i, true, vm)?;
                 // FIXME: add readonly flag into vfio_dma_map in future PR when it is needed.
                 // issue #8725
-                if let Err(e) = vfio_container.vfio_dma_map(
-                    self.start.raw_value() + self.mmaps[i].mmap_offset,
-                    self.mmaps[i].mmap_size,
-                    self.mmaps[i].mmap_host_addr,
-                ) {
+                if let Err(e) = unsafe {
+                    vfio_container.vfio_dma_map(
+                        self.start.raw_value() + self.mmaps[i].mmap_offset,
+                        self.mmaps[i].mmap_size as usize,
+                        self.mmaps[i].mmap_host_addr as *mut u8,
+                    )
+                } {
                     error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
                 }
             }

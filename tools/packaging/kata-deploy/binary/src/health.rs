@@ -3,11 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use log::{debug, error, info};
+use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
+
+/// Env var used to hand the listening socket from the install process to the
+/// post-install waiter across `execve(2)`. Empty / unset means "no inherited
+/// FD; bind a fresh listener on `HEALTH_PORT`".
+pub const HEALTH_FD_ENV: &str = "KATA_DEPLOY_HEALTH_FD";
 
 /// Installation lifecycle states exposed via the health endpoints.
 ///
@@ -73,6 +79,56 @@ pub async fn bind_health(port: u16) -> anyhow::Result<TcpListener> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to bind health server on {addr}: {e}"))?;
     info!("Health server listening on {addr}");
+    Ok(listener)
+}
+
+/// Clear `FD_CLOEXEC` on the listener so the kernel keeps it open across
+/// `execve(2)`. Returns the raw FD number to be passed to the child via
+/// [`HEALTH_FD_ENV`]. After this call the listener is still owned by the
+/// caller (we do not consume it) — the spawned health-server task continues
+/// to use it until exec replaces the address space.
+pub fn prepare_listener_for_exec(listener: &TcpListener) -> anyhow::Result<RawFd> {
+    let fd = listener.as_raw_fd();
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    if flags < 0 {
+        return Err(anyhow::anyhow!(
+            "fcntl(F_GETFD) on health listener fd={fd}: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let rc = unsafe { libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) };
+    if rc < 0 {
+        return Err(anyhow::anyhow!(
+            "fcntl(F_SETFD, ~FD_CLOEXEC) on health listener fd={fd}: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    debug!("Cleared FD_CLOEXEC on health listener fd={fd} for re-exec inheritance");
+    Ok(fd)
+}
+
+/// Reconstitute a tokio [`TcpListener`] from a file descriptor inherited
+/// across `execve(2)` (see [`prepare_listener_for_exec`]). The FD must
+/// already be a valid listening TCP socket; we only flip it to non-blocking
+/// before handing it to tokio.
+pub fn listener_from_inherited_fd(fd: RawFd) -> anyhow::Result<TcpListener> {
+    // Re-set CLOEXEC on the inherited FD so any future fork/exec we ever do
+    // (e.g. host_systemctl) doesn't accidentally leak the listening socket.
+    unsafe {
+        let flags = libc::fcntl(fd, libc::F_GETFD);
+        if flags >= 0 {
+            libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+        }
+    }
+    // SAFETY: caller guarantees the FD was a listening socket inherited from
+    // the parent process via execve and hasn't been closed since.
+    let std_listener = unsafe { std::net::TcpListener::from_raw_fd(fd) };
+    std_listener
+        .set_nonblocking(true)
+        .map_err(|e| anyhow::anyhow!("set_nonblocking on inherited health listener: {e}"))?;
+    let listener = TcpListener::from_std(std_listener)
+        .map_err(|e| anyhow::anyhow!("tokio::net::TcpListener::from_std: {e}"))?;
+    info!("Health server resumed from inherited fd={fd}");
     Ok(listener)
 }
 

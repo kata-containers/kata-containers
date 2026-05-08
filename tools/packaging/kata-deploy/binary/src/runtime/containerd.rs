@@ -560,8 +560,7 @@ fn check_containerd_snapshotter_version_support(
 }
 
 pub async fn containerd_snapshotter_version_check(config: &Config) -> Result<()> {
-    let container_runtime_version =
-        k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion").await?;
+    let container_runtime_version = k8s::get_container_runtime_version(config).await?;
 
     let has_snapshotter_mapping = config
         .snapshotter_handler_mapping_for_arch
@@ -606,8 +605,7 @@ fn check_containerd_erofs_version_support(container_runtime_version: &str) -> Re
 }
 
 pub async fn containerd_erofs_snapshotter_version_check(config: &Config) -> Result<()> {
-    let container_runtime_version =
-        k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion").await?;
+    let container_runtime_version = k8s::get_container_runtime_version(config).await?;
 
     check_containerd_erofs_version_support(&container_runtime_version)
 }

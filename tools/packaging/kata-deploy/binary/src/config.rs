@@ -572,10 +572,7 @@ impl Config {
                 // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
                 // missing we bail; the cluster must configure the template with the import
                 // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
-                let container_runtime_version =
-                    k8s::get_node_field(self, ".status.nodeInfo.containerRuntimeVersion")
-                        .await
-                        .ok();
+                let container_runtime_version = k8s::get_container_runtime_version(self).await.ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
                     k3s_rke2_rendered_config_path(),
                     container_runtime_version.as_deref(),
@@ -737,7 +734,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
 /// Returns only shims that are supported for that architecture
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
+        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
         "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-cca",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu",

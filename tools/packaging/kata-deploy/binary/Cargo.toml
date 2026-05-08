@@ -17,7 +17,18 @@ env_logger = "0.10"
 k8s-openapi = { version = "0.26", default-features = false, features = [
     "v1_33",
 ] }
-kube = { version = "2.0", features = ["runtime", "derive"] }
+# kata-deploy doesn't use kube::runtime (controllers/watchers/reflectors) or
+# kube::derive (the CustomResource macro). Skipping those features keeps the
+# binary smaller and trims the static data segment that gets mapped into RSS.
+#
+# `ring` matches kube's own default crypto provider for rustls 0.23+ and
+# must stay enabled — without it, rustls panics at runtime with
+# "Could not automatically determine the process-level CryptoProvider".
+kube = { version = "2.0", default-features = false, features = [
+    "client",
+    "rustls-tls",
+    "ring",
+] }
 libc.workspace = true
 log.workspace = true
 regex.workspace = true
@@ -27,6 +38,7 @@ tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",
     "signal",
+    "sync",
     "time",
     "net",
     "io-util",

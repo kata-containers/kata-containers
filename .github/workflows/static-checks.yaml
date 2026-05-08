@@ -195,3 +195,77 @@ jobs:
 
           echo "::error::Golang protobuf bindings need to be regenerated (see Github step summary for diff)."
           exit 1
+
+  go-mod-tidy:
+    name: go-mod-tidy
+    runs-on: ubuntu-22.04
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    permissions:
+      contents: read  # for checkout
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check if Go-related files changed
+        id: check_go_changes
+        run: |
+          if [[ -z "${GITHUB_BASE_REF}" ]]; then
+            echo "run_go_mod_tidy=true" >> "${GITHUB_OUTPUT}"
+            echo "Called from workflow_dispatch, will run go mod tidy check"
+            exit 0
+          fi
+          modified_files=$(git diff --name-only origin/"${GITHUB_BASE_REF}"..HEAD)
+          if echo "${modified_files}" | grep -E '\.(go|mod|sum)$|^versions\.yaml$' > /dev/null; then
+            echo "run_go_mod_tidy=true" >> "${GITHUB_OUTPUT}"
+            echo "Go-related files changed, will run go mod tidy check"
+          else
+            echo "run_go_mod_tidy=false" >> "${GITHUB_OUTPUT}"
+            echo "No Go-related files changed, skipping go mod tidy check"
+          fi
+      - name: Install yq
+        if: steps.check_go_changes.outputs.run_go_mod_tidy == 'true'
+        run: ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Read properties from versions.yaml
+        if: steps.check_go_changes.outputs.run_go_mod_tidy == 'true'
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          [ -n "${go_version}" ]
+          echo "GO_VERSION=${go_version}" >> "${GITHUB_ENV}"
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        if: steps.check_go_changes.outputs.run_go_mod_tidy == 'true'
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Run go mod tidy
+        if: steps.check_go_changes.outputs.run_go_mod_tidy == 'true'
+        run: |
+          # Run go mod tidy in all directories with go.mod files
+          mapfile -t go_mod_dirs < <(find . -name 'go.mod' -exec dirname {} \;)
+          for dir in "${go_mod_dirs[@]}"; do
+            echo "Running go mod tidy in ${dir}"
+            (cd "${dir}" && go mod tidy)
+          done
+      - name: Check for diff
+        if: steps.check_go_changes.outputs.run_go_mod_tidy == 'true'
+        run: |
+          diff=$(git diff)
+          if [[ -z "${diff}" ]]; then
+            echo "No diff detected."
+            exit 0
+          fi
+
+          cat << EOF >> "${GITHUB_STEP_SUMMARY}"
+          Run \`go mod tidy\` in the affected modules to update go.mod and go.sum files.
+
+          \`\`\`diff
+          ${diff}
+          \`\`\`
+          EOF
+
+          echo "::error::Go modules are not up-to-date (see Github step summary for diff)."
+          exit 1

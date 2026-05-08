@@ -210,8 +210,8 @@ jobs:
       - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
@@ -310,8 +310,8 @@ jobs:
       - name: Build shim-v2
         id: build
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.

@@ -86,6 +86,32 @@ pub async fn handle_block_volume(
     // BlockVolume.
     // safe here, device_info is correct and only unwrap it.
     let mut device_id = String::new();
+
+    if let DeviceType::BlockModern(device_mod) = device_info.clone() {
+        let device = &device_mod.lock().await;
+        let blk_driver = device.config.driver_option.clone();
+        // blk, mmioblk
+        storage.driver = blk_driver.clone();
+        storage.source = match blk_driver.as_str() {
+            KATA_BLK_DEV_TYPE => {
+                if let Some(pci_path) = &device.config.pci_path {
+                    pci_path.to_string()
+                } else {
+                    return Err(anyhow!("block driver is blk but no pci path exists"));
+                }
+            }
+            KATA_SCSI_DEV_TYPE => {
+                if let Some(scsi_addr) = &device.config.scsi_addr {
+                    scsi_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
+                }
+            }
+            _ => device.config.virt_path.clone(),
+        };
+        device_id = device.device_id.clone();
+    }
+
     if let DeviceType::Block(device) = device_info {
         let blk_driver = device.config.driver_option;
         // blk, mmioblk
