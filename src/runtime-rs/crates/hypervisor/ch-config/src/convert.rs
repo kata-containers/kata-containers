@@ -123,6 +123,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let net = n.network_devices;
         let host_devices = n.host_devices;
         let protection_dev = n.protection_device;
+        let pending_disks = n.pending_disks.unwrap_or_default();
 
         let cpus = CpusConfig::try_from((cfg.cpu_info, guest_protection_to_use.clone()))
             .map_err(VmConfigError::CPUError)?;
@@ -168,6 +169,8 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
             disks.push(disk);
         };
+
+        disks.extend(pending_disks);
 
         let disks = if !disks.is_empty() { Some(disks) } else { None };
 
@@ -1812,7 +1815,7 @@ mod tests {
             vsock: Some(valid_vsock.clone()),
 
             // rootfs image specific
-            disks: Some(vec![disk_config_with_image]),
+            disks: Some(vec![disk_config_with_image.clone()]),
 
             payload: Some(PayloadConfig {
                 kernel: Some(PathBuf::from(kernel)),
@@ -1822,6 +1825,24 @@ mod tests {
             }),
 
             ..Default::default()
+        };
+
+        let initdata_disk_config = DiskConfig {
+            path: Some(PathBuf::from(
+                "/run/kata-containers/shared/initdata/sid/initdata.image",
+            )),
+            readonly: true,
+
+            ..Default::default()
+        };
+
+        let vmconfig_with_image_and_kernel_and_pending_disk = VmConfig {
+            disks: Some(vec![
+                disk_config_with_image.clone(),
+                initdata_disk_config.clone(),
+            ]),
+
+            ..vmconfig_with_image_and_kernel.clone()
         };
 
         let vmconfig_with_initrd = VmConfig {
@@ -1864,6 +1885,12 @@ mod tests {
             cfg: hypervisor_cfg_with_image_and_kernel.clone(),
 
             ..Default::default()
+        };
+
+        let named_hypervisor_cfg_with_image_and_kernel_and_pending_disk = NamedHypervisorConfig {
+            pending_disks: Some(vec![initdata_disk_config]),
+
+            ..named_hypervisor_cfg_with_image_and_kernel.clone()
         };
 
         let named_hypervisor_cfg_with_image_and_kernel_bad_cpu = NamedHypervisorConfig {
@@ -2049,6 +2076,10 @@ mod tests {
             TestData {
                 cfg: named_hypervisor_cfg_with_image_and_kernel,
                 result: Ok(vmconfig_with_image_and_kernel),
+            },
+            TestData {
+                cfg: named_hypervisor_cfg_with_image_and_kernel_and_pending_disk,
+                result: Ok(vmconfig_with_image_and_kernel_and_pending_disk),
             },
             TestData {
                 cfg: named_hypervisor_cfg_with_initrd,

@@ -513,6 +513,7 @@ pub struct NamedHypervisorConfig {
     pub vsock_socket_path: String,
     pub cfg: HypervisorConfig,
 
+    pub pending_disks: Option<Vec<DiskConfig>>,
     pub shared_fs_devices: Option<Vec<FsConfig>>,
     pub network_devices: Option<Vec<NetConfig>>,
     pub host_devices: Option<Vec<DeviceConfig>>,

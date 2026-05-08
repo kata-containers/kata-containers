@@ -73,6 +73,7 @@ impl CloudHypervisorInner {
             // - Network details need to be saved for later application.
             //
             match device {
+                DeviceType::Block(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Vfio(_) => self.pending_devices.insert(0, device.clone()),
@@ -348,11 +349,14 @@ impl CloudHypervisorInner {
     pub(crate) async fn get_shared_devices(
         &mut self,
     ) -> Result<(
+        Option<Vec<DiskConfig>>,
         Option<Vec<FsConfig>>,
         Option<Vec<NetConfig>>,
         Option<Vec<DeviceConfig>>,
         Option<ProtectionDevConfig>,
     )> {
+        let vm_rootfs_path = self.hypervisor_config().boot_info.image;
+        let mut coldplug_block_devices = Vec::<DiskConfig>::new();
         let mut shared_fs_devices = Vec::<FsConfig>::new();
         let mut network_devices = Vec::<NetConfig>::new();
         let mut host_devices = Vec::<DeviceConfig>::new();
@@ -360,6 +364,14 @@ impl CloudHypervisorInner {
 
         while let Some(dev) = self.pending_devices.pop() {
             match dev {
+                DeviceType::Block(block_device) => {
+                    if block_device.config.path_on_host == vm_rootfs_path {
+                        continue;
+                    }
+
+                    let disk_cfg = DiskConfig::try_from(block_device.config)?;
+                    coldplug_block_devices.push(disk_cfg);
+                }
                 DeviceType::ShareFs(dev) => {
                     let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
@@ -480,6 +492,7 @@ impl CloudHypervisorInner {
         }
 
         Ok((
+            Some(coldplug_block_devices),
             Some(shared_fs_devices),
             Some(network_devices),
             Some(host_devices),
