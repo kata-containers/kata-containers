@@ -67,11 +67,19 @@ install_nim_operator() {
 		-n "${NIM_OPERATOR_NAMESPACE}" \
 		--wait
 
-	local deploy_name
-	deploy_name=$(kubectl get deployment -n "${NIM_OPERATOR_NAMESPACE}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-	if [[ -n "${deploy_name}" ]]; then
-		kubectl wait --for=condition=available --timeout=300s "deployment/${deploy_name}" -n "${NIM_OPERATOR_NAMESPACE}"
-	fi
+	local operator_selector="app.kubernetes.io/instance=${NIM_OPERATOR_RELEASE_NAME}"
+	echo "NIMService setup: Ensuring NIM operator deployment is available"
+	kubectl wait --for=condition=available --timeout=300s \
+		deployment -l "${operator_selector}" \
+		-n "${NIM_OPERATOR_NAMESPACE}"
+
+	local operator_pods
+	mapfile -t operator_pods < <(kubectl get pods -n "${NIM_OPERATOR_NAMESPACE}" -l "${operator_selector}" -o name 2>/dev/null)
+	[[ "${#operator_pods[@]}" -gt 0 ]] || die "NIM Operator pod not found in namespace ${NIM_OPERATOR_NAMESPACE}"
+	echo "NIMService setup: Ensuring NIM operator pod is ready: ${operator_pods[*]}"
+	kubectl wait --for=condition=ready --timeout=120s \
+		"${operator_pods[@]}" \
+		-n "${NIM_OPERATOR_NAMESPACE}"
 	echo "NIM Operator install complete."
 }
 
@@ -84,6 +92,20 @@ uninstall_nim_operator() {
 	else
 		echo "NIM Operator release not found, nothing to uninstall."
 	fi
+}
+
+print_nimservice_namespace_resources() {
+	local stage="${1:-state}"
+	local namespaces=("default" "${TEST_CLUSTER_NAMESPACE}")
+
+	echo "NIMService resources (${stage}):"
+	for ns in "${namespaces[@]}"; do
+		echo "--- namespace: ${ns} ---"
+		kubectl get nimservice "${NIM_SERVICE_NAME}" -n "${ns}" -o wide 2>/dev/null || true
+		kubectl get deployment "${NIM_SERVICE_NAME}" -n "${ns}" -o wide 2>/dev/null || true
+		kubectl get service "${NIM_SERVICE_NAME}" -n "${ns}" -o wide 2>/dev/null || true
+		kubectl get pods -n "${ns}" -o wide 2>/dev/null | grep "${NIM_SERVICE_NAME}" || true
+	done
 }
 
 setup_kbs_credentials() {
@@ -161,6 +183,7 @@ setup() {
 }
 
 @test "NIMService llama-3.2-1b-instruct serves /v1/models" {
+    print_nimservice_namespace_resources "before apply"
     echo "NIMService test: Applying NIM YAML"
     kubectl apply -f "${NIM_YAML}"
     echo "NIMService test: Waiting for deployment to exist (operator creates it from NIMService)"
@@ -175,6 +198,7 @@ setup() {
         sleep 5
         elapsed=$((elapsed + 5))
     done
+    print_nimservice_namespace_resources "after deployment appears"
     local pod_name
     pod_name=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" | head -1)
     echo "NIMService test: POD_NAME=${pod_name} (waiting for pod ready, timeout ${POD_READY_TIMEOUT_LLAMA_3_2_1B})"
@@ -205,6 +229,7 @@ setup() {
 }
 
 teardown() {
+    print_nimservice_namespace_resources "teardown start"
     if kubectl get nimservice "${NIM_SERVICE_NAME}" &>/dev/null; then
         POD_NAME=$(kubectl get pods --no-headers -o custom-columns=":metadata.name" | head -1)
         if [[ -n "${POD_NAME}" ]]; then

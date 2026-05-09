@@ -2105,7 +2105,6 @@ impl PCIeRootPortDevice {
         self.addr = addr.into();
         self
     }
-
 }
 
 #[async_trait]
@@ -2410,7 +2409,6 @@ impl VfioDeviceConfig {
         self.x_pci_device_id = Some(device_id.into());
         self
     }
-
 }
 
 /// Configuration for a group of VFIO devices, typically used to manage multiple
@@ -3025,10 +3023,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     /// Batch adds multiple VFIO devices to the QEMU command line.
-    pub fn add_vfio_devices(
-        &mut self,
-        configs: Vec<VfioDeviceConfig>,
-    ) -> Result<()> {
+    pub fn add_vfio_devices(&mut self, configs: Vec<VfioDeviceConfig>) -> Result<()> {
         if configs.is_empty() {
             return Ok(());
         }

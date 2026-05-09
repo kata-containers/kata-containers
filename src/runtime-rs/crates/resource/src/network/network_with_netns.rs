@@ -163,8 +163,7 @@ impl Network for NetworkWithNetns {
 /// interface with at least one IP address exists.  Does NOT create endpoints
 /// or attach anything to the hypervisor.
 pub(crate) async fn netns_has_interfaces(netns_path: &str) -> Result<bool> {
-    let _netns_guard =
-        netns::NetnsGuard::new(netns_path).context("netns guard for scan")?;
+    let _netns_guard = netns::NetnsGuard::new(netns_path).context("netns guard for scan")?;
     let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
     let thread_handler = tokio::spawn(connection);
     defer!({

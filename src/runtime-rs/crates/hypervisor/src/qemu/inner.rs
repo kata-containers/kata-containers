@@ -197,9 +197,7 @@ impl QemuInner {
 
                     match port_type {
                         PCIePort::RootPort => cmdline.add_pcie_root_ports(devices_per_port)?,
-                        PCIePort::SwitchPort => {
-                            cmdline.add_pcie_switch_ports(devices_per_port)?
-                        }
+                        PCIePort::SwitchPort => cmdline.add_pcie_switch_ports(devices_per_port)?,
                         _ => info!(sl!(), "no need to add {} ports", port_type),
                     }
                 }
@@ -967,9 +965,10 @@ impl QemuInner {
                         cfg.index,
                         cfg.path_on_host.clone(),
                         cfg.blkdev_aio.to_string(),
-                        Some(cfg.is_direct.unwrap_or(
-                            self.config.blockdev_info.block_device_cache_direct,
-                        )),
+                        Some(
+                            cfg.is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
+                        ),
                         cfg.is_readonly,
                         cfg.no_drop,
                         self.config.blockdev_info.block_device_driver.clone(),

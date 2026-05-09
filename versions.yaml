@@ -207,11 +207,11 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.22"
+    version: "v6.18.28"
     nvidia:
       description: "Linux kernel optimised for virtual machines"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.22"
+      version: "v6.18.28"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -226,7 +226,7 @@ assets:
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.22"
+    version: "v6.18.28"
 
 externals:
   description: "Third-party projects used by the system"

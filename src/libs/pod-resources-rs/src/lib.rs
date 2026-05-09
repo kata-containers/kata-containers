@@ -5,10 +5,10 @@
 
 pub mod pod_resources;
 
-use anyhow::{Result, anyhow};
-use cdi::specs::config::DeviceNode;
-use cdi::cache::{CdiOption, new_cache, with_auto_refresh};
+use anyhow::{anyhow, Result};
+use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
 use cdi::spec_dirs::with_spec_dirs;
+use cdi::specs::config::DeviceNode;
 use container_device_interface as cdi;
 use serde::Deserialize;
 

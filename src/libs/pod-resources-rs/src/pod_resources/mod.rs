@@ -10,10 +10,10 @@ use v1::pod_resources_lister_client::PodResourcesListerClient;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use hyper_util::rt::TokioIo;
 use tokio::net::UnixStream;
-use tokio::time::{Duration, timeout};
+use tokio::time::{timeout, Duration};
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 

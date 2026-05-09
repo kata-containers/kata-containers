@@ -218,25 +218,21 @@ impl Container {
                 resource.set_network(None);
             }
 
-            // VFIO char devices are handled by the VM's device driver, not
-            // presented to the container directly. Remove them from the OCI
-            // spec to match the Go runtime (kata_agent.go:1093-1105) and
-            // satisfy the agent policy's allow_linux_devices check.
-            const VFIO_PATH: &str = "/dev/vfio/";
-            let filtered = linux.devices().as_ref().map(|devices| {
-                devices
-                    .iter()
-                    .filter(|d| {
-                        !(d.typ() == oci::LinuxDeviceType::C
-                            && d.path().to_str().is_some_and(|p| p.starts_with(VFIO_PATH)))
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>()
-            });
-            linux.set_devices(match filtered {
-                Some(v) if v.is_empty() => None,
-                other => other,
-            });
+            // VFIO device filtering depends on vfio_mode configuration:
+            //
+            // - guest-kernel mode: Devices are managed by the guest kernel driver and
+            //   are not presented to the container. Remove them from the OCI spec to
+            //   match the Go runtime (kata_agent.go:1093-1105) and satisfy the agent
+            //   policy's allow_linux_devices check.
+            //   * vfio-pci-gk: PCI device passthrough with guest kernel driver
+            //
+            // - vfio mode: Devices appear as VFIO character devices
+            //   (/dev/vfio/*) inside the container. Keep them in the OCI spec so the
+            //   agent can validate and bind them properly. This is required for:
+            //   * vfio-pci: PCI device passthrough with VFIO in container
+            //   * vfio-ap: Adjunct Processor (AP) device passthrough with VFIO-AP
+            let vfio_mode = toml_config.runtime.vfio_mode.as_str();
+            filter_vfio_devices(linux, vfio_mode);
         }
 
         let container_name = k8s::container_name(&spec);
@@ -821,6 +817,32 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     false
 }
 
+/// Filter VFIO devices from the Linux device list based on vfio_mode configuration.
+/// - vfio mode: Keeps all devices including /dev/vfio/*
+/// - guest-kernel mode: Removes /dev/vfio/* devices as they're managed by guest kernel
+///   Note that the guest-kernel mode is assumed if vfio_mode is unset/empty.
+fn filter_vfio_devices(linux: &mut oci::Linux, vfio_mode: &str) {
+    if vfio_mode == "vfio" {
+        return;
+    }
+
+    const VFIO_PATH: &str = "/dev/vfio/";
+    let filtered = linux.devices().as_ref().map(|devices| {
+        devices
+            .iter()
+            .filter(|d| {
+                !(d.typ() == oci::LinuxDeviceType::C
+                    && d.path().to_str().is_some_and(|p| p.starts_with(VFIO_PATH)))
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    });
+    linux.set_devices(match filtered {
+        Some(v) if v.is_empty() => None,
+        other => other,
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::amend_spec;
@@ -948,5 +970,152 @@ mod tests {
                 d.desc
             );
         }
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_guest_kernel_mode() {
+        // Test that VFIO devices are filtered out in guest-kernel mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let non_vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/null")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(3)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device, non_vfio_device.clone()])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(devices.len(), 1, "Should have only 1 device after filtering");
+        assert_eq!(
+            devices[0].path(),
+            non_vfio_device.path(),
+            "Non-VFIO device should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_vfio_mode() {
+        // Test that VFIO devices are preserved in vfio mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let non_vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/null")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(3)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device, non_vfio_device])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "vfio");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(devices.len(), 2, "Should have both devices in vfio mode");
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_only_vfio_filtered() {
+        // Test that only /dev/vfio/* devices are filtered in guest-kernel mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let vfio_container = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/vfio")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let similar_path = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio-test")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(1)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![
+                vfio_device,
+                vfio_container,
+                similar_path.clone(),
+            ])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(
+            devices.len(),
+            1,
+            "Should only filter devices starting with /dev/vfio/"
+        );
+        assert_eq!(
+            devices[0].path(),
+            similar_path.path(),
+            "Device with similar but different path should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_empty_mode() {
+        // Test default/empty mode behavior (should filter /dev/vfio/* like guest-kernel mode)
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "");
+
+        assert!(linux.devices().is_none(), "Should filter out VFIO device with empty mode");
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_no_devices() {
+        // Test that filtering works when there are no devices
+        let mut linux = oci::LinuxBuilder::default().build().unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        assert!(linux.devices().is_none(), "Should remain None when no devices");
     }
 }

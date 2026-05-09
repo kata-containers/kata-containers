@@ -139,11 +139,11 @@ pub mod pod_resources_lister_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use std::convert::TryInto;
-    use tonic::codegen::*;
     use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     /// PodResourcesLister is a service provided by the kubelet that provides information about the
     /// node resources consumed by pods and containers on the node
     #[derive(Debug, Clone)]
@@ -189,9 +189,8 @@ pub mod pod_resources_lister_client {
                     <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::Body>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::Body>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             PodResourcesListerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -230,22 +229,13 @@ pub mod pod_resources_lister_client {
         pub async fn list(
             &mut self,
             request: impl tonic::IntoRequest<super::ListPodResourcesRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ListPodResourcesResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::ListPodResourcesResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.PodResourcesLister/List",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.PodResourcesLister/List");
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("v1.PodResourcesLister", "List"));
@@ -255,51 +245,36 @@ pub mod pod_resources_lister_client {
         pub async fn get_allocatable_resources(
             &mut self,
             request: impl tonic::IntoRequest<super::AllocatableResourcesRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::AllocatableResourcesResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::AllocatableResourcesResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/v1.PodResourcesLister/GetAllocatableResources",
             );
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new("v1.PodResourcesLister", "GetAllocatableResources"),
-                );
+            req.extensions_mut().insert(GrpcMethod::new(
+                "v1.PodResourcesLister",
+                "GetAllocatableResources",
+            ));
             self.inner.unary(req, path, codec).await
         }
         /// / Get returns the node resources assigned to a specific pod.
         pub async fn get(
             &mut self,
             request: impl tonic::IntoRequest<super::GetPodResourcesRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetPodResourcesResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::GetPodResourcesResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.PodResourcesLister/Get",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.PodResourcesLister/Get");
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new("v1.PodResourcesLister", "Get"));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("v1.PodResourcesLister", "Get"));
             self.inner.unary(req, path, codec).await
         }
     }

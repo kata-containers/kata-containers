@@ -24,22 +24,23 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
-use hypervisor::device::topology::PCIePort;
-use hypervisor::VsockConfig;
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
-use hypervisor::remote::Remote;
-use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
     feature = "cloud-hypervisor",
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 use hypervisor::ch::CloudHypervisor;
+use hypervisor::device::topology::PCIePort;
+use hypervisor::remote::Remote;
+use hypervisor::VfioDeviceBase;
+use hypervisor::VsockConfig;
+use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
     feature = "dragonball",
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
@@ -48,7 +49,6 @@ use hypervisor::{
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
-use hypervisor::VfioDeviceBase;
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
@@ -319,12 +319,10 @@ impl VirtSandbox {
             annotations.get("io.kubernetes.cri.sandbox-namespace")
         );
 
-        let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
-            pod_resource_socket,
-            annotations,
-        )
-        .await
-        .context("failed to query Pod Resources CDI devices")?;
+        let cdi_devices =
+            pod_resources_rs::pod_resources::get_pod_cdi_devices(pod_resource_socket, annotations)
+                .await
+                .context("failed to query Pod Resources CDI devices")?;
         info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
 
         let device_nodes = handle_cdi_devices(&cdi_devices).await?;

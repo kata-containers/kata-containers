@@ -356,7 +356,9 @@ impl ResourceManagerInner {
     }
 
     pub async fn apply_network_to_agent(&self, network: &dyn Network) -> Result<()> {
-        self.handle_interfaces(network).await.context("handle interfaces")?;
+        self.handle_interfaces(network)
+            .await
+            .context("handle interfaces")?;
         self.handle_neighbours(network)
             .await
             .context("handle neighbors")?;

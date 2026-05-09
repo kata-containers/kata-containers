@@ -79,16 +79,14 @@ pub fn annotate_container_devices(
                 .iter()
                 .enumerate()
                 .for_each(|(index, container_device)| {
-                    if let Some(iommu_grpid) =
-                        Path::new(&container_device.device.container_path)
-                            .file_name()
-                            .and_then(|name| name.to_str())
+                    if let Some(iommu_grpid) = Path::new(&container_device.device.container_path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
                     {
                         // iommufd cdev paths use "/dev/vfio/devices/vfio<N>" —
                         // strip the "vfio" prefix so the annotation key is
                         // "cdi.k8s.io/vfio<N>", matching the Go runtime.
-                        let vfio_num =
-                            iommu_grpid.strip_prefix("vfio").unwrap_or(iommu_grpid);
+                        let vfio_num = iommu_grpid.strip_prefix("vfio").unwrap_or(iommu_grpid);
                         spec.annotations_mut().as_mut().unwrap().insert(
                             format!("{CDI_PREFIX}/vfio{vfio_num}"),
                             format!("{}={}", vendor_class, index),
@@ -282,18 +280,9 @@ mod tests {
         let _devices = annotate_container_devices(&mut spec, devices);
 
         let expected_annotations: HashMap<String, String> = vec![
-            (
-                "cdi.k8s.io/vfio0".to_owned(),
-                "amd.com/gpu=2".to_owned(),
-            ),
-            (
-                "cdi.k8s.io/vfio1".to_owned(),
-                "amd.com/gpu=0".to_owned(),
-            ),
-            (
-                "cdi.k8s.io/vfio2".to_owned(),
-                "amd.com/gpu=1".to_owned(),
-            ),
+            ("cdi.k8s.io/vfio0".to_owned(), "amd.com/gpu=2".to_owned()),
+            ("cdi.k8s.io/vfio1".to_owned(), "amd.com/gpu=0".to_owned()),
+            ("cdi.k8s.io/vfio2".to_owned(), "amd.com/gpu=1".to_owned()),
         ]
         .into_iter()
         .collect();
@@ -383,22 +372,10 @@ mod tests {
         let _devices = annotate_container_devices(&mut spec, devices);
 
         let expected_annotations: HashMap<String, String> = vec![
-            (
-                "cdi.k8s.io/vfio0".to_owned(),
-                "intel.com/gpu=0".to_owned(),
-            ),
-            (
-                "cdi.k8s.io/vfio1".to_owned(),
-                "nvidia.com/gpu=0".to_owned(),
-            ),
-            (
-                "cdi.k8s.io/vfio2".to_owned(),
-                "nvidia.com/gpu=1".to_owned(),
-            ),
-            (
-                "cdi.k8s.io/vfio3".to_owned(),
-                "intel.com/gpu=1".to_owned(),
-            ),
+            ("cdi.k8s.io/vfio0".to_owned(), "intel.com/gpu=0".to_owned()),
+            ("cdi.k8s.io/vfio1".to_owned(), "nvidia.com/gpu=0".to_owned()),
+            ("cdi.k8s.io/vfio2".to_owned(), "nvidia.com/gpu=1".to_owned()),
+            ("cdi.k8s.io/vfio3".to_owned(), "intel.com/gpu=1".to_owned()),
         ]
         .into_iter()
         .collect();

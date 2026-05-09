@@ -156,10 +156,7 @@ impl CgroupsResourceInner {
         Ok(resources)
     }
 
-    async fn move_vcpus_to_sandbox_cgroup(
-        &mut self,
-        hv_pids: &VcpuThreadIds,
-    ) -> Result<usize> {
+    async fn move_vcpus_to_sandbox_cgroup(&mut self, hv_pids: &VcpuThreadIds) -> Result<usize> {
         let mut pids = hv_pids.vcpus.values();
 
         // Use threaded mode only in cgroup v1 + cgroupfs
@@ -187,8 +184,7 @@ impl CgroupsResourceInner {
     }
 
     async fn update_sandbox_cgroups(&mut self, hypervisor: &dyn Hypervisor) -> Result<bool> {
-        let needs_thread_ids =
-            self.overhead_cgroup.is_some() || self.enable_vcpus_pinning;
+        let needs_thread_ids = self.overhead_cgroup.is_some() || self.enable_vcpus_pinning;
 
         let thread_ids = if needs_thread_ids {
             Some(
@@ -316,18 +312,13 @@ impl CgroupsResourceInner {
         Ok(())
     }
 
-    fn reset_vcpus_pinning(
-        &self,
-        vcpus: &HashMap<u32, u32>,
-        cpuset_slice: &[u32],
-    ) -> Result<()> {
+    fn reset_vcpus_pinning(&self, vcpus: &HashMap<u32, u32>, cpuset_slice: &[u32]) -> Result<()> {
         if cpuset_slice.is_empty() {
             return Ok(());
         }
         for tid in vcpus.values() {
-            Self::set_thread_affinity(*tid, cpuset_slice).with_context(|| {
-                format!("failed to reset vCPU thread {} affinity", tid)
-            })?;
+            Self::set_thread_affinity(*tid, cpuset_slice)
+                .with_context(|| format!("failed to reset vCPU thread {} affinity", tid))?;
         }
         Ok(())
     }
@@ -456,18 +447,13 @@ mod tests {
             .cpus(cpus.to_string())
             .build()
             .unwrap();
-        LinuxResourcesBuilder::default()
-            .cpu(cpu)
-            .build()
-            .unwrap()
+        LinuxResourcesBuilder::default().cpu(cpu).build().unwrap()
     }
 
     fn make_inner_for_test(enable_pinning: bool) -> CgroupsResourceInner {
         CgroupsResourceInner {
             resources: HashMap::new(),
-            sandbox_cgroup: Box::new(
-                FsManager::new("test_sandbox_cgroup_pinning").unwrap(),
-            ),
+            sandbox_cgroup: Box::new(FsManager::new("test_sandbox_cgroup_pinning").unwrap()),
             overhead_cgroup: None,
             enable_vcpus_pinning: enable_pinning,
             is_vcpus_pinning_on: false,

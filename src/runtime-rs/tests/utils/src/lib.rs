@@ -10,10 +10,7 @@ use anyhow::{anyhow, Result};
 use kata_types::config::{QemuConfig, TomlConfig};
 use std::{fs, path::PathBuf};
 
-use rand::{
-    distr::Alphanumeric,
-    rng, RngExt,
-};
+use rand::{distr::Alphanumeric, rng, RngExt};
 
 fn get_kata_config_file(hypervisor_name: String) -> PathBuf {
     let target = format!(
