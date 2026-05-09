@@ -174,8 +174,10 @@ DEFMAXMEMSZ := 0
 DEFBRIDGES := 1
 ##VAR DEFNETQUEUES=<number> Default number of network queues
 DEFNETQUEUES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+# Security note: do not enable "virtio_fs_extra_args" by default.
+# Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled

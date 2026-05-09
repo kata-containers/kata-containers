@@ -223,8 +223,10 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+# Security note: do not enable "virtio_fs_extra_args" by default.
+# Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 DEFEMPTYDIRMODE := shared-fs
