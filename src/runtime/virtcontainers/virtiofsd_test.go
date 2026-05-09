@@ -74,17 +74,18 @@ func TestVirtiofsdArgs(t *testing.T) {
 	assert := assert.New(t)
 
 	v := &virtiofsd{
-		path:       "/usr/bin/virtiofsd",
-		sourcePath: "/run/kata-shared/foo",
-		cache:      "never",
+		path:             "/usr/bin/virtiofsd",
+		sourcePath:       "/run/kata-shared/foo",
+		cache:            "never",
+		inodeFileHandles: "prefer",
 	}
 
-	expected := "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=123"
+	expected := "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=123 --inode-file-handles=prefer"
 	args, err := v.args(123)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
-	expected = "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=456"
+	expected = "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=456 --inode-file-handles=prefer"
 	args, err = v.args(456)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))

@@ -108,6 +108,10 @@ fn virtiofsd_args(cfg: SharedFsInfo, shared_dir: &str, sock_path: &str) -> Resul
         String::from("none"),
     ];
 
+    if !cfg.virtio_fs_inode_file_handles.is_empty() {
+        args.push(format!("--inode-file-handles={}", cfg.virtio_fs_inode_file_handles));
+    }
+
     if !cfg.virtio_fs_extra_args.is_empty() {
         let mut extra_args: Vec<String> = cfg.virtio_fs_extra_args.clone();
         args.append(&mut extra_args);

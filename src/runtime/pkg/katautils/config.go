@@ -115,6 +115,7 @@ type hypervisor struct {
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
 	VirtioFSExtraArgs              []string                  `toml:"virtio_fs_extra_args"`
+	VirtioFSInodeFileHandles       string                    `toml:"virtio_fs_inode_file_handles"`
 	PFlashList                     []string                  `toml:"pflashes"`
 	VhostUserStorePathList         []string                  `toml:"valid_vhost_user_store_paths"`
 	FileBackedMemRootList          []string                  `toml:"valid_file_mem_backends"`
@@ -550,6 +551,14 @@ func (h hypervisor) defaultVirtioFSCache() string {
 	return h.VirtioFSCache
 }
 
+func (h hypervisor) defaultVirtioFSInodeFileHandles() string {
+	if h.VirtioFSInodeFileHandles == "" {
+		return vc.VirtioFSInodeFileHandlesPrefer
+	}
+
+	return h.VirtioFSInodeFileHandles
+}
+
 func (h hypervisor) blockDeviceDriver() (string, error) {
 	supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio, config.Nvdimm, config.VirtioBlockCCW}
 
@@ -958,6 +967,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCache:            h.defaultVirtioFSCache(),
 		VirtioFSQueueSize:        h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:        h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles: h.defaultVirtioFSInodeFileHandles(),
 		MemPrealloc:              h.MemPrealloc,
 		ReclaimGuestFreedMemory:  h.ReclaimGuestFreedMemory,
 		HugePages:                h.HugePages,
@@ -1114,6 +1124,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles:       h.defaultVirtioFSInodeFileHandles(),
 		SGXEPCSize:                     defaultSGXEPCSize,
 		EnableAnnotations:              h.EnableAnnotations,
 		DisableSeccomp:                 h.DisableSeccomp,
@@ -1253,6 +1264,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCacheSize:     h.VirtioFSCacheSize,
 		VirtioFSCache:         h.defaultVirtioFSCache(),
 		VirtioFSExtraArgs:     h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles: h.defaultVirtioFSInodeFileHandles(),
 		HugePages:             h.HugePages,
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,

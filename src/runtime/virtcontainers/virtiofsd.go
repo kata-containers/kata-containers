@@ -42,6 +42,13 @@ const (
 	typeVirtioFSCacheModeMetadata = "metadata"
 	typeVirtioFSCacheModeAlways   = "always"
 	typeVirtioFSCacheModeAuto     = "auto"
+
+	typeVirtioFSInodeFileHandlesNever     = "never"
+	typeVirtioFSInodeFileHandlesPrefer    = "prefer"
+	typeVirtioFSInodeFileHandlesMandatory = "mandatory"
+
+	// VirtioFSInodeFileHandlesPrefer is the exported default value for inode file handles mode.
+	VirtioFSInodeFileHandlesPrefer = typeVirtioFSInodeFileHandlesPrefer
 )
 
 type VirtiofsDaemon interface {
@@ -77,6 +84,8 @@ type virtiofsd struct {
 	sourcePath string
 	// extraArgs list of extra args to append to virtiofsd command
 	extraArgs []string
+	// inodeFileHandles mode for virtiofsd
+	inodeFileHandles string
 	// PID process ID of virtiosd process
 	PID int
 }
@@ -191,6 +200,10 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 		"--shared-dir=" + v.sourcePath,
 		// fd number of vhost-user socket
 		fmt.Sprintf("--fd=%v", FdSocketNumber),
+	}
+
+	if v.inodeFileHandles != "" {
+		args = append(args, "--inode-file-handles="+v.inodeFileHandles)
 	}
 
 	if len(v.extraArgs) != 0 {

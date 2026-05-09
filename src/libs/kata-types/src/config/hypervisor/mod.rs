@@ -1069,6 +1069,13 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub virtio_fs_cache: String,
 
+    /// Inode file handles mode for `virtio-fs`:
+    /// - `never`: Do not use file handles.
+    /// - `prefer`: Try to use file handles, but fall back to `O_PATH` if not supported.
+    /// - `mandatory`: Use file handles, fail if not supported.
+    #[serde(default)]
+    pub virtio_fs_inode_file_handles: String,
+
     /// Default size of the DAX cache in MiB for `virtio-fs`.
     #[serde(default)]
     pub virtio_fs_cache_size: u32,
@@ -1170,6 +1177,11 @@ impl SharedFsInfo {
         if !self.virtio_fs_is_dax && self.virtio_fs_cache_size != 0 {
             self.virtio_fs_is_dax = true;
         }
+
+        if self.virtio_fs_inode_file_handles.is_empty() {
+            self.virtio_fs_inode_file_handles = String::from("prefer");
+        }
+
         Ok(())
     }
 
@@ -1200,6 +1212,15 @@ impl SharedFsInfo {
                 &self.virtio_fs_cache_size
             ));
         }
+
+        let l = ["never", "prefer", "mandatory"];
+        if !l.contains(&self.virtio_fs_inode_file_handles.as_str()) {
+            return Err(eother!(
+                "Invalid virtio-fs inode file handles mode: {}",
+                &self.virtio_fs_inode_file_handles
+            ));
+        }
+
         Ok(())
     }
 }
