@@ -791,6 +791,11 @@ EOF
 		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
 		ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
+		# Enable the addon mount template for known addon names.
+		# The unit uses ConditionPathExists so it is a no-op when the
+		# addon device is not attached to the VM.
+		ln -sf "/usr/lib/systemd/system/kata-addon-mount@.service" \
+			"${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/kata-addon-mount@coco.service"
 		chmod g+rx,o+x "${ROOTFS_DIR}"
 
 		if [[ "${CONFIDENTIAL_GUEST}" == "yes" ]]; then
