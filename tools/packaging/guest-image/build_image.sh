@@ -75,8 +75,17 @@ build_image() {
 	info "Build image"
 	info "image os: ${os_name}"
 	info "image os version: ${os_version}"
+
+	# The label used for BUILD_VARIANT (and therefore the emitted
+	# root_hash_<variant>.txt file) is normally the image filename suffix.
+	# The base image, however, has an empty suffix (it is shipped as
+	# kata-containers.img) yet may still be built measured.  Callers can set
+	# ROOT_HASH_VARIANT to give that measured base a dedicated root-hash label
+	# (e.g. "base") without changing the image filename.
+	local build_variant="${ROOT_HASH_VARIANT:-${image_initrd_suffix}}"
+
 	make image \
-		BUILD_VARIANT="${image_initrd_suffix}" \
+		BUILD_VARIANT="${build_variant}" \
 		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
@@ -94,9 +103,9 @@ build_image() {
 	fi
 
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
-	if [[ -e "root_hash_${image_initrd_suffix}.txt" ]]; then
-		info "Copying root hash file for variant: ${image_initrd_suffix} ${PWD}"
-		cp "root_hash_${image_initrd_suffix}.txt" "${install_dir}/"
+	if [[ -e "root_hash_${build_variant}.txt" ]]; then
+		info "Copying root hash file for variant: ${build_variant} ${PWD}"
+		cp "root_hash_${build_variant}.txt" "${install_dir}/"
 	fi
 	(
 		cd "${install_dir}"

@@ -37,6 +37,7 @@ BASE_TARBALLS = serial-targets \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-coco-addon-tarball \
 	rootfs-image-mariner-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
@@ -50,6 +51,7 @@ BASE_TARBALLS = serial-targets \
 	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-coco-addon-tarball \
 	rootfs-initrd-tarball
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
@@ -63,6 +65,7 @@ BASE_TARBALLS = serial-targets \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-coco-addon-tarball \
 	rootfs-cca-confidential-image-tarball \
 	rootfs-cca-confidential-initrd-tarball \
 	rootfs-initrd-tarball
@@ -268,8 +271,12 @@ DEPS := agent-tarball
 rootfs-image-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+DEPS := agent-tarball kernel-tarball
 rootfs-image-confidential-tarball: $(DEPS)
+	${MAKE} $@-build
+
+DEPS := pause-image-tarball coco-guest-components-tarball
+rootfs-image-coco-addon-tarball: $(DEPS)
 	${MAKE} $@-build
 
 DEPS := agent-tarball
