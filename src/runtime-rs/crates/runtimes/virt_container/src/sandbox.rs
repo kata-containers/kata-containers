@@ -56,6 +56,7 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 #[cfg(all(
     feature = "cloud-hypervisor",
     any(target_arch = "x86_64", target_arch = "aarch64")
@@ -248,6 +249,15 @@ impl VirtSandbox {
         {
             let vm_rootfs = ResourceConfig::VmRootfs(block_config);
             resource_configs.push(vm_rootfs);
+        }
+
+        // prepare extra extension image device configs (e.g. CoCo extension)
+        let extra_configs = self
+            .prepare_guest_extension_images_config()
+            .await
+            .context("failed to prepare extra images device config")?;
+        for block_config in extra_configs {
+            resource_configs.push(ResourceConfig::GuestExtensionImage(block_config));
         }
 
         // prepare protection device config
@@ -621,6 +631,40 @@ impl VirtSandbox {
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         }))
+    }
+
+    async fn prepare_guest_extension_images_config(&self) -> Result<Vec<BlockConfig>> {
+        let hv_config = self.hypervisor.hypervisor_config().await;
+        let mut configs = Vec::new();
+
+        // Extension images must be cold-plugged as virtio-blk, because the
+        // guest discovers each extension by its deterministic serial
+        // (extension-<name>), and only virtio-blk devices carry that serial.
+        // We therefore always enforce a virtio-blk transport here (the
+        // architecture's virtio-blk-ccw on s390x, virtio-blk-pci elsewhere)
+        // rather than reusing vm_rootfs_driver or block_device_driver: those
+        // may resolve to a non-virtio-blk transport such as virtio-pmem
+        // (NVDIMM, no serial) or virtio-scsi, which would leave the extension
+        // undiscoverable and its mount unit would fail closed.
+        let block_driver = if uses_native_ccw_bus() {
+            VIRTIO_BLK_CCW.to_string()
+        } else {
+            VIRTIO_BLK_PCI.to_string()
+        };
+        for extra in &hv_config.guest_extension_images {
+            if extra.path.is_empty() {
+                continue;
+            }
+            configs.push(BlockConfig {
+                path_on_host: extra.path.clone(),
+                is_readonly: true,
+                driver_option: block_driver.clone(),
+                serial_override: format!("extension-{}", extra.name),
+                ..Default::default()
+            });
+        }
+
+        Ok(configs)
     }
 
     async fn set_agent_policy(&self) -> Result<()> {
