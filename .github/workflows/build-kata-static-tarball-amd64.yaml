@@ -207,7 +207,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
-          - rootfs-image-confidential
+          - rootfs-image-coco-addon
           - rootfs-image-mariner
           - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia-gpu-confidential

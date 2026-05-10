@@ -201,7 +201,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
-          - rootfs-image-confidential
+          - rootfs-image-coco-addon
           - rootfs-image-nvidia-gpu
           - rootfs-initrd
     concurrency:
