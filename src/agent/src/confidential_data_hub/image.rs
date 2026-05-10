@@ -22,6 +22,15 @@ use protocols::agent::Storage;
 pub const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
 const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
+const KATA_PAUSE_BUNDLE_ADDON: &str = "/run/kata-addons/coco/pause_bundle";
+
+fn resolve_pause_bundle() -> &'static str {
+    if Path::new(KATA_PAUSE_BUNDLE_ADDON).exists() {
+        KATA_PAUSE_BUNDLE_ADDON
+    } else {
+        KATA_PAUSE_BUNDLE
+    }
+}
 
 const K8S_CONTAINER_TYPE_KEYS: [&str; 2] = [
     "io.kubernetes.cri.container-type",
@@ -46,7 +55,7 @@ fn copy_if_not_exists(src: &Path, dst: &Path) -> Result<()> {
 
 /// get guest pause image process specification
 fn get_pause_image_process() -> Result<oci::Process> {
-    let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
+    let guest_pause_bundle = Path::new(resolve_pause_bundle());
     if !guest_pause_bundle.exists() {
         bail!("Pause image not present in rootfs");
     }
@@ -70,7 +79,7 @@ fn get_pause_image_process() -> Result<oci::Process> {
 pub fn unpack_pause_image(cid: &str) -> Result<String> {
     verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
 
-    let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
+    let guest_pause_bundle = Path::new(resolve_pause_bundle());
     if !guest_pause_bundle.exists() {
         bail!("Pause image not present in rootfs");
     }

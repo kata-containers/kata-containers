@@ -96,20 +96,34 @@ const NAME: &str = "kata-agent";
 
 const UNIX_SOCKET_PREFIX: &str = "unix://";
 
+const COCO_ADDON_DIR: &str = "/run/kata-addons/coco";
+
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/attestation-agent");
 const AA_ATTESTATION_SOCKET: &str =
     "/run/confidential-containers/attestation-agent/attestation-agent.sock";
 const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
+const CDH_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/confidential-data-hub");
 const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
 const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
+const API_SERVER_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/api-server-rest");
 
-/// Path of ocicrypt config file. This is used by CDH when decrypting image.
-/// TODO: remove this when we move the launch of CDH out of the kata-agent.
 const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
+const OCICRYPT_CONFIG_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/etc/ocicrypt_config.json");
+
+/// Resolve a binary path: prefer the CoCo addon location, fall back to the
+/// legacy rootfs path.
+fn resolve_path<'a>(addon_path: &'a str, legacy_path: &'a str) -> &'a str {
+    if Path::new(addon_path).exists() {
+        addon_path
+    } else {
+        legacy_path
+    }
+}
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -457,23 +471,31 @@ async fn start_sandbox(
     Ok(())
 }
 
-// Check if required attestation binaries are available on the rootfs.
+// Check if required attestation binaries are available, looking in the CoCo
+// addon mount first, then in the legacy rootfs paths.
 fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs) -> bool {
-    let binaries = match procs {
-        GuestComponentsProcs::AttestationAgent => vec![AA_PATH],
-        GuestComponentsProcs::ConfidentialDataHub => vec![AA_PATH, CDH_PATH],
-        GuestComponentsProcs::ApiServerRest => vec![AA_PATH, CDH_PATH, API_SERVER_PATH],
+    let binaries: Vec<(&str, &str)> = match procs {
+        GuestComponentsProcs::AttestationAgent => vec![(AA_ADDON_PATH, AA_PATH)],
+        GuestComponentsProcs::ConfidentialDataHub => {
+            vec![(AA_ADDON_PATH, AA_PATH), (CDH_ADDON_PATH, CDH_PATH)]
+        }
+        GuestComponentsProcs::ApiServerRest => vec![
+            (AA_ADDON_PATH, AA_PATH),
+            (CDH_ADDON_PATH, CDH_PATH),
+            (API_SERVER_ADDON_PATH, API_SERVER_PATH),
+        ],
         _ => vec![],
     };
-    for binary in binaries.iter() {
-        let exists = Path::new(binary)
+    for (addon, legacy) in binaries.iter() {
+        let resolved = resolve_path(addon, legacy);
+        let exists = Path::new(resolved)
             .try_exists()
             .unwrap_or_else(|error| match error.kind() {
                 ErrorKind::NotFound => {
-                    warn!(logger, "{} not found", binary);
+                    warn!(logger, "{} not found", resolved);
                     false
                 }
-                _ => panic!("Path existence check failed for '{}': {}", binary, error),
+                _ => panic!("Path existence check failed for '{}': {}", resolved, error),
             });
 
         if !exists {
@@ -492,7 +514,8 @@ async fn launch_guest_component_procs(
         return Ok(());
     }
 
-    debug!(logger, "spawning attestation-agent process {}", AA_PATH);
+    let aa_path = resolve_path(AA_ADDON_PATH, AA_PATH);
+    debug!(logger, "spawning attestation-agent process {}", aa_path);
     let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
     if initdata_return_value.is_some() {
         aa_args.push("--initdata-toml");
@@ -501,7 +524,7 @@ async fn launch_guest_component_procs(
 
     launch_process(
         logger,
-        AA_PATH,
+        aa_path,
         aa_args,
         Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
@@ -509,43 +532,44 @@ async fn launch_guest_component_procs(
         &[],
     )
     .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", aa_path, e))?;
 
-    // skip launch of confidential-data-hub and api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
         return Ok(());
     }
 
+    let cdh_path = resolve_path(CDH_ADDON_PATH, CDH_PATH);
+    let ocicrypt_path = resolve_path(OCICRYPT_CONFIG_ADDON_PATH, OCICRYPT_CONFIG_PATH);
     debug!(
         logger,
-        "spawning confidential-data-hub process {}", CDH_PATH
+        "spawning confidential-data-hub process {}", cdh_path
     );
 
     launch_process(
         logger,
-        CDH_PATH,
+        cdh_path,
         vec![],
         Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
         config.launch_process_timeout.as_secs(),
-        &[("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH)],
+        &[("OCICRYPT_KEYPROVIDER_CONFIG", ocicrypt_path)],
     )
     .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", cdh_path, e))?;
 
-    // skip launch of api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
         return Ok(());
     }
 
+    let api_path = resolve_path(API_SERVER_ADDON_PATH, API_SERVER_PATH);
     let features = config.guest_components_rest_api;
     debug!(
         logger,
-        "spawning api-server-rest process {} --features {}", API_SERVER_PATH, features
+        "spawning api-server-rest process {} --features {}", api_path, features
     );
     launch_process(
         logger,
-        API_SERVER_PATH,
+        api_path,
         vec!["--features", &features.to_string()],
         None,
         "",
@@ -553,7 +577,7 @@ async fn launch_guest_component_procs(
         &[],
     )
     .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", api_path, e))?;
 
     Ok(())
 }

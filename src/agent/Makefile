@@ -91,6 +91,10 @@ ifeq ($(INIT),no)
     GENERATED_FILES += $(UNIT_FILES)
     # Target to be reached in systemd services
     UNIT_FILES += kata-containers.target
+    # Template unit for mounting addon block devices (CoCo, GPU, etc.)
+    UNIT_FILES += kata-addon-mount@.service
+    # Helper scripts for addon mount/umount
+    ADDON_SCRIPTS = kata-addon-mount.sh kata-addon-umount.sh
 endif
 
 # Display name of command and it's version (or a message if not available).
@@ -154,6 +158,8 @@ install-services: $(GENERATED_FILES)
 ifeq ($(INIT),no)
 	@echo "Installing systemd unit files..."
 	$(foreach f,$(UNIT_FILES),$(call INSTALL_FILE,$f,$(UNIT_DIR)))
+	@echo "Installing addon helper scripts..."
+	$(foreach f,$(ADDON_SCRIPTS),install -D -m 755 $f $(DESTDIR)/usr/libexec/$f || exit 1;)
 endif
 
 show-header:

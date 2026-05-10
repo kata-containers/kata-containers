@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[Unit]
+Description=Mount Kata addon image %i
+DefaultDependencies=no
+Before=kata-agent.service
+After=local-fs-pre.target
+ConditionKernelCommandLine=kata.addon.%i.verity_params
+OnFailure=poweroff.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/kata-addon-mount.sh %i
+ExecStop=/usr/libexec/kata-addon-umount.sh %i
+
+[Install]
+WantedBy=kata-containers.target
