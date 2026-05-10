@@ -42,14 +42,20 @@ esac
 [[ "${CROSS_BUILD}" == "true" ]] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 
 # Variants (targets) that build a measured rootfs as of now are:
-# - rootfs-image-confidential
+# - rootfs-image (the base image, measured; root hash labelled "base")
+# - rootfs-image-coco-addon
 # - rootfs-image-nvidia-gpu
 # - rootfs-image-nvidia-gpu-confidential
+#
+# The base image is shared between non-confidential and confidential guests.
+# Only confidential configurations enforce its dm-verity hash via
+# @KERNELVERITYPARAMS@; non-confidential guests boot the data partition directly.
 #
 # shellcheck disable=SC2154
 root_hash_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 verity_variants=(
-	"confidential:KERNELVERITYPARAMS"
+	"base:KERNELVERITYPARAMS"
+	"coco-addon:COCOVERITYPARAMS"
 	"nvidia-gpu:KERNELVERITYPARAMS_NV"
 	"nvidia-gpu-confidential:KERNELVERITYPARAMS_CONFIDENTIAL_NV"
 )

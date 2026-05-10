@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_COCO@"
-image = "@IMAGECONFIDENTIALPATH@"
+image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -805,3 +805,8 @@ experimental = @DEFAULTEXPFEATURES@
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
 enable_pprof = false
+
+[[hypervisor.qemu.extra_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"
