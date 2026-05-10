@@ -214,6 +214,15 @@ func (q *qemu) kernelParameters() string {
 	// params are added here, they will take priority over the defaults.
 	params = append(params, q.config.KernelParams...)
 
+	for _, extra := range q.config.ExtraImages {
+		if extra.VerityParams != "" {
+			params = append(params, Param{
+				Key:   fmt.Sprintf("kata.addon.%s.verity_params", extra.Name),
+				Value: extra.VerityParams,
+			})
+		}
+	}
+
 	paramsStr := SerializeParams(params, "=")
 
 	return strings.Join(paramsStr, " ")
@@ -863,6 +872,23 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 		// SecureBootAsset, no need to set image or initrd path
 		q.Logger().Info("For IBM Z Secure Execution, initrd path should not be set")
 		kernel.InitrdPath = ""
+	}
+
+	for _, extra := range q.config.ExtraImages {
+		if extra.Path == "" {
+			continue
+		}
+		drive := config.BlockDrive{
+			File:     extra.Path,
+			Format:   "raw",
+			ID:       fmt.Sprintf("addon-%s", extra.Name),
+			ShareRW:  true,
+			ReadOnly: true,
+		}
+		devices, err = q.arch.appendBlockDevice(ctx, devices, drive)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	if q.config.IOMMU {

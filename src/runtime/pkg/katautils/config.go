@@ -177,6 +177,13 @@ type hypervisor struct {
 	DisableGuestSeLinux            bool                      `toml:"disable_guest_selinux"`
 	LegacySerial                   bool                      `toml:"use_legacy_serial"`
 	ExtraMonitorSocket             govmmQemu.MonitorProtocol `toml:"extra_monitor_socket"`
+	ExtraImages                    []extraImage              `toml:"extra_images"`
+}
+
+type extraImage struct {
+	Name         string `toml:"name"`
+	Path         string `toml:"path"`
+	VerityParams string `toml:"verity_params"`
 }
 
 type runtime struct {
@@ -1028,6 +1035,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	extraImages, err := toExtraImages(h.ExtraImages)
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:                hypervisor,
 		HypervisorPathList:            h.HypervisorPathList,
@@ -1111,7 +1123,31 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SnpIdAuth:                     h.SnpIdAuth,
 		SnpGuestPolicy:                h.SnpGuestPolicy,
 		MeasurementAlgo:               h.GetMeasurementAlgo(),
+		ExtraImages:                   extraImages,
 	}, nil
+}
+
+func toExtraImages(imgs []extraImage) ([]vc.ExtraImage, error) {
+	if len(imgs) == 0 {
+		return nil, nil
+	}
+	result := make([]vc.ExtraImage, len(imgs))
+	for i, img := range imgs {
+		if img.Name == "" {
+			return nil, fmt.Errorf("extra_images entry %d is missing required 'name' field", i)
+		}
+		if strings.TrimSpace(img.VerityParams) != "" {
+			if _, err := vc.ParseKernelVerityParams(img.VerityParams); err != nil {
+				return nil, fmt.Errorf("extra_images '%s' has invalid verity_params: %w", img.Name, err)
+			}
+		}
+		result[i] = vc.ExtraImage{
+			Name:         img.Name,
+			Path:         img.Path,
+			VerityParams: img.VerityParams,
+		}
+	}
+	return result, nil
 }
 
 func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
