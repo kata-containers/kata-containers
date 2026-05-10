@@ -179,6 +179,7 @@ build_with_container() {
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env SKIP_DAX_HEADER="${SKIP_DAX_HEADER}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+		   --env SKIP_ROOTFS_CHECK="${SKIP_ROOTFS_CHECK:-no}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -715,8 +716,10 @@ main() {
 		exit $?
 	fi
 
-	if ! check_rootfs "${rootfs}" ; then
-		die "Invalid rootfs"
+	if [[ "${SKIP_ROOTFS_CHECK:-no}" != "yes" ]]; then
+		if ! check_rootfs "${rootfs}" ; then
+			die "Invalid rootfs"
+		fi
 	fi
 
 	local skip_dax="${SKIP_DAX_HEADER:-no}"
