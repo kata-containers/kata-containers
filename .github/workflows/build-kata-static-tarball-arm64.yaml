@@ -203,6 +203,7 @@ jobs:
         asset:
           - rootfs-image
           - rootfs-image-confidential
+          - rootfs-image-coco-extension
           - rootfs-image-nvidia-gpu
           - rootfs-initrd
     concurrency:
