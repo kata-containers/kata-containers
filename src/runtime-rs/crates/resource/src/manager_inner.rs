@@ -185,6 +185,11 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device failed.")?;
                 }
+                ResourceConfig::ExtraImage(r) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
+                        .await
+                        .context("do handle extra image device failed.")?;
+                }
                 ResourceConfig::HybridVsock(hv) => {
                     do_handle_device(&self.device_manager, &DeviceConfig::HybridVsockCfg(hv))
                         .await

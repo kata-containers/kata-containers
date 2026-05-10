@@ -141,8 +141,13 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => cmdline
-                            .add_block_device(
+                        KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
+                            let serial = if block_dev.config.serial_override.is_empty() {
+                                None
+                            } else {
+                                Some(block_dev.config.serial_override.as_str())
+                            };
+                            cmdline.add_block_device(
                                 block_dev.device_id.as_str(),
                                 &block_dev.config.path_on_host,
                                 block_dev
@@ -150,7 +155,9 @@ impl QemuInner {
                                     .is_direct
                                     .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                                 block_dev.config.driver_option.as_str() == KATA_SCSI_DEV_TYPE,
-                            )?,
+                                serial,
+                            )?
+                        }
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
                         }

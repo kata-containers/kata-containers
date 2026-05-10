@@ -244,6 +244,15 @@ impl VirtSandbox {
             resource_configs.push(vm_rootfs);
         }
 
+        // prepare extra addon image device configs (e.g. CoCo addon)
+        let extra_configs = self
+            .prepare_extra_images_config()
+            .await
+            .context("failed to prepare extra images device config")?;
+        for block_config in extra_configs {
+            resource_configs.push(ResourceConfig::ExtraImage(block_config));
+        }
+
         // prepare protection device config
         let init_data = if let Some(initdata) = self
             .prepare_initdata_device_config(&self.hypervisor.hypervisor_config().await)
@@ -508,6 +517,26 @@ impl VirtSandbox {
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         }))
+    }
+
+    async fn prepare_extra_images_config(&self) -> Result<Vec<BlockConfig>> {
+        let hv_config = self.hypervisor.hypervisor_config().await;
+        let mut configs = Vec::new();
+
+        for extra in &hv_config.extra_images {
+            if extra.path.is_empty() {
+                continue;
+            }
+            configs.push(BlockConfig {
+                path_on_host: extra.path.clone(),
+                is_readonly: true,
+                driver_option: "virtio-blk-pci".to_string(),
+                serial_override: format!("addon-{}", extra.name),
+                ..Default::default()
+            });
+        }
+
+        Ok(configs)
     }
 
     async fn set_agent_policy(&self) -> Result<()> {
