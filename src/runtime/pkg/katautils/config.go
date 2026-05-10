@@ -177,6 +177,13 @@ type hypervisor struct {
 	DisableGuestSeLinux            bool                      `toml:"disable_guest_selinux"`
 	LegacySerial                   bool                      `toml:"use_legacy_serial"`
 	ExtraMonitorSocket             govmmQemu.MonitorProtocol `toml:"extra_monitor_socket"`
+	GuestExtensionImages           []guestExtensionImage     `toml:"guest_extension_images"`
+}
+
+type guestExtensionImage struct {
+	Name         string `toml:"name"`
+	Path         string `toml:"path"`
+	VerityParams string `toml:"verity_params"`
 }
 
 type runtime struct {
@@ -1033,6 +1040,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	guestExtensionImages, err := toGuestExtensionImages(h.GuestExtensionImages)
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:                hypervisor,
 		HypervisorPathList:            h.HypervisorPathList,
@@ -1116,7 +1128,55 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SnpIdAuth:                     h.SnpIdAuth,
 		SnpGuestPolicy:                h.SnpGuestPolicy,
 		MeasurementAlgo:               h.GetMeasurementAlgo(),
+		GuestExtensionImages:          guestExtensionImages,
 	}, nil
+}
+
+// isValidExtensionName reports whether name is safe to embed in the virtio-blk
+// serial (extension-<name>) and the kata.extension.<name>.verity_params kernel
+// parameter. A stray space or '=' would corrupt the kernel command line, so the
+// name is restricted to ASCII alphanumerics, '-' and '_'.
+func isValidExtensionName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func toGuestExtensionImages(imgs []guestExtensionImage) ([]vc.GuestExtensionImage, error) {
+	if len(imgs) == 0 {
+		return nil, nil
+	}
+	result := make([]vc.GuestExtensionImage, len(imgs))
+	for i, img := range imgs {
+		if img.Name == "" {
+			return nil, fmt.Errorf("guest_extension_images entry %d is missing required 'name' field", i)
+		}
+		if !isValidExtensionName(img.Name) {
+			return nil, fmt.Errorf("guest_extension_images '%s' has an invalid name: only ASCII alphanumerics, '-' and '_' are allowed (the name is used in the virtio-blk serial and in the kata.extension.<name>.verity_params kernel parameter)", img.Name)
+		}
+		if strings.TrimSpace(img.VerityParams) != "" {
+			if _, err := vc.ParseKernelVerityParams(img.VerityParams); err != nil {
+				return nil, fmt.Errorf("guest_extension_images '%s' has invalid verity_params: %w", img.Name, err)
+			}
+		}
+		result[i] = vc.GuestExtensionImage{
+			Name:         img.Name,
+			Path:         img.Path,
+			VerityParams: img.VerityParams,
+		}
+	}
+	return result, nil
 }
 
 func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
