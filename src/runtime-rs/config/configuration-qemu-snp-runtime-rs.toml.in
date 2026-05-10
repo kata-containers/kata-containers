@@ -16,7 +16,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_COCO@"
-image = "@IMAGECONFIDENTIALPATH@"
+image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # Enable confidential guest support.
@@ -755,3 +755,8 @@ enable_pprof = false
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"

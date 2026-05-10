@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_COCO@"
-image = "@IMAGECONFIDENTIALPATH@"
+image = "@IMAGEPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
 # Set to 0 to use Unix Domain Socket (/var/run/tdx-qgs/qgs.socket) instead of vsock.
@@ -733,3 +733,8 @@ enable_pprof = false
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"
