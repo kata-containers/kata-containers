@@ -140,6 +140,7 @@ options:
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
+	rootfs-image-coco-extension
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
@@ -192,7 +193,7 @@ cleanup_and_fail_shim_v2_specifics() {
 	local extra_tarballs="${3:-}"
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
 		local root_hash_file="${tarball_dir}/${component}-root_hash_${variant}.txt"
 		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
@@ -222,8 +223,15 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
 
-	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-		local image_conf_tarball="kata-static-rootfs-image-${variant}.tar.zst"
+	for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
+		# The measured base image ships as kata-static-rootfs-image.tar.zst
+		# (no variant suffix), but carries its root hash under the "base" label.
+		local image_conf_tarball
+		if [[ "${variant}" == "base" ]]; then
+			image_conf_tarball="kata-static-rootfs-image.tar.zst"
+		else
+			image_conf_tarball="kata-static-rootfs-image-${variant}.tar.zst"
+		fi
 		local tarball_path="${tarball_dir}/${image_conf_tarball}"
 		local root_hash_path="${root_hash_basedir}root_hash_${variant}.txt"
 
@@ -243,7 +251,7 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
 		local image_root_hash="${tarball_dir}/root_hash_${variant}.txt"
 		local cached_root_hash="${component}-root_hash_${variant}.txt"
 
@@ -462,6 +470,9 @@ install_image() {
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 
+		# Both the standard and NVIDIA confidential images bake the CoCo
+		# guest components + pause image into the rootfs, so factor them
+		# into the cache key.
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
@@ -473,6 +484,19 @@ install_image() {
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 	fi
+
+	# The base guest image (empty variant) is built as a measured rootfs so
+	# that confidential configurations can dm-verity-protect it; non-confidential
+	# configurations simply boot its data partition unverified.  Reflect the
+	# measured build (and the kernel it is tied to, since measured boot depends
+	# on it) in the cache key, and emit the root hash under a dedicated "base"
+	# label so it never collides with the legacy confidential image hash.
+	local root_hash_variant="${variant}"
+	if [[ -z "${variant}" && "${MEASURED_ROOTFS:-no}" == "yes" ]]; then
+		root_hash_variant="base"
+		latest_artefact+="-measured-$(get_latest_kernel_artefact_and_builder_image_version)"
+	fi
+	export ROOT_HASH_VARIANT="${root_hash_variant}"
 
 	latest_builder_image=""
 
@@ -487,6 +511,11 @@ install_image() {
 	info "Create image"
 
 	if [[ -n "${variant}" ]]; then
+		# Both the standard confidential image and the NVIDIA confidential
+		# image bake the CoCo guest components + pause image into the
+		# rootfs, so each stays a usable standalone monolithic CoCo image.
+		# The runtime-rs split path instead ships these in the separate
+		# CoCo extension image (rootfs-image-coco-extension).
 		if [[ "${variant}" == *confidential ]]; then
 			COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export COCO_GUEST_COMPONENTS_TARBALL
@@ -523,7 +552,32 @@ install_image() {
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
+#Install the base guest image
+#
+# The base image (kata-containers.img) is shared by both non-confidential and
+# confidential configurations.  It is built once as a measured rootfs (dm-verity
+# hash partition + root hash emitted under the "base" label).  Confidential
+# configurations enforce that hash via the kernel command line, while
+# non-confidential configurations ignore it and boot the data partition
+# directly.  Measured rootfs is not used on s390x (Secure Execution measures the
+# guest through a different mechanism), so the base stays unmeasured there.
+install_image_base() {
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	install_image
+}
+
 #Install guest image for confidential guests
+#
+# During the transition to composable (base + extension) images this monolithic
+# confidential image still bakes in the CoCo guest components and is the image
+# used by the Go runtime. The runtime-rs shims instead use the base image plus
+# the separately built CoCo extension image (rootfs-image-coco-extension),
+# attached as an extra block device. Once the split path is validated for the
+# Go runtime too, the components can stop being baked in here.
 install_image_confidential() {
 	export CONFIDENTIAL_GUEST="yes"
 	if [[ "${ARCH}" == "s390x" ]]; then
@@ -532,6 +586,72 @@ install_image_confidential() {
 		export MEASURED_ROOTFS="yes"
 	fi
 	install_image "confidential"
+}
+
+#Install CoCo extension image (erofs+verity, contains CoCo guest components + pause)
+install_image_coco_extension() {
+	local component="rootfs-image-coco-extension"
+
+	local coco_last_commit
+	coco_last_commit="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+	local pause_last_commit
+	pause_last_commit="$(get_latest_pause_image_artefact_and_builder_image_version)"
+
+	latest_artefact="$(get_kata_version)-coco-extension-${coco_last_commit}-${pause_last_commit}"
+	latest_builder_image=""
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "Create CoCo extension image"
+
+	# Use a temp dir under the repo root so the path is valid both inside
+	# the outer build-kata-deploy container and in the nested image-builder
+	# container (Docker-in-Docker mounts use host paths).
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.coco-extension-rootfs.XXXX")"
+
+	COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+	PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
+
+	info "Unpacking CoCo guest components into extension rootfs"
+	tar --zstd -xvf "${COCO_GUEST_COMPONENTS_TARBALL}" -C "${extension_rootfs}"
+
+	info "Unpacking pause image into extension rootfs"
+	tar --zstd -xvf "${PAUSE_IMAGE_TARBALL}" -C "${extension_rootfs}"
+
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	mkdir -p "${install_dir}"
+
+	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="coco-extension"
+	export FS_TYPE="erofs"
+	# Mirror the base/confidential images: s390x does not use a measured rootfs
+	# (Secure Execution measures the guest through a different mechanism), so the
+	# extension carries no dm-verity hash there and is mounted off its raw
+	# partition instead.
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	"${image_builder}" -o "${install_dir}/kata-containers-coco-extension.img" "${extension_rootfs}"
+
+	if [[ -e "${install_dir}/root_hash_coco-extension.txt" ]]; then
+		info "Root hash file: ${install_dir}/root_hash_coco-extension.txt"
+	fi
+
+	rm -rf "${extension_rootfs}"
 }
 
 #Install cbl-mariner guest image
@@ -1059,9 +1179,13 @@ install_nydus() {
 # Shared helper: extract measured-rootfs root hashes from confidential image tarballs.
 # These are needed by the Rust runtime (runtime-rs) at build time for dm-verity.
 _collect_root_hashes() {
-	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
+		# The measured base image ships as kata-static-rootfs-image.tar.zst
+		# (no variant suffix), but carries its root hash under the "base" label.
+		local tarball_glob="kata-static-rootfs-image-${variant}.tar.zst"
+		[[ "${variant}" == "base" ]] && tarball_glob="kata-static-rootfs-image.tar.zst"
 		local image_conf_tarball
-		image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
+		image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "${tarball_glob}" 2>/dev/null | head -n 1)"
 		# Only one variant may be built at a time so we need to
 		# skip one or the other if not available.
 		[[ -f "${image_conf_tarball}" ]] || continue
@@ -1503,9 +1627,11 @@ handle_build() {
 
 	stratovirt) install_stratovirt ;;
 
-	rootfs-image) install_image ;;
+	rootfs-image) install_image_base ;;
 
 	rootfs-image-confidential) install_image_confidential ;;
+
+	rootfs-image-coco-extension) install_image_coco_extension ;;
 
 	rootfs-image-mariner) install_image_mariner ;;
 
@@ -1576,7 +1702,7 @@ handle_build() {
 			;;
 		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+				for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
 					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/${build_target}-root_hash_${variant}.txt"
 				done
 			fi
@@ -1642,7 +1768,7 @@ handle_build() {
 		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 				local found_any=""
-				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+				for variant in base confidential coco-extension nvidia-gpu nvidia-gpu-confidential; do
 					# The variants could be built independently we need to check if
 					# they exist and then push them to the registry
 					[[ -f "${workdir}/${build_target}-root_hash_${variant}.txt" ]] && files_to_push+=("${build_target}-root_hash_${variant}.txt") && found_any="yes"
