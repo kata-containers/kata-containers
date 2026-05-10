@@ -236,6 +236,16 @@ setup_file() {
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
         create_embedqa_pod
     fi
+
+    # BATS_TEST_COMPLETED is per-test and remains empty in teardown_file.
+    # Persist file-level state so success does not trigger journal dumps.
+    touch "${BATS_FILE_TMPDIR}/setup-file-completed"
+}
+
+teardown() {
+    if [[ "${BATS_TEST_COMPLETED:-}" != "1" && -z "${BATS_TEST_SKIPPED:-}" ]]; then
+        touch "${BATS_FILE_TMPDIR}/test-failed"
+    fi
 }
 
 @test "List of models available for inference" {
@@ -507,5 +517,9 @@ teardown_file() {
         cleanup_loop_device /tmp/trusted-image-storage-embedqa.img || true
     fi
 
-    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}" >&3
+    local bats_test_completed=1
+    if [[ ! -f "${BATS_FILE_TMPDIR}/setup-file-completed" || -f "${BATS_FILE_TMPDIR}/test-failed" ]]; then
+        bats_test_completed=
+    fi
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${bats_test_completed}" >&3
 }

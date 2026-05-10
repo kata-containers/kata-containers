@@ -9,12 +9,32 @@
 //! This module depends on kubelet internal implementation details, a better way is needed
 //! to detect K8S EmptyDir medium type from `oci::spec::Mount` objects.
 
+use std::fs;
+
 use kata_types::mount;
 use oci_spec::runtime::{Mount, Spec};
 
-use crate::mount::get_linux_mount_info;
+use crate::mount::{get_linux_mount_info, LinuxMountInfo};
 
 pub use kata_types::k8s::is_empty_dir;
+
+fn get_mount_info(path: &str) -> crate::mount::Result<LinuxMountInfo> {
+    // Kubelet paths can be symlinks or relocated by bind mounts. Resolve the
+    // path first because /proc/mounts reports the mounted target path.
+    if let Ok(real_path) = fs::canonicalize(path) {
+        if let Some(real_path) = real_path.to_str() {
+            if real_path != path {
+                match get_linux_mount_info(real_path) {
+                    Ok(info) => return Ok(info),
+                    Err(crate::mount::Error::NoMountEntry(_)) => {}
+                    Err(err) => return Err(err),
+                }
+            }
+        }
+    }
+
+    get_linux_mount_info(path)
+}
 
 /// Check whether a given volume is an ephemeral volume.
 ///
@@ -33,7 +53,7 @@ pub fn is_ephemeral_volume(mount: &Mount) -> bool {
             mount.destination(),
 
         ),
-        (Some("bind"), Some(source), _dest) if get_linux_mount_info(source).is_ok_and(|info| info.fs_type == "tmpfs") &&
+        (Some("bind"), Some(source), _dest) if get_mount_info(source).is_ok_and(|info| info.fs_type == "tmpfs") &&
             is_empty_dir(source))
 }
 
@@ -46,7 +66,7 @@ pub fn is_host_empty_dir(path: &str) -> bool {
         return false;
     }
 
-    match get_linux_mount_info(path) {
+    match get_mount_info(path) {
         Ok(info) => info.fs_type != "tmpfs",
         Err(crate::mount::Error::NoMountEntry(_)) => true,
         Err(_) => false,
@@ -78,5 +98,37 @@ pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_di
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn detects_ephemeral_empty_dir_from_resolved_mount_source() {
+        if !matches!(get_linux_mount_info("/dev/shm"), Ok(info) if info.fs_type == "tmpfs") {
+            return;
+        }
+
+        let dir = tempdir().unwrap();
+        let empty_dir_parent = dir.path().join("kubernetes.io~empty-dir");
+        fs::create_dir(&empty_dir_parent).unwrap();
+
+        let volume = empty_dir_parent.join("memory-empty-vol");
+        std::os::unix::fs::symlink("/dev/shm", &volume).unwrap();
+
+        let mut mount = Mount::default();
+        mount.set_typ(Some("bind".to_string()));
+        mount.set_source(Some(volume.clone()));
+        mount.set_destination(PathBuf::from("/tmp/cache"));
+
+        assert!(is_ephemeral_volume(&mount));
+        assert!(!is_host_empty_dir(volume.to_str().unwrap()));
     }
 }
