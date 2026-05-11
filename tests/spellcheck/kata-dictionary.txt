@@ -14,8 +14,9 @@ upcall
 virtcontainers
 
 # Open source projects
-
+bootc
 materialx
+ostree
 
 # Hardware & Architecture
 AMD
@@ -33,6 +34,7 @@ mmio
 NVDIMM
 OVMF
 SEV
+TDVF
 SLES
 SNP
 SRIOV
@@ -60,6 +62,9 @@ Quadro
 
 # Storage & Filesystems
 AUFS
+confext
+overlayfs
+sysext
 blockfile
 devicemapper
 devmapper
@@ -77,6 +82,9 @@ netns
 Netlink
 ttrpc
 vsock
+
+# Security & Encryption
+ocicrypt
 
 # Container, Runtime & Misc terms
 Burstable
