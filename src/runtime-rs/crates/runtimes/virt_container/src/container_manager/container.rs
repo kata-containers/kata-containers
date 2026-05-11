@@ -999,7 +999,11 @@ mod tests {
         filter_vfio_devices(&mut linux, "guest-kernel");
 
         let devices = linux.devices().as_ref().unwrap();
-        assert_eq!(devices.len(), 1, "Should have only 1 device after filtering");
+        assert_eq!(
+            devices.len(),
+            1,
+            "Should have only 1 device after filtering"
+        );
         assert_eq!(
             devices[0].path(),
             non_vfio_device.path(),
@@ -1065,11 +1069,7 @@ mod tests {
             .unwrap();
 
         let mut linux = oci::LinuxBuilder::default()
-            .devices(vec![
-                vfio_device,
-                vfio_container,
-                similar_path.clone(),
-            ])
+            .devices(vec![vfio_device, vfio_container, similar_path.clone()])
             .build()
             .unwrap();
 
@@ -1106,7 +1106,10 @@ mod tests {
 
         filter_vfio_devices(&mut linux, "");
 
-        assert!(linux.devices().is_none(), "Should filter out VFIO device with empty mode");
+        assert!(
+            linux.devices().is_none(),
+            "Should filter out VFIO device with empty mode"
+        );
     }
 
     #[test]
@@ -1116,6 +1119,9 @@ mod tests {
 
         filter_vfio_devices(&mut linux, "guest-kernel");
 
-        assert!(linux.devices().is_none(), "Should remain None when no devices");
+        assert!(
+            linux.devices().is_none(),
+            "Should remain None when no devices"
+        );
     }
 }
