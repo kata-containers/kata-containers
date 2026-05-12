@@ -115,6 +115,15 @@ func (t *template) prepareTemplateFiles() error {
 	}
 	f.Close()
 
+	// truncate the memory file to the exact size of the VM memory
+	memoryInBytes := int64(t.config.HypervisorConfig.MemorySize) * 1024 * 1024
+	t.Logger().Infof("truncating memory file %s to %d bytes", t.statePath+"/memory", memoryInBytes)
+	err = os.Truncate(t.statePath+"/memory", memoryInBytes)
+	if err != nil {
+		t.close()
+		return err
+	}
+
 	return nil
 }
 
