@@ -134,6 +134,7 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.VMStorePath = t.statePath
 
 	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
