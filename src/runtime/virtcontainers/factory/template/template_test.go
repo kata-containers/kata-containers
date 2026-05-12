@@ -87,7 +87,7 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.checkTemplateVM()
 	assert.Error(err)
 
-	_, err = os.Create(tt.statePath + "/state")
+	_, err = os.Create(tt.deviceStatePath())
 	assert.Nil(err)
 	err = tt.checkTemplateVM()
 	assert.Nil(err)
