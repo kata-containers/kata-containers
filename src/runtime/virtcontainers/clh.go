@@ -281,12 +281,14 @@ type CloudHypervisorState struct {
 	PID               int
 	VirtiofsDaemonPid int
 	state             clhState
+	isRestoring       bool
 }
 
 func (s *CloudHypervisorState) reset() {
 	s.PID = 0
 	s.VirtiofsDaemonPid = 0
 	s.state = clhNotReady
+	s.isRestoring = false
 }
 
 type cloudHypervisor struct {
@@ -527,7 +529,7 @@ func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bo
 }
 
 // For cloudHypervisor this call only sets the internal structure up.
-// The VM will be created and started through StartVM().
+// The VM will be created and started through StartVM(), or restored from template if template files exist.
 func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	clh.ctx = ctx
 
@@ -755,7 +757,102 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		return err
 	}
 
+	// Check if we should restore from template instead of creating new VM
+	if clh.config.BootFromTemplate && clh.shouldRestoreFromTemplate() {
+		clh.Logger().Info("Template files found, will restore VM instead of creating new")
+		// Mark this as a restore operation for StartVM to use RestoreVM instead
+		clh.state.isRestoring = true
+		return nil
+	}
+
 	return nil
+}
+
+// shouldRestoreFromTemplate checks if template snapshot files exist and we should restore instead of creating new VM
+func (clh *cloudHypervisor) shouldRestoreFromTemplate() bool {
+	// For template restore, we need the snapshot directory to contain the necessary files
+	// The snapshotDir is derived from the MemoryPath directory
+	snapshotDir := filepath.Dir(clh.config.MemoryPath)
+
+	// Check for required template files (config.json and memory file)
+	configFile := filepath.Join(snapshotDir, "config.json")
+	memoryFile := clh.config.MemoryPath
+
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		clh.Logger().WithField("configFile", configFile).Debug("Template config file not found")
+		return false
+	}
+
+	if _, err := os.Stat(memoryFile); os.IsNotExist(err) {
+		clh.Logger().WithField("memoryFile", memoryFile).Debug("Template memory file not found")
+		return false
+	}
+
+	clh.Logger().WithFields(log.Fields{
+		"configFile": configFile,
+		"memoryFile": memoryFile,
+	}).Info("Template files found, can restore VM from template")
+
+	return true
+}
+
+// copyFile copies a file from src to dst
+func (clh *cloudHypervisor) copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	if err != nil {
+		return err
+	}
+
+	return dstFile.Sync()
+}
+
+// updateVsockSocketPath updates the vsock socket path in the config.json file
+func (clh *cloudHypervisor) updateVsockSocketPath(configPath, vmID string) error {
+	// Read the config file
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(configData, &config); err != nil {
+		return err
+	}
+
+	// Update vsock socket path if vsock exists
+	if vsock, ok := config["vsock"].(map[string]interface{}); ok {
+		// Generate new vsock socket path for this VM
+		newVsockPath, err := clh.vsockSocketPath(vmID)
+		if err != nil {
+			return err
+		}
+		vsock["socket"] = newVsockPath
+
+		clh.Logger().WithFields(log.Fields{
+			"vmID":         vmID,
+			"newVsockPath": newVsockPath,
+		}).Debug("Updated vsock socket path in config.json")
+	}
+
+	// Write the updated config back to file
+	updatedConfig, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, updatedConfig, 0644)
 }
 
 // setupInitdata prepares and attaches the initdata disk if present.
@@ -826,8 +923,37 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	ctx, cancel := context.WithTimeout(ctx, bootTimeout*time.Second)
 	defer cancel()
 
-	if err := clh.bootVM(ctx); err != nil {
-		return err
+	// Check if we should restore from template or create new VM
+	if clh.state.isRestoring {
+		// Copy template files to VM directory
+		snapshotDir := filepath.Dir(clh.config.MemoryPath)
+
+		// Copy config.json from template to VM directory
+		srcConfig := filepath.Join(snapshotDir, "config.json")
+		dstConfig := filepath.Join(vmPath, "config.json")
+		if err := clh.copyFile(srcConfig, dstConfig); err != nil {
+			return fmt.Errorf("failed to copy config.json: %v", err)
+		}
+
+		// Copy state.json from template to VM directory
+		srcState := filepath.Join(snapshotDir, "state.json")
+		dstState := filepath.Join(vmPath, "state.json")
+		if err := clh.copyFile(srcState, dstState); err != nil {
+			return fmt.Errorf("failed to copy state.json: %v", err)
+		}
+
+		// Update vsock socket path in the copied config.json
+		if err := clh.updateVsockSocketPath(dstConfig, clh.id); err != nil {
+			return fmt.Errorf("failed to update vsock socket path: %v", err)
+		}
+
+		if err := clh.restoreVM(ctx); err != nil {
+			return err
+		}
+	} else {
+		if err := clh.bootVM(ctx); err != nil {
+			return err
+		}
 	}
 
 	clh.state.state = clhReady
@@ -1363,10 +1489,11 @@ func (clh *cloudHypervisor) SaveVM() error {
 	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 
+	snapshotDir := filepath.Dir(clh.config.MemoryPath)
 	// Create snapshot config with file URL to template path
 	// Use MemoryPath as base for snapshot destination
 	// When creating a template, the MemoryPath is set to the template path, so we can use it to save the snapshot.
-	fileURL := "file://" + filepath.Dir(clh.config.MemoryPath)
+	fileURL := "file://" + snapshotDir
 
 	vmSnapshotConfig := *chclient.NewVmSnapshotConfig()
 	vmSnapshotConfig.SetDestinationUrl(fileURL)
@@ -1892,12 +2019,13 @@ func (clh *cloudHypervisor) restoreVM(ctx context.Context) error {
 	cl := clh.client()
 
 	// use the VMStorePath as the base for the restore source URL
-	snapshotDir := clh.config.VMStorePath
+	vmPath := filepath.Join(clh.config.VMStorePath, clh.id)
+	sourceURL := "file://" + vmPath
 
 	// check if the snapshot directory contains the state.json and config.json files
 	// which contain the VM state and configuration respectively
-	stateFile := filepath.Join(snapshotDir, "state.json")
-	configFile := filepath.Join(snapshotDir, "config.json")
+	stateFile := filepath.Join(vmPath, "state.json")
+	configFile := filepath.Join(vmPath, "config.json")
 
 	if _, err := os.Stat(stateFile); err != nil {
 		return fmt.Errorf("Failed to access state file %s: %v", stateFile, err)
@@ -1908,7 +2036,6 @@ func (clh *cloudHypervisor) restoreVM(ctx context.Context) error {
 	}
 
 	// Prepare restore configuration
-	sourceURL := "file://" + snapshotDir
 	restoreConfig := *chclient.NewRestoreConfig(sourceURL)
 
 	clh.Logger().WithField("sourceURL", sourceURL).Debug("Restore configuration")
