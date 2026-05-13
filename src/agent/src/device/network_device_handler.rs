@@ -5,18 +5,26 @@
 //
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
+#[cfg(target_arch = "riscv64")]
+use crate::AGENT_CONFIG;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
-use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
+#[cfg(not(target_arch = "riscv64"))]
+use crate::uevent::wait_for_uevent;
+use crate::uevent::{Uevent, UeventMatcher};
 #[cfg(not(target_arch = "s390x"))]
 use crate::{device::pcipath_to_sysfs, pci};
 use anyhow::{anyhow, Result};
 use regex::Regex;
 use std::fs;
 use std::sync::Arc;
+#[cfg(target_arch = "riscv64")]
+use std::time::Duration;
 use tokio::sync::Mutex;
+#[cfg(target_arch = "riscv64")]
+use tokio::time::{sleep, Instant};
 
-fn check_existing(re: Regex) -> Result<bool> {
+fn check_existing(re: &Regex) -> Result<bool> {
     // Check if the interface is already added in case network is cold-plugged
     // or the uevent loop is started before network is added.
     // We check for the device in the sysfs directory for network devices.
@@ -49,13 +57,44 @@ pub async fn wait_for_pci_net_interface(
         matcher.devpath.as_str()
     );
     let re = Regex::new(&pattern).expect("BUG: Failed to compile regex for NetPciMatcher");
-    if check_existing(re)? {
+    if check_existing(&re)? {
         return Ok(());
     }
 
-    let _uev = wait_for_uevent(sandbox, matcher).await?;
+    #[cfg(target_arch = "riscv64")]
+    {
+        let _ = sandbox;
+        // Some virtual PCI network devices can be visible in sysfs without a net
+        // uevent reaching the agent watcher. Poll the same sysfs symlink pattern
+        // used for cold-plug detection so UpdateInterface can still proceed.
+        let timeout = AGENT_CONFIG.hotplug_timeout;
+        let deadline = Instant::now() + timeout;
+        let interval = Duration::from_millis(100);
 
-    Ok(())
+        loop {
+            if check_existing(&re)? {
+                return Ok(());
+            }
+
+            if Instant::now() >= deadline {
+                break;
+            }
+
+            sleep(interval).await;
+        }
+
+        Err(anyhow!(
+            "Timeout after {:?} waiting for net interface {:?}",
+            timeout,
+            matcher
+        ))
+    }
+
+    #[cfg(not(target_arch = "riscv64"))]
+    {
+        let _uev = wait_for_uevent(sandbox, matcher).await?;
+        Ok(())
+    }
 }
 
 #[cfg(not(target_arch = "s390x"))]
@@ -91,7 +130,7 @@ pub async fn wait_for_ccw_net_interface(
     device: &ccw::Device,
 ) -> Result<()> {
     let matcher = NetCcwMatcher::new(CCW_ROOT_BUS_PATH, device);
-    if check_existing(matcher.re.clone())? {
+    if check_existing(&matcher.re)? {
         return Ok(());
     }
     let _uev = wait_for_uevent(sandbox, matcher).await?;
