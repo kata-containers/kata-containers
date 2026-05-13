@@ -9,13 +9,12 @@ use cfg_if::cfg_if;
 use std::str::FromStr;
 // Linux ABI related constants.
 
-#[cfg(target_arch = "aarch64")]
+#[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))]
 use std::fs;
 
 pub const SYSFS_DIR: &str = "/sys";
 #[cfg(any(
     all(target_arch = "powerpc64", target_endian = "little"),
-    target_arch = "riscv64",
     target_arch = "s390x",
     target_arch = "x86_64",
     target_arch = "x86"
@@ -24,6 +23,36 @@ pub const SYSFS_DIR: &str = "/sys";
 // defined by the pxb-pcie driver.
 pub fn create_pci_root_bus_path(root_complex: &str) -> String {
     format!("/devices/pci0000:{root_complex}")
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn create_pci_root_bus_path(root_complex: &str) -> String {
+    let acpi_root_bus_path = format!("/devices/pci0000:{root_complex}");
+    let acpi_sysfs_dir = format!("{SYSFS_DIR}{acpi_root_bus_path}");
+    if fs::metadata(acpi_sysfs_dir).is_ok() {
+        return acpi_root_bus_path;
+    }
+
+    let fallback = format!("/devices/platform/30000000.pci/pci0000:{root_complex}");
+    let platform_sysfs_dir = format!("{SYSFS_DIR}/devices/platform");
+    let entries = match fs::read_dir(platform_sysfs_dir) {
+        Ok(entries) => entries,
+        Err(_) => return fallback,
+    };
+
+    for entry in entries.flatten() {
+        let dir_name = entry.file_name();
+        let root_bus_path = format!(
+            "/devices/platform/{}/pci0000:{root_complex}",
+            dir_name.to_string_lossy()
+        );
+        let sysfs_dir = format!("{SYSFS_DIR}{root_bus_path}");
+        if fs::metadata(sysfs_dir).is_ok() {
+            return root_bus_path;
+        }
+    }
+
+    fallback
 }
 
 // This is used in several modules, let's create a helper function to parse the
