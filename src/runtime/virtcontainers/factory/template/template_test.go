@@ -57,15 +57,26 @@ func TestTemplateFactory(t *testing.T) {
 	assert.NoError(err)
 	defer hybridVSockTTRPCMock.Stop()
 
-	// New
+	// Create 2 sets of instance-specific directories for per-VM storage
+	runStorePath1 := t.TempDir()
+	vmStorePath1 := t.TempDir()
+	runStorePath2 := t.TempDir()
+	vmStorePath2 := t.TempDir()
+
+	// Create a new Template Factory
 	f, err := New(ctx, vmConfig, testDir)
 	assert.Nil(err)
 
 	// Config
 	assert.Equal(f.Config(), vmConfig)
 
-	// GetBaseVM
-	vm, err := f.GetBaseVM(ctx, vmConfig)
+	// GetBaseVM with first instance paths
+	vmConfig1 := vmConfig
+	vmConfig1.HypervisorConfig.RunStorePath = runStorePath1
+	vmConfig1.HypervisorConfig.VMStorePath = vmStorePath1
+
+	// Test the creation of a new VM from the template factory
+	vm, err := f.GetBaseVM(ctx, vmConfig1)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
@@ -79,6 +90,8 @@ func TestTemplateFactory(t *testing.T) {
 
 	assert.Equal(tt.Config(), vmConfig)
 
+	// Checking that template VM check fails
+	// if the corresponding memory and state files are absent
 	err = tt.checkTemplateVM()
 	assert.Error(err)
 
@@ -89,34 +102,45 @@ func TestTemplateFactory(t *testing.T) {
 
 	_, err = os.Create(tt.deviceStatePath())
 	assert.Nil(err)
+
+	// After creating state and memory files, checkTemplateVM should succeed
 	err = tt.checkTemplateVM()
 	assert.Nil(err)
 
+	// Recreate the template VM, which should succeed
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	vm, err = tt.GetBaseVM(ctx, vmConfig)
+	// Ensuring that directly calling template's GetBaseVM function
+	// returns a VM instance similar to the one returned by the factory's GetBaseVM function
+	vm, err = tt.GetBaseVM(ctx, vmConfig1)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
-	vm, err = f.GetBaseVM(ctx, vmConfig)
+	vm, err = f.GetBaseVM(ctx, vmConfig1)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
+	// Overwriting the template VM should succeed
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	vm, err = tt.GetBaseVM(ctx, vmConfig)
+	// Create second instance with different storage paths
+	vmConfig2 := vmConfig
+	vmConfig2.HypervisorConfig.RunStorePath = runStorePath2
+	vmConfig2.HypervisorConfig.VMStorePath = vmStorePath2
+
+	vm, err = tt.GetBaseVM(ctx, vmConfig2)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
-	vm, err = f.GetBaseVM(ctx, vmConfig)
+	vm, err = f.GetBaseVM(ctx, vmConfig2)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
