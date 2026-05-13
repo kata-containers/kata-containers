@@ -1049,6 +1049,22 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	if err != nil {
 		return err
 	}
+	// Physical NICs (e.g. Azure accelerated networking VFs) require
+	// the link to be down before changing the MAC address; otherwise
+	// the driver returns EBUSY.  Bring it down, swap the MAC, and
+	// it will be brought back up via the deferred LinkSetUp.
+	// Virtual endpoints (veths, etc.) don't need this.
+	if _, isPhysical := endpoint.(*PhysicalEndpoint); isPhysical {
+		if err := netHandle.LinkSetDown(link); err != nil {
+			networkLogger().WithError(err).Error("tapNetworkPair: could not bring link down for MAC swap")
+			return fmt.Errorf("Could not disable %s for MAC swap: %s", netPair.VirtIface.Name, err)
+		}
+		defer func() {
+			if err := netHandle.LinkSetUp(link); err != nil {
+				networkLogger().WithError(err).Warnf("tapNetworkPair: could not bring %s back up", netPair.VirtIface.Name)
+			}
+		}()
+	}
 	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
 		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
 			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
