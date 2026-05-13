@@ -76,9 +76,10 @@ const (
 	clhTimeout                     = 10
 	clhAPITimeout                  = 1
 	clhAPITimeoutConfidentialGuest = 20
-	// Minimum timout for calling CreateVM followed by BootVM. Executing these two APIs
+	// Minimum timeout for calling CreateVM followed by BootVM. Executing these two APIs
 	// might take longer than the value returned by getClhAPITimeout().
-	clhCreateAndBootVMMinimumTimeout = 10
+	clhCreateAndBootVMMinimumTimeout        = 10
+	clhRiscv64CreateAndBootVMMinimumTimeout = 60
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
 	clhHotPlugAPITimeout                   = 5
@@ -316,6 +317,20 @@ func (clh *cloudHypervisor) getClhAPITimeout() time.Duration {
 	}
 
 	return clhAPITimeout
+}
+
+func (clh *cloudHypervisor) getClhCreateAndBootVMTimeout() time.Duration {
+	minimumTimeout := time.Duration(clhCreateAndBootVMMinimumTimeout)
+	if runtime.GOARCH == "riscv64" {
+		minimumTimeout = time.Duration(clhRiscv64CreateAndBootVMMinimumTimeout)
+	}
+
+	apiTimeout := clh.getClhAPITimeout()
+	if apiTimeout < minimumTimeout {
+		return minimumTimeout
+	}
+
+	return apiTimeout
 }
 
 func (clh *cloudHypervisor) getClhStopSandboxTimeout() time.Duration {
@@ -764,10 +779,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %q", err)
 	}
 
-	bootTimeout := clh.getClhAPITimeout()
-	if bootTimeout < clhCreateAndBootVMMinimumTimeout {
-		bootTimeout = clhCreateAndBootVMMinimumTimeout
-	}
+	bootTimeout := clh.getClhCreateAndBootVMTimeout()
 	ctx, cancel := context.WithTimeout(ctx, bootTimeout*time.Second)
 	defer cancel()
 
