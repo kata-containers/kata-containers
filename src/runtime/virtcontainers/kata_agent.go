@@ -2824,47 +2824,41 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	})
 }
 
-// readStdout and readStderr are special that we cannot differentiate them with the request types...
 func (k *kataAgent) readProcessStdout(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(ctx); err != nil {
-		return 0, err
-	}
-	if !k.keepConn {
-		defer k.disconnect(ctx)
-	}
-
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout)
+	return k.readProcessStreamWithRetry(ctx, c.id, processID, data, false)
 }
 
-// readStdout and readStderr are special that we cannot differentiate them with the request types...
 func (k *kataAgent) readProcessStderr(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(ctx); err != nil {
-		return 0, err
-	}
+	return k.readProcessStreamWithRetry(ctx, c.id, processID, data, true)
+}
+
+func (k *kataAgent) readProcessStreamWithRetry(ctx context.Context, containerID, processID string, data []byte, stderr bool) (int, error) {
 	if !k.keepConn {
 		defer k.disconnect(ctx)
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStderr)
-}
-
-type readFn func(context.Context, *grpc.ReadStreamRequest) (*grpc.ReadStreamResponse, error)
-
-func (k *kataAgent) readProcessStream(containerID, processID string, data []byte, read readFn) (int, error) {
-	resp, err := read(k.ctx, &grpc.ReadStreamRequest{
+	req := &grpc.ReadStreamRequest{
 		ContainerId: containerID,
 		ExecId:      processID,
-		Len:         uint32(len(data))})
+		Len:         uint32(len(data)),
+	}
+
+	resp, err := k.callWithReconnect(ctx, func() (interface{}, error) {
+		if stderr {
+			return k.client.AgentServiceClient.ReadStderr(k.ctx, req)
+		}
+		return k.client.AgentServiceClient.ReadStdout(k.ctx, req)
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	if len(resp.Data) == 0 {
+	r := resp.(*grpc.ReadStreamResponse)
+	if len(r.Data) == 0 {
 		return 0, io.EOF
 	}
-
-	copy(data, resp.Data)
-	return len(resp.Data), nil
+	copy(data, r.Data)
+	return len(r.Data), nil
 }
 
 func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
