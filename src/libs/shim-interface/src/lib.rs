@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn test_get_uds_with_sid_ok() {
         let run_path = tempdir().unwrap();
-        let dir = run_path.path().join("aata98654dangboxpath1");
+        let dir = run_path.path().join("kata98654sandboxpath1");
         fs::create_dir_all(dir.as_path()).unwrap();
 
         let result = get_uds_with_sid("kata", &run_path.path().display().to_string());
@@ -141,7 +141,7 @@ mod tests {
                 "unix://{}",
                 run_path
                     .path()
-                    .join("kata")
+                    .join("kata98654sandboxpath1")
                     .join(SHIM_MGMT_SOCK_NAME)
                     .display()
             )
@@ -152,18 +152,9 @@ mod tests {
     fn test_get_uds_with_sid_with_zero() {
         let run_path = tempdir().unwrap();
         let result = get_uds_with_sid("acdsdfe", &run_path.path().display().to_string());
-        assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            format!(
-                "unix://{}",
-                run_path
-                    .path()
-                    .join("acdsdfe")
-                    .join(SHIM_MGMT_SOCK_NAME)
-                    .display()
-            )
-        )
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("is not found"));
     }
 
     #[test]
