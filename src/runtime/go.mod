@@ -14,7 +14,7 @@ require (
 	github.com/container-orchestrated-devices/container-device-interface v0.6.0
 	github.com/containerd/cgroups v1.1.0
 	github.com/containerd/console v1.0.5
-	github.com/containerd/containerd v1.7.29
+	github.com/containerd/containerd v1.7.31
 	github.com/containerd/containerd/api v1.9.0
 	github.com/containerd/cri-containerd v1.19.0
 	github.com/containerd/fifo v1.1.0
@@ -39,7 +39,7 @@ require (
 	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/runc v1.2.8
 	github.com/opencontainers/runtime-spec v1.2.1
-	github.com/opencontainers/selinux v1.13.0
+	github.com/opencontainers/selinux v1.13.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
