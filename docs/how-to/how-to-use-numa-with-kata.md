@@ -451,20 +451,13 @@ NUMA node.
 
 ### 7.3 Check GPU NUMA inside the guest
 
-Inside the GPU pod, verify the GPU reports a valid NUMA node (not `-1`):
+Inside the GPU pod:
 
 ```bash
-$ cat /sys/bus/pci/devices/*/numa_node
-# Should show 0 or 1 (matching the host GPU's NUMA node), not -1.
-
 $ nvidia-smi topo --matrix
-# Shows the GPU's relationship to NUMA nodes from the guest perspective.
 ```
 
-The runtime uses QEMU's `acpi-generic-initiator` object to wire each VFIO
-device to the correct guest NUMA node.  If the guest reports `-1`, check
-that the QEMU command line contains
-`-object acpi-generic-initiator,id=gi-...,pci-dev=...,node=...`.
+This shows the GPU's relationship to NUMA nodes from the guest perspective.
 
 ## How It Works
 
@@ -502,13 +495,8 @@ When a VM is created with NUMA enabled, the runtime:
    also go through this NUMA-aware path, so all vCPUs land on the chosen
    host NUMA node's CPUs.
 
-6. **Places VFIO devices on correct guest NUMA node**: For each
-   cold-plugged VFIO device (e.g. GPU), the runtime looks up its host
-   NUMA node, maps it to the corresponding guest NUMA node, and emits a
-   QEMU `acpi-generic-initiator` object so the guest kernel reports the
-   correct `numa_node` for the device.  This ensures GPU memory accesses
-   stay NUMA-local.  If a device's host NUMA node is not covered by the
-   guest topology, a warning is logged.
+6. **Validates VFIO devices**: Checks each cold-plugged device's host NUMA
+   node against the guest topology and logs placement status.
 
 7. **Translates cpuset.mems**: Converts host NUMA node IDs to guest node IDs
    before forwarding to the agent.
