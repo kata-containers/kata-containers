@@ -2766,6 +2766,29 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 	return newCtx, cancel
 }
 
+func (k *kataAgent) callWithReconnect(ctx context.Context, fn func() (interface{}, error)) (interface{}, error) {
+	for {
+		if err := k.connect(ctx); err != nil {
+			return nil, err
+		}
+
+		resp, err := fn()
+
+		if err == nil || !isConnectionError(err) {
+			return resp, err
+		}
+
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("connection error and context cancelled: %w", err)
+		}
+
+		k.Logger().WithError(err).Warn("connection error detected, flagging for reconnection")
+		k.Lock()
+		k.dead = true
+		k.Unlock()
+	}
+}
+
 func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (interface{}, error) {
 	start := time.Now()
 
@@ -2785,11 +2808,7 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
 
-	for {
-		if err := k.connect(spanCtx); err != nil {
-			return nil, err
-		}
-
+	return k.callWithReconnect(spanCtx, func() (interface{}, error) {
 		handler := k.reqHandlers[msgName]
 		if handler == nil {
 			return nil, errors.New("invalid request type")
@@ -2798,24 +2817,11 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 		k.Logger().WithField("name", msgName).WithField("req", string(jsonStr)).Trace("sending request")
 
 		ctx, cancel := k.getReqContext(spanCtx, msgName)
-		resp, err := handler(ctx, request)
 		if cancel != nil {
-			cancel()
+			defer cancel()
 		}
-
-		if err == nil || !isConnectionError(err) {
-			return resp, err
-		}
-
-		if spanCtx.Err() != nil {
-			return nil, fmt.Errorf("connection error and context cancelled: %w", err)
-		}
-
-		k.Logger().WithError(err).Warn("connection error detected, flagging for reconnection")
-		k.Lock()
-		k.dead = true
-		k.Unlock()
-	}
+		return handler(ctx, request)
+	})
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
