@@ -41,3 +41,7 @@ func (impl *VCImpl) CreateSandbox(ctx context.Context, sandboxConfig SandboxConf
 func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
 	return CleanupContainer(ctx, sandboxID, containerID, force)
 }
+
+func (impl *VCImpl) FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	return FetchSandbox(ctx, sandboxID)
+}
