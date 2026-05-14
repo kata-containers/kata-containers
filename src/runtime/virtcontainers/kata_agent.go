@@ -358,8 +358,9 @@ type kataAgent struct {
 
 	dialTimout uint32
 
-	keepConn bool
-	dead     bool
+	keepConn       bool
+	dead           bool
+	connGeneration uint64
 
 	reconnectAttempts uint
 	reconnectDelay    time.Duration
@@ -2519,6 +2520,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	}
 
 	k.installReqFunc(client)
+	k.connGeneration++
 	k.client = client
 	k.Unlock()
 
@@ -2772,6 +2774,10 @@ func (k *kataAgent) callWithReconnect(ctx context.Context, fn func() (interface{
 			return nil, err
 		}
 
+		k.Lock()
+		gen := k.connGeneration
+		k.Unlock()
+
 		resp, err := fn()
 
 		if err == nil || !isConnectionError(err) {
@@ -2782,9 +2788,11 @@ func (k *kataAgent) callWithReconnect(ctx context.Context, fn func() (interface{
 			return nil, fmt.Errorf("connection error and context cancelled: %w", err)
 		}
 
-		k.Logger().WithError(err).Warn("connection error detected, flagging for reconnection")
 		k.Lock()
-		k.dead = true
+		if k.connGeneration == gen {
+			k.Logger().WithError(err).Warn("connection error detected, flagging for reconnection")
+			k.dead = true
+		}
 		k.Unlock()
 	}
 }
