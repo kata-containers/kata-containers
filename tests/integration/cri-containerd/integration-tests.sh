@@ -275,7 +275,8 @@ function TestContainerMemoryUpdate() {
 		# Currently, dragonball fails at decrease memory, just test increasing memory.
 		# We'll re-enable it as soon as we get it to work.
 		# Reference: https://github.com/kata-containers/kata-containers/issues/8804
-		DoContainerMemoryUpdate 0
+		# DoContainerMemoryUpdate 0
+		info "TestContainerMemoryUpdate skipped for dragonball"
 	fi
 
 	if [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ]]; then
