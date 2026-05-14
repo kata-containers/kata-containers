@@ -52,4 +52,5 @@
 - [How to use seccomp with runtime-rs](how-to-use-seccomp-with-runtime-rs.md)
 - [How to use passthroughfd-IO with runtime-rs and Dragonball](how-to-use-passthroughfd-io-within-runtime-rs.md)
 - [How to use EROFS snapshotter with Kata Containers](how-to-use-erofs-snapshotter-with-kata.md)
+- [How to use NUMA with Kata Containers](how-to-use-numa-with-kata.md)
 

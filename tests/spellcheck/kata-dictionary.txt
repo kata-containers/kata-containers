@@ -20,6 +20,7 @@ materialx
 # Hardware & Architecture
 AMD
 APQN
+chiplet
 cpuid
 DCAP
 DGPU
@@ -78,6 +79,7 @@ ttrpc
 vsock
 
 # Container, Runtime & Misc terms
+Burstable
 cgroupsv1
 coredump
 CPUSET
