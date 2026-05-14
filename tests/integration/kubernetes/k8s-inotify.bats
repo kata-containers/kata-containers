@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
@@ -49,6 +51,8 @@ setup() {
 }
 
 teardown() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"

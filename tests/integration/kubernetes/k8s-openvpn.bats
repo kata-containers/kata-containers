@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+    [[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
     # cannot build the container image: ERROR: unable to select packages: easy-rsa (no such package) ...
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
     # built the container image only for x86 and arm64 so far
@@ -74,6 +76,8 @@ setup() {
 }
 
 teardown() {
+    [[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
     [ "$(uname -m)" == "s390x" ] && skip "container image not built for s390x"
 

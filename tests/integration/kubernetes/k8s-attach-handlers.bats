@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	pod_name="handlers"
 	setup_common || die "setup_common failed"
 	yaml_file="${pod_config_dir}/test-lifecycle-events.yaml"
@@ -42,6 +44,8 @@ setup() {
 }
 
 teardown(){
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 

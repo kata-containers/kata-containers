@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "See: https://github.com/kata-containers/kata-containers/issues/12492"
 
 	setup_common || die "setup_common failed"
@@ -49,6 +51,8 @@ setup() {
 }
 
 teardown() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "See: https://github.com/kata-containers/kata-containers/issues/12492"
 
 	for pod in "${pods[@]}"; do

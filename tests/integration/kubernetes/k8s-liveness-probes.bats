@@ -40,6 +40,8 @@ setup() {
 }
 
 @test "Liveness http probe" {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	pod_name="liveness-http"
 
 	# Create pod specification.
@@ -68,6 +70,8 @@ setup() {
 
 
 @test "Liveness tcp probe" {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	pod_name="tcptest"
 
 	# Create pod specification.

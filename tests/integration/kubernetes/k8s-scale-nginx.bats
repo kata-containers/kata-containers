@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	replicas="3"
 	deployment="nginx-deployment"
 
@@ -34,6 +36,8 @@ setup() {
 }
 
 teardown() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	rm -f "${test_yaml}"
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"

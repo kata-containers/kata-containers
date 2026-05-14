@@ -57,6 +57,8 @@ setup() {
 }
 
 @test "Empty dir volume when FSGroup is specified with non-root container" {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	local agnhost_name
 	local agnhost_version
 	local gid

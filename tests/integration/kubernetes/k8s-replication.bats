@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	setup_common || die "setup_common failed"
 	# Create yaml
 	test_yaml="${pod_config_dir}/test-replication-controller.yaml"
@@ -56,6 +58,8 @@ setup() {
 }
 
 teardown() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	# Debugging information
 	kubectl describe replicationcontrollers/"$replication_name"
 	teardown_common "${node}" "${node_start_time:-}"

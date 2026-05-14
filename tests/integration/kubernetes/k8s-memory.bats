@@ -41,6 +41,8 @@ setup_yaml() {
 }
 
 @test "Running within memory constraints" {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	memory_limit_size="600Mi"
 	allocated_size="150M"
 

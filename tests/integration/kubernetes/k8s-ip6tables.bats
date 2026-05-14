@@ -9,6 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[ "$(uname -m)" == "ppc64le" ] && skip "ip6tables tests for ppc64le"
 
 	setup_common || die "setup_common failed"
@@ -35,6 +37,8 @@ setup() {
 }
 
 teardown() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && skip "Test skipped with erofs snapshotter"
+
 	[ "$(uname -m)" == "ppc64le" ] && skip "ip6tables tests for ppc64le"
 
 	# Debugging information
