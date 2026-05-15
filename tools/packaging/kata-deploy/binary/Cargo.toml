@@ -34,6 +34,7 @@ log.workspace = true
 regex.workspace = true
 serde_json.workspace = true
 serde_yaml = "0.9"
+tar = "0.4.45"
 tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",
@@ -45,6 +46,7 @@ tokio = { workspace = true, features = [
 ] }
 toml_edit = "0.22"
 walkdir = "2"
+zstd = "0.13.3"
 
 [dev-dependencies]
 rstest.workspace = true
