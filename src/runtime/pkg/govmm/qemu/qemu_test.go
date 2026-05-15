@@ -24,6 +24,15 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	testConfigAppend(&config, structure, expected, t)
 }
 
+// testAppendQ35 is testAppend with Config.Machine.Type set to "q35" so
+// device emitters that gate on hasPCIeRoot() (e.g. virtio-pci leaves
+// pinned to bus=pcie.0) take the PCIe path.  Use this for tests whose
+// expected string contains "bus=pcie.0".
+func testAppendQ35(structure interface{}, expected string, t *testing.T) {
+	config := Config{Machine: Machine{Type: "q35"}}
+	testConfigAppend(&config, structure, expected, t)
+}
+
 func testConfigAppend(config *Config, structure interface{}, expected string, t *testing.T) {
 	switch s := structure.(type) {
 	case Machine:
@@ -343,7 +352,32 @@ func TestAppendVSOCK(t *testing.T) {
 		vsockDevice.DevNo = DevNo
 	}
 
-	testAppend(vsockDevice, deviceVSOCKString, t)
+	// deviceVSOCKString includes bus=pcie.0 — gated to q35/virt machines.
+	testAppendQ35(vsockDevice, deviceVSOCKString, t)
+}
+
+// TestAppendVSOCKNoPCIeRoot verifies that on machines without a `pcie.0`
+// root (e.g. ppc64le's pseries, microvm, s390-ccw-virtio), we do NOT
+// emit `bus=pcie.0` — doing so would crash QEMU with
+// "Bus 'pcie.0' not found".  Transport and ROMFile are set explicitly
+// rather than using the arch-conditional `romfile` constant (which is
+// "" on s390x via qemu_s390x_test.go), so the test exercises the
+// same code path on every architecture.
+func TestAppendVSOCKNoPCIeRoot(t *testing.T) {
+	const vsockRomfile = "efi-virtio.rom"
+	vsockDevice := VSOCKDevice{
+		ID:            "vhost-vsock-pci0",
+		ContextID:     4,
+		VHostFD:       nil,
+		DisableModern: true,
+		ROMFile:       vsockRomfile,
+		Transport:     TransportPCI,
+	}
+
+	// pseries -> hasPCIeRoot returns false -> no bus=pcie.0 emitted.
+	expected := "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=" + vsockRomfile
+	config := Config{Machine: Machine{Type: "pseries"}}
+	testConfigAppend(&config, vsockDevice, expected, t)
 }
 
 func TestVSOCKValid(t *testing.T) {

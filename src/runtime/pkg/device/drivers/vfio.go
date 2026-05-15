@@ -90,11 +90,17 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 
 		if vfio.IsPCIe {
-			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
-			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
-			// We need to keep track the number of devices per port to deduce
-			// the corectu bus number, additionally we can use the VFIO device
-			// info to act upon different Vendor IDs and Device IDs.
+			// When pxb-pcie NUMA topology is active, assign the device
+			// to a root port on the pxb-pcie bridge for its host NUMA
+			// node instead of the default rp/swdp numbering.
+			if rpIDs, ok := config.NUMARootPorts[vfio.NUMANode]; ok && len(rpIDs) > 0 {
+				idx := config.NUMARootPortDeviceCount[vfio.NUMANode]
+				vfio.Bus = rpIDs[idx%len(rpIDs)]
+				config.NUMARootPortDeviceCount[vfio.NUMANode] = idx + 1
+			} else {
+				busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
+				vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+			}
 			config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
 		}
 	}

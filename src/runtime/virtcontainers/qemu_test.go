@@ -1203,7 +1203,33 @@ func TestResizeMemoryVirtioMemNegativeSize(t *testing.T) {
 	assert.Equal(100, q.state.HotpluggedMemory)
 }
 
+func TestNumaPlacementActive(t *testing.T) {
+	assert := assert.New(t)
+	cases := []struct {
+		name  string
+		nodes []types.GuestNUMANode
+		want  bool
+	}{
+		{"empty", nil, false},
+		{"single-node-no-binding", []types.GuestNUMANode{{}}, false},
+		{"single-node-host-0", []types.GuestNUMANode{{HostNodes: "0"}}, true},
+		{"single-node-host-1", []types.GuestNUMANode{{HostNodes: "1"}}, true},
+		{"single-node-host-range", []types.GuestNUMANode{{HostNodes: "0-1"}}, true},
+		{"two-nodes", []types.GuestNUMANode{{HostNodes: "0"}, {HostNodes: "1"}}, true},
+	}
+	for _, c := range cases {
+		assert.Equal(c.want, numaPlacementActive(c.nodes), c.name)
+	}
+}
+
 func TestBuildNUMATopologySingleNode(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// A single guest node mapped to a specific host node (e.g. produced
+	// by maybeRightSizeAutoNUMA() collapsing a multi-node sandbox to the
+	// GPU's host NUMA node) must still emit a one-node topology so that
+	// the memory backend gets a host-nodes= binding.
 	assert := assert.New(t)
 	q := &qemu{
 		config: HypervisorConfig{
@@ -1214,10 +1240,86 @@ func TestBuildNUMATopologySingleNode(t *testing.T) {
 			},
 		},
 	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 1)
+	assert.Equal(uint32(0), nodes[0].NodeID)
+	assert.Equal("0-3", nodes[0].CPUs)
+	assert.Equal("1024M", nodes[0].MemSize)
+	assert.Equal("0", nodes[0].HostNodes)
+	assert.Equal("memory-backend-ram", nodes[0].MemBackendType)
+}
+
+func TestBuildNUMATopologySingleNodeNoHostBinding(t *testing.T) {
+	// A single guest node without a HostNodes value carries no NUMA
+	// binding intent; buildNUMATopology() must return nil so that the
+	// QEMU command line falls through to the flat memdev path.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "", HostCPUs: "0-3"},
+			},
+		},
+	}
 	nodes, dists, err := q.buildNUMATopology()
 	assert.NoError(err)
 	assert.Nil(nodes)
 	assert.Nil(dists)
+}
+
+func TestBuildNUMATopologySingleNodeExplicitNonZeroHost(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// User explicitly mapped the only guest node to a non-zero host node
+	// (e.g. numa_mapping = ["1"]).  buildNUMATopology() must propagate
+	// HostNodes verbatim so the memory backend ends up bound to host
+	// node 1 rather than the default node 0.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			NUMAMapping:     []string{"1"},
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "1", HostCPUs: "0-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 1)
+	assert.Equal(uint32(0), nodes[0].NodeID)
+	assert.Equal("1", nodes[0].HostNodes)
+}
+
+func TestBuildNUMATopologyExplicitRangedHostNodes(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// User explicitly mapped two guest nodes to disjoint host-node ranges
+	// (e.g. numa_mapping = ["0-1", "2-3"]).  buildNUMATopology() must
+	// preserve the ranged HostNodes strings on each emitted NUMANode.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 8,
+			MemorySize:      2048,
+			NUMAMapping:     []string{"0-1", "2-3"},
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0-1", HostCPUs: "0-3"},
+				{HostNodes: "2-3", HostCPUs: "4-7"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	assert.Equal("0-1", nodes[0].HostNodes)
+	assert.Equal("2-3", nodes[1].HostNodes)
 }
 
 func TestBuildNUMATopologyTwoNodes(t *testing.T) {

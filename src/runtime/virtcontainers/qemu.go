@@ -565,10 +565,12 @@ func maybeRightSizeAutoNUMA(hc *HypervisorConfig, log *logrus.Entry) {
 
 func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
 	// q.config.GuestNUMANodes has already been right-sized (when applicable)
-	// by maybeRightSizeAutoNUMA() at hypervisor setup time, so a length
-	// of 1 here means "no NUMA topology"; fall through to a flat memdev.
+	// by maybeRightSizeAutoNUMA() at hypervisor setup time.  Empty means
+	// no NUMA topology; a single node may still carry a HostNodes binding
+	// (e.g. right-sized to the GPU's NUMA node), in which case we must
+	// emit it so memory is bound to the correct host node.
 	numaNodes := q.config.GuestNUMANodes
-	if len(numaNodes) <= 1 {
+	if !numaPlacementActive(numaNodes) {
 		return nil, nil, nil
 	}
 
@@ -1298,6 +1300,15 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
+
+		// When NUMA is active (multi-node OR a single node right-sized to a
+		// specific host node), create pxb-pcie bridges so cold-plugged VFIO
+		// devices inherit the correct guest NUMA affinity.
+		if numaPlacementActive(q.config.GuestNUMANodes) && len(hypervisorConfig.VFIODevices) > 0 {
+			qemuConfig.Devices = q.createNUMAPCIeTopology(qemuConfig.Devices, hypervisorConfig, numOfPluggablePorts)
+			return nil
+		}
+
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts)
 		return nil
 	}
@@ -3077,7 +3088,107 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
-// genericAppendPCIeRootPort appends to devices the given pcie-root-port
+// numaPlacementActive reports whether the runtime should emit per-NUMA
+// pxb-pcie / memory-binding QEMU args.  True when there is more than one
+// guest node, OR a single guest node with an explicit HostNodes binding.
+//
+// The single-node case covers two scenarios that the runtime cannot tell
+// apart after right-sizing:
+//   - a multi-NUMA host whose workload was collapsed to one host node
+//     (e.g. GPU on host node 0) — pxb-pcie + host-nodes binding are
+//     required so the guest GPU reports the correct NUMA affinity;
+//   - a single-NUMA host with `enable_numa=true` — emitting the binding
+//     is a functional no-op (the only host node is node 0 anyway).
+//
+// Single node without a HostNodes value (no NUMA mapping at all) falls
+// through to the flat memdev path.
+func numaPlacementActive(nodes []types.GuestNUMANode) bool {
+	if len(nodes) > 1 {
+		return true
+	}
+	return len(nodes) == 1 && nodes[0].HostNodes != ""
+}
+
+// createNUMAPCIeTopology creates pxb-pcie bridges for NUMA nodes that have
+// VFIO devices, then creates root ports on each pxb bus.  VFIO devices will
+// be assigned to these root ports during Attach() based on their host NUMA
+// node, giving the guest kernel correct NUMA affinity for the PCI devices.
+func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConfig *HypervisorConfig, totalPorts uint32) []govmmQemu.Device {
+	coveredHostNodes := buildCoveredHostNodes(q.config.GuestNUMANodes)
+
+	// Count VFIO devices per host NUMA node.
+	numaDevCount := make(map[int]int)
+	for _, dev := range hypervisorConfig.VFIODevices {
+		hostPath, err := config.GetHostPath(dev, false, "")
+		if err != nil {
+			continue
+		}
+		dev.HostPath = hostPath
+		var vfioDevs []*config.VFIODev
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
+			vfioDevs, _ = drivers.GetDeviceFromVFIODev(dev)
+		} else {
+			vfioDevs, _ = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+		}
+		for _, vd := range vfioDevs {
+			if vd.NUMANode >= 0 && drivers.IsPCIeDevice(vd.BDF) {
+				numaDevCount[vd.NUMANode]++
+			}
+		}
+	}
+
+	if len(numaDevCount) == 0 {
+		return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
+	}
+
+	// Create a pxb-pcie + root ports per NUMA node that has devices.
+	var rpIndex uint32
+	const busNrSpacing uint8 = 0x20
+
+	for hostNode, devCount := range numaDevCount {
+		guestNode, ok := coveredHostNodes[hostNode]
+		if !ok {
+			q.Logger().WithField("host-numa", hostNode).Warn("VFIO device on uncovered NUMA node; skipping pxb-pcie")
+			continue
+		}
+
+		pxbID := fmt.Sprintf("pxb-numa%d", guestNode)
+		busNr := busNrSpacing * uint8(guestNode+1)
+
+		devices = append(devices, govmmQemu.PXBPCIeDevice{
+			ID:       pxbID,
+			BusNr:    busNr,
+			NUMANode: int(guestNode),
+		})
+
+		// Create root ports on this pxb bus for the VFIO devices.
+		var rpIDs []string
+		for i := 0; i < devCount; i++ {
+			rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, i)
+			rpIDs = append(rpIDs, rpID)
+			devices = append(devices, govmmQemu.PCIeRootPortDevice{
+				ID:      rpID,
+				Bus:     pxbID,
+				Chassis: fmt.Sprintf("%d", 10+guestNode),
+				Slot:    fmt.Sprintf("%d", i),
+			})
+			rpIndex++
+		}
+
+		config.NUMARootPorts[hostNode] = rpIDs
+
+		q.Logger().WithFields(logrus.Fields{
+			"pxb-id":     pxbID,
+			"bus-nr":     busNr,
+			"guest-numa": guestNode,
+			"host-numa":  hostNode,
+			"root-ports": rpIDs,
+		}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
+	}
+
+	return devices
+}
+
 func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
 	var (
 		bus           string

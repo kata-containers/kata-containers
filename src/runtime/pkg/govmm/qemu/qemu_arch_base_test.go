@@ -42,7 +42,8 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserBlk,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserBlkDevice, deviceVhostUserBlkString, t)
+	// vhost-user-pci device strings include bus=pcie.0 — gated to q35/virt.
+	testAppendQ35(vhostuserBlkDevice, deviceVhostUserBlkString, t)
 
 	vhostuserSCSIDevice := VhostUserDevice{
 		SocketPath:    "/tmp/nonexistentsocket.socket",
@@ -52,7 +53,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserSCSI,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
+	testAppendQ35(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
 
 	vhostuserNetDevice := VhostUserDevice{
 		SocketPath:    "/tmp/nonexistentsocket.socket",
@@ -62,7 +63,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserNet,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserNetDevice, deviceVhostUserNetString, t)
+	testAppendQ35(vhostuserNetDevice, deviceVhostUserNetString, t)
 }
 
 func TestAppendVirtioBalloon(t *testing.T) {

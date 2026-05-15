@@ -71,6 +71,8 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 	config.PCIeDevicesPerPort[config.RootPort] = make([]config.VFIODev, 0)
 	config.PCIeDevicesPerPort[config.SwitchPort] = make([]config.VFIODev, 0)
 	config.PCIeDevicesPerPort[config.BridgePort] = make([]config.VFIODev, 0)
+	config.NUMARootPorts = make(map[int][]string)
+	config.NUMARootPortDeviceCount = make(map[int]int)
 
 	for _, dev := range devices {
 		dm.devices[dev.DeviceID()] = dev

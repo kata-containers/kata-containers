@@ -50,6 +50,20 @@ const (
 	qgsSocketPath string = "/var/run/tdx-qgs/qgs.socket"
 )
 
+// hasPCIeRoot reports whether the configured QEMU machine type exposes a
+// `pcie.0` root complex (q35 on x86, virt on arm64).  Machines such as
+// pseries (ppc64le -> pci.0), s390-ccw-virtio (s390x -> CCW transport)
+// and microvm (no PCI at all) do not have a `pcie.0` bus, so emitting
+// `bus=pcie.0` on virtio-pci leaf devices would fail to start QEMU.
+// Used to gate the bus= pin we apply to keep leaf devices off pxb-pcie.
+func hasPCIeRoot(config *Config) bool {
+	if config == nil {
+		return false
+	}
+	t := config.Machine.Type
+	return strings.HasPrefix(t, "q35") || strings.HasPrefix(t, "virt")
+}
+
 const (
 	// Well known vsock CID for host system.
 	// https://man7.org/linux/man-pages/man7/vsock.7.html
@@ -131,6 +145,10 @@ const (
 
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
+
+	// PXBPCIe is a PCIe Expander Bridge that creates a new PCI root
+	// complex with NUMA node affinity.
+	PXBPCIe DeviceDriver = "pxb-pcie"
 
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
@@ -1064,6 +1082,11 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 
 	if netdev.Bus != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", netdev.Bus))
+	} else if netdev.Transport.isVirtioPCI(config) && hasPCIeRoot(config) {
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device as the default bus.  Skipped on machines
+		// without a `pcie.0` root (pseries, microvm, s390-ccw-virtio).
+		deviceParams = append(deviceParams, "bus=pcie.0")
 	}
 
 	if netdev.Addr != "" {
@@ -1587,9 +1610,11 @@ func (vhostuserDev VhostUserDevice) QemuNetParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 
 	if vhostuserDev.Transport.isVirtioPCI(config) {
-		// Pin to pcie.0 so pxb-pcie (when present) doesn't capture
-		// this leaf device as the default bus.
-		deviceParams = append(deviceParams, "bus=pcie.0")
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device.  See hasPCIeRoot() for skipped machines.
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
 		if vhostuserDev.ROMFile != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 		}
@@ -1618,7 +1643,9 @@ func (vhostuserDev VhostUserDevice) QemuSCSIParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 
 	if vhostuserDev.Transport.isVirtioPCI(config) {
-		deviceParams = append(deviceParams, "bus=pcie.0")
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
 		if vhostuserDev.ROMFile != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 		}
@@ -1646,7 +1673,9 @@ func (vhostuserDev VhostUserDevice) QemuBlkParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 
 	if vhostuserDev.Transport.isVirtioPCI(config) {
-		deviceParams = append(deviceParams, "bus=pcie.0")
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
 		if vhostuserDev.ROMFile != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 		}
@@ -1686,7 +1715,9 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vhostuserDev.DevNo))
 	}
 	if vhostuserDev.Transport.isVirtioPCI(config) {
-		deviceParams = append(deviceParams, "bus=pcie.0")
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
 		if vhostuserDev.ROMFile != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 		}
@@ -1750,6 +1781,36 @@ func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
 	default:
 		return ""
 	}
+}
+
+// PXBPCIeDevice represents a PCIe Expander Bridge (pxb-pcie).
+// It creates a new PCI root complex with NUMA node affinity, allowing
+// devices attached to its bus hierarchy to inherit the NUMA association.
+// This is the only QEMU PCI device that carries a numa_node property.
+type PXBPCIeDevice struct {
+	// ID is the QEMU device identifier (e.g. "pxb-numa0").
+	ID string
+
+	// BusNr is the guest PCI bus number for this root complex.
+	// Use values spaced apart (e.g. 0x20, 0x40) to leave room for
+	// bridges beneath each pxb-pcie.
+	BusNr uint8
+
+	// NUMANode is the guest NUMA node index this root complex belongs to.
+	NUMANode int
+}
+
+// QemuParams returns the QEMU parameters for a pxb-pcie device.
+func (dev PXBPCIeDevice) QemuParams(_ *Config) []string {
+	return []string{
+		"-device",
+		fmt.Sprintf("pxb-pcie,id=%s,bus_nr=%d,numa_node=%d", dev.ID, dev.BusNr, dev.NUMANode),
+	}
+}
+
+// Valid returns true if the PXBPCIeDevice structure is valid and complete.
+func (dev PXBPCIeDevice) Valid() bool {
+	return dev.ID != ""
 }
 
 // PCIeRootPortDevice represents a memory balloon device.
@@ -2324,8 +2385,15 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vsock.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf("%s=%d", VSOCKGuestCID, vsock.ContextID))
 
-	if vsock.Transport.isVirtioPCI(config) && vsock.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vsock.ROMFile))
+	if vsock.Transport.isVirtioPCI(config) {
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device.  See hasPCIeRoot() for skipped machines.
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vsock.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vsock.ROMFile))
+		}
 	}
 
 	if vsock.Transport.isVirtioCCW(config) {

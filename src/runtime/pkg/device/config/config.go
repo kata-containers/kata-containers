@@ -235,6 +235,17 @@ var (
 	// different types of PCI ports. We can deduces the Bus number from it
 	// and eliminate duplicates being assigned.
 	PCIeDevicesPerPort = map[PCIePort][]VFIODev{}
+
+	// NUMARootPorts maps host NUMA node IDs to root port IDs on pxb-pcie
+	// bridges.  When NUMA-aware PCIe topology is active (pxb-pcie),
+	// createPCIeTopology populates this so VFIODevice.Attach() can assign
+	// each device to the root port on its host NUMA node's pxb-pcie bus.
+	// Key: host NUMA node ID, Value: slice of root port IDs on that node's pxb.
+	NUMARootPorts = map[int][]string{}
+
+	// NUMARootPortDeviceCount tracks how many devices have been assigned
+	// to each host NUMA node's root ports (for round-robin assignment).
+	NUMARootPortDeviceCount = map[int]int{}
 )
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
