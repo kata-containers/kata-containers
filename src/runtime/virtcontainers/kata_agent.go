@@ -918,7 +918,7 @@ func setupStorages(ctx context.Context, sandbox *Sandbox) []*grpc.Storage {
 			// directly map contents from the host. Otherwise, the mount
 			// options should not contain 'dax' lest the virtio-fs daemon crashing
 			// with an invalid address reference.
-			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSCacheModeNever && sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSCacheModeMetadata {
+			if sandbox.config.HypervisorConfig.VirtioFSCache != VirtioFSCacheModeNever && sandbox.config.HypervisorConfig.VirtioFSCache != VirtioFSCacheModeMetadata {
 				// If virtio_fs_cache_size = 0, dax should not be used.
 				if sandbox.config.HypervisorConfig.VirtioFSCacheSize != 0 {
 					sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)

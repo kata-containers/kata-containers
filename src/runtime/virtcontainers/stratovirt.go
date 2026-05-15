@@ -949,11 +949,12 @@ func (s *stratovirt) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, er
 
 	// default use virtiofsd
 	return &virtiofsd{
-		path:       s.config.VirtioFSDaemon,
-		sourcePath: sharedPath,
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  s.config.VirtioFSExtraArgs,
-		cache:      s.config.VirtioFSCache,
+		path:             s.config.VirtioFSDaemon,
+		sourcePath:       sharedPath,
+		socketPath:       virtiofsdSocketPath,
+		extraArgs:        s.config.VirtioFSExtraArgs,
+		cache:            s.config.VirtioFSCache,
+		inodeFileHandles: s.config.VirtioFSInodeFileHandles,
 	}, nil
 }
 

@@ -116,6 +116,7 @@ type hypervisor struct {
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
 	VirtioFSExtraArgs              []string                  `toml:"virtio_fs_extra_args"`
+	VirtioFSInodeFileHandles       string                    `toml:"virtio_fs_inode_file_handles"`
 	PFlashList                     []string                  `toml:"pflashes"`
 	VhostUserStorePathList         []string                  `toml:"valid_vhost_user_store_paths"`
 	FileBackedMemRootList          []string                  `toml:"valid_file_mem_backends"`
@@ -578,6 +579,14 @@ func (h hypervisor) defaultVirtioFSCache() string {
 	}
 
 	return h.VirtioFSCache
+}
+
+func (h hypervisor) defaultVirtioFSInodeFileHandles() string {
+	if h.VirtioFSInodeFileHandles == "" {
+		return vc.VirtioFSInodeFileHandlesPrefer
+	}
+
+	return h.VirtioFSInodeFileHandles
 }
 
 func (h hypervisor) blockDeviceDriver() (string, error) {
@@ -1065,6 +1074,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCache:                 h.defaultVirtioFSCache(),
 		VirtioFSQueueSize:             h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:             h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles:      h.defaultVirtioFSInodeFileHandles(),
 		MemPrealloc:                   h.MemPrealloc,
 		ReclaimGuestFreedMemory:       h.ReclaimGuestFreedMemory,
 		HugePages:                     h.HugePages,
@@ -1227,6 +1237,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles:       h.defaultVirtioFSInodeFileHandles(),
 		SGXEPCSize:                     defaultSGXEPCSize,
 		EnableAnnotations:              h.EnableAnnotations,
 		DisableSeccomp:                 h.DisableSeccomp,
@@ -1265,17 +1276,18 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	kernelParams := h.kernelParams()
 
 	return vc.HypervisorConfig{
-		KernelPath:         kernel,
-		ImagePath:          image,
-		RootfsType:         rootfsType,
-		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		KernelVerityParams: h.kernelVerityParams(),
-		NumVCPUsF:          h.defaultVCPUs(),
-		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
-		MemorySize:         h.defaultMemSz(),
-		MemSlots:           h.defaultMemSlots(),
-		EntropySource:      h.GetEntropySource(),
-		Debug:              h.Debug,
+		KernelPath:               kernel,
+		ImagePath:                image,
+		RootfsType:               rootfsType,
+		KernelParams:             vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:       h.kernelVerityParams(),
+		NumVCPUsF:                h.defaultVCPUs(),
+		DefaultMaxVCPUs:          h.defaultMaxVCPUs(),
+		MemorySize:               h.defaultMemSz(),
+		MemSlots:                 h.defaultMemSlots(),
+		EntropySource:            h.GetEntropySource(),
+		Debug:                    h.Debug,
+		VirtioFSInodeFileHandles: h.defaultVirtioFSInodeFileHandles(),
 	}, nil
 }
 
@@ -1382,6 +1394,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCacheSize:             h.VirtioFSCacheSize,
 		VirtioFSCache:                 h.defaultVirtioFSCache(),
 		VirtioFSExtraArgs:             h.VirtioFSExtraArgs,
+		VirtioFSInodeFileHandles:      h.defaultVirtioFSInodeFileHandles(),
 		HugePages:                     h.HugePages,
 		Debug:                         h.Debug,
 		DisableNestingChecks:          h.DisableNestingChecks,
@@ -1621,6 +1634,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		VhostUserDeviceReconnect: defaultVhostUserDeviceReconnect,
 		HypervisorLoglevel:       defaultHypervisorLoglevel,
 		VirtioFSCache:            defaultVirtioFSCacheMode,
+		VirtioFSInodeFileHandles: vc.VirtioFSInodeFileHandlesPrefer,
 		DisableImageNvdimm:       defaultDisableImageNvdimm,
 		RxRateLimiterMaxRate:     defaultRxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:     defaultTxRateLimiterMaxRate,
@@ -2085,6 +2099,14 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 		return nil
 	}
 
+	if err := checkVirtioFSCache(config.VirtioFSCache); err != nil {
+		return err
+	}
+
+	if err := checkVirtioFSInodeFileHandles(config.VirtioFSInodeFileHandles); err != nil {
+		return err
+	}
+
 	type image struct {
 		path   string
 		initrd bool
@@ -2189,5 +2211,32 @@ func SetConfigOptions(n, runtimeConfig, sysRuntimeConfig string) {
 
 	if sysRuntimeConfig != "" {
 		DEFAULTSYSCONFRUNTIMECONFIGURATION = sysRuntimeConfig
+	}
+}
+
+func checkVirtioFSCache(cache string) error {
+	switch cache {
+	case
+		"",
+		vc.VirtioFSCacheModeNever,
+		vc.VirtioFSCacheModeMetadata,
+		vc.VirtioFSCacheModeAlways,
+		vc.VirtioFSCacheModeAuto:
+		return nil
+	default:
+		return fmt.Errorf("invalid virtio-fs cache mode: %s", cache)
+	}
+}
+
+func checkVirtioFSInodeFileHandles(mode string) error {
+	switch mode {
+	case
+		"",
+		vc.VirtioFSInodeFileHandlesNever,
+		vc.VirtioFSInodeFileHandlesPrefer,
+		vc.VirtioFSInodeFileHandlesMandatory:
+		return nil
+	default:
+		return fmt.Errorf("invalid virtio-fs inode file handles mode: %s", mode)
 	}
 }

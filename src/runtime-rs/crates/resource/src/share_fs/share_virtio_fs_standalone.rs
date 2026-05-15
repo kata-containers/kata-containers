@@ -43,6 +43,8 @@ pub struct ShareVirtioFsStandaloneConfig {
     pub virtio_fs_cache: String,
     // virtio_fs_extra_args passes options to virtiofsd daemon
     pub virtio_fs_extra_args: Vec<String>,
+    // virtio_fs_inode_file_handles specifies the inode file handles mode for virtiofsd
+    pub virtio_fs_inode_file_handles: String,
 }
 
 #[derive(Default, Debug)]
@@ -66,6 +68,7 @@ impl ShareVirtioFsStandalone {
                 virtio_fs_daemon: config.virtio_fs_daemon.clone(),
                 virtio_fs_cache: config.virtio_fs_cache.clone(),
                 virtio_fs_extra_args: config.virtio_fs_extra_args.clone(),
+                virtio_fs_inode_file_handles: config.virtio_fs_inode_file_handles.clone(),
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
             mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
@@ -87,6 +90,13 @@ impl ShareVirtioFsStandalone {
             String::from("--cache"),
             self.config.virtio_fs_cache.clone(),
         ];
+
+        let inode_value = if self.config.virtio_fs_inode_file_handles.is_empty() {
+            "prefer"
+        } else {
+            &self.config.virtio_fs_inode_file_handles
+        };
+        args.push(format!("--inode-file-handles={}", inode_value));
 
         if !self.config.virtio_fs_extra_args.is_empty() {
             let mut extra_args: Vec<String> = self.config.virtio_fs_extra_args.clone();

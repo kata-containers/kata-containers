@@ -995,6 +995,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		sbConfig.HypervisorConfig.VirtioFSCache = value
 	}
 
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.VirtioFSCacheSize).setUint(func(cacheSize uint64) {
 		sbConfig.HypervisorConfig.VirtioFSCacheSize = uint32(cacheSize)
 	}); err != nil {

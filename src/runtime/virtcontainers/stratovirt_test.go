@@ -51,7 +51,7 @@ func newStratovirtConfig() (HypervisorConfig, error) {
 		MemorySize:        defaultMemSzMiB,
 		DefaultMaxVCPUs:   uint32(64),
 		SharedFS:          config.VirtioFS,
-		VirtioFSCache:     typeVirtioFSCacheModeAlways,
+		VirtioFSCache:     VirtioFSCacheModeAlways,
 		VirtioFSDaemon:    testVirtiofsdPath,
 	}, nil
 }

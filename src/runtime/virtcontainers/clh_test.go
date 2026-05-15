@@ -62,7 +62,7 @@ func newClhConfig() (HypervisorConfig, error) {
 		DefaultBridges:                defaultBridges,
 		DefaultMaxVCPUs:               uint32(64),
 		SharedFS:                      config.VirtioFS,
-		VirtioFSCache:                 typeVirtioFSCacheModeAlways,
+		VirtioFSCache:                 VirtioFSCacheModeAlways,
 		VirtioFSDaemon:                testVirtiofsdPath,
 		NetRateLimiterBwMaxRate:       int64(0),
 		NetRateLimiterBwOneTimeBurst:  int64(0),

@@ -29,19 +29,24 @@ var virtiofsdTracingTags = map[string]string{
 }
 
 var (
-	errVirtiofsdDaemonPathEmpty          = errors.New("virtiofsd daemon path is empty")
-	errVirtiofsdSocketPathEmpty          = errors.New("virtiofsd socket path is empty")
-	errVirtiofsdSourcePathEmpty          = errors.New("virtiofsd source path is empty")
-	errVirtiofsdInvalidVirtiofsCacheMode = func(mode string) error { return errors.Errorf("Invalid virtio-fs cache mode: %s", mode) }
-	errVirtiofsdSourceNotAvailable       = errors.New("virtiofsd source path not available")
-	errUnimplemented                     = errors.New("unimplemented")
+	errVirtiofsdDaemonPathEmpty                 = errors.New("virtiofsd daemon path is empty")
+	errVirtiofsdSocketPathEmpty                 = errors.New("virtiofsd socket path is empty")
+	errVirtiofsdSourcePathEmpty                 = errors.New("virtiofsd source path is empty")
+	errVirtiofsdInvalidVirtiofsCacheMode        = func(mode string) error { return errors.Errorf("Invalid virtio-fs cache mode: %s", mode) }
+	errVirtiofsdInvalidVirtiofsInodeFileHandles = func(mode string) error { return errors.Errorf("Invalid virtio-fs inode file handles mode: %s", mode) }
+	errVirtiofsdSourceNotAvailable              = errors.New("virtiofsd source path not available")
+	errUnimplemented                            = errors.New("unimplemented")
 )
 
 const (
-	typeVirtioFSCacheModeNever    = "never"
-	typeVirtioFSCacheModeMetadata = "metadata"
-	typeVirtioFSCacheModeAlways   = "always"
-	typeVirtioFSCacheModeAuto     = "auto"
+	VirtioFSCacheModeNever    = "never"
+	VirtioFSCacheModeMetadata = "metadata"
+	VirtioFSCacheModeAlways   = "always"
+	VirtioFSCacheModeAuto     = "auto"
+
+	VirtioFSInodeFileHandlesNever     = "never"
+	VirtioFSInodeFileHandlesPrefer    = "prefer"
+	VirtioFSInodeFileHandlesMandatory = "mandatory"
 )
 
 type VirtiofsDaemon interface {
@@ -77,6 +82,8 @@ type virtiofsd struct {
 	sourcePath string
 	// extraArgs list of extra args to append to virtiofsd command
 	extraArgs []string
+	// inodeFileHandles mode for virtiofsd
+	inodeFileHandles string
 	// PID process ID of virtiosd process
 	PID int
 }
@@ -185,13 +192,25 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 	args := []string{
 		// Send logs to syslog
 		"--syslog",
-		// cache mode for virtiofsd
-		"--cache=" + v.cache,
 		// shared directory tree
 		"--shared-dir=" + v.sourcePath,
 		// fd number of vhost-user socket
 		fmt.Sprintf("--fd=%v", FdSocketNumber),
 	}
+
+	// cache mode for virtiofsd; default to "auto" if unset
+	cache := v.cache
+	if cache == "" {
+		cache = VirtioFSCacheModeAuto
+	}
+	args = append(args, "--cache="+cache)
+
+	// inode file handles mode; default to "prefer" if unset
+	inodeFileHandles := v.inodeFileHandles
+	if inodeFileHandles == "" {
+		inodeFileHandles = VirtioFSInodeFileHandlesPrefer
+	}
+	args = append(args, "--inode-file-handles="+inodeFileHandles)
 
 	if len(v.extraArgs) != 0 {
 		args = append(args, v.extraArgs...)
@@ -201,6 +220,14 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 }
 
 func (v *virtiofsd) valid() error {
+	if err := v.validateCacheMode(); err != nil {
+		return err
+	}
+
+	if err := v.validateInodeFileHandlesMode(); err != nil {
+		return err
+	}
+
 	if v.path == "" {
 		return errVirtiofsdDaemonPathEmpty
 	}
@@ -217,19 +244,35 @@ func (v *virtiofsd) valid() error {
 		return errVirtiofsdSourceNotAvailable
 	}
 
+	return nil
+}
+
+func (v *virtiofsd) validateCacheMode() error {
 	switch v.cache {
-	case "":
-		v.cache = typeVirtioFSCacheModeAuto
 	case
-		typeVirtioFSCacheModeAuto,
-		typeVirtioFSCacheModeAlways,
-		typeVirtioFSCacheModeMetadata,
-		typeVirtioFSCacheModeNever:
+		"",
+		VirtioFSCacheModeAuto,
+		VirtioFSCacheModeAlways,
+		VirtioFSCacheModeMetadata,
+		VirtioFSCacheModeNever:
 		// No-op, accepted
 	default:
 		return errVirtiofsdInvalidVirtiofsCacheMode(v.cache)
 	}
+	return nil
+}
 
+func (v *virtiofsd) validateInodeFileHandlesMode() error {
+	switch v.inodeFileHandles {
+	case
+		"",
+		VirtioFSInodeFileHandlesNever,
+		VirtioFSInodeFileHandlesPrefer,
+		VirtioFSInodeFileHandlesMandatory:
+		// No-op, accepted
+	default:
+		return errVirtiofsdInvalidVirtiofsInodeFileHandles(v.inodeFileHandles)
+	}
 	return nil
 }
 

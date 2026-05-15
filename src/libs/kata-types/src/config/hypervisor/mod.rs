@@ -1498,6 +1498,13 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub virtio_fs_cache: String,
 
+    /// Inode file handles mode for `virtio-fs`:
+    /// - `never`: Do not use file handles.
+    /// - `prefer`: Try to use file handles, but fall back to `O_PATH` if not supported.
+    /// - `mandatory`: Use file handles, fail if not supported.
+    #[serde(default)]
+    pub virtio_fs_inode_file_handles: String,
+
     /// Default size of the DAX cache in MiB for `virtio-fs`.
     #[serde(default)]
     pub virtio_fs_cache_size: u32,
@@ -1578,6 +1585,11 @@ impl SharedFsInfo {
         if !self.virtio_fs_is_dax && self.virtio_fs_cache_size != 0 {
             self.virtio_fs_is_dax = true;
         }
+
+        if self.virtio_fs_inode_file_handles.is_empty() {
+            self.virtio_fs_inode_file_handles = String::from("prefer");
+        }
+
         Ok(())
     }
 
@@ -1594,9 +1606,8 @@ impl SharedFsInfo {
             )?;
         }
 
-        let l = ["never", "auto", "always"];
-
-        if !l.contains(&self.virtio_fs_cache.as_str()) {
+        let valid_modes = ["never", "auto", "always"];
+        if !valid_modes.contains(&self.virtio_fs_cache.as_str()) {
             return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs cache mode: {}",
                 &self.virtio_fs_cache,
@@ -1608,6 +1619,15 @@ impl SharedFsInfo {
                 &self.virtio_fs_cache_size,
             )));
         }
+
+        let valid_modes = ["never", "prefer", "mandatory"];
+        if !valid_modes.contains(&self.virtio_fs_inode_file_handles.as_str()) {
+            return Err(std::io::Error::other(format!(
+                "Invalid virtio-fs inode file handles mode: {}",
+                &self.virtio_fs_inode_file_handles
+            )));
+        }
+
         Ok(())
     }
 }
@@ -2193,5 +2213,52 @@ mod tests {
             blockdev_info_with_sectors(65536, 512).validate().is_err(),
             "logical > physical should be rejected"
         );
+    }
+
+    #[test]
+    fn test_shared_fs_info_adjust_config() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let virtiofsd_path = temp_dir.path().join("virtiofsd");
+        std::fs::write(&virtiofsd_path, "").unwrap();
+
+        let mut info = SharedFsInfo {
+            shared_fs: Some(VIRTIO_FS.to_string()),
+            virtio_fs_daemon: virtiofsd_path.to_string_lossy().to_string(),
+            ..Default::default()
+        };
+
+        info.adjust_config().unwrap();
+        assert_eq!(info.virtio_fs_inode_file_handles, "prefer");
+
+        info.virtio_fs_inode_file_handles = "".to_string();
+        info.adjust_config().unwrap();
+        assert_eq!(info.virtio_fs_inode_file_handles, "prefer");
+    }
+
+    #[test]
+    fn test_shared_fs_info_validate() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let virtiofsd_path = temp_dir.path().join("virtiofsd");
+        std::fs::write(&virtiofsd_path, "").unwrap();
+
+        let info = SharedFsInfo {
+            shared_fs: Some(VIRTIO_FS.to_string()),
+            virtio_fs_daemon: virtiofsd_path.to_string_lossy().to_string(),
+            virtio_fs_cache: "auto".to_string(),
+            virtio_fs_inode_file_handles: "prefer".to_string(),
+            ..Default::default()
+        };
+        assert!(info.validate().is_ok());
+
+        let mut invalid_info = info.clone();
+        invalid_info.virtio_fs_inode_file_handles = "invalid".to_string();
+        assert!(invalid_info.validate().is_err());
+
+        let mut valid_info = info.clone();
+        valid_info.virtio_fs_inode_file_handles = "never".to_string();
+        assert!(valid_info.validate().is_ok());
+
+        valid_info.virtio_fs_inode_file_handles = "mandatory".to_string();
+        assert!(valid_info.validate().is_ok());
     }
 }

@@ -365,11 +365,12 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 
 	// default: use virtiofsd
 	return &virtiofsd{
-		path:       clh.config.VirtioFSDaemon,
-		sourcePath: sharedPath,
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  clh.config.VirtioFSExtraArgs,
-		cache:      clh.config.VirtioFSCache,
+		path:             clh.config.VirtioFSDaemon,
+		sourcePath:       sharedPath,
+		socketPath:       virtiofsdSocketPath,
+		extraArgs:        clh.config.VirtioFSExtraArgs,
+		cache:            clh.config.VirtioFSCache,
+		inodeFileHandles: clh.config.VirtioFSInodeFileHandles,
 	}, nil
 }
 

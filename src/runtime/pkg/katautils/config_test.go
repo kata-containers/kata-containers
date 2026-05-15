@@ -190,6 +190,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 		MeasurementAlgo:       defaultMeasurementAlgo,
+		VirtioFSInodeFileHandles: vc.VirtioFSInodeFileHandlesPrefer,
 	}
 
 	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {
@@ -580,6 +581,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		ColdPlugVFIO:          defaultColdPlugVFIO,
 		PCIeRootPort:          defaultPCIeRootPort,
 		PCIeSwitchPort:        defaultPCIeSwitchPort,
+		VirtioFSInodeFileHandles: vc.VirtioFSInodeFileHandlesPrefer,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{
@@ -704,6 +706,10 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.BlockDeviceAIO != blockDeviceAIO {
 		t.Errorf("Expected value for BlockDeviceAIO  %v, got %v", blockDeviceAIO, config.BlockDeviceAIO)
+	}
+
+	if config.VirtioFSInodeFileHandles != vc.VirtioFSInodeFileHandlesPrefer {
+		t.Errorf("Expected value for VirtioFSInodeFileHandles %v, got %v", vc.VirtioFSInodeFileHandlesPrefer, config.VirtioFSInodeFileHandles)
 	}
 
 }
@@ -1296,6 +1302,23 @@ func TestDefaultVirtioFSCache(t *testing.T) {
 	h.VirtioFSCache = "never"
 	cache = h.defaultVirtioFSCache()
 	assert.Equal("never", cache)
+}
+
+func TestDefaultVirtioFSInodeFileHandles(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{VirtioFSInodeFileHandles: ""}
+
+	mode := h.defaultVirtioFSInodeFileHandles()
+	assert.Equal(vc.VirtioFSInodeFileHandlesPrefer, mode)
+
+	h.VirtioFSInodeFileHandles = "mandatory"
+	mode = h.defaultVirtioFSInodeFileHandles()
+	assert.Equal("mandatory", mode)
+
+	h.VirtioFSInodeFileHandles = "never"
+	mode = h.defaultVirtioFSInodeFileHandles()
+	assert.Equal("never", mode)
 }
 
 func TestDefaultFirmware(t *testing.T) {
