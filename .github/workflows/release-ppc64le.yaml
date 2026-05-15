@@ -54,10 +54,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: get-kata-tarball
+      - name: get-kata-artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-ppc64le
+          pattern: kata-artifacts-ppc64le-*
+          path: tools/packaging/kata-deploy/local-build/build
+          merge-multiple: true
 
       - name: build-and-push-kata-deploy-ci-ppc64le
         id: build-and-push-kata-deploy-ci-ppc64le
@@ -75,9 +77,9 @@ jobs:
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.zst "ghcr.io/kata-containers/kata-deploy" \
+                  "ghcr.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.zst "quay.io/kata-containers/kata-deploy" \
+                  "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
           done
