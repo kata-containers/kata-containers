@@ -368,9 +368,28 @@ function create_cluster_kcli() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
-	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	# Configure RKE2:
+	# - kubelet-arg: bump --runtime-request-timeout to 600s (same as kubeadm)
+	#   for CoCo and long-running CreateContainer requests.
+	# - disable: drop RKE2 add-ons that we don't exercise in our k8s test
+	#   suites. On the 4-vCPU GitHub-hosted runners the default RKE2 stack
+	#   reserves ~2.5 vCPU through CPU requests on its system pods, which
+	#   leaves no room for kata pods that request multiple vCPUs (e.g. the
+	#   k8s-sandbox-vcpus-allocation and k8s-guest-pull-image trusted
+	#   storage tests). These add-ons are not used by our tests, so turning
+	#   them off frees enough allocatable CPU to keep the suites scheduling
+	#   reliably on RKE2 -- mirroring the headroom k3s already gives us by
+	#   running the control plane as a single process.
 	sudo mkdir -p /etc/rancher/rke2
-	printf '%s\n' 'kubelet-arg:' '  - --runtime-request-timeout=600s' | sudo tee /etc/rancher/rke2/config.yaml
+	sudo tee /etc/rancher/rke2/config.yaml > /dev/null <<-EOF
+	kubelet-arg:
+	  - --runtime-request-timeout=600s
+	disable:
+	  - rke2-snapshot-controller
+	  - rke2-snapshot-controller-crd
+	  - rke2-snapshot-validation-webhook
+	  - rke2-metrics-server
+	EOF
 
 	sudo systemctl enable --now rke2-server.service
 
