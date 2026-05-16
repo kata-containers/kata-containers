@@ -978,7 +978,7 @@ impl QemuInner {
                 };
 
                 // Second, execute the asynchronous hotplug without holding the lock.
-                let (pci_path, scsi_addr) = qmp
+                let (pci_path, addr_str) = qmp
                     .hotplug_block_device(
                         &driver,
                         index,
@@ -1000,8 +1000,12 @@ impl QemuInner {
                     if let Some(p) = pci_path {
                         cfg.pci_path = Some(p);
                     }
-                    if let Some(s) = scsi_addr {
-                        cfg.scsi_addr = Some(s);
+                    if let Some(addr) = addr_str {
+                        if driver == VIRTIO_BLK_CCW {
+                            cfg.ccw_addr = Some(addr);
+                        } else {
+                            cfg.scsi_addr = Some(addr);
+                        }
                     }
                     info!(sl!(), "Completed BlockModern hotplug: {:?}", &cfg);
                 }

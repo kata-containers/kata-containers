@@ -107,6 +107,13 @@ pub async fn handle_block_volume(
                     return Err(anyhow!("block driver is scsi but no scsi address exists"));
                 }
             }
+            KATA_CCW_DEV_TYPE => {
+                if let Some(ccw_addr) = &device.config.ccw_addr {
+                    ccw_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
+                }
+            }
             _ => device.config.virt_path.clone(),
         };
         device_id = device.device_id.clone();
