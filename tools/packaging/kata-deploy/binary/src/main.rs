@@ -340,10 +340,71 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     runtime::lifecycle::restart_runtime(config, runtime).await?;
     info!("Runtime restart completed successfully");
 
-    k8s::label_node(config, "katacontainers.io/kata-runtime", Some("true"), true).await?;
+    label_node_with_retry(config, "katacontainers.io/kata-runtime", "true").await?;
 
     info!("Kata Containers installation completed successfully");
     Ok(())
+}
+
+/// Label the node and verify the label sticks, retrying if necessary.
+///
+/// On rke2/k3s a CRI restart also restarts the kubelet. The kubelet may
+/// briefly re-register the node with its cached label set, clobbering the
+/// label we just applied via the API. We work around this by verifying the
+/// label value after setting it and re-applying if needed.
+async fn label_node_with_retry(
+    config: &config::Config,
+    label_key: &str,
+    label_value: &str,
+) -> Result<()> {
+    const MAX_ATTEMPTS: u32 = 10;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        k8s::label_node(config, label_key, Some(label_value), true).await?;
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        match k8s::get_node_label(config, label_key).await {
+            Ok(Some(val)) if val == label_value => {
+                info!(
+                    "Label {}={} confirmed on node (attempt {})",
+                    label_key, label_value, attempt
+                );
+                return Ok(());
+            }
+            Ok(actual) => {
+                log::warn!(
+                    "Label {}={} did not stick (got {:?}), retrying ({}/{})",
+                    label_key,
+                    label_value,
+                    actual,
+                    attempt,
+                    MAX_ATTEMPTS
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to verify label {} (attempt {}/{}): {}",
+                    label_key,
+                    attempt,
+                    MAX_ATTEMPTS,
+                    e
+                );
+            }
+        }
+
+        if attempt < MAX_ATTEMPTS {
+            tokio::time::sleep(RETRY_DELAY).await;
+        }
+    }
+
+    anyhow::bail!(
+        "Failed to set label {}={} after {} attempts",
+        label_key,
+        label_value,
+        MAX_ATTEMPTS
+    );
 }
 
 async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
