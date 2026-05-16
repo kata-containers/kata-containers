@@ -32,6 +32,9 @@ RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
 export branch="${target_branch:-"$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')"}"
 
+# Export target_branch to avoid hitting the remote repository again when this script gets loaded again.
+export target_branch="${branch}"
+
 function die() {
 	local msg="$*"
 
