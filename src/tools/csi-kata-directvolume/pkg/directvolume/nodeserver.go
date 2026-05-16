@@ -98,12 +98,11 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
 		targetPath, fsType, devicePath, readOnly, volumeID)
 
-	options := []string{"bind"}
+	accessMode := "rw"
 	if readOnly {
-		options = append(options, "ro")
-	} else {
-		options = append(options, "rw")
+		accessMode = "ro"
 	}
+	options := []string{"bind", accessMode}
 
 	stagingTargetPath := req.GetStagingTargetPath()
 
@@ -120,13 +119,18 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		return nil, status.Error(codes.Aborted, errMsg)
 	}
 
-	// kata-containers DirectVolume add
+	// kata-containers DirectVolume add.
+	//
+	// Forward only the access mode. "bind" is for the host-side CSI
+	// bind-mount: kata-agent's parse_mount_options() turns it into
+	// MS_BIND, and mount(2) with MS_BIND on a block device is rejected
+	// by the kernel (see #11296).
 	mountInfo := utils.MountInfo{
 		VolumeType: volType,
 		Device:     devicePath,
 		FsType:     fsType,
 		Metadata:   attrib,
-		Options:    options,
+		Options:    []string{accessMode},
 	}
 	if err := utils.AddDirectVolume(targetPath, mountInfo); err != nil {
 		klog.Errorf("add direct volume with source %s and mountInfo %v failed", targetPath, mountInfo)
