@@ -14,6 +14,8 @@ import (
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -191,4 +193,49 @@ func TestSPDKStage(t *testing.T) {
 	}
 	require.Contains(t, callsJoined.String(), "vhost_get_controllers",
 		"should call vhost_get_controllers at least once")
+}
+
+func TestDirectBackingDevice(t *testing.T) {
+	tmp := t.TempDir()
+
+	cfg := Config{
+		DriverName:    "directvolume.csi.katacontainers.io",
+		Endpoint:      "unix:///tmp/fake.sock",
+		NodeID:        "node-test",
+		StoragePath:   filepath.Join(tmp, "stor"),
+		StateDir:      filepath.Join(tmp, "st"),
+		MaxVolumeSize: 1 << 40,
+		SpdkRawPath:   filepath.Join(tmp, "spdk-raw"),
+		SpdkVhostPath: filepath.Join(tmp, "spdk-vhost"),
+	}
+	dv, err := NewDirectVolumeDriver(cfg)
+	require.NoError(t, err)
+
+	createResp, err := dv.CreateVolume(context.TODO(), &csi.CreateVolumeRequest{
+		Name: "vol-direct",
+		CapacityRange: &csi.CapacityRange{
+			RequiredBytes: 8 << 20,
+		},
+		Parameters: map[string]string{
+			utils.KataContainersDirectVolumeType: utils.DirectVolumeTypeName,
+		},
+		VolumeCapabilities: []*csi.VolumeCapability{mountCap()},
+	})
+	require.NoError(t, err)
+	volID := createResp.GetVolume().GetVolumeId()
+	req := &csi.NodeStageVolumeRequest{
+		VolumeId:      volID,
+		VolumeContext: createResp.GetVolume().GetVolumeContext(),
+	}
+
+	devicePath, err := dv.directBackingDevice(req, volID)
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(cfg.StoragePath, volID, "directvol-rawdisk.8M"), *devicePath)
+
+	// Staging must not replace a lost backing device with an empty one.
+	require.NoError(t, os.RemoveAll(filepath.Join(cfg.StoragePath, volID)))
+	_, err = dv.directBackingDevice(req, volID)
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+	_, err = os.Stat(*devicePath)
+	require.True(t, os.IsNotExist(err))
 }
