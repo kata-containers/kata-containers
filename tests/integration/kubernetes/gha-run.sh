@@ -177,6 +177,11 @@ function deploy_coco_kbs() {
 function deploy_kata() {
 	platform="${1:-}"
 
+	if ! is_supported_hypervisor "${KATA_HYPERVISOR}" ; then
+		# shellcheck disable=SC2154
+		die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Supported values: ${ALL_HYPERVISORS[*]}"
+	fi
+
 	[[ "${platform}" = "kcli" ]] && \
 	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
