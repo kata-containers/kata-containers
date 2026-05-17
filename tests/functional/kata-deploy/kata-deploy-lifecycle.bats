@@ -36,10 +36,20 @@ LIFECYCLE_POD_NAME="kata-lifecycle-test"
 # The host root is mounted at /host inside the pod.
 # Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
 #
+# Optional second arg: pass "host-pid" to also set hostPID=true on the pod
+# so `ps`, `pgrep`, and `nsenter -t 1` see host processes — needed for the
+# rollout-test diagnostics that inspect the kata shim's PID/cgroup or the
+# host's systemd state.
+#
 # We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
 # into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
 run_on_host() {
 	local cmd="$1"
+	local mode="${2:-}"
+	local host_pid_field=""
+	if [[ "${mode}" == "host-pid" ]]; then
+		host_pid_field='"hostPID": true,'
+	fi
 	local node_name
 	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
 	local pod_name="host-exec-${RANDOM}"
@@ -50,6 +60,7 @@ run_on_host() {
 		--overrides="{
 			\"spec\": {
 				\"nodeName\": \"${node_name}\",
+				${host_pid_field}
 				\"activeDeadlineSeconds\": 300,
 				\"tolerations\": [{\"operator\": \"Exists\"}],
 				\"containers\": [{
@@ -77,6 +88,115 @@ run_on_host() {
 	kubectl logs "${pod_name}" 2>/dev/null
 	kubectl delete pod "${pod_name}" --ignore-not-found=true > /dev/null 2>&1
 	[[ "${phase}" == "Succeeded" ]]
+}
+
+# Run a multi-line shell script on the host node via a short-lived
+# privileged hostPID pod. The script is base64-encoded so it can use
+# double quotes, newlines, etc. without colliding with the JSON-encoded
+# `--overrides=` payload (which interpolates the command verbatim).
+#
+# Usage: run_script_on_host <<'EOF'
+#   echo "hello from host pid namespace"
+#   pgrep -af containerd
+# EOF
+run_script_on_host() {
+	local script
+	script=$(cat)
+	local b64
+	b64=$(printf '%s' "${script}" | base64 -w0)
+	run_on_host "echo ${b64} | base64 -d | sh" "host-pid"
+}
+
+# Capture and emit (to bats fd 3) a labeled block of state we need to
+# understand what happened to the test pod's container around the
+# kata-deploy rollout. Best-effort and tolerant of every underlying
+# kubectl / run_on_host failure — diagnostics must never flake the test.
+#
+# What we capture, and why:
+#  * lastState.terminated.{reason,exitCode,message,finishedAt}
+#    — kubelet's view of *why* the container died (e.g. Error + 137
+#      points at a SIGKILL from cgroup teardown);
+#  * containerID before/after — proves the kubelet bounced the
+#    container (new ID) vs just re-reported it;
+#  * containerd-shim-kata-v2 host PIDs and their cgroup membership
+#    — confirms whether the shim is in the runtime supervisor's
+#      cgroup and is therefore taken down by a `systemctl restart`
+#      with `KillMode=control-group`;
+#  * `systemctl show rke2-server -p KillMode -p MainPID -p ControlGroup`
+#    — the smoking gun for the rke2-vs-k3s behavior difference.
+dump_lifecycle_diagnostics() {
+	local stage="$1"
+	echo "# >>> diagnostics: ${stage} <<<" >&3
+
+	if kubectl get pod "${LIFECYCLE_POD_NAME}" >/dev/null 2>&1; then
+		local container_id last_reason last_exit last_message last_finished
+		container_id=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].containerID}' 2>/dev/null || true)
+		last_reason=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || true)
+		last_exit=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}' 2>/dev/null || true)
+		last_message=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].lastState.terminated.message}' 2>/dev/null || true)
+		last_finished=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].lastState.terminated.finishedAt}' 2>/dev/null || true)
+		echo "# lifecycle pod: containerID=${container_id}" >&3
+		echo "# lifecycle pod: lastState.terminated.reason=${last_reason}" >&3
+		echo "# lifecycle pod: lastState.terminated.exitCode=${last_exit}" >&3
+		echo "# lifecycle pod: lastState.terminated.message=${last_message}" >&3
+		echo "# lifecycle pod: lastState.terminated.finishedAt=${last_finished}" >&3
+	else
+		echo "# lifecycle pod ${LIFECYCLE_POD_NAME} not present (skipping pod-level dump)" >&3
+	fi
+
+	echo "# --- kata-deploy pods (${HELM_NAMESPACE}) ---" >&3
+	kubectl -n "${HELM_NAMESPACE}" get pods -o wide 2>&1 | sed 's/^/# /' >&3 || true
+
+	echo "# --- host-side kata shim / rke2-server state ---" >&3
+	run_script_on_host 2>&1 <<'HOSTSCRIPT' | sed 's/^/# /' >&3 || true
+echo "* containerd-shim-kata-v2 host processes:"
+ps -eo pid,ppid,start,cmd 2>/dev/null | grep -v grep | grep "containerd-shim-kata-v2" || echo "  (none)"
+echo "* containerd-shim-kata-v2 cgroup membership:"
+pids=$(pgrep -f "containerd-shim-kata-v2" 2>/dev/null || true)
+if [ -z "${pids}" ]; then
+    echo "  (no shim PIDs visible)"
+else
+    for pid in ${pids}; do
+        echo "  pid=${pid}:"
+        cat /proc/${pid}/cgroup 2>/dev/null | sed 's/^/    /' || echo "    (cgroup unreadable)"
+    done
+fi
+echo "* host systemd unit state (rke2-server):"
+if command -v nsenter >/dev/null 2>&1; then
+    nsenter -t 1 -m -u -i systemctl show rke2-server \
+        -p KillMode -p ActiveState -p MainPID -p ControlGroup 2>&1 \
+        | sed 's/^/  /' || echo "  (nsenter/systemctl failed)"
+else
+    echo "  (nsenter not available; falling back to on-disk unit files)"
+    for f in /host/etc/systemd/system/rke2-server.service \
+             /host/usr/lib/systemd/system/rke2-server.service; do
+        [ -f "${f}" ] || continue
+        echo "  -- ${f}:"
+        grep -E '^(KillMode|Description)=' "${f}" | sed 's/^/    /'
+    done
+fi
+HOSTSCRIPT
+
+	echo "# <<< diagnostics: ${stage} >>>" >&3
+}
+
+# Dump current + previous container logs for every kata-deploy pod in the
+# namespace. Useful *after* the rollout to see whether the new install pod
+# reached `restart_runtime`, and what the old (terminating) pod was doing.
+dump_kata_deploy_logs() {
+	local stage="$1"
+	echo "# >>> kata-deploy logs: ${stage} <<<" >&3
+	local p
+	for p in $(kubectl -n "${HELM_NAMESPACE}" get pods -o name 2>/dev/null \
+				| grep '^pod/kata-deploy-' || true); do
+		echo "# --- ${p#pod/}: current container (tail 200) ---" >&3
+		kubectl -n "${HELM_NAMESPACE}" logs --tail=200 "${p}" 2>&1 \
+			| sed "s|^|# ${p#pod/}: |" >&3 || true
+		echo "# --- ${p#pod/}: previous container (tail 200, if any) ---" >&3
+		kubectl -n "${HELM_NAMESPACE}" logs --previous --tail=200 "${p}" 2>&1 \
+			| sed "s|^|# ${p#pod/}/prev: |" >&3 || true
+	done
+	echo "# <<< kata-deploy logs: ${stage} >>>" >&3
 }
 
 setup_file() {
@@ -153,7 +273,12 @@ EOF
 	pod_uid_before=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.metadata.uid}')
 	local restart_count_before
 	restart_count_before=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].restartCount}')
+	local container_id_before
+	container_id_before=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].containerID}')
 	echo "# Pod UID before: ${pod_uid_before}, restarts: ${restart_count_before}" >&3
+	echo "# Container ID before: ${container_id_before}" >&3
+
+	dump_lifecycle_diagnostics "before-rollout"
 
 	# Trigger a DaemonSet restart — this simulates what happens when a user
 	# changes a label, updates a config value, or does a rolling update.
@@ -189,6 +314,11 @@ EOF
 	local restart_count_after
 	restart_count_after=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].restartCount}')
 	echo "# Restart count after: ${restart_count_after}" >&3
+
+	local container_id_after
+	container_id_after=$(kubectl get pod "${LIFECYCLE_POD_NAME}" -o jsonpath='{.status.containerStatuses[0].containerID}' 2>/dev/null || true)
+	echo "# Container ID after: ${container_id_after}" >&3
+
 	[[ "${restart_count_before}" == "${restart_count_after}" ]]
 
 	echo "# SUCCESS: Kata pod survived DaemonSet restart without crashing" >&3
@@ -242,6 +372,12 @@ EOF
 
 teardown() {
 	if [[ "${BATS_TEST_NAME}" == *"restart"* ]]; then
+		# Dump diagnostics *before* deleting the lifecycle pod so that
+		# kubectl describe / lastState still have something to report.
+		# Always dumping (pass or fail) gives us a baseline to compare
+		# against the failing rke2 case from the passing k3s/AKS runs.
+		dump_lifecycle_diagnostics "teardown"
+		dump_kata_deploy_logs "teardown"
 		kubectl delete pod "${LIFECYCLE_POD_NAME}" --ignore-not-found=true --wait=false 2>/dev/null || true
 	fi
 }
