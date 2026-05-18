@@ -677,6 +677,21 @@ impl Container {
         self.registry = registry::get_container(config, &self.image, is_pause_container)
             .await
             .unwrap();
+
+        if config.lock_digests && !self.image.contains("@") {
+            let digest = self.registry.manifest_digest.clone();
+            let image_ref = if !digest.is_empty() {
+                let base = self.image.rfind('/').map(|p| p + 1).unwrap_or(0);
+                let rest = self.image[base..]
+                    .find(':')
+                    .map(|colon| &self.image[..base + colon])
+                    .unwrap_or(&self.image);
+                format!("{}@{}", rest, digest)
+            } else {
+                self.image.clone()
+            };
+            self.image = image_ref;
+        }
     }
 
     pub fn get_env_variables(

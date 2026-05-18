@@ -55,7 +55,7 @@ impl Container {
         pull_image(&image_ref, k8_cri_image_client.clone()).await?;
 
         let image_ref_str = &image_ref.to_string();
-        let manifest = get_image_manifest(image_ref_str, &ctrd_client).await?;
+        let (manifest, manifest_digest) = get_image_manifest(image_ref_str, &ctrd_client).await?;
         debug!(
             "manifest: {}",
             serde_json::to_string_pretty(&manifest).unwrap()
@@ -102,6 +102,7 @@ impl Container {
             config_layer,
             passwd,
             group,
+            manifest_digest,
         })
     }
 }
@@ -133,7 +134,7 @@ pub async fn get_content(
 pub async fn get_image_manifest(
     image_ref: &str,
     client: &containerd_client::Client,
-) -> Result<serde_json::Value> {
+) -> Result<(serde_json::Value, String)> {
     let mut imageChannel = client.images();
 
     let req = GetImageRequest {
@@ -151,7 +152,7 @@ pub async fn get_image_manifest(
     let is_image_manifest = content.get("layers").is_some();
 
     if is_image_manifest {
-        return Ok(content);
+        return Ok((content, image_digest));
     }
 
     // else, content is an image index
@@ -171,9 +172,9 @@ pub async fn get_image_manifest(
         }
     }
 
-    let image_digest = manifestAmd64["digest"].as_str().unwrap();
+    let image_digest = manifestAmd64["digest"].as_str().unwrap().to_string();
 
-    get_content(image_digest, client).await
+    Ok((get_content(&image_digest, client).await?, image_digest))
 }
 
 pub async fn get_config_layer(
