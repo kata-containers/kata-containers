@@ -45,6 +45,7 @@ else
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
 		"k8s-confidential-attestation.bats" \
+		"k8s-measured-rootfs.bats" \
 	)
 
 	K8S_TEST_SMALL_HOST_TEE_POLICY_UNION=( \
@@ -84,7 +85,6 @@ else
 		"k8s-kill-all-process-in-container.bats" \
 		"k8s-limit-range.bats" \
 		"k8s-liveness-probes.bats" \
-		"k8s-measured-rootfs.bats" \
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
