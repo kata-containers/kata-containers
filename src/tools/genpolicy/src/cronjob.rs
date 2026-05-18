@@ -73,6 +73,20 @@ impl yaml::K8sResource for CronJob {
     ) {
         yaml::k8s_resource_init(&mut self.spec.jobTemplate.spec.template.spec, config).await;
         self.doc_mapping = doc_mapping.clone();
+        if config.lock_digests {
+            if let Some(spec_val) = self.doc_mapping
+                .get_mut("spec")
+                .and_then(|v| v.get_mut("jobTemplate"))
+                .and_then(|v| v.get_mut("spec"))
+                .and_then(|v| v.get_mut("template"))
+                .and_then(|v| v.get_mut("spec"))
+            {
+                yaml::rewrite_container_images(
+                    spec_val,
+                    &self.spec.jobTemplate.spec.template.spec.containers,
+                );
+            }
+        }
     }
 
     fn get_sandbox_name(&self) -> Option<String> {

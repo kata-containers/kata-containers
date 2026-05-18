@@ -276,6 +276,32 @@ pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
     Ok(serde_yaml::from_str(yaml)?)
 }
 
+pub fn rewrite_container_images(
+    spec_mapping: &mut serde_yaml::Value,
+    containers: &[pod::Container],
+) {
+    for key in &["containers", "initContainers"] {
+        if let Some(arr) = spec_mapping
+            .get_mut(*key)
+            .and_then(|v| v.as_sequence_mut())
+        {
+            for item in arr.iter_mut() {
+                let name = item
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if let Some(name) = name {
+                    if let Some(c) = containers.iter().find(|c| c.name == name) {
+                        if let Some(image_val) = item.get_mut("image") {
+                            *image_val = serde_yaml::Value::String(c.image.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     for container in &mut spec.containers {
         let is_pause_container = false;

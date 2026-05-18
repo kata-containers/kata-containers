@@ -999,6 +999,11 @@ impl yaml::K8sResource for Pod {
     async fn init(&mut self, config: &Config, doc_mapping: &serde_yaml::Value, _silent: bool) {
         yaml::k8s_resource_init(&mut self.spec, config).await;
         self.doc_mapping = doc_mapping.clone();
+        if config.lock_digests {
+            if let Some(spec_val) = self.doc_mapping.get_mut("spec") {
+                yaml::rewrite_container_images(spec_val, &self.spec.containers);
+            }
+        }
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
