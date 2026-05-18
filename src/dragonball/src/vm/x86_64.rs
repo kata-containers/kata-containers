@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ops::Deref;
 
-use dbs_acpi::sdt::Sdt;
+use dbs_acpi::*;
 use dbs_address_space::{AddressSpace, AddressSpaceRegionType};
 use dbs_boot::{
     add_e820_entry, bootparam, layout, mptable, tdshim::*, BootParamsWrapper, FirmwareType,
@@ -215,8 +215,11 @@ impl Vm {
                 .cloned()
                 .ok_or(StartMicroVmError::GuestMemoryNotInitialized)?;
             let mut hob_address = 0;
-            // TODO: Fill the empty list with ACPI table content
-            let acpi_tables: Vec<Sdt> = Vec::new();
+            let acpi_tables: Vec<sdt::Sdt> = vec![
+                create_madt_table(self.vm_config.max_vcpu_count, self.vm_config.vcpu_count),
+                create_fadt_table(),
+                create_dsdt_table(),
+            ];
 
             self.load_kernel_with_tdshim(
                 &sections,
@@ -383,7 +386,7 @@ impl Vm {
         vm_memory: &GuestMemoryImpl,
         address_space: AddressSpace,
         hob_address: &mut u64,
-        acpi_tables: &Vec<Sdt>,
+        acpi_tables: &Vec<sdt::Sdt>,
     ) -> std::result::Result<(), StartMicroVmError> {
         let mut required_sections = vec!["Bfv", "TdHob", "PayloadParam"];
 
@@ -461,7 +464,7 @@ impl Vm {
         vm_memory: &GuestMemoryImpl,
         address_space: AddressSpace,
         payload_info: PayloadInfo,
-        acpi_tables: &Vec<Sdt>,
+        acpi_tables: &Vec<sdt::Sdt>,
     ) -> std::result::Result<(), StartMicroVmError> {
         let mut hob = TdHob::start(hob_address);
 
