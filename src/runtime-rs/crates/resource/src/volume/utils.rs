@@ -64,6 +64,44 @@ pub(crate) async fn generate_shared_path(
     Ok(guest_path)
 }
 
+/// Extract storage source information from block device configuration.
+/// This helper function handles the common logic for determining the storage source
+/// based on the driver type (BLK/SCSI/CCW).
+fn extract_storage_source(
+    driver_option: &str,
+    pci_path: Option<&hypervisor::device::pci_path::PciPath>,
+    scsi_addr: Option<&str>,
+    ccw_addr: Option<&str>,
+    virt_path: &str,
+) -> Result<String> {
+    let source = match driver_option {
+        KATA_BLK_DEV_TYPE => {
+            if let Some(pci_path) = pci_path {
+                pci_path.to_string()
+            } else {
+                return Err(anyhow!("block driver is blk but no pci path exists"));
+            }
+        }
+        KATA_SCSI_DEV_TYPE => {
+            if let Some(scsi_addr) = scsi_addr {
+                scsi_addr.to_string()
+            } else {
+                return Err(anyhow!("block driver is scsi but no scsi address exists"));
+            }
+        }
+        KATA_CCW_DEV_TYPE => {
+            if let Some(ccw_addr) = ccw_addr {
+                ccw_addr.to_string()
+            } else {
+                return Err(anyhow!("block driver is ccw but no ccw address exists"));
+            }
+        }
+        _ => virt_path.to_string(),
+    };
+
+    Ok(source)
+}
+
 pub async fn handle_block_volume(
     device_info: DeviceType,
     m: &oci::Mount,
@@ -89,64 +127,26 @@ pub async fn handle_block_volume(
 
     if let DeviceType::BlockModern(device_mod) = device_info.clone() {
         let device = &device_mod.lock().await;
-        let blk_driver = device.config.driver_option.clone();
-        // blk, mmioblk
-        storage.driver = blk_driver.clone();
-        storage.source = match blk_driver.as_str() {
-            KATA_BLK_DEV_TYPE => {
-                if let Some(pci_path) = &device.config.pci_path {
-                    pci_path.to_string()
-                } else {
-                    return Err(anyhow!("block driver is blk but no pci path exists"));
-                }
-            }
-            KATA_SCSI_DEV_TYPE => {
-                if let Some(scsi_addr) = &device.config.scsi_addr {
-                    scsi_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
-                }
-            }
-            KATA_CCW_DEV_TYPE => {
-                if let Some(ccw_addr) = &device.config.ccw_addr {
-                    ccw_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
-                }
-            }
-            _ => device.config.virt_path.clone(),
-        };
+        storage.driver = device.config.driver_option.clone();
+        storage.source = extract_storage_source(
+            &device.config.driver_option,
+            device.config.pci_path.as_ref(),
+            device.config.scsi_addr.as_deref(),
+            device.config.ccw_addr.as_deref(),
+            &device.config.virt_path,
+        )?;
         device_id = device.device_id.clone();
     }
 
     if let DeviceType::Block(device) = device_info {
-        let blk_driver = device.config.driver_option;
-        // blk, mmioblk
-        storage.driver = blk_driver.clone();
-        storage.source = match blk_driver.as_str() {
-            KATA_BLK_DEV_TYPE => {
-                if let Some(pci_path) = device.config.pci_path {
-                    pci_path.to_string()
-                } else {
-                    return Err(anyhow!("block driver is blk but no pci path exists"));
-                }
-            }
-            KATA_SCSI_DEV_TYPE => {
-                if let Some(scsi_addr) = device.config.scsi_addr {
-                    scsi_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
-                }
-            }
-            KATA_CCW_DEV_TYPE => {
-                if let Some(ccw_addr) = device.config.ccw_addr {
-                    ccw_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
-                }
-            }
-            _ => device.config.virt_path,
-        };
+        storage.driver = device.config.driver_option.clone();
+        storage.source = extract_storage_source(
+            &device.config.driver_option,
+            device.config.pci_path.as_ref(),
+            device.config.scsi_addr.as_deref(),
+            device.config.ccw_addr.as_deref(),
+            &device.config.virt_path,
+        )?;
         device_id = device.device_id;
     }
 
