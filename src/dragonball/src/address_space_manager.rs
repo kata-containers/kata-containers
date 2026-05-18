@@ -29,7 +29,12 @@ use dbs_address_space::{
 use dbs_allocator::Constraint;
 #[cfg(target_arch = "x86_64")]
 use dbs_boot::layout::{BIOS_MEM_SIZE, BIOS_MEM_START};
-use kvm_bindings::kvm_userspace_memory_region;
+use kvm_bindings::{
+    kvm_create_guest_memfd, kvm_userspace_memory_region, kvm_userspace_memory_region2,
+    KVM_MEM_GUEST_MEMFD,
+};
+#[cfg(target_arch = "x86_64")]
+use kvm_bindings::{kvm_memory_attributes, KVM_MEMORY_ATTRIBUTE_PRIVATE};
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, warn};
 use nix::sys::mman;
@@ -153,6 +158,19 @@ pub enum AddressManagerError {
     /// Failed to create Address Space Region
     #[error("address manager failed to create Address Space Region {0}")]
     CreateAddressSpaceRegion(#[source] AddressSpaceError),
+
+    /// Failed to create VM-bound memfd
+    #[error("address manager failed to create VM-bound memfd: {0}")]
+    CreateVmboundMemfd(#[source] kvm_ioctls::Error),
+
+    /// Failed to set KVM memory slot with VM-bound memfd
+    #[error("address manager failed to configure KVM memory slot with VM-bound memfd: {0}")]
+    KvmSetMemorySlotWithMemfd(#[source] kvm_ioctls::Error),
+
+    #[cfg(target_arch = "x86_64")]
+    /// Failed to configure KVM memory attributes
+    #[error("address manager failed to configure KVM memory attributes: {0}")]
+    KvmSetMemoryAttributes(#[source] kvm_ioctls::Error),
 }
 
 type Result<T> = std::result::Result<T, AddressManagerError>;
@@ -167,6 +185,8 @@ pub struct AddressSpaceMgrBuilder<'a> {
     dirty_page_logging: bool,
     vmfd: Option<Arc<VmFd>>,
     use_firmware: bool,
+    #[cfg(target_arch = "x86_64")]
+    kvm_mem_attr_private: bool,
 }
 
 impl<'a> AddressSpaceMgrBuilder<'a> {
@@ -184,6 +204,8 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
             dirty_page_logging: false,
             vmfd: None,
             use_firmware: false,
+            #[cfg(target_arch = "x86_64")]
+            kvm_mem_attr_private: false,
         })
     }
 
@@ -208,6 +230,12 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
     /// Enable/disable firmware memory region.
     pub fn toggle_use_firmware(&mut self, firmware: bool) {
         self.use_firmware = firmware;
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    /// Set KVM memory attribute to private/shared.
+    pub fn toggle_kvm_mem_attr_private(&mut self, private: bool) {
+        self.kvm_mem_attr_private = private;
     }
 
     /// Set KVM [`VmFd`] handle to configure memory slots.
@@ -431,24 +459,67 @@ impl AddressSpaceMgr {
             let host_addr = mmap_reg
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|_e| AddressManagerError::InvalidOperation)?;
-            let flags = 0u32;
+            let mut flags = 0u32;
 
-            let mem_region = kvm_userspace_memory_region {
-                slot,
-                guest_phys_addr: reg.start_addr().raw_value(),
-                memory_size: reg.len(),
-                userspace_addr: host_addr as u64,
-                flags,
-            };
+            #[cfg(not(target_arch = "x86_64"))]
+            let kvm_guest_memfd = false;
+            #[cfg(target_arch = "x86_64")]
+            let kvm_guest_memfd = param.kvm_mem_attr_private;
 
-            info!(
-                "VM: guest memory region {:x} starts at {:x?}",
-                reg.start_addr().raw_value(),
-                host_addr
-            );
-            // Safe because the guest regions are guaranteed not to overlap.
-            unsafe { vmfd.set_user_memory_region(mem_region) }
-                .map_err(AddressManagerError::KvmSetMemorySlot)?;
+            if !kvm_guest_memfd {
+                let mem_region = kvm_userspace_memory_region {
+                    slot,
+                    guest_phys_addr: reg.start_addr().raw_value(),
+                    memory_size: reg.len(),
+                    userspace_addr: host_addr as u64,
+                    flags,
+                };
+
+                info!(
+                    "VM: guest memory region {:x} starts at {:x?}",
+                    reg.start_addr().raw_value(),
+                    host_addr
+                );
+                // Safe because the guest regions are guaranteed not to overlap.
+                unsafe { vmfd.set_user_memory_region(mem_region) }
+                    .map_err(AddressManagerError::KvmSetMemorySlot)?;
+            } else {
+                let memfd = vmfd
+                    .create_guest_memfd(kvm_create_guest_memfd {
+                        size: reg.len(),
+                        flags: 0,
+                        ..Default::default()
+                    })
+                    .map_err(AddressManagerError::CreateVmboundMemfd)?;
+                flags |= KVM_MEM_GUEST_MEMFD;
+                let guest_phys_addr = reg.start_addr().raw_value();
+                let memory_size = reg.len();
+                unsafe {
+                    vmfd.set_user_memory_region2(kvm_userspace_memory_region2 {
+                        slot,
+                        flags,
+                        guest_phys_addr,
+                        memory_size,
+                        userspace_addr: host_addr as u64,
+                        guest_memfd_offset: 0,
+                        guest_memfd: memfd as u32,
+                        ..Default::default()
+                    })
+                    .map_err(AddressManagerError::KvmSetMemorySlotWithMemfd)?;
+                }
+
+                #[cfg(target_arch = "x86_64")]
+                if param.kvm_mem_attr_private {
+                    let attributes = KVM_MEMORY_ATTRIBUTE_PRIVATE as u64;
+                    vmfd.set_memory_attributes(kvm_memory_attributes {
+                        address: guest_phys_addr,
+                        size: memory_size,
+                        attributes,
+                        flags: 0,
+                    })
+                    .map_err(AddressManagerError::KvmSetMemoryAttributes)?;
+                }
+            }
         }
 
         self.base_to_slot

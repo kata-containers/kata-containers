@@ -34,7 +34,6 @@ use crate::address_space_manager::{
     AddressManagerError, AddressSpaceMgr, AddressSpaceMgrBuilder, GuestAddressSpaceImpl,
     GuestMemoryImpl,
 };
-#[cfg(target_arch = "x86_64")]
 use crate::api::v1::ConfidentialVmType;
 use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
@@ -426,6 +425,15 @@ impl Vm {
             AddressManagerError::GuestMemoryNotInitialized,
         ))
     }
+
+    /// Get confidential VM type for micro VM, if any
+    pub fn confidential_vm_type(&self) -> Option<ConfidentialVmType> {
+        self.shared_info
+            .read()
+            .unwrap()
+            .confidential_vm_type
+            .clone()
+    }
 }
 
 impl Vm {
@@ -616,6 +624,8 @@ impl Vm {
             .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
         address_space_param.toggle_use_firmware(self.firmware_type.is_some());
+        #[cfg(target_arch = "x86_64")]
+        address_space_param.toggle_kvm_mem_attr_private(self.kvm_mem_attr_private());
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
             .map_err(StartMicroVmError::AddressManagerError)?;
