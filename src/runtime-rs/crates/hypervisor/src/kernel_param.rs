@@ -131,6 +131,7 @@ impl KernelParams {
             Param::new("panic", "1"),
             Param::new("systemd.unit", "kata-containers.target"),
             Param::new("systemd.mask", "systemd-networkd.service"),
+            Param::new("systemd.mask", "systemd-networkd.socket"),
         ];
 
         if debug {
