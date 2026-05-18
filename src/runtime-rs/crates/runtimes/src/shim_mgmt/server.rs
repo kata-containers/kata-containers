@@ -16,7 +16,7 @@ use std::{fs, path::Path, sync::Arc};
 use anyhow::{Context, Result};
 use common::Sandbox;
 use hyper::{server::conn::Http, service::service_fn};
-use shim_interface::{mgmt_socket_addr, shim_mgmt::ERR_NO_SHIM_SERVER};
+use shim_interface::{sb_storage_path, SHIM_MGMT_SOCK_NAME};
 use tokio::net::UnixListener;
 
 use super::handlers::handler_mux;
@@ -33,10 +33,14 @@ pub struct MgmtServer {
 impl MgmtServer {
     /// construct a new management server
     pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Result<Self> {
-        Ok(Self {
-            s_addr: mgmt_socket_addr(sid).context(ERR_NO_SHIM_SERVER)?,
-            sandbox,
-        })
+        // make sure the storage path exists, and the socket file will be created in that path
+        let kata_path = sb_storage_path();
+        fs::create_dir_all(kata_path)
+            .context(format!("failed to create kata path directory {kata_path}"))?;
+
+        let s_addr = format!("unix://{kata_path}/{sid}/{SHIM_MGMT_SOCK_NAME}");
+
+        Ok(Self { s_addr, sandbox })
     }
 
     // TODO(when metrics is supported): write metric addresses to fs
