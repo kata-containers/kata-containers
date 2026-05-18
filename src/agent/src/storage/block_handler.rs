@@ -163,8 +163,8 @@ impl StorageHandler for VirtioBlkCcwHandler {
         let ccw_device = ccw::Device::from_str(&storage.source)?;
         let dev_path = get_virtio_blk_ccw_device_name(ctx.sandbox, &ccw_device).await?;
         storage.source = dev_path;
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
+        let dev_num = get_device_number(&storage.source, None)?;
+        handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
 
     #[cfg(not(target_arch = "s390x"))]
