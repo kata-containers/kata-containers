@@ -13,7 +13,7 @@ use dbs_address_space::AddressSpace;
 use dbs_arch::gic::GICDevice;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::pmu::PmuError;
-use dbs_boot::InitrdConfig;
+use dbs_boot::{FirmwareType, InitrdConfig};
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_ioctls::VmFd;
@@ -34,6 +34,8 @@ use crate::address_space_manager::{
     AddressManagerError, AddressSpaceMgr, AddressSpaceMgrBuilder, GuestAddressSpaceImpl,
     GuestMemoryImpl,
 };
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
@@ -211,6 +213,8 @@ pub struct Vm {
 
     #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
+
+    firmware_type: Option<FirmwareType>,
 }
 
 impl Vm {
@@ -233,6 +237,18 @@ impl Vm {
             api_shared_info.clone(),
         )
         .map_err(Error::DeviceMgrError)?;
+
+        #[cfg(target_arch = "x86_64")]
+        let firmware_type = if api_shared_info.read().unwrap().confidential_vm_type
+            == Some(ConfidentialVmType::TDX)
+        {
+            Some(FirmwareType::Tdshim)
+        } else {
+            None
+        };
+
+        #[cfg(not(target_arch = "x86_64"))]
+        let firmware_type = None;
 
         Ok(Vm {
             epoll_manager,
@@ -258,6 +274,8 @@ impl Vm {
             irqchip_handle: None,
             #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
+
+            firmware_type,
         })
     }
 
@@ -597,6 +615,7 @@ impl Vm {
         let mut address_space_param = AddressSpaceMgrBuilder::new(&mem_type, &mem_file_path)
             .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
+        address_space_param.toggle_use_firmware(self.firmware_type.is_some());
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
             .map_err(StartMicroVmError::AddressManagerError)?;
@@ -1072,6 +1091,7 @@ pub mod tests {
             kernel_file.into_file(),
             None,
             cmd_line,
+            None,
         ));
 
         vm.init_devices(epoll_mgr).unwrap();
