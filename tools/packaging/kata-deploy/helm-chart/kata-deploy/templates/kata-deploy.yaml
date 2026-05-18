@@ -61,6 +61,9 @@ spec:
       tolerations:
 {{- toYaml . | nindent 8 }}
 {{- end }}
+{{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
 {{- if index .Values "node-feature-discovery" "enabled" }}
       # When node-feature-discovery is managed by this chart (enabled: true), enforce virtualization requirements.
       # Kata Containers requires hardware virtualization support to function.

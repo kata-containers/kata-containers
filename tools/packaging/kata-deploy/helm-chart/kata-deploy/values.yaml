@@ -38,6 +38,23 @@ containerd:
 nodeSelector: {}
 tolerations: []
 
+# Priority class name for the kata-deploy DaemonSet pods.
+#
+# kata-deploy is an infrastructure DaemonSet that installs Kata runtime
+# artifacts on every node. If it gets evicted under node pressure, the
+# node loses its Kata runtime until the pod is rescheduled. Setting a
+# high-priority class prevents the kubelet from evicting kata-deploy
+# before lower-priority workloads.
+#
+# Kubernetes ships "system-node-critical" and "system-cluster-critical"
+# PriorityClasses by default. You can also create your own.
+#
+# Examples:
+# priorityClassName: system-node-critical
+# priorityClassName: system-cluster-critical
+# priorityClassName: my-custom-priority-class
+priorityClassName: "system-node-critical"
+
 # Update strategy for the kata-deploy DaemonSet
 # Default is RollingUpdate with maxUnavailable: 1
 # Examples:
