@@ -6,55 +6,51 @@
 [package]
 name = "kata-agent-ctl"
 version = "0.0.1"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-protocols = { path = "../../libs/protocols", features = ["with-serde"] }
-oci-spec = { version = "0.8.1", features = ["runtime"] }
+protocols = { workspace = true, features = ["with-serde"] }
+oci-spec.workspace = true
 
-clap = { version = "4.5.40", features = ["derive", "cargo"] }
-lazy_static = "1.4.0"
-anyhow = "1.0.31"
+clap = { workspace = true, features = ["derive", "cargo"] }
+lazy_static.workspace = true
+anyhow.workspace = true
 hex = "0.4.2"
 byteorder = "1.3.4"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
-logging = { path = "../../libs/logging" }
-slog = "2.7.0"
-slog-scope = "4.4.0"
-rand = "0.10.1"
-protobuf = "3.2.0"
+logging.workspace = true
+slog.workspace = true
+slog-scope.workspace = true
+rand.workspace = true
+protobuf.workspace = true
 
-nix = "0.26.4"
-libc = "0.2.112"
+nix.workspace = true
+libc.workspace = true
 # XXX: Must be the same as the version used by the agent
-ttrpc = "0.8.4"
+ttrpc.workspace = true
 
 # For parsing timeouts
 humantime = "2.1.0"
 
 # For Options (state passing)
-serde = { version = "1.0.131", features = ["derive"] }
-serde_json = "1.0.73"
+serde.workspace = true
+serde_json.workspace = true
 
-kata-types = { path = "../../libs/kata-types" }
+kata-types.workspace = true
 
 # hypervisor crate from runtime-rs
-hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = [
-    "cloud-hypervisor",
-] }
-kata-sys-util = { path = "../../libs/kata-sys-util" }
-safe-path = { path = "../../libs/safe-path" }
+hypervisor.workspace = true
+kata-sys-util.workspace = true
+safe-path.workspace = true
 
-tokio = { version = "1.44.2", features = ["signal"] }
+tokio.workspace = true
 
 [features]
 default = ["cloud-hypervisor"]
 
 # Enable the Cloud Hypervisor driver
 cloud-hypervisor = []
-
-[workspace]

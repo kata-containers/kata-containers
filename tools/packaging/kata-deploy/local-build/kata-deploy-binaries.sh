@@ -1288,7 +1288,6 @@ install_tools_helper() {
 	[[ "${tool}" = "trace-forwarder" ]] && tool_binary="kata-trace-forwarder"
 
 	local tool_build_dir="target"
-	[[ "${tool}" = "agent-ctl" ]] && tool_build_dir="src/tools/${tool}"
 	binary=$(find "${repo_root_dir}/${tool_build_dir}" -type f -name "${tool_binary}")
 
 	binary_count=$(echo "${binary}" | grep -c '^' || echo "0")

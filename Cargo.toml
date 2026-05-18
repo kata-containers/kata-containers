@@ -40,13 +40,10 @@ members = [
   "src/dragonball/dbs_utils",
   "src/dragonball/dbs_virtio_devices",
 
-  # genpolicy
+  # tools
+  "src/tools/agent-ctl",
   "src/tools/genpolicy",
-
-  # kata-ctl
   "src/tools/kata-ctl",
-
-  # trace-forwarder
   "src/tools/trace-forwarder",
 
   # kata-deploy (Kubernetes installer binary)
