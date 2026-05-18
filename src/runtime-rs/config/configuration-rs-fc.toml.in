@@ -314,9 +314,9 @@ debug_console_enabled = false
 # (default: 45000)
 dial_timeout_ms = 45000
 
-# Confidential Data Hub API timeout value in seconds
-# (default: 50)
-cdh_api_timeout = 50
+# Confidential Data Hub API timeout value in milliseconds
+# (default: 50000)
+cdh_api_timeout_ms = 50000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.

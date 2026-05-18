@@ -551,6 +551,10 @@ launch_process_timeout = 6
 # Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
+# Confidential Data Hub API timeout value in milliseconds
+# (default: 50000)
+cdh_api_timeout_ms = 50000
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log

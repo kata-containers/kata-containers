@@ -231,6 +231,14 @@ impl TomlConfig {
                     launch_process_timeout,
                 );
             }
+            if cfg.cdh_api_timeout_ms > 0 {
+                // Convert milliseconds to seconds for agent kernel parameter
+                let cdh_api_timeout_secs = cfg.cdh_api_timeout_ms / 1000;
+                kv.insert(
+                    "agent.cdh_api_timeout".to_string(),
+                    cdh_api_timeout_secs.to_string(),
+                );
+            }
             if cfg.debug_console_enabled {
                 kv.insert(DEBUG_CONSOLE_FLAG.to_string(), "".to_string());
                 kv.insert(
