@@ -1128,14 +1128,6 @@ function run_static_checks()
 	bash "${this_script_dir}/static-checks.sh" "$@"
 }
 
-function run_docs_url_alive_check()
-{
-	# Make sure we have the targeting branch
-	git remote set-branches --add origin "${branch}"
-	git fetch -a
-	bash "${this_script_dir}/static-checks.sh" --docs --all "github.com/kata-containers/kata-containers"
-}
-
 function run_get_pr_changed_file_details()
 {
 	# Make sure we have the targeting branch

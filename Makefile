@@ -43,9 +43,6 @@ generate-protocols:
 static-checks: static-checks-build
 	bash tests/static-checks.sh
 
-docs-url-alive-check:
-	bash ci/docs-url-alive-check.sh
-
 build-and-publish-kata-debug:
 	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG}
 
@@ -61,6 +58,5 @@ docs-serve: docs-build
 	install-tarball \
 	default \
 	static-checks \
-	docs-url-alive-check \
 	docs-build \
 	docs-serve
