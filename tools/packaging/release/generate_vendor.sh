@@ -40,7 +40,7 @@ create_vendor_tarball() {
 				    Cargo.lock)
 				        [[ -d .cargo ]] || mkdir .cargo
 				        cargo vendor >> .cargo/config.toml
-                                        vendor_dir_list+=" ${dir}/vendor ${dir}/.cargo/config"
+                                        vendor_dir_list+=" ${dir}/vendor ${dir}/.cargo/config.toml"
 				        ;;
 				    go.mod)
                                         go mod tidy
