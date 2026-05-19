@@ -193,6 +193,27 @@ pub struct DmVerityInfo {
     pub hashsize: u64,
     /// Offset of hash area/superblock on hash_device.
     pub offset: u64,
+    /// Salt value for dm-verity (256-bit hex string, optional).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub salt: Option<String>,
+    /// Hash type for dm-verity (0 or 1).
+    /// Type 0: original format without padding
+    /// Type 1: current format with padding
+    #[serde(default = "default_hash_type")]
+    pub hash_type: u32,
+    /// Whether to skip superblock at hash offset.
+    /// true: no superblock, hash tree starts at offset
+    /// false: superblock exists at offset, hash tree after superblock
+    #[serde(default = "default_no_superblock")]
+    pub no_superblock: bool,
+}
+
+fn default_hash_type() -> u32 {
+    1
+}
+
+fn default_no_superblock() -> bool {
+    false
 }
 
 /// Information about directly assigned volume.
