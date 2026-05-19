@@ -45,9 +45,6 @@ use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
 
-pub const DEFAULT_FS_QUEUES: usize = 1;
-const DEFAULT_FS_QUEUE_SIZE: u16 = 1024;
-
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         if self.state != VmmState::VmRunning {
@@ -143,17 +140,8 @@ impl CloudHypervisorInner {
             ));
         }
 
-        let num_queues: usize = if device.config.queue_num > 0 {
-            device.config.queue_num as usize
-        } else {
-            DEFAULT_FS_QUEUES
-        };
-
-        let queue_size: u16 = if device.config.queue_num > 0 {
-            u16::try_from(device.config.queue_size)?
-        } else {
-            DEFAULT_FS_QUEUE_SIZE
-        };
+        let num_queues = device.config.queue_num as usize;
+        let queue_size = u16::try_from(device.config.queue_size)?;
 
         let socket_path = if device.config.sock_path.starts_with('/') {
             PathBuf::from(device.config.sock_path)
@@ -545,17 +533,8 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         let cfg = settings.cfg;
         let vm_path = settings.vm_path;
 
-        let num_queues: usize = if cfg.queue_num > 0 {
-            cfg.queue_num as usize
-        } else {
-            DEFAULT_FS_QUEUES
-        };
-
-        let queue_size: u16 = if cfg.queue_num > 0 {
-            u16::try_from(cfg.queue_size)?
-        } else {
-            DEFAULT_FS_QUEUE_SIZE
-        };
+        let num_queues = cfg.queue_num as usize;
+        let queue_size = u16::try_from(cfg.queue_size)?;
 
         let socket_path = if cfg.sock_path.starts_with('/') {
             PathBuf::from(cfg.sock_path)

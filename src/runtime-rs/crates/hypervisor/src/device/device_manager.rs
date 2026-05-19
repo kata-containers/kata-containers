@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
-use kata_types::config::hypervisor::{BlockDeviceInfo, TopologyConfigInfo, VIRTIO_SCSI};
+use kata_types::config::hypervisor::{BlockDeviceInfo, SharedFsInfo, TopologyConfigInfo, VIRTIO_SCSI};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -124,6 +124,10 @@ impl DeviceManager {
 
     async fn get_block_device_info(&self) -> BlockDeviceInfo {
         self.hypervisor.hypervisor_config().await.blockdev_info
+    }
+
+    async fn get_shared_fs_info(&self) -> SharedFsInfo {
+        self.hypervisor.hypervisor_config().await.shared_fs
     }
 
     async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
@@ -712,6 +716,10 @@ pub async fn do_update_device(
 
 pub async fn get_block_device_info(d: &RwLock<DeviceManager>) -> BlockDeviceInfo {
     d.read().await.get_block_device_info().await
+}
+
+pub async fn get_shared_fs_info(d: &RwLock<DeviceManager>) -> SharedFsInfo {
+    d.read().await.get_shared_fs_info().await
 }
 
 #[cfg(test)]
