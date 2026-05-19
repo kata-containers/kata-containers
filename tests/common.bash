@@ -1400,9 +1400,19 @@ function install_crio() {
 	sudo mkdir -p /etc/apt/keyrings
 	sudo mkdir -p /etc/apt/sources.list.d
 
-	curl -fsSL "https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/Release.key" | \
+	local major minor repo_url
+	major=$(echo "${version}" | cut -d. -f1)
+	minor=$(echo "${version}" | cut -d. -f2)
+
+	if [ "${major}" -gt 1 ] || [ "${minor}" -ge 33 ]; then
+		repo_url="https://download.opensuse.org/repositories/isv:/cri-o:/stable:/v${version}/deb"
+	else
+		repo_url="https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb"
+	fi
+
+	curl -fsSL "${repo_url}/Release.key" | \
 		sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
-	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/ /" | \
+	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] ${repo_url}/ /" | \
 		sudo tee /etc/apt/sources.list.d/cri-o.list
 
 	apt_get_update
