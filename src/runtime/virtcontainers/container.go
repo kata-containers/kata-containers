@@ -1527,7 +1527,10 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	}
 
 	if err := c.state.ValidTransition(c.state.State, types.StateStopped); err != nil {
-		return err
+		if !force {
+			return err
+		}
+		c.Logger().WithError(err).Warn("invalid state transition to Stopped; continuing because force is set")
 	}
 
 	// Force the container to be killed. For most of the cases, this
