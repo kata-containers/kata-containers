@@ -83,8 +83,10 @@ run_agent_ctl()
 
 	local server_address="--server-address ${local_agent_server_addr}"
 
+	info "Running agent-ctl with commands: ${cmds}"
+
 	# shellcheck disable=SC2086
-	eval \
+	if ! eval \
 		sudo \
 		RUST_BACKTRACE=full \
 		"${agent_ctl_path}" \
@@ -93,6 +95,13 @@ run_agent_ctl()
 		${server_address} \
 		${cmds} \
 		${redirect}
+	then
+		warn "agent-ctl command failed. Last 50 lines of agent-ctl log:"
+		tail -n 50 "${ctl_log_file}" >&2 || true
+		warn "Last 50 lines of agent log:"
+		tail -n 50 "${agent_log_file}" >&2 || true
+		return 1
+	fi
 }
 
 get_agent_pid()
