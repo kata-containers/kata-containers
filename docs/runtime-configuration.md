@@ -23,8 +23,10 @@ rootless = false
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
+enable_annotations = ["enable_iommu", "kernel_params"]
 ```
+
+Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you fully trust all annotation sources. Allowing pods to pass `virtiofsd` extra arguments can be abused to inject unsafe daemon options and lead to malicious host-side behavior.
 
 These files should never be modified directly. If you wish to create a modified version of these files, you may create your own [custom runtime](helm-configuration.md#custom-runtimes). For example, to modify the image path, we provide these values to helm:
 

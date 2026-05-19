@@ -49,8 +49,10 @@ Hypervisor annotations must be explicitly whitelisted in the Kata runtime config
 
 ```toml title="/path/to/configuration.toml"
 # List of valid annotation names for the hypervisor
-enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
+enable_annotations = ["enable_iommu", "kernel_params"]
 ```
+
+Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you fully trust all annotation sources. Passing arbitrary `virtiofsd` options can be abused for malicious host-side behavior.
 
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
@@ -107,7 +109,7 @@ enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
 | `io.katacontainers.config.hypervisor.virtio_fs_cache_size` | uint32 | virtio-fs DAX cache size in `MiB` |
 | `io.katacontainers.config.hypervisor.virtio_fs_cache` | string | the cache mode for virtio-fs, valid values are `always`, `auto` and `never` |
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
-| `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
+| `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon. **Security warning:** enabling this annotation can be abused for malicious host-side behavior |
 | `io.katacontainers.config.hypervisor.enable_guest_swap` | `boolean` | enable swap in the guest |
 | `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
 | `io.katacontainers.config.hypervisor.default_gpus` | uint32 | the minimum number of GPUs required for the VM. Only used by remote hypervisor to help with instance selection |
