@@ -296,6 +296,38 @@ pub async fn handle_cdi_devices(
         info!(logger, "no CDI annotations, no devices to inject");
         return Ok(());
     }
+
+    // [instrument-coldplug-vf] log the parsed CDI devices and the
+    // contents of the spec dir at injection time. When the cache fails
+    // to resolve a device (e.g. "unresolvable CDI devices nvidia.com/...")
+    // the journal will then have everything we need: requested devices,
+    // available CDI YAML files, and their sizes.
+    info!(
+        logger,
+        "handle_cdi_devices: {} device(s) requested for injection, spec_dir={}",
+        devices.len(),
+        spec_dir;
+        "devices" => format!("{:?}", devices),
+    );
+    if let Ok(entries) = fs::read_dir(spec_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            info!(
+                logger,
+                "handle_cdi_devices: spec_dir entry";
+                "path" => format!("{:?}", path),
+                "size" => size,
+            );
+        }
+    } else {
+        warn!(
+            logger,
+            "handle_cdi_devices: spec_dir is not readable";
+            "spec_dir" => spec_dir,
+        );
+    }
+
     // Explicitly set the cache options to disable auto-refresh and
     // to use the single spec dir "/var/run/cdi" for tests it can be overridden
     let options: Vec<CdiOption> = vec![with_auto_refresh(false), with_spec_dirs(&[spec_dir])];
@@ -335,9 +367,21 @@ pub async fn handle_cdi_devices(
             }
         }
     }
+    // [instrument-coldplug-vf] On final timeout, dump the requested
+    // devices alongside the spec_dir contents one more time so the
+    // failure is self-explanatory in journals.
+    let mut available_files: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir(spec_dir) {
+        for entry in entries.flatten() {
+            available_files.push(format!("{:?}", entry.path()));
+        }
+    }
     Err(anyhow!(
-        "failed to inject devices after CDI timeout of {} seconds",
-        cdi_timeout.as_secs()
+        "failed to inject devices after CDI timeout of {} seconds (devices={:?}, spec_dir={}, available={:?})",
+        cdi_timeout.as_secs(),
+        devices,
+        spec_dir,
+        available_files,
     ))
 }
 

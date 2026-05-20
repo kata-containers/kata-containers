@@ -251,7 +251,39 @@ impl AgentService {
         // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
         // readonly
         dump_nvidia_cdi_yaml(&sl())?;
-        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
+        // [instrument-coldplug-vf] log every CDI annotation observed on the
+        // OCI spec so we can correlate failures (e.g. "unresolvable CDI
+        // devices") with what containerd actually delivered to the agent.
+        if let Some(annotations) = oci.annotations().as_ref() {
+            let cdi_annotations: Vec<(&String, &String)> = annotations
+                .iter()
+                .filter(|(k, _)| k.starts_with("cdi.k8s.io/"))
+                .collect();
+            info!(
+                sl(),
+                "handle_cdi_devices: {} CDI annotation(s) on OCI spec",
+                cdi_annotations.len();
+                "container-id" => &cid,
+                "annotations" => format!("{:?}", cdi_annotations),
+            );
+        } else {
+            info!(
+                sl(),
+                "handle_cdi_devices: no annotations on OCI spec";
+                "container-id" => &cid,
+            );
+        }
+        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout)
+            .await
+            .map_err(|e| {
+                warn!(
+                    sl(),
+                    "handle_cdi_devices: FAILED";
+                    "container-id" => &cid,
+                    "error" => format!("{:?}", e),
+                );
+                e
+            })?;
 
         // Handle trusted storage configuration before mounting any storage
         cdh_handler_trusted_storage(&mut oci)

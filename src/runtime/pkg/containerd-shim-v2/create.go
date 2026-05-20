@@ -439,15 +439,25 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxID stri
 	return fmt.Errorf("failed to get the gid of /dev/kvm")
 }
 
+// [instrument-coldplug-vf] removeCDIAnnotations always logs a summary of
+// what it observed/removed, so the journal makes it obvious whether the
+// container ever had CDI annotations attached by upstream containerd.
 func removeCDIAnnotations(annotations map[string]string) {
 	if annotations == nil {
+		shimLog.Debug("removeCDIAnnotations: no annotations map, nothing to do")
 		return
 	}
 
+	var removed []string
 	for key := range annotations {
 		if strings.HasPrefix(key, cdi.AnnotationPrefix) {
 			shimLog.Debugf("removing CDI annotation: %s=%s", key, annotations[key])
+			removed = append(removed, fmt.Sprintf("%s=%s", key, annotations[key]))
 			delete(annotations, key)
 		}
 	}
+
+	shimLog.WithField("num-removed", len(removed)).
+		WithField("removed", removed).
+		Info("removeCDIAnnotations: done")
 }

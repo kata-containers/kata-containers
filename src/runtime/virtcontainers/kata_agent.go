@@ -815,19 +815,31 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "StartVM", kataAgentTracingTags)
 	defer span.End()
 
+	// [instrument-coldplug-vf] entry log: startSandbox is the post-VM-start
+	// path running until the agent CreateSandbox RPC returns. We log every
+	// substep so we can localize hangs from the journal alone.
+	k.Logger().Info("startSandbox: begin")
+	defer k.Logger().Info("startSandbox: end")
+
+	k.Logger().Debug("startSandbox: setAgentURL begin")
 	if err := k.setAgentURL(); err != nil {
+		k.Logger().WithError(err).Warn("startSandbox: setAgentURL failed")
 		return err
 	}
+	k.Logger().Debug("startSandbox: setAgentURL done")
 
 	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {
 		hostname = hostname[:maxHostnameLen]
 	}
 
+	k.Logger().Debug("startSandbox: getDNS begin")
 	dns, err := k.getDNS(sandbox)
 	if err != nil {
+		k.Logger().WithError(err).Warn("startSandbox: getDNS failed")
 		return err
 	}
+	k.Logger().Debug("startSandbox: getDNS done")
 
 	var kmodules []*grpc.KernelModule
 
@@ -836,27 +848,39 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	}
 
 	// Check grpc server is serving
+	k.Logger().Info("startSandbox: agent check begin (first gRPC call to guest agent)")
 	if err = k.check(ctx); err != nil {
+		k.Logger().WithError(err).Warn("startSandbox: agent check failed")
 		return err
 	}
+	k.Logger().Info("startSandbox: agent check done")
 
 	// If a Policy has been specified, send it to the agent.
 	if len(sandbox.config.AgentConfig.Policy) > 0 {
+		k.Logger().Info("startSandbox: setPolicy begin")
 		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+			k.Logger().WithError(err).Warn("startSandbox: setPolicy failed")
 			return err
 		}
+		k.Logger().Info("startSandbox: setPolicy done")
+	} else {
+		k.Logger().Debug("startSandbox: no policy configured, skipping setPolicy")
 	}
 
 	if sandbox.config.HypervisorType != RemoteHypervisor {
-		// Setup network interfaces and routes
+		k.Logger().Info("startSandbox: setupNetworks begin")
 		err = k.setupNetworks(ctx, sandbox, nil)
 		if err != nil {
+			k.Logger().WithError(err).Warn("startSandbox: setupNetworks failed")
 			return err
 		}
+		k.Logger().Info("startSandbox: setupNetworks done")
 		kmodules = setupKernelModules(k.kmodules)
 	}
 
+	k.Logger().Debug("startSandbox: setupStorages begin")
 	storages := setupStorages(ctx, sandbox)
+	k.Logger().WithField("num-storages", len(storages)).Debug("startSandbox: setupStorages done")
 
 	req := &grpc.CreateSandboxRequest{
 		Hostname:      hostname,
@@ -868,13 +892,16 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		KernelModules: kmodules,
 	}
 
+	k.Logger().Info("startSandbox: CreateSandbox RPC begin")
 	_, err = k.sendReq(ctx, req)
 	if err != nil {
+		k.Logger().WithError(err).Warn("startSandbox: CreateSandbox RPC failed")
 		if err.Error() == context.DeadlineExceeded.Error() {
 			return grpcStatus.Errorf(codes.DeadlineExceeded, "CreateSandboxRequest timed out")
 		}
 		return err
 	}
+	k.Logger().Info("startSandbox: CreateSandbox RPC done")
 
 	return nil
 }
@@ -2186,11 +2213,19 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	}
 
 	k.Logger().WithField("url", k.state.URL).Info("New client")
+	// [instrument-coldplug-vf] log right before/after the gRPC dial so a hung
+	// dial is instantly visible from the journal.
+	k.Logger().WithFields(logrus.Fields{
+		"url":         k.state.URL,
+		"dialTimeout": k.dialTimout,
+	}).Info("connect: NewAgentClient begin (vsock dial to guest agent)")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
 	if err != nil {
+		k.Logger().WithError(err).Warn("connect: NewAgentClient failed")
 		k.dead = true
 		return err
 	}
+	k.Logger().Info("connect: NewAgentClient done")
 
 	k.installReqFunc(client)
 	k.client = client
@@ -2475,10 +2510,26 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	}
 	k.Logger().WithField("name", msgName).WithField("req", string(jsonStr)).Trace("sending request")
 
+	// [instrument-coldplug-vf] bracket every gRPC RPC so a hang is
+	// pinpointable from the journal.
+	k.Logger().WithField("name", msgName).Info("sendReq: handler begin")
+
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
-	return handler(ctx, request)
+	resp, err := handler(ctx, request)
+	if err != nil {
+		k.Logger().WithFields(logrus.Fields{
+			"name":     msgName,
+			"duration": time.Since(start),
+		}).WithError(err).Warn("sendReq: handler failed")
+	} else {
+		k.Logger().WithFields(logrus.Fields{
+			"name":     msgName,
+			"duration": time.Since(start),
+		}).Info("sendReq: handler done")
+	}
+	return resp, err
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...

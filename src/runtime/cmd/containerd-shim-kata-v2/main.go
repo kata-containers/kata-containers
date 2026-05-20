@@ -8,6 +8,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"runtime"
+	"syscall"
 
 	containerdtypes "github.com/containerd/containerd/api/types"
 	shimapi "github.com/containerd/containerd/runtime/v2/shim"
@@ -17,6 +20,30 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 )
+
+// [instrument-coldplug-vf] installGoroutineDumper installs a SIGUSR1 handler
+// that writes a full goroutine stack trace to stderr (which the systemd
+// journal captures under the "kata" identifier). Use it on a hung shim:
+//
+//	pgrep -af containerd-shim-kata-v2 | grep <sandbox-id>
+//	sudo kill -USR1 <pid>
+//	journalctl -t kata --since "1 minute ago" | grep -A 200 GOROUTINE_DUMP
+//
+// This is the cheapest way to localise a hang in the post-VM-start agent path
+// when log statements alone are insufficient.
+func installGoroutineDumper() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGUSR1)
+	go func() {
+		for range ch {
+			buf := make([]byte, 1<<20)
+			n := runtime.Stack(buf, true)
+			fmt.Fprintf(os.Stderr,
+				"=== GOROUTINE_DUMP_BEGIN pid=%d ===\n%s\n=== GOROUTINE_DUMP_END pid=%d ===\n",
+				os.Getpid(), buf[:n], os.Getpid())
+		}
+	}()
+}
 
 func shimConfig(config *shimapi.Config) {
 	config.NoReaper = true
@@ -52,6 +79,8 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "-info" {
 		handleInfoFlag()
 	}
+
+	installGoroutineDumper()
 
 	shimapi.Run(types.DefaultKataRuntimeName, shim.New, shimConfig)
 }
