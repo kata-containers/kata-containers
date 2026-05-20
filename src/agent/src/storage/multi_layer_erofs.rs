@@ -10,10 +10,15 @@
 //! - Storage with X-kata.overlay-lower: erofs layers (lowerdir)
 //! - Creates overlay to combine them
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
+//! - Supports GPT-partitioned disks where each layer is a separate partition
 
+#[allow(unused_imports)]
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::scsi_device_handler::get_scsi_device_name;
@@ -44,7 +49,11 @@ pub const DRIVER_MULTI_LAYER_EROFS: &str = "erofs.multi-layer";
 const OPT_OVERLAY_UPPER: &str = "X-kata.overlay-upper";
 const OPT_OVERLAY_LOWER: &str = "X-kata.overlay-lower";
 const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
+#[allow(dead_code)]
+const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
+#[allow(dead_code)]
+const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
@@ -575,6 +584,81 @@ async fn resolve_base_device_path(
     Ok(base_dev_path)
 }
 
+/// Check if the storage is GPT-partitioned
+#[allow(dead_code)]
+fn is_gpt_partitioned(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_GPT_PARTITIONED)
+}
+
+/// Extract partition number from storage options
+/// Returns None if not specified (non-GPT mode)
+#[allow(dead_code)]
+fn get_partition_number(storage: &Storage) -> Option<u32> {
+    for opt in &storage.options {
+        if let Some(num_str) = opt.strip_prefix(OPT_PARTITION_NUMBER) {
+            return num_str.parse::<u32>().ok();
+        }
+    }
+    None
+}
+
+/// Get the partition device path for a GPT-partitioned disk
+///
+/// For GPT mode: the storage.source contains the base disk path (e.g., "/dev/vda")
+/// We need to append the partition number to get the partition path (e.g., "/dev/vda1")
+///
+/// Follows the kernel naming rule: if the base device name ends with a digit,
+/// insert a 'p' separator before the partition number to avoid ambiguity.
+/// This correctly handles all device families:
+/// - /dev/vda   -> /dev/vda1   (no trailing digit, bare number)
+/// - /dev/sda   -> /dev/sda1
+/// - /dev/nvme0n1 -> /dev/nvme0n1p1 (trailing digit, needs 'p')
+/// - /dev/mmcblk0 -> /dev/mmcblk0p1
+/// - /dev/loop0 -> /dev/loop0p1
+#[allow(dead_code)]
+fn get_partition_device_path(base_path: &str, partition_number: u32) -> String {
+    if base_path.ends_with(char::is_numeric) {
+        format!("{}p{}", base_path, partition_number)
+    } else {
+        format!("{}{}", base_path, partition_number)
+    }
+}
+
+/// Wait for partition device node to appear in /dev.
+///
+/// When a virtio-blk device with a GPT is hotplugged, the kernel automatically
+/// scans the partition table and creates partition nodes. However, devtmpfs node
+/// creation may lag slightly behind the uevent, so we poll briefly if needed.
+#[allow(dead_code)]
+async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result<()> {
+    let device_path_buf = PathBuf::from(device_path);
+    if device_path_buf.exists() {
+        return Ok(());
+    }
+
+    const MAX_WAIT_MS: u64 = 1000;
+    const POLL_INTERVAL_MS: u64 = 50;
+
+    for attempt in 0..(MAX_WAIT_MS / POLL_INTERVAL_MS) {
+        sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+        if device_path_buf.exists() {
+            info!(
+                logger,
+                "Partition device node appeared after polling: {} (attempt {})",
+                device_path,
+                attempt + 1
+            );
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!(
+        "partition device {} did not appear within {} ms",
+        device_path,
+        MAX_WAIT_MS
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -729,6 +813,31 @@ mod tests {
             "is_multi_layer_storage with driver={:?}, options={:?}",
             s.driver,
             s.options
+        );
+    }
+
+    // --- get_partition_device_path ---
+
+    #[rstest]
+    #[case("/dev/vda", 1, "/dev/vda1")]
+    #[case("/dev/sda", 3, "/dev/sda3")]
+    #[case("/dev/hda", 2, "/dev/hda2")]
+    #[case("/dev/nvme0n1", 1, "/dev/nvme0n1p1")]
+    #[case("/dev/nvme0n1", 2, "/dev/nvme0n1p2")]
+    #[case("/dev/mmcblk0", 1, "/dev/mmcblk0p1")]
+    #[case("/dev/loop0", 1, "/dev/loop0p1")]
+    #[case("/dev/nbd0", 3, "/dev/nbd0p3")]
+    fn test_get_partition_device_path(
+        #[case] base: &str,
+        #[case] part: u32,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            get_partition_device_path(base, part),
+            expected,
+            "get_partition_device_path({}, {})",
+            base,
+            part
         );
     }
 }
