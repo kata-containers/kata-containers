@@ -1280,12 +1280,43 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
 		}
 
+		// [coldplug-vf-fix] Log the per-VFIODev entry the runtime is
+		// about to ship to the agent, so we can confirm the host->guest
+		// PCI mapping the agent will record into `sandbox.pcimap[cid]`.
+		k.Logger().WithFields(logrus.Fields{
+			"container-id":   c.id,
+			"container-path": dev.ContainerPath,
+			"vfio-id":        dev.ID,
+			"vfio-bdf":       dev.BDF,
+			"vfio-type":      dev.Type,
+			"is-pcie":        dev.IsPCIe,
+			"port":           dev.Port,
+			"bus":            dev.Bus,
+			"guest-pci-path": dev.GuestPciPath.String(),
+			"index":          i,
+			"option":         kataDevice.Options[i],
+		}).Info("appendVfioDevice: built option")
 	}
+
+	k.Logger().WithFields(logrus.Fields{
+		"container-id":   c.id,
+		"container-path": kataDevice.ContainerPath,
+		"kata-type":      kataDevice.Type,
+		"kata-id":        kataDevice.Id,
+		"option-count":   len(kataDevice.Options),
+		"options":        kataDevice.Options,
+	}).Info("appendVfioDevice: kataDevice ready")
 
 	return kataDevice
 }
 
 func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*grpc.Device {
+	k.Logger().WithFields(logrus.Fields{
+		"container-id":  c.id,
+		"device-count":  len(c.devices),
+		"vfio-mode":     c.sandbox.config.VfioMode,
+		"cold-plug":     c.sandbox.config.HypervisorConfig.ColdPlugVFIO,
+	}).Info("appendDevices: enumerating container devices")
 	for _, dev := range c.devices {
 		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
 		if device == nil {
@@ -1299,6 +1330,13 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 
 		var kataDevice *grpc.Device
 
+		k.Logger().WithFields(logrus.Fields{
+			"container-id":   c.id,
+			"container-path": dev.ContainerPath,
+			"device-id":      dev.ID,
+			"device-type":    device.DeviceType(),
+		}).Info("appendDevices: dispatching device")
+
 		switch device.DeviceType() {
 		case config.DeviceBlock:
 			kataDevice = k.appendBlockDevice(dev, device, c)
@@ -1309,11 +1347,27 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		}
 
 		if kataDevice == nil || kataDevice.Type == "" {
+			kataType := ""
+			if kataDevice != nil {
+				kataType = kataDevice.Type
+			}
+			k.Logger().WithFields(logrus.Fields{
+				"container-id":   c.id,
+				"container-path": dev.ContainerPath,
+				"device-id":      dev.ID,
+				"device-type":    device.DeviceType(),
+				"kata-type":      kataType,
+				"kata-nil":       kataDevice == nil,
+			}).Warn("appendDevices: skipping device (nil or empty Type)")
 			continue
 		}
 
 		deviceList = append(deviceList, kataDevice)
 	}
+	k.Logger().WithFields(logrus.Fields{
+		"container-id":  c.id,
+		"emitted-count": len(deviceList),
+	}).Info("appendDevices: done")
 
 	return deviceList
 }

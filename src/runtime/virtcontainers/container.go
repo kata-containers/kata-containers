@@ -1129,6 +1129,34 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
 	}
 
+	// [coldplug-vf-fix] Log the deviceInfos slice that will drive
+	// `c.devices` and the agent CreateContainer device list. If a
+	// cold-plug VFIO device was supposed to be carried through but
+	// is missing here, the agent's `pcimap[cid]` will end up empty
+	// and `update_env_pci` will fail with
+	// "No PCI mapping found for container".
+	{
+		paths := make([]string, 0, len(deviceInfos))
+		coldPlugged := 0
+		for _, di := range deviceInfos {
+			paths = append(paths, di.ContainerPath)
+			if di.ColdPlug {
+				coldPlugged++
+			}
+		}
+		c.Logger().WithFields(logrus.Fields{
+			"container-id":      c.id,
+			"vfio-mode":         c.sandbox.config.VfioMode,
+			"cold-plug-vfio":    c.sandbox.config.HypervisorConfig.ColdPlugVFIO,
+			"hot-plug-vfio":     c.sandbox.config.HypervisorConfig.HotPlugVFIO,
+			"hot-plug-count":    len(hotPlugDevices),
+			"cold-plug-count":   len(vfioColdPlugDevices),
+			"cold-plug-emitted": coldPlugged,
+			"total-emitted":     len(deviceInfos),
+			"paths":             paths,
+		}).Info("createDevices: deviceInfos prepared")
+	}
+
 	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
 		if err != nil {
