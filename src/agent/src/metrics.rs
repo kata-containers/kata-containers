@@ -73,6 +73,12 @@ lazy_static! {
 
     static ref GUEST_MEMINFO: GaugeVec =
     GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"meminfo"), "Statistics about memory usage in the system."), &["item"]).unwrap();
+
+    static ref GUEST_FILESYSTEM_BYTES: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"filesystem_bytes"), "Guest filesystem space usage in bytes."), &["mount","device","item"]).unwrap();
+
+    static ref GUEST_FILESYSTEM_INODES: GaugeVec =
+    GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_GUEST,"filesystem_inodes"), "Guest filesystem inode usage."), &["mount","device","item"]).unwrap();
 }
 
 #[instrument]
@@ -125,6 +131,8 @@ fn register_metrics() -> Result<()> {
     REGISTRY.register(Box::new(GUEST_NETDEV_STAT.clone()))?;
     REGISTRY.register(Box::new(GUEST_DISKSTAT.clone()))?;
     REGISTRY.register(Box::new(GUEST_MEMINFO.clone()))?;
+    REGISTRY.register(Box::new(GUEST_FILESYSTEM_BYTES.clone()))?;
+    REGISTRY.register(Box::new(GUEST_FILESYSTEM_INODES.clone()))?;
 
     Ok(())
 }
