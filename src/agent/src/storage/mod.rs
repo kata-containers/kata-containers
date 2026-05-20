@@ -168,7 +168,6 @@ struct MultiLayerProcessResult {
     /// container-scoped cleanup via `container_mounts`.
     temp_mount_points: Vec<String>,
     /// dm-verity device paths that need to be destroyed during cleanup
-    #[allow(dead_code)]
     verity_devices: Vec<String>,
 }
 

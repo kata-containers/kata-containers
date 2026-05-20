@@ -12,7 +12,6 @@
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
 //! - Supports GPT-partitioned disks where each layer is a separate partition
 
-#[allow(unused_imports)]
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -49,10 +48,8 @@ pub const DRIVER_MULTI_LAYER_EROFS: &str = "erofs.multi-layer";
 const OPT_OVERLAY_UPPER: &str = "X-kata.overlay-upper";
 const OPT_OVERLAY_LOWER: &str = "X-kata.overlay-lower";
 const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
-#[allow(dead_code)]
 const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
-#[allow(dead_code)]
 const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 
 #[derive(Debug)]
@@ -78,7 +75,6 @@ struct MkdirDirective {
 /// Helper struct to track layer mount information including dm-verity devices
 #[derive(Debug)]
 struct LayerMountInfo {
-    #[allow(dead_code)]
     verity_device: Option<String>,
 }
 
@@ -138,6 +134,7 @@ pub async fn handle_multi_layer_erofs_group(
     let mut ext4_storage: Option<&Storage> = None;
     let mut erofs_storages: Vec<&Storage> = Vec::new();
     let mut mkdir_dirs: Vec<MkdirDirective> = Vec::new();
+    let mut has_gpt_partition: bool = false;
 
     for storage in &multi_layer_storages {
         if is_upper_storage(storage) {
@@ -155,18 +152,32 @@ pub async fn handle_multi_layer_erofs_group(
                 }
             }
         } else if is_lower_storage(storage) {
+            // Each GPT partition is provided as a separate storage entry by the host
+            if !has_gpt_partition && is_gpt_partitioned(storage) {
+                has_gpt_partition = true;
+            }
             erofs_storages.push(*storage);
         }
     }
-
-    let ext4 = ext4_storage
-        .ok_or_else(|| anyhow!("multi-layer erofs missing ext4 upper layer storage"))?;
 
     if erofs_storages.is_empty() {
         return Err(anyhow!(
             "multi-layer erofs missing erofs lower layer storage"
         ));
     }
+
+    // Only sort erofs layers by partition number in GPT mode.
+    // In GPT mode, each storage carries X-kata.partition-number=N and layers
+    // must be ordered by partition number so that the overlay lowerdir
+    // precedence is correct (lower partition number = higher overlay priority).
+    // In non-GPT mode all partition numbers are None, so sorting would be a
+    // no-op that needlessly reorders elements.
+    if has_gpt_partition {
+        erofs_storages.sort_by_key(|storage| get_partition_number(storage).unwrap_or(u32::MAX));
+    }
+
+    let ext4 = ext4_storage
+        .ok_or_else(|| anyhow!("multi-layer erofs missing ext4 upper layer storage"))?;
 
     info!(
         logger,
@@ -217,6 +228,9 @@ pub async fn handle_multi_layer_erofs_group(
     }
 
     let mut lower_mounts = Vec::new();
+    let mut verity_devices = Vec::new();
+    let mut base_device_cache: HashMap<String, String> = HashMap::new();
+
     for (index, erofs) in erofs_storages.iter().enumerate() {
         let lower_mount = temp_base.join(format!("lower-{}", index));
         fs::create_dir_all(&lower_mount).context(format!(
@@ -224,8 +238,25 @@ pub async fn handle_multi_layer_erofs_group(
             lower_mount.display()
         ))?;
 
-        let _mount_info = wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger, None).await?;
+        let base_dev_path = if is_gpt_partitioned(erofs) {
+            Some(
+                base_device_cache
+                    .entry(erofs.source.clone())
+                    .or_insert(resolve_base_device_path(erofs, sandbox).await?)
+                    .clone(),
+            )
+        } else {
+            None
+        };
+
+        let mount_info =
+            wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger, base_dev_path).await?;
         lower_mounts.push(lower_mount);
+
+        // Collect dm-verity device for cleanup
+        if let Some(verity_dev) = mount_info.verity_device {
+            verity_devices.push(verity_dev);
+        }
     }
 
     // If any mkdir directive refers to {{ mount 1 }}, resolve it now using the first lower mount.
@@ -334,7 +365,7 @@ pub async fn handle_multi_layer_erofs_group(
         mount_point: ext4.mount_point.clone(),
         processed_mount_points,
         temp_mount_points,
-        verity_devices: vec![],
+        verity_devices,
     })
 }
 
@@ -493,10 +524,40 @@ async fn wait_and_mount_layer(
         "mount-point" => layer_mount.display(),
     );
 
+    let is_gpt = is_gpt_partitioned(layer);
+    let partition_num = get_partition_number(layer);
+
     // Get the base device path
     let dev_path = match base_dev_path {
         Some(path) => path,
         None => resolve_base_device_path(layer, sandbox).await?,
+    };
+
+    // For GPT-partitioned disks, use the partition device path
+    let dev_path = if is_gpt {
+        if let Some(part_num) = partition_num {
+            let path = get_partition_device_path(&dev_path, part_num);
+            info!(
+                logger,
+                "GPT-partitioned mode: using partition device";
+                "base-device" => &dev_path,
+                "partition-number" => part_num,
+                "partition-device" => &path,
+            );
+
+            // Wait for partition device node to appear
+            wait_for_partition_device(&path, logger).await?;
+
+            path
+        } else {
+            return Err(anyhow!(
+                "GPT-partitioned storage missing partition number: {:?}",
+                layer
+            ));
+        }
+    } else {
+        // Non-GPT mode: use base device directly
+        dev_path.clone()
     };
 
     info!(
@@ -506,6 +567,7 @@ async fn wait_and_mount_layer(
         "fstype" => &layer.fstype,
         "devname" => &dev_path,
         "mount-point" => layer_mount.display(),
+        "gpt-mode" => is_gpt,
     );
 
     create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
@@ -585,14 +647,12 @@ async fn resolve_base_device_path(
 }
 
 /// Check if the storage is GPT-partitioned
-#[allow(dead_code)]
 fn is_gpt_partitioned(storage: &Storage) -> bool {
     storage.options.iter().any(|o| o == OPT_GPT_PARTITIONED)
 }
 
 /// Extract partition number from storage options
 /// Returns None if not specified (non-GPT mode)
-#[allow(dead_code)]
 fn get_partition_number(storage: &Storage) -> Option<u32> {
     for opt in &storage.options {
         if let Some(num_str) = opt.strip_prefix(OPT_PARTITION_NUMBER) {
@@ -615,7 +675,6 @@ fn get_partition_number(storage: &Storage) -> Option<u32> {
 /// - /dev/nvme0n1 -> /dev/nvme0n1p1 (trailing digit, needs 'p')
 /// - /dev/mmcblk0 -> /dev/mmcblk0p1
 /// - /dev/loop0 -> /dev/loop0p1
-#[allow(dead_code)]
 fn get_partition_device_path(base_path: &str, partition_number: u32) -> String {
     if base_path.ends_with(char::is_numeric) {
         format!("{}p{}", base_path, partition_number)
