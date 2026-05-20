@@ -757,8 +757,8 @@ fn amend_spec(
             linux.set_seccomp(None);
         }
 
-        // Host pidns path does not make sense in kata. Let's just align it with
-        // sandbox namespace whenever it is set.
+        // Host pid/net/time namespace paths do not make sense in kata.
+        // Pid is aligned with the sandbox namespace whenever it is set.
         let ns: Vec<oci::LinuxNamespace> = linux
             .namespaces()
             .clone()
@@ -767,6 +767,7 @@ fn amend_spec(
             .filter(|n| {
                 n.typ() != oci::LinuxNamespaceType::Pid
                     && n.typ() != oci::LinuxNamespaceType::Network
+                    && n.typ() != oci::LinuxNamespaceType::Time
             })
             .map(|n| {
                 let mut ns = oci::LinuxNamespace::default();
@@ -869,6 +870,38 @@ mod tests {
         // disable_guest_seccomp = true
         amend_spec(&mut spec, true, false, false, "shared-fs").unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
+    }
+
+    #[test]
+    fn test_amend_spec_strips_host_time_namespace() {
+        let mut spec = oci::Spec::default();
+        let linux = LinuxBuilder::default()
+            .namespaces(vec![
+                LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Time)
+                    .path("/proc/1/ns/time")
+                    .build()
+                    .unwrap(),
+                LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Uts)
+                    .build()
+                    .unwrap(),
+            ])
+            .build()
+            .unwrap();
+        spec.set_linux(Some(linux));
+
+        amend_spec(&mut spec, false, false, false, "shared-fs").unwrap();
+
+        let namespaces = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .namespaces()
+            .as_ref()
+            .unwrap();
+        assert_eq!(namespaces.len(), 1);
+        assert_eq!(namespaces[0].typ(), LinuxNamespaceType::Uts);
     }
 
     #[test]

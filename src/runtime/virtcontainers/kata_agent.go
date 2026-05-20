@@ -1072,17 +1072,17 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		grpcSpec.Linux.Resources.CPU.Mems = ""
 	}
 
-	// Disable network namespace since it is already handled on the host by
-	// virtcontainers. The network is a complex part which cannot be simply
-	// passed to the agent.
-	// Every other namespaces's paths have to be emptied. This way, there
-	// is no confusion from the agent, trying to find an existing namespace
-	// on the guest.
+	// Disable network and time namespaces since they are handled on the host
+	// (or are unsupported in the guest agent). Docker 29.5+ adds a host time
+	// namespace by default; host namespace paths must not be passed to the agent.
+	// Every other namespace's path has to be emptied so the agent does not try
+	// to join a host namespace inside the guest.
 	var tmpNamespaces []*grpc.LinuxNamespace
 	for _, ns := range grpcSpec.Linux.Namespaces {
 		switch ns.Type {
 		case string(specs.CgroupNamespace):
 		case string(specs.NetworkNamespace):
+		case string(specs.TimeNamespace):
 		default:
 			ns.Path = ""
 			tmpNamespaces = append(tmpNamespaces, ns)
