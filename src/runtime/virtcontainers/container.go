@@ -1106,11 +1106,22 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
 	// Sort the devices starting with device #1 being the VFIO control group
 	// device and the next the actuall device(s) /dev/vfio/<group>
-	if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
-		// DeviceInfo should still be added to the sandbox's device manager
-		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
-		// This ensures that ociSpec.Linux.Devices is updated with
-		// this information before the container is created on the guest.
+	//
+	// [coldplug-vf-fix] Cold-plug VFIO devices must also reach the agent
+	// in `VfioMode == GuestKernel`. The agent's `vfio-pci-gk` handler
+	// returns `dev: None` (so /dev/vfio/<group> is *not* materialised in
+	// the container spec — `constrainGRPCSpec(stripVfio=true)` will have
+	// already removed it from `grpcSpec.Linux.Devices`), but it still
+	// records the host->guest PCI mapping into `sandbox.pcimap[cid]`.
+	// Without that mapping, `update_env_pci` cannot translate the
+	// `PCIDEVICE_<RES>=<host-BDF>` env vars set by the SR-IOV device
+	// plugin and aborts the container creation with
+	// "No PCI mapping found for container <id>".
+	//
+	// `devManager.NewDevice` calls `FindDevice` first, which matches the
+	// already-cold-plugged sandbox-level device by HostPath/major/minor,
+	// so this does not double-attach.
+	if coldPlugVFIO {
 		sortedVFIODevices := sortContainerVFIODevices(vfioColdPlugDevices)
 		// Combine sorted VFIO devices with hot-plug devices
 		deviceInfos = append(sortedVFIODevices, hotPlugDevices...)

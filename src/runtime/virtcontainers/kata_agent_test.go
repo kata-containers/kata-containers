@@ -1276,11 +1276,19 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			expectVFIODev: true,
 		},
 		{
+			// [coldplug-vf-fix] In `VfioMode == GuestKernel` + cold-plug,
+			// the cold-plug VFIO device must still be registered in the
+			// sandbox device manager (and surfaced to the agent as a
+			// `vfio-pci-gk` device) so that `update_env_pci` can
+			// translate `PCIDEVICE_<RES>=<host-BDF>` env vars set by
+			// the SR-IOV device plugin. Without this, container
+			// creation aborts with "No PCI mapping found for container
+			// <id>".
 			name:          "VFIO device with cold plug enabled but guest kernel mode",
 			hotPlugVFIO:   config.NoPort,
 			coldPlugVFIO:  config.BridgePort,
 			vfioMode:      config.VFIOModeGuestKernel,
-			expectVFIODev: false,
+			expectVFIODev: true,
 		},
 	}
 
