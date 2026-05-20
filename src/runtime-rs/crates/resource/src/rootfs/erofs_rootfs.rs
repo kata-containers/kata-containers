@@ -24,6 +24,10 @@ use hypervisor::{
 use kata_types::device::{
     DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
 };
+use kata_types::gpt_disk::{
+    extract_snapshot_id, generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
+    ErofsLayer, GptDiskLayout, GptMetadataFiles,
+};
 use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
 use std::fs;
@@ -320,6 +324,135 @@ fn create_vmdk_descriptor(vmdk_path: &Path, erofs_paths: &[String]) -> Result<()
     Ok(())
 }
 
+/// Generate GPT-partitioned VMDK and return layout information for per-partition storage creation
+///
+/// Returns: (vmdk_path, BlockDeviceFormat::Vmdk, GptDiskLayout, GptMetadataFiles)
+fn generate_gpt_vmdk_with_layout(
+    sid: &str,
+    cid: &str,
+    erofs_layers: Vec<ErofsLayer>,
+) -> Result<(String, BlockDeviceFormat, GptDiskLayout, GptMetadataFiles)> {
+    if erofs_layers.is_empty() {
+        return Err(anyhow!("no EROFS layers provided for GPT VMDK generation"));
+    }
+
+    // Validate all layer paths exist and are regular files
+    for layer in &erofs_layers {
+        let metadata = fs::metadata(&layer.path)
+            .context(format!("EROFS layer path not accessible: {}", layer.path))?;
+        if !metadata.is_file() {
+            return Err(anyhow!(
+                "EROFS layer path is not a regular file: {}",
+                layer.path
+            ));
+        }
+    }
+
+    // Create container directory
+    let container_dir = ensure_container_dir(sid, cid)?;
+    let vmdk_path = container_dir.join(EROFS_MERGED_VMDK);
+
+    info!(
+        sl!(),
+        "creating GPT-partitioned VMDK for {} EROFS layers: {}",
+        erofs_layers.len(),
+        vmdk_path.display()
+    );
+
+    // Generate GPT metadata files
+    let (layout, mut gpt_files) = generate_gpt_metadata(sid, cid, erofs_layers, &container_dir)
+        .context("failed to generate GPT metadata")?;
+
+    // Create VMDK descriptor with GPT layout and collect generated padding paths
+    let pad_paths = create_gpt_vmdk_descriptor(&vmdk_path, &layout, &gpt_files)
+        .context("failed to create GPT VMDK descriptor")?;
+    gpt_files.pad_paths = pad_paths;
+
+    Ok((
+        vmdk_path.display().to_string(),
+        BlockDeviceFormat::Vmdk,
+        layout,
+        gpt_files,
+    ))
+}
+
+/// Create VMDK descriptor for GPT-partitioned disk
+///
+/// Returns the list of generated padding file paths for cleanup tracking.
+fn create_gpt_vmdk_descriptor(
+    vmdk_path: &Path,
+    layout: &GptDiskLayout,
+    gpt_files: &GptMetadataFiles,
+) -> Result<Vec<PathBuf>> {
+    let mut vmdk = VmdkDescriptorWriter::new(vmdk_path)?;
+    let mut pad_paths: Vec<PathBuf> = Vec::new();
+
+    // 1. GPT head metadata
+    vmdk.write_extent(
+        &gpt_files.head_path.display().to_string(),
+        gpt_files.head_sectors,
+        0,
+    )?;
+    info!(
+        sl!(),
+        "VMDK extent: GPT head ({} sectors) at {}",
+        gpt_files.head_sectors,
+        gpt_files.head_path.display()
+    );
+
+    // 2. Layer extents with padding gaps
+    // head ends at LBA 2047, so first gap starts at LBA 2048.
+    let mut prev_end_lba = gpt_files.head_sectors - 1;
+
+    let metadata_dir = gpt_files.head_path.parent().ok_or_else(|| {
+        anyhow!(
+            "GPT head file has no parent directory: {}",
+            gpt_files.head_path.display()
+        )
+    })?;
+
+    for (idx, part) in layout.partitions.iter().enumerate() {
+        let gap_start_lba = prev_end_lba + 1;
+        if part.start_lba > gap_start_lba {
+            let gap_sectors = part.start_lba - gap_start_lba;
+            let pad_path = metadata_dir.join(format!("pad-{}.img", idx));
+
+            generate_padding_file(&pad_path, gap_sectors).context(format!(
+                "failed to generate padding file: {}",
+                pad_path.display()
+            ))?;
+
+            vmdk.write_extent(&pad_path.display().to_string(), gap_sectors, 0)?;
+            pad_paths.push(pad_path);
+        }
+
+        vmdk.write_extent_chunked(&part.layer.path, part.layer.size_sectors)?;
+        info!(
+            sl!(),
+            "VMDK extent: {} (partition {}, LBA {}-{}, {} sectors)",
+            part.layer.path,
+            part.partition_number,
+            part.start_lba,
+            part.end_lba,
+            part.layer.size_sectors
+        );
+
+        prev_end_lba = part.end_lba;
+    }
+
+    vmdk.finalize(layout.total_sectors)?;
+
+    info!(
+        sl!(),
+        "GPT VMDK descriptor created: {} (total {} sectors, {} partitions)",
+        vmdk_path.display(),
+        layout.total_sectors,
+        layout.partitions.len()
+    );
+
+    Ok(pad_paths)
+}
+
 fn extract_block_device_info(
     device_info: &DeviceType,
     read_only: bool,
@@ -383,7 +516,7 @@ pub(crate) struct ErofsMultiLayerRootfs {
     erofs_storages: Vec<Storage>,
     // Path to generated VMDK descriptor (only set when multiple EROFS devices are merged)
     vmdk_path: Option<PathBuf>,
-    // Paths to generated GPT metadata files (head, tail, padding) for cleanup
+    // Paths to generated GPT metadata files (head, padding) for cleanup
     gpt_metadata_paths: Vec<PathBuf>,
     // Container-scoped runtime directory that may only contain generated helper artifacts.
     generated_artifacts_dir: PathBuf,
@@ -407,7 +540,9 @@ impl ErofsMultiLayerRootfs {
         let mut rwlayer_storage: Option<Storage> = None;
         let mut erofs_storages: Vec<Storage> = Vec::new();
         let mut vmdk_path: Option<PathBuf> = None;
-        let gpt_metadata_paths: Vec<PathBuf> = Vec::new();
+        let mut gpt_metadata_paths: Vec<PathBuf> = Vec::new();
+        // Track whether GPT+VMDK erofs layers have already been processed in bulk.
+        let mut gpt_erofs_processed = false;
 
         // Directories to create (X-containerd.mkdir.path)
         let mut mkdir_dirs: Vec<String> = Vec::new();
@@ -504,95 +639,242 @@ impl ErofsMultiLayerRootfs {
                 }
                 fmt if fmt.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE) => {
                     // Mount[1]: erofs layers -> virtio-blk via VMDK /dev/vdX2
-                    info!(
-                        sl!(),
-                        "multi-layer erofs: adding erofs layers: {}", mount.source
-                    );
+                    //
+                    // Two modes are supported:
+                    // 1. fsmerge mode: Single erofs mount with `device=` options pointing to additional files.
+                    //    This is used when containerd has already merged layers into a single file.
+                    // 2. GPT+VMDK mode: Multiple independent erofs mounts (each mount is a separate layer file).
+                    //    This is used when containerd does NOT use fsmerge, and we need to create GPT partitions.
 
-                    // Collect all EROFS devices: source + `device=` options
-                    let mut erofs_devices = vec![mount.source.clone()];
-                    for opt in &mount.options {
-                        if let Some(device_path) = opt.strip_prefix("device=") {
-                            erofs_devices.push(device_path.to_string());
-                        }
+                    // In GPT mode, all erofs layers are processed in bulk on the first
+                    // encounter. Skip subsequent erofs mounts but continue iterating
+                    // so that later ext4 rw-layer and overlay mounts are still handled.
+                    if gpt_erofs_processed {
+                        info!(
+                            sl!(),
+                            "multi-layer erofs: skipping already-processed erofs mount: {}",
+                            mount.source
+                        );
+                        continue;
                     }
 
-                    info!(sl!(), "EROFS devices count: {}", erofs_devices.len());
-
-                    // Generate merged VMDK file from all EROFS devices
-                    // Returns (path, format) - format is Vmdk for multiple devices, Raw for single device
-                    let (erofs_path, erofs_format) =
-                        generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
-                            .await
-                            .context("failed to generate EROFS VMDK")?;
-
-                    // Track VMDK path for cleanup (only when VMDK is actually created)
-                    if erofs_format == BlockDeviceFormat::Vmdk {
-                        vmdk_path = Some(PathBuf::from(&erofs_path));
-                    }
-
-                    info!(
-                        sl!(),
-                        "EROFS block device config - path: {}, format: {:?}",
-                        erofs_path,
-                        erofs_format
-                    );
-
-                    let device_config = &mut BlockConfig {
-                        driver_option: block_driver.clone(),
-                        format: erofs_format, // Vmdk for multiple devices, Raw for single device
-                        path_on_host: erofs_path,
-                        is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
-                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
-                        ..Default::default()
-                    };
-
-                    let device_info = do_handle_device(
-                        device_manager,
-                        &DeviceConfig::BlockCfg(device_config.clone()),
-                    )
-                    .await
-                    .context("failed to attach erofs block device")?;
-
-                    let (mut rolayer, device_id) =
-                        extract_block_device_info(&device_info, true)?;
-                    info!(
-                        sl!(),
-                        "erofs device attached - device_id: {} guest_path: {}",
-                        device_id,
-                        &rolayer.source
-                    );
-
-                    let mut options: Vec<String> = mount
-                        .options
+                    // Collect all EROFS mounts once with their original indices.
+                    let erofs_mounts_indexed: Vec<(usize, &Mount)> = rootfs_mounts
                         .iter()
-                        .filter(|o| {
-                            // Filter out options that are not valid erofs mount parameters:
-                            // 1. "loop" - not needed in VM, device is already /dev/vdX
-                            // 2. "device=" prefix - used for VMDK generation only, not for mount
-                            // 3. "X-kata." prefix - metadata markers for kata internals
-                            *o != "loop"
-                                && !o.starts_with("device=")
-                                && !o.starts_with("X-kata.")
-                        })
-                        .cloned()
+                        .enumerate()
+                        .filter(|(_, m)| m.fs_type.eq_ignore_ascii_case(EROFS_ROOTFS_TYPE))
                         .collect();
+                    let total_erofs_mounts = erofs_mounts_indexed.len();
 
-                    // Erofs layers are read-only lower layers (marked with X-kata.overlay-lower)
-                    options.push("X-kata.overlay-lower".to_string());
-                    options.push("X-kata.multi-layer=true".to_string());
+                    // GPT+VMDK mode: Multiple independent erofs layer files
+                    if total_erofs_mounts > 1 {
+                        info!(
+                            sl!(),
+                            "multi-layer erofs: using GPT+VMDK mode for {} independent layers",
+                            total_erofs_mounts
+                        );
 
-                    info!(
-                        sl!(),
-                        "erofs storage options filtered: {:?} -> {:?}", mount.options, options
-                    );
+                        let mut erofs_layers = Vec::new();
 
-                    rolayer.fs_type = EROFS_ROOTFS_TYPE.to_string();
-                    rolayer.mount_point = container_path.clone();
-                    rolayer.options = options;
+                        for (_mount_idx, erofs_mount) in &erofs_mounts_indexed {
+                            let layer_path = erofs_mount.source.clone();
+                            let size_bytes = get_erofs_layer_size(&layer_path).context(format!(
+                                "gptdisk: failed to get size of EROFS layer: {}",
+                                layer_path
+                            ))?;
 
-                    erofs_storages.push(rolayer);
-                    device_ids.push(device_id);
+                            if size_bytes == 0 {
+                                warn!(
+                                    sl!(),
+                                    "gptdisk: EROFS layer {} is zero-length, skipping", layer_path
+                                );
+                                continue;
+                            }
+
+                            let size_sectors = size_bytes.div_ceil(512);
+                            let snapshot_id = extract_snapshot_id(&layer_path);
+
+                            erofs_layers.push(ErofsLayer {
+                                path: layer_path,
+                                size_sectors,
+                                snapshot_id,
+                            });
+                        }
+
+                        if erofs_layers.is_empty() {
+                            return Err(anyhow!(
+                                "gptdisk: no valid EROFS layers found for GPT VMDK"
+                            ));
+                        }
+
+                        // Generate GPT-partitioned VMDK and get layout information
+                        let (erofs_path, erofs_format, layout, gpt_files) =
+                            generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
+                                .context("gptdisk: failed to generate GPT VMDK")?;
+
+                        // Track VMDK path for cleanup
+                        vmdk_path = Some(PathBuf::from(&erofs_path));
+
+                        // Track GPT metadata files (head + padding) for cleanup
+                        gpt_metadata_paths.push(gpt_files.head_path.clone());
+                        gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+
+                        info!(
+                            sl!(),
+                            "GPT VMDK created - path: {}, format: {:?}, {} partitions",
+                            erofs_path,
+                            erofs_format,
+                            layout.partitions.len()
+                        );
+
+                        let device_config = &mut BlockConfig {
+                            driver_option: block_driver.clone(),
+                            format: erofs_format,
+                            path_on_host: erofs_path,
+                            is_readonly: true,
+                            blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                            ..Default::default()
+                        };
+
+                        let device_info = do_handle_device(
+                            device_manager,
+                            &DeviceConfig::BlockCfg(device_config.clone()),
+                        )
+                        .await
+                        .context("failed to attach GPT VMDK block device")?;
+
+                        let (base_device, device_id) =
+                            extract_block_device_info(&device_info, true)?;
+                        info!(
+                            sl!(),
+                            "GPT VMDK device attached - device_id: {} guest_path: {}",
+                            device_id,
+                            &base_device.source
+                        );
+
+                        device_ids.push(device_id);
+
+                        // Create a storage entry for each GPT partition.
+                        for (idx, part) in layout.partitions.iter().enumerate() {
+                            let mut rolayer = base_device.clone();
+                            let options: Vec<String> = vec![
+                                "X-kata.overlay-lower".to_string(),
+                                "X-kata.multi-layer=true".to_string(),
+                                "X-kata.gpt-partitioned=true".to_string(),
+                                format!("X-kata.partition-number={}", part.partition_number),
+                            ];
+
+                            rolayer.fs_type = EROFS_ROOTFS_TYPE.to_string();
+                            rolayer.mount_point = container_path.clone();
+                            rolayer.options = options;
+                            rolayer.source = base_device.source.clone();
+
+                            info!(
+                                sl!(),
+                                "Created storage for GPT partition {} (partition number {}, LBA {}-{})",
+                                idx, part.partition_number, part.start_lba, part.end_lba
+                            );
+
+                            erofs_storages.push(rolayer);
+                        }
+
+                        // Mark GPT erofs as processed so subsequent erofs mounts
+                        // in the loop are skipped, while still allowing ext4 and
+                        // overlay mounts to be visited.
+                        gpt_erofs_processed = true;
+                    } else {
+                        // fsmerge mode: Single erofs mount with device= options
+                        info!(
+                            sl!(),
+                            "multi-layer erofs: using fsmerge mode for erofs layers: {}",
+                            mount.source
+                        );
+
+                        // Collect all EROFS devices: source + `device=` options
+                        let mut erofs_devices = vec![mount.source.clone()];
+                        for opt in &mount.options {
+                            if let Some(device_path) = opt.strip_prefix("device=") {
+                                erofs_devices.push(device_path.to_string());
+                            }
+                        }
+
+                        info!(sl!(), "EROFS devices count: {}", erofs_devices.len());
+
+                        // Generate merged VMDK file from all EROFS devices
+                        // Returns (path, format) - format is Vmdk for multiple devices, Raw for single device
+                        let (erofs_path, erofs_format) =
+                            generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
+                                .await
+                                .context("failed to generate EROFS VMDK")?;
+
+                        // Track VMDK path for cleanup (only when VMDK is actually created)
+                        if erofs_format == BlockDeviceFormat::Vmdk {
+                            vmdk_path = Some(PathBuf::from(&erofs_path));
+                        }
+
+                        info!(
+                            sl!(),
+                            "EROFS block device config - path: {}, format: {:?}",
+                            erofs_path,
+                            erofs_format
+                        );
+
+                        let device_config = &mut BlockConfig {
+                            driver_option: block_driver.clone(),
+                            format: erofs_format, // Vmdk for multiple devices, Raw for single device
+                            path_on_host: erofs_path,
+                            is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
+                            blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                            ..Default::default()
+                        };
+
+                        let device_info = do_handle_device(
+                            device_manager,
+                            &DeviceConfig::BlockCfg(device_config.clone()),
+                        )
+                        .await
+                        .context("failed to attach erofs block device")?;
+
+                        let (mut rolayer, device_id) =
+                            extract_block_device_info(&device_info, true)?;
+                        info!(
+                            sl!(),
+                            "erofs device attached - device_id: {} guest_path: {}",
+                            device_id,
+                            &rolayer.source
+                        );
+
+                        let mut options: Vec<String> = mount
+                            .options
+                            .iter()
+                            .filter(|o| {
+                                // Filter out options that are not valid erofs mount parameters:
+                                // 1. "loop" - not needed in VM, device is already /dev/vdX
+                                // 2. "device=" prefix - used for VMDK generation only, not for mount
+                                // 3. "X-kata." prefix - metadata markers for kata internals
+                                *o != "loop"
+                                    && !o.starts_with("device=")
+                                    && !o.starts_with("X-kata.")
+                            })
+                            .cloned()
+                            .collect();
+
+                        // Erofs layers are read-only lower layers (marked with X-kata.overlay-lower)
+                        options.push("X-kata.overlay-lower".to_string());
+                        options.push("X-kata.multi-layer=true".to_string());
+
+                        info!(
+                            sl!(),
+                            "erofs storage options filtered: {:?} -> {:?}", mount.options, options
+                        );
+
+                        rolayer.fs_type = EROFS_ROOTFS_TYPE.to_string();
+                        rolayer.mount_point = container_path.clone();
+                        rolayer.options = options;
+
+                        erofs_storages.push(rolayer);
+                        device_ids.push(device_id);
+                    }
                 }
                 fmt if fmt.eq_ignore_ascii_case("overlay")
                     || fmt.eq_ignore_ascii_case("format/overlay")
@@ -698,7 +980,7 @@ impl Rootfs for ErofsMultiLayerRootfs {
             safely_remove_file(vmdk, &self.generated_artifacts_dir)?;
         }
 
-        // Clean up GPT metadata files (head, tail, padding).
+        // Clean up GPT metadata files (head, padding).
         for metadata_path in &self.gpt_metadata_paths {
             safely_remove_file(metadata_path, &self.generated_artifacts_dir)?;
         }
