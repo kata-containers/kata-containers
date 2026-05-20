@@ -353,6 +353,196 @@ impl Qmp {
         Ok(())
     }
 
+    /// Cleanup virtio-mem resources on setup failure
+    fn cleanup_virtio_mem_setup(&mut self, device_id: &str) {
+        // Remove memory backend object
+        let _ = self.qmp.execute(&qmp::object_del {
+            id: "virtiomem".to_owned(),
+        });
+
+        // Remove CCW device slot
+        if let Some(ccw) = self.ccw_subchannel.as_mut() {
+            ccw.remove_device(device_id).ok();
+        }
+    }
+
+    pub fn setup_virtio_mem(
+        &mut self,
+        default_memory: u32,
+        default_maxmemory: u32,
+        machine_type: &str,
+        shared_fs: Option<&str>,
+    ) -> Result<()> {
+        // Calculate virtio-mem size: (default_maxmemory - default_memory) aligned to 4MB
+        // default_maxmemory is already validated during sandbox initialization
+        let diff_mb = default_maxmemory
+             .checked_sub(default_memory)
+             .ok_or_else(|| {
+                 anyhow!(
+                     "default_maxmemory ({}) must be >= default_memory ({}) for virtio-mem setup",
+                     default_maxmemory,
+                     default_memory
+                 )
+             })?;
+        let size_mb = u64::from(diff_mb & !3u32);
+
+        if size_mb == 0 {
+            info!(sl!(), "virtio-mem size is 0, skipping setup");
+            return Ok(());
+        }
+
+        // Validate machine type for virtio-mem support
+        // TODO: support more architectures
+        if machine_type != "s390-ccw-virtio" {
+            return Err(anyhow!(
+                "virtio-mem supports multiple architectures, the current implementation is only for s390x (s390-ccw-virtio). Current machine type: {}",
+                machine_type
+            ));
+        }
+
+        // Determine memory backend based on shared filesystem
+        let uses_virtio_fs = shared_fs
+            .map(|fs| fs == "virtio-fs" || fs == "virtio-fs-nydus")
+            .unwrap_or(false);
+
+        let (qomtype, mempath, share) = if uses_virtio_fs {
+            ("memory-backend-file", "/dev/shm", true)
+        } else {
+            ("memory-backend-ram", "", false)
+        };
+
+        let size_bytes = size_mb * 1024 * 1024;
+
+        // Allocate CCW slot and format address
+        // Use same ID for both CCW subchannel tracking and QMP device
+        let device_id = "virtiomem0";
+        let ccw = self
+            .ccw_subchannel
+            .as_mut()
+            .ok_or_else(|| anyhow!("CCW subchannel not initialized for s390x"))?;
+        let slot = ccw
+            .add_device(device_id)
+            .map_err(|e| anyhow!("Failed to add CCW device: {:?}", e))?;
+        let devno = ccw.address_format_ccw(slot);
+
+        info!(
+            sl!(),
+            "Setting up virtio-mem-ccw: backend={}, path={}, share={}, devno={}",
+            qomtype,
+            if mempath.is_empty() { "none" } else { mempath },
+            share,
+            devno
+        );
+
+        // Helper to create common MemoryBackendProperties
+        let create_backend_props = || qapi_qmp::MemoryBackendProperties {
+            dump: None,
+            host_nodes: None,
+            merge: None,
+            policy: None,
+            prealloc: None,
+            prealloc_context: None,
+            prealloc_threads: None,
+            reserve: None,
+            share: Some(share),
+            x_use_canonical_path_for_ramblock_id: None,
+            size: size_bytes,
+        };
+
+        // STEP 1: Create memory backend
+        let memory_backend = if mempath.is_empty() {
+            qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_ram {
+                id: "virtiomem".to_owned(),
+                memory_backend_ram: create_backend_props(),
+            })
+        } else {
+            qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
+                id: "virtiomem".to_owned(),
+                memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
+                    base: create_backend_props(),
+                    align: None,
+                    discard_data: None,
+                    offset: None,
+                    pmem: None,
+                    readonly: None,
+                    rom: None,
+                    mem_path: mempath.to_owned(),
+                },
+            })
+        };
+
+        // Execute backend creation with cleanup on error
+        if let Err(e) = self.qmp.execute(&memory_backend) {
+            self.cleanup_virtio_mem_setup(device_id);
+            return if e.to_string().contains("Cannot allocate memory") {
+                Err(anyhow!("Failed to allocate {} MB for virtio-mem: {}. \
+                            Please use command 'echo 1 > /proc/sys/vm/overcommit_memory' to handle it.",
+                            size_mb, e))
+            } else {
+                Err(e.into())
+            };
+        }
+
+        // STEP 2: Create virtio-mem-ccw device
+        let mut device_args = Dictionary::new();
+        device_args.insert("memdev".to_owned(), "virtiomem".into());
+        device_args.insert("devno".to_owned(), devno.into());
+
+        if let Err(e) = self.qmp.execute(&qmp::device_add {
+            bus: None,
+            id: Some(device_id.to_owned()),
+            driver: "virtio-mem-ccw".to_owned(),
+            arguments: device_args,
+        }) {
+            self.cleanup_virtio_mem_setup(device_id);
+            return Err(anyhow!("Failed to add virtio-mem-ccw device: {}", e));
+        }
+
+        info!(
+            sl!(),
+            "Successfully set up virtio-mem-ccw with max capacity {} MB", size_mb
+        );
+        Ok(())
+    }
+
+    /// Resize virtio-mem device to the specified size in MB.
+    /// This uses QMP qom-set to change the requested-size property.
+    ///
+    /// # Arguments
+    /// * `new_size_mb` - New size in MB for the virtio-mem device
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err` if resize fails or size is negative
+    pub fn resize_virtio_mem(&mut self, new_size_mb: i64) -> Result<()> {
+        // Validate and convert size from MB to bytes
+        if new_size_mb < 0 {
+            return Err(anyhow!(
+                "cannot resize virtio-mem device to negative size ({}) memory",
+                new_size_mb
+            ));
+        }
+        let size_bytes = (new_size_mb as u64) * 1024 * 1024;
+
+        info!(
+            sl!(),
+            "Resizing virtio-mem device to {} MB ({} bytes)", new_size_mb, size_bytes
+        );
+
+        // Use qom-set to change the requested-size property of virtiomem0
+        self.qmp.execute(&qmp::qom_set {
+            path: "virtiomem0".to_owned(),
+            property: "requested-size".to_owned(),
+            value: serde_json::json!(size_bytes),
+        })?;
+
+        info!(
+            sl!(),
+            "Successfully resized virtio-mem to {} MB", new_size_mb
+        );
+        Ok(())
+    }
+
     pub fn hotunplug_memory(&mut self, size: i64) -> Result<()> {
         let frontend = self
             .qmp

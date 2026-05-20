@@ -167,8 +167,9 @@ memory_offset = 0
 # Specifies virtio-mem will be enabled or not.
 # Please note that this option should be used with the command
 # "echo 1 > /proc/sys/vm/overcommit_memory".
-# Default false
-enable_virtio_mem = false
+# Default is architecture/build dependent and is substituted from
+# @DEFENABLEVIRTIOMEM@ (for example, enabled on some builds such as s390x).
+enable_virtio_mem = @DEFENABLEVIRTIOMEM@
 
 # Disable block device from being used for a container's rootfs.
 # In case of a storage driver like devicemapper where a container's
