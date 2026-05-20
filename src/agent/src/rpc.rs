@@ -72,6 +72,8 @@ use crate::device::network_device_handler::wait_for_ccw_net_interface;
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::network_device_handler::wait_for_pci_net_interface;
 use crate::device::{add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, update_env_pci};
+#[cfg(not(target_arch = "s390x"))]
+use crate::device::find_netdev_name_by_pci_path;
 use crate::features::get_build_features;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -1170,6 +1172,84 @@ impl agent_ttrpc::AgentService for AgentService {
                 wait_for_pci_net_interface(&self.sandbox, root_complex, &pcipath)
                     .await
                     .map_ttrpc_err(|e| format!("interface not available: {e:?}"))?;
+
+                // [instrument-coldplug-vf] VFIO/SR-IOV cold-plug MAC reconciliation.
+                //
+                // For pods that use an SR-IOV VF as their primary network
+                // interface (e.g. DPF + OVN-Kubernetes offloaded onto a
+                // BlueField DPU), OVN-Kubernetes assigns an IP-derived MAC
+                // (0a:58:<IPv4 in hex>) to the host-side VF netdev. Kata's
+                // shim then writes "vfio-pci" to driver_override and unbinds
+                // the VF from mlx5_core, which clears that software MAC.
+                // Inside the guest, with vfio_mode = "guest-kernel", mlx5_core
+                // re-binds the VF and exposes it with its firmware MAC, not
+                // the OVN-set one. The shim still issues UpdateInterface with
+                // the OVN MAC, so the agent's by-MAC lookup fails forever
+                // and the sandbox start hits the CRI deadline.
+                //
+                // Reconcile here, while we still have the PCI path: locate
+                // the cold-plugged netdev by sysfs, and if its current MAC
+                // does not match the one requested by the runtime, write the
+                // requested MAC. The existing by-MAC update_interface flow
+                // below then succeeds unchanged.
+                if !interface.hwAddr.is_empty() {
+                    let root_bus_sysfs =
+                        format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
+                    match find_netdev_name_by_pci_path(&root_bus_sysfs, &pcipath) {
+                        Ok(netdev_name) => {
+                            let mut sandbox = self.sandbox.lock().await;
+                            match sandbox
+                                .rtnl
+                                .set_link_mac_by_name(&netdev_name, &interface.hwAddr)
+                                .await
+                            {
+                                Ok(prev_mac) => {
+                                    if prev_mac.eq_ignore_ascii_case(&interface.hwAddr) {
+                                        info!(
+                                            sl(),
+                                            "update_interface: VFIO MAC reconciliation: \
+                                             netdev {} already has requested MAC {}",
+                                            netdev_name,
+                                            interface.hwAddr,
+                                        );
+                                    } else {
+                                        info!(
+                                            sl(),
+                                            "update_interface: VFIO MAC reconciliation: \
+                                             rewrote MAC of netdev {} from {} to {} \
+                                             (PCI devicePath={})",
+                                            netdev_name,
+                                            prev_mac,
+                                            interface.hwAddr,
+                                            interface.devicePath,
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        sl(),
+                                        "update_interface: VFIO MAC reconciliation failed \
+                                         (netdev={}, requested_mac={}): {:?}; falling through \
+                                         to standard by-MAC lookup",
+                                        netdev_name,
+                                        interface.hwAddr,
+                                        e,
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                sl(),
+                                "update_interface: could not resolve netdev for \
+                                 PCI devicePath={}: {:?}; falling through to standard \
+                                 by-MAC lookup",
+                                interface.devicePath,
+                                e,
+                            );
+                        }
+                    }
+                }
             }
             #[cfg(target_arch = "s390x")]
             {

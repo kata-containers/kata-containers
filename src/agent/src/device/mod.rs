@@ -735,6 +735,66 @@ fn get_next_bus_from_bridge(devpath: &PathBuf) -> Result<String> {
     })
 }
 
+/// [instrument-coldplug-vf] Resolve the network device name (e.g.
+/// `eth0`, `enp0s3`) for the PCI device identified by `pcipath` under
+/// the given root complex.
+///
+/// Caller must have first awaited the device's appearance in sysfs
+/// (e.g. via `wait_for_pci_net_interface`). The lookup walks
+/// `<sysfs_root>/<relpath>/net/` and returns the single entry found.
+///
+/// Used by the VFIO/SR-IOV cold-plug workaround in `update_interface`:
+/// when an OVN-Kubernetes pod uses an SR-IOV VF as its primary
+/// interface, the host CNI sets the desired MAC on the netdev, but the
+/// `vfio-pci` driver_override unbind/rebind cycle on cold-plug clears
+/// it. Inside the guest, `mlx5_core` then exposes the VF with its
+/// firmware MAC, and the agent's regular by-MAC lookup fails. With
+/// this helper, the agent can locate the cold-plugged netdev by PCI
+/// path, restore the requested MAC, and let the existing flow
+/// configure IP/MTU as usual.
+#[cfg(not(target_arch = "s390x"))]
+pub fn find_netdev_name_by_pci_path(
+    root_bus_sysfs: &str,
+    pcipath: &pci::Path,
+) -> Result<String> {
+    let relpath = pcipath_to_sysfs(root_bus_sysfs, pcipath)?;
+    let net_dir = PathBuf::from(format!(
+        "{}{}/net",
+        root_bus_sysfs,
+        relpath.trim_end_matches('/')
+    ));
+
+    let entries = fs::read_dir(&net_dir).with_context(|| {
+        format!(
+            "PCI device at {:?} has no net/ directory; not a network interface?",
+            net_dir
+        )
+    })?;
+
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        if let Some(name) = entry.file_name().to_str() {
+            names.push(name.to_string());
+        }
+    }
+
+    match names.len() {
+        0 => Err(anyhow!(
+            "no netdev found under {:?} for PCI path {}",
+            net_dir,
+            pcipath
+        )),
+        1 => Ok(names.remove(0)),
+        _ => Err(anyhow!(
+            "multiple netdevs ({:?}) under {:?} for PCI path {}; ambiguous",
+            names,
+            net_dir,
+            pcipath
+        )),
+    }
+}
+
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.

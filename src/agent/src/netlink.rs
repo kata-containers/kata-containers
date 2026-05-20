@@ -291,8 +291,79 @@ impl Handle {
             stream.try_next().await?
         };
 
-        next.map(|msg| msg.into())
-            .ok_or_else(|| anyhow!("Link not found ({})", filter))
+        if let Some(msg) = next {
+            return Ok(msg.into());
+        }
+
+        // [instrument-coldplug-vf] When a lookup fails — especially the
+        // by-MAC variant used during pod-network setup — embed a snapshot
+        // of every link currently visible inside the guest in the error
+        // message. This makes failures self-diagnosing in the journal.
+        let snapshot = self
+            .list_links_summary()
+            .await
+            .unwrap_or_else(|e| format!("(failed to snapshot links: {e:?})"));
+        Err(anyhow!(
+            "Link not found ({}); guest links snapshot: {}",
+            filter,
+            snapshot
+        ))
+    }
+
+    /// [instrument-coldplug-vf] Return a one-line, human-readable summary of
+    /// every link currently visible in the netns: name, MAC, index, MTU,
+    /// kind. Intended only for diagnostics; do not use for control flow.
+    async fn list_links_summary(&self) -> Result<String> {
+        let links = self.list_links().await?;
+        let mut parts = Vec::with_capacity(links.len());
+        for link in &links {
+            parts.push(format!(
+                "{{name={}, mac={}, index={}, mtu={}}}",
+                link.name(),
+                link.address(),
+                link.index(),
+                link.mtu().unwrap_or(0),
+            ));
+        }
+        Ok(format!("[{}]", parts.join(", ")))
+    }
+
+    /// [instrument-coldplug-vf] Set the hardware (MAC) address of an
+    /// interface looked up by its current Linux name. Returns the link's
+    /// previous MAC so callers can decide whether the change was needed.
+    pub async fn set_link_mac_by_name(&mut self, name: &str, mac: &str) -> Result<String> {
+        let link = self.find_link(LinkFilter::Name(name)).await?;
+        let prev_mac = link.address();
+        let mac_bytes = parse_mac_address(mac)
+            .with_context(|| format!("Failed to parse MAC address: {mac}"))?;
+
+        // Bring the interface down before changing its hardware address;
+        // many drivers reject a MAC change while the device is up.
+        let was_up = link.is_up();
+        if was_up {
+            self.enable_link(link.index(), false).await?;
+        }
+
+        let mut request = self.handle.link().set(link.index());
+        request.message_mut().header = link.header.clone();
+        request
+            .address(mac_bytes.to_vec())
+            .execute()
+            .await
+            .map_err(|err| {
+                anyhow!(
+                    "Failed to set MAC of interface {} (idx={}) to {}: {}",
+                    name,
+                    link.index(),
+                    mac,
+                    err
+                )
+            })?;
+
+        if was_up {
+            self.enable_link(link.index(), true).await?;
+        }
+        Ok(prev_mac)
     }
 
     async fn list_links(&self) -> Result<Vec<Link>> {
