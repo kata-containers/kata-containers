@@ -18,6 +18,7 @@ import (
 	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -92,6 +93,52 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		if vfio.IsPCIe {
 			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
 			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+
+			// [coldplug-vf-fix] Pre-compute the deterministic guest PCI
+			// path for QEMU cold-plug at a PCIe RootPort.
+			//
+			// In `appendPCIeRootPortDevice`, the N-th root port (rpN)
+			// is added to the guest's `pcie.0` bus at slot=N, addr=0.
+			// A cold-plugged VFIO device whose `bus=rpN` therefore
+			// always shows up in the guest at the secondary bus of
+			// rpN, slot 0 — yielding a 2-element PciPath [N, 00].
+			//
+			// Without this pre-computation, `GuestPciPath` is only
+			// filled by the QEMU *hot-plug* path (qomGetPciPath in
+			// qemu.go), so cold-plugged VFIO network devices reach
+			// the agent with `Interface.devicePath = ""`. That makes
+			// the agent's by-MAC `update_interface` lookup the only
+			// way to find the link, which in turn fails when the VF's
+			// in-guest MAC differs from the OVN-assigned one (the
+			// vfio-pci unbind/rebind cycle drops the software MAC).
+			//
+			// We only fill in this path for `RootPort` because that
+			// is the topology described in `appendPCIeRootPortDevice`.
+			// SwitchPort/BridgePort have a different (3-hop) topology
+			// and remain handled by the existing hot-plug code path.
+			//
+			// Cloud Hypervisor does not use guest PCIe bridges and
+			// will never enter this branch with a non-empty Port set
+			// to RootPort, so this change is QEMU-only in practice.
+			if vfio.Port == config.RootPort && vfio.GuestPciPath.IsNil() {
+				bridgeSlot, slotErr := vcTypes.PciSlotFromInt(busIndex)
+				if slotErr == nil {
+					devSlot, slotErr := vcTypes.PciSlotFromInt(0)
+					if slotErr == nil {
+						guestPath, pathErr := vcTypes.PciPathFromSlots(bridgeSlot, devSlot)
+						if pathErr == nil {
+							vfio.GuestPciPath = guestPath
+							deviceLogger().WithFields(logrus.Fields{
+								"bdf":            vfio.BDF,
+								"port":           vfio.Port,
+								"bus":            vfio.Bus,
+								"guest-pci-path": vfio.GuestPciPath.String(),
+							}).Info("vfio: pre-computed guest PCI path for cold-plug RootPort")
+						}
+					}
+				}
+			}
+
 			// We need to keep track the number of devices per port to deduce
 			// the corectu bus number, additionally we can use the VFIO device
 			// info to act upon different Vendor IDs and Device IDs.

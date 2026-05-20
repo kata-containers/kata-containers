@@ -1349,6 +1349,39 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		// creation, so no need to skip them here anymore.
 		for _, ep := range sandbox.network.Endpoints() {
 			if ep.Type() != VfioEndpointType {
+				// [coldplug-vf-fix] Reconcile the guest PCI path for
+				// PhysicalEndpoint cold-plug.
+				//
+				// `createPhysicalEndpoint` records the host BDF in
+				// `endpoint.BDF`, but `endpoint.PciPath()` stays empty
+				// until something writes it back. For cold-plug VFIO
+				// at a PCIe RootPort, the guest path is now known
+				// deterministically (set by drivers/vfio.go::Attach),
+				// so we look it up and stamp it on the endpoint here,
+				// before generateVCNetworkStructures emits the agent
+				// Interface proto. Without this, the agent receives
+				// `Interface.devicePath = ""` and falls back to a
+				// pure by-MAC link lookup — which fails for SR-IOV
+				// VFs whose firmware MAC differs from the OVN-set MAC
+				// after the vfio-pci unbind/rebind cycle.
+				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
+					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
+						if !guestPath.IsNil() {
+							ep.SetPciPath(guestPath)
+							k.Logger().WithFields(logrus.Fields{
+								"endpoint-name":  ep.Name(),
+								"host-bdf":       pe.BDF,
+								"guest-pci-path": guestPath.String(),
+							}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
+						} else {
+							k.Logger().WithFields(logrus.Fields{
+								"endpoint-name": ep.Name(),
+								"host-bdf":      pe.BDF,
+							}).Warn("setupNetworks: no guest PCI path found for PhysicalEndpoint cold-plug; agent by-MAC update_interface may fail")
+						}
+					}
+				}
 				endpoints = append(endpoints, ep)
 			}
 		}
