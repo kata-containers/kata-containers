@@ -173,7 +173,8 @@ pub struct VirtioBlkPciMatcher {
 impl VirtioBlkPciMatcher {
     pub fn new(relpath: &str, root_complex: &str) -> VirtioBlkPciMatcher {
         let root_bus = create_pci_root_bus_path(root_complex);
-        let re = format!(r"^{root_bus}{relpath}/virtio[0-9]+/block/");
+        // [^/]+$ ensures it only match the whole-disk uevent (e.g. block/vdx)
+        let re = format!(r"^{root_bus}{relpath}/virtio[0-9]+/block/[^/]+$");
 
         VirtioBlkPciMatcher {
             rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkPciMatcher regex"),
@@ -259,6 +260,17 @@ mod tests {
         assert!(matcher_b.is_match(&uev_b));
         assert!(!matcher_b.is_match(&uev_a));
         assert!(!matcher_a.is_match(&uev_b));
+
+        // Partition uevents must NOT match (only the whole-disk uevent should match)
+        let mut uev_part = uev_a.clone();
+        uev_part.devname = "vda1".to_string();
+        uev_part.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}/vda1");
+        assert!(!matcher_a.is_match(&uev_part));
+
+        let mut uev_part91 = uev_a.clone();
+        uev_part91.devname = "vda91".to_string();
+        uev_part91.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}/vda91");
+        assert!(!matcher_a.is_match(&uev_part91));
     }
 
     #[cfg(target_arch = "s390x")]
