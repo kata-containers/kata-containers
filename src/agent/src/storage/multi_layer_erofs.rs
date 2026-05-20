@@ -59,11 +59,9 @@ pub struct MultiLayerErofsResult {
     pub temp_mount_points: Vec<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 struct MkdirDirective {
     raw_path: String,
-    mode: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -407,7 +405,6 @@ fn parse_mkdir_directive(spec: &str) -> Result<MkdirDirective> {
 
     Ok(MkdirDirective {
         raw_path: raw_path.to_string(),
-        mode: parts.get(1).map(|s| s.to_string()),
     })
 }
 
@@ -604,21 +601,19 @@ mod tests {
     // --- parse_mkdir_directive ---
 
     #[rstest]
-    #[case("some/path", true, "some/path", None)]
-    #[case("some/path:0755", true, "some/path", Some("0755"))]
-    #[case("path:mode:extra", true, "path", Some("mode:extra"))]
-    #[case("", false, "", None)]
+    #[case("some/path", true, "some/path")]
+    #[case("some/path:0755", true, "some/path")]
+    #[case("path:mode:extra", true, "path")]
+    #[case("", false, "")]
     fn test_parse_mkdir_directive(
         #[case] spec: &str,
         #[case] should_pass: bool,
         #[case] expected_path: &str,
-        #[case] expected_mode: Option<&str>,
     ) {
         let result = parse_mkdir_directive(spec);
         if should_pass {
             let d = result.expect("expected Ok");
             assert_eq!(d.raw_path, expected_path);
-            assert_eq!(d.mode.as_deref(), expected_mode);
         } else {
             assert!(result.is_err(), "expected Err for spec {:?}", spec);
         }
