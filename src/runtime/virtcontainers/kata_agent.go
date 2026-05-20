@@ -1339,6 +1339,52 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		return nil
 	}
 
+	// [coldplug-vf-fix] For QEMU + cold_plug_vfio, the guest BDF of a
+	// cold-plugged VFIO device is auto-allocated by QEMU at boot
+	// (each pcie-root-port is added with `chassis=N,slot=N` but no
+	// pinned `addr=`, so QEMU picks the next free slot on pcie.0).
+	// The hot-plug path queries QMP via `qomGetPciPath`, but cold-
+	// plug devices never had a moment where this was done. Now that
+	// the VM is running, walk the device manager and resolve the
+	// guest PCI path of every cold-plugged VFIO device with an
+	// empty `GuestPciPath`. The PhysicalEndpoint loop below then
+	// uses `GetVfioDeviceGuestPciPath` to stamp the path on the
+	// endpoint, which makes `Interface.devicePath` non-empty in the
+	// proto sent to the agent. CLH already populates GuestPciPath
+	// on hot-plug and is unaffected by this code path.
+	if qHv, ok := sandbox.hypervisor.(*qemu); ok {
+		for _, dev := range sandbox.devManager.GetAllDevices() {
+			if dev.DeviceType() != config.DeviceVFIO {
+				continue
+			}
+			vfioDevs, ok := dev.GetDeviceInfo().([]*config.VFIODev)
+			if !ok {
+				continue
+			}
+			for _, vfioDev := range vfioDevs {
+				if !vfioDev.IsPCIe || !vfioDev.GuestPciPath.IsNil() || vfioDev.ID == "" {
+					continue
+				}
+				guestPath, gErr := qHv.ResolveDeviceGuestPciPath(ctx, vfioDev.ID)
+				if gErr != nil {
+					k.Logger().WithFields(logrus.Fields{
+						"qemu-device-id": vfioDev.ID,
+						"host-bdf":       vfioDev.BDF,
+					}).WithError(gErr).Warn("setupNetworks: failed to resolve guest PCI path for cold-plug VFIO device")
+					continue
+				}
+				vfioDev.GuestPciPath = guestPath
+				k.Logger().WithFields(logrus.Fields{
+					"qemu-device-id": vfioDev.ID,
+					"host-bdf":       vfioDev.BDF,
+					"port":           vfioDev.Port,
+					"bus":            vfioDev.Bus,
+					"guest-pci-path": guestPath.String(),
+				}).Info("setupNetworks: resolved guest PCI path for cold-plug VFIO device")
+			}
+		}
+	}
+
 	var err error
 	var endpoints []Endpoint
 	if c == nil || c.id == sandbox.id {
@@ -1354,16 +1400,15 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 				//
 				// `createPhysicalEndpoint` records the host BDF in
 				// `endpoint.BDF`, but `endpoint.PciPath()` stays empty
-				// until something writes it back. For cold-plug VFIO
-				// at a PCIe RootPort, the guest path is now known
-				// deterministically (set by drivers/vfio.go::Attach),
-				// so we look it up and stamp it on the endpoint here,
-				// before generateVCNetworkStructures emits the agent
-				// Interface proto. Without this, the agent receives
-				// `Interface.devicePath = ""` and falls back to a
-				// pure by-MAC link lookup — which fails for SR-IOV
-				// VFs whose firmware MAC differs from the OVN-set MAC
-				// after the vfio-pci unbind/rebind cycle.
+				// until something writes it back. For QEMU cold-plug
+				// at a PCIe RootPort, we just resolved the path above
+				// via QMP/qomGetPciPath; look it up here and stamp it
+				// on the endpoint before generateVCNetworkStructures
+				// emits the agent Interface proto. Without this, the
+				// agent receives `Interface.devicePath = ""` and falls
+				// back to a pure by-MAC link lookup — which fails for
+				// SR-IOV VFs whose firmware MAC differs from the
+				// OVN-set MAC after the vfio-pci unbind/rebind cycle.
 				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
 					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
 						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)

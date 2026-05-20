@@ -1420,6 +1420,26 @@ func (q *qemu) togglePauseSandbox(ctx context.Context, pause bool) error {
 	return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 }
 
+// ResolveDeviceGuestPciPath returns the in-guest PCI path of a device
+// previously cold-plugged into QEMU, identified by the QEMU device ID
+// (e.g. the value of `(*config.VFIODev).ID`). It re-establishes a QMP
+// connection on demand, walks the QOM tree via qomGetPciPath, and
+// returns a 2- or more-element PciPath rooted at the guest's pcie.0.
+//
+// [coldplug-vf-fix] Cold-plug VFIO devices are added to the QEMU
+// command line at boot, but their actual guest PCI BDF is auto-
+// allocated by QEMU (the runtime sets `chassis=N,slot=N` on each
+// pcie-root-port but leaves `addr=` unset, so QEMU picks the first
+// free slot on pcie.0). The hot-plug code path already calls
+// qomGetPciPath via the QMP monitor; this helper makes the same
+// resolution available to setupNetworks for cold-plugged devices.
+func (q *qemu) ResolveDeviceGuestPciPath(ctx context.Context, qemuDeviceID string) (types.PciPath, error) {
+	if err := q.qmpSetup(); err != nil {
+		return types.PciPath{}, err
+	}
+	return q.arch.qomGetPciPath(qemuDeviceID, &q.qmpMonitorCh)
+}
+
 func (q *qemu) qmpSetup() error {
 	q.qmpMonitorCh.Lock()
 	defer q.qmpMonitorCh.Unlock()
