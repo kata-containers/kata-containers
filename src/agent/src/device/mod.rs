@@ -735,6 +735,79 @@ fn get_next_bus_from_bridge(devpath: &PathBuf) -> Result<String> {
     })
 }
 
+/// [instrument-coldplug-vf] Return a one-line, human-readable snapshot
+/// of every PCI device (`/sys/bus/pci/devices/*`) and every netdev
+/// (`/sys/class/net/*`) currently visible inside the guest, along with
+/// the kernel driver bound to each. Used in `update_interface`'s
+/// failure path to make "Link not found" errors self-diagnosing: we
+/// can immediately see whether the cold-plugged VFIO device is
+/// present, which driver bound it, and whether it produced a netdev.
+pub fn snapshot_pci_and_netdev() -> String {
+    let mut pci_parts: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir("/sys/bus/pci/devices") {
+        for entry in entries.flatten() {
+            let bdf = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+            let driver = fs::read_link(path.join("driver"))
+                .ok()
+                .and_then(|p| {
+                    p.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| "<none>".to_string());
+            let vendor = fs::read_to_string(path.join("vendor"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let device = fs::read_to_string(path.join("device"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let class = fs::read_to_string(path.join("class"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            pci_parts.push(format!(
+                "{bdf}=[vendor={vendor},device={device},class={class},driver={driver}]"
+            ));
+        }
+    }
+
+    let mut net_parts: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir("/sys/class/net") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+            let mac = fs::read_to_string(path.join("address"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let ifindex = fs::read_to_string(path.join("ifindex"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let oper = fs::read_to_string(path.join("operstate"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            // Walk back through /sys/class/net/<name>/device to find the
+            // backing PCI BDF (if any). The `device` symlink targets the
+            // bus device, e.g. `/sys/devices/pci0000:00/.../0000:01:00.0`.
+            let pci_bdf = fs::read_link(path.join("device"))
+                .ok()
+                .and_then(|target| {
+                    target
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                })
+                .unwrap_or_else(|| "<none>".to_string());
+            net_parts.push(format!(
+                "{name}=[mac={mac},idx={ifindex},oper={oper},bdf={pci_bdf}]"
+            ));
+        }
+    }
+
+    format!(
+        "pci_devices=[{}] netdevs=[{}]",
+        pci_parts.join(", "),
+        net_parts.join(", ")
+    )
+}
+
 /// [instrument-coldplug-vf] Resolve the network device name (e.g.
 /// `eth0`, `enp0s3`) for the PCI device identified by `pcipath` under
 /// the given root complex.

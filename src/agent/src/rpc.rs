@@ -71,7 +71,10 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::network_device_handler::wait_for_pci_net_interface;
-use crate::device::{add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, update_env_pci};
+use crate::device::{
+    add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, snapshot_pci_and_netdev,
+    update_env_pci,
+};
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::find_netdev_name_by_pci_path;
 use crate::features::get_build_features;
@@ -1160,6 +1163,23 @@ impl agent_ttrpc::AgentService for AgentService {
             "empty update interface request",
         )?;
 
+        // [instrument-coldplug-vf] Log the full Interface proto on every
+        // call so we can correlate failures to what the shim actually
+        // sent. Especially: we want to see whether `devicePath` is set
+        // (which decides if the VFIO MAC reconciliation path runs).
+        info!(
+            sl(),
+            "update_interface: incoming request";
+            "name" => &interface.name,
+            "device" => &interface.device,
+            "hwAddr" => &interface.hwAddr,
+            "devicePath" => &interface.devicePath,
+            "type" => &interface.type_,
+            "mtu" => interface.mtu,
+            "raw_flags" => interface.raw_flags,
+            "ip_count" => interface.IPAddresses.len(),
+        );
+
         // For network devices passed, check for the network interface
         // to be available first.
         if !interface.devicePath.is_empty() {
@@ -1262,13 +1282,34 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
-        self.sandbox
+        if let Err(e) = self
+            .sandbox
             .lock()
             .await
             .rtnl
             .update_interface(&interface)
             .await
-            .map_ttrpc_err(|e| format!("update interface: {e:?}"))?;
+        {
+            // [instrument-coldplug-vf] Whenever the by-MAC link lookup
+            // fails inside the guest, dump a full PCI + netdev snapshot
+            // so we can decide between "VF never reached the guest",
+            // "VF is bound to vfio-pci with no netdev", "VF is bound to
+            // mlx5_core with the wrong MAC", etc.
+            let pci_snapshot = snapshot_pci_and_netdev();
+            warn!(
+                sl(),
+                "update_interface: rtnl.update_interface failed";
+                "name" => &interface.name,
+                "hwAddr" => &interface.hwAddr,
+                "devicePath" => &interface.devicePath,
+                "error" => format!("{:?}", e),
+                "guest_snapshot" => &pci_snapshot,
+            );
+            return Err(ttrpc_error(
+                ttrpc::Code::INTERNAL,
+                format!("update interface: {e:?}; {}", pci_snapshot),
+            ));
+        }
 
         Ok(interface)
     }

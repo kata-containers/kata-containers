@@ -284,6 +284,21 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			DevicePath:  devicePath,
 		}
 
+		// [instrument-coldplug-vf] Log every Interface we hand to the
+		// agent. Critically, log endpoint type and PciPath so we can
+		// tell whether a SR-IOV VF reached the runtime as a VfioEndpoint
+		// (devicePath set, agent will reconcile MAC) versus a tap/macvlan
+		// endpoint (devicePath empty, agent's by-MAC lookup is the only
+		// way the link gets found).
+		networkLogger().WithFields(logrus.Fields{
+			"endpoint-type": string(endpoint.Type()),
+			"name":          endpoint.Name(),
+			"hwAddr":        endpoint.HardwareAddr(),
+			"mtu":           endpoint.Properties().Iface.MTU,
+			"pciPath":       devicePath,
+			"ip-count":      len(ipAddresses),
+		}).Info("generateVCNetworkStructures: Interface generated")
+
 		ifaces = append(ifaces, &ifc)
 
 		for _, route := range endpoint.Properties().Routes {

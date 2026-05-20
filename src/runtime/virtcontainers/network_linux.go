@@ -139,6 +139,24 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		return nil, err
 	}
 
+	// [instrument-coldplug-vf] Log the classification decision so we
+	// can tell whether an SR-IOV VF presented in the pod netns will go
+	// down the PhysicalEndpoint -> VFIO passthrough path (devicePath
+	// will be set, MAC reconciliation can run in the agent), or down a
+	// tap/macvlan/veth path (devicePath empty, agent must find link by
+	// MAC alone). This is the runtime-side mirror of the agent's
+	// `update_interface: incoming request` log.
+	networkLogger().WithFields(logrus.Fields{
+		"name":          netInfo.Iface.Name,
+		"netlink-type":  netInfo.Iface.Type,
+		"hwAddr":        netInfo.Iface.HardwareAddr.String(),
+		"mtu":           netInfo.Iface.MTU,
+		"isPhysical":    isPhysical,
+		"coldPlugVFIO":  s.config.HypervisorConfig.ColdPlugVFIO,
+		"vfioMode":      s.config.VfioMode,
+		"hotplug":       hotplug,
+	}).Info("addSingleEndpoint: classifying interface")
+
 	if isPhysical {
 		if s.config.HypervisorConfig.ColdPlugVFIO == config.NoPort {
 			// When `cold_plug_vfio` is set to "no-port", the PhysicalEndpoint's VFIO device cannot be attached to the guest VM.
@@ -421,6 +439,26 @@ func (n *LinuxNetwork) scanEndpointsInNs(ctx context.Context, s *Sandbox, nsPath
 	linkList, err := netlinkHandle.LinkList()
 	if err != nil {
 		return nil, err
+	}
+
+	// [instrument-coldplug-vf] Log every link netlink found in the pod
+	// netns: name, type, MAC, flags. This is the source-of-truth for
+	// what Kata's classifier (addSingleEndpoint) is about to see, so a
+	// missing SR-IOV VF or unexpected netlink type shows up here first.
+	{
+		summary := make([]string, 0, len(linkList))
+		for _, l := range linkList {
+			a := l.Attrs()
+			summary = append(summary, fmt.Sprintf(
+				"{name=%s, type=%s, mac=%s, idx=%d, mtu=%d, flags=%v}",
+				a.Name, l.Type(), a.HardwareAddr.String(), a.Index, a.MTU, a.Flags,
+			))
+		}
+		networkLogger().WithFields(logrus.Fields{
+			"netns":      nsPath,
+			"link-count": len(linkList),
+			"links":      summary,
+		}).Info("scanEndpointsInNs: netns link snapshot")
 	}
 
 	epsBefore := len(n.eps)
