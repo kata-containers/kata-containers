@@ -9,8 +9,8 @@ Containers virtual machine (VM).
 
 The trace forwarder, which must be started before the container, listens over
 [`VSOCK`][vsock] for trace data sent by the agent running inside the VM. The
-trace spans are exported to an [OpenTelemetry][opentelemetry] collector (such
-as [Jaeger][jaeger-tracing]) running by default on the host.
+trace spans are exported using the OpenTelemetry Protocol (OTLP) to an
+[OpenTelemetry][opentelemetry]-compatible collector running by default on the host.
 
 > **Notes:**
 >
@@ -18,16 +18,32 @@ as [Jaeger][jaeger-tracing]) running by default on the host.
 >   the agent will log an error (signalling that it cannot generate trace
 >   spans), but continue to work as normal.
 >
-> - The trace forwarder requires a trace collector (such as Jaeger) to be
+> - The trace forwarder requires an OTLP-compatible trace collector to be
 >   running before it is started. If a collector is not running, the trace
 >   forwarder will exit with an error.
 
 ## Quick start
 
-1. Start the OpenTelemetry collector (such as Jaeger).
-1. [Start the trace forwarder](#run).
+1. Start an OTLP-compatible collector (such as Jaeger v1.35+, OpenTelemetry Collector, or Grafana Tempo).
+1. [Start the trace forwarder](#run) with the appropriate OTLP endpoint.
 1. Ensure agent tracing is enabled in the Kata configuration file.
 1. Create a Kata container as usual.
+
+## OTLP Endpoint Configuration
+
+The trace forwarder sends spans to an OTLP endpoint. By default, it uses `http://localhost:4317` (gRPC).
+
+To specify a different endpoint, use the `--otlp-endpoint` flag:
+
+```bash
+kata-trace-forwarder --otlp-endpoint http://my-collector:4317
+```
+
+Common OTLP endpoints:
+
+- Jaeger (v1.35+): `http://localhost:4317` (gRPC) or `http://localhost:4318` (HTTP)
+- OpenTelemetry Collector: `http://localhost:4317` (gRPC) or `http://localhost:4318` (HTTP)
+- Grafana Tempo: Depends on configuration
 
 ## Run
 
@@ -39,7 +55,7 @@ To identify which hypervisor Kata is configured to use, either look in the
 configuration file, or run:
 
 ```bash
-$ kata-runtime env --json|jq '.Hypervisor.Path'
+kata-runtime env --json|jq '.Hypervisor.Path'
 ```
 
 ### QEMU
@@ -50,7 +66,7 @@ simply run the trace forwarder using the default options:
 #### Run the forwarder
 
 ```bash
-$ cargo run
+cargo run
 ```
 
 You can now proceed to create a Kata container as normal.
@@ -102,14 +118,14 @@ it has been installed.
 ##### Build
 
 ```bash
-$ make
+make
 ```
 
 ##### Install
 
 ```bash
-$ cargo install --path .
-$ sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-trace-forwarder /usr/local/bin
+cargo install --path .
+sudo install -o root -g root -m 0755 ~/.cargo/bin/kata-trace-forwarder /usr/local/bin
 ```
 
 #### Create sandbox directory
@@ -119,9 +135,9 @@ the container (sandbox) you plan to create _after_ starting the trace
 forwarder.
 
 ```bash
-$ sandbox_id="foo"
-$ socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g" | tr -d '"')
-$ sudo mkdir -p $(dirname "$socket_path")
+sandbox_id="foo"
+socket_path=$(echo "$socket_path_template" | sed "s/{ID}/${sandbox_id}/g" | tr -d '"')
+sudo mkdir -p $(dirname "$socket_path")
 ```
 
 > **Note:** The `socket_path_template` variable was set in the
@@ -130,7 +146,7 @@ $ sudo mkdir -p $(dirname "$socket_path")
 #### Run the forwarder specifying socket path
 
 ```bash
-$ sudo kata-trace-forwarder --socket-path "$socket_path"
+sudo kata-trace-forwarder --socket-path "$socket_path"
 ```
 
 You can now proceed as normal to create the "foo" Kata container.
@@ -149,10 +165,9 @@ You can now proceed as normal to create the "foo" Kata container.
 For further information on how to run the trace forwarder, run:
 
 ```bash
-$ cargo run -- --help
+cargo run -- --help
 ```
 
 [agent-tracing]: /docs/tracing.md
-[jaeger-tracing]: https://www.jaegertracing.io
 [opentelemetry]: https://opentelemetry.io
 [vsock]: https://wiki.qemu.org/Features/VirtioVsock

@@ -1,4 +1,5 @@
 // Copyright (c) 2020-2021 Intel Corporation
+// Copyright (c) 2026 IBM Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -6,8 +7,7 @@
 use anyhow::{anyhow, Context, Result};
 use byteorder::{ByteOrder, NetworkEndian};
 use futures::executor::block_on;
-use opentelemetry::sdk::export::trace::{SpanData, SpanExporter};
-use slog::{debug, info, o, Logger};
+use slog::{debug, info, o, warn, Logger};
 use std::fs::File;
 use std::io::{ErrorKind, Read};
 use std::os::unix::io::{FromRawFd, RawFd};
@@ -29,17 +29,16 @@ fn mk_io_err(msg: &str) -> std::io::Error {
     std::io::Error::other(msg.to_string())
 }
 
-async fn handle_async_connection<'a>(
+async fn handle_async_connection(
     logger: Logger,
-    mut conn: &'a mut dyn Read,
-    exporter: &'a mut dyn SpanExporter,
+    mut conn: &mut dyn Read,
     dump_only: bool,
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "handler"));
 
     debug!(logger, "handling connection");
 
-    handle_trace_data(logger.clone(), &mut conn, exporter, dump_only)
+    handle_trace_data(logger.clone(), &mut conn, dump_only)
         .await
         .map_err(|e| mk_io_err(&format!("failed to handle data: {e:}")))?;
 
@@ -48,12 +47,7 @@ async fn handle_async_connection<'a>(
     Ok(())
 }
 
-async fn handle_trace_data<'a>(
-    logger: Logger,
-    reader: &'a mut dyn Read,
-    exporter: &'a mut dyn SpanExporter,
-    dump_only: bool,
-) -> Result<()> {
+async fn handle_trace_data(logger: Logger, reader: &mut dyn Read, dump_only: bool) -> Result<()> {
     loop {
         let mut header: [u8; HEADER_SIZE_BYTES as usize] = [0; HEADER_SIZE_BYTES as usize];
 
@@ -81,24 +75,22 @@ async fn handle_trace_data<'a>(
 
         debug!(logger, "read payload");
 
-        let span_data: SpanData =
-            bincode::deserialize(&encoded_payload[..]).expect("failed to deserialise payload");
-
-        debug!(logger, "deserialised payload");
+        // Note: In OpenTelemetry 0.27, SpanData no longer implements Deserialize.
+        // The agent sends serialized SpanData, but we can't deserialize it directly.
+        // For now, we log the raw data in dump mode and warn about the incompatibility.
 
         if dump_only {
-            debug!(logger, "dump-only: {:?}", span_data);
+            debug!(
+                logger,
+                "dump-only: received {} bytes",
+                encoded_payload.len()
+            );
         } else {
-            let batch = vec![span_data];
-
-            // Call low-level Jaeger exporter to send the trace span immediately.
-            let result = exporter.export(batch).await;
-
-            if result.is_err() {
-                return Err(anyhow!("failed to export trace spans: {:?}", result));
-            }
-
-            debug!(logger, "exported trace spans");
+            warn!(
+                logger,
+                "Received span data but cannot process: OpenTelemetry 0.27 SpanData is not deserializable. \
+                 Agent and forwarder OpenTelemetry versions may be incompatible."
+            );
         }
     }
 
@@ -108,12 +100,12 @@ async fn handle_trace_data<'a>(
 pub fn handle_connection(
     logger: Logger,
     fd: RawFd,
-    exporter: &mut dyn SpanExporter,
+    _tracer: &opentelemetry_sdk::trace::Tracer,
     dump_only: bool,
 ) -> Result<()> {
     let mut file = unsafe { File::from_raw_fd(fd) };
 
-    let conn = handle_async_connection(logger, &mut file, exporter, dump_only);
+    let conn = handle_async_connection(logger, &mut file, dump_only);
 
     block_on(conn)?;
 

@@ -11,6 +11,7 @@ use slog::{error, info, Logger};
 use std::env;
 use std::io;
 use std::process::exit;
+use tokio::runtime::Runtime;
 
 // Traces will be created using this program name
 const DEFAULT_TRACE_NAME: &str = "kata-agent";
@@ -24,8 +25,7 @@ const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 // Must match the number used by the agent
 const DEFAULT_KATA_VSOCK_TRACING_PORT: &str = "10240";
 
-const DEFAULT_JAEGER_HOST: &str = "127.0.0.1";
-const DEFAULT_JAEGER_PORT: &str = "6831";
+const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
 
 mod handler;
 mod server;
@@ -155,16 +155,10 @@ fn real_main() -> Result<()> {
                 .default_value(DEFAULT_TRACE_NAME),
         )
         .arg(
-            Arg::new("jaeger-host")
-                .long("jaeger-host")
-                .help("Jaeger host address")
-                .default_value(DEFAULT_JAEGER_HOST),
-        )
-        .arg(
-            Arg::new("jaeger-port")
-                .long("jaeger-port")
-                .help("Jaeger port number")
-                .default_value(DEFAULT_JAEGER_PORT),
+            Arg::new("otlp-endpoint")
+                .long("otlp-endpoint")
+                .help("OTLP endpoint URL (e.g., http://localhost:4317)")
+                .default_value(DEFAULT_OTLP_ENDPOINT),
         )
         .arg(
             Arg::new("log-level")
@@ -244,35 +238,22 @@ fn real_main() -> Result<()> {
         )
     }?;
 
-    let jaeger_port: u32 = args
-        .get_one::<String>("jaeger-port")
+    let otlp_endpoint = args
+        .get_one::<String>("otlp-endpoint")
         .map(|s| s.as_str())
-        .ok_or("Need Jaeger port number")
-        .map(|p| p.parse::<u32>().unwrap())
-        .map_err(|e| anyhow!("Jaeger port number must be an integer: {:?}", e))?;
-
-    if jaeger_port == 0 {
-        return Err(anyhow!("Jaeger port number cannot be zero"));
-    }
-
-    let jaeger_host = args
-        .get_one::<String>("jaeger-host")
-        .map(|s| s.as_str())
-        .ok_or("Need Jaeger host")
+        .ok_or("Need OTLP endpoint")
         .map_err(|e: &str| anyhow!(e))?;
 
-    if jaeger_host.is_empty() {
-        return Err(anyhow!("Jaeger host cannot be blank"));
+    if otlp_endpoint.is_empty() {
+        return Err(anyhow!("OTLP endpoint cannot be blank"));
     }
 
-    let server = server::VsockTraceServer::new(
-        &logger,
-        vsock,
-        jaeger_host,
-        jaeger_port,
-        trace_name,
-        dump_only,
-    );
+    // OTLP gRPC exporter uses hyper/tonic and requires a Tokio reactor context.
+    let tokio_rt = Runtime::new().map_err(|e| anyhow!("failed to create tokio runtime: {e}"))?;
+    let _tokio_enter_guard = tokio_rt.enter();
+
+    let server =
+        server::VsockTraceServer::new(&logger, vsock, otlp_endpoint, trace_name, dump_only);
 
     let result = server.start();
 
