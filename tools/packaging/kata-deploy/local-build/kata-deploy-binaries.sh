@@ -1153,7 +1153,6 @@ install_busybox() {
 
 install_agent() {
 	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" "${repo_root_dir}"/src/agent)"
-	artefact_tag="$(git log -1 --pretty=format:"%H" "${repo_root_dir}")"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -1318,7 +1317,6 @@ install_tools_helper() {
 	fi
 
 	if [[ "${tool}" == "agent-ctl" ]]; then
-		artefact_tag="$(git log -1 --pretty=format:"%H" "${repo_root_dir}")"
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers/agent-ctl"
 		mkdir -p "${defaults_path}"
 		install -D --mode 0644 "${repo_root_dir}/src/tools/${tool}/template/oci_config.json" "${defaults_path}/oci_config.json"
@@ -1549,7 +1547,14 @@ handle_build() {
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		tags=(latest-"${TARGET_BRANCH}")
-		if [[ -n "${artefact_tag:-}" ]]; then
+
+		# Always tag with HEAD commit SHA to ensure all components are traceable
+		# to the exact repository state, regardless of which files were modified
+		head_sha="$(git -C "${repo_root_dir}" log -1 --pretty=format:"%H")"
+		tags+=("${head_sha}")
+
+		# Add component-specific tag if set and different from HEAD SHA
+		if [[ -n "${artefact_tag:-}" && "${artefact_tag}" != "${head_sha}" ]]; then
 			tags+=("${artefact_tag}")
 		fi
 		if [[ "${RELEASE}" == "yes" ]]; then
