@@ -463,12 +463,60 @@ pub fn insert_devices_cgroup_rule(
 // update_env_pci alters PCI addresses in a set of environment
 // variables to be correct for the VM instead of the host.  It is
 // given a map of (host address => guest address)
+//
+// [coldplug-vf-fix] If `pcimap[cid]` is missing or does not cover a
+// host PCI address found in a `PCIDEVICE_*` env var, the env var is
+// left as-is and a warning is logged instead of aborting container
+// creation. This is needed for the cold-plug VFIO + guest-kernel
+// scenario, where the SR-IOV device plugin may set
+// `PCIDEVICE_<RES>=<host-BDF>` on the workload container's env without
+// ever exposing `/dev/vfio/<group>` as an OCI device — meaning the
+// runtime has no per-container device entry to populate the per-cid
+// pcimap with.  In that mode the env var is purely informational
+// (the workload uses the in-guest kernel netdev, not the host BDF),
+// so leaving it untranslated is harmless.  Workloads that *do* rely
+// on the translation (e.g. DPDK in `vfio_mode = "vfio"`) will see
+// the warning in agent logs and the original host BDF in their env;
+// they should be using the runtime's vfio device path, which still
+// populates pcimap normally.
 #[instrument]
 pub fn update_env_pci(
     cid: &String,
     env: &mut [String],
     pcimap: &HashMap<String, PciHostGuestMapping>,
 ) -> Result<()> {
+    // [coldplug-vf-fix] Surface per-container pcimap state before we
+    // walk PCIDEVICE_* env vars.  This is the single best signal for
+    // diagnosing the cold-plug VFIO env-var translation pipeline:
+    //   - `cid_present=false`           => runtime never sent a vfio-pci /
+    //                                      vfio-pci-gk device for this
+    //                                      container; we'll fall back to
+    //                                      leaving env vars untranslated.
+    //   - `cid_present=true, entries=0` => device handler ran but produced
+    //                                      no host->guest fixups (likely a
+    //                                      malformed VFIODev option from
+    //                                      the runtime, e.g. empty
+    //                                      `GuestPciPath`).
+    //   - `cid_present=true, entries>0` => normal path; we should be able
+    //                                      to translate.
+    let pcidevice_envs: Vec<String> = env
+        .iter()
+        .filter(|e| {
+            let name = e.split('=').next().unwrap_or("");
+            name.starts_with("PCIDEVICE_") && !name.ends_with("_INFO")
+        })
+        .cloned()
+        .collect();
+    let cid_pcimap_entries = pcimap.get(cid).map(|m| m.len()).unwrap_or(0);
+    tracing::info!(
+        cid = cid.as_str(),
+        cid_present = pcimap.contains_key(cid),
+        entries = cid_pcimap_entries,
+        sandbox_pcimap_size = pcimap.len(),
+        pcidevice_envs = ?pcidevice_envs,
+        "update_env_pci: enter"
+    );
+
     // SR-IOV device plugin may add two environment variables for one resource:
     // - PCIDEVICE_<prefix>_<resource-name>: a list of PCI device ids separated by comma
     // - PCIDEVICE_<prefix>_<resource-name>_INFO: detailed info in JSON for above PCI devices
@@ -490,6 +538,7 @@ pub fn update_env_pci(
 
         let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
+        let mut translation_skipped = false;
         for host_addr_str in val.split(',') {
             let host_addr = match pci::Address::from_str(host_addr_str) {
                 Ok(addr) => addr,
@@ -502,15 +551,48 @@ pub fn update_env_pci(
                     continue 'env_loop;
                 }
             };
-            let host_guest = pcimap
-                .get(cid)
-                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
-            let guest_addr = host_guest
-                .get(&host_addr)
-                .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+            let host_guest = match pcimap.get(cid) {
+                Some(m) => m,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        "update_env_pci: no per-container pcimap; leaving \
+                         PCIDEVICE env var untranslated (cold-plug VFIO \
+                         + guest-kernel: env var is informational, host \
+                         BDF is meaningless inside the guest)"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
+            let guest_addr = match host_guest.get(&host_addr) {
+                Some(g) => g,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        pcimap_size = host_guest.len(),
+                        "update_env_pci: host PCI address not present in \
+                         per-container pcimap; leaving PCIDEVICE env var \
+                         untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
 
             guest_addrs.push(format!("{guest_addr}"));
             addr_map.insert(host_addr_str.to_string(), format!("{guest_addr}"));
+        }
+
+        if translation_skipped {
+            // Leave both `PCIDEVICE_<RES>` and (later) the matching
+            // `_INFO` variant untouched. Skipping the `_INFO` insert
+            // below is what causes the 2nd pass to also leave it alone.
+            continue 'env_loop;
         }
 
         pci_dev_map.insert(format!("{name}_INFO"), addr_map);
@@ -1419,6 +1501,65 @@ mod tests {
         );
         // Real PCI addresses should still be translated
         assert_eq!(env[2], "PCIDEVICE_REAL=0000:01:01.0");
+    }
+
+    // [coldplug-vf-fix] Cover the missing-mapping fallback path. In the
+    // cold-plug VFIO + guest-kernel scenario, `pcimap[cid]` may be empty
+    // (the runtime never sent a per-container vfio device entry), or it
+    // may not contain the host BDF found in the env var. In both cases
+    // `update_env_pci` must NOT abort; it must leave the env vars
+    // untranslated and log a warning.
+    #[test]
+    fn test_update_env_pci_missing_cid_in_pcimap() {
+        let mut env = vec![
+            "PCIDEVICE_NVIDIA_COM_BF3_P0_NO_RDMA_VFS=0000:06:02.6".to_string(),
+            "PCIDEVICE_NVIDIA_COM_BF3_P0_NO_RDMA_VFS_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}".to_string(),
+            "OTHER=value".to_string(),
+        ];
+        let pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+
+        let cid = "container-0".to_string();
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(res.is_ok(), "must not error when pcimap[cid] missing: {:?}", res);
+
+        // Both PCIDEVICE_* and PCIDEVICE_*_INFO must be left as-is.
+        assert_eq!(
+            env[0],
+            "PCIDEVICE_NVIDIA_COM_BF3_P0_NO_RDMA_VFS=0000:06:02.6"
+        );
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_NVIDIA_COM_BF3_P0_NO_RDMA_VFS_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+        );
+        assert_eq!(env[2], "OTHER=value");
+    }
+
+    #[test]
+    fn test_update_env_pci_unknown_host_bdf() {
+        let mut env = vec![
+            // Two host BDFs; only the first is in pcimap.
+            "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}".to_string(),
+        ];
+
+        let cid = "container-0".to_string();
+        let mut inner: HashMap<pci::Address, pci::Address> = HashMap::new();
+        inner.insert(
+            pci::Address::from_str("0000:1a:01.0").unwrap(),
+            pci::Address::from_str("0000:01:01.0").unwrap(),
+        );
+        let mut pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pcimap.insert(cid.clone(), inner);
+
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(res.is_ok(), "must not error on partial pcimap: {:?}", res);
+
+        // Must leave the env vars untouched (atomicity: don't half-translate).
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}"
+        );
     }
 
     #[test]

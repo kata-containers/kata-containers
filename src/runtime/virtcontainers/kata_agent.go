@@ -1283,9 +1283,14 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		// [coldplug-vf-fix] Log the per-VFIODev entry the runtime is
 		// about to ship to the agent, so we can confirm the host->guest
 		// PCI mapping the agent will record into `sandbox.pcimap[cid]`.
+		// NOTE: `dev` here is the for-loop variable of type
+		// `*config.VFIODev`, which shadows the outer
+		// `dev ContainerDevice` function parameter; use
+		// `kataDevice.ContainerPath` (already initialised from the
+		// outer `dev.ContainerPath`) to refer to the OCI device path.
 		k.Logger().WithFields(logrus.Fields{
 			"container-id":   c.id,
-			"container-path": dev.ContainerPath,
+			"container-path": kataDevice.ContainerPath,
 			"vfio-id":        dev.ID,
 			"vfio-bdf":       dev.BDF,
 			"vfio-type":      dev.Type,
