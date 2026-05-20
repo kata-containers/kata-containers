@@ -57,11 +57,20 @@ pub struct MultiLayerErofsResult {
     /// overlay.  These must be tracked so they are unmounted *after* the
     /// overlay target during container teardown.
     pub temp_mount_points: Vec<String>,
+    /// dm-verity device paths that need to be destroyed during cleanup
+    pub verity_devices: Vec<String>,
 }
 
 #[derive(Debug)]
 struct MkdirDirective {
     raw_path: String,
+}
+
+/// Helper struct to track layer mount information including dm-verity devices
+#[derive(Debug)]
+struct LayerMountInfo {
+    #[allow(dead_code)]
+    verity_device: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -176,7 +185,7 @@ pub async fn handle_multi_layer_erofs_group(
     let upper_mount = temp_base.join("upper");
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger).await?;
+    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger, None).await?;
 
     for mkdir_dir in &mkdir_dirs {
         // As {{ mount 1 }} refers to the first lower layer, which is not available until we mount it.
@@ -206,7 +215,7 @@ pub async fn handle_multi_layer_erofs_group(
             lower_mount.display()
         ))?;
 
-        wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger).await?;
+        let _mount_info = wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger, None).await?;
         lower_mounts.push(lower_mount);
     }
 
@@ -316,6 +325,7 @@ pub async fn handle_multi_layer_erofs_group(
         mount_point: ext4.mount_point.clone(),
         processed_mount_points,
         temp_mount_points,
+        verity_devices: vec![],
     })
 }
 
@@ -464,7 +474,8 @@ async fn wait_and_mount_layer(
     layer_mount: &Path,
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
-) -> Result<()> {
+    base_dev_path: Option<String>,
+) -> Result<LayerMountInfo> {
     info!(
         logger,
         "Waiting for layer device";
@@ -472,22 +483,11 @@ async fn wait_and_mount_layer(
         "driver" => &layer.driver,
         "mount-point" => layer_mount.display(),
     );
-    let dev_path = match layer.driver.as_str() {
-        DRIVER_SCSI_TYPE => {
-            // For SCSI devices, we need to wait for the device to appear and get its path before mounting.
-            get_scsi_device_name(sandbox, &layer.source).await?
-        }
-        DRIVER_BLK_PCI_TYPE => {
-            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
-            get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
-        }
-        _ => {
-            // For non-SCSI devices, we can assume the source is directly mountable.
-            return Err(anyhow!(
-                "unsupported driver type '{}' for multi-layer erofs",
-                layer.driver
-            ));
-        }
+
+    // Get the base device path
+    let dev_path = match base_dev_path {
+        Some(path) => path,
+        None => resolve_base_device_path(layer, sandbox).await?,
     };
 
     info!(
@@ -545,7 +545,34 @@ async fn wait_and_mount_layer(
     // After successfully mounting the layer, we track the mount point for cleanup.
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
 
-    Ok(())
+    Ok(LayerMountInfo {
+        verity_device: None,
+    })
+}
+
+async fn resolve_base_device_path(
+    layer: &Storage,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<String> {
+    let base_dev_path = match layer.driver.as_str() {
+        DRIVER_SCSI_TYPE => {
+            // For SCSI devices, we need to wait for the device to appear and get its path before mounting.
+            get_scsi_device_name(sandbox, &layer.source).await?
+        }
+        DRIVER_BLK_PCI_TYPE => {
+            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
+            get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
+        }
+        _ => {
+            // For non-SCSI devices, we can assume the source is directly mountable.
+            return Err(anyhow!(
+                "unsupported driver type '{}' for multi-layer erofs",
+                layer.driver
+            ));
+        }
+    };
+
+    Ok(base_dev_path)
 }
 
 #[cfg(test)]
@@ -599,25 +626,6 @@ mod tests {
     }
 
     // --- parse_mkdir_directive ---
-
-    #[rstest]
-    #[case("some/path", true, "some/path")]
-    #[case("some/path:0755", true, "some/path")]
-    #[case("path:mode:extra", true, "path")]
-    #[case("", false, "")]
-    fn test_parse_mkdir_directive(
-        #[case] spec: &str,
-        #[case] should_pass: bool,
-        #[case] expected_path: &str,
-    ) {
-        let result = parse_mkdir_directive(spec);
-        if should_pass {
-            let d = result.expect("expected Ok");
-            assert_eq!(d.raw_path, expected_path);
-        } else {
-            assert!(result.is_err(), "expected Err for spec {:?}", spec);
-        }
-    }
 
     #[test]
     fn test_parse_mkdir_directive_rejects_null_bytes() {

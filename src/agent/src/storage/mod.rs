@@ -22,6 +22,7 @@ use tracing::instrument;
 
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
+pub use self::ephemeral_handler::update_ephemeral_mounts;
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, VirtioFsHandler};
 use self::image_pull_handler::ImagePullHandler;
@@ -30,15 +31,13 @@ use self::multi_layer_erofs::{handle_multi_layer_erofs_group, is_multi_layer_sto
 use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
-pub use self::ephemeral_handler::update_ephemeral_mounts;
-
 mod bind_watcher_handler;
 mod block_handler;
 mod ephemeral_handler;
 mod fs_handler;
 mod image_pull_handler;
 mod local_handler;
-mod multi_layer_erofs;
+pub mod multi_layer_erofs;
 
 const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
@@ -168,6 +167,9 @@ struct MultiLayerProcessResult {
     /// Temporary mount points (upper/lower) backing the overlay, needed for
     /// container-scoped cleanup via `container_mounts`.
     temp_mount_points: Vec<String>,
+    /// dm-verity device paths that need to be destroyed during cleanup
+    #[allow(dead_code)]
+    verity_devices: Vec<String>,
 }
 
 /// Handle multi-layer storage by creating the overlay device.
@@ -209,6 +211,7 @@ async fn handle_multi_layer_storage(
         device,
         processed_mount_points: result.processed_mount_points,
         temp_mount_points: result.temp_mount_points,
+        verity_devices: result.verity_devices,
     }))
 }
 
@@ -303,6 +306,7 @@ pub async fn add_storages(
                 }
             }
             mount_list.extend(result.temp_mount_points);
+            mount_list.extend(result.verity_devices);
             continue;
         }
 
