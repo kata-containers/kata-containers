@@ -272,35 +272,115 @@ impl Qmp {
 
         let mut hotplugged_mem_size = 0_u64;
 
-        info!(sl!(), "hotplugged_memory_size(): iterating over dimms");
+        info!(
+            sl!(),
+            "hotplugged_memory_size(): iterating over memory devices"
+        );
         for mem_frontend in &memory_frontends {
-            if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = mem_frontend {
-                let id = match dimm_info.data.id {
-                    Some(ref id) => id.clone(),
-                    None => "".to_owned(),
-                };
+            match mem_frontend {
+                qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) => {
+                    let id = match dimm_info.data.id {
+                        Some(ref id) => id.clone(),
+                        None => "".to_owned(),
+                    };
 
-                info!(
-                    sl!(),
-                    "dimm id: {} size={}, hotplugged: {}",
-                    id,
-                    dimm_info.data.size,
-                    dimm_info.data.hotplugged
-                );
+                    info!(
+                        sl!(),
+                        "dimm id: {} size={}, hotplugged: {}",
+                        id,
+                        dimm_info.data.size,
+                        dimm_info.data.hotplugged
+                    );
 
-                if dimm_info.data.hotpluggable && dimm_info.data.hotplugged {
-                    hotplugged_mem_size += dimm_info.data.size as u64;
+                    if dimm_info.data.hotpluggable && dimm_info.data.hotplugged {
+                        hotplugged_mem_size += dimm_info.data.size as u64;
+                    }
                 }
+                qapi_qmp::MemoryDeviceInfo::virtio_mem(vm_info) => {
+                    // For virtio-mem, the 'size' field is the requested-size
+                    info!(
+                        sl!(),
+                        "virtio-mem device: requested-size={} bytes ({} MB)",
+                        vm_info.data.size,
+                        vm_info.data.size / (1024 * 1024)
+                    );
+                    hotplugged_mem_size += vm_info.data.size;
+                }
+                _ => {}
             }
         }
+
+        info!(
+            sl!(),
+            "Total hotplugged memory: {} bytes ({} MB)",
+            hotplugged_mem_size,
+            hotplugged_mem_size / (1024 * 1024)
+        );
 
         Ok(hotplugged_mem_size)
     }
 
+    /// Hotplug memory into the VM.
+    /// Automatically detects if virtio-mem is available and uses it; otherwise falls back to pc-dimm.
     pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
-        let memdev_idx = self
-            .qmp
-            .execute(&qapi_qmp::query_memory_devices {})?
+        // Query existing memory devices to detect virtio-mem
+        let memory_devices = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+
+        // Check if virtio-mem device exists
+        let has_virtio_mem = memory_devices
+            .iter()
+            .any(|memdev| matches!(memdev, qapi_qmp::MemoryDeviceInfo::virtio_mem(_)));
+
+        if has_virtio_mem {
+            self.hotplug_virtio_mem(size, memory_devices)
+        } else {
+            self.hotplug_pc_dimm(size, memory_devices)
+        }
+    }
+
+    /// Hotplug memory using virtio-mem resize method.
+    fn hotplug_virtio_mem(
+        &mut self,
+        size: u64,
+        memory_devices: Vec<qapi_qmp::MemoryDeviceInfo>,
+    ) -> Result<()> {
+        info!(sl!(), "Detected virtio-mem device, using resize method");
+
+        // Calculate current hotplugged memory from virtio-mem device
+        let current_hotplugged_mb = memory_devices
+            .iter()
+            .filter_map(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::virtio_mem(vm_info) = memdev {
+                    Some(vm_info.data.size / (1024 * 1024))
+                } else {
+                    None
+                }
+            })
+            .sum::<u64>();
+
+        let size_mb = size / (1024 * 1024);
+        let new_total_mb = (current_hotplugged_mb + size_mb) as i64;
+
+        info!(
+            sl!(),
+            "Hotplugging {} MB using virtio-mem (current: {} MB, new total: {} MB)",
+            size_mb,
+            current_hotplugged_mb,
+            new_total_mb
+        );
+
+        self.resize_virtio_mem(new_total_mb)
+    }
+
+    /// Hotplug memory using pc-dimm device.
+    fn hotplug_pc_dimm(
+        &mut self,
+        size: u64,
+        memory_devices: Vec<qapi_qmp::MemoryDeviceInfo>,
+    ) -> Result<()> {
+        info!(sl!(), "No virtio-mem detected, using pc-dimm hotplug");
+
+        let memdev_idx = memory_devices
             .into_iter()
             .filter(|memdev| {
                 if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
@@ -544,26 +624,87 @@ impl Qmp {
     }
 
     pub fn hotunplug_memory(&mut self, size: i64) -> Result<()> {
-        let frontend = self
-            .qmp
-            .execute(&qapi_qmp::query_memory_devices {})?
-            .into_iter()
-            .find(|memdev| {
-                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
-                    let dimm_id = match dimm_info.data.id {
-                        Some(ref id) => id,
-                        None => return false,
-                    };
-                    if dimm_info.data.hotpluggable
-                        && dimm_info.data.hotplugged
-                        && dimm_info.data.size == size
-                        && dimm_id.starts_with("frontend-to-hotplugged-")
-                    {
-                        return true;
-                    }
+        // Query existing memory devices to detect virtio-mem
+        let memory_devices = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+
+        // Check if virtio-mem device exists
+        let has_virtio_mem = memory_devices
+            .iter()
+            .any(|memdev| matches!(memdev, qapi_qmp::MemoryDeviceInfo::virtio_mem(_)));
+
+        if has_virtio_mem {
+            self.hotunplug_virtio_mem(size, memory_devices)
+        } else {
+            self.hotunplug_pc_dimm(size, memory_devices)
+        }
+    }
+
+    /// Hotunplug memory using virtio-mem resize method.
+    fn hotunplug_virtio_mem(
+        &mut self,
+        size: i64,
+        memory_devices: Vec<qapi_qmp::MemoryDeviceInfo>,
+    ) -> Result<()> {
+        // Validate size is non-negative before casting
+        if size < 0 {
+            return Err(anyhow!(
+                "cannot hotunplug negative memory size: {} bytes",
+                size
+            ));
+        }
+
+        // Get current size from virtio-mem device (this is the requested-size, not actual size)
+        let current_size_bytes = memory_devices
+            .iter()
+            .filter_map(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::virtio_mem(vm_info) = memdev {
+                    Some(vm_info.data.size)
+                } else {
+                    None
                 }
-                false
-            });
+            })
+            .sum::<u64>();
+
+        // size parameter is the amount to REMOVE (in bytes)
+        let new_size_bytes = current_size_bytes.saturating_sub(size as u64);
+        let new_size_mb = (new_size_bytes / (1024 * 1024)) as i64;
+
+        info!(
+            sl!(),
+            "Decreasing virtio-mem by {} bytes (current: {} bytes, new: {} bytes = {} MB)",
+            size,
+            current_size_bytes,
+            new_size_bytes,
+            new_size_mb
+        );
+
+        self.resize_virtio_mem(new_size_mb)
+    }
+
+    /// Hotunplug memory using pc-dimm device removal.
+    fn hotunplug_pc_dimm(
+        &mut self,
+        size: i64,
+        memory_devices: Vec<qapi_qmp::MemoryDeviceInfo>,
+    ) -> Result<()> {
+        info!(sl!(), "No virtio-mem detected, using pc-dimm hotunplug");
+
+        let frontend = memory_devices.into_iter().find(|memdev| {
+            if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
+                let dimm_id = match dimm_info.data.id {
+                    Some(ref id) => id,
+                    None => return false,
+                };
+                if dimm_info.data.hotpluggable
+                    && dimm_info.data.hotplugged
+                    && dimm_info.data.size == size
+                    && dimm_id.starts_with("frontend-to-hotplugged-")
+                {
+                    return true;
+                }
+            }
+            false
+        });
 
         if let Some(frontend) = frontend {
             if let qapi_qmp::MemoryDeviceInfo::dimm(frontend) = frontend {
