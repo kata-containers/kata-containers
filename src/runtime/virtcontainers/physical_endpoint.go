@@ -10,8 +10,10 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -20,6 +22,8 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/safchain/ethtool"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 var physicalTrace = getNetworkTrace(PhysicalEndpointType)
@@ -92,6 +96,30 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := physicalTrace(ctx, "Attach", endpoint)
 	defer span.End()
+
+	// [coldplug-vf-roce] Push the desired netdev MAC down to the VF as
+	// an "admin MAC" via the PF before we rebind to vfio-pci. Without
+	// this the guest's mlx5_core inherits whatever firmware-default MAC
+	// the VF was created with, the guest netdev MAC ends up different
+	// from the IB port's HCA MAC, and `mlx5_ib`'s GID cache refuses to
+	// populate `/sys/class/infiniband/mlx5_*/ports/N/gids/*`. RoCE then
+	// looks like it works (port = ACTIVE, link_layer = Ethernet) but
+	// every actual verb that needs a GID — RoCEv2 packets, address
+	// handles, librdmacm bind — fails. The bind-to-vfio-pci step is the
+	// VF's reset, so the firmware applies the admin MAC during that
+	// transition; the guest then sees a single consistent MAC across
+	// netdev / IB port / HCA. Best-effort: any failure here is logged
+	// and the fallback (agent-side MAC reconciliation, see
+	// rpc.rs::update_interface) still keeps L2/L3 working.
+	if endpoint.HardAddr != "" && endpoint.BDF != "" {
+		if err := setVfAdminMAC(endpoint.BDF, endpoint.HardAddr); err != nil {
+			networkLogger().WithFields(logrus.Fields{
+				"bdf":     endpoint.BDF,
+				"netdev":  endpoint.IfaceName,
+				"hwAddr":  endpoint.HardAddr,
+			}).WithError(err).Warn("setVfAdminMAC: skipped, falling back to in-guest MAC reconciliation")
+		}
+	}
 
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
@@ -282,6 +310,118 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 
 func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
 	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver)
+}
+
+// [coldplug-vf-roce] setVfAdminMAC pushes `mac` down to the VF
+// identified by `vfBDF` as an admin MAC, via the parent PF using
+// rtnetlink (the same plumbing as `ip link set <PF> vf <N> mac <MAC>`).
+// The admin MAC is stored in the PF's per-VF context and applied by
+// the VF firmware on its next reset/init — which is exactly the
+// unbind-from-mlx5_core / bind-to-vfio-pci cycle we do right after
+// this call. Best-effort: returns an error only when the caller
+// should know about it (logged at warn). Bare bones, no retries.
+func setVfAdminMAC(vfBDF, mac string) error {
+	hwaddr, err := net.ParseMAC(mac)
+	if err != nil {
+		return fmt.Errorf("parse MAC %q: %w", mac, err)
+	}
+
+	pfBDF, vfIndex, err := resolveVfPfPath(vfBDF)
+	if err != nil {
+		return fmt.Errorf("resolve PF/vf-index for VF %s: %w", vfBDF, err)
+	}
+
+	pfNetdev, err := pfNetdevName(pfBDF)
+	if err != nil {
+		return fmt.Errorf("look up PF netdev for %s: %w", pfBDF, err)
+	}
+
+	link, err := netlink.LinkByName(pfNetdev)
+	if err != nil {
+		return fmt.Errorf("netlink LinkByName(%s): %w", pfNetdev, err)
+	}
+
+	if err := netlink.LinkSetVfHardwareAddr(link, vfIndex, hwaddr); err != nil {
+		return fmt.Errorf("netlink LinkSetVfHardwareAddr(%s, vf=%d, mac=%s): %w",
+			pfNetdev, vfIndex, mac, err)
+	}
+
+	networkLogger().WithFields(logrus.Fields{
+		"vf-bdf":     vfBDF,
+		"pf-bdf":     pfBDF,
+		"pf-netdev":  pfNetdev,
+		"vf-index":   vfIndex,
+		"admin-mac":  mac,
+	}).Info("setVfAdminMAC: stamped admin MAC on VF")
+	return nil
+}
+
+// resolveVfPfPath walks `/sys/bus/pci/devices/<vfBDF>/physfn` to find
+// the parent PF, then walks the PF's `virtfnN/` symlinks to find the
+// VF index that points back at `vfBDF`. Returns (pfBDF, vfIndex).
+func resolveVfPfPath(vfBDF string) (string, int, error) {
+	physfn := filepath.Join("/sys/bus/pci/devices", vfBDF, "physfn")
+	pfTarget, err := os.Readlink(physfn)
+	if err != nil {
+		return "", -1, fmt.Errorf("readlink(%s): %w (is %s actually a VF?)", physfn, err, vfBDF)
+	}
+	pfBDF := filepath.Base(pfTarget)
+
+	pfDir := filepath.Join("/sys/bus/pci/devices", pfBDF)
+	entries, err := os.ReadDir(pfDir)
+	if err != nil {
+		return "", -1, fmt.Errorf("read_dir(%s): %w", pfDir, err)
+	}
+
+	const prefix = "virtfn"
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		idxStr := strings.TrimPrefix(name, prefix)
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
+			continue
+		}
+
+		target, err := os.Readlink(filepath.Join(pfDir, name))
+		if err != nil {
+			continue
+		}
+		if filepath.Base(target) == vfBDF {
+			return pfBDF, idx, nil
+		}
+	}
+	return "", -1, fmt.Errorf("no virtfn under %s links to %s", pfDir, vfBDF)
+}
+
+// pfNetdevName returns the single netdev name registered under the
+// PF's sysfs node, e.g. `enp6s0f0np0` for a BlueField-3 PF0. Returns
+// an error if zero or more-than-one netdev is found, since with
+// SR-IOV the PF has exactly one netdev per port and per-PF here.
+func pfNetdevName(pfBDF string) (string, error) {
+	netDir := filepath.Join("/sys/bus/pci/devices", pfBDF, "net")
+	entries, err := os.ReadDir(netDir)
+	if err != nil {
+		return "", fmt.Errorf("read_dir(%s): %w", netDir, err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	switch len(names) {
+	case 0:
+		return "", fmt.Errorf("no netdev under %s (PF not bound to a Linux driver?)", netDir)
+	case 1:
+		return names[0], nil
+	default:
+		// Should not happen for SR-IOV NICs; pick the first
+		// deterministically and surface the ambiguity in the error
+		// path so callers can decide.
+		return names[0], fmt.Errorf("PF %s has %d netdevs (%s), picked %s",
+			pfBDF, len(names), strings.Join(names, ","), names[0])
+	}
 }
 
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
