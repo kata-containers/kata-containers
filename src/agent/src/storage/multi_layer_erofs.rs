@@ -15,12 +15,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::confidential_data_hub;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
+use crate::AGENT_CONFIG;
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::create_mount_destination;
 use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
@@ -46,8 +48,134 @@ const OPT_OVERLAY_LOWER: &str = "X-kata.overlay-lower";
 const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 
+/// MKFS options for unformatted rwlayer
+const OPT_MKFS: &str = "X-kata.mkfs=true";
+const OPT_MKFS_FS: &str = "X-kata.mkfs.fs=";
+const OPT_MKFS_SIZE: &str = "X-kata.mkfs.size=";
+const OPT_MKFS_UUID: &str = "X-kata.mkfs.uuid=";
+
+/// MKFS type prefix from containerd
+const MKFS_TYPE_PREFIX: &str = "mkfs/";
+/// LUKS type (luks2 is the modern standard)
+const LUKS_TYPE: &str = "luks2";
+/// cryptsetup binary path (used for cleanup: cryptsetup close)
+const CRYPTSETUP_BIN: &str = "cryptsetup";
+/// Device mapper path prefix
+const DEV_MAPPER_PATH: &str = "/dev/mapper/";
+
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
+/// LUKS encrypted device information for cleanup.
+///
+/// When CDH sets up LUKS encryption, we discover the mapper device name
+/// from /proc/mounts so that cleanup can call `cryptsetup close`.
+/// The encryption key is managed entirely by CDH/KBS and is not held by the agent.
+#[derive(Debug, Clone)]
+pub struct LuksInfo {
+    /// Device mapper name (e.g., "kata-rwlayer-xxx")
+    pub mapper_name: String,
+}
+
+/// Storage device that handles LUKS encrypted device cleanup
+///
+/// This wraps a base storage device and ensures LUKS devices are properly
+/// closed when the storage is cleaned up.
+///
+/// Cleanup order:
+/// 1. Unmount overlay (base_device.cleanup)
+/// 2. Unmount upper layer temporary mount (must happen before LUKS close)
+/// 3. Close LUKS devices (cryptsetup close)
+pub struct LuksStorageDevice {
+    /// Base storage device
+    base_device: Arc<dyn StorageDevice>,
+    /// LUKS mapper names that need to be closed on cleanup
+    luks_devices: Vec<String>,
+    /// Upper layer temporary mount point that sits on top of the LUKS device.
+    /// Must be unmounted before closing the LUKS device.
+    upper_mount_path: Option<String>,
+    /// Logger for cleanup operations
+    logger: Logger,
+}
+
+impl std::fmt::Debug for LuksStorageDevice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LuksStorageDevice")
+            .field("luks_devices", &self.luks_devices)
+            .field("upper_mount_path", &self.upper_mount_path)
+            .finish()
+    }
+}
+
+impl LuksStorageDevice {
+    /// Create a new LUKS storage device wrapper
+    pub fn new(
+        base_device: Arc<dyn StorageDevice>,
+        luks_devices: Vec<String>,
+        upper_mount_path: Option<String>,
+        logger: Logger,
+    ) -> Self {
+        Self {
+            base_device,
+            luks_devices,
+            upper_mount_path,
+            logger,
+        }
+    }
+}
+
+impl StorageDevice for LuksStorageDevice {
+    fn path(&self) -> Option<&str> {
+        self.base_device.path()
+    }
+
+    fn cleanup(&self) -> Result<()> {
+        // Step 1: Cleanup the base device (unmount overlay, etc.)
+        if let Err(e) = self.base_device.cleanup() {
+            warn!(
+                self.logger,
+                "Error cleaning up base storage device: {:?}", e
+            );
+            // Continue with LUKS cleanup even if base cleanup fails
+        }
+
+        // Step 2: Unmount the upper layer temporary mount point.
+        // The upper layer is mounted on the LUKS mapper device, so it MUST
+        // be unmounted before we can close the LUKS device.
+        if let Some(ref upper_path) = self.upper_mount_path {
+            info!(
+                self.logger,
+                "Unmounting upper layer before LUKS close";
+                "upper_mount_path" => upper_path,
+            );
+            if let Ok(true) = crate::mount::is_mounted(upper_path) {
+                let mounts = vec![upper_path.to_string()];
+                if let Err(e) = crate::mount::remove_mounts(&mounts) {
+                    warn!(
+                        self.logger,
+                        "Error unmounting upper layer {}: {:?}", upper_path, e
+                    );
+                }
+            }
+        }
+
+        // Step 3: Close all LUKS devices
+        for mapper_name in &self.luks_devices {
+            info!(
+                self.logger,
+                "Cleaning up LUKS device during storage cleanup";
+                "mapper_name" => mapper_name,
+            );
+            if let Err(e) = luks_close(mapper_name, &self.logger) {
+                warn!(
+                    self.logger,
+                    "Error closing LUKS device {}: {:?}", mapper_name, e
+                );
+            }
+        }
+
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct MultiLayerErofsResult {
@@ -57,6 +185,10 @@ pub struct MultiLayerErofsResult {
     /// overlay.  These must be tracked so they are unmounted *after* the
     /// overlay target during container teardown.
     pub temp_mount_points: Vec<String>,
+    /// Upper layer temporary mount point path (sits on LUKS device, needs unmount before LUKS close)
+    pub upper_mount_path: Option<String>,
+    /// LUKS encrypted devices that need cleanup
+    pub luks_devices: Vec<String>,
 }
 
 #[allow(dead_code)]
@@ -119,6 +251,14 @@ pub async fn handle_multi_layer_erofs_group(
         return Err(anyhow!("no multi-layer storages found"));
     }
 
+    info!(
+        logger,
+        "handle_multi_layer_erofs_group: found multi-layer storages";
+        "count" => multi_layer_storages.len(),
+        "trigger-mount-point" => trigger.mount_point.clone(),
+        "storages" => multi_layer_storages.iter().map(|s| format!("{}:{}", s.fstype, s.mount_point)).collect::<Vec<_>>().join(","),
+    );
+
     let mut ext4_storage: Option<&Storage> = None;
     let mut erofs_storages: Vec<&Storage> = Vec::new();
     let mut mkdir_dirs: Vec<MkdirDirective> = Vec::new();
@@ -178,7 +318,19 @@ pub async fn handle_multi_layer_erofs_group(
     let upper_mount = temp_base.join("upper");
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger).await?;
+    // Track LUKS devices for cleanup
+    let mut luks_devices: Vec<String> = Vec::new();
+
+    // Mount the upper layer (rwlayer) - this may be LUKS encrypted if mkfs type
+    let luks_info = wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger).await?;
+    if let Some(info) = luks_info {
+        info!(
+            logger,
+            "Tracking LUKS encrypted rwlayer for cleanup";
+            "mapper_name" => &info.mapper_name,
+        );
+        luks_devices.push(info.mapper_name);
+    }
 
     for mkdir_dir in &mkdir_dirs {
         // As {{ mount 1 }} refers to the first lower layer, which is not available until we mount it.
@@ -208,6 +360,7 @@ pub async fn handle_multi_layer_erofs_group(
             lower_mount.display()
         ))?;
 
+        // EROFS layers are not encrypted, so we ignore the returned LuksInfo
         wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger).await?;
         lower_mounts.push(lower_mount);
     }
@@ -256,6 +409,7 @@ pub async fn handle_multi_layer_erofs_group(
         "lowerdir" => &lowerdir,
         "workdir" => workdir.display(),
         "target" => &ext4.mount_point,
+        "luks-devices" => luks_devices.join(","),
     );
 
     create_mount_destination(
@@ -287,6 +441,7 @@ pub async fn handle_multi_layer_erofs_group(
         logger,
         "Multi-layer EROFS overlay mounted successfully";
         "mount-point" => &ext4.mount_point,
+        "luks-devices-count" => luks_devices.len(),
     );
 
     // Collect all unique mount points to maintain a clean resource state.
@@ -318,6 +473,12 @@ pub async fn handle_multi_layer_erofs_group(
         mount_point: ext4.mount_point.clone(),
         processed_mount_points,
         temp_mount_points,
+        luks_devices: luks_devices.clone(),
+        upper_mount_path: if luks_devices.is_empty() {
+            None
+        } else {
+            Some(upper_mount.display().to_string())
+        },
     })
 }
 
@@ -348,11 +509,170 @@ async fn track_temporary_mount_for_cleanup(
 fn is_upper_storage(storage: &Storage) -> bool {
     storage.options.iter().any(|o| o == OPT_OVERLAY_UPPER)
         || (storage.fstype == EXT4_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+        || (storage.options.iter().any(|o| o == OPT_MKFS)
+            && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
 }
 
 fn is_lower_storage(storage: &Storage) -> bool {
     storage.options.iter().any(|o| o == OPT_OVERLAY_LOWER)
         || (storage.fstype == EROFS_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+}
+
+/// Get device number in "major:minor" format from a device path.
+/// CDH secure_mount requires device_id in "major:minor" format.
+/// This reads the device metadata to obtain major/minor numbers.
+fn get_device_number_from_path(dev_path: &str) -> Result<String> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata =
+        std::fs::metadata(dev_path).context(format!("failed to stat device: {}", dev_path))?;
+    let rdev = metadata.rdev();
+    Ok(format!(
+        "{}:{}",
+        nix::sys::stat::major(rdev),
+        nix::sys::stat::minor(rdev)
+    ))
+}
+
+/// Find the LUKS device mapper name for a given mount point by inspecting /proc/mounts.
+/// Returns None if the mount source is not a /dev/mapper/ device.
+fn find_luks_mapper_for_mount(mount_point: &str, logger: &Logger) -> Result<Option<String>> {
+    let mount_info = kata_sys_util::mount::get_linux_mount_info(mount_point)
+        .context(format!("failed to get mount info for: {}", mount_point))?;
+
+    info!(
+        logger,
+        "Mount info for LUKS mapper discovery";
+        "mount_point" => mount_point,
+        "device" => &mount_info.device,
+        "fs_type" => &mount_info.fs_type,
+    );
+
+    if let Some(mapper_name) = mount_info.device.strip_prefix(DEV_MAPPER_PATH) {
+        if !mapper_name.is_empty() {
+            return Ok(Some(mapper_name.to_string()));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Try to set up LUKS encryption using CDH (Confidential Data Hub) service.
+/// CDH handles the entire LUKS lifecycle in one call:
+/// LUKS format -> LUKS open -> mkfs -> mount (one-shot operation).
+async fn try_cdh_luks_setup(
+    dev_path: &str,
+    actual_fstype: &str,
+    layer: &Storage,
+    mount_point: &Path,
+    logger: &Logger,
+) -> Result<Option<LuksInfo>> {
+    // Check if CDH is available
+    if !confidential_data_hub::is_cdh_client_initialized() {
+        return Ok(None);
+    }
+
+    info!(
+        logger,
+        "CDH is available, attempting LUKS encryption via CDH secure_mount";
+        "device" => dev_path,
+        "fstype" => actual_fstype,
+    );
+
+    // Get device major:minor number for CDH
+    let device_id = get_device_number_from_path(dev_path)
+        .context("failed to get device number for CDH secure_mount")?;
+
+    // Build mkfs options string from layer options (e.g., "-U <uuid>")
+    let mut mkfs_opts_parts: Vec<String> = Vec::new();
+    if let Some(uuid) = layer
+        .options
+        .iter()
+        .find_map(|o| o.strip_prefix(OPT_MKFS_UUID))
+    {
+        mkfs_opts_parts.push("-U".to_string());
+        mkfs_opts_parts.push(uuid.to_string());
+    }
+    let mkfs_opts = mkfs_opts_parts.join(" ");
+
+    let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
+
+    // Construct CDH options HashMap following the same format as rpc::cdh_secure_mount
+    let options = std::collections::HashMap::from([
+        ("deviceId".to_string(), device_id.clone()),
+        ("sourceType".to_string(), "empty".to_string()),
+        ("targetType".to_string(), "fileSystem".to_string()),
+        ("filesystemType".to_string(), actual_fstype.to_string()),
+        ("mkfsOpts".to_string(), mkfs_opts.clone()),
+        ("encryptionType".to_string(), LUKS_TYPE.to_string()),
+        ("dataIntegrity".to_string(), integrity.clone()),
+    ]);
+
+    let mount_point_str = mount_point.to_str().unwrap_or("");
+
+    info!(
+        logger,
+        "Calling CDH secure_mount for LUKS encrypted rwlayer";
+        "device_id" => &device_id,
+        "filesystem_type" => actual_fstype,
+        "encryption_type" => LUKS_TYPE,
+        "data_integrity" => &integrity,
+        "mkfs_opts" => &mkfs_opts,
+        "mount_point" => mount_point_str,
+    );
+
+    // CDH secure_mount handles everything: LUKS format + open + mkfs + mount
+    confidential_data_hub::secure_mount("block-device", &options, vec![], mount_point_str)
+        .await
+        .context("CDH secure_mount failed for LUKS encrypted rwlayer")?;
+
+    info!(
+        logger,
+        "CDH secure_mount completed successfully, discovering LUKS mapper device";
+        "mount_point" => mount_point_str,
+    );
+
+    let luks_info = match find_luks_mapper_for_mount(mount_point_str, logger)? {
+        Some(mapper_name) => {
+            info!(
+                logger,
+                "Discovered LUKS mapper device from CDH mount";
+                "mapper_name" => &mapper_name,
+            );
+            Some(LuksInfo { mapper_name })
+        }
+        None => {
+            info!(
+                logger,
+                "CDH mount source is not a /dev/mapper device";
+                "mount_point" => mount_point_str,
+            );
+            None
+        }
+    };
+
+    Ok(luks_info)
+}
+
+/// Close a LUKS encrypted device
+fn luks_close(mapper_name: &str, logger: &Logger) -> Result<()> {
+    info!(logger, "Closing LUKS device"; "mapper_name" => mapper_name);
+
+    let output = std::process::Command::new(CRYPTSETUP_BIN)
+        .args(["close", mapper_name])
+        .output()
+        .context("failed to execute cryptsetup close")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Log warning but don't fail - device might already be closed
+        warn!(
+            logger,
+            "cryptsetup close warning for {}: {}", mapper_name, stderr
+        );
+    }
+
+    Ok(())
 }
 
 /// Validate that a container ID does not contain path traversal sequences.
@@ -467,7 +787,7 @@ async fn wait_and_mount_layer(
     layer_mount: &Path,
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
-) -> Result<()> {
+) -> Result<Option<LuksInfo>> {
     info!(
         logger,
         "Waiting for layer device";
@@ -493,19 +813,131 @@ async fn wait_and_mount_layer(
         }
     };
 
+    // Check if this is an mkfs type that needs formatting before mount
+    let is_mkfs =
+        layer.fstype.starts_with(MKFS_TYPE_PREFIX) || layer.options.iter().any(|o| o == OPT_MKFS);
+
+    // Determine the actual filesystem type to use
+    let actual_fstype = if is_mkfs {
+        // Extract filesystem type from mkfs options or use default ext4
+        let fs_from_option = layer
+            .options
+            .iter()
+            .find_map(|o| o.strip_prefix(OPT_MKFS_FS));
+        fs_from_option.unwrap_or(EXT4_TYPE).to_string()
+    } else {
+        layer.fstype.clone()
+    };
+
     info!(
         logger,
         "Mounting layer";
         "device" => &layer.source,
         "fstype" => &layer.fstype,
+        "actual-fstype" => &actual_fstype,
         "devname" => &dev_path,
         "mount-point" => layer_mount.display(),
+        "is-mkfs" => is_mkfs,
     );
 
-    create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
+    // LUKS encryption via CDH (Confidential Data Hub).
+    if is_mkfs {
+        if let Some(luks_info) =
+            try_cdh_luks_setup(&dev_path, &actual_fstype, layer, layer_mount, logger).await?
+        {
+            // CDH handled everything: LUKS + mkfs + mount
+            track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
+            return Ok(Some(luks_info));
+        }
+
+        // CDH not available, proceed without encryption (mkfs + mount only)
+        info!(
+            logger,
+            "CDH not available, proceeding without encryption for mkfs rwlayer"
+        );
+    }
+
+    // Non-encrypted path: format (if mkfs) and mount the device directly.
+    create_mount_destination(Path::new(&dev_path), layer_mount, "", &actual_fstype)
         .context("failed to create layer mount destination")?;
 
-    let (flags, options) = if layer.fstype == EROFS_TYPE {
+    // If this is an mkfs type, format the device before mounting
+    if is_mkfs {
+        info!(
+            logger,
+            "Formatting unencrypted rwlayer device";
+            "device" => &dev_path,
+            "fstype" => &actual_fstype,
+        );
+
+        // Build mkfs command arguments
+        let mut mkfs_args = vec![];
+
+        // Add UUID if specified
+        if let Some(uuid) = layer
+            .options
+            .iter()
+            .find_map(|o| o.strip_prefix(OPT_MKFS_UUID))
+        {
+            mkfs_args.push("-U".to_string());
+            mkfs_args.push(uuid.to_string());
+        }
+
+        // Add size if specified (for ext4, this would be the filesystem size)
+        // Note: Most filesystems use the entire device by default, so size is optional
+        if let Some(_size) = layer
+            .options
+            .iter()
+            .find_map(|o| o.strip_prefix(OPT_MKFS_SIZE))
+        {
+            warn!(
+                logger,
+                "MKFS size option is specified but not implemented in this example; ignoring size limit"
+            );
+        }
+
+        // Add the device path
+        mkfs_args.push(dev_path.clone());
+
+        // Execute mkfs command based on filesystem type
+        let mkfs_cmd = match actual_fstype.as_str() {
+            EXT4_TYPE => "mkfs.ext4",
+            "xfs" => "mkfs.xfs",
+            "btrfs" => "mkfs.btrfs",
+            _ => {
+                return Err(anyhow!(
+                    "unsupported filesystem type for mkfs: '{}'",
+                    actual_fstype
+                ));
+            }
+        };
+
+        info!(
+            logger,
+            "Executing mkfs command";
+            "cmd" => mkfs_cmd,
+            "args" => mkfs_args.join(" "),
+        );
+
+        let output = std::process::Command::new(mkfs_cmd)
+            .args(&mkfs_args)
+            .output()
+            .context(format!("failed to execute {} command", mkfs_cmd))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!("{} command failed: {}", mkfs_cmd, stderr));
+        }
+
+        info!(
+            logger,
+            "Successfully formatted device";
+            "device" => &dev_path,
+            "fstype" => &actual_fstype,
+        );
+    }
+
+    let (flags, options) = if actual_fstype == EROFS_TYPE {
         info!(
             logger,
             "Mounting EROFS layer";
@@ -538,7 +970,7 @@ async fn wait_and_mount_layer(
     baremount(
         Path::new(&dev_path),
         layer_mount,
-        &layer.fstype,
+        &actual_fstype,
         flags,
         options.as_str(),
         logger,
@@ -548,7 +980,8 @@ async fn wait_and_mount_layer(
     // After successfully mounting the layer, we track the mount point for cleanup.
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
 
-    Ok(())
+    // No LUKS encryption in this path (CDH was not available or not mkfs type)
+    Ok(None)
 }
 
 #[cfg(test)]
