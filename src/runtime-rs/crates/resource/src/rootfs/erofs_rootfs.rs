@@ -333,15 +333,25 @@ fn extract_block_device_info(
 ///
 /// Handles the EROFS Multi-Layer where rootfs consists of:
 /// - Mount[0]: ext4 rw layer (writable container layer) -> virtio-blk device
-/// - Mount[1]: erofs layers (fsmeta + flattened layers) -> virtio-blk via VMDK
-/// - Mount[2]: overlay (to combine ext4 upper + erofs lower)
+/// - Mount[1..N]: one or more erofs layers (each fsmeta or flattened layer) ->
+///   virtio-blk (optionally via VMDK when a single Mount carries multiple
+///   `device=` extents)
+/// - Mount[N+1]: overlay (to combine ext4 upper + erofs lower(s))
+///
+/// `erofs_storages` is a Vec because containerd's erofs snapshotter can
+/// emit one separate erofs Mount per image layer (e.g. snapshot 12 and
+/// snapshot 11 for a two-layer image).  Each must be forwarded to the
+/// guest agent so it can compose them as ordered overlay lowerdirs;
+/// otherwise files in higher layers (e.g. `cryptsetup`, `nginx`) become
+/// invisible inside the container.
 pub(crate) struct ErofsMultiLayerRootfs {
     guest_path: String,
     device_ids: Vec<String>,
     rwlayer_storage: Option<Storage>, // Writable layer storage (upper layer), typically ext4
-    erofs_storage: Option<Storage>,
-    /// Path to generated VMDK descriptor (only set when multiple EROFS devices are merged)
-    vmdk_path: Option<PathBuf>,
+    erofs_storages: Vec<Storage>,
+    /// Paths to generated VMDK descriptors (one per erofs Mount that combined
+    /// multiple `device=` extents). Tracked for cleanup.
+    vmdk_paths: Vec<PathBuf>,
 }
 
 impl ErofsMultiLayerRootfs {
@@ -360,8 +370,8 @@ impl ErofsMultiLayerRootfs {
 
         let mut device_ids = Vec::new();
         let mut rwlayer_storage: Option<Storage> = None;
-        let mut erofs_storage: Option<Storage> = None;
-        let mut vmdk_path: Option<PathBuf> = None;
+        let mut erofs_storages: Vec<Storage> = Vec::new();
+        let mut vmdk_paths: Vec<PathBuf> = Vec::new();
 
         // Directories to create (X-containerd.mkdir.path)
         let mut mkdir_dirs: Vec<String> = Vec::new();
@@ -465,7 +475,7 @@ impl ErofsMultiLayerRootfs {
 
                     // Track VMDK path for cleanup (only when VMDK is actually created)
                     if erofs_format == BlockDeviceFormat::Vmdk {
-                        vmdk_path = Some(PathBuf::from(&erofs_path));
+                        vmdk_paths.push(PathBuf::from(&erofs_path));
                     }
 
                     info!(
@@ -525,7 +535,11 @@ impl ErofsMultiLayerRootfs {
                     rolayer.mount_point = container_path.clone();
                     rolayer.options = options;
 
-                    erofs_storage = Some(rolayer);
+                    // Preserve every erofs layer.  Containerd's erofs
+                    // snapshotter emits one Mount per layer (snapshot N,
+                    // snapshot N-1, ...) and the agent needs the full
+                    // ordered set to assemble the overlay lowerdirs.
+                    erofs_storages.push(rolayer);
                     device_ids.push(device_id);
                 }
                 fmt if fmt.eq_ignore_ascii_case("overlay")
@@ -572,8 +586,8 @@ impl ErofsMultiLayerRootfs {
             guest_path: container_path,
             device_ids,
             rwlayer_storage,
-            erofs_storage,
-            vmdk_path,
+            erofs_storages,
+            vmdk_paths,
         })
     }
 }
@@ -589,17 +603,17 @@ impl Rootfs for ErofsMultiLayerRootfs {
     }
 
     async fn get_storage(&self) -> Option<Vec<Storage>> {
-        // Return all storages for multi-layer EROFS (rw layer + erofs layer) to guest agent.
-        // Guest agent needs both to create overlay mount
+        // Return all storages for multi-layer EROFS (rw layer + every erofs
+        // lower layer) to the guest agent.  The agent uses the full set to
+        // assemble the overlay mount; dropping any erofs layer here would
+        // hide the files contributed by that layer inside the container.
         let mut storages = Vec::new();
 
         if let Some(rwlayer) = self.rwlayer_storage.clone() {
             storages.push(rwlayer);
         }
 
-        if let Some(erofs) = self.erofs_storage.clone() {
-            storages.push(erofs);
-        }
+        storages.extend(self.erofs_storages.iter().cloned());
 
         if storages.is_empty() {
             None
@@ -618,8 +632,9 @@ impl Rootfs for ErofsMultiLayerRootfs {
             dm.try_remove_device(device_id).await?;
         }
 
-        // Clean up generated VMDK descriptor file if it exists (only for multi-device case)
-        if let Some(ref vmdk) = self.vmdk_path {
+        // Clean up any generated VMDK descriptor files (one per erofs Mount
+        // that combined multiple `device=` extents).
+        for vmdk in &self.vmdk_paths {
             if vmdk.exists() {
                 if let Err(e) = fs::remove_file(vmdk) {
                     warn!(
