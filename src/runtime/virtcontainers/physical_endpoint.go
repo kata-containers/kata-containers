@@ -24,6 +24,7 @@ import (
 	"github.com/safchain/ethtool"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 )
 
 var physicalTrace = getNetworkTrace(PhysicalEndpointType)
@@ -336,22 +337,40 @@ func setVfAdminMAC(vfBDF, mac string) error {
 		return fmt.Errorf("look up PF netdev for %s: %w", pfBDF, err)
 	}
 
-	link, err := netlink.LinkByName(pfNetdev)
+	// [coldplug-vf-roce] At this point we are running inside the
+	// pod's network namespace (network_linux.go::addSingleEndpoint is
+	// wrapped in doNetNS), but the PF netdev lives in the host's
+	// init netns. Anchor the netlink handle to PID 1's netns so the
+	// PF lookup and the VF MAC RTM_SETLINK actually hit the right
+	// kernel state.
+	hostNs, err := netns.GetFromPid(1)
 	if err != nil {
-		return fmt.Errorf("netlink LinkByName(%s): %w", pfNetdev, err)
+		return fmt.Errorf("open host netns (/proc/1/ns/net): %w", err)
+	}
+	defer hostNs.Close()
+
+	handle, err := netlink.NewHandleAt(hostNs)
+	if err != nil {
+		return fmt.Errorf("netlink NewHandleAt(host-ns): %w", err)
+	}
+	defer handle.Close()
+
+	link, err := handle.LinkByName(pfNetdev)
+	if err != nil {
+		return fmt.Errorf("netlink LinkByName(%s) in host netns: %w", pfNetdev, err)
 	}
 
-	if err := netlink.LinkSetVfHardwareAddr(link, vfIndex, hwaddr); err != nil {
+	if err := handle.LinkSetVfHardwareAddr(link, vfIndex, hwaddr); err != nil {
 		return fmt.Errorf("netlink LinkSetVfHardwareAddr(%s, vf=%d, mac=%s): %w",
 			pfNetdev, vfIndex, mac, err)
 	}
 
 	networkLogger().WithFields(logrus.Fields{
-		"vf-bdf":     vfBDF,
-		"pf-bdf":     pfBDF,
-		"pf-netdev":  pfNetdev,
-		"vf-index":   vfIndex,
-		"admin-mac":  mac,
+		"vf-bdf":    vfBDF,
+		"pf-bdf":    pfBDF,
+		"pf-netdev": pfNetdev,
+		"vf-index":  vfIndex,
+		"admin-mac": mac,
 	}).Info("setVfAdminMAC: stamped admin MAC on VF")
 	return nil
 }
