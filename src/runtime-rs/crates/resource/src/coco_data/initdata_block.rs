@@ -276,7 +276,6 @@ pub fn push_data(initdata_path: &Path, data: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::io::Read;
 
     #[test]

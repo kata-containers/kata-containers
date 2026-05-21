@@ -603,6 +603,10 @@ func TestConstrainGRPCSpec(t *testing.T) {
 					Path: "/abc/123",
 				},
 				{
+					Type: string(specs.TimeNamespace),
+					Path: "/proc/123/ns/time",
+				},
+				{
 					Type: string(specs.MountNamespace),
 					Path: "/abc/123",
 				},
