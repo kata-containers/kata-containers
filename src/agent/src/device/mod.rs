@@ -247,6 +247,17 @@ pub async fn add_devices(
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
+
+    // [coldplug-vf-ib] Expose any RDMA / InfiniBand char devices the
+    // guest kernel created for cold-plugged VFs. Done unconditionally
+    // here (no-op when `/dev/infiniband/` is empty), so workloads in
+    // pods with cold-plug VFIO + guest-kernel RDMA see their VF's
+    // `uverbs<N>`, `rdma_cm`, etc. without depending on host-side CDI
+    // / SR-IOV DP DeviceSpec, both of which are unusable when the host
+    // VF is bound to vfio-pci.
+    expose_guest_infiniband_devices(logger, spec)
+        .context("expose_guest_infiniband_devices")?;
+
     update_spec_devices(logger, spec, dev_updates)
 }
 
@@ -888,6 +899,231 @@ pub fn snapshot_pci_and_netdev() -> String {
         pci_parts.join(", "),
         net_parts.join(", ")
     )
+}
+
+/// [coldplug-vf-ib] One-line summary of every `/sys/class/infiniband*`
+/// device the guest kernel currently exposes, plus every char device
+/// under `/dev/infiniband/` and the PCI BDF backing each IB device.
+///
+/// Used both as a diagnostic before/after the cold-plug VF rebinds
+/// to `mlx5_core` (so we can see whether the IB stack came up), and
+/// as the primary signal for the auto-exposure path in
+/// `expose_guest_infiniband_devices`.
+pub fn snapshot_infiniband() -> String {
+    let mut ib_parts: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir("/sys/class/infiniband") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+            let pci_bdf = fs::read_link(path.join("device"))
+                .ok()
+                .and_then(|t| t.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| "<none>".to_string());
+            let node_type = fs::read_to_string(path.join("node_type"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let fw = fs::read_to_string(path.join("fw_ver"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            ib_parts.push(format!(
+                "{name}=[bdf={pci_bdf},node_type={node_type:?},fw={fw}]"
+            ));
+        }
+    }
+
+    let mut verbs_parts: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir("/sys/class/infiniband_verbs") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("uverbs") {
+                continue;
+            }
+            let path = entry.path();
+            let ibdev = fs::read_to_string(path.join("ibdev"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            let dev = fs::read_to_string(path.join("dev"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            verbs_parts.push(format!("{name}=[ibdev={ibdev},dev={dev}]"));
+        }
+    }
+
+    let mut chardev_parts: Vec<String> = Vec::new();
+    if let Ok(entries) = fs::read_dir("/dev/infiniband") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let metadata = match entry.metadata() {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let kind = if metadata.file_type().is_char_device() {
+                "char"
+            } else if metadata.file_type().is_block_device() {
+                "block"
+            } else {
+                "other"
+            };
+            let rdev = metadata.rdev();
+            let major = stat::major(rdev);
+            let minor = stat::minor(rdev);
+            chardev_parts.push(format!("{name}=[{kind},{major}:{minor}]"));
+        }
+    }
+
+    format!(
+        "ib_devices=[{}] uverbs=[{}] chardevs=[{}]",
+        ib_parts.join(", "),
+        verbs_parts.join(", "),
+        chardev_parts.join(", "),
+    )
+}
+
+/// [coldplug-vf-ib] Walk `/dev/infiniband/` and append every char
+/// device found to the workload container's OCI spec, so that
+/// applications inside the container can use the guest's RDMA stack.
+///
+/// Why we do this on the agent (in-guest) side, not in the runtime:
+///
+/// * For VFIO passthrough, the host VF is bound to `vfio-pci` *before*
+///   the guest VM starts. Anything under `/dev/infiniband/` on the
+///   host either does not exist for that VF, or refers to a different
+///   `mlx5` device entirely. Host-side CDI and the SR-IOV DP's
+///   DeviceSpec response (when `isRdma=true`) both bake the host
+///   `uverbsN` paths into the container OCI spec, which is wrong:
+///   either kubelet fails with `lstat /dev/infiniband/uverbsN: no
+///   such file or directory`, or the container ends up with a stale
+///   character device that is not connected to the cold-plugged VF.
+/// * The guest's `uverbsN` numbering is independent of the host's
+///   and is only assigned once `mlx5_core` (and `mlx5_ib` /
+///   `ib_uverbs`) bind in the guest — i.e. only after VM boot.
+/// * The kata sandbox is one-VM-per-pod, and all containers in the
+///   pod share the network namespace and the cold-plugged VF, so
+///   exposing every guest-side IB char device to every container
+///   that lands here is consistent with the existing model. Pods
+///   that don't request the SR-IOV resource won't get a cold-plug
+///   VF in the first place, so `/dev/infiniband/` will be empty
+///   and this is a no-op.
+///
+/// The function preserves the guest's mode/owner from the char
+/// device's stat, falls back to `0o666` / root:root if stat fails.
+fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<()> {
+    let ib_dir = std::path::Path::new("/dev/infiniband");
+    if !ib_dir.exists() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband does not \
+             exist, skipping (no IB driver in guest, or VF not yet rebound)";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    let entries: Vec<_> = match fs::read_dir(ib_dir) {
+        Ok(it) => it.flatten().collect(),
+        Err(e) => {
+            warn!(
+                logger,
+                "expose_guest_infiniband_devices: read_dir(/dev/infiniband) failed: {e}"
+            );
+            return Ok(());
+        }
+    };
+
+    if entries.is_empty() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband is empty, \
+             skipping";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    let linux = spec
+        .linux_mut()
+        .as_mut()
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+    let mut exposed: Vec<String> = Vec::new();
+
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+
+        let metadata = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(
+                    logger,
+                    "expose_guest_infiniband_devices: skipping {} (stat: {e})",
+                    path.display()
+                );
+                continue;
+            }
+        };
+
+        if !metadata.file_type().is_char_device() {
+            continue;
+        }
+
+        let rdev = metadata.rdev();
+        let major = stat::major(rdev) as i64;
+        let minor = stat::minor(rdev) as i64;
+        let mode = (metadata.mode() & 0o7777) as u32;
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+
+        let device = oci::LinuxDeviceBuilder::default()
+            .path(path.clone())
+            .typ(oci::LinuxDeviceType::C)
+            .major(major)
+            .minor(minor)
+            .file_mode(mode)
+            .uid(uid)
+            .gid(gid)
+            .build()
+            .map_err(|e| {
+                anyhow!(
+                    "failed to build LinuxDevice for {}: {e}",
+                    path.display()
+                )
+            })?;
+
+        if let Some(devices) = linux.devices_mut() {
+            // Avoid duplicating a device that's already in the spec
+            // (paranoia: shouldn't happen for /dev/infiniband/* but
+            // we are append-only here).
+            let already = devices
+                .iter()
+                .any(|d| d.path().display().to_string() == path.display().to_string());
+            if !already {
+                devices.push(device);
+            }
+        } else {
+            linux.set_devices(Some(vec![device]));
+        }
+
+        let info = DeviceInfo {
+            cgroup_type: String::from("c"),
+            guest_major: major,
+            guest_minor: minor,
+        };
+        insert_devices_cgroup_rule(logger, spec, &info, true, "rwm")
+            .context("insert IB device cgroup rule")?;
+
+        exposed.push(format!("{name}({major}:{minor},mode=0o{mode:o})"));
+    }
+
+    info!(
+        logger,
+        "expose_guest_infiniband_devices: injected {} guest IB char device(s)",
+        exposed.len();
+        "exposed" => exposed.join(","),
+        "snapshot" => snapshot_infiniband(),
+    );
+
+    Ok(())
 }
 
 /// [instrument-coldplug-vf] Resolve the network device name (e.g.
