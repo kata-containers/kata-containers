@@ -1040,13 +1040,21 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
         return Ok(());
     }
 
-    let linux = spec
-        .linux_mut()
-        .as_mut()
-        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+    // Collect each char device's metadata in one pass *without* holding
+    // a long-lived `&mut spec.linux` borrow, so we can call
+    // `insert_devices_cgroup_rule(spec, ...)` afterwards (it itself
+    // borrows `spec.linux` mutably).
+    struct IbDev {
+        path: PathBuf,
+        name: String,
+        major: i64,
+        minor: i64,
+        mode: u32,
+        uid: u32,
+        gid: u32,
+    }
 
-    let mut exposed: Vec<String> = Vec::new();
-
+    let mut ib_devs: Vec<IbDev> = Vec::new();
     for entry in entries {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -1068,51 +1076,72 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
         }
 
         let rdev = metadata.rdev();
-        let major = stat::major(rdev) as i64;
-        let minor = stat::minor(rdev) as i64;
-        let mode = (metadata.mode() & 0o7777) as u32;
-        let uid = metadata.uid();
-        let gid = metadata.gid();
+        ib_devs.push(IbDev {
+            path,
+            name,
+            major: stat::major(rdev) as i64,
+            minor: stat::minor(rdev) as i64,
+            mode: (metadata.mode() & 0o7777) as u32,
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        });
+    }
 
-        let device = oci::LinuxDeviceBuilder::default()
-            .path(path.clone())
-            .typ(oci::LinuxDeviceType::C)
-            .major(major)
-            .minor(minor)
-            .file_mode(mode)
-            .uid(uid)
-            .gid(gid)
-            .build()
-            .map_err(|e| {
-                anyhow!(
-                    "failed to build LinuxDevice for {}: {e}",
-                    path.display()
-                )
-            })?;
+    // Pass 1: append LinuxDevice entries to spec.linux.devices.
+    {
+        let linux = spec
+            .linux_mut()
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
 
-        if let Some(devices) = linux.devices_mut() {
-            // Avoid duplicating a device that's already in the spec
-            // (paranoia: shouldn't happen for /dev/infiniband/* but
-            // we are append-only here).
-            let already = devices
-                .iter()
-                .any(|d| d.path().display().to_string() == path.display().to_string());
-            if !already {
-                devices.push(device);
+        for ib in &ib_devs {
+            let device = oci::LinuxDeviceBuilder::default()
+                .path(ib.path.clone())
+                .typ(oci::LinuxDeviceType::C)
+                .major(ib.major)
+                .minor(ib.minor)
+                .file_mode(ib.mode)
+                .uid(ib.uid)
+                .gid(ib.gid)
+                .build()
+                .map_err(|e| {
+                    anyhow!(
+                        "failed to build LinuxDevice for {}: {e}",
+                        ib.path.display()
+                    )
+                })?;
+
+            if let Some(devices) = linux.devices_mut() {
+                // Avoid duplicating a device that's already in the spec
+                // (paranoia: shouldn't happen for /dev/infiniband/* but
+                // we are append-only here).
+                let already = devices
+                    .iter()
+                    .any(|d| d.path().display().to_string() == ib.path.display().to_string());
+                if !already {
+                    devices.push(device);
+                }
+            } else {
+                linux.set_devices(Some(vec![device]));
             }
-        } else {
-            linux.set_devices(Some(vec![device]));
         }
+    } // `linux` borrow ends here.
 
+    // Pass 2: cgroup allow rules. `insert_devices_cgroup_rule` borrows
+    // `spec.linux` mutably itself; safe to call now that pass 1 is done.
+    let mut exposed: Vec<String> = Vec::with_capacity(ib_devs.len());
+    for ib in &ib_devs {
         let info = DeviceInfo {
             cgroup_type: String::from("c"),
-            guest_major: major,
-            guest_minor: minor,
+            guest_major: ib.major,
+            guest_minor: ib.minor,
         };
         insert_devices_cgroup_rule(logger, spec, &info, true, "rwm")
             .context("insert IB device cgroup rule")?;
-
-        exposed.push(format!("{name}({major}:{minor},mode=0o{mode:o})"));
+        exposed.push(format!(
+            "{}({}:{},mode=0o{:o})",
+            ib.name, ib.major, ib.minor, ib.mode
+        ));
     }
 
     info!(
