@@ -139,7 +139,8 @@ options:
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
-	shim-v2
+	shim-v2-go
+	shim-v2-rust
 	trace-forwarder
 	virtiofsd
 EOF
@@ -181,9 +182,9 @@ get_kernel_modules_dir() {
 	echo "${kernel_modules_dir}"
 }
 
-cleanup_and_fail_shim_v2_specifics() {
+cleanup_and_fail_shim_v2_rust_specifics() {
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
+		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-rust-root_hash_${variant}.txt"
 		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
 
@@ -228,7 +229,7 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	return 0
 }
 
-install_cached_shim_v2_tarball_compare_root_hashes() {
+install_cached_shim_v2_rust_tarball_compare_root_hashes() {
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
@@ -236,7 +237,7 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 		# Skip if one or the other does not exist.
 		[[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ]] && continue
 
-		diff "${tarball_dir}/root_hash_${variant}.txt" "shim-v2-root_hash_${variant}.txt" || return 1
+		diff "${tarball_dir}/root_hash_${variant}.txt" "shim-v2-rust-root_hash_${variant}.txt" || return 1
 		found_any="yes"
 	done
 	[[ -z "${found_any}" ]] && return 0
@@ -259,7 +260,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	if [[ "${component}" = "shim-v2" ]]; then
+	if [[ "${component}" = "shim-v2-rust" ]]; then
 		install_cached_shim_v2_tarball_get_root_hash
 	fi
 
@@ -275,8 +276,8 @@ install_cached_tarball_component() {
 	[[ "${cached_version}" != "${current_version}" ]] && return "$(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")"
 	sha256sum -c "${component}-sha256sum" || return "$(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")"
 
-	if [[ "${component}" = "shim-v2" ]]; then
-		install_cached_shim_v2_tarball_compare_root_hashes || return "$(cleanup_and_fail_shim_v2_specifics "${component_tarball_path}" "${extra_tarballs}")"
+	if [[ "${component}" = "shim-v2-rust" ]]; then
+		install_cached_shim_v2_rust_tarball_compare_root_hashes || return "$(cleanup_and_fail_shim_v2_rust_specifics "${component_tarball_path}" "${extra_tarballs}")"
 	fi
 
 	info "Using cached tarball of ${component}"
@@ -1042,35 +1043,9 @@ install_nydus() {
 	install -D --mode "${default_binary_permissions}" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
 }
 
-#Install all components that are not assets
-install_shimv2() {
-	local shim_v2_last_commit
-	shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
-	local runtime_rs_last_commit
-	runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
-	local protocols_last_commit
-	protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
-	local GO_VERSION
-	GO_VERSION="$(get_from_kata_deps ".languages.golang.meta.newest-version")"
-	local RUST_VERSION
-	RUST_VERSION="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
-
-	latest_artefact="$(get_kata_version)-${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
-	latest_builder_image="$(get_shim_v2_image_name)"
-
-	install_cached_tarball_component \
-		"shim-v2" \
-		"${latest_artefact}" \
-		"${latest_builder_image}" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	export GO_VERSION
-	export RUST_VERSION
-	export MEASURED_ROOTFS
-	export RUNTIME_CHOICE
-
+# Shared helper: extract measured-rootfs root hashes from confidential image tarballs.
+# These are needed by the Rust runtime (runtime-rs) at build time for dm-verity.
+_collect_root_hashes() {
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		local image_conf_tarball
 		image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
@@ -1087,6 +1062,70 @@ install_shimv2() {
 
 		mv "root_hash_${variant}.txt" "${workdir}/root_hash_${variant}.txt"
 	done
+}
+
+# Install the Go shim only (containerd-shim-kata-v2 Go runtime + kata-runtime + Go configs).
+install_shim_v2_go() {
+	local shim_v2_last_commit
+	shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local protocols_last_commit
+	protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local GO_VERSION
+	GO_VERSION="$(get_from_kata_deps ".languages.golang.meta.newest-version")"
+	local RUST_VERSION
+	RUST_VERSION="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
+
+	latest_artefact="$(get_kata_version)-${shim_v2_last_commit}-${protocols_last_commit}-${GO_VERSION}"
+	latest_builder_image="$(get_shim_v2_image_name)"
+
+	install_cached_tarball_component \
+		"shim-v2-go" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	export GO_VERSION
+	export RUST_VERSION
+	export MEASURED_ROOTFS
+	RUNTIME_CHOICE="go"
+	export RUNTIME_CHOICE
+
+	_collect_root_hashes
+
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
+}
+
+# Install the Rust shim only (containerd-shim-kata-v2 runtime-rs + runtime-rs configs).
+install_shim_v2_rust() {
+	local runtime_rs_last_commit
+	runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+	local protocols_last_commit
+	protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local GO_VERSION
+	GO_VERSION="$(get_from_kata_deps ".languages.golang.meta.newest-version")"
+	local RUST_VERSION
+	RUST_VERSION="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
+
+	latest_artefact="$(get_kata_version)-${runtime_rs_last_commit}-${protocols_last_commit}-${RUST_VERSION}"
+	latest_builder_image="$(get_shim_v2_image_name)"
+
+	install_cached_tarball_component \
+		"shim-v2-rust" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	export GO_VERSION
+	export RUST_VERSION
+	export MEASURED_ROOTFS
+	RUNTIME_CHOICE="rust"
+	export RUNTIME_CHOICE
+
+	_collect_root_hashes
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
@@ -1391,7 +1430,8 @@ handle_build() {
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_stratovirt
-		install_shimv2
+		install_shim_v2_go
+		install_shim_v2_rust
 		install_trace_forwarder
 		install_virtiofsd
 		;;
@@ -1470,7 +1510,9 @@ handle_build() {
 
 	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
 
-	shim-v2) install_shimv2 ;;
+	shim-v2-go) install_shim_v2_go ;;
+
+	shim-v2-rust) install_shim_v2_rust ;;
 
 	trace-forwarder) install_trace_forwarder ;;
 
@@ -1521,10 +1563,10 @@ handle_build() {
 			fi
 			tar --zstd -tvf "${modules_final_tarball_path}"
 			;;
-		shim-v2)
+		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
+					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/${build_target}-root_hash_${variant}.txt"
 				done
 			fi
 			;;
@@ -1589,18 +1631,17 @@ handle_build() {
 					"kata-static-${build_target}-modules.tar.zst"
 				)
 				;;
-			shim-v2)
-				if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-					local found_any=""
-					for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-						# The variants could be built independently we need to check if
-						# they exist and then push them to the registry
-					[[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ]] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
-						found_any="yes"
-					done
-					[[ -z "${found_any}" ]] && die "No files to push for shim-v2 with MEASURED_ROOTFS support"
-				fi
-				;;
+		shim-v2-rust)
+			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
+				local found_any=""
+				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+					# The variants could be built independently we need to check if
+					# they exist and then push them to the registry
+					[[ -f "${workdir}/shim-v2-rust-root_hash_${variant}.txt" ]] && files_to_push+=("shim-v2-rust-root_hash_${variant}.txt") && found_any="yes"
+				done
+				[[ -z "${found_any}" ]] && die "No files to push for shim-v2-rust with MEASURED_ROOTFS support"
+			fi
+			;;
 			*)
 				;;
 		esac
@@ -1647,7 +1688,8 @@ main() {
 		rootfs-initrd
 		rootfs-initrd-confidential
 		rootfs-initrd-mariner
-		shim-v2
+		shim-v2-go
+		shim-v2-rust
 		trace-forwarder
 		virtiofsd
 		dummy

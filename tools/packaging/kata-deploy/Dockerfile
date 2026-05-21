@@ -121,18 +121,18 @@ RUN \
 	rm -rf /kata/target && \
 	cargo clean
 
-#### Extract kata artifacts
-FROM alpine:3.22 AS artifact-extractor
+#### Prepare kata artifact tarballs
+# Individual component tarballs are stored compressed in the image.
+# The installer extracts only those required for the enabled runtime classes.
+FROM alpine:3.22 AS artifact-stage
 
-ARG KATA_ARTIFACTS=tools/packaging/kata-deploy/kata-static.tar.zst
+ARG KATA_ARTIFACTS_DIR=tools/packaging/kata-deploy/kata-artifacts
 ARG DESTINATION=/opt/kata-artifacts
 
-COPY ${KATA_ARTIFACTS} /tmp/
-RUN \
-	apk add --no-cache tar zstd util-linux-misc && \
-	mkdir -p "${DESTINATION}" && \
-	tar --zstd -xf "/tmp/$(basename "${KATA_ARTIFACTS}")" -C "${DESTINATION}" && \
-	rm -f "/tmp/$(basename "${KATA_ARTIFACTS}")"
+RUN apk add --no-cache util-linux-misc
+
+COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
+COPY tools/packaging/kata-deploy/shim-components.json ${DESTINATION}/
 
 #### Prepare runtime dependencies (nsenter and required libraries)
 # This stage assembles all runtime dependencies based on architecture
@@ -205,8 +205,8 @@ RUN \
 	esac
 
 # Copy musl nsenter from alpine for amd64/arm64
-COPY --from=artifact-extractor /usr/bin/nsenter /output/usr/bin/nsenter-musl
-COPY --from=artifact-extractor /lib/ld-musl-*.so.1 /output/lib/
+COPY --from=artifact-stage /usr/bin/nsenter /output/usr/bin/nsenter-musl
+COPY --from=artifact-stage /lib/ld-musl-*.so.1 /output/lib/
 
 # For amd64/arm64, use the musl nsenter; for ppc64le/s390x, keep the glibc one
 RUN \
@@ -225,8 +225,8 @@ FROM gcr.io/distroless/static-debian13@sha256:972618ca78034aaddc55864342014a96b8
 
 ARG DESTINATION=/opt/kata-artifacts
 
-# Copy extracted kata artifacts
-COPY --from=artifact-extractor ${DESTINATION} ${DESTINATION}
+# Copy kata component tarballs and component manifest
+COPY --from=artifact-stage ${DESTINATION} ${DESTINATION}
 
 # Copy Rust binary
 COPY --from=rust-builder /kata-deploy/bin/kata-deploy /usr/bin/kata-deploy

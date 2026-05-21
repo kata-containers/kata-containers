@@ -10,9 +10,11 @@ use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+#[cfg(test)]
 use walkdir::WalkDir;
 
 /// All valid shims
@@ -100,7 +102,8 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
         ));
     }
 
-    copy_artifacts("/opt/kata-artifacts/opt/kata", &config.host_install_dir)?;
+    let mut extracted: HashSet<String> = HashSet::new();
+    extract_component_tarballs(config, &mut extracted)?;
 
     set_executable_permissions(&config.host_install_dir)?;
 
@@ -318,12 +321,11 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Note: The src parameter is kept to allow for unit testing with temporary directories,
-/// even though in production it always uses /opt/kata-artifacts/opt/kata
+/// Copy an extracted artifact tree from `src` into `dst`.
 ///
-/// Symlinks in the source tree are preserved at the destination (recreated as symlinks
-/// instead of copying the target file). Absolute targets under the source root are
-/// rewritten to the destination root so they remain valid.
+/// Used only by unit tests; production code now uses `extract_component_tarballs`.
+/// Symlinks are preserved; absolute targets under the source root are rewritten to dst.
+#[cfg(test)]
 fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
     let src_path = Path::new(src);
     for entry in WalkDir::new(src).follow_links(false) {
@@ -383,6 +385,281 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
             fs::copy(src_path_entry, &dst_path)?;
         }
     }
+    Ok(())
+}
+
+/// Path to the shim-components.json manifest inside the kata-deploy container image.
+const SHIM_COMPONENTS_PATH: &str = "/opt/kata-artifacts/shim-components.json";
+
+/// Directory inside the container image where individual component tarballs are stored.
+const TARBALLS_DIR: &str = "/opt/kata-artifacts/tarballs";
+
+/// Common prefix stripped from tarball entries to get the install-relative path.
+const TAR_PREFIX: &str = "opt/kata";
+
+/// Absolute install path embedded in the tarballs (used to rewrite absolute symlink targets).
+const TARBALL_ABS_PREFIX: &str = "/opt/kata";
+
+/// Return the current architecture string as used in shim-components.json.
+fn current_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "s390x" => "s390x",
+        "powerpc64" => "ppc64le",
+        other => other,
+    }
+}
+
+/// Parse shim-components.json and return the union of component tarball names
+/// required by all shims listed in `config.shims_for_arch` for the current arch.
+fn collect_required_tarballs(config: &Config) -> Result<HashSet<String>> {
+    let arch = current_arch();
+    let json_str = fs::read_to_string(SHIM_COMPONENTS_PATH)
+        .with_context(|| format!("Failed to read {SHIM_COMPONENTS_PATH}"))?;
+    let doc: serde_json::Value =
+        serde_json::from_str(&json_str).context("Failed to parse shim-components.json")?;
+    let shims_map = doc["shims"]
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("shim-components.json is missing the 'shims' object"))?;
+
+    let mut required: HashSet<String> = HashSet::new();
+    for shim in &config.shims_for_arch {
+        match shims_map
+            .get(shim.as_str())
+            .and_then(|v| v.get(arch))
+            .and_then(|v| v.as_array())
+        {
+            Some(tarballs) => {
+                for t in tarballs {
+                    if let Some(name) = t.as_str() {
+                        required.insert(name.to_string());
+                    }
+                }
+            }
+            None => {
+                log::warn!(
+                    "Shim '{}' has no entry for architecture '{}' in shim-components.json; \
+                     no tarballs will be extracted for it",
+                    shim,
+                    arch
+                );
+            }
+        }
+    }
+    Ok(required)
+}
+
+/// Extract a `.tar.zst` tarball into `dest_dir`, stripping the leading `opt/kata/` prefix
+/// from every entry so files land directly under `dest_dir`.
+///
+/// Absolute symlink targets that point into `/opt/kata` are rewritten to point into
+/// `dest_dir` instead, keeping symlinks valid for non-default installation prefixes.
+fn extract_tarball(tarball_path: &Path, dest_dir: &str) -> Result<()> {
+    use std::path::Component;
+
+    let file = fs::File::open(tarball_path)
+        .with_context(|| format!("Failed to open tarball: {}", tarball_path.display()))?;
+    let decoder = zstd::Decoder::new(file).with_context(|| {
+        format!(
+            "Failed to create zstd decoder for: {}",
+            tarball_path.display()
+        )
+    })?;
+    let mut archive = tar::Archive::new(decoder);
+    let dest_path = Path::new(dest_dir);
+
+    for entry_result in archive.entries()? {
+        let mut entry = entry_result.context("Failed to read tar entry")?;
+        let raw_path = entry
+            .path()
+            .context("Failed to get tar entry path")?
+            .into_owned();
+
+        // Strip the "opt/kata" or "./opt/kata" prefix; skip anything else.
+        let dot_slash_prefix = Path::new("./opt/kata");
+        let stripped = if let Ok(p) = raw_path.strip_prefix(TAR_PREFIX) {
+            p.to_path_buf()
+        } else if let Ok(p) = raw_path.strip_prefix(dot_slash_prefix) {
+            p.to_path_buf()
+        } else {
+            log::debug!(
+                "Skipping entry without expected prefix: {}",
+                raw_path.display()
+            );
+            continue;
+        };
+
+        // The root "opt/kata/" directory itself → just ensure dest_dir exists.
+        if stripped.as_os_str().is_empty() {
+            fs::create_dir_all(dest_path)?;
+            continue;
+        }
+
+        // Reject path traversal attempts.
+        for component in stripped.components() {
+            if component == Component::ParentDir {
+                anyhow::bail!(
+                    "Tarball {} contains path traversal in entry: {}",
+                    tarball_path.display(),
+                    raw_path.display()
+                );
+            }
+        }
+
+        let dest_entry = dest_path.join(&stripped);
+        let entry_type = entry.header().entry_type();
+
+        if entry_type.is_dir() {
+            fs::create_dir_all(&dest_entry)
+                .with_context(|| format!("Failed to create directory: {}", dest_entry.display()))?;
+        } else if entry_type.is_symlink() {
+            let link_target = entry
+                .header()
+                .link_name()?
+                .ok_or_else(|| anyhow::anyhow!("Symlink has no link name: {}", raw_path.display()))?
+                .into_owned();
+
+            // Rewrite absolute symlinks that pointed into /opt/kata so they point into dest_dir.
+            let final_target: std::path::PathBuf = if link_target.is_absolute() {
+                if let Ok(rel) = link_target.strip_prefix(TARBALL_ABS_PREFIX) {
+                    dest_path.join(rel)
+                } else {
+                    link_target
+                }
+            } else {
+                link_target
+            };
+
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            std::os::unix::fs::symlink(&final_target, &dest_entry).with_context(|| {
+                format!(
+                    "Failed to create symlink {} -> {}",
+                    dest_entry.display(),
+                    final_target.display()
+                )
+            })?;
+        } else if entry_type.is_hard_link() {
+            let link_target = entry
+                .header()
+                .link_name()?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Hard link has no link name: {}", raw_path.display())
+                })?
+                .into_owned();
+
+            // Strip the prefix from the hard link target as well.
+            let link_stripped = if let Ok(p) = link_target.strip_prefix(TAR_PREFIX) {
+                dest_path.join(p)
+            } else if let Ok(p) = link_target.strip_prefix(dot_slash_prefix) {
+                dest_path.join(p)
+            } else {
+                dest_path.join(&link_target)
+            };
+
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            fs::hard_link(&link_stripped, &dest_entry).with_context(|| {
+                format!(
+                    "Failed to create hard link {} -> {}",
+                    dest_entry.display(),
+                    link_stripped.display()
+                )
+            })?;
+        } else {
+            // Regular file
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            entry
+                .unpack(&dest_entry)
+                .with_context(|| format!("Failed to unpack entry to: {}", dest_entry.display()))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Select and extract the component tarballs required for the configured shims.
+///
+/// Shared components (e.g. kernel, shim-v2-go) are listed by multiple shims.
+/// The `extracted` set tracks which components have already been unpacked in
+/// this install run so that shared components are only extracted once.
+/// Using an in-memory set (rather than on-disk markers) avoids any risk of
+/// stale state surviving across pod restarts.
+fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
+    let required = collect_required_tarballs(config)?;
+
+    if required.is_empty() {
+        log::warn!(
+            "No component tarballs required for the configured shims on '{}'; \
+             check shim-components.json",
+            current_arch()
+        );
+        return Ok(());
+    }
+
+    info!(
+        "Component tarballs required for shims [{}]: {:?}",
+        config.shims_for_arch.join(", "),
+        {
+            let mut sorted: Vec<_> = required.iter().collect();
+            sorted.sort();
+            sorted
+        }
+    );
+
+    let mut sorted_components: Vec<_> = required.iter().collect();
+    sorted_components.sort();
+
+    for component in sorted_components {
+        if extracted.contains(component.as_str()) {
+            info!("Component '{}' already extracted, skipping", component);
+            continue;
+        }
+
+        let tarball_name = format!("kata-static-{}.tar.zst", component);
+        let tarball_path = Path::new(TARBALLS_DIR).join(&tarball_name);
+
+        if !tarball_path.exists() {
+            anyhow::bail!(
+                "Required component tarball not found: {}. \
+                 Ensure the kata-deploy image was built with the '{}' component.",
+                tarball_path.display(),
+                component
+            );
+        }
+
+        info!("Extracting component '{}'", component);
+        extract_tarball(&tarball_path, &config.host_install_dir).with_context(|| {
+            format!(
+                "Failed to extract component '{}' from {}",
+                component,
+                tarball_path.display()
+            )
+        })?;
+
+        extracted.insert(component.clone());
+    }
+
     Ok(())
 }
 

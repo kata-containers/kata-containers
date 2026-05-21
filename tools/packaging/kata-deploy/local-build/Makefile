@@ -32,7 +32,8 @@ BASE_TARBALLS = serial-targets \
 	qemu-tdx-experimental-tarball \
 	qemu-tarball \
 	stratovirt-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
@@ -46,7 +47,8 @@ BASE_TARBALLS = serial-targets \
 	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
@@ -57,7 +59,8 @@ BASE_TARBALLS = serial-targets \
 	kernel-tarball \
 	qemu-tarball \
 	qemu-cca-experimental-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
@@ -219,7 +222,10 @@ DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-c
 rootfs-cca-confidential-initrd-tarball: $(DEPS)
 	${MAKE} $@-build
 
-shim-v2-tarball:
+shim-v2-go-tarball:
+	${MAKE} $@-build
+
+shim-v2-rust-tarball:
 	${MAKE} $@-build
 
 trace-forwarder-tarball: copy-scripts-for-the-tools-build

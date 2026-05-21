@@ -13,30 +13,23 @@ set -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${0}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
-KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
-STAGED_ARTIFACT="${KATA_DEPLOY_DIR}/kata-static.tar.zst"
-KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.zst"}"
-REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
-TAG="${3:-}"
 
-# Only remove a staged copy we created (skip when source is already the staged path).
-REMOVE_STAGED_ON_EXIT=false
+REGISTRY="${1:-"quay.io/kata-containers/kata-deploy"}"
+TAG="${2:-}"
+
+KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
+ARTIFACTS_BUILD_DIR="${KATA_DEPLOY_DIR}/local-build/build"
+ARTIFACTS_STAGE_DIR="${KATA_DEPLOY_DIR}/kata-artifacts"
+
+# Stage the component tarballs into a directory that is visible to the
+# Docker build context (local-build/ is excluded via .dockerignore).
+mkdir -p "${ARTIFACTS_STAGE_DIR}"
+cp "${ARTIFACTS_BUILD_DIR}"/kata-static-*.tar.zst "${ARTIFACTS_STAGE_DIR}/"
+
 cleanup() {
-	if [[ "${REMOVE_STAGED_ON_EXIT}" = true ]]; then
-		rm -f "${STAGED_ARTIFACT}"
-	fi
+	rm -rf "${ARTIFACTS_STAGE_DIR}"
 }
 trap cleanup EXIT
-
-src_rp="$(realpath -e "${KATA_DEPLOY_ARTIFACT}" 2>/dev/null || true)"
-dest_rp="$(realpath -e "${STAGED_ARTIFACT}" 2>/dev/null || true)"
-if [[ -n "${src_rp}" ]] && [[ -n "${dest_rp}" ]] && [[ "${src_rp}" = "${dest_rp}" ]]; then
-	echo "Artifact already at staged path ${STAGED_ARTIFACT}; skipping copy"
-else
-	echo "Copying ${KATA_DEPLOY_ARTIFACT} to ${STAGED_ARTIFACT}"
-	cp "${KATA_DEPLOY_ARTIFACT}" "${STAGED_ARTIFACT}"
-	REMOVE_STAGED_ON_EXIT=true
-fi
 
 pushd "${REPO_ROOT}"
 
