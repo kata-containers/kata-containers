@@ -29,6 +29,7 @@ use slog::info;
 use vm_memory::{Address, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
+use crate::api::v1::ConfidentialVmType;
 use crate::error::{Error, Result, StartMicroVmError};
 use crate::event_manager::EventManager;
 use crate::vm::{Vm, VmError};
@@ -378,6 +379,10 @@ impl Vm {
 
     pub(crate) fn split_irqchip(&self) -> bool {
         self.shared_info.read().unwrap().split_irqchip()
+    }
+
+    pub(crate) fn kvm_mem_attr_private(&self) -> bool {
+        self.confidential_vm_type() == Some(ConfidentialVmType::TDX)
     }
 
     fn load_kernel_with_tdshim(
