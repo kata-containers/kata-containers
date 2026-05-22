@@ -35,6 +35,7 @@ readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
 readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
+readonly KERNEL_DATADOG_ENABLED=${KERNEL_DATADOG_ENABLED:-"no"}
 
 #Path to kernel directory
 kernel_path=""
@@ -327,6 +328,14 @@ get_kernel_frag_path() {
 		local debug_configs
 		debug_configs="$(ls "${debug_path}"/*.conf)"
 		all_configs="${all_configs} ${debug_configs}"
+	fi
+
+	if [[ ${KERNEL_DATADOG_ENABLED} == "yes" ]]; then
+		info "Enable Datadog kernel config"
+		local datadog_path="${arch_path}/../datadog"
+		local datadog_configs
+		datadog_configs="$(find "${datadog_path}" -name '*.conf')"
+		all_configs="${all_configs} ${datadog_configs}"
 	fi
 
 	if [[ "${force_setup_generate_config}" == "true" ]]; then

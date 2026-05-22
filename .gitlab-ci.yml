@@ -7,6 +7,7 @@ variables:
   KUBERNETES_MEMORY_REQUEST: "20Gi"
   KUBERNETES_MEMORY_LIMIT: "40Gi"
   KERNEL_DEBUG_ENABLED: "yes"
+  KERNEL_DATADOG_ENABLED: "yes"
 
 stages:
   - ci-image
