@@ -7,6 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::process;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use cgroups_rs::manager::is_systemd_cgroup;
@@ -16,6 +17,7 @@ use kata_types::cpu::CpuSet;
 use nix::sched::{sched_setaffinity, CpuSet as NixCpuSet};
 use nix::unistd::Pid;
 use oci_spec::runtime::{LinuxCpu, LinuxCpuBuilder, LinuxResources, LinuxResourcesBuilder};
+use tokio::time::sleep;
 
 use crate::cgroups::utils::get_tgid_from_pid;
 use crate::cgroups::CgroupConfig;
@@ -187,12 +189,46 @@ impl CgroupsResourceInner {
         let needs_thread_ids = self.overhead_cgroup.is_some() || self.enable_vcpus_pinning;
 
         let thread_ids = if needs_thread_ids {
-            Some(
-                hypervisor
-                    .get_thread_ids()
-                    .await
-                    .context("get vCPU thread IDs")?,
-            )
+            let mut tids = hypervisor
+                .get_thread_ids()
+                .await
+                .context("get vCPU thread IDs")?;
+
+            // QEMU may not have spawned all vCPU threads yet. Retry with
+            // exponential backoff until we see the expected count.
+            let expected = hypervisor.hypervisor_config().await.cpu_info.default_vcpus.ceil() as usize;
+            if expected > 0 && tids.vcpus.len() < expected {
+                const MAX_ATTEMPTS: u32 = 10;
+                let mut backoff = Duration::from_millis(50);
+                for attempt in 2..=MAX_ATTEMPTS {
+                    if tids.vcpus.len() >= expected {
+                        break;
+                    }
+                    info!(
+                        sl!(),
+                        "waiting for all vCPU threads: have {}, want {}, attempt {}",
+                        tids.vcpus.len(),
+                        expected,
+                        attempt
+                    );
+                    sleep(backoff).await;
+                    backoff *= 2;
+                    tids = hypervisor
+                        .get_thread_ids()
+                        .await
+                        .context("get vCPU thread IDs (retry)")?;
+                }
+                if tids.vcpus.len() < expected {
+                    warn!(
+                        sl!(),
+                        "not all vCPU threads available after retries: have {}, want {}; pinning available ones",
+                        tids.vcpus.len(),
+                        expected
+                    );
+                }
+            }
+
+            Some(tids)
         } else {
             None
         };
