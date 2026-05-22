@@ -28,7 +28,6 @@ and configuration process.
 - `dbs_device`: [`dbs_device` Document](dbs_device/README.md)
 - `dbs_interrupt`: [`dbs_interrput` Document](dbs_interrupt/README.md)
 - `dbs_legacy_devices`: [`dbs_legacy_devices` Document](dbs_legacy_devices/README.md)
-- `dbs_tdx`: [`dbs_tdx` Document](dbs_tdx/README.md)
 - `dbs_upcall`: [`dbs_upcall` Document](dbs_upcall/README.md)
 - `dbs_utils`: [`dbs_utils` Document](dbs_utils/README.md)
 - `dbs_virtio_devices`: [`dbs_virtio_devices` Document](dbs_virtio_devices/README.md)

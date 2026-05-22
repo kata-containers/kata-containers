@@ -16,6 +16,9 @@ use dbs_boot::tdshim::TdvfError;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtioError;
 
+#[cfg(target_arch = "x86_64")]
+use tdx::launch::Error as TdxError;
+
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::VfioDeviceError;
 use crate::{address_space_manager, device_manager, resource_manager, vcpu, vm};
@@ -83,6 +86,11 @@ pub enum Error {
     /// Fail to create device manager system
     #[error("failed to create device manager system: {0}")]
     DeviceMgrError(#[source] device_manager::DeviceMgrError),
+
+    #[cfg(target_arch = "x86_64")]
+    /// TDX related error
+    #[error("TDX error: {0}")]
+    TdxError(TdxError),
 }
 
 /// Errors associated with starting the instance.
@@ -252,6 +260,15 @@ pub enum StartMicroVmError {
     /// Initrd is not supported
     #[error("Initrd is not supported")]
     InitrdNotSupported,
+
+    #[cfg(target_arch = "x86_64")]
+    /// TDX related error
+    #[error("Tdx error: {0}")]
+    TdxError(TdxError),
+
+    /// Guest memory error
+    #[error("Guest memory error: {0}")]
+    GuestMemoryError(#[source] vm_memory::guest_memory::Error),
 }
 
 /// Errors associated with starting the instance.

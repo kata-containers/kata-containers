@@ -53,6 +53,9 @@ vfio-bindings = { workspace = true, optional = true }
 vfio-ioctls = { workspace = true, optional = true }
 kata-sys-util = { path = "../libs/kata-sys-util" }
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+tdx = { workspace = true }
+
 [dev-dependencies]
 slog-async = "2.7.0"
 slog-term = "2.9.0"
