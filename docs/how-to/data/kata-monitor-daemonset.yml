@@ -23,12 +23,14 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
     spec:
-      hostNetwork: true
       containers:
       - name: kata-monitor
-        image: quay.io/kata-containers/kata-monitor:2.0.0
+        image: quay.io/kata-containers/kata-deploy:3.31.0
+        command: ["/opt/kata/bin/kata-monitor"]
         args:
+          - -listen-address=0.0.0.0:8090
           - -log-level=debug
+          - -runtime-endpoint=unix:///run/containerd/containerd.sock
         ports:
           - containerPort: 8090
         resources:
@@ -39,23 +41,40 @@ spec:
             cpu: 200m
             memory: 300Mi
         volumeMounts:
-        - name: containerdtask
-          mountPath: /run/containerd/io.containerd.runtime.v2.task/
+        - name: opt-kata
+          mountPath: /opt/kata
           readOnly: true
-        - name: containerdsocket
-          mountPath: /run/containerd/containerd.sock
+        - name: containerd-sock
+          mountPath: /run/containerd
           readOnly: true
         - name: sbs
           mountPath: /run/vc/sbs/
           readOnly: true
+        - name: host-lib
+          mountPath: /lib
+          readOnly: true
+        - name: host-lib64
+          mountPath: /lib64
+          readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: containerdtask
+      - name: opt-kata
         hostPath:
-          path: /run/containerd/io.containerd.runtime.v2.task/
-      - name: containerdsocket
+          path: /opt/kata
+          type: Directory
+      - name: containerd-sock
         hostPath:
-          path: /run/containerd/containerd.sock
+          path: /run/containerd
+          type: Directory
       - name: sbs
         hostPath:
           path: /run/vc/sbs/
+          type: DirectoryOrCreate
+      - name: host-lib
+        hostPath:
+          path: /lib
+          type: Directory
+      - name: host-lib64
+        hostPath:
+          path: /lib64
+          type: Directory
