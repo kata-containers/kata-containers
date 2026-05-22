@@ -1,5 +1,5 @@
 # Example values file to enable NVIDIA GPU shims
-# This includes all NVIDIA GPU-enabled shims: qemu-nvidia-gpu, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-tdx
+# This includes all NVIDIA GPU-enabled shims: qemu-nvidia-gpu, qemu-nvidia-gpu-runtime-rs, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-snp-runtime-rs, qemu-nvidia-gpu-tdx, qemu-nvidia-gpu-tdx-runtime-rs
 #
 # Usage:
 #   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -9,7 +9,7 @@
 debug: false
 
 snapshotter:
-  setup: []
+  setup: ["nydus"]
 
 # Enable NVIDIA GPU shims
 # Disable all shims at once, then enable only the ones we need
@@ -21,10 +21,27 @@ shims:
     enabled: true
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
 
   qemu-nvidia-gpu-snp:
     enabled: true
@@ -32,13 +49,43 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
       httpsProxy: ""
       noProxy: ""
+    runtimeClass:
+      # These labels are automatically added by gpu-operator and NFD
+      # respectively. Override if you want to use a different label.
+      # If you don't have NFD, you need to add the snp label by other
+      # means to your SNP nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      # These labels are automatically added by gpu-operator and NFD
+      # respectively. Override if you want to use a different label.
+      # If you don't have NFD, you need to add the snp label by other
+      # means to your SNP nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
 
   qemu-nvidia-gpu-tdx:
     enabled: true
@@ -46,18 +93,47 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
       httpsProxy: ""
       noProxy: ""
+    runtimeClass:
+      # These labels are automatically added by gpu-operator and NFD
+      # respectively. Override if you want to use a different label.
+      # If you don't have NFD, you need to add the tdx label by other
+      # means to your TDX nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      # These labels are automatically added by gpu-operator and NFD
+      # respectively. Override if you want to use a different label.
+      # If you don't have NFD, you need to add the tdx label by other
+      # means to your TDX nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
 
 # Default shim per architecture (prefer NVIDIA GPU shims)
 defaultShim:
   amd64: qemu-nvidia-gpu  # Can be changed to qemu-nvidia-gpu-snp or qemu-nvidia-gpu-tdx if preferred
-  arm64: qemu-nvidia-gpu
 
 runtimeClasses:
   enabled: true

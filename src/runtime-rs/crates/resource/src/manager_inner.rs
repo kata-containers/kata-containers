@@ -7,7 +7,7 @@
 use std::{collections::HashMap, sync::Arc, thread};
 
 use agent::{types::Device, ARPNeighbor, Agent, OnlineCPUMemRequest, Storage};
-use anyhow::{anyhow, Context, Ok, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
@@ -37,7 +37,7 @@ use crate::{
         cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource, swap::SwapResource,
     },
     manager::ManagerArgs,
-    network::{self, Network, NetworkConfig},
+    network::{self, dan_config_path, Network, NetworkConfig, NetworkWithNetNsConfig},
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
@@ -211,6 +211,11 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle initdata block device failed.")?;
                 }
+                ResourceConfig::VfioDeviceModern(vfiobase) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::VfioModernCfg(vfiobase))
+                        .await
+                        .context("do handle vfio device failed.")?;
+                }
             };
         }
 
@@ -250,12 +255,42 @@ impl ResourceManagerInner {
 
     async fn handle_interfaces(&self, network: &dyn Network) -> Result<()> {
         for i in network.interfaces().await.context("get interfaces")? {
-            // update interface
             info!(sl!(), "update interface {:?}", i);
-            self.agent
-                .update_interface(agent::UpdateInterfaceRequest { interface: Some(i) })
-                .await
-                .context("update interface")?;
+
+            // After hotplugging a network device, the guest kernel needs time
+            // to probe it before the interface appears.  This is especially
+            // pronounced on s390x (CCW bus) but can also happen on x86 in
+            // slower CI environments.  Retry a few times.
+            let mut last_error = None;
+            for attempt in 0..10u32 {
+                match self
+                    .agent
+                    .update_interface(agent::UpdateInterfaceRequest {
+                        interface: Some(i.clone()),
+                    })
+                    .await
+                {
+                    core::result::Result::Ok(_) => {
+                        last_error = None;
+                        break;
+                    }
+                    core::result::Result::Err(e) => {
+                        debug!(
+                            sl!(),
+                            "update_interface attempt {} failed, retrying: {:?}",
+                            attempt + 1,
+                            e
+                        );
+                        last_error = Some(e);
+                        if attempt < 9 {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                    }
+                }
+            }
+            if let Some(err) = last_error {
+                return Err(err).context("update interface");
+            }
         }
 
         Ok(())
@@ -310,14 +345,7 @@ impl ResourceManagerInner {
         }
 
         if let Some(network) = self.network.as_ref() {
-            let network = network.as_ref();
-            self.handle_interfaces(network)
-                .await
-                .context("handle interfaces")?;
-            self.handle_neighbours(network)
-                .await
-                .context("handle neighbors")?;
-            self.handle_routes(network).await.context("handle routes")?;
+            self.apply_network_to_agent(network.as_ref()).await?;
         }
 
         if let Some(swap) = self.swap_resource.as_ref() {
@@ -325,6 +353,61 @@ impl ResourceManagerInner {
         }
 
         Ok(())
+    }
+
+    pub async fn apply_network_to_agent(&self, network: &dyn Network) -> Result<()> {
+        self.handle_interfaces(network)
+            .await
+            .context("handle interfaces")?;
+        self.handle_neighbours(network)
+            .await
+            .context("handle neighbors")?;
+        self.handle_routes(network).await.context("handle routes")?;
+        Ok(())
+    }
+
+    /// Check whether a rescan is needed at all (early-out conditions).
+    pub fn rescan_should_skip(&self, net_cfg: &NetworkWithNetNsConfig) -> bool {
+        self.toml_config.runtime.disable_new_netns
+            || net_cfg.network_model == "none"
+            || net_cfg.netns_path.is_empty()
+            || dan_config_path(&self.toml_config, &self.sid).exists()
+    }
+
+    /// Check whether the network already has interfaces configured.
+    pub async fn network_has_interfaces(&self) -> Result<bool> {
+        match self.network.as_ref() {
+            Some(n) => Ok(!n
+                .interfaces()
+                .await
+                .context("check existing interfaces")?
+                .is_empty()),
+            None => Ok(false),
+        }
+    }
+
+    /// Perform a single network scan attempt.  Returns `Some(network)` when
+    /// new interfaces were found and need to be applied to the guest agent,
+    /// `None` when no interfaces were found yet (caller should retry).
+    /// The caller is responsible for calling `apply_network_to_agent` on
+    /// the returned network **after** releasing the write lock.
+    pub async fn rescan_network_once(
+        &mut self,
+        net_cfg: NetworkWithNetNsConfig,
+    ) -> Result<Option<Arc<dyn Network>>> {
+        self.handle_network(NetworkConfig::NetNs(net_cfg))
+            .await
+            .context("rescan handle network")?;
+
+        let n = self
+            .network
+            .as_ref()
+            .ok_or_else(|| anyhow!("network missing after rescan setup"))?;
+        let ifs = n.interfaces().await.context("rescan get interfaces")?;
+        if !ifs.is_empty() {
+            return Ok(Some(Arc::clone(n)));
+        }
+        Ok(None)
     }
 
     pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
@@ -395,16 +478,14 @@ impl ResourceManagerInner {
         cid: &str,
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
-        self.volume_resource
-            .handler_volumes(
-                &self.share_fs,
-                cid,
-                spec,
-                self.device_manager.as_ref(),
-                &self.sid,
-                self.agent.clone(),
-            )
-            .await
+        let ctx = crate::volume::VolumeContext {
+            share_fs: &self.share_fs,
+            d: self.device_manager.as_ref(),
+            sid: &self.sid,
+            agent: self.agent.clone(),
+            emptydir_mode: &self.toml_config.runtime.emptydir_mode,
+        };
+        self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }
 
     pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
@@ -422,6 +503,8 @@ impl ResourceManagerInner {
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
                         num_queues: blkdev_info.num_queues,
                         queue_size: blkdev_info.queue_size,
+                        logical_sector_size: blkdev_info.block_device_logical_sector_size,
+                        physical_sector_size: blkdev_info.block_device_physical_sector_size,
                         ..Default::default()
                     });
 
@@ -481,50 +564,134 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device")?;
 
-                    // vfio mode: vfio-pci and vfio-pci-gk for x86_64
-                    // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
-                    // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
-                    // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
-                    let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                        "vfio" => {
-                            if bus_type == "ccw" {
-                                "vfio-ap".to_string()
-                            } else {
-                                "vfio-pci".to_string()
-                            }
-                        }
-                        _ => "vfio-pci-gk".to_string(),
-                    };
+                    if let DeviceType::VfioModern(vfio_dev) = device_info.clone() {
+                        info!(sl!(), "device info: {:?}", vfio_dev.lock().await);
+                        let vfio_device = vfio_dev.lock().await;
+                        let guest_pci_path = vfio_device
+                            .config
+                            .guest_pci_path
+                            .clone()
+                            .context("VFIO device has no guest PCI path assigned")?;
+                        let host_bdf = vfio_device.device.primary.addr.to_string();
+                        info!(
+                            sl!(),
+                            "vfio device guest pci path: {:?}, host bdf: {:?}",
+                            guest_pci_path,
+                            &host_bdf
+                        );
 
-                    // create agent device
-                    if let DeviceType::Vfio(device) = device_info {
-                        let device_options = sort_options_by_pcipath(device.device_options);
+                        // vfio mode: vfio-pci and vfio-pci-gk for x86_64
+                        // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
+                        // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
+                        // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
+                        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+                            "vfio" => {
+                                if bus_type == "ccw" {
+                                    "vfio-ap".to_string()
+                                } else {
+                                    "vfio-pci".to_string()
+                                }
+                            }
+                            _ => "vfio-pci-gk".to_string(),
+                        };
+                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        // The Go runtime sets the device Id to
+                        // filepath.Base(dev.ContainerPath), e.g. "vfio0".
+                        // The agent policy validates this with:
+                        //   i_vfio_device.id == concat("", ["vfio", suffix])
+                        let group_num = d
+                            .path()
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or_default()
+                            .to_string();
                         let agent_device = Device {
-                            id: device.device_id, // just for kata-agent
+                            id: group_num,
                             container_path: d.path().display().to_string().clone(),
                             field_type: vfio_mode,
                             options: device_options,
                             ..Default::default()
                         };
 
-                        let device_info = if let Some(device_vendor_class) =
-                            &device.devices.first().unwrap().device_vendor_class
-                        {
-                            let vendor_class = device_vendor_class
-                                .get_vendor_class_id()
-                                .context("get vendor class failed")?;
-                            Some(DeviceInfo {
-                                vendor_id: vendor_class.0.to_owned(),
-                                class_id: vendor_class.1.to_owned(),
-                                host_path: d.path().clone(),
-                            })
-                        } else {
-                            None
-                        };
+                        let device_info = Some(DeviceInfo {
+                            vendor_id: vfio_device
+                                .device
+                                .primary
+                                .vendor_id
+                                .clone()
+                                .unwrap_or_default(),
+                            class_id: format!(
+                                "{:#08x}",
+                                vfio_device.device.primary.class_code.unwrap_or_default()
+                            ),
+                            host_path: d.path().clone(),
+                        });
+                        info!(
+                            sl!(),
+                            "vfio device info for agent: {:?}",
+                            device_info.clone()
+                        );
+                        info!(
+                            sl!(),
+                            "agent device info for agent: {:?}",
+                            agent_device.clone()
+                        );
                         devices.push(ContainerDevice {
                             device_info,
                             device: agent_device,
                         });
+                    } else {
+                        // vfio mode: vfio-pci and vfio-pci-gk for x86_64
+                        // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
+                        // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
+                        // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
+                        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+                            "vfio" => {
+                                if bus_type == "ccw" {
+                                    "vfio-ap".to_string()
+                                } else {
+                                    "vfio-pci".to_string()
+                                }
+                            }
+                            _ => "vfio-pci-gk".to_string(),
+                        };
+
+                        // create agent device
+                        if let DeviceType::Vfio(device) = device_info {
+                            let device_options = sort_options_by_pcipath(device.device_options);
+                            let group_num = d
+                                .path()
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or_default()
+                                .to_string();
+                            let agent_device = Device {
+                                id: group_num,
+                                container_path: d.path().display().to_string().clone(),
+                                field_type: vfio_mode,
+                                options: device_options,
+                                ..Default::default()
+                            };
+
+                            let device_info = if let Some(device_vendor_class) =
+                                &device.devices.first().unwrap().device_vendor_class
+                            {
+                                let vendor_class = device_vendor_class
+                                    .get_vendor_class_id()
+                                    .context("get vendor class failed")?;
+                                Some(DeviceInfo {
+                                    vendor_id: vendor_class.0.to_owned(),
+                                    class_id: vendor_class.1.to_owned(),
+                                    host_path: d.path().clone(),
+                                })
+                            } else {
+                                None
+                            };
+                            devices.push(ContainerDevice {
+                                device_info,
+                                device: agent_device,
+                            });
+                        }
                     }
                 }
                 _ => {
@@ -577,7 +744,11 @@ impl ResourceManagerInner {
             swap.clean().await;
         }
 
-        // TODO cleanup other resources
+        self.volume_resource
+            .cleanup_ephemeral_disks()
+            .await
+            .context("failed to cleanup ephemeral disks")?;
+
         Ok(())
     }
 

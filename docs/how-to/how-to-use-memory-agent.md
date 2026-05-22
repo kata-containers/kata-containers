@@ -315,7 +315,7 @@ $ kata-agent-ctl connect --server-address "unix:///var/run/kata/$PODID/root/kata
 ### compact_threshold
 Control the mem-agent compaction function compact threshold.<br>
 compact_threshold is the pages number.<br>
-When examining the /proc/pagetypeinfo, if there's an increase in the number of movable pages of orders smaller than the compact_order compared to the amount following the previous compaction period, and this increase surpasses a certain threshold specifically, more than compact_threshold number of pages, or the number of free pages has decreased by compact_threshold since the previous compaction. Current compact run period will not do compaction because there is no enough fragmented pages to be compaction.<br>
+When examining the `/proc/pagetypeinfo`, if there's an increase in the number of movable pages of orders smaller than the compact_order compared to the amount following the previous compaction period, and this increase surpasses a certain threshold specifically, more than compact_threshold number of pages, or the number of free pages has decreased by compact_threshold since the previous compaction. Current compact run period will not do compaction because there is no enough fragmented pages to be compaction.<br>
 This design aims to minimize the impact of unnecessary compaction calls on system performance.<br>
 Default to 1024.
 

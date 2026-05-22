@@ -5,11 +5,15 @@
 
 set -o nounset
 
-readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
-readonly kata_root_dir="$(cd "${packaging_root_dir}/../../" && pwd)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly script_dir
+packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
+readonly packaging_root_dir
+kata_root_dir="$(cd "${packaging_root_dir}/../../" && pwd)"
+readonly kata_root_dir
 
-source "$kata_root_dir/tests/common.bash"
+# shellcheck source=/dev/null
+source "${kata_root_dir}/tests/common.bash"
 
 # Build a IBM zSystem secure execution (SE) image
 #
@@ -27,20 +31,20 @@ build_secure_image() {
 	install_dest_dir="${3:-}"
 	key_verify_option="--no-verify" # no verification for CI testing purposes
 
-	if [ -n "${SIGNING_KEY_CERT_PATH:-}" ] && [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ] && [ -n "${HOST_KEY_CRL_PATH:-}" ]; then
-		if [ -e "${SIGNING_KEY_CERT_PATH}" ] && [ -e "${INTERMEDIATE_CA_CERT_PATH}" ] && [ -e "${HOST_KEY_CRL_PATH}" ]; then
+	if [[ -n "${SIGNING_KEY_CERT_PATH:-}" ]] && [[ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ]] && [[ -n "${HOST_KEY_CRL_PATH:-}" ]]; then
+		if [[ -e "${SIGNING_KEY_CERT_PATH}" ]] && [[ -e "${INTERMEDIATE_CA_CERT_PATH}" ]] && [[ -e "${HOST_KEY_CRL_PATH}" ]]; then
 			key_verify_option="--cert=${SIGNING_KEY_CERT_PATH} --cert=${INTERMEDIATE_CA_CERT_PATH} --crl=${HOST_KEY_CRL_PATH}"
 		else
 			die "Specified certificate(s) not found"
 		fi
-	elif [ -n "${SIGNING_KEY_CERT_PATH:-}" ] || [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ] || [ -n "${HOST_KEY_CRL_PATH:-}" ]; then
+	elif [[ -n "${SIGNING_KEY_CERT_PATH:-}" ]] || [[ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ]] || [[ -n "${HOST_KEY_CRL_PATH:-}" ]]; then
 		die "All of SIGNING_KEY_CERT_PATH, INTERMEDIATE_CA_CERT_PATH, and HOST_KEY_CRL_PATH must be specified"
 	else
 		echo "No certificate specified. Using --no-verify option"
 	fi
 
-	if [ ! -f "${install_src_dir}/vmlinuz.container" ] ||
-		[ ! -f "${install_src_dir}/kata-containers-initrd-confidential.img" ]; then
+	if [[ ! -f "${install_src_dir}/vmlinuz.container" ]] ||
+		[[ ! -f "${install_src_dir}/kata-containers-initrd-confidential.img" ]]; then
 		cat << EOF >&2
 Either kernel or initrd does not exist or is mistakenly named
 A file name for kernel must be vmlinuz.container (raw binary)
@@ -54,8 +58,9 @@ EOF
 	echo "${cmdline}" > "${parmfile}"
 	chmod 600 "${parmfile}"
 
-	[ -n "${HKD_PATH:-}" ] || (echo >&2 "No host key document specified." && return 1)
-	cert_list=($(ls -1 $HKD_PATH/HKD-*.crt | xargs -n 1 basename))
+	[[ -n "${HKD_PATH:-}" ]] || (echo >&2 "No host key document specified." && return 1)
+	# shellcheck disable=SC2207
+	cert_list=($(find "${HKD_PATH}" -name 'HKD-*.crt' -exec basename {} \;))
 	declare hkd_options
 	eval "for cert in ${cert_list[*]}; do
 		hkd_options+=\"--host-key-document=\\\"\$HKD_PATH/\$cert\\\" \"
@@ -79,7 +84,7 @@ EOF
 
 	build_result=$?
 	rm -f "${parmfile}"
-	if [ $build_result -eq 0 ]; then
+	if [[ "${build_result}" -eq 0 ]]; then
 		return 0
 	else
 		return 1
@@ -90,16 +95,16 @@ function repack_secure_image() {
 	kernel_params_value="${1:-}"
 	build_dir="${2:-}"
 	for_kbs="${3:-false}"
-	if [ -z "${build_dir}" ]; then
+	if [[ -z "${build_dir}" ]]; then
 		>&2 echo "ERROR: build_dir for secure image is not specified"
 		return 1
 	fi
 	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
-	if [ ! -f "${config_file_path}" ]; then
+	if [[ ! -f "${config_file_path}" ]]; then
 		>&2 echo "ERROR: config file not found: ${config_file_path}"
 		return 1
 	fi
-	kernel_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+	kernel_base_dir=$(dirname "$(kata-runtime --config "${config_file_path}" env --json | jq -r '.Kernel.Path')")
 	# Make sure ${build_dir}/hdr exists
 	mkdir -p "${build_dir}/hdr"
 	# Prepare required files for building the secure image
@@ -108,15 +113,15 @@ function repack_secure_image() {
 	# Build the secure image
 	build_secure_image "${kernel_params_value}" "${build_dir}/hdr" "${build_dir}/hdr"
 	# Get the secure image updated back to the kernel base directory
-	if [ ! -f "${build_dir}/hdr/kata-containers-se.img" ]; then
+	if [[ ! -f "${build_dir}/hdr/kata-containers-se.img" ]]; then
 		>&2 echo "ERROR: secure image not found: ${build_dir}/hdr/kata-containers-se.img"
 		return 1
 	fi
 	sudo cp "${build_dir}/hdr/kata-containers-se.img" "${kernel_base_dir}/"
-	if [ "${for_kbs}" == "true" ]; then
+	if [[ "${for_kbs}" == "true" ]]; then
 		# Rename kata-containers-se.img to hdr.bin and clean up kernel and initrd
 		mv "${build_dir}/hdr/kata-containers-se.img" "${build_dir}/hdr/hdr.bin"
-		rm -f ${build_dir}/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
+		rm -f "${build_dir}"/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
 	else
 		# Clean up the build directory completely
 		rm -rf "${build_dir}"

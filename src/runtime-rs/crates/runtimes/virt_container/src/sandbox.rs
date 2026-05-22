@@ -24,11 +24,23 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+use hypervisor::ch::CloudHypervisor;
+use hypervisor::device::topology::PCIePort;
+use hypervisor::remote::Remote;
+use hypervisor::VfioDeviceBase;
 use hypervisor::VsockConfig;
-use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
-#[cfg(feature = "dragonball")]
+#[cfg(all(
+    feature = "dragonball",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
@@ -42,11 +54,16 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
+use pod_resources_rs::handle_cdi_devices;
 use protobuf::SpecialFields;
 use resource::coco_data::initdata::{
     kata_shared_init_data_path, InitDataConfig, KATA_INIT_DATA_IMAGE,
@@ -56,7 +73,7 @@ use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
@@ -161,7 +178,7 @@ impl VirtSandbox {
     async fn prepare_for_start_sandbox(
         &self,
         id: &str,
-        network_env: SandboxNetworkEnv,
+        sandbox_config: &SandboxConfig,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
@@ -172,6 +189,7 @@ impl VirtSandbox {
             .context("failed to prepare vm socket config")?;
         resource_configs.push(vm_socket_config);
 
+        let network_env: SandboxNetworkEnv = sandbox_config.network_env.clone();
         // prepare network config
         if !network_env.network_created {
             if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
@@ -206,6 +224,17 @@ impl VirtSandbox {
         } else {
             None
         };
+
+        let vfio_devices = self.prepare_coldplug_cdi_devices(sandbox_config).await?;
+        if !vfio_devices.is_empty() {
+            info!(
+                sl!(),
+                "prepare pod devices {vfio_devices:?} for sandbox done."
+            );
+            resource_configs.extend(vfio_devices);
+        } else {
+            info!(sl!(), "no pod devices to prepare for sandbox.");
+        }
 
         // prepare protection device config
         if let Some(protection_dev_config) = self
@@ -250,6 +279,75 @@ impl VirtSandbox {
                 None
             }
         }
+    }
+
+    async fn prepare_coldplug_cdi_devices(
+        &self,
+        sandbox_config: &SandboxConfig,
+    ) -> Result<Vec<ResourceConfig>> {
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        let cold_plug_vfio = &hypervisor_config.device_info.cold_plug_vfio;
+        if cold_plug_vfio.is_empty() || cold_plug_vfio == "no-port" {
+            return Ok(Vec::new());
+        }
+
+        let port = match cold_plug_vfio.as_str() {
+            "root-port" => PCIePort::RootPort,
+            other => {
+                return Err(anyhow!(
+                    "unsupported cold_plug_vfio value {:?}; only \"root-port\" is supported",
+                    other
+                ))
+            }
+        };
+
+        let config = self.resource_manager.config().await;
+        let pod_resource_socket = &config.runtime.pod_resource_api_sock;
+        info!(
+            sl!(),
+            "sandbox pod_resource_socket: {:?}", pod_resource_socket
+        );
+        if pod_resource_socket.is_empty() || !Path::new(pod_resource_socket).exists() {
+            return Ok(Vec::new());
+        }
+
+        let annotations = &sandbox_config.annotations;
+        debug!(
+            sl!(),
+            "cold-plug: sandbox-name={:?} sandbox-namespace={:?}",
+            annotations.get("io.kubernetes.cri.sandbox-name"),
+            annotations.get("io.kubernetes.cri.sandbox-namespace")
+        );
+
+        let cdi_devices =
+            pod_resources_rs::pod_resources::get_pod_cdi_devices(pod_resource_socket, annotations)
+                .await
+                .context("failed to query Pod Resources CDI devices")?;
+        info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
+
+        let device_nodes = handle_cdi_devices(&cdi_devices).await?;
+        let paths: Vec<String> = device_nodes
+            .iter()
+            .filter_map(pod_resources_rs::device_node_host_path)
+            .collect();
+
+        let mut vfio_configs = Vec::new();
+        for path in paths.iter() {
+            let dev_info = VfioDeviceBase {
+                host_path: path.clone(),
+                iommu_group_devnode: PathBuf::from(path),
+                dev_type: "c".to_string(),
+                port,
+                hostdev_prefix: "vfio_device".to_owned(),
+                ..Default::default()
+            };
+            vfio_configs.push(dev_info);
+        }
+
+        Ok(vfio_configs
+            .into_iter()
+            .map(ResourceConfig::VfioDeviceModern)
+            .collect())
     }
 
     async fn prepare_network_resource(
@@ -563,6 +661,46 @@ impl VirtSandbox {
     ) -> bool {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
+
+    /// Build a network rescan config targeting the hypervisor's network
+    /// namespace.  Docker 26+ bind-mounts `/proc/<vmm_pid>/ns/net` and
+    /// configures veth pairs there between Create and Start, so the
+    /// hypervisor netns is where the interfaces will appear — regardless
+    /// of whether we earlier created a placeholder netns (network_created)
+    /// or not.  This mirrors the Go shim's `detectHypervisorNetns` logic
+    /// inside `addAllEndpoints` (commit f7878cc).
+    async fn netns_rescan_config(&self) -> Option<NetworkWithNetNsConfig> {
+        let toml = self.resource_manager.config().await;
+        if toml.runtime.disable_new_netns {
+            return None;
+        }
+        if dan_config_path(&toml, &self.sid).exists() {
+            return None;
+        }
+        self.sandbox_config.as_ref()?;
+
+        let vmm_pid = match self.hypervisor.get_vmm_master_tid().await {
+            Ok(pid) => pid,
+            Err(e) => {
+                warn!(sl!(), "netns_rescan_config: cannot get VMM PID: {:?}", e);
+                return None;
+            }
+        };
+        let netns_path = format!("/proc/{}/ns/net", vmm_pid);
+
+        let queues = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .network_info
+            .network_queues as usize;
+        Some(NetworkWithNetNsConfig {
+            network_model: toml.runtime.internetworking_model.clone(),
+            netns_path,
+            queues,
+            network_created: false,
+        })
+    }
 }
 
 #[async_trait]
@@ -602,9 +740,7 @@ impl Sandbox for VirtSandbox {
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
-        let resources = self
-            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
-            .await?;
+        let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
 
         self.resource_manager
             .prepare_before_start_vm(resources)
@@ -748,6 +884,7 @@ impl Sandbox for VirtSandbox {
         });
         self.monitor.start(id, self.agent.clone());
         self.save().await.context("save state")?;
+
         Ok(())
     }
 
@@ -786,7 +923,7 @@ impl Sandbox for VirtSandbox {
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
+            .prepare_for_start_sandbox(id, sandbox_config)
             .await
             .context("prepare resources before start vm")?;
 
@@ -874,6 +1011,20 @@ impl Sandbox for VirtSandbox {
             .context("resource clean up")?;
 
         // TODO: cleanup other sandbox resource
+        Ok(())
+    }
+
+    async fn rescan_network(&self) -> Result<()> {
+        if let Some(net_cfg) = self.netns_rescan_config().await {
+            info!(
+                sl!(),
+                "rescan_network: scanning netns={}", net_cfg.netns_path
+            );
+            self.resource_manager
+                .rescan_network_if_unconfigured(net_cfg)
+                .await
+                .context("network rescan during start")?;
+        }
         Ok(())
     }
 
@@ -1004,10 +1155,17 @@ impl Persist for VirtSandbox {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
-                // TODO support other hypervisors
-                #[cfg(feature = "dragonball")]
+                #[cfg(all(
+                    feature = "dragonball",
+                    any(target_arch = "x86_64", target_arch = "aarch64")
+                ))]
                 HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
+                #[cfg(all(
+                    feature = "cloud-hypervisor",
+                    any(target_arch = "x86_64", target_arch = "aarch64")
+                ))]
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
+                #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
@@ -1042,14 +1200,35 @@ impl Persist for VirtSandbox {
         let r = sandbox_state.resource.unwrap_or_default();
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
-            // TODO support other hypervisors
-            #[cfg(feature = "dragonball")]
+            #[cfg(all(
+                feature = "dragonball",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
+            #[cfg(all(
+                feature = "cloud-hypervisor",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
+            HYPERVISOR_NAME_CH => {
+                let hypervisor =
+                    Arc::new(CloudHypervisor::restore((), h).await?) as Arc<dyn Hypervisor>;
+                Ok(hypervisor)
+            }
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            HYPERVISOR_FIRECRACKER => {
+                let hypervisor =
+                    Arc::new(Firecracker::restore((), h).await?) as Arc<dyn Hypervisor>;
+                Ok(hypervisor)
+            }
             HYPERVISOR_QEMU => {
                 let hypervisor = Arc::new(Qemu::restore((), h).await?) as Arc<dyn Hypervisor>;
+                Ok(hypervisor)
+            }
+            HYPERVISOR_REMOTE => {
+                let hypervisor = Arc::new(Remote::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
             _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),

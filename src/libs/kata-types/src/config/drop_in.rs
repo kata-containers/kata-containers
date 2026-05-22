@@ -346,7 +346,7 @@ mod drop_in_directory_handling {
 
             let dropin_override_data = r#"
                 [hypervisor.qemu]
-                shared_fs = "virtio-9p"
+                shared_fs = "none"
                 [runtime]
                 vfio_mode="vfio"
             "#;
@@ -372,7 +372,7 @@ mod drop_in_directory_handling {
             assert_eq!(config.hypervisor["qemu"].device_info.default_bridges, 4);
             assert_eq!(
                 config.hypervisor["qemu"].shared_fs.shared_fs.as_deref(),
-                Some("virtio-9p")
+                Some("none")
             );
             assert!(config.runtime.debug);
             assert!(config.runtime.sandbox_cgroup_only);

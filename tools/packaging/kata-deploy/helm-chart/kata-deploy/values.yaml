@@ -12,6 +12,20 @@ kubectlImage:
 
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
+# Containerd configuration overrides
+# These override the auto-detected paths based on k8sDistribution.
+# Use these when your containerd setup doesn't match any built-in distribution preset.
+containerd:
+  # Override the host directory where containerd config lives.
+  # When empty, derived automatically from k8sDistribution.
+  # Example: "/etc/my-containerd/"
+  configDir: ""
+  # Override the containerd config file name.
+  # When empty, the kata-deploy binary uses its built-in default ("config.toml")
+  # or auto-detects based on the runtime (k0s, microk8s, k3s/rke2).
+  # Example: "my-config.toml"
+  configFileName: ""
+
 # Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
 # Examples:
 # nodeSelector:
@@ -23,6 +37,23 @@ k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 #     effect: "NoSchedule"
 nodeSelector: {}
 tolerations: []
+
+# Priority class name for the kata-deploy DaemonSet pods.
+#
+# kata-deploy is an infrastructure DaemonSet that installs Kata runtime
+# artifacts on every node. If it gets evicted under node pressure, the
+# node loses its Kata runtime until the pod is rescheduled. Setting a
+# high-priority class prevents the kubelet from evicting kata-deploy
+# before lower-priority workloads.
+#
+# Kubernetes ships "system-node-critical" and "system-cluster-critical"
+# PriorityClasses by default. You can also create your own.
+#
+# Examples:
+# priorityClassName: system-node-critical
+# priorityClassName: system-cluster-critical
+# priorityClassName: my-custom-priority-class
+priorityClassName: "system-node-critical"
 
 # Update strategy for the kata-deploy DaemonSet
 # Default is RollingUpdate with maxUnavailable: 1
@@ -38,10 +69,70 @@ updateStrategy:
   rollingUpdate:
     maxUnavailable: 1
 
+# Resource requests/limits for the kata-deploy container.
+#
+# kata-deploy does its real work (host file copies, kubeconfig parsing,
+# apiserver calls, snapshotter setup) once at pod start and then re-execs
+# into a tiny waiter that just blocks on SIGTERM.
+#
+# Defaults sized from real measurements: VmRSS of the unpatched binary on
+# a ~220-vCPU node tops out under 10 MiB, and the patched post-re-exec
+# waiter is smaller still. 16Mi is roughly 2x that headroom.
+#
+# No memory limit is set by default. During the install phase the kernel
+# page cache for artifact copies can peak well above any reasonable fixed
+# limit (e.g. the CoCo/nydus CI image is ~1.6 GiB), causing OOMKill if a
+# limit is applied. Operators who want to cap memory on the post-install
+# waiter can override this field.
+#
+# Set to {} to remove all requests/limits, or override individual fields.
+resources:
+  requests:
+    cpu: 25m
+    memory: 16Mi
+
 debug: false
 
+# Health probes for the kata-deploy DaemonSet.
+# The binary runs an HTTP health server exposing /healthz (liveness) and /readyz (readiness).
+# /healthz returns 200 as soon as the server starts (process is alive).
+# /readyz returns 200 only after install completes; 503 while installing.
+#
+# The startup probe uses /readyz so it only passes once install completes. While
+# the startup probe is active the liveness probe is suppressed, giving install up
+# to failureThreshold * periodSeconds (default 20 min) before the kubelet kills
+# the container. Without a startup probe the liveness probe would fire immediately.
+#
+# The 20-min budget covers slow GitHub-hosted free runners — single-node kubeadm
+# clusters on small Azure VMs, where artifact extraction and `systemctl restart
+# containerd` (which restarts the apiserver static pod with it) can push install
+# past the 15-min mark (seen on dragonball + lts containerd matrix jobs). On
+# real multi-node clusters install completes in tens of seconds, so the only cost
+# of the wider deadline is a longer wait on a genuinely-broken pod.
+#
+# The readiness probe makes rolling updates safer: the DaemonSet controller waits for
+# a pod to become ready before proceeding to the next node (respecting maxUnavailable).
+health:
+  port: 8090
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 1
+    periodSeconds: 10
+    failureThreshold: 60
+    timeoutSeconds: 3
+  livenessProbe:
+    enabled: true
+    periodSeconds: 30
+    failureThreshold: 3
+    timeoutSeconds: 3
+  readinessProbe:
+    enabled: true
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
+
 snapshotter:
-  setup: []  # ["nydus", "erofs"] or []
+  setup: ["nydus"]  # ["nydus", "erofs"] or []
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
@@ -69,6 +160,7 @@ snapshotter:
 #       runtimeClass:
 #         nodeSelector:              # extra node selectors added to the RuntimeClass
 #           example.io/feature: "true"
+#         overheadEnabled: true      # enable/disable overhead in RuntimeClass (default: inherits from runtimeClasses.overheadEnabled)
 #         overhead:                  # override pod overhead (falls back to built-in defaults)
 #           memory: "160Mi"
 #           cpu: "250m"
@@ -79,16 +171,14 @@ shims:
     enabled: ~  # null = use disableAll setting (enabled when false, disabled when true)
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
 
-  cloud-hypervisor:
+  clh-runtime-rs:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -97,7 +187,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -106,7 +195,6 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
-      - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "devmapper" # requires pre-configuration on the user side
@@ -136,6 +224,19 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
       - arm64
     allowedHypervisorAnnotations: []
     containerd:
@@ -143,9 +244,8 @@ shims:
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
-      # Uncomment once GPU Operator v26.3 is out
-      # nodeSelector:
-        # nvidia.com/cc.ready.state: "false"
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
 
   qemu-nvidia-gpu-snp:
     enabled: ~
@@ -153,8 +253,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
@@ -166,8 +266,25 @@ shims:
       # If you don't have NFD, you need to add the snp label by other
       # means to your SNP nodes.
       nodeSelector:
-        # Uncomment once GPU Operator v26.3 is out
-        # nvidia.com/cc.ready.state: "true"
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
   qemu-nvidia-gpu-tdx:
@@ -176,8 +293,8 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
+      forceGuestPull: false
     crio:
       guestPull: true
     agent:
@@ -189,8 +306,25 @@ shims:
       # If you don't have NFD, you need to add the tdx label by other
       # means to your TDX nodes.
       nodeSelector:
-        # Uncomment once GPU Operator v26.3 is out
-        # nvidia.com/cc.ready.state: "true"
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
 
   qemu-snp:
@@ -277,20 +411,6 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-cca:
-    enabled: ~
-    supportedArches:
-      - arm64
-    allowedHypervisorAnnotations: []
-    containerd:
-      snapshotter: nydus
-      forceGuestPull: false
-    crio:
-      guestPull: true
-    agent:
-      httpsProxy: ""
-      noProxy: ""
-
   qemu-coco-dev:
     enabled: ~
     supportedArches:
@@ -310,6 +430,7 @@ shims:
     enabled: ~
     supportedArches:
       - amd64
+      - arm64
       - s390x
     allowedHypervisorAnnotations: []
     containerd:
@@ -347,6 +468,10 @@ runtimeClasses:
   enabled: true
   createDefault: false
   defaultName: "kata"
+  # Global switch for overhead in all RuntimeClasses (default: true)
+  # Set to false to disable overhead for all shims globally.
+  # Individual shims can override this via shims.<name>.runtimeClass.overheadEnabled
+  overheadEnabled: true
 
 env:
   installationPrefix: ""
@@ -457,7 +582,7 @@ verification:
 #   Then deploy with:
 #     helm install kata-deploy ./kata-deploy -f custom-runtimes.values.yaml
 #
-# Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, cloud-hypervisor, fc, etc.
+# Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, clh-runtime-rs, fc, etc.
 # The correct shim binary is automatically selected based on the baseConfig.
 #
 customRuntimes:

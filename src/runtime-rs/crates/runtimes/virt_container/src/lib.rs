@@ -23,13 +23,21 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
 use hypervisor::Hypervisor;
-#[cfg(feature = "dragonball")]
+#[cfg(all(
+    feature = "dragonball",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{remote::Remote, HYPERVISOR_REMOTE};
-#[cfg(feature = "dragonball")]
+#[cfg(all(
+    feature = "dragonball",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use kata_types::config::DragonballConfig;
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use kata_types::config::FirecrackerConfig;
 use kata_types::config::RemoteConfig;
 use kata_types::config::{hypervisor::register_hypervisor_plugin, QemuConfig, TomlConfig};
@@ -64,13 +72,20 @@ impl RuntimeHandler for VirtContainer {
         logging::register_subsystem_logger("runtimes", "virt-container");
 
         // register
-        #[cfg(feature = "dragonball")]
-        let dragonball_config = Arc::new(DragonballConfig::new());
-        #[cfg(feature = "dragonball")]
-        register_hypervisor_plugin("dragonball", dragonball_config);
+        #[cfg(all(
+            feature = "dragonball",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
+        {
+            let dragonball_config = Arc::new(DragonballConfig::new());
+            register_hypervisor_plugin("dragonball", dragonball_config);
+        }
 
-        let firecracker_config = Arc::new(FirecrackerConfig::new());
-        register_hypervisor_plugin("firecracker", firecracker_config);
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        {
+            let firecracker_config = Arc::new(FirecrackerConfig::new());
+            register_hypervisor_plugin("firecracker", firecracker_config);
+        }
 
         let qemu_config = Arc::new(QemuConfig::new());
         register_hypervisor_plugin("qemu", qemu_config);
@@ -194,7 +209,10 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
-        #[cfg(feature = "dragonball")]
+        #[cfg(all(
+            feature = "dragonball",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         HYPERVISOR_DRAGONBALL => {
             let hypervisor = Dragonball::new();
             hypervisor
@@ -214,6 +232,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         HYPERVISOR_FIRECRACKER => {
             let hypervisor = Firecracker::new();
             hypervisor

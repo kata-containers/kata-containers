@@ -12,12 +12,18 @@ use std::path::Path;
 use crate::k8s;
 
 /// K3s/RKE2 containerd config template filenames (under the mounted containerd dir).
-/// V3 is for containerd 2.x; V2 is for containerd 1.x.
+/// `config-v3.toml.tmpl` is used when the rendered config uses split-CRI schema (containerd config version >= 3, including 4+).
+/// `config.toml.tmpl` is for legacy CRI (version 2).
 pub const K3S_RKE2_CONTAINERD_V3_TMPL: &str = "/etc/containerd/config-v3.toml.tmpl";
 pub const K3S_RKE2_CONTAINERD_V2_TMPL: &str = "/etc/containerd/config.toml.tmpl";
 
-/// Resolves whether to use containerd config v3 (true) or v2 (false) for K3s/RKE2.
-/// 1. Tries config.toml (containerd config file): if it exists and contains "version = 3" or "version = 2", use that.
+/// Name of the nydus-snapshotter instance deployed and managed by kata-deploy for TEE workloads.
+/// Used as the systemd service name, the containerd proxy plugin key, the runtime class
+/// snapshotter field, and the base name for the data directory and socket path on the host.
+pub const NYDUS_FOR_KATA_TEE: &str = "nydus-for-kata-tee";
+
+/// Resolves whether to use the containerd 2.x split-CRI layout (true) or the v1 CRI gRPC layout (false) for K3s/RKE2.
+/// 1. Tries config.toml: if it has `version = 2` use legacy CRI table; if `version >= 3` (including 4+) use split CRI.
 /// 2. Else falls back to the node's containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1").
 /// 3. If neither is available, returns an error.
 pub fn k3s_rke2_resolve_use_v3(
@@ -25,14 +31,17 @@ pub fn k3s_rke2_resolve_use_v3(
     container_runtime_version: Option<&str>,
 ) -> Result<bool> {
     use crate::runtime::manager;
+    use crate::utils::major_version_from_config_toml;
 
     // 1. Try config.toml (generated config that may already exist on the node)
     if let Ok(content) = fs::read_to_string(config_file_path) {
-        if content.contains("version = 3") {
-            return Ok(true);
-        }
-        if content.contains("version = 2") {
-            return Ok(false);
+        if let Some(v) = major_version_from_config_toml(&content) {
+            if v == 2 {
+                return Ok(false);
+            }
+            if v >= 3 {
+                return Ok(true);
+            }
         }
     }
 
@@ -43,8 +52,8 @@ pub fn k3s_rke2_resolve_use_v3(
 
     // 3. Neither source available
     Err(anyhow::anyhow!(
-        "K3s/RKE2: cannot determine containerd config version (v2 vs v3). \
-         Need version from {config_file_path} (version = 2/3) or node containerRuntimeVersion."
+        "K3s/RKE2: cannot determine containerd config version (v2 vs split-CRI). \
+         Need version from {config_file_path} (version = 2 or >= 3) or node containerRuntimeVersion."
     ))
 }
 
@@ -150,6 +159,7 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
 }
@@ -164,6 +174,12 @@ impl Config {
             return Err(anyhow::anyhow!("NODE_NAME must not be empty"));
         }
 
+        let daemonset_name = env::var("DAEMONSET_NAME")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| "kata-deploy".to_string());
+
         let debug = env::var("DEBUG").unwrap_or_else(|_| "false".to_string()) == "true";
 
         // Parse shims - only use arch-specific variable
@@ -177,14 +193,11 @@ impl Config {
         let default_shim_for_arch = get_arch_var("DEFAULT_SHIM", "qemu", &arch);
 
         // Only use arch-specific variable for allowed hypervisor annotations
-        let allowed_hypervisor_annotations_for_arch = get_arch_var(
-            "ALLOWED_HYPERVISOR_ANNOTATIONS",
-            "",
-            &arch,
-        )
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
+        let allowed_hypervisor_annotations_for_arch =
+            get_arch_var("ALLOWED_HYPERVISOR_ANNOTATIONS", "", &arch)
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect();
 
         // Only use arch-specific variable for snapshotter handler mapping
         let snapshotter_handler_mapping_for_arch =
@@ -196,7 +209,9 @@ impl Config {
 
         let pull_type_mapping_for_arch = get_arch_var_or_base("PULL_TYPE_MAPPING", &arch);
 
-        let installation_prefix = env::var("INSTALLATION_PREFIX").ok().filter(|s| !s.is_empty());
+        let installation_prefix = env::var("INSTALLATION_PREFIX")
+            .ok()
+            .filter(|s| !s.is_empty());
         let dest_dir = match installation_prefix {
             Some(ref prefix) => {
                 if !prefix.starts_with('/') {
@@ -232,7 +247,21 @@ impl Config {
         };
         let crio_drop_in_conf_file_debug = format!("{crio_drop_in_conf_dir}/100-debug");
 
-        let containerd_conf_file = "/etc/containerd/config.toml".to_string();
+        let containerd_config_file_name = env::var("CONTAINERD_CONFIG_FILE_NAME")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "config.toml".to_string());
+        let containerd_conf_path = Path::new("/etc/containerd").join(&containerd_config_file_name);
+        if containerd_conf_path.parent() != Some(Path::new("/etc/containerd"))
+            || containerd_conf_path.file_name() != Some(containerd_config_file_name.as_ref())
+        {
+            return Err(anyhow::anyhow!(
+                "CONTAINERD_CONFIG_FILE_NAME must be a simple file name without path separators, \
+                 got: '{containerd_config_file_name}'"
+            ));
+        }
+        let containerd_conf_file = containerd_conf_path.to_string_lossy().to_string();
         let containerd_conf_file_backup = format!("{containerd_conf_file}.bak");
         let containerd_drop_in_conf_file =
             format!("{dest_dir}/containerd/config.d/kata-deploy.toml");
@@ -246,15 +275,12 @@ impl Config {
             .map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
         // Only use arch-specific variable for experimental force guest pull
-        let experimental_force_guest_pull_for_arch = get_arch_var(
-            "EXPERIMENTAL_FORCE_GUEST_PULL",
-            "",
-            &arch,
-        )
-        .split(',')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.trim().to_string())
-        .collect();
+        let experimental_force_guest_pull_for_arch =
+            get_arch_var("EXPERIMENTAL_FORCE_GUEST_PULL", "", &arch)
+                .split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
 
         // Parse custom runtimes from ConfigMap
         let custom_runtimes_enabled =
@@ -288,6 +314,7 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
         };
@@ -494,6 +521,7 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
         info!(
             "* CUSTOM_RUNTIMES_ENABLED: {}",
             self.custom_runtimes_enabled
@@ -518,7 +546,8 @@ impl Config {
         use crate::runtime::manager;
 
         // Check if drop-in files can be used based on containerd version
-        let use_drop_in = manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
+        let use_drop_in =
+            manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
 
         let paths = match runtime {
             "k0s-worker" | "k0s-controller" => ContainerdPaths {
@@ -543,14 +572,9 @@ impl Config {
                 // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
                 // missing we bail; the cluster must configure the template with the import
                 // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
-                let container_runtime_version = k8s::get_node_field(
-                    self,
-                    ".status.nodeInfo.containerRuntimeVersion",
-                )
-                .await
-                .ok();
+                let container_runtime_version = k8s::get_container_runtime_version(self).await.ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
-                    &self.containerd_conf_file,
+                    k3s_rke2_rendered_config_path(),
                     container_runtime_version.as_deref(),
                 )?;
                 let config_file = k3s_rke2_containerd_template_path(use_v3).to_string();
@@ -710,8 +734,8 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
 /// Returns only shims that are supported for that architecture
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" => "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
-        "aarch64" => "clh cloud-hypervisor dragonball fc qemu qemu-runtime-rs qemu-nvidia-gpu qemu-cca",
+        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
+        "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-cca",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu",
         _ => "qemu", // Fallback to qemu for unknown architectures
@@ -744,18 +768,15 @@ fn get_arch_var_or_base(base_name: &str, arch: &str) -> Option<String> {
 mod tests {
     //! Tests for configuration parsing and validation.
     //!
-    //! IMPORTANT: All tests in this crate MUST be run serially (--test-threads=1)
-    //! because they manipulate shared environment variables. Running tests in parallel
-    //! will cause race conditions and test failures.
-    //!
-    //! Use: cargo test --bin kata-deploy -- --test-threads=1
+    //! Tests that touch environment variables use `serial_test::serial` so they do not run
+    //! in parallel within this process. For extra isolation you can still use
+    //! `cargo test -p kata-deploy config::tests -- --test-threads=1`.
 
     use super::*;
     use rstest::rstest;
+    use serial_test::serial;
 
-    // NOTE: These tests modify environment variables which are process-global.
-    // Run with: cargo test config::tests -- --test-threads=1
-    // to ensure proper test isolation.
+    // NOTE: Env-var tests use #[serial] (see above) for safe parallel execution with other modules.
 
     /// Helper to clean up common environment variables used in tests
     fn cleanup_env_vars() {
@@ -796,6 +817,7 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64",
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
+            "CONTAINERD_CONFIG_FILE_NAME",
         ];
         for var in &vars {
             std::env::remove_var(var);
@@ -854,6 +876,7 @@ mod tests {
         );
     }
 
+    #[serial]
     #[test]
     fn test_get_arch() {
         let arch = get_arch().unwrap();
@@ -861,6 +884,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_get_arch_var() {
         std::env::set_var("SHIMS_X86_64", "test1 test2");
@@ -874,24 +898,39 @@ mod tests {
     #[rstest]
     #[case(false, "config.toml.d")]
     #[case(true, "config-v3.toml.d")]
+    #[serial]
     fn test_k3s_rke2_drop_in_dir_name(#[case] use_v3: bool, #[case] expected: &str) {
         assert_eq!(k3s_rke2_drop_in_dir_name(use_v3), expected);
     }
 
+    #[serial]
     #[test]
     fn test_k3s_rke2_rendered_config_path() {
-        assert_eq!(k3s_rke2_rendered_config_path(), "/etc/containerd/config.toml");
+        assert_eq!(
+            k3s_rke2_rendered_config_path(),
+            "/etc/containerd/config.toml"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn test_k3s_rke2_resolve_use_v3_from_config_version_4_without_node_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "version = 4\n").unwrap();
+        assert!(k3s_rke2_resolve_use_v3(path.to_str().unwrap(), None).unwrap());
     }
 
     #[rstest]
     #[case(
         "imports = [\"/var/lib/rancher/k3s/agent/etc/containerd/config.toml.d/*.toml\"]\n",
         false,
-        true,
+        true
     )]
     #[case("version = 2\n", false, false)]
     #[case("imports = [\"/path/config-v3.toml.d/*.toml\"]", true, true)]
     #[case("imports = [\"/path/config.toml.d/*.toml\"]", true, false)]
+    #[serial]
     fn test_k3s_rke2_rendered_has_import(
         #[case] content: &str,
         #[case] use_v3: bool,
@@ -900,6 +939,7 @@ mod tests {
         assert_eq!(k3s_rke2_rendered_has_import(content, use_v3), expected);
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_not_set() {
         setup_minimal_env();
@@ -916,6 +956,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_with_value() {
         setup_minimal_env();
@@ -937,6 +978,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_different_values() {
         let suffixes = ["staging", "prod", "v2", "test123"];
@@ -957,6 +999,7 @@ mod tests {
         }
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_prefix_and_suffix() {
         setup_minimal_env();
@@ -975,6 +1018,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_empty_shims_no_custom_runtimes() {
         setup_minimal_env();
@@ -1000,6 +1044,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_default_shim_not_in_shims() {
         setup_minimal_env();
@@ -1012,6 +1057,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_hypervisor_annotation_invalid_shim() {
         setup_minimal_env();
@@ -1028,6 +1074,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_agent_https_proxy_invalid_shim() {
         setup_minimal_env();
@@ -1044,6 +1091,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_snapshotter_mapping_invalid_shim() {
         setup_minimal_env();
@@ -1054,6 +1102,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_pull_type_mapping_invalid_shim() {
         setup_minimal_env();
@@ -1064,6 +1113,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_force_guest_pull_invalid_shim() {
         setup_minimal_env();
@@ -1074,6 +1124,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_validate_success() {
         setup_minimal_env();
@@ -1093,6 +1144,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_missing_node_name_fails() {
         cleanup_env_vars();
@@ -1103,6 +1155,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_empty_node_name_fails() {
         setup_minimal_env();
@@ -1112,6 +1165,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_empty_default_shim_fails() {
         setup_minimal_env();
@@ -1124,6 +1178,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_whitespace_only_default_shim_fails() {
         setup_minimal_env();
@@ -1134,6 +1189,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_whitespace_only_shims_fails() {
         setup_minimal_env();
@@ -1143,6 +1199,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_agent_no_proxy_invalid_shim() {
         setup_minimal_env();
@@ -1153,6 +1210,7 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
     #[test]
     fn test_multi_install_suffix_empty_treated_as_none() {
         setup_minimal_env();
@@ -1164,6 +1222,135 @@ mod tests {
         cleanup_env_vars();
     }
 
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_default() {
+        setup_minimal_env();
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+        assert_eq!(
+            config.containerd_conf_file_backup,
+            "/etc/containerd/config.toml.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_custom() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "my-config.toml");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/my-config.toml"
+        );
+        assert_eq!(
+            config.containerd_conf_file_backup,
+            "/etc/containerd/my-config.toml.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_empty_uses_default() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_whitespace_only_uses_default() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "   ");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_trimmed() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "  my-config.toml  ");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/my-config.toml"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_path_separator() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "../etc/shadow");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_slash() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "subdir/config.toml");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_dotdot() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "..");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_rejects_dot() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", ".");
+
+        assert_config_error_contains("simple file name");
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_containerd_config_file_name_allows_dots_in_name() {
+        setup_minimal_env();
+        std::env::set_var("CONTAINERD_CONFIG_FILE_NAME", "config.v2.toml");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(
+            config.containerd_conf_file,
+            "/etc/containerd/config.v2.toml"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
     #[test]
     fn test_arch_specific_all_variables() {
         // Test ALL architecture-specific variables work without base variables

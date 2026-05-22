@@ -10,16 +10,20 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
-[ -n "$coco_guest_components_repo" ] || die "failed to get coco-guest-components repo"
-[ -n "$coco_guest_components_version" ] || die "failed to get coco-guest-components version"
+# shellcheck disable=SC2154
+[[ -n "${coco_guest_components_repo}" ]] || die "failed to get coco-guest-components repo"
+# shellcheck disable=SC2154
+[[ -n "${coco_guest_components_version}" ]] || die "failed to get coco-guest-components version"
 
-[ -d "guest-components" ] && rm -rf  guest-components
+[[ -d "guest-components" ]] && rm -rf  guest-components
 
 build_coco_guest_components_from_source() {
 	echo "build coco-guest-components from source"
 
+	# shellcheck source=/dev/null
 	. /etc/profile.d/rust.sh
 
 	git clone --depth 1 "${coco_guest_components_repo}" guest-components
@@ -28,14 +32,31 @@ build_coco_guest_components_from_source() {
 	git fetch --depth=1 origin "${coco_guest_components_version}"
 	git checkout FETCH_HEAD
 
+	# shellcheck disable=SC2154
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make build
+	# shellcheck disable=SC2154
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/confidential-data-hub"
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/api-server-rest"
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
 
-	install -D -m0755 "confidential-data-hub/hub/src/storage/scripts/luks-encrypt-storage" "${DESTDIR}/usr/local/bin/luks-encrypt-storage"
 	install -D -m0644 "confidential-data-hub/hub/src/image/ocicrypt_config.json" "${DESTDIR}/etc/ocicrypt_config.json"
+
+	if [[ -n "${NV_ATTESTER:-}" ]]; then
+		echo "build attestation-agent-nv with nvidia-attester support"
+
+		rm "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
+
+		ATTESTER="${NV_ATTESTER}" NVAT_USE_SYSTEM_LIB=1 RUSTFLAGS="-L /usr/local/lib" \
+			DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make build
+		strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
+		install -D -m0755 "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent" \
+			"${DESTDIR}/usr/local/bin/attestation-agent-nv"
+
+		mkdir -p "${DESTDIR}/usr/local/lib"
+		cp -a /usr/local/lib/libnvat.so* "${DESTDIR}/usr/local/lib/"
+	fi
+
 	popd
 }
 

@@ -19,8 +19,9 @@ setup() {
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	command="ps"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${command}"
+	command="ps aux || ps"
+
+	add_exec_to_policy_settings "${policy_settings_dir}" "sh" "-c" "${command}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -34,10 +35,14 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
 	# Check PID from first container
-	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \
-		-- $command | grep "tail" || true)
+	# Capture kubectl exec output separately so a failed exec is not hidden
+	# by the downstream grep.  Use 'sh -c' to ensure the shell interprets
+	# $command correctly, and "[t]ail" to prevent grep itself from appearing.
+	exec_output=$(kubectl exec $pod_name -c $first_container_name \
+		-- sh -c "$command")
+	first_pid_container=$(echo "$exec_output" | grep "[t]ail" || true)
 	# Verify that the tail process didn't exist
-	[ -z $first_pid_container ] || die "found processes pid: $first_pid_container"
+	[ -z "$first_pid_container" ] || die "found processes pid: $first_pid_container"
 }
 
 teardown() {

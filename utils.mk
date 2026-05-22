@@ -30,9 +30,8 @@ export KATA_INSTALL_CFG_PERMS ?= 0640
 # $1 - Directory component lives in.
 # $2 - Name of component.
 #
-# Note: The "clean" and "vendor" rules are the "odd one out" - they only
-# depend on the Makefile. This ensure that running them won't first try
-# to build the project.
+# Note: The "clean" rule is the "odd one out" - it only depends on the Makefile.
+# This ensure that running it won't first try to build the project.
 
 define make_rules
 $(2) : $(1)/$(2)/Makefile
@@ -44,9 +43,6 @@ static-checks-build-$(2):
 
 check-$(2) : $(2)
 	make -C $(1)/$(2) check
-
-vendor-$(2) : $(1)/$(2)/Makefile
-	make -C $(1)/$(2) vendor
 
 clean-$(2) : $(1)/$(2)/Makefile
 	make -C $(1)/$(2) clean
@@ -62,7 +58,6 @@ test-$(2) : $(2)
     build-$(2) \
     clean-$(2) \
     check-$(2) \
-    vendor-$(2) \
     test-$(2) \
     install-$(2)
 endef
@@ -181,16 +176,9 @@ CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 standard_rust_check:
 	@echo "standard rust check..."
 	cargo fmt -- --check
-	cargo clippy --all-targets --all-features --release \
+	cargo clippy --all-targets --all-features --release --locked \
 		-- \
 		-D warnings
-	cargo check
-	@DIFF=$$(git diff HEAD); \
-	if [ -n "$$DIFF" ]; then \
-		echo "ERROR: cargo check resulted in uncommited changes"; \
-		echo "$$DIFF"; \
-		exit 1; \
-	fi
 
 # Install a file (full version).
 #

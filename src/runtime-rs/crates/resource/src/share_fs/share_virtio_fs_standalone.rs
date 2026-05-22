@@ -86,10 +86,6 @@ impl ShareVirtioFsStandalone {
             String::from(shared_dir),
             String::from("--cache"),
             self.config.virtio_fs_cache.clone(),
-            String::from("--sandbox"),
-            String::from("none"),
-            String::from("--seccomp"),
-            String::from("none"),
         ];
 
         if !self.config.virtio_fs_extra_args.is_empty() {
@@ -250,6 +246,7 @@ impl ShareFs for ShareVirtioFsStandalone {
             fs_group: None,
             options: vec![String::from("nodev")],
             mount_point: kata_guest_share_dir(),
+            shared: false,
         };
 
         storages.push(shared_volume);

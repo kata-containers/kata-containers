@@ -33,7 +33,7 @@ use super::{
 };
 use crate::network::NetworkInfo;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NetworkWithNetNsConfig {
     pub network_model: String,
     pub netns_path: String,
@@ -159,6 +159,34 @@ impl Network for NetworkWithNetns {
     }
 }
 
+/// Lightweight probe: enter the netns and check whether any non-loopback
+/// interface with at least one IP address exists.  Does NOT create endpoints
+/// or attach anything to the hypervisor.
+pub(crate) async fn netns_has_interfaces(netns_path: &str) -> Result<bool> {
+    let _netns_guard = netns::NetnsGuard::new(netns_path).context("netns guard for scan")?;
+    let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+    let thread_handler = tokio::spawn(connection);
+    defer!({
+        thread_handler.abort();
+    });
+
+    let mut links = handle.link().get().execute();
+    while let Some(msg) = links.try_next().await? {
+        let link = link::get_link_from_message(msg);
+        let attrs = link.attrs();
+        if (attrs.flags & libc::IFF_LOOPBACK as u32) != 0 {
+            continue;
+        }
+        let addrs = handle_addresses(&handle, attrs)
+            .await
+            .context("handle addresses")?;
+        if !addrs.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 async fn get_entity_from_netns(
     config: &NetworkWithNetNsConfig,
     d: Arc<RwLock<DeviceManager>>,
@@ -240,7 +268,13 @@ async fn create_endpoint(
             "{} network interface found: {}", &link_type, &attrs.name
         );
         match link_type {
-            "veth" => {
+            // "device" is the generic netlink type for interfaces whose
+            // drivers do not register a more specific kind. This includes
+            // mlx5 Scalable Functions (SFs) and other non-PCI backed
+            // netdevs that is_physical_iface() cannot classify via
+            // ethtool BusInfo. Handle them the same way as veth
+            // endpoints, using the configured network model.
+            "veth" | "device" => {
                 let ret = VethEndpoint::new(
                     &d,
                     handle,
@@ -250,7 +284,7 @@ async fn create_endpoint(
                     config.queues,
                 )
                 .await
-                .context("veth endpoint")?;
+                .context(anyhow!("{link_type} endpoint"))?;
                 Arc::new(ret)
             }
             "vlan" => {

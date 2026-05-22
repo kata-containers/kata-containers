@@ -37,9 +37,9 @@ updates:
     # create groups for common dependencies, so they can all go in a single PR
     # We can extend this as we see more frequent groups
     groups:
-      bit-vec:
+      aws-libcrypto:
         patterns:
-          - bit-vec
+          - aws-lc-*
       bumpalo:
         patterns:
           - bumpalo
@@ -67,6 +67,9 @@ updates:
       rustix:
         patterns:
           - rustix
+      rustls-webpki:
+        patterns:
+          - rustls-webpki
       slab:
         patterns:
           - slab

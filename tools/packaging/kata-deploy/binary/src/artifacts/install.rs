@@ -10,16 +10,18 @@ use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
+use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+#[cfg(test)]
 use walkdir::WalkDir;
 
 /// All valid shims
 const ALL_SHIMS: &[&str] = &[
     // Non-QEMU shims
     "clh",
-    "cloud-hypervisor",
+    "clh-runtime-rs",
     "dragonball",
     "fc",
     "firecracker",
@@ -30,8 +32,11 @@ const ALL_SHIMS: &[&str] = &[
     "qemu-coco-dev",
     "qemu-coco-dev-runtime-rs",
     "qemu-nvidia-gpu",
+    "qemu-nvidia-gpu-runtime-rs",
     "qemu-nvidia-gpu-snp",
+    "qemu-nvidia-gpu-snp-runtime-rs",
     "qemu-nvidia-gpu-tdx",
+    "qemu-nvidia-gpu-tdx-runtime-rs",
     "qemu-runtime-rs",
     "qemu-se",
     "qemu-se-runtime-rs",
@@ -58,8 +63,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     }
 
     match shim {
-        "clh" => Ok("clh"),
-        "cloud-hypervisor" => Ok("cloud-hypervisor"),
+        "clh" | "clh-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
         "fc" | "firecracker" => Ok("firecracker"),
         "remote" => Ok("remote"),
@@ -76,8 +80,12 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
 
     // Create the installation directory if it doesn't exist
     // fs::create_dir_all handles existing directories gracefully (returns Ok if already exists)
-    fs::create_dir_all(&config.host_install_dir)
-        .with_context(|| format!("Failed to create installation directory: {}", config.host_install_dir))?;
+    fs::create_dir_all(&config.host_install_dir).with_context(|| {
+        format!(
+            "Failed to create installation directory: {}",
+            config.host_install_dir
+        )
+    })?;
 
     // Verify the path exists and is a directory (not a file)
     let install_path = Path::new(&config.host_install_dir);
@@ -94,7 +102,8 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
         ));
     }
 
-    copy_artifacts("/opt/kata-artifacts/opt/kata", &config.host_install_dir)?;
+    let mut extracted: HashSet<String> = HashSet::new();
+    extract_component_tarballs(config, &mut extracted)?;
 
     set_executable_permissions(&config.host_install_dir)?;
 
@@ -182,7 +191,11 @@ fn write_common_drop_ins(
     let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
     if !kernel_params_content.is_empty() {
         info!("  - Kernel parameters: configured");
-        write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+        write_drop_in_file(
+            config_d_dir,
+            "30-kernel-params.toml",
+            &kernel_params_content,
+        )?;
     }
 
     Ok(())
@@ -239,7 +252,12 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
         }
 
         // Generate the common drop-in files (shared with standard runtimes)
-        write_common_drop_ins(config, &runtime.base_config, &config_d_dir, container_runtime)?;
+        write_common_drop_ins(
+            config,
+            &runtime.base_config,
+            &config_d_dir,
+            container_runtime,
+        )?;
 
         // Copy user-provided drop-in file if provided (at 50-overrides.toml)
         if let Some(ref drop_in_src) = runtime.drop_in_file {
@@ -303,12 +321,11 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Note: The src parameter is kept to allow for unit testing with temporary directories,
-/// even though in production it always uses /opt/kata-artifacts/opt/kata
+/// Copy an extracted artifact tree from `src` into `dst`.
 ///
-/// Symlinks in the source tree are preserved at the destination (recreated as symlinks
-/// instead of copying the target file). Absolute targets under the source root are
-/// rewritten to the destination root so they remain valid.
+/// Used only by unit tests; production code now uses `extract_component_tarballs`.
+/// Symlinks are preserved; absolute targets under the source root are rewritten to dst.
+#[cfg(test)]
 fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
     let src_path = Path::new(src);
     for entry in WalkDir::new(src).follow_links(false) {
@@ -328,10 +345,10 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 if let Ok(rel) = link_target.strip_prefix(src_path) {
                     Path::new(dst).join(rel)
                 } else {
-                    link_target.into()
+                    link_target
                 }
             } else {
-                link_target.into()
+                link_target
             };
 
             if let Some(parent) = dst_path.parent() {
@@ -342,8 +359,12 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e.into()),
             }
-            std::os::unix::fs::symlink(&new_target, &dst_path)
-                .with_context(|| format!("Failed to create symlink {:?} -> {:?}", dst_path, new_target))?;
+            std::os::unix::fs::symlink(&new_target, &dst_path).with_context(|| {
+                format!(
+                    "Failed to create symlink {:?} -> {:?}",
+                    dst_path, new_target
+                )
+            })?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -367,8 +388,283 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
     Ok(())
 }
 
+/// Path to the shim-components.json manifest inside the kata-deploy container image.
+const SHIM_COMPONENTS_PATH: &str = "/opt/kata-artifacts/shim-components.json";
+
+/// Directory inside the container image where individual component tarballs are stored.
+const TARBALLS_DIR: &str = "/opt/kata-artifacts/tarballs";
+
+/// Common prefix stripped from tarball entries to get the install-relative path.
+const TAR_PREFIX: &str = "opt/kata";
+
+/// Absolute install path embedded in the tarballs (used to rewrite absolute symlink targets).
+const TARBALL_ABS_PREFIX: &str = "/opt/kata";
+
+/// Return the current architecture string as used in shim-components.json.
+fn current_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "s390x" => "s390x",
+        "powerpc64" => "ppc64le",
+        other => other,
+    }
+}
+
+/// Parse shim-components.json and return the union of component tarball names
+/// required by all shims listed in `config.shims_for_arch` for the current arch.
+fn collect_required_tarballs(config: &Config) -> Result<HashSet<String>> {
+    let arch = current_arch();
+    let json_str = fs::read_to_string(SHIM_COMPONENTS_PATH)
+        .with_context(|| format!("Failed to read {SHIM_COMPONENTS_PATH}"))?;
+    let doc: serde_json::Value =
+        serde_json::from_str(&json_str).context("Failed to parse shim-components.json")?;
+    let shims_map = doc["shims"]
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("shim-components.json is missing the 'shims' object"))?;
+
+    let mut required: HashSet<String> = HashSet::new();
+    for shim in &config.shims_for_arch {
+        match shims_map
+            .get(shim.as_str())
+            .and_then(|v| v.get(arch))
+            .and_then(|v| v.as_array())
+        {
+            Some(tarballs) => {
+                for t in tarballs {
+                    if let Some(name) = t.as_str() {
+                        required.insert(name.to_string());
+                    }
+                }
+            }
+            None => {
+                log::warn!(
+                    "Shim '{}' has no entry for architecture '{}' in shim-components.json; \
+                     no tarballs will be extracted for it",
+                    shim,
+                    arch
+                );
+            }
+        }
+    }
+    Ok(required)
+}
+
+/// Extract a `.tar.zst` tarball into `dest_dir`, stripping the leading `opt/kata/` prefix
+/// from every entry so files land directly under `dest_dir`.
+///
+/// Absolute symlink targets that point into `/opt/kata` are rewritten to point into
+/// `dest_dir` instead, keeping symlinks valid for non-default installation prefixes.
+fn extract_tarball(tarball_path: &Path, dest_dir: &str) -> Result<()> {
+    use std::path::Component;
+
+    let file = fs::File::open(tarball_path)
+        .with_context(|| format!("Failed to open tarball: {}", tarball_path.display()))?;
+    let decoder = zstd::Decoder::new(file).with_context(|| {
+        format!(
+            "Failed to create zstd decoder for: {}",
+            tarball_path.display()
+        )
+    })?;
+    let mut archive = tar::Archive::new(decoder);
+    let dest_path = Path::new(dest_dir);
+
+    for entry_result in archive.entries()? {
+        let mut entry = entry_result.context("Failed to read tar entry")?;
+        let raw_path = entry
+            .path()
+            .context("Failed to get tar entry path")?
+            .into_owned();
+
+        // Strip the "opt/kata" or "./opt/kata" prefix; skip anything else.
+        let dot_slash_prefix = Path::new("./opt/kata");
+        let stripped = if let Ok(p) = raw_path.strip_prefix(TAR_PREFIX) {
+            p.to_path_buf()
+        } else if let Ok(p) = raw_path.strip_prefix(dot_slash_prefix) {
+            p.to_path_buf()
+        } else {
+            log::debug!(
+                "Skipping entry without expected prefix: {}",
+                raw_path.display()
+            );
+            continue;
+        };
+
+        // The root "opt/kata/" directory itself → just ensure dest_dir exists.
+        if stripped.as_os_str().is_empty() {
+            fs::create_dir_all(dest_path)?;
+            continue;
+        }
+
+        // Reject path traversal attempts.
+        for component in stripped.components() {
+            if component == Component::ParentDir {
+                anyhow::bail!(
+                    "Tarball {} contains path traversal in entry: {}",
+                    tarball_path.display(),
+                    raw_path.display()
+                );
+            }
+        }
+
+        let dest_entry = dest_path.join(&stripped);
+        let entry_type = entry.header().entry_type();
+
+        if entry_type.is_dir() {
+            fs::create_dir_all(&dest_entry)
+                .with_context(|| format!("Failed to create directory: {}", dest_entry.display()))?;
+        } else if entry_type.is_symlink() {
+            let link_target = entry
+                .header()
+                .link_name()?
+                .ok_or_else(|| anyhow::anyhow!("Symlink has no link name: {}", raw_path.display()))?
+                .into_owned();
+
+            // Rewrite absolute symlinks that pointed into /opt/kata so they point into dest_dir.
+            let final_target: std::path::PathBuf = if link_target.is_absolute() {
+                if let Ok(rel) = link_target.strip_prefix(TARBALL_ABS_PREFIX) {
+                    dest_path.join(rel)
+                } else {
+                    link_target
+                }
+            } else {
+                link_target
+            };
+
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            std::os::unix::fs::symlink(&final_target, &dest_entry).with_context(|| {
+                format!(
+                    "Failed to create symlink {} -> {}",
+                    dest_entry.display(),
+                    final_target.display()
+                )
+            })?;
+        } else if entry_type.is_hard_link() {
+            let link_target = entry
+                .header()
+                .link_name()?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Hard link has no link name: {}", raw_path.display())
+                })?
+                .into_owned();
+
+            // Strip the prefix from the hard link target as well.
+            let link_stripped = if let Ok(p) = link_target.strip_prefix(TAR_PREFIX) {
+                dest_path.join(p)
+            } else if let Ok(p) = link_target.strip_prefix(dot_slash_prefix) {
+                dest_path.join(p)
+            } else {
+                dest_path.join(&link_target)
+            };
+
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            fs::hard_link(&link_stripped, &dest_entry).with_context(|| {
+                format!(
+                    "Failed to create hard link {} -> {}",
+                    dest_entry.display(),
+                    link_stripped.display()
+                )
+            })?;
+        } else {
+            // Regular file
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dest_entry) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            entry
+                .unpack(&dest_entry)
+                .with_context(|| format!("Failed to unpack entry to: {}", dest_entry.display()))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Select and extract the component tarballs required for the configured shims.
+///
+/// Shared components (e.g. kernel, shim-v2-go) are listed by multiple shims.
+/// The `extracted` set tracks which components have already been unpacked in
+/// this install run so that shared components are only extracted once.
+/// Using an in-memory set (rather than on-disk markers) avoids any risk of
+/// stale state surviving across pod restarts.
+fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
+    let required = collect_required_tarballs(config)?;
+
+    if required.is_empty() {
+        log::warn!(
+            "No component tarballs required for the configured shims on '{}'; \
+             check shim-components.json",
+            current_arch()
+        );
+        return Ok(());
+    }
+
+    info!(
+        "Component tarballs required for shims [{}]: {:?}",
+        config.shims_for_arch.join(", "),
+        {
+            let mut sorted: Vec<_> = required.iter().collect();
+            sorted.sort();
+            sorted
+        }
+    );
+
+    let mut sorted_components: Vec<_> = required.iter().collect();
+    sorted_components.sort();
+
+    for component in sorted_components {
+        if extracted.contains(component.as_str()) {
+            info!("Component '{}' already extracted, skipping", component);
+            continue;
+        }
+
+        let tarball_name = format!("kata-static-{}.tar.zst", component);
+        let tarball_path = Path::new(TARBALLS_DIR).join(&tarball_name);
+
+        if !tarball_path.exists() {
+            anyhow::bail!(
+                "Required component tarball not found: {}. \
+                 Ensure the kata-deploy image was built with the '{}' component.",
+                tarball_path.display(),
+                component
+            );
+        }
+
+        info!("Extracting component '{}'", component);
+        extract_tarball(&tarball_path, &config.host_install_dir).with_context(|| {
+            format!(
+                "Failed to extract component '{}' from {}",
+                component,
+                tarball_path.display()
+            )
+        })?;
+
+        extracted.insert(component.clone());
+    }
+
+    Ok(())
+}
+
 fn set_executable_permissions(dir: &str) -> Result<()> {
-    let bin_paths = vec!["bin", "runtime-rs/bin"];
+    let bin_paths = ["bin", "runtime-rs/bin"];
 
     for bin_path in bin_paths.iter() {
         let bin_dir = Path::new(dir).join(bin_path);
@@ -423,14 +719,46 @@ fn add_kata_deploy_warning(config_file: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Atomically replace a file with a symlink.
+///
+/// Creates the symlink at a temporary path first, then renames it over the
+/// original so the original is preserved if symlink creation fails.
+fn atomic_symlink_replace(file_path: &str, symlink_target: &str) -> Result<()> {
+    let temp_symlink = format!("{}.tmp-link", file_path);
+
+    // Clean up any stale temp symlink from a previous interrupted run
+    if Path::new(&temp_symlink).exists() || Path::new(&temp_symlink).is_symlink() {
+        let _ = fs::remove_file(&temp_symlink);
+    }
+
+    std::os::unix::fs::symlink(symlink_target, &temp_symlink).with_context(|| {
+        format!(
+            "Failed to create temporary symlink {} -> {}",
+            temp_symlink, symlink_target
+        )
+    })?;
+
+    fs::rename(&temp_symlink, file_path).map_err(|err| {
+        let _ = fs::remove_file(&temp_symlink);
+        anyhow::anyhow!(
+            "Failed to atomically replace {} with symlink to {}: {}",
+            file_path,
+            symlink_target,
+            err
+        )
+    })?;
+
+    Ok(())
+}
+
 /// Set up the runtime directory structure for a shim.
 /// Creates: {config_path}/runtimes/{shim}/
 ///          {config_path}/runtimes/{shim}/config.d/
 ///          {config_path}/runtimes/{shim}/configuration-{shim}.toml (copy of original)
 ///
-/// Note: We copy the config file instead of symlinking because kata-containers'
-/// ResolvePath uses filepath.EvalSymlinks, which would resolve to the original
-/// location and look for config.d there instead of in our per-shim directory.
+/// After copying, the original config file is replaced with a symlink pointing
+/// to the runtime copy. This way the runtime's ResolvePath / EvalSymlinks resolves
+/// the symlink and finds config.d next to the real file in the per-shim directory.
 fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     let original_config_dir = format!(
         "/host{}",
@@ -449,9 +777,9 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     fs::create_dir_all(&config_d_dir)
         .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
 
-    // Copy the original config file to the runtime directory
-    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
-    let dest_config_file = format!("{}/configuration-{}.toml", runtime_config_dir, shim);
+    let config_filename = format!("configuration-{}.toml", shim);
+    let original_config_file = format!("{}/{}", original_config_dir, config_filename);
+    let dest_config_file = format!("{}/{}", runtime_config_dir, config_filename);
 
     // Only copy if original exists
     if Path::new(&original_config_file).exists() {
@@ -459,33 +787,63 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         // fs::copy follows symlinks and would write to the wrong location
         let dest_path = Path::new(&dest_config_file);
         if dest_path.exists() || dest_path.is_symlink() {
-            fs::remove_file(&dest_config_file)
-                .with_context(|| format!("Failed to remove existing config: {}", dest_config_file))?;
+            fs::remove_file(&dest_config_file).with_context(|| {
+                format!("Failed to remove existing config: {}", dest_config_file)
+            })?;
         }
 
-        // Copy the base config file
-        fs::copy(&original_config_file, &dest_config_file)
-            .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
+        // Copy the base config file to the runtime directory
+        fs::copy(&original_config_file, &dest_config_file).with_context(|| {
+            format!(
+                "Failed to copy config: {} -> {}",
+                original_config_file, dest_config_file
+            )
+        })?;
 
         // Add warning comment to inform users about drop-in files
         add_kata_deploy_warning(Path::new(&dest_config_file))?;
 
         info!("  Copied base config: {}", dest_config_file);
+
+        let symlink_target = format!("runtimes/{}/{}", shim, config_filename);
+        atomic_symlink_replace(&original_config_file, &symlink_target)?;
+
+        info!(
+            "  Symlinked original config: {} -> {}",
+            original_config_file, symlink_target
+        );
     }
 
     Ok(())
 }
 
-/// Remove the runtime directory for a shim during cleanup
+/// Remove the runtime directory for a shim during cleanup.
+/// Also removes the symlink at the original config location that was created
+/// by setup_runtime_directory.
 fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    // Remove the symlink at the original config location (if present)
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let original_path = Path::new(&original_config_file);
+    if original_path.is_symlink() {
+        fs::remove_file(&original_config_file).with_context(|| {
+            format!("Failed to remove config symlink: {}", original_config_file)
+        })?;
+        log::debug!("Removed config symlink: {}", original_config_file);
+    }
+
     let runtime_config_dir = format!(
         "/host{}",
         utils::get_kata_containers_config_path(shim, &config.dest_dir)
     );
 
     if Path::new(&runtime_config_dir).exists() {
-        fs::remove_dir_all(&runtime_config_dir)
-            .with_context(|| format!("Failed to remove runtime directory: {}", runtime_config_dir))?;
+        fs::remove_dir_all(&runtime_config_dir).with_context(|| {
+            format!("Failed to remove runtime directory: {}", runtime_config_dir)
+        })?;
         log::debug!("Removed runtime directory: {}", runtime_config_dir);
     }
 
@@ -505,7 +863,7 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
 }
 
 async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &str) -> Result<()> {
-    // Set up the runtime directory structure with symlink to original config
+    // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
     let runtime_config_dir = format!(
@@ -514,13 +872,14 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
     );
     let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
-    let kata_config_file = Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
+    let kata_config_file =
+        Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
 
-    // The configuration file (symlink) should exist after setup_runtime_directory()
+    // The configuration file should exist after setup_runtime_directory()
     if !kata_config_file.exists() {
         return Err(anyhow::anyhow!(
             "Configuration file not found: {kata_config_file:?}. This file should have been \
-             symlinked from the original config. Check that the shim '{}' has a valid configuration \
+             copied from the original config. Check that the shim '{}' has a valid configuration \
              file in the artifacts.",
             shim
         ));
@@ -545,8 +904,8 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 /// Reads the current value (defaulting to "false" if not found), and if it's not "true",
 /// logs the update and sets it to "true".
 fn set_toml_bool_to_true(config_file: &Path, path: &str) -> Result<()> {
-    let current_value = toml_utils::get_toml_value(config_file, path)
-        .unwrap_or_else(|_| "false".to_string());
+    let current_value =
+        toml_utils::get_toml_value(config_file, path).unwrap_or_else(|_| "false".to_string());
     if current_value != "true" {
         log::debug!(
             "Updating {} in {}: old=\"{}\" new=\"true\"",
@@ -585,7 +944,9 @@ fn get_qemu_share_name(shim: &str) -> Option<String> {
     let share_name = match shim {
         "qemu-cca" => "qemu-cca-experimental",
         "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
+        "qemu-nvidia-gpu-snp-runtime-rs" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
+        "qemu-nvidia-gpu-tdx-runtime-rs" => "qemu-tdx-experimental",
         _ => "qemu",
     };
 
@@ -636,12 +997,13 @@ fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
     if is_qemu_shim(shim) {
         // For QEMU shims, use the wrapper script that adds firmware paths
         // create_qemu_wrapper_script always returns Some for QEMU shims
-        create_qemu_wrapper_script(config, shim)?
-            .ok_or_else(|| anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims"))
+        create_qemu_wrapper_script(config, shim)?.ok_or_else(|| {
+            anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims")
+        })
     } else {
         // For non-QEMU shims, use the appropriate hypervisor binary
         let binary = match shim {
-            "clh" | "cloud-hypervisor" => "cloud-hypervisor",
+            "clh" | "clh-runtime-rs" => "cloud-hypervisor",
             "fc" | "firecracker" => "firecracker",
             "dragonball" => "dragonball",
             "stratovirt" => "stratovirt",
@@ -673,20 +1035,41 @@ fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<S
     }
 
     // Common paths for all hypervisors
-    content.push_str(&format!("kernel = \"{}/share/kata-containers/vmlinux.container\"\n", config.dest_dir));
-    content.push_str(&format!("image = \"{}/share/kata-containers/kata-containers.img\"\n", config.dest_dir));
-    content.push_str(&format!("initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n", config.dest_dir));
+    content.push_str(&format!(
+        "kernel = \"{}/share/kata-containers/vmlinux.container\"\n",
+        config.dest_dir
+    ));
+    content.push_str(&format!(
+        "image = \"{}/share/kata-containers/kata-containers.img\"\n",
+        config.dest_dir
+    ));
+    content.push_str(&format!(
+        "initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n",
+        config.dest_dir
+    ));
 
     // QEMU-specific paths (firmware is only relevant for QEMU)
     if is_qemu_shim(shim) {
-        content.push_str(&format!("firmware = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
-        content.push_str(&format!("firmware_volume = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+        content.push_str(&format!(
+            "firmware = \"{}/share/kata-containers/firmware/\"\n",
+            config.dest_dir
+        ));
+        content.push_str(&format!(
+            "firmware_volume = \"{}/share/kata-containers/firmware/\"\n",
+            config.dest_dir
+        ));
     }
 
     // Firecracker-specific paths (jailer is only for Firecracker)
     if shim == "fc" || shim == "firecracker" {
-        content.push_str(&format!("jailer_path = \"{}/bin/jailer\"\n", config.dest_dir));
-        content.push_str(&format!("valid_jailer_paths = [\"{}/bin/jailer\"]\n", config.dest_dir));
+        content.push_str(&format!(
+            "jailer_path = \"{}/bin/jailer\"\n",
+            config.dest_dir
+        ));
+        content.push_str(&format!(
+            "valid_jailer_paths = [\"{}/bin/jailer\"]\n",
+            config.dest_dir
+        ));
     }
 
     Ok(content)
@@ -738,16 +1121,14 @@ fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<St
     match proxy_var {
         Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
             // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
-            proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
+            proxy.split(';').find_map(|m| {
+                let parts: Vec<&str> = m.splitn(2, '=').collect();
+                if parts.len() == 2 && parts[0] == shim {
+                    Some(parts[1].to_string())
+                } else {
+                    None
+                }
+            })
         }
         Some(proxy) if !proxy.is_empty() => Some(proxy.clone()),
         _ => None,
@@ -770,8 +1151,8 @@ fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
     }
 
     let kernel_params_path = format!("hypervisor.{}.kernel_params", hypervisor_name);
-    let base_params = toml_utils::get_toml_value(config_path, &kernel_params_path)
-        .unwrap_or_default();
+    let base_params =
+        toml_utils::get_toml_value(config_path, &kernel_params_path).unwrap_or_default();
 
     // Remove surrounding quotes if present
     Ok(base_params.trim_matches('"').to_string())
@@ -892,51 +1273,59 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
 }
 
 async fn configure_mariner(config: &Config) -> Result<()> {
-    let config_path = format!(
-        "{}/share/defaults/kata-containers/configuration-clh.toml",
-        config.host_install_dir
-    );
-    let config_file = Path::new(&config_path);
-
-    if !config_file.exists() {
-        return Ok(());
-    }
-
     let mariner_hypervisor_name = "clh";
+    let config_paths = [
+        format!(
+            "{}/share/defaults/kata-containers/configuration-clh.toml",
+            config.host_install_dir
+        ),
+        format!(
+            "{}/share/defaults/kata-containers/runtime-rs/configuration-clh-runtime-rs.toml",
+            config.host_install_dir
+        ),
+    ];
 
-    let static_resource_mgmt_path =
-        format!("hypervisor.{mariner_hypervisor_name}.static_sandbox_resource_mgmt");
-    set_toml_bool_to_true(config_file, &static_resource_mgmt_path)?;
+    for config_path in config_paths {
+        let config_file = Path::new(&config_path);
 
-    let clh_path = format!("{}/bin/cloud-hypervisor-glibc", config.dest_dir);
-    let valid_paths_field = format!("hypervisor.{mariner_hypervisor_name}.valid_hypervisor_paths");
-    let existing_paths =
-        toml_utils::get_toml_array(config_file, &valid_paths_field).unwrap_or_else(|_| Vec::new());
+        if !config_file.exists() {
+            continue;
+        }
 
-    if !existing_paths.iter().any(|p| p == &clh_path) {
-        let mut new_paths = existing_paths.clone();
-        new_paths.push(clh_path.clone());
-        log::debug!(
-            "Updating {} in {}: old={:?} new={:?}",
-            valid_paths_field,
-            config_file.display(),
-            existing_paths,
-            new_paths
-        );
-        toml_utils::set_toml_array(config_file, &valid_paths_field, &new_paths)?;
-    }
+        let static_resource_mgmt_path = "runtime.static_sandbox_resource_mgmt";
+        set_toml_bool_to_true(config_file, static_resource_mgmt_path)?;
 
-    let path_field = format!("hypervisor.{mariner_hypervisor_name}.path");
-    let current_path = toml_utils::get_toml_value(config_file, &path_field).unwrap_or_default();
-    if !current_path.contains(&clh_path) {
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            path_field,
-            config_file.display(),
-            current_path,
-            clh_path
-        );
-        toml_utils::set_toml_value(config_file, &path_field, &format!("\"{clh_path}\""))?;
+        let clh_path = format!("{}/bin/cloud-hypervisor-glibc", config.dest_dir);
+        let valid_paths_field =
+            format!("hypervisor.{mariner_hypervisor_name}.valid_hypervisor_paths");
+        let existing_paths = toml_utils::get_toml_array(config_file, &valid_paths_field)
+            .unwrap_or_else(|_| Vec::new());
+
+        if !existing_paths.iter().any(|p| p == &clh_path) {
+            let mut new_paths = existing_paths.clone();
+            new_paths.push(clh_path.clone());
+            log::debug!(
+                "Updating {} in {}: old={:?} new={:?}",
+                valid_paths_field,
+                config_file.display(),
+                existing_paths,
+                new_paths
+            );
+            toml_utils::set_toml_array(config_file, &valid_paths_field, &new_paths)?;
+        }
+
+        let path_field = format!("hypervisor.{mariner_hypervisor_name}.path");
+        let current_path = toml_utils::get_toml_value(config_file, &path_field).unwrap_or_default();
+        if !current_path.contains(&clh_path) {
+            log::debug!(
+                "Updating {} in {}: old=\"{}\" new=\"{}\"",
+                path_field,
+                config_file.display(),
+                current_path,
+                clh_path
+            );
+            toml_utils::set_toml_value(config_file, &path_field, &format!("\"{clh_path}\""))?;
+        }
     }
 
     Ok(())
@@ -955,8 +1344,11 @@ mod tests {
     #[case("qemu-coco-dev", "qemu")]
     #[case("qemu-cca", "qemu")]
     #[case("qemu-nvidia-gpu", "qemu")]
-    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-runtime-rs", "qemu")]
     #[case("qemu-nvidia-gpu-snp", "qemu")]
+    #[case("qemu-nvidia-gpu-snp-runtime-rs", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx-runtime-rs", "qemu")]
     #[case("qemu-runtime-rs", "qemu")]
     #[case("qemu-coco-dev-runtime-rs", "qemu")]
     #[case("qemu-se-runtime-rs", "qemu")]
@@ -968,7 +1360,7 @@ mod tests {
 
     #[rstest]
     #[case("clh", "clh")]
-    #[case("cloud-hypervisor", "cloud-hypervisor")]
+    #[case("clh-runtime-rs", "clh")]
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
     #[case("firecracker", "firecracker")]
@@ -1101,4 +1493,140 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_atomic_symlink_replace_creates_symlink() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        // Create the original file and the target it will point to
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        let target_file = target_dir.join("configuration-qemu.toml");
+        fs::write(&target_file, "real config content").unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original content").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+
+        assert!(original.is_symlink(), "original should now be a symlink");
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+        assert_eq!(
+            fs::read_to_string(&original).unwrap(),
+            "real config content",
+            "reading through the symlink should yield the target's content"
+        );
+    }
+
+    #[test]
+    fn test_atomic_symlink_replace_is_idempotent() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        let target_file = target_dir.join("configuration-qemu.toml");
+        fs::write(&target_file, "config content").unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+
+        // First call
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+        assert!(original.is_symlink());
+
+        // Second call (e.g. re-install) should succeed and still be a valid symlink
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+        assert!(original.is_symlink());
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+    }
+
+    #[test]
+    fn test_atomic_symlink_replace_cleans_stale_temp() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        let original = tmpdir.path().join("configuration-qemu.toml");
+        fs::write(&original, "original").unwrap();
+
+        // Simulate a stale temp symlink from an interrupted previous run
+        let stale_temp = tmpdir.path().join("configuration-qemu.toml.tmp-link");
+        std::os::unix::fs::symlink("stale-target", &stale_temp).unwrap();
+        assert!(stale_temp.is_symlink());
+
+        let target_dir = tmpdir.path().join("runtimes/qemu");
+        fs::create_dir_all(&target_dir).unwrap();
+        fs::write(target_dir.join("configuration-qemu.toml"), "content").unwrap();
+
+        let symlink_target = "runtimes/qemu/configuration-qemu.toml";
+        atomic_symlink_replace(original.to_str().unwrap(), symlink_target).unwrap();
+
+        assert!(original.is_symlink());
+        assert_eq!(
+            fs::read_link(&original).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+        // Temp file should not linger
+        assert!(!stale_temp.exists() && !stale_temp.is_symlink());
+    }
+
+    #[test]
+    fn test_setup_and_remove_runtime_directory_symlink() {
+        let tmpdir = tempfile::tempdir().unwrap();
+
+        // Simulate the directory layout that setup_runtime_directory expects
+        // (after copy_artifacts has run), using a Go shim as example.
+        let defaults_dir = tmpdir.path().join("share/defaults/kata-containers");
+        fs::create_dir_all(&defaults_dir).unwrap();
+
+        let config_filename = "configuration-qemu.toml";
+        let original_config = defaults_dir.join(config_filename);
+        fs::write(
+            &original_config,
+            "[hypervisor.qemu]\npath = \"/usr/bin/qemu\"",
+        )
+        .unwrap();
+
+        // Create the runtime directory and copy the config (mimics setup_runtime_directory)
+        let runtime_dir = defaults_dir.join("runtimes/qemu");
+        let config_d_dir = runtime_dir.join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        let dest_config = runtime_dir.join(config_filename);
+        fs::copy(&original_config, &dest_config).unwrap();
+
+        // Atomically replace the original with a symlink
+        let symlink_target = format!("runtimes/qemu/{}", config_filename);
+        atomic_symlink_replace(original_config.to_str().unwrap(), &symlink_target).unwrap();
+
+        // Verify: original is now a symlink
+        assert!(original_config.is_symlink());
+        assert_eq!(
+            fs::read_link(&original_config).unwrap().to_str().unwrap(),
+            symlink_target
+        );
+
+        // Verify: reading through the symlink yields the real file content
+        assert_eq!(
+            fs::read_to_string(&original_config).unwrap(),
+            fs::read_to_string(&dest_config).unwrap()
+        );
+
+        // Verify: config.d is next to the real file (the resolved path)
+        assert!(dest_config.parent().unwrap().join("config.d").is_dir());
+
+        // Simulate remove_runtime_directory: remove symlink then runtime dir
+        assert!(original_config.is_symlink());
+        fs::remove_file(&original_config).unwrap();
+        assert!(!original_config.exists() && !original_config.is_symlink());
+
+        fs::remove_dir_all(&runtime_dir).unwrap();
+        assert!(!runtime_dir.exists());
+    }
 }

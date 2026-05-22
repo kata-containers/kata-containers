@@ -149,3 +149,23 @@ func TestSetupNetworkNamespace(t *testing.T) {
 	err = SetupNetworkNamespace(config)
 	assert.NoError(err)
 }
+
+func TestMountinfoFsType(t *testing.T) {
+	assert := assert.New(t)
+
+	// Standard mountinfo line with optional tagged fields
+	fields := []string{"711", "26", "0:3", "net:[4026532009]", "/run/docker/netns/default", "rw", "shared:535", "-", "nsfs", "nsfs", "rw"}
+	assert.Equal("nsfs", mountinfoFsType(fields))
+
+	// Multiple optional tags before separator
+	fields = []string{"711", "26", "0:3", "net:[4026532009]", "/run/docker/netns/default", "rw", "shared:535", "master:1", "-", "nsfs", "nsfs", "rw"}
+	assert.Equal("nsfs", mountinfoFsType(fields))
+
+	// No separator
+	fields = []string{"711", "26", "0:3", "net:[4026532009]", "/run/docker/netns/default", "rw"}
+	assert.Equal("", mountinfoFsType(fields))
+
+	// Separator at end (malformed)
+	fields = []string{"711", "26", "-"}
+	assert.Equal("", mountinfoFsType(fields))
+}

@@ -389,6 +389,22 @@ impl RuntimeHandlerManager {
             }
         }
 
+        // When the OCI spec contains a network namespace with path `/proc/0/ns/net`,
+        // it means the task PID was not yet known at spec generation time (PID 0 is a
+        // placeholder).  containerd populates the netns path before the shim returns
+        // a real PID via the Connect RPC.  Treat this as "no netns provided" so the
+        // rescan mechanism can discover the correct namespace later.
+        if netns.as_deref() == Some("/proc/0/ns/net") {
+            netns = None;
+        }
+        // Docker 26+ may not publish the network namespace in `linux.namespaces` at create; use
+        // `libnetwork-setkey` hook args (see Go `DockerNetnsPath` and #9340).
+        if netns.is_none() {
+            if let Some(p) = kata_sys_util::oci_docker::docker_netns_path(spec) {
+                netns = Some(p);
+            }
+        }
+
         // A nerdctl network namespace to let nerdctl know which namespace to use when calling the
         // selected CNI plugin.
         if let Some(netns_path) = &netns {
@@ -639,6 +655,20 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::WaitProcess(exit_status))
             }
             TaskRequest::StartProcess(process_id) => {
+                // Docker 26+ configures the veth between the Create and Start
+                // RPCs.  Rescan now so interfaces are wired before the process
+                // starts.  The rescan uses a lightweight netlink probe during
+                // polling and only does the expensive endpoint setup once
+                // interfaces are detected.
+                if process_id.process_type == ProcessType::Container {
+                    if let Err(e) = sandbox.rescan_network().await {
+                        error!(
+                            sl!(),
+                            "network rescan failed; container may lack networking: {:?}", e
+                        );
+                    }
+                }
+
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await

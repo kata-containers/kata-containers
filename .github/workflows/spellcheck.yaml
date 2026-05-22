@@ -1,0 +1,30 @@
+name: Spelling check
+
+on: ["pull_request"]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-spelling:
+    name: check-spelling
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check Spelling
+        uses: streetsidesoftware/cspell-action@de2a73e963e7443969755b648a1008f77033c5b2  # 8.4.0
+        with:
+          files: |
+            **/*.md
+            **/*.rst
+            **/*.txt
+          incremental_files_only: true
+          config: ".cspell.yaml"

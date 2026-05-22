@@ -7,17 +7,17 @@
 
 FROM golang:1.24-alpine AS nydus-binary-downloader
 
-# Keep the version here aligned with "ndyus-snapshotter.version"
-# in versions.yaml
-ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.10
-ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+COPY versions.yaml /tmp/versions.yaml
 
 RUN \
+	set -e && \
+	apk add --no-cache curl yq-go && \
+	NYDUS_SNAPSHOTTER_VERSION="$(yq eval -e '.externals.nydus-snapshotter.version | explode(.)' /tmp/versions.yaml)" && \
+	NYDUS_SNAPSHOTTER_REPO="$(yq eval -e '.externals.nydus-snapshotter.url | explode(.)' /tmp/versions.yaml)" && \
 	mkdir -p /opt/nydus-snapshotter && \
 	ARCH="$(uname -m)" && \
 	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64 ; fi && \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	apk add --no-cache curl && \
 	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" && \
 	tar xvzpf "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" -C /opt/nydus-snapshotter && \
 	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
@@ -47,12 +47,16 @@ RUN \
 		libc6-dev \
 		musl-tools && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
+	rustup component add rustfmt clippy
 
-WORKDIR /kata-deploy
+# Build from the repository root so kata-deploy uses the root Cargo workspace:
+#   docker build -f tools/packaging/kata-deploy/Dockerfile .
+WORKDIR /kata
 
-# Copy standalone binary project
-COPY binary /kata-deploy
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+COPY tools/packaging/kata-deploy/binary ./tools/packaging/kata-deploy/binary
 
 # Install target and run tests based on architecture
 # - AMD64/arm64: use musl for fully static binaries
@@ -88,36 +92,47 @@ RUN \
 	esac; \
 	echo "${rust_target}" > /tmp/rust_target
 
+# Verify code formatting and run cargo check before tests and build
+RUN \
+	set -e && \
+	rust_target="$(cat /tmp/rust_target)" && \
+	echo "Checking code formatting..." && \
+	cargo fmt -p kata-deploy --check && \
+	echo "Code formatting check passed!" && \
+	echo "Running cargo clippy with target ${rust_target}..." && \
+	cargo clippy -p kata-deploy --all-targets --all-features --release --locked --target "${rust_target}" -- -D warnings && \
+	echo "Cargo clippy passed!"
+
 # Run tests using --test-threads=1 to prevent environment variable pollution between tests,
 # and this is fine as we'll never ever have multiple binaries running at the same time.
 RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
 	echo "Running binary tests with target ${rust_target}..." && \
-	RUSTFLAGS="-D warnings" cargo test --target "${rust_target}" -- --test-threads=1 && \
+	RUSTFLAGS="-D warnings" cargo test -p kata-deploy --target "${rust_target}" -- --test-threads=1 && \
 	echo "All tests passed!"
 
 RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
 	echo "Building kata-deploy binary for ${rust_target}..." && \
-	RUSTFLAGS="-D warnings" cargo build --release --target "${rust_target}" && \
+	RUSTFLAGS="-D warnings" cargo build --release -p kata-deploy --target "${rust_target}" && \
 	mkdir -p /kata-deploy/bin && \
-	cp "/kata-deploy/target/${rust_target}/release/kata-deploy" /kata-deploy/bin/kata-deploy && \
+	cp "/kata/target/${rust_target}/release/kata-deploy" /kata-deploy/bin/kata-deploy && \
 	echo "Cleaning up build artifacts to save disk space..." && \
-	rm -rf /kata-deploy/target && \
+	rm -rf /kata/target && \
 	cargo clean
 
-#### Extract kata artifacts
-FROM alpine:3.22 AS artifact-extractor
+#### Prepare kata artifact tarballs
+# Individual component tarballs are stored compressed in the image.
+# The installer extracts only those required for the enabled runtime classes.
+FROM alpine:3.22 AS artifact-stage
 
-ARG KATA_ARTIFACTS=kata-static.tar.zst
+ARG KATA_ARTIFACTS_DIR=tools/packaging/kata-deploy/kata-artifacts
 ARG DESTINATION=/opt/kata-artifacts
 
-COPY ${KATA_ARTIFACTS} /tmp/
-RUN \
-	apk add --no-cache tar zstd util-linux-misc && \
-	mkdir -p "${DESTINATION}" && \
-	tar --zstd -xf "/tmp/$(basename "${KATA_ARTIFACTS}")" -C "${DESTINATION}" && \
-	rm -f "/tmp/$(basename "${KATA_ARTIFACTS}")"
+RUN apk add --no-cache util-linux-misc
+
+COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
+COPY tools/packaging/kata-deploy/shim-components.json ${DESTINATION}/
 
 #### Prepare runtime dependencies (nsenter and required libraries)
 # This stage assembles all runtime dependencies based on architecture
@@ -190,8 +205,8 @@ RUN \
 	esac
 
 # Copy musl nsenter from alpine for amd64/arm64
-COPY --from=artifact-extractor /usr/bin/nsenter /output/usr/bin/nsenter-musl
-COPY --from=artifact-extractor /lib/ld-musl-*.so.1 /output/lib/
+COPY --from=artifact-stage /usr/bin/nsenter /output/usr/bin/nsenter-musl
+COPY --from=artifact-stage /lib/ld-musl-*.so.1 /output/lib/
 
 # For amd64/arm64, use the musl nsenter; for ppc64le/s390x, keep the glibc one
 RUN \
@@ -210,8 +225,8 @@ FROM gcr.io/distroless/static-debian13@sha256:972618ca78034aaddc55864342014a96b8
 
 ARG DESTINATION=/opt/kata-artifacts
 
-# Copy extracted kata artifacts
-COPY --from=artifact-extractor ${DESTINATION} ${DESTINATION}
+# Copy kata component tarballs and component manifest
+COPY --from=artifact-stage ${DESTINATION} ${DESTINATION}
 
 # Copy Rust binary
 COPY --from=rust-builder /kata-deploy/bin/kata-deploy /usr/bin/kata-deploy
@@ -222,11 +237,11 @@ COPY --from=runtime-assembler /output/lib/ /lib/
 COPY --from=runtime-assembler /output/lib64/ /lib64/
 
 # Copy nydus snapshotter
-COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
+COPY tools/packaging/kata-deploy/nydus-snapshotter ${DESTINATION}/nydus-snapshotter
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 
 # Copy runtimeclasses and node-feature-rules
-COPY node-feature-rules ${DESTINATION}/node-feature-rules
+COPY tools/packaging/kata-deploy/node-feature-rules ${DESTINATION}/node-feature-rules
 
 ENTRYPOINT ["/usr/bin/kata-deploy"]

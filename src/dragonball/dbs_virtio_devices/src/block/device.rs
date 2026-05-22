@@ -20,6 +20,7 @@ use dbs_utils::{
 };
 use log::{debug, error, info, warn};
 use virtio_bindings::bindings::virtio_blk::*;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_queue::QueueT;
 use vm_memory::GuestMemoryRegion;
 use vmm_sys_util::eventfd::{EventFd, EFD_NONBLOCK};

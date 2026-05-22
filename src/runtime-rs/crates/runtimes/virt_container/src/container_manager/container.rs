@@ -19,6 +19,7 @@ use common::{
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
     annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
+    config::TomlConfig,
     container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
     k8s::{self, container_type},
 };
@@ -103,17 +104,7 @@ impl Container {
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
-        let disable_guest_selinux = match toml_config
-            .hypervisor
-            .get(&toml_config.runtime.hypervisor_name)
-        {
-            Some(hypervisor_config) => hypervisor_config.disable_guest_selinux,
-            // This shouldn't happen due to how logic in the config crate works
-            // but we need to handle it anyway so we stick with the default
-            // value of disable_guest_selinux in configuration.toml which
-            // is 'true'.
-            None => true,
-        };
+        let disable_guest_selinux = get_disable_guest_selinux(&toml_config);
         let annotations = spec.annotations().clone().unwrap_or_default();
         let container_typ = container_type(&spec);
         let pod_type_anno = if container_typ.is_pod_container() {
@@ -135,6 +126,7 @@ impl Container {
             toml_config.runtime.disable_guest_seccomp,
             disable_guest_selinux,
             toml_config.runtime.disable_guest_empty_dir,
+            &toml_config.runtime.emptydir_mode,
         )
         .context("amend spec")?;
 
@@ -167,8 +159,8 @@ impl Container {
         );
 
         let mut storages = vec![];
-        if let Some(storage) = rootfs.get_storage().await {
-            storages.push(storage);
+        if let Some(mut storage_list) = rootfs.get_storage().await {
+            storages.append(&mut storage_list);
         }
         inner.rootfs.push(rootfs);
 
@@ -217,11 +209,31 @@ impl Container {
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
 
-            // In certain scenarios, particularly under CoCo/Agent Policy enforcement,
-            // the value of `Linux.Resources.Devices` should be empty.
+            // Only CPU and Memory constraints are supported in the guest.
+            // Clear unsupported resource fields to match the Go runtime
+            // and satisfy the agent policy checks.
             if let Some(resource) = linux.resources_mut() {
                 resource.set_devices(None);
+                resource.set_pids(None);
+                resource.set_block_io(None);
+                resource.set_network(None);
             }
+
+            // VFIO device filtering depends on vfio_mode configuration:
+            //
+            // - guest-kernel mode: Devices are managed by the guest kernel driver and
+            //   are not presented to the container. Remove them from the OCI spec to
+            //   match the Go runtime (kata_agent.go:1093-1105) and satisfy the agent
+            //   policy's allow_linux_devices check.
+            //   * vfio-pci-gk: PCI device passthrough with guest kernel driver
+            //
+            // - vfio mode: Devices appear as VFIO character devices
+            //   (/dev/vfio/*) inside the container. Keep them in the OCI spec so the
+            //   agent can validate and bind them properly. This is required for:
+            //   * vfio-pci: PCI device passthrough with VFIO in container
+            //   * vfio-ap: Adjunct Processor (AP) device passthrough with VFIO-AP
+            let vfio_mode = toml_config.runtime.vfio_mode.as_str();
+            filter_vfio_devices(linux, vfio_mode);
         }
 
         let container_name = k8s::container_name(&spec);
@@ -465,8 +477,13 @@ impl Container {
         stdout: Option<String>,
         stderr: Option<String>,
         terminal: bool,
-        oci_process: OCIProcess,
+        mut oci_process: OCIProcess,
     ) -> Result<()> {
+        let toml_config = self.resource_manager.config().await;
+        if get_disable_guest_selinux(&toml_config) {
+            oci_process.set_selinux_label(None);
+        }
+
         let process = Process::new(
             container_process,
             self.pid,
@@ -491,6 +508,10 @@ impl Container {
     }
 
     pub async fn stop_process(&self, container_process: &ContainerProcess) -> Result<()> {
+        if container_process.process_type == ProcessType::Container {
+            self.copy_termination_log().await;
+        }
+
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
         inner
@@ -510,6 +531,77 @@ impl Container {
         }
 
         Ok(())
+    }
+
+    async fn copy_termination_log(&self) {
+        let toml_config = self.resource_manager.config().await;
+        let shared_fs = toml_config
+            .hypervisor
+            .get(&toml_config.runtime.hypervisor_name)
+            .and_then(|h| h.shared_fs.shared_fs.as_deref());
+
+        // When a shared filesystem is configured the host can read the
+        // termination log directly.  shared_fs == None means no shared
+        // filesystem (the "none" config value is normalised to None by
+        // SharedFsInfo::adjust_config).
+        if shared_fs.is_some() {
+            return;
+        }
+
+        let annotations = self.spec.annotations().clone().unwrap_or_default();
+        let policy = annotations.get("io.kubernetes.container.terminationMessagePolicy");
+        if policy.map(|p| p.as_str()) != Some("File") {
+            return;
+        }
+
+        let termination_path =
+            match annotations.get("io.kubernetes.container.terminationMessagePath") {
+                Some(p) if !p.is_empty() => p.clone(),
+                _ => return,
+            };
+
+        let req = agent::GetDiagnosticDataRequest {
+            log_type: "termination_log".to_string(),
+            container_id: self.container_id.container_id.clone(),
+        };
+
+        // The kubelet bind-mounts a host file into the container at
+        // terminationMessagePath, then reads back from that host file.
+        // With shared_fs=none the guest cannot write through that mount,
+        // so we locate the host-side source path from the OCI mounts and
+        // write the data there directly.
+        let host_path = self.spec.mounts().as_ref().and_then(|mounts| {
+            mounts
+                .iter()
+                .find(|m| m.destination() == std::path::Path::new(&termination_path))
+                .and_then(|m| m.source().clone())
+        });
+
+        let host_path = match host_path {
+            Some(p) => p,
+            None => {
+                warn!(
+                    self.logger,
+                    "No host mount found for termination message path"
+                );
+                return;
+            }
+        };
+
+        match self.agent.get_diagnostic_data(req).await {
+            Ok(resp) if !resp.data.is_empty() => {
+                if let Err(e) = tokio::fs::write(&host_path, resp.data.as_bytes()).await {
+                    warn!(self.logger, "Failed to write termination message: {}", e);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                warn!(
+                    self.logger,
+                    "Failed to get termination message from guest: {}", e
+                );
+            }
+        }
     }
 
     pub async fn pause(&self) -> Result<()> {
@@ -648,6 +740,7 @@ fn amend_spec(
     disable_guest_seccomp: bool,
     disable_guest_selinux: bool,
     disable_guest_empty_dir: bool,
+    emptydir_mode: &str,
 ) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     if let Some(hooks) = spec.hooks().as_ref() {
@@ -657,15 +750,15 @@ fn amend_spec(
     }
 
     // special process K8s ephemeral volumes.
-    update_ephemeral_storage_type(spec, disable_guest_empty_dir);
+    update_ephemeral_storage_type(spec, disable_guest_empty_dir, emptydir_mode);
 
     if let Some(linux) = &mut spec.linux_mut() {
         if disable_guest_seccomp {
             linux.set_seccomp(None);
         }
 
-        // Host pidns path does not make sense in kata. Let's just align it with
-        // sandbox namespace whenever it is set.
+        // Host pid/net/time namespace paths do not make sense in kata.
+        // Pid is aligned with the sandbox namespace whenever it is set.
         let ns: Vec<oci::LinuxNamespace> = linux
             .namespaces()
             .clone()
@@ -674,6 +767,7 @@ fn amend_spec(
             .filter(|n| {
                 n.typ() != oci::LinuxNamespaceType::Pid
                     && n.typ() != oci::LinuxNamespaceType::Network
+                    && n.typ() != oci::LinuxNamespaceType::Time
             })
             .map(|n| {
                 let mut ns = oci::LinuxNamespace::default();
@@ -697,6 +791,20 @@ fn amend_spec(
     Ok(())
 }
 
+fn get_disable_guest_selinux(toml_config: &TomlConfig) -> bool {
+    match toml_config
+        .hypervisor
+        .get(&toml_config.runtime.hypervisor_name)
+    {
+        Some(hypervisor_config) => hypervisor_config.disable_guest_selinux,
+        // This shouldn't happen due to how logic in the config crate works
+        // but we need to handle it anyway so we stick with the default
+        // value of disable_guest_selinux in configuration.toml which
+        // is 'true'.
+        None => true,
+    }
+}
+
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox
 // pid namespace.
 fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
@@ -710,6 +818,32 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     }
 
     false
+}
+
+/// Filter VFIO devices from the Linux device list based on vfio_mode configuration.
+/// - vfio mode: Keeps all devices including /dev/vfio/*
+/// - guest-kernel mode: Removes /dev/vfio/* devices as they're managed by guest kernel
+///   Note that the guest-kernel mode is assumed if vfio_mode is unset/empty.
+fn filter_vfio_devices(linux: &mut oci::Linux, vfio_mode: &str) {
+    if vfio_mode == "vfio" {
+        return;
+    }
+
+    const VFIO_PATH: &str = "/dev/vfio/";
+    let filtered = linux.devices().as_ref().map(|devices| {
+        devices
+            .iter()
+            .filter(|d| {
+                !(d.typ() == oci::LinuxDeviceType::C
+                    && d.path().to_str().is_some_and(|p| p.starts_with(VFIO_PATH)))
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    });
+    linux.set_devices(match filtered {
+        Some(v) if v.is_empty() => None,
+        other => other,
+    });
 }
 
 #[cfg(test)]
@@ -730,12 +864,44 @@ mod tests {
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false, false, false).unwrap();
+        amend_spec(&mut spec, false, false, false, "shared-fs").unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true, false, false).unwrap();
+        amend_spec(&mut spec, true, false, false, "shared-fs").unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
+    }
+
+    #[test]
+    fn test_amend_spec_strips_host_time_namespace() {
+        let mut spec = oci::Spec::default();
+        let linux = LinuxBuilder::default()
+            .namespaces(vec![
+                LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Time)
+                    .path("/proc/1/ns/time")
+                    .build()
+                    .unwrap(),
+                LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Uts)
+                    .build()
+                    .unwrap(),
+            ])
+            .build()
+            .unwrap();
+        spec.set_linux(Some(linux));
+
+        amend_spec(&mut spec, false, false, false, "shared-fs").unwrap();
+
+        let namespaces = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .namespaces()
+            .as_ref()
+            .unwrap();
+        assert_eq!(namespaces.len(), 1);
+        assert_eq!(namespaces[0].typ(), LinuxNamespaceType::Uts);
     }
 
     #[test]
@@ -757,12 +923,12 @@ mod tests {
             .unwrap();
 
         // disable_guest_selinux = false, selinux labels are left alone
-        amend_spec(&mut spec, false, false, false).unwrap();
+        amend_spec(&mut spec, false, false, false, "shared-fs").unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label() == &Some("xxx".to_owned()));
         assert!(spec.linux().as_ref().unwrap().mount_label() == &Some("yyy".to_owned()));
 
         // disable_guest_selinux = true, selinux labels are reset
-        amend_spec(&mut spec, false, true, false).unwrap();
+        amend_spec(&mut spec, false, true, false, "shared-fs").unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
         assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
     }
@@ -839,5 +1005,152 @@ mod tests {
                 d.desc
             );
         }
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_guest_kernel_mode() {
+        // Test that VFIO devices are filtered out in guest-kernel mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let non_vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/null")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(3)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device, non_vfio_device.clone()])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(devices.len(), 1, "Should have only 1 device after filtering");
+        assert_eq!(
+            devices[0].path(),
+            non_vfio_device.path(),
+            "Non-VFIO device should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_vfio_mode() {
+        // Test that VFIO devices are preserved in vfio mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let non_vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/null")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(3)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device, non_vfio_device])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "vfio");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(devices.len(), 2, "Should have both devices in vfio mode");
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_only_vfio_filtered() {
+        // Test that only /dev/vfio/* devices are filtered in guest-kernel mode
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let vfio_container = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/vfio")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let similar_path = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio-test")
+            .typ(oci::LinuxDeviceType::C)
+            .major(1)
+            .minor(1)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![
+                vfio_device,
+                vfio_container,
+                similar_path.clone(),
+            ])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        let devices = linux.devices().as_ref().unwrap();
+        assert_eq!(
+            devices.len(),
+            1,
+            "Should only filter devices starting with /dev/vfio/"
+        );
+        assert_eq!(
+            devices[0].path(),
+            similar_path.path(),
+            "Device with similar but different path should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_empty_mode() {
+        // Test default/empty mode behavior (should filter /dev/vfio/* like guest-kernel mode)
+        let vfio_device = oci::LinuxDeviceBuilder::default()
+            .path("/dev/vfio/1")
+            .typ(oci::LinuxDeviceType::C)
+            .major(10)
+            .minor(196)
+            .build()
+            .unwrap();
+
+        let mut linux = oci::LinuxBuilder::default()
+            .devices(vec![vfio_device])
+            .build()
+            .unwrap();
+
+        filter_vfio_devices(&mut linux, "");
+
+        assert!(linux.devices().is_none(), "Should filter out VFIO device with empty mode");
+    }
+
+    #[test]
+    fn test_filter_vfio_devices_no_devices() {
+        // Test that filtering works when there are no devices
+        let mut linux = oci::LinuxBuilder::default().build().unwrap();
+
+        filter_vfio_devices(&mut linux, "guest-kernel");
+
+        assert!(linux.devices().is_none(), "Should remain None when no devices");
     }
 }

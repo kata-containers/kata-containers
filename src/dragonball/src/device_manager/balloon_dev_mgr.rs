@@ -31,7 +31,7 @@ pub enum BalloonDeviceError {
 
     /// guest memory error
     #[error("failed to access guest memory, {0}")]
-    GuestMemoryError(#[source] vm_memory::mmap::Error),
+    GuestMemoryError(#[source] vm_memory::GuestMemoryError),
 
     /// create balloon device error
     #[error("failed to create virtio-balloon device, {0}")]

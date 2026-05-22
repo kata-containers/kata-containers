@@ -74,7 +74,7 @@ See the [official documentation](docs) including:
 - [Developer guide](docs/Developer-Guide.md)
 - [Design documents](docs/design)
   - [Architecture overview](docs/design/architecture)
-  - [Architecture 3.0 overview](docs/design/architecture_3.0/)
+  - [Architecture 4.0 overview](docs/design/architecture_4.0/)
 
 ## Configuration
 
@@ -152,10 +152,6 @@ Kata Containers is now
 ## General tests
 
 See the [tests documentation](tests/README.md).
-
-## Metrics tests
-
-See the [metrics documentation](tests/metrics/README.md).
 
 ## Glossary of Terms
 

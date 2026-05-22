@@ -10,17 +10,26 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ops::Deref;
 
-use dbs_address_space::AddressSpace;
-use dbs_boot::{add_e820_entry, bootparam, layout, mptable, BootParamsWrapper, InitrdConfig};
+use dbs_acpi::*;
+use dbs_address_space::{AddressSpace, AddressSpaceRegionType};
+use dbs_boot::{
+    add_e820_entry, bootparam, layout, mptable, tdshim::*, BootParamsWrapper, FirmwareType,
+    InitrdConfig,
+};
+use dbs_interrupt::IOAPIC_MAX_NR_REDIR_ENTRIES;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
-use kvm_bindings::{kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_PIT_SPEAKER_DUMMY};
+use kvm_bindings::{
+    kvm_enable_cap, kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_CAP_SPLIT_IRQCHIP,
+    KVM_PIT_SPEAKER_DUMMY,
+};
 use linux_loader::cmdline::Cmdline;
 use linux_loader::configurator::{linux::LinuxBootConfigurator, BootConfigurator, BootParams};
 use slog::info;
 use vm_memory::{Address, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
+use crate::api::v1::ConfidentialVmType;
 use crate::error::{Error, Result, StartMicroVmError};
 use crate::event_manager::EventManager;
 use crate::vm::{Vm, VmError};
@@ -192,6 +201,44 @@ impl Vm {
         }
 
         let vm_memory = vm_as.memory();
+
+        if self.firmware_type == Some(FirmwareType::Tdshim) {
+            let tdshim_file = self
+                .kernel_config
+                .as_mut()
+                .ok_or(StartMicroVmError::MissingKernelConfig)?
+                .firmware_file_mut()
+                .ok_or(StartMicroVmError::MissingFirmwareFile)?;
+            let sections =
+                parse_tdvf_sections(tdshim_file).map_err(StartMicroVmError::TdvfError)?;
+            let address_space = self
+                .vm_address_space()
+                .cloned()
+                .ok_or(StartMicroVmError::GuestMemoryNotInitialized)?;
+            let mut hob_address = 0;
+            let acpi_tables: Vec<sdt::Sdt> = vec![
+                create_madt_table(self.vm_config.max_vcpu_count, self.vm_config.vcpu_count),
+                create_fadt_table(),
+                create_dsdt_table(),
+            ];
+
+            self.load_kernel_with_tdshim(
+                &sections,
+                vm_memory.deref(),
+                address_space,
+                &mut hob_address,
+                &acpi_tables,
+            )?;
+
+            let boot_vcpu_count = self.vm_config.vcpu_count;
+            self.vcpu_manager()
+                .map_err(StartMicroVmError::Vcpu)?
+                .create_vcpus(boot_vcpu_count, Some(request_ts), None, self.firmware_type)
+                .map_err(StartMicroVmError::Vcpu)?;
+
+            return Ok(());
+        }
+
         let kernel_loader_result = self.load_kernel(vm_memory.deref())?;
         self.vcpu_manager()
             .map_err(StartMicroVmError::Vcpu)?
@@ -212,6 +259,15 @@ impl Vm {
         cmdline: &Cmdline,
         initrd: Option<InitrdConfig>,
     ) -> std::result::Result<(), StartMicroVmError> {
+        // tdshim uses ACPI instead of mptable, and kernel boot parameters
+        // (including e820) would be prepared by firmware
+        if self.firmware_type == Some(FirmwareType::Tdshim) {
+            if initrd.is_some() {
+                return Err(StartMicroVmError::InitrdNotSupported);
+            }
+            return Ok(());
+        }
+
         let cmdline_addr = GuestAddress(dbs_boot::layout::CMDLINE_START);
         linux_loader::loader::load_cmdline(vm_memory, cmdline_addr, cmdline)
             .map_err(StartMicroVmError::LoadCommandline)?;
@@ -264,13 +320,32 @@ impl Vm {
     pub(crate) fn setup_interrupt_controller(
         &mut self,
     ) -> std::result::Result<(), StartMicroVmError> {
-        self.vm_fd
-            .create_irq_chip()
-            .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
+        // In cases of split irqchip, we do not need to invoke KVM ioctl to create an
+        // in-kernel irqchip. We only need to enable the capability of split irqchip,
+        // and manage the interrupts in userspace.
+        if self.split_irqchip() {
+            let mut enable_split_irqchip = kvm_enable_cap {
+                cap: KVM_CAP_SPLIT_IRQCHIP,
+                ..Default::default()
+            };
+            enable_split_irqchip.args[0] = IOAPIC_MAX_NR_REDIR_ENTRIES as u64;
+            self.vm_fd()
+                .enable_cap(&enable_split_irqchip)
+                .map_err(StartMicroVmError::EnableSplitIrqchip)
+        } else {
+            self.vm_fd
+                .create_irq_chip()
+                .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
+        }
     }
 
     /// Creates an in-kernel device model for the PIT.
     pub(crate) fn create_pit(&self) -> std::result::Result<(), StartMicroVmError> {
+        // In-kernel PIT is not allowed for split irqchip
+        if self.split_irqchip() {
+            return Ok(());
+        }
+
         info!(self.logger, "VM: create pit");
         // We need to enable the emulation of a dummy speaker port stub so that writing to port 0x61
         // (i.e. KVM_SPEAKER_BASE_ADDRESS) does not trigger an exit to user space.
@@ -298,6 +373,144 @@ impl Vm {
             .register_exit_eventfd(&reset_evt)
             .map_err(|_| StartMicroVmError::RegisterEvent)?;
         self.reset_eventfd = Some(reset_evt);
+
+        Ok(())
+    }
+
+    pub(crate) fn split_irqchip(&self) -> bool {
+        self.shared_info.read().unwrap().split_irqchip()
+    }
+
+    pub(crate) fn kvm_mem_attr_private(&self) -> bool {
+        self.confidential_vm_type() == Some(ConfidentialVmType::TDX)
+    }
+
+    fn load_kernel_with_tdshim(
+        &mut self,
+        sections: &Vec<TdvfSection>,
+        vm_memory: &GuestMemoryImpl,
+        address_space: AddressSpace,
+        hob_address: &mut u64,
+        acpi_tables: &Vec<sdt::Sdt>,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let mut required_sections = vec!["Bfv", "TdHob", "PayloadParam"];
+
+        for section in sections {
+            match section.r#type {
+                TdvfSectionType::Bfv => {
+                    let tdshim_file = self
+                        .kernel_config
+                        .as_mut()
+                        .ok_or(StartMicroVmError::MissingKernelConfig)?
+                        .firmware_file_mut()
+                        .ok_or(StartMicroVmError::MissingFirmwareFile)?;
+                    load_tdvf_section(tdshim_file, section, vm_memory)
+                        .map_err(StartMicroVmError::TdvfError)?;
+                    required_sections.retain(|s| *s != "Bfv");
+                }
+                TdvfSectionType::Cfv => {
+                    let tdshim_file = self
+                        .kernel_config
+                        .as_mut()
+                        .ok_or(StartMicroVmError::MissingKernelConfig)?
+                        .firmware_file_mut()
+                        .ok_or(StartMicroVmError::MissingFirmwareFile)?;
+                    load_tdvf_section(tdshim_file, section, vm_memory)
+                        .map_err(StartMicroVmError::TdvfError)?;
+                }
+                TdvfSectionType::TdHob => {
+                    *hob_address = section.address;
+                    required_sections.retain(|s| *s != "TdHob");
+                }
+                TdvfSectionType::PayloadParam => {
+                    let cmdline = self
+                        .kernel_config
+                        .as_mut()
+                        .ok_or(StartMicroVmError::MissingKernelConfig)?
+                        .kernel_cmdline();
+                    linux_loader::loader::load_cmdline(
+                        vm_memory,
+                        GuestAddress(section.address),
+                        cmdline,
+                    )
+                    .map_err(StartMicroVmError::LoadCommandline)?;
+                    required_sections.retain(|s| *s != "PayloadParam");
+                }
+                _ => {}
+            }
+        }
+
+        if !required_sections.is_empty() {
+            return Err(StartMicroVmError::MissingTdshimSection(
+                required_sections[0],
+            ));
+        }
+
+        let kernel_loader_result = self.load_kernel(vm_memory)?;
+        let payload_info = PayloadInfo::new(
+            PayloadImageType::RawVmLinux,
+            kernel_loader_result.kernel_load.0,
+        );
+
+        self.write_tdshim_hob_list(
+            *hob_address,
+            vm_memory,
+            address_space,
+            payload_info,
+            acpi_tables,
+        )?;
+
+        Ok(())
+    }
+
+    fn write_tdshim_hob_list(
+        &self,
+        hob_address: u64,
+        vm_memory: &GuestMemoryImpl,
+        address_space: AddressSpace,
+        payload_info: PayloadInfo,
+        acpi_tables: &Vec<sdt::Sdt>,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let mut hob = TdHob::start(hob_address);
+
+        let mut regions = Vec::new();
+        address_space
+            .walk_regions(|region| {
+                match region.region_type() {
+                    AddressSpaceRegionType::DefaultMemory => {
+                        regions.push((region.start_addr().0, region.len(), true));
+                    }
+                    AddressSpaceRegionType::FirmwareMemory => {
+                        regions.push((region.start_addr().0, region.len(), false));
+                    }
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        for (start, size, is_ram) in regions {
+            hob.add_memory_resource(vm_memory, start, size, is_ram)
+                .map_err(StartMicroVmError::TdvfError)?;
+        }
+
+        hob.add_mmio_resource(
+            vm_memory,
+            layout::MMIO_LOW_START,
+            layout::BIOS_MEM_START - layout::MMIO_LOW_START,
+        )
+        .map_err(StartMicroVmError::TdvfError)?;
+
+        hob.add_payload(vm_memory, payload_info)
+            .map_err(StartMicroVmError::TdvfError)?;
+
+        for sdt in acpi_tables {
+            hob.add_acpi_table(vm_memory, sdt.as_slice())
+                .map_err(StartMicroVmError::TdvfError)?;
+        }
+
+        hob.finish(vm_memory)
+            .map_err(StartMicroVmError::TdvfError)?;
 
         Ok(())
     }

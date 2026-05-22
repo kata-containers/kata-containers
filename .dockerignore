@@ -1,0 +1,13 @@
+# Context for tools/packaging/kata-deploy/Dockerfile (build from repo root: -f tools/packaging/kata-deploy/Dockerfile .)
+#
+# The Dockerfile only needs: Cargo.toml, Cargo.lock, src/, tools/packaging/kata-deploy/,
+# and versions.yaml. Exclude heavy or irrelevant trees to keep context small.
+.git
+.github
+target
+kata-artifacts
+docs
+tests
+utils
+tools/packaging/kata-deploy/local-build
+tools/packaging/kata-deploy/binary/target

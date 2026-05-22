@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rtnetlink::Handle;
@@ -11,6 +13,9 @@ use scopeguard::defer;
 
 use super::{NetworkModel, NetworkModelType};
 use crate::network::NetworkPair;
+
+const QDISC_ADD_ATTEMPTS: u64 = 5; // Number of attempts when adding an ingress qdisc
+const QDISC_ADD_BACKOFF_MS: u64 = 10; // Base delay for the linear backoff between qdisc add retries on EBUSY
 
 #[derive(Debug)]
 pub(crate) struct TcFilterModel {}
@@ -42,19 +47,11 @@ impl NetworkModel for TcFilterModel {
             .await
             .context("fetch virt by index")?;
 
-        handle
-            .qdisc()
-            .add(tap_index as i32)
-            .ingress()
-            .execute()
+        add_ingress_qdisc(&handle, tap_index as i32)
             .await
             .context("add tap ingress")?;
 
-        handle
-            .qdisc()
-            .add(virt_index as i32)
-            .ingress()
-            .execute()
+        add_ingress_qdisc(&handle, virt_index as i32)
             .await
             .context("add virt ingress")?;
 
@@ -92,6 +89,29 @@ impl NetworkModel for TcFilterModel {
         let virt_index = fetch_index(&handle, &pair.virt_iface.name).await?;
         handle.qdisc().del(virt_index as i32).execute().await?;
         Ok(())
+    }
+}
+
+/// Add an ingress qdisc to the device at the given index, retrying on EBUSY
+/// with linear backoff (10ms, 20ms, ...).
+async fn add_ingress_qdisc(handle: &Handle, index: i32) -> Result<(), rtnetlink::Error> {
+    let mut last_err = handle.qdisc().add(index).ingress().execute().await;
+    for i in 1..QDISC_ADD_ATTEMPTS {
+        match &last_err {
+            Ok(()) => return Ok(()),
+            Err(e) if !is_ebusy(e) => break,
+            Err(_) => {}
+        }
+        tokio::time::sleep(Duration::from_millis(QDISC_ADD_BACKOFF_MS * i)).await;
+        last_err = handle.qdisc().add(index).ingress().execute().await;
+    }
+    last_err
+}
+
+fn is_ebusy(err: &rtnetlink::Error) -> bool {
+    match err {
+        rtnetlink::Error::NetlinkError(msg) => msg.code.is_some_and(|c| c.get() == -libc::EBUSY),
+        _ => false,
     }
 }
 

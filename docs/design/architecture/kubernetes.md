@@ -32,4 +32,4 @@ runtime. Refer to the following guides on how to set up Kata
 Containers with Kubernetes:
 
 - [How to use Kata Containers and containerd](../../how-to/containerd-kata.md)
-- [Run Kata Containers with Kubernetes](../../how-to/run-kata-with-k8s.md)
+- [Run Kata Containers with Kubernetes](../../how-to/how-to-use-k8s-with-crio-and-kata.md)

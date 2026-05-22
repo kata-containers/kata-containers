@@ -34,6 +34,14 @@ setup() {
         fi
     fi
 
+    # shellcheck disable=SC2154 # BATS_FILE_TMPDIR is provided by bats.
+    setup_genpolicy_registry_auth \
+        "${AUTHENTICATED_IMAGE}" \
+        "${AUTHENTICATED_IMAGE_USER}" \
+        "${AUTHENTICATED_IMAGE_PASSWORD}" \
+        "${BATS_FILE_TMPDIR}/docker-genpolicy"
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
     # Set up Kubernetes secret for the nydus-snapshotter metadata pull
     kubectl delete secret cococred --ignore-not-found
     kubectl create secret docker-registry cococred --docker-server="https://"$(echo "$AUTHENTICATED_IMAGE" | cut -d':' -f1) \
@@ -84,6 +92,7 @@ EOF
 
     create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -98,6 +107,7 @@ EOF
 
     create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -111,6 +121,7 @@ EOF
     # Create pod config, but don't add agent.image_registry_auth annotation
     create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "" "" "resource" "$node"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -128,6 +139,7 @@ EOF
     initdata=$(get_initdata_with_auth_registry_config)
     create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -145,6 +157,7 @@ EOF
     initdata=$(get_initdata_with_auth_registry_config)
     create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -161,6 +174,7 @@ EOF
     initdata=$(get_initdata_with_cdh_image_section "")
     create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -178,6 +192,7 @@ teardown() {
         skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
     fi
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir:-}"
     confidential_teardown_common "${node}" "${node_start_time:-}"
     kubectl delete secret cococred --ignore-not-found
 }

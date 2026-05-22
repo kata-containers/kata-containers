@@ -8,6 +8,8 @@ kind: Pod
 metadata:
   name: policy-pod
   uid: policy-pod-uid
+  labels:
+    some-test-label: label-value1
 spec:
   runtimeClassName: kata
   containers:
@@ -30,6 +32,11 @@ spec:
           value: foo
         - name: TEST_DIR2
           value: bar
+        - name: VARIABLE_FROM_LABEL
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.labels['some-test-label']
       securityContext:
         seccompProfile:
           type: RuntimeDefault
@@ -69,3 +76,15 @@ spec:
   volumes:
     - name: test-volume1
       emptyDir: {}
+  affinity:
+    podAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 12
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - not-a-real-hostname

@@ -276,19 +276,12 @@ pub fn push_data(initdata_path: &Path, data: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::io::Read;
-
-    fn setup_test_env() -> PathBuf {
-        let dir = env::temp_dir().join("initimg_test");
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
 
     #[test]
     fn test_valid_creation() {
-        let dir = setup_test_env();
-        let path = dir.join("test.img");
+        let dir = tempfile::tempdir().expect("crating temp dir failed");
+        let path = dir.path().join("test.img");
 
         let data = "[config]\nkey = \"value\"\n";
         let result = create_compressed_block(data, &path, Some(6));
@@ -312,8 +305,8 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let dir = setup_test_env();
-        let path = dir.join("empty.img");
+        let dir = tempfile::tempdir().expect("crating temp dir failed");
+        let path = dir.path().join("empty.img");
 
         let result = create_compressed_block("", &path, None);
 
@@ -326,13 +319,13 @@ mod tests {
 
     #[test]
     fn test_different_compression_levels() {
-        let dir = setup_test_env();
+        let dir = tempfile::tempdir().expect("crating temp dir failed");
         let data = "[config]\n".repeat(1000); // Generate large test data
 
         let sizes = vec![0, 3, 9]
             .into_iter()
             .map(|level| {
-                let path = dir.join(format!("test_comp_{}.img", level));
+                let path = dir.path().join(format!("test_comp_{}.img", level));
                 let res = create_compressed_block(&data, &path, Some(level));
                 let size = res.unwrap();
                 fs::remove_file(&path).unwrap();

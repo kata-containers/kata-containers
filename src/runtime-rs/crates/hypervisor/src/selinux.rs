@@ -58,8 +58,15 @@ mod tests {
             }
             let label = std::fs::read_to_string(attr_path).unwrap();
             assert_eq!(label.trim_end_matches('\0'), TEST_LABEL);
-        } else {
-            assert!(ret.is_err(), "Expecting error, Got {:?}", ret);
         }
+        // When SELinux is not enabled, deliberately don't assert on `ret`.
+        // /proc/thread-self/attr/exec is a generic LSM interface, not
+        // SELinux-specific, and the kernel's behaviour when no LSM owns
+        // the slot varies by arch/distro/build: some kernels return
+        // EINVAL (observed on x86_64 Ubuntu CI runners), others silently
+        // accept the write (observed on ppc64le Ubuntu CI runners).
+        // Either is fine -- it's a kernel-side detail, not something
+        // set_exec_label() can or should normalize, so all we can
+        // meaningfully require here is that the call doesn't panic.
     }
 }

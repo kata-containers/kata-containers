@@ -316,7 +316,8 @@ impl TryFrom<TaskResponse> for api::ConnectResponse {
         match from {
             TaskResponse::ConnectContainer(resp) => {
                 let mut res = api::ConnectResponse::new();
-                res.set_shim_pid(resp.pid);
+                res.set_shim_pid(std::process::id());
+                res.set_task_pid(resp.pid);
                 Ok(res)
             }
             _ => Err(anyhow!(Error::UnexpectedResponse(

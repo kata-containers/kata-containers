@@ -5,28 +5,36 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ] || set -x
+[[ -z "${DEBUG}" ]] || set -x
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly script_name="$(basename "${BASH_SOURCE[0]}")"
-readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
+script_name="$(basename "${BASH_SOURCE[0]}")"
+readonly script_name
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly script_dir
+packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
+readonly packaging_root_dir
 
+# shellcheck source=/dev/null
 source "${packaging_root_dir}/scripts/lib.sh"
 
-readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
+# shellcheck disable=SC2154
+osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
+readonly osbuilder_dir
 
 export GOPATH=${GOPATH:-${HOME}/go}
 export AGENT_TARBALL=${AGENT_TARBALL:-}
 export GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
 
 ARCH=${ARCH:-$(uname -m)}
-if [ $(uname -m) == "${ARCH}" ]; then
+if [[ "$(uname -m)" == "${ARCH}" ]]; then
+       # shellcheck disable=SC2034
        arch_target="$(uname -m)"
 else
+       # shellcheck disable=SC2034
        arch_target="${ARCH}"
 fi
 
@@ -35,11 +43,11 @@ image_initrd_extension=".img"
 
 build_initrd() {
 	info "Build initrd"
-	info "initrd os: $os_name"
-	info "initrd os version: $os_version"
+	info "initrd os: ${os_name}"
+	info "initrd os version: ${os_version}"
 	make initrd \
 		BUILD_VARIANT="${image_initrd_suffix}" \
-		DISTRO="$os_name" \
+		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
@@ -65,8 +73,8 @@ build_initrd() {
 
 build_image() {
 	info "Build image"
-	info "image os: $os_name"
-	info "image os version: $os_version"
+	info "image os: ${os_name}"
+	info "image os version: ${os_version}"
 	make image \
 		BUILD_VARIANT="${image_initrd_suffix}" \
 		DISTRO="${os_name}" \
@@ -119,13 +127,14 @@ EOF
 
 main() {
 	image_type=image
-	destdir="$PWD"
+	destdir="${PWD}"
 	prefix="/opt/kata"
+	# shellcheck disable=SC2034
 	image_suffix=""
 	image_initrd_suffix=""
 	builddir="${PWD}"
 	while getopts "h-:" opt; do
-		case "$opt" in
+		case "${opt}" in
 		-)
 			case "${OPTARG}" in
 			osname=*)
@@ -153,14 +162,14 @@ main() {
 				builddir=${OPTARG#*=}
 				;;
 			*)
-				echo >&2 "ERROR: Invalid option -$opt${OPTARG}"
+				echo >&2 "ERROR: Invalid option -${opt}${OPTARG}"
 				usage 1
 				;;
 			esac
 			;;
 		h) usage 0 ;;
 		*)
-			echo "Invalid option $opt"
+			echo "Invalid option ${opt}"
 			usage 1
 			;;
 		esac
@@ -170,11 +179,11 @@ main() {
 
 	echo "build ${image_type}"
 
-	if [ "${image_type}" = "initrd" ]; then
+	if [[ "${image_type}" = "initrd" ]]; then
 		final_artifact_name+="-initrd"
 	fi
 
-	if [ -n "${image_initrd_suffix}" ]; then
+	if [[ -n "${image_initrd_suffix}" ]]; then
 		artifact_name="kata-${os_name}-${os_version}-${image_initrd_suffix}.${image_type}"
 		final_artifact_name+="-${image_initrd_suffix}"
 	else
@@ -195,4 +204,4 @@ main() {
 	popd
 }
 
-main $*
+main "$@"

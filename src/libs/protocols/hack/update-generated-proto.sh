@@ -39,7 +39,7 @@ show_usage() {
     # iterate over proto files
     for file in "$@"
     do
-        echo "         $file"
+        echo "         ${file}"
     done
 
     echo ""
@@ -51,60 +51,65 @@ generate_go_sources() {
     local dir_path="${proto_file%/*}"
     local file_name="${proto_file##*/}"
 
-    [ "$dir_path" == "$proto_file" ] && dir_path="."
+    [[ "${dir_path}" == "${proto_file}" ]] && dir_path="."
 
-    local root_path=$(realpath ../)/libs/protocols/protos
-    local output_path=$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path
+    local root_path
+    root_path=$(realpath ../)/libs/protocols/protos
+    local output_path
+    output_path=$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/${dir_path}
     local mapping="Mgoogle/protobuf/empty.proto=google.golang.org/protobuf/types/known/emptypb"
 
-    local cmd="protoc -I$GOPATH/src:${root_path} \
-    --go_out=paths=source_relative,$mapping:$output_path \
-    --go-ttrpc_out=paths=source_relative,$mapping:$output_path \
-    ${root_path}/$file_name"
+    local cmd="protoc -I${GOPATH}/src:${root_path} \
+    --go_out=paths=source_relative,${mapping}:${output_path} \
+    --go-ttrpc_out=paths=source_relative,${mapping}:${output_path} \
+    ${root_path}/${file_name}"
 
-    echo $cmd
-    $cmd
-    [ $? -eq 0 ] || die "Failed to generate golang file from $1"
+    echo "${cmd}"
+    if ! ${cmd}; then
+        die "Failed to generate golang file from $1"
+    fi
 }
 
-if [ "$(basename $(pwd))" != "agent" ]; then
+if [[ "$(basename "$(pwd)")" != "agent" ]]; then
 	die "Please go to root directory of agent before execute this shell"
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
 proto_files_list=(grpc/agent.proto grpc/csi.proto grpc/health.proto grpc/oci.proto types.proto)
 
-if [ "$1" = "" ]; then
+if [[ "$1" = "" ]]; then
     show_usage "${proto_files_list[@]}"
     exit 1
 fi;
 
 # pre-requirement check
-which protoc
-[ $? -eq 0 ] || die "Please install protoc from github.com/protocolbuffers/protobuf"
+if ! which protoc; then
+    die "Please install protoc from github.com/protocolbuffers/protobuf"
+fi
 
-which protoc-gen-gogottrpc
-[ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
+if ! which protoc-gen-gogottrpc; then
+    die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
+fi
 
-[[ -n "$GOPATH" ]] || die "GOPATH is not set. Please set it."
+[[ -n "${GOPATH}" ]] || die "GOPATH is not set. Please set it."
 
 # do generate work
 target=$1
 
 # compile all proto files
-if [ "$target" = "all" ]; then
+if [[ "${target}" = "all" ]]; then
     # compile all proto files
     for f in "${proto_files_list[@]}"; do
         echo -e "\n   [golang] compiling ${f} ..."
-        generate_go_sources $f
+        generate_go_sources "${f}"
         echo -e "   [golang] ${f} compiled\n"
     done
 else
     # compile individual proto file
     for f in "${proto_files_list[@]}"; do
-        if [ "$target" = "$f" ]; then
+        if [[ "${target}" = "${f}" ]]; then
             echo -e "\n   [golang] compiling ${target} ..."
-            generate_go_sources $target
+            generate_go_sources "${target}"
             echo -e "   [golang] ${target} compiled\n"
         fi
     done

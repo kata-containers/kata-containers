@@ -17,6 +17,7 @@ pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
     BlkioStatsEntry, CheckRequest, CloseStdinRequest, ContainerID, ContainerProcessID,
     CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, Empty, ExecProcessRequest,
+    FSGroup, FSGroupChangePolicy, GetDiagnosticDataRequest, GetDiagnosticDataResponse,
     GetGuestDetailsRequest, GetIPTablesRequest, GetIPTablesResponse, GuestDetailsResponse,
     HealthCheckResponse, IPAddress, IPFamily, Interface, Interfaces, ListProcessesRequest,
     MemHotplugByProbeRequest, MetricsResponse, OnlineCPUMemRequest, OomEventResponse,
@@ -100,4 +101,10 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn add_swap(&self, req: AddSwapRequest) -> Result<Empty>;
     async fn add_swap_path(&self, req: AddSwapPathRequest) -> Result<Empty>;
     async fn set_policy(&self, req: SetPolicyRequest) -> Result<Empty>;
+
+    // diagnostics
+    async fn get_diagnostic_data(
+        &self,
+        req: GetDiagnosticDataRequest,
+    ) -> Result<GetDiagnosticDataResponse>;
 }

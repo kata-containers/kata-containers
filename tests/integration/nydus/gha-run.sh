@@ -9,8 +9,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# shellcheck disable=SC2034
 kata_tarball_dir="${2:-kata-artifacts}"
 nydus_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${nydus_dir}/../../common.bash"
 
 function install_dependencies() {
@@ -35,6 +37,7 @@ function install_dependencies() {
 	# - nydus
 	# - nydus-snapshotter
 	declare -a github_deps
+	# shellcheck disable=SC2154
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
 	github_deps[2]="nydus:$(get_from_kata_deps ".externals.nydus.version")"
@@ -44,11 +47,12 @@ function install_dependencies() {
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"
-		install_${dep[0]} "${dep[1]}"
+		"install_${dep[0]}" "${dep[1]}"
 	done
 }
 
 function run() {
+	# shellcheck disable=SC2154
 	info "Running nydus tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor

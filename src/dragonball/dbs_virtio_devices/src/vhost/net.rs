@@ -6,7 +6,7 @@ use log::{debug, error, warn};
 use virtio_bindings::bindings::virtio_net::{
     virtio_net_ctrl_hdr, virtio_net_ctrl_mq, VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET,
 };
-use virtio_queue::{Descriptor, DescriptorChain};
+use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{Bytes, GuestMemory};
 
 use crate::{DbsGuestAddressSpace, Error as VirtioError, Result as VirtioResult};

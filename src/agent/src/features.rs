@@ -10,8 +10,6 @@ pub fn get_build_features() -> Vec<String> {
         "agent-policy",
         #[cfg(feature = "seccomp")]
         "seccomp",
-        #[cfg(feature = "standard-oci-runtime")]
-        "standard-oci-runtime",
     ];
 
     let mut sorted: Vec<String> = features.into_iter().map(String::from).collect();

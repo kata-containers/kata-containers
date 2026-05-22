@@ -150,7 +150,7 @@ path includes a `{ID}` tag that represents the real sandbox ID or name.
 
 Further, since the socket path is below the sandbox directory and since that
 directory is `root` owned, it is necessary to run the tool as `root` when
-using a Hybrid VSOCKS hypervisor.
+using a Hybrid VSOCK hypervisor.
 
 ##### Determine socket path template value
 

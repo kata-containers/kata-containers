@@ -522,10 +522,18 @@ $ sudo kata-runtime check
 If your system is *not* able to run Kata Containers, the previous command will error out and explain why.
 
 # Run Kata Containers with Containerd
+
 Refer to the [How to use Kata Containers and Containerd](how-to/containerd-kata.md) how-to guide.
 
 # Run Kata Containers with Kubernetes
-Refer to the [Run Kata Containers with Kubernetes](how-to/run-kata-with-k8s.md) how-to guide.
+
+- Containerd
+
+Refer to the [How to use Kata Containers and Containerd with Kubernetes](how-to/how-to-use-k8s-with-containerd-and-kata.md) how-to guide.
+
+- CRI-O
+
+Refer to the [How to use Kata Containers and CRI-O with Kubernetes](how-to/how-to-use-k8s-with-crio-and-kata.md) how-to guide.
 
 # Troubleshoot Kata Containers
 
@@ -730,7 +738,7 @@ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_cons
 
 ##### Connecting to the debug console
 
-Next, connect to the debug console. The VSOCKS paths vary slightly between each
+Next, connect to the debug console. The VSOCK paths vary slightly between each
 VMM solution.
 
 In case of cloud-hypervisor, connect to the `vsock` as shown:

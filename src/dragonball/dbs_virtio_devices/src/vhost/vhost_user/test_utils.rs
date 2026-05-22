@@ -14,13 +14,14 @@ use vhost_rs::vhost_user::message::{
     VhostUserVringAddr, VhostUserVringState, MAX_MSG_SIZE,
 };
 use vhost_rs::vhost_user::Error;
+use vm_memory::ByteValued;
 use vmm_sys_util::sock_ctrl_msg::ScmSocket;
 use vmm_sys_util::tempfile::TempFile;
 
 pub const MAX_ATTACHED_FD_ENTRIES: usize = 32;
 
 pub(crate) trait Req:
-    Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Into<u32>
+    Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Into<u32> + Send + Sync
 {
     fn is_valid(&self) -> bool;
 }
@@ -214,6 +215,10 @@ impl<R: Req> Default for VhostUserMsgHeader<R> {
         }
     }
 }
+
+// SAFETY: VhostUserMsgHeader is a packed struct with only primitive (u32) fields and PhantomData.
+// All bit patterns are valid, and it has no padding bytes.
+unsafe impl<R: Req> ByteValued for VhostUserMsgHeader<R> {}
 
 /// Unix domain socket endpoint for vhost-user connection.
 pub(crate) struct Endpoint<R: Req> {

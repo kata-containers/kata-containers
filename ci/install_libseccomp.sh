@@ -9,6 +9,7 @@ set -o errexit
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../tests/common.bash"
 
 # Path to the ORAS cache helper for downloading tarballs (sourced when needed)
@@ -79,6 +80,7 @@ build_and_install_gperf() {
 	# Use ORAS cache if available and enabled
 	if [[ "${USE_ORAS_CACHE}" == "yes" ]] && [[ -f "${oras_cache_helper}" ]]; then
 		echo "Using ORAS cache for gperf download"
+		# shellcheck source=/dev/null
 		source "${oras_cache_helper}"
 		local cached_tarball
 		cached_tarball=$(download_component gperf "$(pwd)")

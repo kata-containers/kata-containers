@@ -8,7 +8,7 @@
 #
 set -e
 
-kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+kubernetes_dir="${kubernetes_dir:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
@@ -19,7 +19,6 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-ITA_KEY="${ITA_KEY:-}"
 HTTPS_PROXY="${HTTPS_PROXY:-}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
@@ -45,7 +44,7 @@ kbs_set_allow_all_resources() {
 
 kbs_set_default_policy() {
 	kbs_set_resources_policy \
-		"${COCO_KBS_DIR}/src/policy_engine/opa/default_policy.rego"
+		"${COCO_KBS_DIR}/sample_policies/default.rego"
 }
 
 # Set "deny all" policy to resources.
@@ -227,7 +226,7 @@ kbs_install_cli() {
 
 	source /etc/os-release || source /usr/lib/os-release
 	case "${ID}" in
-		ubuntu)
+		debian|ubuntu)
 			local pkgs="build-essential pkg-config libssl-dev"
 
 			sudo apt-get update -y
@@ -272,12 +271,29 @@ kbs_uninstall_cli() {
 	fi
 }
 
+# Ensure ~/.cicd/venv exists and activate it in the current shell.
+ensure_cicd_python_venv() {
+	local venv_path="${HOME}/.cicd/venv"
+	if [[ ! -f "${venv_path}/bin/activate" ]]; then
+		# NIM tests need Python 3.10 via pyenv; attestation uses system python3. Both are fine.
+		if command -v pyenv &>/dev/null; then
+			export PYENV_ROOT="${HOME}/.pyenv"
+			[[ -d "${PYENV_ROOT}/bin" ]] && export PATH="${PYENV_ROOT}/bin:${PATH}"
+			eval "$(pyenv init - bash)"
+		fi
+		mkdir -p "${HOME}/.cicd"
+		python3 -m venv "${venv_path}"
+	fi
+	# shellcheck disable=SC1091
+	source "${venv_path}/bin/activate"
+}
+
 # Ensure the sev-snp-measure utility is installed.
 #
 ensure_sev_snp_measure() {
 	command -v sev-snp-measure >/dev/null && return
 
-	source "${HOME}"/.cicd/venv/bin/activate
+	ensure_cicd_python_venv
 	pip install sev-snp-measure
 }
 
@@ -303,9 +319,7 @@ ensure_snphost() {
 #
 function kbs_k8s_delete() {
 	pushd "${COCO_KBS_DIR}"
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		kubectl delete -k config/kubernetes/ita
-	elif [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
+	if [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
 		kubectl delete -k config/kubernetes/overlays/ibm-se
 	else
 		kubectl delete -k config/kubernetes/overlays/
@@ -341,12 +355,6 @@ function kbs_k8s_deploy() {
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
 	image=$(get_from_kata_deps ".externals.coco-trustee.image")
 	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
-
-	# Image tag for TDX
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		image=$(get_from_kata_deps ".externals.coco-trustee.ita_image")
-		image_tag=$(get_from_kata_deps ".externals.coco-trustee.ita_image_tag")
-	fi
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -394,14 +402,6 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		echo "::group::Setting up ITA/ITTS for TDX"
-		pushd "${COCO_KBS_DIR}/config/kubernetes/ita/"
-			# Let's replace the "tBfd5kKX2x9ahbodKV1..." sample
-			# `api_key`property by a valid ITA/ITTS API key, in the
-			# ITA/ITTS specific configuration
-			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
-		popd
-
 		if [[ -n "${HTTPS_PROXY}" ]]; then
 			# Ideally this should be something kustomizable on trustee side.
 			#
@@ -414,8 +414,6 @@ function kbs_k8s_deploy() {
 				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"${HTTPS_PROXY}\"}]" -i deployment.yaml
 			popd
 		fi
-
-		export DEPLOYMENT_DIR=ita
 	fi
 
 	./deploy-kbs.sh

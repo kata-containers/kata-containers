@@ -165,6 +165,6 @@ pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
         VIRTIO_FS => Ok(Arc::new(
             ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
         )),
-        _ => Err(anyhow!("unsupported shred fs {:?}", &shared_fs)),
+        _ => Err(anyhow!("unsupported shared fs {:?}", &shared_fs)),
     }
 }

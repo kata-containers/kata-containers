@@ -920,9 +920,39 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		return err
 	}
 
-	return newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheNoflush).setBool(func(blockDeviceCacheNoflush bool) {
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheNoflush).setBool(func(blockDeviceCacheNoflush bool) {
 		sbConfig.HypervisorConfig.BlockDeviceCacheNoflush = blockDeviceCacheNoflush
-	})
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceLogicalSectorSize).setUintWithCheck(func(size uint64) error {
+		if size != 0 && (size < 512 || size > 65536 || (size&(size-1)) != 0) {
+			return fmt.Errorf("invalid %s %d: must be 0 or a power of 2 between 512 and 65536", vcAnnotations.BlockDeviceLogicalSectorSize, size)
+		}
+		sbConfig.HypervisorConfig.BlockDeviceLogicalSectorSize = uint32(size)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDevicePhysicalSectorSize).setUintWithCheck(func(size uint64) error {
+		if size != 0 && (size < 512 || size > 65536 || (size&(size-1)) != 0) {
+			return fmt.Errorf("invalid %s %d: must be 0 or a power of 2 between 512 and 65536", vcAnnotations.BlockDevicePhysicalSectorSize, size)
+		}
+		sbConfig.HypervisorConfig.BlockDevicePhysicalSectorSize = uint32(size)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	logical := sbConfig.HypervisorConfig.BlockDeviceLogicalSectorSize
+	physical := sbConfig.HypervisorConfig.BlockDevicePhysicalSectorSize
+	if logical != 0 && physical != 0 && logical > physical {
+		return fmt.Errorf("invalid sector sizes: logical (%d) must not be larger than physical (%d)", logical, physical)
+	}
+
+	return nil
 }
 
 func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {

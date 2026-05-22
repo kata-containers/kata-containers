@@ -128,4 +128,15 @@ impl yaml::K8sResource for ReplicaSet {
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         yaml::get_sysctls(&self.spec.template.spec.securityContext)
     }
+
+    fn get_pod_security_context(&self) -> Option<&pod::PodSecurityContext> {
+        self.spec.template.spec.securityContext.as_ref()
+    }
+
+    fn get_labels(&self) -> &Option<BTreeMap<String, String>> {
+        if let Some(metadata) = &self.spec.template.metadata {
+            return &metadata.labels;
+        }
+        &None
+    }
 }

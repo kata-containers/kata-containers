@@ -38,7 +38,7 @@ use tokio::sync::RwLock;
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 const CLH_CONFIG_PATH: &str =
-    "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-cloud-hypervisor.toml";
+    "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-clh-runtime-rs.toml";
 
 // qemu specific configuration path
 const QEMU_CONFIG_PATH: &str =

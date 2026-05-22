@@ -7,7 +7,7 @@ include ../../utils.mk
 PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
 
 ifeq ($(ARCH), $(filter $(ARCH), s390x powerpc64le))
-default build check test clippy vendor:
+default build check test clippy:
 	@echo "$(ARCH) is not support currently"
 	exit 0
 else
@@ -28,9 +28,6 @@ clippy:
 	cargo clippy --all-targets --all-features \
 		-- \
 		-D warnings
-
-vendor:
-	@echo "INFO: vendor do nothing.."
 
 format:
 	@echo "INFO: rust fmt..."

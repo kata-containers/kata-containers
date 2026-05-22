@@ -175,7 +175,7 @@ specific).
 
 ##### Dragonball networking
 
-For Dragonball, the `virtio-net` backend default is within Dragonbasll's VMM.
+For Dragonball, the `virtio-net` backend default is within Dragonball's VMM.
 
 
 #### virtio-vsock

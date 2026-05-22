@@ -61,6 +61,9 @@ spec:
       tolerations:
 {{- toYaml . | nindent 8 }}
 {{- end }}
+{{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
 {{- if index .Values "node-feature-discovery" "enabled" }}
       # When node-feature-discovery is managed by this chart (enabled: true), enforce virtualization requirements.
       # Kata Containers requires hardware virtualization support to function.
@@ -143,6 +146,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+{{- if .Values.env.multiInstallSuffix }}
+        - name: DAEMONSET_NAME
+          value: {{ printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix | quote }}
+{{- else }}
+        - name: DAEMONSET_NAME
+          value: {{ .Chart.Name | quote }}
+{{- end }}
         - name: DEBUG
           value: {{ include "kata-deploy.getDebug" . | quote }}
         {{- $shimsAmd64 := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "amd64") | trim -}}
@@ -284,6 +294,10 @@ spec:
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
           value: {{ $forceGuestPullPpc64le | quote }}
         {{- end }}
+{{- if .Values.containerd.configFileName | trim }}
+        - name: CONTAINERD_CONFIG_FILE_NAME
+          value: {{ .Values.containerd.configFileName | trim | quote }}
+{{- end }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
@@ -292,8 +306,49 @@ spec:
         - name: CUSTOM_RUNTIMES_ENABLED
           value: "true"
 {{- end }}
+{{- $healthDefaults := dict
+    "port" 8090
+    "startupProbe" (dict "enabled" true "initialDelaySeconds" 1 "periodSeconds" 10 "failureThreshold" 60 "timeoutSeconds" 3)
+    "livenessProbe" (dict "enabled" true "periodSeconds" 30 "failureThreshold" 3 "timeoutSeconds" 3)
+    "readinessProbe" (dict "enabled" true "periodSeconds" 10 "failureThreshold" 3 "timeoutSeconds" 3)
+}}
+{{- $health := merge (.Values.health | default dict) $healthDefaults }}
+        - name: HEALTH_PORT
+          value: {{ $health.port | quote }}
         securityContext:
           privileged: true
+{{- if $health.startupProbe.enabled }}
+        startupProbe:
+          httpGet:
+            path: /readyz
+            port: {{ $health.port }}
+          initialDelaySeconds: {{ $health.startupProbe.initialDelaySeconds }}
+          periodSeconds: {{ $health.startupProbe.periodSeconds }}
+          failureThreshold: {{ $health.startupProbe.failureThreshold }}
+          timeoutSeconds: {{ $health.startupProbe.timeoutSeconds }}
+{{- end }}
+{{- if $health.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ $health.port }}
+          periodSeconds: {{ $health.livenessProbe.periodSeconds }}
+          failureThreshold: {{ $health.livenessProbe.failureThreshold }}
+          timeoutSeconds: {{ $health.livenessProbe.timeoutSeconds }}
+{{- end }}
+{{- if $health.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: {{ $health.port }}
+          periodSeconds: {{ $health.readinessProbe.periodSeconds }}
+          failureThreshold: {{ $health.readinessProbe.failureThreshold }}
+          timeoutSeconds: {{ $health.readinessProbe.timeoutSeconds }}
+{{- end }}
+{{- with .Values.resources }}
+        resources:
+{{- toYaml . | nindent 10 }}
+{{- end }}
         volumeMounts:
         - name: crio-conf
           mountPath: /etc/crio/

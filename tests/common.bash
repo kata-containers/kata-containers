@@ -8,8 +8,10 @@
 # are being used by our metrics and integration tests
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
+repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
+export repo_root_dir
 
+# shellcheck source=/dev/null
 source "${this_script_dir}/error.sh"
 
 # Kata tests directory used for storing various test-related artifacts.
@@ -30,15 +32,18 @@ RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
 export branch="${target_branch:-"$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')"}"
 
+# Export target_branch to avoid hitting the remote repository again when this script gets loaded again.
+export target_branch="${branch}"
+
 function die() {
 	local msg="$*"
 
-	if [ -z "${KATA_TEST_VERBOSE:-}" ]; then
-		echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
+	if [[ -z "${KATA_TEST_VERBOSE:-}" ]]; then
+		echo -e "[$(basename "$0"):${BASH_LINENO[0]}] ERROR: ${msg}" >&2
 		exit 1
 	fi
 
-	echo >&2 "ERROR: $msg"
+	echo >&2 "ERROR: ${msg}"
 
 	# This function is called to indicate a fatal error occurred, so
 	# the caller of this function is the site of the detected error.
@@ -49,12 +54,12 @@ function die() {
 	local func
 	local file
 
-	line=$(echo "$error_location"|awk '{print $1}')
-	func=$(echo "$error_location"|awk '{print $2}')
-	file=$(echo "$error_location"|awk '{print $3}')
+	line=$(echo "${error_location}"|awk '{print $1}')
+	func=$(echo "${error_location}"|awk '{print $2}')
+	file=$(echo "${error_location}"|awk '{print $3}')
 
 	local path
-	path=$(resolve_path "$file")
+	path=$(resolve_path "${file}")
 
 	dump_details \
 		"${line}" \
@@ -66,24 +71,61 @@ function die() {
 
 function warn() {
 	local msg="$*"
-	echo -e "[$(basename $0):${BASH_LINENO[0]}] WARNING: $msg"
+	echo -e "[$(basename "$0"):${BASH_LINENO[0]}] WARNING: ${msg}"
 }
 
 function info() {
 	local msg="$*"
-	echo -e "[$(basename $0):${BASH_LINENO[0]}] INFO: $msg"
+	echo -e "[$(basename "$0"):${BASH_LINENO[0]}] INFO: ${msg}"
 }
 
 function bats_unbuffered_info() {
 	local msg="$*"
 	# Ask bats to print this text immediately rather than buffering until the end of a test case.
-	echo -e "[$(basename $0):${BASH_LINENO[0]}] UNBUFFERED: INFO: $msg" >&3
+	echo -e "[$(basename "$0"):${BASH_LINENO[0]}] UNBUFFERED: INFO: ${msg}" >&3
+}
+
+# Create Docker config for genpolicy so it can authenticate when pulling image
+# manifests. Genpolicy uses docker_credential::get_credential(), which reads
+# DOCKER_CONFIG/config.json.
+#
+# Parameters:
+#	$1	- explicit registry host such as nvcr.io, or an image reference
+#		  with an explicit registry host such as nvcr.io/nim/meta/llama:latest
+#	$2	- registry username
+#	$3	- registry password (empty password leaves auth unchanged)
+#	$4	- Docker config directory (default: ${kubernetes_dir}/.docker-genpolicy)
+function setup_genpolicy_registry_auth() {
+	local registry_or_image="${1:-}"
+	local username="${2:-}"
+	local password="${3:-}"
+	local auth_dir="${4:-${kubernetes_dir:-${PWD}}/.docker-genpolicy}"
+
+	[[ -n "${password}" ]] || return 0
+	[[ -n "${registry_or_image}" ]] || die "Registry host or image reference not provided"
+	[[ -n "${username}" ]] || die "Registry username not provided"
+
+	local registry="${registry_or_image#http://}"
+	registry="${registry#https://}"
+	registry="${registry%%/*}"
+	[[ -n "${registry}" ]] || die "Could not determine registry from ${registry_or_image}"
+
+	mkdir -p "${auth_dir}"
+
+	local auth
+	auth=$(printf "%s" "${username}:${password}" | base64 -w0)
+
+	printf '{"auths":{"%s":{"auth":"%s"}}}\n' "${registry}" "${auth}" > "${auth_dir}/config.json"
+	chmod 600 "${auth_dir}/config.json"
+
+	export DOCKER_CONFIG="${auth_dir}"
+	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
 }
 
 function handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
-	echo -e "[$(basename $0):$line_number] ERROR: $(eval echo "$BASH_COMMAND")"
+	echo -e "[$(basename "$0"):${line_number}] ERROR: $(eval echo "${BASH_COMMAND}")"
 	exit "${exit_code}"
 }
 trap 'handle_error $LINENO' ERR
@@ -108,23 +150,29 @@ function kubectl_retry() {
 
 	local i=0
 	while true; do
-		kubectl "$@" && return 0 || true
+		if kubectl "$@"; then
+			return 0
+		fi
 		i=$((i + 1))
-		[ $i -lt $max_tries ] && echo "'kubectl $*' failed, retrying in $interval seconds" 1>&2 || break
-		sleep $interval
+		if [[ "${i}" -lt "${max_tries}" ]]; then
+			echo "'kubectl $*' failed, retrying in ${interval} seconds" 1>&2
+		else
+			break
+		fi
+		sleep "${interval}"
 	done
-	echo "'kubectl $*' failed after $max_tries tries" 1>&2 && return 1
+	echo "'kubectl $*' failed after ${max_tries} tries" 1>&2 && return 1
 }
 
 function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
 	cmd="$3"
-	while [ "$wait_time" -gt 0 ]; do
-		if eval "$cmd"; then
+	while [[ "${wait_time}" -gt 0 ]]; do
+		if eval "${cmd}"; then
 			return 0
 		else
-			sleep "$sleep_time"
+			sleep "${sleep_time}"
 			wait_time=$((wait_time-sleep_time))
 		fi
 	done
@@ -136,13 +184,13 @@ function waitForCmdWithAbortCmd() {
 	sleep_time="$2"
 	cmd="$3"
 	abort_cmd="$4"
-	while [ "$wait_time" -gt 0 ]; do
-		if eval "$cmd"; then
+	while [[ "${wait_time}" -gt 0 ]]; do
+		if eval "${cmd}"; then
 			return 0
-		elif eval "$abort_cmd"; then
+		elif eval "${abort_cmd}"; then
 			return 1
 		else
-			sleep "$sleep_time"
+			sleep "${sleep_time}"
 			wait_time=$((wait_time-sleep_time))
 		fi
 	done
@@ -154,7 +202,7 @@ function waitForCmdWithAbortCmd() {
 # want in reality, but this function knows the names of the default
 # and recommended Kata docker runtime install names.
 function is_a_kata_runtime() {
-	if [ "$1" = "containerd-shim-kata-v2" ] || [ "$1" = "io.containerd.kata.v2" ]; then
+	if [[ "$1" = "containerd-shim-kata-v2" ]] || [[ "$1" = "io.containerd.kata.v2" ]]; then
 		echo "1"
 	else
 		echo "0"
@@ -171,10 +219,13 @@ function extract_kata_env() {
 	local runtime_version_commit
 	local runtime_path
 	local hypervisor_path
+	# shellcheck disable=SC2034
 	local virtiofsd_path
 	local initrd_path
 	local kata_env
+	# shellcheck disable=SC2034
 	local req_memory_amount
+	# shellcheck disable=SC2034
 	local req_num_vcpus
 
 	case "${KATA_HYPERVISOR}" in
@@ -201,39 +252,49 @@ function extract_kata_env() {
 			virtio_fs_daemon_path=".Hypervisor.VirtioFSDaemon"
 			initrd_path=".Initrd.Path"
 			shared_fs=".Hypervisor.SharedFS"
+			# shellcheck disable=SC2034
 			req_memory_amount=".Host.Memory.Total"
+			# shellcheck disable=SC2034
 			req_num_vcpus=""
 			;;
 	esac
-	kata_env="$(sudo ${cmd} env --json)"
+	kata_env="$(sudo "${cmd}" env --json)"
 
-	RUNTIME_CONFIG_PATH="$(echo "${kata_env}" | jq -r ${config_path})"
-	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r ${runtime_version} | grep ${runtime_version_semver} | cut -d'"' -f4)"
-	RUNTIME_COMMIT="$(echo "${kata_env}" | jq -r ${runtime_version} | grep ${runtime_version_commit} | cut -d'"' -f4)"
-	RUNTIME_PATH="$(echo "${kata_env}" | jq -r ${runtime_path})"
-	SHARED_FS="$(echo "${kata_env}" | jq -r ${shared_fs})"
+	RUNTIME_CONFIG_PATH="$(echo "${kata_env}" | jq -r "${config_path}")"
+	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_semver}" | cut -d'"' -f4)"
+	# shellcheck disable=SC2034
+	RUNTIME_COMMIT="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_commit}" | cut -d'"' -f4)"
+	RUNTIME_PATH="$(echo "${kata_env}" | jq -r "${runtime_path}")"
+	# shellcheck disable=SC2034
+	SHARED_FS="$(echo "${kata_env}" | jq -r "${shared_fs}")"
 
 	# get the requested memory and num of vcpus from the kata config file.
-	config_content="$(cat ${RUNTIME_CONFIG_PATH} | grep -vE "^#")"
+	config_content="$(grep -vE "^#" "${RUNTIME_CONFIG_PATH}")"
+	# shellcheck disable=SC2034
 	REQ_MEMORY="$(echo "${config_content}" | grep -i 'default_memory =' | cut -d  "=" -f2 | awk '{print $1}')"
+	# shellcheck disable=SC2034
 	REQ_NUM_VCPUS="$(echo "${config_content}" | grep -i 'default_vcpus =' | cut -d  "=" -f2 | awk '{print $1}')"
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
 	SHIM_PATH=$(command -v containerd-shim-kata-v2)
-	[ -L ${SHIM_PATH} ] && SHIM_PATH=$(readlink ${SHIM_PATH})
+	[[ -L "${SHIM_PATH}" ]] && SHIM_PATH=$(readlink "${SHIM_PATH}")
 
+	# shellcheck disable=SC2034
 	SHIM_VERSION=${RUNTIME_VERSION}
 
-	HYPERVISOR_PATH=$(echo "${kata_env}" | jq -r ${hypervisor_path})
-	VIRTIOFSD_PATH=$(echo "${kata_env}" | jq -r ${virtio_fs_daemon_path})
-	INITRD_PATH=$(echo "${kata_env}" | jq -r ${initrd_path})
+	HYPERVISOR_PATH=$(echo "${kata_env}" | jq -r "${hypervisor_path}")
+	# shellcheck disable=SC2034
+	VIRTIOFSD_PATH=$(echo "${kata_env}" | jq -r "${virtio_fs_daemon_path}")
+	# shellcheck disable=SC2034
+	INITRD_PATH=$(echo "${kata_env}" | jq -r "${initrd_path}")
 
 	# TODO: there is no ${cmd} of rust version currently
-	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
-		if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
-			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} -version | head -n1)
+	if [[ "${KATA_HYPERVISOR}" != "dragonball" ]]; then
+		if [[ "${KATA_HYPERVISOR}" = "stratovirt" ]]; then
+			HYPERVISOR_VERSION=$(sudo -E "${HYPERVISOR_PATH}" -version | head -n1)
 		else
-			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
+			# shellcheck disable=SC2034
+			HYPERVISOR_VERSION=$(sudo -E "${HYPERVISOR_PATH}" --version | head -n1)
 		fi
 	fi
 }
@@ -243,18 +304,25 @@ function check_processes() {
 	extract_kata_env
 
 	# Only check the kata-env if we have managed to find the kata executable...
-	if [ -x "$RUNTIME_PATH" ]; then
-		local vsock_configured=$($RUNTIME_PATH env | awk '/UseVSock/ {print $3}')
-		local vsock_supported=$($RUNTIME_PATH env | awk '/SupportVSock/ {print $3}')
+	if [[ -x "${RUNTIME_PATH}" ]]; then
+		local vsock_configured
+		# shellcheck disable=SC2034
+		vsock_configured=$(${RUNTIME_PATH} env | awk '/UseVSock/ {print $3}')
+		local vsock_supported
+		# shellcheck disable=SC2034
+		vsock_supported=$(${RUNTIME_PATH} env | awk '/SupportVSock/ {print $3}')
 	else
+		# shellcheck disable=SC2034
 		local vsock_configured="false"
+		# shellcheck disable=SC2034
 		local vsock_supported="false"
 	fi
 
-	general_processes=( ${HYPERVISOR_PATH} ${SHIM_PATH} )
+	general_processes=( "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 
 	for i in "${general_processes[@]}"; do
-		if pgrep -f "$i"; then
+		[[ -z "${i}" ]] && continue
+		if pgrep -f "${i}"; then
 			die "Found unexpected ${i} present"
 		fi
 	done
@@ -268,54 +336,60 @@ function clean_env()
 	# Docker has a built in 10s default timeout, so make ours
 	# longer than that.
 	KATA_DOCKER_TIMEOUT=${KATA_DOCKER_TIMEOUT:-30}
-	containers_running=$(sudo timeout ${KATA_DOCKER_TIMEOUT} docker ps -q)
+	containers_running=$(sudo timeout "${KATA_DOCKER_TIMEOUT}" docker ps -q)
 
-	if [ ! -z "$containers_running" ]; then
+	if [[ -n "${containers_running}" ]]; then
 		# First stop all containers that are running
 		# Use kill, as the containers are generally benign, and most
 		# of the time our 'stop' request ends up doing a `kill` anyway
-		sudo timeout ${KATA_DOCKER_TIMEOUT} docker kill $containers_running
+		# shellcheck disable=SC2086
+		sudo timeout "${KATA_DOCKER_TIMEOUT}" docker kill ${containers_running}
 
 		# Remove all containers
-		sudo timeout ${KATA_DOCKER_TIMEOUT} docker rm -f $(docker ps -qa)
+		# shellcheck disable=SC2046
+		sudo timeout "${KATA_DOCKER_TIMEOUT}" docker rm -f $(docker ps -qa)
 	fi
 }
 
 function clean_env_ctr()
 {
-	local count_running="$(sudo ctr c list -q | wc -l)"
+	local count_running
+	count_running="$(sudo ctr c list -q | wc -l)"
 	local remaining_attempts=10
 	declare -a running_tasks=()
 	local count_tasks=0
 	local sleep_time=1
 	local time_out=10
 
-	[ "$count_running" -eq "0" ] && return 0
+	[[ "${count_running}" -eq "0" ]] && return 0
 
 	readarray -t running_tasks < <(sudo ctr t list -q)
 
 	info "Wait until the containers gets removed"
 
 	for task_id in "${running_tasks[@]}"; do
-		sudo timeout -s SIGKILL 30s ctr t kill -a -s SIGKILL ${task_id} >/dev/null 2>&1 || true
+		sudo timeout -s SIGKILL 30s ctr t kill -a -s SIGKILL "${task_id}" >/dev/null 2>&1 || true
 		sleep 0.5
 	done
 
 	# do not stop if the command fails, it will be evaluated by waitForProcess
-	local cmd="[[ $(sudo ctr tasks list | grep -c "STOPPED") == "$count_running" ]]" || true
+	local cmd
+	cmd="[[ \$(sudo ctr tasks list | grep -c \"STOPPED\" || true) == \"${count_running}\" ]]" || true
 
 	local res="ok"
-	waitForProcess "${time_out}" "${sleep_time}" "$cmd" || res="fail"
+	waitForProcess "${time_out}" "${sleep_time}" "${cmd}" || res="fail"
 
-	[ "$res" == "ok" ] || sudo systemctl restart containerd
+	[[ "${res}" == "ok" ]] || sudo systemctl restart containerd
 
 	while (( remaining_attempts > 0 )); do
-		[ "${RUNTIME}" == "runc" ] && sudo ctr tasks rm -f $(sudo ctr task list -q)
+		# shellcheck disable=SC2046
+		[[ "${RUNTIME}" == "runc" ]] && sudo ctr tasks rm -f $(sudo ctr task list -q)
+		# shellcheck disable=SC2046
 		sudo ctr c rm $(sudo ctr c list -q) >/dev/null 2>&1
 
 		count_running="$(sudo ctr c list -q | wc -l)"
 
-		[ "$count_running" -eq 0 ] && break
+		[[ "${count_running}" -eq 0 ]] && break
 
 		remaining_attempts=$((remaining_attempts-1))
 		sleep 0.5
@@ -334,42 +408,47 @@ function clean_env_ctr()
 # Returns 0 on success, 1 otherwise
 function restart_systemd_service_with_no_burst_limit() {
 	local service=$1
-	info "restart $service service"
+	info "restart ${service} service"
 
-	local active=$(systemctl show "$service.service" -p ActiveState | cut -d'=' -f2)
-	[ "$active" == "active" ] || warn "Service $service is not active"
+	local active
+	active=$(systemctl show "${service}.service" -p ActiveState | cut -d'=' -f2) || true
+	[[ "${active}" == "active" ]] || warn "Service ${service} is not active"
 
-	local start_burst=$(systemctl show "$service".service -p StartLimitBurst | cut -d'=' -f2)
-	if [ "$start_burst" -ne 0 ]
+	local start_burst
+	start_burst=$(systemctl show "${service}".service -p StartLimitBurst | cut -d'=' -f2) || true
+	if [[ "${start_burst}" -ne 0 ]]
 	then
-		local unit_file=$(systemctl show "$service.service" -p FragmentPath | cut -d'=' -f2)
-		[ -f "$unit_file" ] || { warn "Can't find $service's unit file: $unit_file"; return 1; }
+		local unit_file
+		unit_file=$(systemctl show "${service}.service" -p FragmentPath | cut -d'=' -f2) || true
+		[[ -f "${unit_file}" ]] || { warn "Can't find ${service}'s unit file: ${unit_file}"; return 1; }
 
 		# If the unit file is in /lib or /usr/lib, copy it to /etc
-		if [[ $unit_file =~ ^/(usr/)?lib/ ]]; then
+		if [[ ${unit_file} =~ ^/(usr/)?lib/ ]]; then
 			tmp_unit_file="/etc/${unit_file#*lib/}"
-			sudo cp "$unit_file" "$tmp_unit_file"
-			unit_file="$tmp_unit_file"
+			sudo cp "${unit_file}" "${tmp_unit_file}"
+			unit_file="${tmp_unit_file}"
 		fi
 
-		local start_burst_set=$(sudo grep StartLimitBurst $unit_file | wc -l)
-		if [ "$start_burst_set" -eq 0 ]
+		local start_burst_set
+		start_burst_set=$(sudo grep StartLimitBurst "${unit_file}" | wc -l) || true
+		if [[ "${start_burst_set}" -eq 0 ]]
 		then
-			sudo sed -i '/\[Service\]/a StartLimitBurst=0' "$unit_file"
+			sudo sed -i '/\[Service\]/a StartLimitBurst=0' "${unit_file}"
 		else
-			sudo sed -i 's/StartLimitBurst.*$/StartLimitBurst=0/g' "$unit_file"
+			sudo sed -i 's/StartLimitBurst.*$/StartLimitBurst=0/g' "${unit_file}"
 		fi
 
 		sudo systemctl daemon-reload
 	fi
 
-	sudo systemctl restart "$service"
+	sudo systemctl restart "${service}"
 
-	local state=$(systemctl show "$service.service" -p SubState | cut -d'=' -f2)
-	[ "$state" == "running" ] || { warn "Can't restart the $service service"; return 1; }
+	local state
+	state=$(systemctl show "${service}.service" -p SubState | cut -d'=' -f2) || true
+	[[ "${state}" == "running" ]] || { warn "Can't restart the ${service} service"; return 1; }
 
-	start_burst=$(systemctl show "$service.service" -p StartLimitBurst | cut -d'=' -f2)
-	[ "$start_burst" -eq 0 ] || { warn "Can't set start burst limit for $service service"; return 1; }
+	start_burst=$(systemctl show "${service}.service" -p StartLimitBurst | cut -d'=' -f2) || true
+	[[ "${start_burst}" -eq 0 ]] || { warn "Can't set start burst limit for ${service} service"; return 1; }
 
 	return 0
 }
@@ -379,13 +458,13 @@ function restart_containerd_service() {
 
 	local retries=5
 	local counter=0
-	until [ "$counter" -ge "$retries" ] || sudo ctr --connect-timeout 1s version > /dev/null 2>&1
+	until [[ "${counter}" -ge "${retries}" ]] || sudo ctr --connect-timeout 1s version > /dev/null 2>&1
 	do
 		info "Waiting for containerd socket..."
 		((counter++))
 	done
 
-	[ "$counter" -ge "$retries" ] && { warn "Can't connect to containerd socket"; return 1; }
+	[[ "${counter}" -ge "${retries}" ]] && { warn "Can't connect to containerd socket"; return 1; }
 
 	clean_env_ctr
 	return 0
@@ -438,7 +517,7 @@ EOF
 # Configures CRI-O
 function overwrite_crio_config() {
 	crio_conf_d="/etc/crio/crio.conf.d"
-	sudo mkdir -p ${crio_conf_d}
+	sudo mkdir -p "${crio_conf_d}"
 
 	kata_config="${crio_conf_d}/99-kata-containers"
 	sudo tee "${kata_config}" << EOF
@@ -469,9 +548,9 @@ function install_tarball() {
 		sudo rm -rf "${installed_dir}"
 	fi
 
-	pushd "${tarball_dir}"
+	pushd "${tarball_dir}" || return
 	sudo tar --zstd -xvf "${tarball}" -C "${destdir}"
-	popd
+	popd || return
 }
 
 function install_kata_tools() {
@@ -483,7 +562,7 @@ function install_kata_tools() {
 
 	# create symbolic links to kata-tools components
 	for b in "${katadir}"/bin/* ; do
-		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename "${b}")"
 	done
 }
 
@@ -496,10 +575,10 @@ function install_kata() {
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do
-		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename "${b}")"
 	done
 
-	if [ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]; then
+	if [[ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]]; then
 		check_containerd_config_for_kata
 		restart_containerd_service
 	else
@@ -517,7 +596,7 @@ function enabling_hypervisor() {
 	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
 
 	case "${KATA_HYPERVISOR}" in
-		dragonball|cloud-hypervisor|qemu-runtime-rs|qemu-se-runtime-rs)
+		dragonball|clh-runtime-rs|qemu-runtime-rs|qemu-se-runtime-rs)
 			sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
 			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers/runtime-rs"
 			;;
@@ -542,9 +621,10 @@ function check_containerd_config_for_kata() {
 	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
 	declare -r num_lines_containerd=2
 	declare -r containerd_path="/etc/containerd/config.toml"
-	local count_matches=$(grep -ic  "$line1\|$line2" "${containerd_path}")
+	local count_matches
+	count_matches=$(grep -ic  "${line1}\|${line2}" "${containerd_path}" || true)
 
-	if [ "${count_matches}" = "${num_lines_containerd}" ]; then
+	if [[ "${count_matches}" = "${num_lines_containerd}" ]]; then
 		info "containerd ok"
 	else
 		info "overwriting containerd configuration w/ a valid one"
@@ -553,11 +633,72 @@ function check_containerd_config_for_kata() {
 }
 
 function ensure_yq() {
-	: "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
+	: "${GOPATH:=${GITHUB_WORKSPACE:-${HOME}/go}}"
 	export GOPATH
 	export PATH="${GOPATH}/bin:${PATH}"
 	INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
 	hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
+}
+
+function ensure_pip() {
+	command -v python3 &> /dev/null || die "python3 is required"
+	python3 -m pip --version &> /dev/null && return
+
+	python3 -m ensurepip --user 2>/dev/null || \
+		(sudo apt-get update && \
+			sudo apt-get install -y python3-pip 2>/dev/null) || \
+		die "failed to bootstrap pip"
+
+	python3 -m pip --version &> /dev/null || die "pip is unavailable after bootstrap"
+}
+
+function install_tomlq() {
+	command -v jq &> /dev/null || die "jq is required by tomlq but was not found"
+	command -v tomlq &> /dev/null && echo "tomlq is already installed." && return
+	ensure_pip
+
+	echo "tomlq is not installed. Installing..."
+	python3 -m pip install --user --upgrade yq tomlkit 2>/dev/null || \
+		python3 -m pip install --user --upgrade --break-system-packages yq tomlkit || \
+		die "failed to install tomlq"
+
+	# Save the original PATH before modifying it
+	export _TOMLQ_ORIGINAL_PATH="${PATH}"
+	export PATH="${HOME}/.local/bin:${PATH}"
+	hash -r
+
+	if command -v tomlq &> /dev/null; then
+		export _TOMLQ_INSTALLED=true
+	else
+		die "tomlq installation failed"
+	fi
+}
+
+function uninstall_tomlq() {
+	if [[ -z "${_TOMLQ_INSTALLED:-}" ]]; then
+		echo "tomlq was not installed by install_tomlq(); skipping uninstall."
+		return
+	fi
+
+	if command -v tomlq &> /dev/null; then
+		echo "Uninstalling tomlq..."
+
+		# Only attempt uninstall if python3 and pip are available
+		if command -v python3 &> /dev/null && python3 -m pip --version &> /dev/null; then
+			python3 -m pip uninstall -y yq tomlkit 2>/dev/null || \
+				python3 -m pip uninstall -y --break-system-packages yq tomlkit || \
+				die "failed to uninstall tomlq"
+		else
+			warn "tomlq found in PATH but python3 or pip unavailable; skipping uninstall (likely preinstalled)"
+		fi
+	fi
+
+	# Restore the original PATH if it was saved by install_tomlq
+	if [[ -n "${_TOMLQ_ORIGINAL_PATH}" ]]; then
+		export PATH="${_TOMLQ_ORIGINAL_PATH}"
+		unset _TOMLQ_ORIGINAL_PATH
+		hash -r
+	fi
 }
 
 function ensure_helm() {
@@ -587,19 +728,20 @@ function ensure_helm() {
 function get_from_kata_deps() {
         versions_file="${repo_root_dir}/versions.yaml"
 
+        # shellcheck disable=SC2016
         command -v yq &>/dev/null || die 'yq command is not in your $PATH'
 
         yq_version=$(yq --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | cut -d. -f1)
-        if [ "$yq_version" -eq 3 ]; then
-          dependency=$(echo "$1" | sed "s/^\.//g")
-          result=$("yq" read "$versions_file" "$dependency")
+        if [[ "${yq_version}" -eq 3 ]]; then
+          dependency="${1#.}"
+          result=$("yq" read "${versions_file}" "${dependency}")
         else
           dependency=$1
-          result=$("yq" "$dependency | explode (.)" "$versions_file")
+          result=$("yq" "${dependency} | explode (.)" "${versions_file}")
         fi
 
-        [ "$result" = "null" ] && result=""
-        echo "$result"
+        [[ "${result}" = "null" ]] && result=""
+        echo "${result}"
 }
 
 # project: org/repo format
@@ -633,7 +775,7 @@ function clone_cri_containerd() {
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
 	rm -rf containerd
-	git clone -b ${version} https://github.com/${project}
+	git clone -b "${version}" "https://github.com/${project}"
 }
 
 # project: org/repo format
@@ -653,7 +795,7 @@ function install_cni_plugins() {
 	version="${1}"
 
 	project="containernetworking/plugins"
-	tarball_name="cni-plugins-linux-$(${repo_root_dir}/tests/kata-arch.sh -g)-${version}.tgz"
+	tarball_name="cni-plugins-linux-$("${repo_root_dir}"/tests/kata-arch.sh -g)-${version}.tgz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo mkdir -p /opt/cni/bin
@@ -661,7 +803,7 @@ function install_cni_plugins() {
 	rm -f "${tarball_name}"
 
 	cni_config="/etc/cni/net.d/10-containerd-net.conflist"
-	if [ ! -f ${cni_config} ];then
+	if [[ ! -f "${cni_config}" ]];then
 		sudo mkdir -p /etc/cni/net.d
 		sudo tee "${cni_config}" << EOF
 {
@@ -706,15 +848,15 @@ function install_runc() {
 	project="opencontainers/runc"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
-	if [ -f /usr/local/sbin/runc ]; then
+	if [[ -f /usr/local/sbin/runc ]]; then
 		return
 	fi
 
-	binary_name="runc.$(${repo_root_dir}/tests/kata-arch.sh -g)"
+	binary_name="runc.$("${repo_root_dir}"/tests/kata-arch.sh -g)"
 	download_github_project_tarball "${project}" "${version}" "${binary_name}"
 
 	sudo mkdir -p /usr/local/sbin
-	sudo mv $binary_name /usr/local/sbin/runc
+	sudo mv "${binary_name}" /usr/local/sbin/runc
 	sudo chmod +x /usr/local/sbin/runc
 }
 
@@ -725,12 +867,12 @@ function install_cri_containerd() {
 	project="containerd/containerd"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}" "true")
 
-	tarball_name="containerd-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+	tarball_name="containerd-${version//v}-linux-$("${repo_root_dir}"/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	#add the "--keep-directory-symlink" option to make sure the untar wouldn't override the
 	#system rootfs's bin/sbin directory which would be a symbol link to /usr/bin or /usr/sbin.
-	if [ ! -f /usr/local ]; then
+	if [[ ! -f /usr/local ]]; then
 		sudo mkdir -p /usr/local
 	fi
 	sudo tar --keep-directory-symlink -xvf "${tarball_name}" -C /usr/local/
@@ -741,9 +883,9 @@ function install_cri_containerd() {
 
 	containerd_service="/etc/systemd/system/containerd.service"
 
-	if [ ! -f ${containerd_service} ]; then
+	if [[ ! -f "${containerd_service}" ]]; then
 		sudo mkdir -p /etc/systemd/system
-		sudo tee ${containerd_service}  <<EOF
+		sudo tee "${containerd_service}"  <<EOF
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -781,7 +923,7 @@ function install_cri_tools() {
 	project="kubernetes-sigs/cri-tools"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
-	tarball_name="crictl-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+	tarball_name="crictl-${version}-linux-$("${repo_root_dir}"/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
@@ -792,7 +934,7 @@ function install_nydus() {
 	version="${1}"
 
 	project="dragonflyoss/image-service"
-	tarball_name="nydus-static-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tgz"
+	tarball_name="nydus-static-${version}-linux-$("${repo_root_dir}"/tests/kata-arch.sh -g).tgz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
@@ -803,7 +945,7 @@ function install_nydus_snapshotter() {
 	version="${1}"
 
 	project="containerd/nydus-snapshotter"
-	tarball_name="nydus-snapshotter-${version}-$(uname -s| tr A-Z a-z)-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+	tarball_name="nydus-snapshotter-${version}-$(uname -s| tr '[:upper:]' '[:lower:]')-$("${repo_root_dir}"/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
@@ -817,7 +959,7 @@ function install_crio() {
 	sudo mkdir -p /etc/apt/keyrings
 	sudo mkdir -p /etc/apt/sources.list.d
 
-	curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/Release.key | \
+	curl -fsSL "https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/Release.key" | \
 		sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
 	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/ /" | \
 		sudo tee /etc/apt/sources.list.d/cri-o.list
@@ -861,8 +1003,8 @@ function install_docker() {
 
 	# Add the repository to Apt sources:
 	echo \
-		"deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-		"$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+		"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+		$(. /etc/os-release && echo "${VERSION_CODENAME}") stable" | \
 		sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 	sudo apt-get update
 
@@ -948,23 +1090,23 @@ function get_dep_from_yaml_db(){
         local versions_file="$1"
         local dependency="$2"
 
-        [ ! -f "$versions_file" ] && die "cannot find $versions_file"
+        [[ ! -f "${versions_file}" ]] && die "cannot find ${versions_file}"
 
         "${repo_root_dir}/ci/install_yq.sh" >&2
 
-        result=$("${GOPATH}/bin/yq" "$dependency" "$versions_file")
-        [ "$result" = "null" ] && result=""
-        echo "$result"
+        result=$("${GOPATH}/bin/yq" "${dependency}" "${versions_file}")
+        [[ "${result}" = "null" ]] && result=""
+        echo "${result}"
 }
 
 function get_test_version(){
         local dependency="$1"
 
         local db
-        local cidir
 
         # directory of this script, not the caller
-        local cidir=$(dirname "${BASH_SOURCE[0]}")
+        local cidir
+        cidir=$(dirname "${BASH_SOURCE[0]}")
 
         db="${cidir}/../versions.yaml"
 
@@ -983,15 +1125,7 @@ function run_static_checks()
 	# Make sure we have the targeting branch
 	git remote set-branches --add origin "${branch}"
 	git fetch -a
-	bash "$this_script_dir/static-checks.sh" "$@"
-}
-
-function run_docs_url_alive_check()
-{
-	# Make sure we have the targeting branch
-	git remote set-branches --add origin "${branch}"
-	git fetch -a
-	bash "$this_script_dir/static-checks.sh" --docs --all "github.com/kata-containers/kata-containers"
+	bash "${this_script_dir}/static-checks.sh" "$@"
 }
 
 function run_get_pr_changed_file_details()
@@ -1015,8 +1149,8 @@ function run_get_pr_changed_file_details()
 function version_greater_than_equal() {
 	local current_version=$1
 	local target_version=$2
-	smaller_version=$(echo -e "$current_version\n$target_version" | sort -V | head -1)
-	if [ "${smaller_version}" = "${target_version}" ]; then
+	smaller_version=$(echo -e "${current_version}\n${target_version}" | sort -V | head -1)
+	if [[ "${smaller_version}" = "${target_version}" ]]; then
 		return 0
 	else
 		return 1
@@ -1044,7 +1178,8 @@ function run_bats_tests() {
 	local -n test_array=$2
 	local fail_fast="${BATS_TEST_FAIL_FAST:-no}"
 
-	local report_dir="${test_dir}/reports/$(date +'%F-%T')"
+	local report_dir
+	report_dir="${test_dir}/reports/$(date +'%F-%T')"
 	mkdir -p "${report_dir}"
 
 	info "Running tests with bats version: $(bats --version). Save outputs to ${report_dir}"
@@ -1052,14 +1187,14 @@ function run_bats_tests() {
 	local tests_fail=()
 	for test_entry in "${test_array[@]}"; do
 		test_entry=$(echo "${test_entry}" | tr -d '[:space:][:cntrl:]')
-		[ -z "${test_entry}" ] && continue
+		[[ -z "${test_entry}" ]] && continue
 
 		info "Executing ${test_entry}"
 
 		# Output file will be prefixed with "ok" or "not_ok" based on the result
 		local out_file="${report_dir}/${test_entry}.out"
 
-		pushd "${test_dir}" > /dev/null
+		pushd "${test_dir}" > /dev/null || return
 		if ! bats --timing --show-output-of-passing-tests "${test_entry}" | tee "${out_file}"; then
 			tests_fail+=("${test_entry}")
 			mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
@@ -1067,7 +1202,7 @@ function run_bats_tests() {
 		else
 			mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
 		fi
-		popd > /dev/null
+		popd > /dev/null || return
 	done
 
 	if [[ ${#tests_fail[@]} -ne 0 ]]; then

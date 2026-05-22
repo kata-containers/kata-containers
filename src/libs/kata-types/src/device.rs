@@ -27,8 +27,6 @@ pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
 /// DRIVER_VFIO_AP_COLD_TYPE is the device driver for vfio-ap coldplug.
 pub const DRIVER_VFIO_AP_COLD_TYPE: &str = "vfio-ap-cold";
 
-/// DRIVER_9P_TYPE is the driver for 9pfs volume.
-pub const DRIVER_9P_TYPE: &str = "9p";
 /// DRIVER_EPHEMERAL_TYPE is the driver for ephemeral volume.
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
 /// DRIVER_LOCAL_TYPE is the driver for local volume.

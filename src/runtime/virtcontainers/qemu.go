@@ -841,7 +841,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		// /dev/vfio/devices/vfio0
 		// (1) Check if we have the new IOMMUFD or old container based VFIO
 		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
-			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
 			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
 			if err != nil {
 				return fmt.Errorf("Cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
@@ -1687,7 +1686,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			iothreadID = fmt.Sprintf("%s_%d", indepIOThreadsPrefix, 0)
 		}
 
-		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, iothreadID); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, iothreadID, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
@@ -1706,7 +1705,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 		if err != nil {
 			return err
 		}
-		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioSCSI:

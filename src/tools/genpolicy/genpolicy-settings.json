@@ -173,7 +173,7 @@
                 "encryption_key=ephemeral"
             ],
             "source": "",
-            "mount_point": "^$(spath)/$(b64_device_id)$",
+            "mount_point": "$(spath)/$(b64_device_id)",
             "fstype": "ext4",
             "options": [],
             "shared": true
@@ -335,7 +335,11 @@
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
         "guest_pull": true,
         "pause_container_id_policy": "v1",
-        "encrypted_emptydir": true
+        "encrypted_emptydir": true,
+        "cgroup_mount_extras_allowed": [
+            "nsdelegate",
+            "memory_recursiveprot"
+        ]
     },
     "request_defaults": {
         "CreateContainerRequest": {
@@ -388,9 +392,14 @@
             ],
             "forbidden_cidrs_regex": [
                 "^127\\.(?:[0-9]{1,3}\\.){2}[0-9]{1,3}$"
+            ],
+            "allowed_states": [
+                2,
+                128
             ]
         },
         "CloseStdinRequest": false,
+        "GetDiagnosticDataRequest": false,
         "ReadStreamRequest": false,
         "UpdateEphemeralMountsRequest": false,
         "WriteStreamRequest": false

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-[ -n "${DEBUG:-}" ] && set -x
+[[ -n "${DEBUG:-}" ]] && set -x
 
 set -o errexit
 set -o nounset
@@ -12,14 +12,17 @@ set -o pipefail
 script_name="$(basename "${BASH_SOURCE[0]}")"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
+# shellcheck disable=SC2034
 kata_root_dir="$(cd "${packaging_root_dir}/../../" && pwd)"
 
+# shellcheck source=/dev/null
 source "${packaging_root_dir}/scripts/lib.sh"
+# shellcheck source=/dev/null
 source "${script_dir}/lib_se.sh"
 
 ARCH=${ARCH:-$(uname -m)}
-if [ $(uname -m) == "${ARCH}" ]; then
-	[ "${ARCH}" == "s390x" ] || die "Building a Secure Execution image is currently only supported on s390x."
+if [[ "$(uname -m)" == "${ARCH}" ]]; then
+	[[ "${ARCH}" == "s390x" ]] || die "Building a Secure Execution image is currently only supported on s390x."
 fi
 usage() {
 	cat >&2 << EOF
@@ -48,7 +51,7 @@ build_image() {
 	mkdir -p "${image_source_dir}"
 	pushd "${tarball_dir}"
 	for tarball_id in kernel rootfs-initrd-confidential; do
-		tar --zstd -xvf kata-static-${tarball_id}.tar.zst -C "${image_source_dir}"
+		tar --zstd -xvf "kata-static-${tarball_id}.tar.zst" -C "${image_source_dir}"
 	done
 	popd
 
@@ -64,7 +67,7 @@ main() {
 	builddir="${PWD}"
 	tarball_dir="${builddir}/../.."
 	while getopts "h-:" opt; do
-		case "$opt" in
+		case "${opt}" in
 		-)
 			case "${OPTARG}" in
 			builddir=*)
@@ -74,14 +77,14 @@ main() {
 				destdir=${OPTARG#*=}
 				;;
 			*)
-				echo >&2 "ERROR: Invalid option -$opt${OPTARG}"
+				echo >&2 "ERROR: Invalid option -${opt}${OPTARG}"
 				usage 1
 				;;
 			esac
 			;;
 		h) usage 0 ;;
 		*)
-			echo "Invalid option $opt" >&2
+			echo "Invalid option ${opt}" >&2
 			usage 1
 			;;
 		esac
@@ -99,4 +102,4 @@ main() {
 	build_image
 }
 
-main $*
+main "$@"

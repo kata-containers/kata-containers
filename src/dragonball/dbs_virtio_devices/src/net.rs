@@ -22,6 +22,7 @@ use dbs_utils::net::{net_gen, MacAddr, Tap};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter, TokenType};
 use libc;
 use log::{debug, error, info, trace, warn};
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_bindings::bindings::virtio_net::*;
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{Bytes, GuestAddress, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};

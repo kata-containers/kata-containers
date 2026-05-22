@@ -8,10 +8,11 @@
 #
 set -e
 
-script_dir="$(realpath $(dirname $0))"
+# shellcheck disable=SC2034
+script_dir="$(realpath "$(dirname "$0")")"
 patches_dir="$1"
 
-if [ -z "$patches_dir" ]; then
+if [[ -z "${patches_dir}" ]]; then
 	cat <<-EOF
 	Apply patches to the sources at the current directory.
 
@@ -34,13 +35,13 @@ if [ -z "$patches_dir" ]; then
 	exit 1
 fi
 
-echo "INFO: Apply patches from $patches_dir"
-if [ -d "$patches_dir" ]; then
-	patches=($(find "$patches_dir" -maxdepth 1 -name '*.patch'|sort -t- -k1,1n))
+echo "INFO: Apply patches from ${patches_dir}"
+if [[ -d "${patches_dir}" ]]; then
+	mapfile -t patches < <(find "${patches_dir}" -maxdepth 1 -name '*.patch'|sort -t- -k1,1n)
 	echo "INFO: Found ${#patches[@]} patches"
 	for patch in "${patches[@]}"; do
-		echo "INFO: Apply $patch"
-		patch -p1 < "$patch" || \
+		echo "INFO: Apply ${patch}"
+		patch -p1 < "${patch}" || \
 			{ echo >&2 "ERROR: Not applied. Exiting..."; exit 1; }
 	done
 else

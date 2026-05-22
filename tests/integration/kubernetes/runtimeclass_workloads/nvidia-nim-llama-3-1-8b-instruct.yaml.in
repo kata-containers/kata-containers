@@ -14,10 +14,6 @@ spec:
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
-  securityContext:
-    runAsUser: 0
-    runAsGroup: 0
-    fsGroup: 0
   containers:
   - name: ${POD_NAME_INSTRUCT}
     image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1

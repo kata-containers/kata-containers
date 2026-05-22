@@ -51,19 +51,11 @@ endif
 
 include ../../utils.mk
 
-##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature
-STANDARD_OCI_RUNTIME := no
-
-# Enable standard oci runtime feature of rust build
-ifeq ($(STANDARD_OCI_RUNTIME),yes)
-    override EXTRA_RUSTFEATURES += standard-oci-runtime
-endif
-
 ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
 
-TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
+TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?=
@@ -147,13 +139,9 @@ clean:
 	@rm -f $(GENERATED_FILES)
 	@rm -f tarpaulin-report.html
 
-vendor:
-	@cargo vendor
-
-
 #TARGET test: run cargo tests
 test: $(GENERATED_FILES)
-	@RUST_LIB_BACKTRACE=0 RUST_BACKTRACE=1 cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@RUST_LIB_BACKTRACE=0 RUST_BACKTRACE=1 cargo test -p kata-agent --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
@@ -220,8 +208,7 @@ codecov-html: check_tarpaulin
 	help \
 	optimize \
 	show-header \
-	show-summary \
-	vendor
+	show-summary
 
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:

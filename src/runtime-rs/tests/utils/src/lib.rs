@@ -10,10 +10,7 @@ use anyhow::{anyhow, Result};
 use kata_types::config::{QemuConfig, TomlConfig};
 use std::{fs, path::PathBuf};
 
-use rand::{
-    distributions::Alphanumeric,
-    {thread_rng, Rng},
-};
+use rand::{distr::Alphanumeric, rng, RngExt};
 
 fn get_kata_config_file(hypervisor_name: String) -> PathBuf {
     let target = format!(
@@ -30,7 +27,7 @@ pub fn get_image_bundle_path() -> PathBuf {
 }
 
 pub fn gen_id(len: usize) -> String {
-    thread_rng()
+    rng()
         .sample_iter(&Alphanumeric)
         .take(len)
         .map(char::from)

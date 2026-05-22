@@ -25,6 +25,7 @@ default: build
 
 build: $(GENERATED_FILES)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p genpolicy --no-run --all-targets --all-features --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 static-checks-build:
 	@echo "INFO: static-checks-build do nothing.."
@@ -33,11 +34,8 @@ clean:
 	cargo clean
 	rm -f $(GENERATED_FILES)
 
-vendor:
-	cargo vendor
-
 test: $(GENERATED_FILES)
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p genpolicy --all-targets --all-features --target $(TRIPLE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p genpolicy --all-targets --all-features --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 install: $(GENERATED_FILES)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
@@ -49,5 +47,4 @@ check:  $(GENERATED_CODE) standard_rust_check
 	check \
 	clean \
 	install \
-	test \
-	vendor
+	test

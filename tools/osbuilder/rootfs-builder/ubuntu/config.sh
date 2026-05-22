@@ -4,32 +4,38 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# Variables are used externally by the rootfs build system
+# shellcheck disable=SC2034
+
 OS_NAME=ubuntu
 # This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
 OS_VERSION=${OS_VERSION:-""}
-[ -z "$OS_VERSION" ] && echo "OS_VERSION is required, but was not set" && exit 1
+[[ -z "${OS_VERSION}" ]] && echo "OS_VERSION is required, but was not set" && exit 1
 PACKAGES="chrony iptables dbus"
-[ "$AGENT_INIT" = no ] && PACKAGES+=" init"
+# shellcheck disable=SC2154
+[[ "${AGENT_INIT}" = no ]] && PACKAGES+=" init"
 # CDH secure storage feature requires these tools in the guest
 [[ "${CONFIDENTIAL_GUEST:-no}" = "yes" ]] && PACKAGES+=" cryptsetup-bin e2fsprogs"
-[ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
-[ "$(uname -m)" = "s390x" ] && PACKAGES+=" libcurl4 libnghttp2-14"
+# shellcheck disable=SC2154
+[[ "${SECCOMP}" = yes ]] && PACKAGES+=" libseccomp2"
+[[ "$(uname -m)" = "s390x" ]] && PACKAGES+=" libcurl4 libnghttp2-14"
 REPO_COMPONENTS=${REPO_COMPONENTS:-main}
 
-case "$ARCH" in
+# shellcheck disable=SC2154
+case "${ARCH}" in
 	aarch64) DEB_ARCH=arm64;;
 	ppc64le) DEB_ARCH=ppc64el;;
-	s390x) DEB_ARCH="$ARCH";;
+	s390x) DEB_ARCH="${ARCH}";;
 	x86_64) DEB_ARCH=amd64; REPO_URL=${REPO_URL_X86_64:-${REPO_URL:-http://archive.ubuntu.com/ubuntu}};;
-	*) die "$ARCH not supported"
+	*) die "${ARCH} not supported"
 esac
 REPO_URL=${REPO_URL:-http://ports.ubuntu.com}
 
-if [ "$(uname -m)" != "$ARCH" ]; then
-	case "$ARCH" in
+if [[ "$(uname -m)" != "${ARCH}" ]]; then
+	case "${ARCH}" in
 		ppc64le) cc_arch=powerpc64le;;
 		x86_64) cc_arch=x86-64;;
-		*) cc_arch="$ARCH"
+		*) cc_arch="${ARCH}"
 	esac
-	export CC="$cc_arch-linux-gnu-gcc"
+	export CC="${cc_arch}-linux-gnu-gcc"
 fi

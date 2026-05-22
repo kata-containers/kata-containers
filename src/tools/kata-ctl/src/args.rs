@@ -78,10 +78,9 @@ pub enum Commands {
 }
 
 #[derive(Debug, Args, Error)]
-#[error("Argument is not valid")]
+#[error("Argument is not valid: {command:?}")]
 pub struct CheckArgument {
     #[clap(subcommand)]
-    #[allow(unused_assignments)]
     pub command: CheckSubCommand,
 }
 

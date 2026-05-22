@@ -28,13 +28,21 @@ use nix::{
     sys::stat,
     unistd::{chown, setgroups, Gid, Uid},
 };
-use rand::{thread_rng, Rng};
+use rand::{rng, RngExt};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::device::Tap;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
+
+pub fn remove_dir_all_if_exists(path: &str) -> Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
 
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
@@ -253,7 +261,7 @@ pub fn create_vmm_user() -> Result<String> {
 
     let max_attempt = 5;
     for _ in 0..max_attempt {
-        let user_name = format!("kata-{}", thread_rng().gen_range(0..10000));
+        let user_name = format!("kata-{}", rng().random_range(0..10000));
         let status = Command::new(&useradd_path)
             .arg("-M")
             .arg("-s")
@@ -283,7 +291,7 @@ pub fn remove_vmm_user(user: &str) -> Result<()> {
 }
 
 pub fn vm_cleanup(config: &Hypervisor, vm_path: &str) -> Result<()> {
-    std::fs::remove_dir_all(vm_path)?;
+    remove_dir_all_if_exists(vm_path)?;
     if kata_types::rootless::is_rootless() {
         let user = &config
             .security_info

@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-termination-log-success
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+    - name: termination-log-test
+      image: quay.io/prometheus/busybox:latest
+      command: ["/bin/sh"]
+      args: ["-c", "echo 'successful exit message' > /dev/termination-log; exit 0"]

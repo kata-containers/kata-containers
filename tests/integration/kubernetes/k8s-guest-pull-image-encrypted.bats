@@ -24,6 +24,7 @@ setup() {
     ENCRYPTED_IMAGE="${ENCRYPTED_IMAGE:-ghcr.io/confidential-containers/test-container:multi-arch-encrypted}"
     DECRYPTION_KEY="${DECRYPTION_KEY:-HUlOu8NWz8si11OZUzUJMnjiq/iZyHBJZMSD3BaqgMc=}"
     DECRYPTION_KEY_ID="${DECRYPTION_KEY_ID:-ssh-demo}"
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 }
 
 function setup_kbs_decryption_key() {
@@ -47,6 +48,7 @@ function setup_kbs_decryption_key() {
     # subsequent tests to fail
 
     create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -61,6 +63,7 @@ function setup_kbs_decryption_key() {
     setup_kbs_decryption_key "${DECRYPTION_KEY}" "${DECRYPTION_KEY_ID}"
 
     create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -74,6 +77,7 @@ function setup_kbs_decryption_key() {
     setup_kbs_decryption_key "anVua19rZXk=" "${DECRYPTION_KEY_ID}"
 
     create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
+    auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
@@ -93,5 +97,6 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir:-}"
     confidential_teardown_common "${node}" "${node_start_time:-}"
 }

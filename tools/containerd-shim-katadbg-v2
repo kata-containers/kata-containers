@@ -25,7 +25,7 @@ SHIM_BINARY=/go/src/github.com/kata-containers/kata-containers/src/runtime/__deb
 DLV_PORT=12345
 
 # Edit the following to make sure dlv is in the PATH
-export PATH=/usr/local/go/bin/:$PATH
+export PATH=/usr/local/go/bin/:${PATH}
 
 # The shim can be called multiple times for the same container.
 # If it is already running, subsequent calls just return the socket address that
@@ -36,7 +36,7 @@ export PATH=/usr/local/go/bin/:$PATH
 # debugging the actual server process.
 # To avoid running additional debuggers and blocking on them, we use a lock file.
 LOCK_FILE=/tmp/shim_debug.lock
-if [ -e $LOCK_FILE ]; then
+if [[ -e "${LOCK_FILE}" ]]; then
     NO_DEBUG=1
 fi
 
@@ -50,8 +50,8 @@ case "$1" in
 esac
 
 
-if [ "$NO_DEBUG" == "1" ]; then
-    $SHIM_BINARY "$@"
+if [[ "${NO_DEBUG}" == "1" ]]; then
+    ${SHIM_BINARY} "$@"
     exit $?
 fi
 
@@ -74,12 +74,12 @@ fi
 
 SHIMOUTPUT=$(mktemp /tmp/shim_output_XXXXXX)
 
-cat > $LOCK_FILE << EOF
+cat > "${LOCK_FILE}" << EOF
 #!/bin/bash
-dlv exec ${SHIM_BINARY} --headless --listen=:$DLV_PORT --accept-multiclient -r stdout:$SHIMOUTPUT -r stderr:$SHIMOUTPUT -- "\$@"
-rm $LOCK_FILE
+dlv exec ${SHIM_BINARY} --headless --listen=:${DLV_PORT} --accept-multiclient -r stdout:${SHIMOUTPUT} -r stderr:${SHIMOUTPUT} -- "\$@"
+rm ${LOCK_FILE}
 EOF
-chmod +x $LOCK_FILE
+chmod +x "${LOCK_FILE}"
 
 # We're starting dlv as a background task, so that it continues to run while
 # this script returns, letting the caller resume its execution.
@@ -92,10 +92,10 @@ ${LOCK_FILE} "$@" > /tmp/dlv_output 2>&1 &
 
 
 # wait for the output file of the shim process to be filled with the address.
-while [ ! -s $SHIMOUTPUT ]; do
+while [[ ! -s "${SHIMOUTPUT}" ]]; do
     sleep 1
 done
 
 # write the adress to stdout
-cat $SHIMOUTPUT
+cat "${SHIMOUTPUT}"
 exit 0

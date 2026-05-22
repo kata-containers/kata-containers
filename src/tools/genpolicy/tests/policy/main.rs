@@ -12,12 +12,12 @@ mod tests {
     use std::str;
 
     use protocols::agent::{
-        AddARPNeighborsRequest, CopyFileRequest, CreateContainerRequest, CreateSandboxRequest,
-        ExecProcessRequest, RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        AddARPNeighborsRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
+        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
-    use kata_agent_policy::policy::AgentPolicy;
+    use kata_agent_policy::policy::{AgentPolicy, PolicyCopyFileRequest};
 
     // Translate each test case in testcases.json
     // to one request type.
@@ -25,7 +25,7 @@ mod tests {
     #[serde(tag = "kind", content = "request")]
     #[allow(clippy::enum_variant_names)] // The tags need to match the entrypoint logged by the agent.
     enum TestRequest {
-        CopyFileRequest(CopyFileRequest),
+        CopyFileRequest(PolicyCopyFileRequest),
         CreateContainerRequest(CreateContainerRequest),
         CreateSandboxRequest(CreateSandboxRequest),
         ExecProcessRequest(ExecProcessRequest),
@@ -291,6 +291,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_cgroup_mount_extras() {
+        runtests("createcontainer/cgroup_mount_extras").await;
+    }
+
+    #[tokio::test]
     async fn test_state_create_container() {
         runtests("state/createcontainer").await;
     }
@@ -338,5 +343,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_gpu_vfio_cdi() {
         runtests("createcontainer/gpu_vfio_cdi").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_ignored_fields() {
+        runtests("createcontainer/ignored_fields").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_env_vars() {
+        runtests("createcontainer/env_vars").await;
     }
 }

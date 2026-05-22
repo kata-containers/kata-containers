@@ -68,7 +68,6 @@ mod firecracker;
 pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 
 const NO_VIRTIO_FS: &str = "none";
-const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
@@ -272,6 +271,18 @@ pub struct BlockDeviceInfo {
     #[serde(default)]
     pub block_device_cache_noflush: bool,
 
+    /// Specifies the logical sector size, in bytes, reported by block devices to the guest.
+    /// Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+    /// Must be 0 or a power of 2 between 512 and 65536.
+    #[serde(default)]
+    pub block_device_logical_sector_size: u32,
+
+    /// Specifies the physical sector size, in bytes, reported by block devices to the guest.
+    /// Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+    /// Must be 0 or a power of 2 between 512 and 65536.
+    #[serde(default)]
+    pub block_device_physical_sector_size: u32,
+
     /// If false and nvdimm is supported, use nvdimm device to plug guest image.
     #[serde(default)]
     pub disable_image_nvdimm: bool,
@@ -401,6 +412,16 @@ impl BlockDeviceInfo {
             "Invalid vhost-user-store-path {}: {}"
         )?;
 
+        validate_block_device_sector_size(self.block_device_logical_sector_size)?;
+        validate_block_device_sector_size(self.block_device_physical_sector_size)?;
+        let logical = self.block_device_logical_sector_size;
+        let physical = self.block_device_physical_sector_size;
+        if logical != 0 && physical != 0 && logical > physical {
+            return Err(std::io::Error::other(format!(
+                "invalid sector sizes: logical ({logical}) must not be larger than physical ({physical})"
+            )));
+        }
+
         Ok(())
     }
 
@@ -408,6 +429,19 @@ impl BlockDeviceInfo {
     pub fn validate_vhost_user_store_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_vhost_user_store_paths, path)
     }
+}
+
+/// Validate that a block device sector size is 0 or a power of 2 in [512, 65536].
+pub fn validate_block_device_sector_size(size: u32) -> Result<()> {
+    if size == 0 {
+        return Ok(());
+    }
+    if !(512..=65536).contains(&size) || (size & (size - 1)) != 0 {
+        return Err(std::io::Error::other(format!(
+            "invalid sector size {size}: must be 0 or a power of 2 between 512 and 65536"
+        )));
+    }
+    Ok(())
 }
 
 /// Guest kernel boot information.
@@ -708,10 +742,10 @@ pub struct DebugInfo {
     ///
     /// Example usage in configuration:
     /// ```toml
-    /// dbg_monitor_socket = "hmp"
+    /// extra_monitor_socket = "hmp"
     /// ```
-    #[serde(default)]
-    pub dbg_monitor_socket: String,
+    #[serde(default, alias = "dbg_monitor_socket")]
+    pub extra_monitor_socket: String,
 }
 
 impl DebugInfo {
@@ -752,6 +786,14 @@ pub struct DeviceInfo {
     /// Enable hotplugging on root bus for devices with large PCI bars.
     #[serde(default)]
     pub hotplug_vfio_on_root_bus: bool,
+
+    /// Cold-plug VFIO devices to a PCIe port type.
+    ///
+    /// Accepted values: `"no-port"` (default, disabled), `"root-port"`.
+    /// In confidential compute environments hot-plugging can compromise
+    /// security, so devices are cold-plugged instead.
+    #[serde(default)]
+    pub cold_plug_vfio: String,
 
     /// Number of PCIe root ports to create during VM creation.
     ///
@@ -1077,6 +1119,81 @@ impl MemoryInfo {
         if self.default_maxmemory == 0 || u64::from(self.default_maxmemory) > host_memory {
             self.default_maxmemory = host_memory as u32;
         }
+
+        // Apply PowerPC64 memory alignment
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        self.adjust_ppc64_memory_alignment()?;
+
+        Ok(())
+    }
+
+    /// Adjusts memory values for PowerPC64 little-endian systems to meet
+    /// QEMU's 256MB block size alignment requirement.
+    ///
+    /// Ensures default_memory is at least 1024MB and both default_memory
+    /// and default_maxmemory are aligned to 256MB boundaries.
+    /// Returns an error if aligned values would be equal.
+    #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+    fn adjust_ppc64_memory_alignment(&mut self) -> Result<()> {
+        const PPC64_MEM_BLOCK_SIZE: u64 = 256;
+        const MIN_MEMORY_MB: u64 = 1024;
+
+        fn align_memory(value: u64) -> u64 {
+            (value / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE
+        }
+
+        let mut mem_size = u64::from(self.default_memory);
+        let max_mem_size = u64::from(self.default_maxmemory);
+
+        // Ensure minimum memory size
+        if mem_size < MIN_MEMORY_MB {
+            info!(
+                sl!(),
+                "PowerPC: Increasing default_memory from {}MB to minimum {}MB",
+                mem_size,
+                MIN_MEMORY_MB
+            );
+            mem_size = MIN_MEMORY_MB;
+        }
+
+        // Align both values to 256MB boundaries
+        let aligned_mem = align_memory(mem_size);
+        let aligned_max_mem = align_memory(max_mem_size);
+
+        if aligned_mem != mem_size {
+            info!(
+                sl!(),
+                "PowerPC: Aligned default_memory from {}MB to {}MB", mem_size, aligned_mem
+            );
+        }
+
+        if aligned_max_mem != max_mem_size {
+            info!(
+                sl!(),
+                "PowerPC: Aligned default_maxmemory from {}MB to {}MB",
+                max_mem_size,
+                aligned_max_mem
+            );
+        }
+
+        // Check if aligned values are equal
+        if aligned_max_mem != 0 && aligned_max_mem <= aligned_mem {
+            return Err(std::io::Error::other(format!(
+                "PowerPC: default_maxmemory ({}MB) <= default_memory ({}MB) after alignment. \
+                Requires maxmemory > memory. Please increase default_maxmemory.",
+                aligned_max_mem, aligned_mem
+            )));
+        }
+        info!(
+            sl!(),
+            "PowerPC: Memory alignment applied - memory: {}MB, max_memory: {}MB",
+            aligned_mem,
+            aligned_max_mem
+        );
+
+        self.default_memory = aligned_mem as u32;
+        self.default_maxmemory = aligned_max_mem as u32;
+
         Ok(())
     }
 
@@ -1163,6 +1280,7 @@ impl NetworkInfo {
 
 /// Configuration information for rootless user.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RootlessUser {
     /// The UID of the rootless user.
     #[serde(default)]
@@ -1343,12 +1461,13 @@ impl SecurityInfo {
     }
 }
 
-/// Configuration information for shared filesystems, such as virtio-9p and virtio-fs.
+/// Configuration information for shared filesystems, such as virtio-fs-nydus and virtio-fs.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SharedFsInfo {
     /// Type of shared file system to use:
     /// - `virtio-fs` (default)
-    /// - `virtio-9p`
+    /// - `inline-virtio-fs`
+    /// - `virtio-fs-nydus`
     /// - `none` (disables shared filesystem)
     pub shared_fs: Option<String>,
 
@@ -1390,18 +1509,13 @@ pub struct SharedFsInfo {
     /// Enables `virtio-fs` DAX (Direct Access) window if `true`.
     #[serde(default)]
     pub virtio_fs_is_dax: bool,
-
-    /// This is the `msize` used for 9p shares. It represents the number of bytes
-    /// used for the 9p packet payload.
-    #[serde(default)]
-    pub msize_9p: u32,
 }
 
 impl SharedFsInfo {
     /// Adjusts the shared filesystem configuration after loading from a configuration file.
     ///
     /// Handles default values for `shared_fs` type, `virtio-fs` specific settings
-    /// (daemon path, cache mode, DAX), and `virtio-9p` msize.
+    /// (daemon path, cache mode, DAX) or `inline-virtio-fs` settings.
     pub fn adjust_config(&mut self) -> Result<()> {
         if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
             self.shared_fs = None;
@@ -1414,11 +1528,6 @@ impl SharedFsInfo {
         match self.shared_fs.as_deref() {
             Some(VIRTIO_FS) => self.adjust_virtio_fs(false)?,
             Some(VIRTIO_FS_INLINE) => self.adjust_virtio_fs(true)?,
-            Some(VIRTIO_9P) => {
-                if self.msize_9p == 0 {
-                    self.msize_9p = default::DEFAULT_SHARED_9PFS_SIZE_MB;
-                }
-            }
             _ => {}
         }
 
@@ -1428,23 +1537,12 @@ impl SharedFsInfo {
     /// Validates the shared filesystem configuration.
     ///
     /// Checks the validity of the selected `shared_fs` type and
-    /// performs specific validations for `virtio-fs` and `virtio-9p` settings.
+    /// performs specific validations for `virtio-fs` and `inline-virtio-fs` settings.
     pub fn validate(&self) -> Result<()> {
         match self.shared_fs.as_deref() {
             None => Ok(()),
             Some(VIRTIO_FS) => self.validate_virtio_fs(false),
             Some(VIRTIO_FS_INLINE) => self.validate_virtio_fs(true),
-            Some(VIRTIO_9P) => {
-                if self.msize_9p < default::MIN_SHARED_9PFS_SIZE_MB
-                    || self.msize_9p > default::MAX_SHARED_9PFS_SIZE_MB
-                {
-                    return Err(std::io::Error::other(format!(
-                        "Invalid 9p configuration msize 0x{:x}, min value is 0x{:x}, max value is 0x{:x}",
-                        self.msize_9p,default::MIN_SHARED_9PFS_SIZE_MB, default::MAX_SHARED_9PFS_SIZE_MB
-                    )));
-                }
-                Ok(())
-            }
             Some(v) => Err(std::io::Error::other(format!("Invalid shared_fs type {v}"))),
         }
     }
@@ -1568,6 +1666,7 @@ impl VmTemplateInfo {
 
 /// Configuration information for VM factory (templating, caches, etc.).
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Factory {
     /// Enable VM templating support.
     /// When enabled, new VMs may be created from a template to speed up creation.
@@ -1947,5 +2046,152 @@ mod tests {
                 tc.desc
             );
         }
+    }
+
+    #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::memory_below_minimum(512, 2048, 1024, 2048)]
+    #[case::already_aligned(1024, 2048, 1024, 2048)]
+    #[case::unaligned_rounds_down(1100, 2100, 1024, 2048)]
+    #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+    fn test_adjust_ppc64_memory_alignment_success(
+        #[case] input_memory: u32,
+        #[case] input_maxmemory: u32,
+        #[case] expected_memory: u32,
+        #[case] expected_maxmemory: u32,
+    ) {
+        let mut mem = MemoryInfo {
+            default_memory: input_memory,
+            default_maxmemory: input_maxmemory,
+            ..Default::default()
+        };
+
+        let result = mem.adjust_ppc64_memory_alignment();
+        assert!(
+            result.is_ok(),
+            "Expected success but got error: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            mem.default_memory, expected_memory,
+            "Memory not aligned correctly"
+        );
+        assert_eq!(
+            mem.default_maxmemory, expected_maxmemory,
+            "Max memory not aligned correctly"
+        );
+    }
+
+    #[rstest]
+    #[case::equal_after_alignment(1024, 1100, "Requires maxmemory > memory")]
+    #[case::maxmemory_less_than_memory(2048, 1500, "Requires maxmemory > memory")]
+    #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+    fn test_adjust_ppc64_memory_alignment_errors(
+        #[case] input_memory: u32,
+        #[case] input_maxmemory: u32,
+        #[case] expected_error_msg: &str,
+    ) {
+        let mut mem = MemoryInfo {
+            default_memory: input_memory,
+            default_maxmemory: input_maxmemory,
+            ..Default::default()
+        };
+
+        let result = mem.adjust_ppc64_memory_alignment();
+        assert!(
+            result.is_err(),
+            "Expected error but got success for memory={}, maxmemory={}",
+            input_memory,
+            input_maxmemory
+        );
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains(expected_error_msg),
+            "Error message '{}' does not contain expected text '{}'",
+            error_msg,
+            expected_error_msg
+        );
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_valid() {
+        for size in [0, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536] {
+            assert!(
+                validate_block_device_sector_size(size).is_ok(),
+                "expected size {} to be accepted",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_not_power_of_two() {
+        for size in [3, 100, 1000, 3000, 5000] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected non-power-of-2 size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_below_minimum() {
+        for size in [1, 256] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected below-minimum size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_size_above_maximum() {
+        for size in [131072, 1048576] {
+            assert!(
+                validate_block_device_sector_size(size).is_err(),
+                "expected above-maximum size {} to be rejected",
+                size
+            );
+        }
+    }
+
+    fn blockdev_info_with_sectors(logical: u32, physical: u32) -> BlockDeviceInfo {
+        BlockDeviceInfo {
+            block_device_driver: VIRTIO_BLK_PCI.to_string(),
+            block_device_logical_sector_size: logical,
+            block_device_physical_sector_size: physical,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_sizes_valid() {
+        assert!(blockdev_info_with_sectors(0, 0).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 0).validate().is_ok());
+        assert!(blockdev_info_with_sectors(0, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(4096, 4096).validate().is_ok());
+        assert!(blockdev_info_with_sectors(512, 512).validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_block_device_sector_sizes_logical_exceeds_physical() {
+        assert!(
+            blockdev_info_with_sectors(4096, 512).validate().is_err(),
+            "logical > physical should be rejected"
+        );
+        assert!(
+            blockdev_info_with_sectors(4096, 1024).validate().is_err(),
+            "logical > physical should be rejected"
+        );
+        assert!(
+            blockdev_info_with_sectors(65536, 512).validate().is_err(),
+            "logical > physical should be rejected"
+        );
     }
 }

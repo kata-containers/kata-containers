@@ -859,8 +859,10 @@ func (q *QMP) ExecuteBlockdevAddWithDriverCache(ctx context.Context, driver stri
 // shared denotes if the drive can be shared allowing it to be passed more than once.
 // disableModern indicates if virtio version 1.0 should be replaced by the
 // former version 0.9, as there is a KVM bug that occurs when using virtio
-// 1.0 in nested environments.
-func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern bool) error {
+// 1.0 in nested environments. logicalBlockSize and physicalBlockSize specify
+// the logical and physical block sizes for the device; if either is 0, the
+// hypervisor default is used for that size.
+func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern bool, logicalBlockSize, physicalBlockSize uint32) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -884,6 +886,14 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 		if disableModern {
 			args["disable-modern"] = disableModern
 		}
+	}
+
+	if logicalBlockSize > 0 {
+		args["logical_block_size"] = logicalBlockSize
+	}
+
+	if physicalBlockSize > 0 {
+		args["physical_block_size"] = physicalBlockSize
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1108,8 +1118,9 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 // a block device. shared denotes if the drive can be shared allowing it to be passed more than once.
 // disableModern indicates if virtio version 1.0 should be replaced by the
 // former version 0.9, as there is a KVM bug that occurs when using virtio
-// 1.0 in nested environments.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool, iothreadID string) error {
+// 1.0 in nested environments. logicalBlockSize and physicalBlockSize specify the logical and
+// physical sector sizes reported to the guest; set to 0 to use the hypervisor default.
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool, iothreadID string, logicalBlockSize, physicalBlockSize uint32) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -1138,6 +1149,14 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 
 	if iothreadID != "" {
 		args["iothread"] = iothreadID
+	}
+
+	if logicalBlockSize > 0 {
+		args["logical_block_size"] = logicalBlockSize
+	}
+
+	if physicalBlockSize > 0 {
+		args["physical_block_size"] = physicalBlockSize
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)

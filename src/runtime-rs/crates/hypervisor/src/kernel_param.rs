@@ -131,6 +131,7 @@ impl KernelParams {
             Param::new("panic", "1"),
             Param::new("systemd.unit", "kata-containers.target"),
             Param::new("systemd.mask", "systemd-networkd.service"),
+            Param::new("systemd.mask", "systemd-networkd.socket"),
         ];
 
         if debug {
@@ -495,13 +496,13 @@ mod tests {
                 t.use_dax,
             );
             let msg = format!("{msg}, result: {result:?}");
-            if t.result.is_ok() {
-                assert!(result.is_ok(), "{}", msg);
-                assert_eq!(t.expect_params, result.unwrap());
-            } else {
-                let expected_error = format!("{}", t.result.as_ref().unwrap_err());
+            if let Err(expected_err) = &t.result {
+                let expected_error = format!("{expected_err}");
                 let actual_error = format!("{}", result.unwrap_err());
                 assert!(actual_error == expected_error, "{}", msg);
+            } else {
+                assert!(result.is_ok(), "{}", msg);
+                assert_eq!(t.expect_params, result.unwrap());
             }
         }
     }
@@ -525,8 +526,7 @@ mod tests {
             VM_ROOTFS_FILESYSTEM_EXT4,
             false,
         )
-        .err()
-        .expect("expected missing salt error");
+        .expect_err("expected missing salt error");
         assert!(format!("{err}").contains("Missing kernel_verity_params salt"));
 
         let err = KernelParams::new_rootfs_kernel_params(
@@ -535,8 +535,7 @@ mod tests {
             VM_ROOTFS_FILESYSTEM_EXT4,
             false,
         )
-        .err()
-        .expect("expected missing data_blocks error");
+        .expect_err("expected missing data_blocks error");
         assert!(format!("{err}").contains("Missing kernel_verity_params data_blocks"));
 
         let err = KernelParams::new_rootfs_kernel_params(
@@ -545,8 +544,7 @@ mod tests {
             VM_ROOTFS_FILESYSTEM_EXT4,
             false,
         )
-        .err()
-        .expect("expected invalid data_blocks error");
+        .expect_err("expected invalid data_blocks error");
         assert!(format!("{err}").contains("Invalid kernel_verity_params data_blocks"));
 
         let err = KernelParams::new_rootfs_kernel_params(
@@ -555,8 +553,7 @@ mod tests {
             VM_ROOTFS_FILESYSTEM_EXT4,
             false,
         )
-        .err()
-        .expect("expected invalid entry error");
+        .expect_err("expected invalid entry error");
         assert!(format!("{err}").contains("Invalid kernel_verity_params entry"));
 
         Ok(())

@@ -8,6 +8,7 @@
 # which will contain the Kata Containers installation into a given destination
 # directory.
 #
+
 # This contains variables and functions common to all e2e tests.
 
 # Variables used by the kubernetes tests
@@ -34,6 +35,9 @@ export dragonball_limitations="https://github.com/kata-containers/kata-container
 export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
+
+# shellcheck source=/dev/null
+source "${K8S_TEST_DIR}/../../gha-run-k8s-common.sh"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
@@ -81,13 +85,7 @@ auto_generate_policy_enabled() {
 }
 
 is_coco_platform() {
-	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-nvidia-gpu-tdx"|"qemu-nvidia-gpu-snp")
-			return 0
-			;;
-		*)
-			return 1
-	esac
+	is_confidential_runtime_class "${KATA_HYPERVISOR}"
 }
 
 is_nvidia_gpu_platform() {
@@ -113,6 +111,12 @@ is_k3s_or_rke2() {
 		k3s|rke2) return 0 ;;
 		*) return 1 ;;
 	esac
+}
+
+# The arm64 runner owners keep containerd updates synced across all runners.
+is_arm64_host() {
+	[[ "$(uname -m)" == "aarch64" ]] && return 0
+	return 1
 }
 
 # Return the kubelet data directory, which varies by Kubernetes distribution.
@@ -147,10 +151,8 @@ install_genpolicy_drop_ins() {
 
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
-		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform; then
 		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
-	elif [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 
@@ -159,10 +161,6 @@ install_genpolicy_drop_ins() {
 		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
 	fi
 
-	# 20-* runtime-rs overlay (disable encrypted emptyDir, not supported yet)
-	if is_runtime_rs; then
-		cp "${examples_dir}/20-runtime-rs-drop-in.json" "${settings_d}/"
-	fi
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings
@@ -219,6 +217,8 @@ auto_generate_policy() {
 	declare -r yaml_file="$2"
 	declare -r config_map_yaml_file="${3:-""}"
 	declare additional_flags="${4:-""}"
+
+	seed_initdata_from_yaml "${settings_dir}" "${yaml_file}"
 
 	additional_flags="${additional_flags} --initdata-path=${settings_dir}/default-initdata.toml"
 
@@ -342,7 +342,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx" "qemu-coco-dev-runtime-rs")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-coco-dev-runtime-rs")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
@@ -351,7 +351,9 @@ hard_coded_policy_tests_enabled() {
 		fi
 	done
 
-	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+	# https://github.com/kata-containers/kata-containers/issues/12720
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" && \
+	 	  "${KATA_HYPERVISOR}" == "clh" ]]; then
 		enabled="yes"
 	fi
 
@@ -425,6 +427,55 @@ add_allow_all_policy_to_yaml() {
 		;;
 
 	esac
+}
+
+get_cc_init_data_annotation_from_yaml() {
+	local yaml_file="$1"
+	local resource_kind
+	resource_kind=$(yq eval 'select(documentIndex == 0) | .kind' "${yaml_file}")
+
+	case "${resource_kind}" in
+	Pod)
+		yq eval \
+			'select(documentIndex == 0) | .metadata.annotations."io.katacontainers.config.hypervisor.cc_init_data" // ""' \
+			"${yaml_file}"
+		;;
+
+	Deployment|Job|ReplicationController)
+		yq eval \
+			'select(documentIndex == 0) | .spec.template.metadata.annotations."io.katacontainers.config.hypervisor.cc_init_data" // ""' \
+			"${yaml_file}"
+		;;
+
+	*)
+		echo ""
+		;;
+	esac
+}
+
+seed_initdata_from_yaml() {
+	local settings_dir="$1"
+	local yaml_file="$2"
+	local existing_initdata
+
+	auto_generate_policy_enabled || return 0
+
+	existing_initdata="$(get_cc_init_data_annotation_from_yaml "${yaml_file}")"
+	[[ -z "${existing_initdata}" ]] && return 0
+
+	if ! printf "%s" "${existing_initdata}" | base64 -d | gzip -d > "${settings_dir}/default-initdata.toml"; then
+		die "Failed to decode existing cc_init_data annotation from ${yaml_file}"
+	fi
+}
+
+# Execute "kubectl describe pods -l app=${app_label}, until its output contains "${endpoint} is blocked by policy"
+wait_for_blocked_deployment_request() {
+	local -r endpoint="$1"
+	local -r app_label="$2"
+
+	local -r command="kubectl describe pods -l app=${app_label} | grep \"${endpoint} is blocked by policy\""
+	info "Waiting ${wait_time} seconds for: ${command}"
+	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
 # Execute "kubectl describe ${pod}" in a loop, until its output contains "${endpoint} is blocked by policy"

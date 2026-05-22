@@ -6,9 +6,26 @@
 
 //! Policy evaluation for the kata-agent.
 
-use anyhow::{bail, Result};
+use std::num::{NonZeroU32, NonZeroUsize};
+use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
+
+use anyhow::{bail, Error, Result};
+use protocols::agent::CopyFileRequest;
+use regorus::PolicyLengthConfig;
 use slog::{debug, error, info, warn};
 use tokio::io::AsyncWriteExt;
+
+// Regorus' built-in policy length limits (1024 cols / 1 MiB / 20 000 lines)
+// reject realistic policies emitted by `genpolicy`. In particular, container
+// `Env` values such as NVIDIA_REQUIRE_CUDA on the upstream NVIDIA CUDA images
+// can exceed 1 KiB on a single line. These constants raise the per-engine
+// limits to values that comfortably fit any policy we expect to evaluate
+// while still rejecting pathological/minified input.
+//
+// See microsoft/regorus#624 for the upstream API.
+const POLICY_MAX_COL: u32 = 64 * 1024; // 64 KiB per line
+const POLICY_MAX_FILE_BYTES: usize = 16 * 1024 * 1024; // 16 MiB per file
+const POLICY_MAX_LINES: usize = 200_000;
 
 static POLICY_LOG_FILE: &str = "/tmp/policy.jsonl";
 static POLICY_DEFAULT_FILE: &str = "/etc/kata-opa/default-policy.rego";
@@ -53,6 +70,11 @@ impl AgentPolicy {
         let mut engine = regorus::Engine::new();
         engine.set_strict_builtin_errors(false);
         engine.set_gather_prints(true);
+        engine.set_policy_length_config(PolicyLengthConfig {
+            max_col: NonZeroU32::new(POLICY_MAX_COL).unwrap(),
+            max_file_bytes: NonZeroUsize::new(POLICY_MAX_FILE_BYTES).unwrap(),
+            max_lines: NonZeroUsize::new(POLICY_MAX_LINES).unwrap(),
+        });
         // assign a slice of the engine data "pstate" to be used as policy state
         engine
             .add_data(
@@ -239,5 +261,234 @@ impl AgentPolicy {
             Err(_) => false,
         };
         Ok(())
+    }
+}
+
+/// FileType represents the S_IFMT part of the POSIX file mode such that it's easier to check in
+/// Rego.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub enum FileType {
+    #[default]
+    Unknown,
+    Regular,
+    Directory,
+    Symlink,
+}
+
+impl From<u32> for FileType {
+    // libc::S_IF* are mode_t, which is u16 on Darwin/BSD and u32 on Linux. The
+    // `as u32` cast is required for Darwin but a no-op on Linux, which trips
+    // clippy::unnecessary_cast. This is the documented libc-portability case
+    // from https://github.com/rust-lang/rust-clippy/issues/6466.
+    #[allow(clippy::unnecessary_cast)]
+    fn from(raw_mode: u32) -> Self {
+        const S_IFMT: u32 = libc::S_IFMT as u32;
+        const S_IFREG: u32 = libc::S_IFREG as u32;
+        const S_IFDIR: u32 = libc::S_IFDIR as u32;
+        const S_IFLNK: u32 = libc::S_IFLNK as u32;
+        match raw_mode & S_IFMT {
+            S_IFREG => Self::Regular,
+            S_IFDIR => Self::Directory,
+            S_IFLNK => Self::Symlink,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// PolicyCopyFileRequest is a pre-processed variant of the CopyFileRequest that avoids byte
+/// manipulation in Rego rules.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct PolicyCopyFileRequest {
+    pub path: String,
+    pub file_type: FileType,
+    pub symlink_target: Option<String>,
+
+    // Below fields are copied from the original request. They are not used by the genpolicy rules,
+    // but might be relevant for alternative rule sets. The data field is intentionally omitted to
+    // reduce serde overhead and protect the rules engine.
+    pub file_size: i64,
+    pub file_mode: u32,
+    pub dir_mode: u32,
+    pub uid: i32,
+    pub gid: i32,
+    pub offset: i64,
+}
+
+impl std::convert::TryFrom<&CopyFileRequest> for PolicyCopyFileRequest {
+    type Error = Error;
+
+    fn try_from(req: &CopyFileRequest) -> Result<Self> {
+        let file_type = req.file_mode.into();
+        let symlink_target: Option<String> = match file_type {
+            FileType::Symlink => {
+                if let Some(s) = OsStr::from_bytes(&req.data).to_str() {
+                    Some(s.to_owned())
+                } else {
+                    bail!("invalid symlink content")
+                }
+            }
+            _ => None,
+        };
+
+        Ok(PolicyCopyFileRequest {
+            path: req.path.clone(),
+            file_type,
+            symlink_target,
+            file_size: req.file_size,
+            file_mode: req.file_mode,
+            dir_mode: req.dir_mode,
+            uid: req.uid,
+            gid: req.gid,
+            offset: req.offset,
+        })
+    }
+}
+
+#[cfg(test)]
+// libc::S_IF* constants are u16 on Darwin/BSD and u32 on Linux, and the test
+// cases below cast them to u32 to match the file_mode field type. The cast is
+// a no-op on Linux (see https://github.com/rust-lang/rust-clippy/issues/6466).
+#[allow(clippy::unnecessary_cast)]
+mod tests {
+    use super::*;
+    use std::convert::TryInto;
+
+    use protocols::agent::CopyFileRequest;
+
+    struct TestCase {
+        name: String,
+        input: CopyFileRequest,
+        output: Option<PolicyCopyFileRequest>,
+    }
+
+    #[test]
+    fn test_copyfile_translation() {
+        let test_cases = [
+            TestCase {
+                name: "regular".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFREG as u32,
+                    path: "/foo/bar".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFREG as u32,
+                    file_type: FileType::Regular,
+                    path: "/foo/bar".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "directory".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFDIR as u32,
+                    path: "/foo".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFDIR as u32,
+                    file_type: FileType::Directory,
+                    path: "/foo".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "socket".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFSOCK as u32,
+                    path: "/foo/sock".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFSOCK as u32,
+                    file_type: FileType::Unknown,
+                    path: "/foo/sock".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "mixed".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFDIR as u32 | libc::S_IFREG as u32,
+                    path: "/foo/dunno".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFDIR as u32 | libc::S_IFREG as u32,
+                    file_type: FileType::Unknown,
+                    path: "/foo/dunno".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "all".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFMT as u32,
+                    path: "/wat".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFMT as u32,
+                    file_type: FileType::Unknown,
+                    path: "/wat".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "none".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: 0,
+                    path: "/0".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: 0,
+                    file_type: FileType::Unknown,
+                    path: "/0".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "link/valid".to_owned(),
+                input: CopyFileRequest {
+                    data: b"..data/foo".to_vec(),
+                    file_mode: libc::S_IFLNK as u32,
+                    path: "/foo/lnk".to_owned(),
+                    ..Default::default()
+                },
+                output: Some(PolicyCopyFileRequest {
+                    file_mode: libc::S_IFLNK as u32,
+                    file_type: FileType::Symlink,
+                    symlink_target: Some("..data/foo".to_owned()),
+                    path: "/foo/lnk".to_owned(),
+                    ..Default::default()
+                }),
+            },
+            TestCase {
+                name: "link/invalid".to_owned(),
+                input: CopyFileRequest {
+                    file_mode: libc::S_IFLNK as u32,
+                    data: vec![0x00, 0xFF, 0xFF, 0x00],
+                    ..Default::default()
+                },
+                output: None,
+            },
+        ];
+
+        for test_case in test_cases {
+            let output_res: Result<PolicyCopyFileRequest> = (&test_case.input).try_into();
+            if let Some(expected) = test_case.output {
+                let output = output_res.expect(&format!("test case {}", &test_case.name));
+                assert_eq!(expected, output, "test case {}", &test_case.name)
+            } else {
+                assert!(
+                    output_res.is_err(),
+                    "test case {}\nunexpected success: {:?}",
+                    &test_case.name,
+                    output_res
+                )
+            }
+        }
     }
 }

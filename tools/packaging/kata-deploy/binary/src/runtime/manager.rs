@@ -36,13 +36,14 @@ fn is_containerd_based(runtime: &str) -> bool {
 }
 
 pub async fn get_container_runtime(config: &Config) -> Result<String> {
-    let runtime_version = k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion")
+    let runtime_version = k8s::get_container_runtime_version(config)
         .await
         .context("Failed to get container runtime version")?;
 
-    let microk8s = k8s::get_node_field(config, r".metadata.labels.microk8s\.io/cluster")
+    let microk8s = k8s::get_node_label(config, "microk8s.io/cluster")
         .await
-        .ok();
+        .ok()
+        .flatten();
     if microk8s.as_deref() == Some("true") {
         return Ok("microk8s".to_string());
     }
@@ -51,18 +52,19 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
         return Ok("crio".to_string());
     }
 
-    if runtime_version.contains("containerd") && runtime_version.contains("-k3s") {
-        // Check systemd services (ignore errors - service might not exist)
-        let _ = utils::host_systemctl(&["is-active", "--quiet", "rke2-agent"]);
-        if utils::host_systemctl(&["is-active", "--quiet", "rke2-agent"]).is_ok() {
-            return Ok("rke2-agent".to_string());
-        }
-        if utils::host_systemctl(&["is-active", "--quiet", "rke2-server"]).is_ok() {
-            return Ok("rke2-server".to_string());
-        }
-        if utils::host_systemctl(&["is-active", "--quiet", "k3s-agent"]).is_ok() {
-            return Ok("k3s-agent".to_string());
-        }
+    // Detect k3s/rke2 via systemd services rather than the containerd version
+    // string, which no longer reliably contains "k3s" in newer releases
+    // (e.g. "containerd://2.2.2-bd1.34").
+    if utils::host_systemctl(&["is-active", "--quiet", "rke2-agent"]).is_ok() {
+        return Ok("rke2-agent".to_string());
+    }
+    if utils::host_systemctl(&["is-active", "--quiet", "rke2-server"]).is_ok() {
+        return Ok("rke2-server".to_string());
+    }
+    if utils::host_systemctl(&["is-active", "--quiet", "k3s-agent"]).is_ok() {
+        return Ok("k3s-agent".to_string());
+    }
+    if utils::host_systemctl(&["is-active", "--quiet", "k3s"]).is_ok() {
         return Ok("k3s".to_string());
     }
 
@@ -83,7 +85,7 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     Ok(runtime)
 }
 
-/// Returns true if containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1") indicates
+/// Returns true if containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1", "containerd://2.2.2-bd1.34") indicates
 /// containerd 2.x or newer, false for 1.x or unparseable. Used for drop-in support
 /// and for K3s/RKE2 template selection (config-v3.toml.tmpl vs config.toml.tmpl).
 pub fn containerd_version_is_2_or_newer(runtime_version: &str) -> bool {
@@ -126,8 +128,7 @@ pub async fn is_containerd_capable_of_using_drop_in_files(
     }
 
     // Check containerd version - only 2.0+ supports drop-in files properly
-    let runtime_version =
-        k8s::get_node_field(config, ".status.nodeInfo.containerRuntimeVersion").await?;
+    let runtime_version = k8s::get_container_runtime_version(config).await?;
 
     Ok(check_containerd_version_supports_drop_in(&runtime_version).is_ok())
 }
@@ -191,6 +192,7 @@ mod tests {
     #[case("containerd://2.0.0", true)]
     #[case("containerd://2.1.5", true)]
     #[case("containerd://2.1.5-k3s1", true)]
+    #[case("containerd://2.2.2-bd1.34", true)]
     #[case("containerd://2.2.0", true)]
     #[case("containerd://2.3.1", true)]
     #[case("containerd://2.0.0-rc.1", true)]

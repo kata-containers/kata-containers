@@ -47,7 +47,6 @@ file_mem_backend = "/dev/shm"
 valid_file_mem_backends = ["/dev/shm"]
 pflashes = ["/proc/mounts"]
 enable_debug = true
-msize_9p = 16384
 disable_image_nvdimm = true
 hotplug_vfio_on_root_bus = true
 pcie_root_port = 2
@@ -64,8 +63,8 @@ enable_guest_swap = true
 [agent.agent0]
 enable_tracing = true
 debug_console_enabled = true
-debug = true
-dial_timeout = 1
+enable_debug = true
+dial_timeout_ms = 1000
 kernel_modules = ["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1","i915_enabled_ppgtt=0"]
 container_pipe_size = 2
 [runtime]

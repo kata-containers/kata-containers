@@ -2,13 +2,13 @@
 // Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 use std::result;
 
 use log::error;
 use virtio_bindings::bindings::virtio_blk::*;
-use virtio_queue::{Descriptor, DescriptorChain};
+use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemory, GuestMemoryError};
 
 use crate::{
@@ -231,13 +231,19 @@ impl Request {
         for io in data_descs {
             match self.request_type {
                 RequestType::In => {
-                    mem.read_from(GuestAddress(io.data_addr), disk, io.data_len)
+                    let mut buf = vec![0u8; io.data_len];
+                    disk.read_exact(&mut buf)
+                        .map_err(|e| ExecuteError::Read(GuestMemoryError::IOError(e)))?;
+                    mem.write_slice(&buf, GuestAddress(io.data_addr))
                         .map_err(ExecuteError::Read)?;
                     len += io.data_len;
                 }
                 RequestType::Out => {
-                    mem.write_to(GuestAddress(io.data_addr), disk, io.data_len)
+                    let mut buf = vec![0u8; io.data_len];
+                    mem.read_slice(&mut buf, GuestAddress(io.data_addr))
                         .map_err(ExecuteError::Write)?;
+                    disk.write_all(&buf)
+                        .map_err(|e| ExecuteError::Write(GuestMemoryError::IOError(e)))?;
                 }
                 RequestType::Flush => match disk.flush() {
                     Ok(_) => {}

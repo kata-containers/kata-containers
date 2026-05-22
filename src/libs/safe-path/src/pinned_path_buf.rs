@@ -15,7 +15,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::scoped_join;
 
 /// A safe version of [`PathBuf`] pinned to an underlying filesystem object to protect from
-/// `TOCTTOU` style of attacks.
+/// `TOCTOU` style of attacks.
 ///
 /// A [`PinnedPathBuf`] is a resolved path buffer pinned to an underlying filesystem object, which
 /// guarantees:

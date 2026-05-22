@@ -1,0 +1,1 @@
+./how-to/how-to-set-sandbox-config-kata.md

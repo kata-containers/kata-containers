@@ -24,7 +24,7 @@
 use std::sync::{Arc, Mutex};
 
 use dbs_device::device_manager::IoManagerContext;
-use dbs_interrupt::KvmIrqManager;
+use dbs_interrupt::InterruptManager;
 
 mod bus;
 pub use bus::PciBus;
@@ -132,7 +132,7 @@ pub trait PciSystemContext: Sync + Send + Clone {
 
     fn get_device_manager_context(&self) -> Self::D;
 
-    fn get_interrupt_manager(&self) -> Arc<KvmIrqManager>;
+    fn get_interrupt_manager(&self) -> Arc<Box<dyn InterruptManager>>;
 }
 
 /// Fill the buffer with all bits set for invalid PCI configuration space access.

@@ -430,9 +430,11 @@ func TestVfioChecksClh(t *testing.T) {
 	}
 	assert.NoError(f(config.NoPort, config.NoPort))
 	assert.NoError(f(config.NoPort, config.RootPort))
+	assert.NoError(f(config.RootPort, config.NoPort))
 	assert.Error(f(config.RootPort, config.RootPort))
-	assert.Error(f(config.RootPort, config.NoPort))
 	assert.Error(f(config.NoPort, config.SwitchPort))
+	assert.Error(f(config.SwitchPort, config.NoPort))
+	assert.Error(f(config.BridgePort, config.NoPort))
 }
 
 func TestVfioCheckQemu(t *testing.T) {

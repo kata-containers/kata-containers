@@ -111,10 +111,7 @@ mod tests {
 
         let mut properties: Properties = vec![];
 
-        assert_eq!(
-            true,
-            Memory::unified_apply(&memory_resources, &mut properties).is_ok()
-        );
+        assert!(Memory::unified_apply(&memory_resources, &mut properties).is_ok());
 
         assert_eq!(Value::U64(200000000), properties[2].1);
     }

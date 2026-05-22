@@ -32,23 +32,26 @@ their own validation and patch backporting from there.
 
 ## Release Process
 
-### Bump the `VERSION` and `Chart.yaml` file
-
-When the `kata-containers/kata-containers` repository is ready for a new
-release, first create a PR to set the release in the [`VERSION`](./../VERSION)
-file and update the `version` and `appVersion` in the
-[`Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml)
-file and have it merged.
-
-### Lock the `main` branch
+### Lock the `main` branch and announce release process
 
 In order to prevent any PRs getting merged during the release process, and
 slowing the release process down, by impacting the payload caches, we have
-recently trialed setting the `main` branch to read only whilst the release
-action runs.
+recently trialed setting the `main` branch to read-only.
+Once the `kata-containers/kata-containers` repository is ready for a new
+release, lock the main branch until the release action has completed.
+Notify the #kata-dev Slack channel about the ongoing release process.
+Ideally, CI usage by others should be reduced to a minimum during the
+ongoing release process.
 
 > [!NOTE]
-> Admin permission is needed to complete this task.
+> Admin permission is needed to lock/unlock the `main` branch.
+
+### Bump the `VERSION` and `Chart.yaml` file
+
+Create a PR to set the release in the [`VERSION`](./../VERSION) file and to
+update the `version` and `appVersion` fields in the
+[`Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml)
+file. Temporarily unlock the main branch to merge the PR.
 
 ### Wait for the `VERSION` bump PR payload publish to complete
 
@@ -60,7 +63,7 @@ and are cached, so that the release process can just download these artifacts
 rather than needing to build them all, which takes time and can reveal errors in
 infra.
 
-### Check GitHub Actions
+### Trigger the `Release Kata Containers` GitHub Action
 
 We make use of [GitHub actions](https://github.com/features/actions) in the
 [release](https://github.com/kata-containers/kata-containers/actions/workflows/release.yaml)

@@ -8,13 +8,18 @@
 set -e
 set -o pipefail
 
-kubernetes_dir=$(dirname "$(readlink -f "$0")")
+kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime via drop-in config
 enable_nvrc_trace() {
-	local config_dir="/opt/kata/share/defaults/kata-containers/runtimes/${KATA_HYPERVISOR}/config.d"
+	local kata_config_base="/opt/kata/share/defaults/kata-containers"
+	case "${KATA_HYPERVISOR}" in
+		*-runtime-rs) kata_config_base="${kata_config_base}/runtime-rs" ;;
+	esac
+
+	local config_dir="${kata_config_base}/runtimes/${KATA_HYPERVISOR}/config.d"
 	local drop_in_file="${config_dir}/90-nvrc-trace.toml"
 	local kernel_params_drop_in="${config_dir}/30-kernel-params.toml"
 
@@ -30,7 +35,7 @@ enable_nvrc_trace() {
 	if [[ -f "${kernel_params_drop_in}" ]]; then
 		base_params=$(grep -E '^kernel_params\s*=' "${kernel_params_drop_in}" | sed 's/^kernel_params\s*=\s*"\(.*\)"/\1/' || true)
 	else
-		local runtime_config="/opt/kata/share/defaults/kata-containers/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
+		local runtime_config="${kata_config_base}/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
 		if [[ -f "${runtime_config}" ]]; then
 			base_params=$(grep -E '^kernel_params\s*=' "${runtime_config}" | sed 's/^kernel_params\s*=\s*"\(.*\)"/\1/' || true)
 		fi
@@ -51,27 +56,6 @@ kernel_params = "${new_params}"
 EOF
 }
 
-# Create Docker config for genpolicy so it can authenticate to nvcr.io when
-# pulling image manifests (avoids "UnauthorizedError" from genpolicy's registry pull).
-# Genpolicy (src/tools/genpolicy) uses docker_credential::get_credential() in
-# src/tools/genpolicy/src/registry.rs build_auth(). The docker_credential crate
-# reads config from DOCKER_CONFIG (directory) + "/config.json", so we set
-# DOCKER_CONFIG to a directory containing config.json with nvcr.io auth.
-setup_genpolicy_registry_auth() {
-	if [[ -z "${NGC_API_KEY:-}" ]]; then
-		return
-	fi
-	local auth_dir
-	auth_dir="${kubernetes_dir}/.docker-genpolicy"
-	mkdir -p "${auth_dir}"
-	# Docker config format: auths -> registry -> auth (base64 of "user:password")
-	echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" \
-		> "${auth_dir}/config.json"
-	export DOCKER_CONFIG="${auth_dir}"
-	# REGISTRY_AUTH_FILE (containers-auth.json format) is the same structure for auths
-	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
-}
-
 cleanup() {
 	true
 }
@@ -89,10 +73,11 @@ if [[ -n "${K8S_TEST_NV:-}" ]]; then
 else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-cuda.bats" \
-		"k8s-nvidia-nim.bats")
+		"k8s-nvidia-nim.bats" \
+		"k8s-nvidia-nim-service.bats")
 fi
 
-SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-runtime-rs" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
 # shellcheck disable=SC2076 # intentionally use literal string matching
 if [[ ! " ${SUPPORTED_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
@@ -106,7 +91,7 @@ if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
 fi
 
 # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
-setup_genpolicy_registry_auth
+setup_genpolicy_registry_auth "nvcr.io" "\$oauthtoken" "${NGC_API_KEY:-}" "${kubernetes_dir}/.docker-genpolicy"
 
 # Use common bats test runner with proper reporting
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"

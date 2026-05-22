@@ -7,14 +7,17 @@
 set -e
 
 kata_agent_apis_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${kata_agent_apis_dir}/../../common.bash"
+# shellcheck source=/dev/null
 source "${kata_agent_apis_dir}/setup_common.sh"
 
 usage()
 {
+	# shellcheck disable=SC2154
 	cat <<EOF
 
-Usage: $script_name [<command>]
+Usage: ${script_name} [<command>]
 
 Summary: Test agent ttrpc apis using agent-ctl tool.
 
@@ -42,7 +45,7 @@ main()
 {
 	local cmd="${1:-}"
 
-	case "$cmd" in
+	case "${cmd}" in
 		help|-h|-help|--help) usage; exit 0;;
 	esac
 

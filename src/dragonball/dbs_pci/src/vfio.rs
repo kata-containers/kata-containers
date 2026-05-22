@@ -17,7 +17,7 @@ use dbs_device::resources::{DeviceResources, MsiIrqType, Resource, ResourceConst
 use dbs_device::PioAddress;
 use dbs_device::{DeviceIo, IoAddress};
 use dbs_interrupt::{
-    DeviceInterruptManager, DeviceInterruptMode, InterruptSourceGroup, KvmIrqManager,
+    DeviceInterruptManager, DeviceInterruptMode, InterruptManager, InterruptSourceGroup,
 };
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
@@ -146,7 +146,7 @@ impl VfioMsix {
 
 struct Interrupt {
     vfio_dev: Arc<VfioDevice>,
-    irq_manager: Option<DeviceInterruptManager<Arc<KvmIrqManager>>>,
+    irq_manager: Option<DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>>,
     resources: DeviceResources,
     legacy_enabled: bool,
     // the ability of msi is enabled or not
@@ -181,7 +181,7 @@ impl Interrupt {
         }
     }
 
-    pub(crate) fn initialize(&mut self, irq_mgr: Arc<KvmIrqManager>) -> Result<()> {
+    pub(crate) fn initialize(&mut self, irq_mgr: Arc<Box<dyn InterruptManager>>) -> Result<()> {
         let mut irq_manager = DeviceInterruptManager::new(irq_mgr, &self.resources)
             .map_err(VfioPciError::InterruptManager)?;
 
@@ -474,7 +474,7 @@ impl Interrupt {
         vfio_dev: &Arc<VfioDevice>,
         index: u32,
         count: u32,
-        irq_mgr: &DeviceInterruptManager<Arc<KvmIrqManager>>,
+        irq_mgr: &DeviceInterruptManager<Arc<Box<dyn InterruptManager>>>,
     ) -> Result<Arc<Box<dyn InterruptSourceGroup>>> {
         if let Some(group) = irq_mgr.get_group() {
             if count > group.len() {
@@ -706,11 +706,13 @@ impl Region {
 
             // FIXME: add readonly flag into vfio_dma_map in future PR when it is needed.
             // issue #8725
-            if let Err(e) = vfio_container.vfio_dma_map(
-                self.start.raw_value() + self.mmaps[i].mmap_offset,
-                self.mmaps[i].mmap_size,
-                host_addr as u64,
-            ) {
+            if let Err(e) = unsafe {
+                vfio_container.vfio_dma_map(
+                    self.start.raw_value() + self.mmaps[i].mmap_offset,
+                    self.mmaps[i].mmap_size as usize,
+                    host_addr as *mut u8,
+                )
+            } {
                 error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
             }
         }
@@ -744,7 +746,7 @@ impl Region {
 
             if let Err(e) = vfio_container.vfio_dma_unmap(
                 self.start.raw_value() + self.mmaps[i].mmap_offset,
-                self.mmaps[i].mmap_size,
+                self.mmaps[i].mmap_size as usize,
             ) {
                 error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
             }
@@ -771,7 +773,7 @@ impl Region {
             for i in 0..self.mmaps.len() {
                 if let Err(e) = vfio_container.vfio_dma_unmap(
                     self.start.raw_value() + self.mmaps[i].mmap_offset,
-                    self.mmaps[i].mmap_size,
+                    self.mmaps[i].mmap_size as usize,
                 ) {
                     error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
                 }
@@ -779,11 +781,13 @@ impl Region {
                 self.set_user_memory_region(i, true, vm)?;
                 // FIXME: add readonly flag into vfio_dma_map in future PR when it is needed.
                 // issue #8725
-                if let Err(e) = vfio_container.vfio_dma_map(
-                    self.start.raw_value() + self.mmaps[i].mmap_offset,
-                    self.mmaps[i].mmap_size,
-                    self.mmaps[i].mmap_host_addr,
-                ) {
+                if let Err(e) = unsafe {
+                    vfio_container.vfio_dma_map(
+                        self.start.raw_value() + self.mmaps[i].mmap_offset,
+                        self.mmaps[i].mmap_size as usize,
+                        self.mmaps[i].mmap_host_addr as *mut u8,
+                    )
+                } {
                     error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
                 }
             }

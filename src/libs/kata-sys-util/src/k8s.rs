@@ -58,7 +58,13 @@ pub fn is_host_empty_dir(path: &str) -> bool {
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_dir: bool) {
+pub fn update_ephemeral_storage_type(
+    oci_spec: &mut Spec,
+    disable_guest_empty_dir: bool,
+    emptydir_mode: &str,
+) {
+    use kata_types::config::EMPTYDIR_MODE_BLOCK_ENCRYPTED;
+
     if let Some(mounts) = oci_spec.mounts_mut() {
         for m in mounts.iter_mut() {
             if let Some(typ) = &m.typ() {
@@ -69,11 +75,16 @@ pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_di
 
             if let Some(source) = &m.source() {
                 let mnt_src = &source.display().to_string();
-                // We only care about the "bind" mount volume here.
                 if is_ephemeral_volume(m) {
                     m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
                 }
-                if is_host_empty_dir(mnt_src) && !disable_guest_empty_dir {
+                // When block-encrypted mode is active, host emptyDirs must
+                // stay as "bind" so the EncryptedEmptyDirVolume handler can
+                // intercept them in the volume dispatch chain.
+                if is_host_empty_dir(mnt_src)
+                    && !disable_guest_empty_dir
+                    && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+                {
                     m.set_typ(Some(mount::KATA_K8S_LOCAL_STORAGE_TYPE.to_string()));
                 }
             }

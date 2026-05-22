@@ -10,15 +10,15 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-[ -n "${DEBUG:-}" ] && set -o xtrace
+[[ -n "${DEBUG:-}" ]] && set -o xtrace
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root_dir="$(cd "$this_script_dir/../../../" && pwd)"
+repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
 
 KATA_DEPLOY_IMAGE_TAGS="${KATA_DEPLOY_IMAGE_TAGS:-}"
-IFS=' ' read -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS}"
+IFS=' ' read -r -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS}"
 KATA_DEPLOY_REGISTRIES="${KATA_DEPLOY_REGISTRIES:-}"
-IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES}"
+IFS=' ' read -r -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES}"
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
@@ -33,6 +33,7 @@ function _check_required_env_var()
 {
 	local env_var
 
+	# shellcheck disable=SC2154
 	case ${1} in
 		RELEASE_VERSION) env_var="${RELEASE_VERSION}" ;;
 		GH_TOKEN) env_var="${GH_TOKEN}" ;;
@@ -44,7 +45,7 @@ function _check_required_env_var()
 		*) >&2 _die "Invalid environment variable \"${1}\"" ;;
 	esac
 
-	[ -z "${env_var}" ] && \
+	[[ -z "${env_var}" ]] && \
 		_die "\"${1}\" environment variable is required but was not set"
 
 	return 0
@@ -60,11 +61,12 @@ function _create_our_own_notes()
 	GOPATH=${HOME}/go ./ci/install_yq.sh
 	export PATH=${HOME}/go/bin:${PATH}
 
+	# shellcheck source=/dev/null
 	source "${repo_root_dir}/tools/packaging/scripts/lib.sh"
 	libseccomp_version=$(get_from_kata_deps ".externals.libseccomp.version")
 	libseccomp_url=$(get_from_kata_deps ".externals.libseccomp.url")
 
-	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF
+	cat >> "/tmp/our_notes_${RELEASE_VERSION}" <<EOF
 ## Survey
 
 Please take the Kata Containers survey:
@@ -113,7 +115,7 @@ function _create_new_release()
 
 	RELEASE_VERSION="$(_release_version)"
 
-	if gh release view ${RELEASE_VERSION}; then
+	if gh release view "${RELEASE_VERSION}"; then
 		echo "Release already exists, aborting"
 		exit 1
 	fi
@@ -121,7 +123,7 @@ function _create_new_release()
 	_create_our_own_notes
 
 	# This automatically creates the ${RELEASE_VERSION} tag in the repo
-	gh release create ${RELEASE_VERSION} \
+	gh release create "${RELEASE_VERSION}" \
 		--generate-notes --title "Kata Containers ${RELEASE_VERSION}" \
 		--notes-file "/tmp/our_notes_${RELEASE_VERSION}" \
 		--draft
@@ -134,7 +136,7 @@ function _publish_release()
 	RELEASE_VERSION="$(_release_version)"
 
 	# Make the release live on GitHub
-	gh release edit ${RELEASE_VERSION} \
+	gh release edit "${RELEASE_VERSION}" \
 		--verify-tag \
 		--draft=false
 }
@@ -168,7 +170,7 @@ function _upload_kata_static_tarball()
 	RELEASE_VERSION="$(_release_version)"
 
 	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
-	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
+	mv "${KATA_STATIC_TARBALL}" "${new_tarball_name}"
 	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
 }
@@ -182,7 +184,7 @@ function _upload_kata_tools_static_tarball()
 	RELEASE_VERSION="$(_release_version)"
 
 	new_tarball_name="kata-tools-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
-	mv ${KATA_TOOLS_STATIC_TARBALL} "${new_tarball_name}"
+	mv "${KATA_TOOLS_STATIC_TARBALL}" "${new_tarball_name}"
 	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
 }
@@ -192,7 +194,7 @@ function _upload_versions_yaml_file()
 	RELEASE_VERSION="$(_release_version)"
 
 	versions_file="kata-containers-${RELEASE_VERSION}-versions.yaml"
-	cp "${repo_root_dir}/versions.yaml" ${versions_file}
+	cp "${repo_root_dir}/versions.yaml" "${versions_file}"
 	gh release upload "${RELEASE_VERSION}" "${versions_file}"
 }
 
@@ -216,8 +218,8 @@ function _upload_libseccomp_tarball()
 	GOPATH=${HOME}/go ./ci/install_yq.sh
 
 	versions_yaml="versions.yaml"
-	version=$(${HOME}/go/bin/yq ".externals.libseccomp.version" ${versions_yaml})
-	repo_url=$(${HOME}/go/bin/yq ".externals.libseccomp.url" ${versions_yaml})
+	version=$("${HOME}"/go/bin/yq ".externals.libseccomp.version" "${versions_yaml}")
+	repo_url=$("${HOME}"/go/bin/yq ".externals.libseccomp.url" "${versions_yaml}")
 	download_url="${repo_url}releases/download/v${version}"
 	tarball="libseccomp-${version}.tar.gz"
 	asc="${tarball}.asc"
@@ -233,8 +235,8 @@ function _upload_helm_chart_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
-	helm dependencies update ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
-	helm package ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
+	helm dependencies update "${repo_root_dir}"/tools/packaging/kata-deploy/helm-chart/kata-deploy
+	helm package "${repo_root_dir}"/tools/packaging/kata-deploy/helm-chart/kata-deploy
 	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
 }
 

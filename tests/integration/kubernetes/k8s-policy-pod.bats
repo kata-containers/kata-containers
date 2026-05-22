@@ -20,8 +20,12 @@ setup() {
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	exec_command=(printenv data-3)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	print_env_var_data3=(printenv data-3)
+	add_exec_to_policy_settings "${policy_settings_dir}" "${print_env_var_data3[@]}"
+
+	print_env_var_label=(printenv VARIABLE_FROM_LABEL)
+	add_exec_to_policy_settings "${policy_settings_dir}" "${print_env_var_label[@]}"
+
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
 	correct_configmap_yaml="${pod_config_dir}/k8s-policy-configmap.yaml"
@@ -91,15 +95,16 @@ create_and_wait_for_pod_ready() {
 	wait_for_pod_ready
 }
 
-@test "Successful pod with auto-generated policy" {
-	create_and_wait_for_pod_ready
-}
+@test "Successful pod and able to read env variables sourced from configmap using envFrom" {
+	local value
 
-@test "Able to read env variables sourced from configmap using envFrom" {
 	create_and_wait_for_pod_ready
 
-	expected_env_var=$(kubectl exec "${pod_name}" -- "${exec_command[@]}")
-	[ "$expected_env_var" = "value-3" ] || fail "expected_env_var is not equal to value-3"
+	value=$(kubectl exec "${pod_name}" -- "${print_env_var_data3[@]}")
+	[[ "$value" == "value-3" ]] || fail "value=${value} is not equal to value-3"
+
+	value=$(kubectl exec "${pod_name}" -- "${print_env_var_label[@]}")
+	[[ "$value" == "label-value1" ]] || fail "value=${value} is not equal to label-value1"
 }
 
 @test "Successful pod with auto-generated policy and runtimeClassName filter" {

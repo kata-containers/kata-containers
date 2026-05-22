@@ -20,6 +20,7 @@ endif
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
+	kernel-debug-tarball \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-tarball \
@@ -31,7 +32,8 @@ BASE_TARBALLS = serial-targets \
 	qemu-tdx-experimental-tarball \
 	qemu-tarball \
 	stratovirt-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
@@ -42,21 +44,26 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	cloud-hypervisor-glibc-tarball
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
+	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
 	kernel-cca-confidential-tarball \
+	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
 	qemu-cca-experimental-tarball \
-	shim-v2-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-confidential-tarball \
 	rootfs-cca-confidential-image-tarball \
 	rootfs-cca-confidential-initrd-tarball \
 	rootfs-initrd-tarball
@@ -110,9 +117,6 @@ cloud-hypervisor-tarball:
 cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
-csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
-	${MAKE} $@-build
-
 firecracker-tarball:
 	${MAKE} $@-build
 
@@ -138,6 +142,9 @@ kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
 kernel-tarball:
+	${MAKE} $@-build
+
+kernel-debug-tarball:
 	${MAKE} $@-build
 
 kernel-cca-confidential-tarball:
@@ -170,46 +177,55 @@ qemu-cca-experimental-tarball:
 qemu-tarball:
 	${MAKE} $@-build
 
-boot-image-se-tarball: kernel-tarball rootfs-initrd-confidential-tarball
+# DEPS is rebound per target below; prereqs expand at parse time, so each rule
+# freezes the current DEPS. `make DEPS=` from the command line zeros all of them.
+DEPS := kernel-tarball rootfs-initrd-confidential-tarball
+boot-image-se-tarball: $(DEPS)
 	${MAKE} $@-build
 
 stratovirt-tarball:
 	${MAKE} $@-build
 
-rootfs-image-tarball: agent-tarball
+DEPS := agent-tarball
+rootfs-image-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+rootfs-image-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-image-mariner-tarball: agent-tarball
+DEPS := agent-tarball
+rootfs-image-mariner-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+rootfs-initrd-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-initrd-tarball: agent-tarball
+DEPS := agent-tarball
+rootfs-initrd-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+rootfs-image-nvidia-gpu-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-initrd-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
+rootfs-image-nvidia-gpu-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
+rootfs-cca-confidential-image-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
+rootfs-cca-confidential-initrd-tarball: $(DEPS)
 	${MAKE} $@-build
 
-rootfs-cca-confidential-image-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
+shim-v2-go-tarball:
 	${MAKE} $@-build
 
-rootfs-cca-confidential-initrd-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
-	${MAKE} $@-build
-
-shim-v2-tarball:
+shim-v2-rust-tarball:
 	${MAKE} $@-build
 
 trace-forwarder-tarball: copy-scripts-for-the-tools-build
@@ -220,6 +236,9 @@ virtiofsd-tarball:
 
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
+
+install-prebuilt-artifacts:
+	mv kata-artifacts $(MK_DIR)/build
 
 install-tarball:
 	tar --zstd -xf ./kata-static.tar.zst -C /

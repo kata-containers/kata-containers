@@ -29,9 +29,16 @@ async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttr
 }
 
 pub async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+    is_allowed_with_entrypoint(req.descriptor_dyn().name(), &req).await
+}
+
+pub async fn is_allowed_with_entrypoint(
+    ep: &str,
+    req: &impl serde::Serialize,
+) -> ttrpc::Result<()> {
     let request = serde_json::to_string(req).unwrap();
     let mut policy = AGENT_POLICY.lock().await;
-    allow_request(&mut policy, req.descriptor_dyn().name(), &request).await
+    allow_request(&mut policy, ep, &request).await
 }
 
 pub async fn do_set_policy(req: &protocols::agent::SetPolicyRequest) -> ttrpc::Result<()> {

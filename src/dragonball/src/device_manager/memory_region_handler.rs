@@ -78,7 +78,7 @@ impl DeviceVirtioRegionHandler {
     ) -> std::result::Result<(), VirtioError> {
         let vm_as_new = self.vm_as.memory().insert_region(region).map_err(|e| {
             error!("DeviceVirtioRegionHandler failed to insert guest memory region: {e:?}.");
-            VirtioError::InsertMmap(e)
+            VirtioError::InsertMmap
         })?;
         // Do not expect poisoned lock here, so safe to unwrap().
         self.vm_as.lock().unwrap().replace(vm_as_new);

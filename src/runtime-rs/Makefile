@@ -22,39 +22,23 @@ PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
 include ../../utils.mk
 
+##VAR RELEASE_LTO=true|false|thin|fat LTO setting used for release builds
+RELEASE_LTO ?= true
+##VAR RELEASE_CODEGEN_UNITS=<number> codegen units used for release builds
+RELEASE_CODEGEN_UNITS ?= 1
+# Apply release profile overrides only for release builds.
+RELEASE_CARGO_PROFILE_ENV = $(if $(findstring release,$(BUILD_TYPE)),CARGO_PROFILE_RELEASE_LTO=$(RELEASE_LTO) CARGO_PROFILE_RELEASE_CODEGEN_UNITS=$(RELEASE_CODEGEN_UNITS),)
+
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
-ifeq ($(ARCH), s390x)
-default: runtime show-header
-test:
-	@echo "s390x is not currently supported"
-	exit 0
-install: install-runtime install-configs
-else ifeq ($(ARCH), powerpc64le)
-default:
-	@echo "PowerPC 64 LE is not currently supported"
-	exit 0
-test:
-	@echo "PowerPC 64 LE is not currently supported"
-	exit 0
-install:
-	@echo "PowerPC 64 LE is not currently supported"
-	exit 0
-else ifeq ($(ARCH), riscv64gc)
-default: runtime show-header
-test:
-	@echo "RISC-V 64 is not currently supported"
-	exit 0
-else
 ##TARGET default: build code
 default: runtime show-header
 ##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
 test: static-checks-build
 	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
 install: install-runtime install-configs
-endif
 
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
@@ -93,20 +77,21 @@ RUNTIMENAME := virt_container
 HYPERVISOR_DB = dragonball
 HYPERVISOR_FC = firecracker
 HYPERVISOR_QEMU = qemu
-HYPERVISOR_CLH = cloud-hypervisor
+HYPERVISOR_CLH = clh-runtime-rs
+HYPERVISOR_NAME_CLH = clh
 HYPERVISOR_REMOTE = remote
 
 ARCH_SUPPORT_DB := x86_64 aarch64
 ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_DB)),)
     # When set to true, builds the built-in Dragonball hypervisor
-    USE_BUILDIN_DB := true
+    USE_BUILTIN_DB := true
 else
-    USE_BUILDIN_DB := false
+    USE_BUILTIN_DB := false
     $(info Dragonball does not support ARCH $(ARCH), disabled. \
-        Specify "USE_BUILDIN_DB=true" to force enable.)
+        Specify "USE_BUILTIN_DB=true" to force enable.)
 endif
 
-HYPERVISOR ?= $(HYPERVISOR_DB)
+HYPERVISOR ?= $(HYPERVISOR_QEMU)
 
 ##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
 HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH) $(HYPERVISOR_REMOTE)
@@ -137,20 +122,28 @@ FCVALIDJAILERPATHS = [\"$(FCJAILERPATH)\"]
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 
 # EDK2 firmware names per architecture
+ifeq ($(ARCH), x86_64)
+    EDK2_NAME := ovmf
+endif
 ifeq ($(ARCH), aarch64)
     EDK2_NAME := aavmf
 endif
 
-# Set firmware paths from QEMUFW/QEMUFWVOL if defined
+# Set firmware path from QEMUFW if defined
 FIRMWAREPATH :=
-FIRMWAREVOLUMEPATH :=
 ifneq (,$(QEMUCMD))
     ifneq (,$(QEMUFW))
         FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
     endif
-    ifneq (,$(QEMUFWVOL))
-        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFWVOL)
-    endif
+endif
+
+# Firmware path for qemu-nvidia-gpu (OVMF / AAVMF); parity with src/runtime/Makefile FIRMWAREPATH_NV
+FIRMWAREPATH_NV :=
+ifeq ($(ARCH), x86_64)
+    FIRMWAREPATH_NV := $(PREFIXDEPS)/share/$(EDK2_NAME)/OVMF.fd
+endif
+ifeq ($(ARCH), aarch64)
+    FIRMWAREPATH_NV := $(PREFIXDEPS)/share/$(EDK2_NAME)/AAVMF_CODE.fd
 endif
 
 KERNELVERITYPARAMS ?= ""
@@ -161,7 +154,6 @@ FIRMWARETDVFPATH := $(PREFIXDEPS)/share/ovmf/OVMF.inteltdx.fd
 
 # SEV-SNP
 FIRMWARE_SNP_PATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
-FIRMWARE_VOLUME_SNP_PATH :=
 
 ##VAR DEFVCPUS=<number> Default number of vCPUs
 DEFVCPUS := 1
@@ -182,10 +174,14 @@ DEFMAXMEMSZ := 0
 DEFBRIDGES := 1
 ##VAR DEFNETQUEUES=<number> Default number of network queues
 DEFNETQUEUES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+# Security note: do not enable "virtio_fs_extra_args" by default.
+# Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
+DEFEMPTYDIRMODE := shared-fs
+DEFEMPTYDIRMODE_COCO := block-encrypted
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
 DEFAULTEXPFEATURES := []
 DEFDISABLESELINUX := false
@@ -208,7 +204,6 @@ DEFVIRTIOFSQUEUESIZE ?= 1024
 # Make sure you quote args.
 DEFVIRTIOFSEXTRAARGS ?= [\"--thread-pool-size=1\", \"-o\", \"announce_submounts\"]
 DEFENABLEIOTHREADS := false
-DEFINDEPIOTHREADS := 0
 DEFENABLEVHOSTUSERSTORE := false
 DEFVHOSTUSERSTOREPATH := $(PKGRUNDIR)/vhost-user
 DEFVALIDVHOSTUSERSTOREPATHS := [\"$(DEFVHOSTUSERSTOREPATH)\"]
@@ -226,7 +221,6 @@ DEFCREATECONTAINERTIMEOUT ?= 30
 DEFCREATECONTAINERTIMEOUT_COCO ?= 60
 DEFSTATICRESOURCEMGMT_COCO = true
 DEFDISABLEIMAGENVDIMM ?= false
-DEFPODRESOURCEAPISOCK := ""
 
 SED = sed
 CLI_DIR = cmd
@@ -285,7 +279,7 @@ endif
 ifneq (,$(CLHCMD))
     KNOWN_HYPERVISORS += $(HYPERVISOR_CLH)
 
-    CONFIG_FILE_CLH = configuration-cloud-hypervisor.toml
+    CONFIG_FILE_CLH = configuration-clh-runtime-rs.toml
     CONFIG_CLH = config/$(CONFIG_FILE_CLH)
     CONFIG_CLH_IN = $(CONFIG_CLH).in
 
@@ -318,6 +312,16 @@ ifneq (,$(QEMUCMD))
 
     QEMUPATH := $(QEMUBINDIR)/$(QEMUCMD)
     QEMUVALIDHYPERVISORPATHS := [\"$(QEMUPATH)\"]
+
+ifneq (,$(QEMUSNPCMD))
+    QEMUSNPPATH := $(QEMUBINDIR)/$(QEMUSNPCMD)
+    QEMUSNPVALIDHYPERVISORPATHS := [\"$(QEMUSNPPATH)\"]
+endif
+
+ifneq (,$(QEMUTDXCMD))
+    QEMUTDXPATH := $(QEMUBINDIR)/$(QEMUTDXCMD)
+    QEMUTDXVALIDHYPERVISORPATHS := [\"$(QEMUTDXPATH)\"]
+endif
 
     CONFIG_PATH_QEMU = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU))
     CONFIG_PATHS += $(CONFIG_PATH_QEMU)
@@ -376,9 +380,91 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_COCO_DEV)
 
+    CONFIG_FILE_QEMU_NVIDIA_GPU = configuration-qemu-nvidia-gpu-runtime-rs.toml
+    CONFIG_QEMU_NVIDIA_GPU = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU)
+    CONFIG_QEMU_NVIDIA_GPU_IN = $(CONFIG_QEMU_NVIDIA_GPU).in
+
+    CONFIG_PATH_QEMU_NVIDIA_GPU = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_NVIDIA_GPU)
+
+    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU)
+
+ifneq (,$(QEMUSNPCMD))
+    CONFIG_FILE_QEMU_NVIDIA_GPU_SNP = configuration-qemu-nvidia-gpu-snp-runtime-rs.toml
+    CONFIG_QEMU_NVIDIA_GPU_SNP = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP)
+    CONFIG_QEMU_NVIDIA_GPU_SNP_IN = $(CONFIG_QEMU_NVIDIA_GPU_SNP).in
+
+    CONFIG_PATH_QEMU_NVIDIA_GPU_SNP = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU_SNP)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU_SNP = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_NVIDIA_GPU_SNP)
+
+    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU_SNP)
+endif
+
+ifneq (,$(QEMUTDXCMD))
+    CONFIG_FILE_QEMU_NVIDIA_GPU_TDX = configuration-qemu-nvidia-gpu-tdx-runtime-rs.toml
+    CONFIG_QEMU_NVIDIA_GPU_TDX = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX)
+    CONFIG_QEMU_NVIDIA_GPU_TDX_IN = $(CONFIG_QEMU_NVIDIA_GPU_TDX).in
+
+    CONFIG_PATH_QEMU_NVIDIA_GPU_TDX = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU_TDX)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU_TDX = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_NVIDIA_GPU_TDX)
+
+    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU_TDX)
+endif
+
     KERNELTYPE_QEMU = uncompressed
     KERNEL_NAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_QEMU))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNEL_NAME_QEMU)
+
+    # NVIDIA GPU reference stack (parity with Go configuration-qemu-nvidia-gpu.toml.in)
+    KERNELTYPE_NV = compressed
+    KERNELNAME_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE_NV))
+    KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
+    IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
+    IMAGEPATH_NV = $(PKGDATADIR)/$(IMAGENAME_NV)
+    KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses
+
+    KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV)
+    KERNELPARAMS_CONFIDENTIAL_NV += "nvrc.smi.srs=1"
+
+    KERNELVERITYPARAMS_NV ?=
+    DEFAULTVCPUS_NV := 1
+    DEFAULTMEMORY_NV := 8192
+    DEFAULTTIMEOUT_NV := 1200
+    DEFAULTLAUNCHPROCESSTIMEOUT_NV := 15
+    DEFAULTPCIEROOTPORT_NV := 8
+    DEFDISABLEIMAGENVDIMM_NV := true
+    DEFSANDBOXCGROUPONLY_NV := true
+    DEFENABLEVCPUSPINNING_NV := true
+    DEFSTATICRESOURCEMGMT_NV := true
+    DEFVFIOMODE_NV := guest-kernel
+    DEFKUBELETROOTDIR := /var/lib/kubelet
+    DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
+    # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
+    DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
+    # NVIDIA profile: rootfs block driver (avoid virtio-pmem/DAX for this stack)
+    VMROOTFSDRIVER_NV := virtio-blk-pci
+    # Agent client: hybrid vsock retry delay (ms); vsock path uses this as initial backoff (clamped in agent)
+    DEFDIALTIMEOUTMS_NV := 1000
+    # Go qemu-nvidia-gpu dial_timeout is 1200s; runtime-rs uses ms for reconnect_timeout_ms
+    DEFRECONNECTTIMEOUTMS_NV := 1200000
+
+    # NVIDIA GPU confidential (SNP) reference stack
+    IMAGENAME_CONFIDENTIAL_NV = $(PROJECT_TAG)-nvidia-gpu-confidential.img
+    IMAGEPATH_CONFIDENTIAL_NV = $(PKGDATADIR)/$(IMAGENAME_CONFIDENTIAL_NV)
+    KERNELNAME_CONFIDENTIAL_NV = $(call MAKE_KERNEL_NAME_NV,compressed)
+    KERNELPATH_CONFIDENTIAL_NV = $(KERNELDIR)/$(KERNELNAME_CONFIDENTIAL_NV)
+    KERNELVERITYPARAMS_CONFIDENTIAL_NV ?=
+    FIRMWARESNPPATH_NV := $(FIRMWARE_SNP_PATH)
+    FIRMWARETDVFPATH_NV := $(FIRMWARETDVFPATH)
 
     KERNEL_NAME_QEMU_SE = kata-containers-se.img
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
@@ -392,14 +478,23 @@ ifneq (,$(QEMUCMD))
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
+    DEFENABLEVCPUSPINNING_QEMU := false
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
+    # runtime-rs memory hotplug hard-codes pc-dimm, which is x86-only.
+    # s390x (s390-ccw-virtio) requires virtio-mem-ccw instead. Use static
+    # sandbox resource management to size the VM upfront and bypass hotplug.
+    DEFSTATICRESOURCEMGMT_QEMU := true
 else ifeq ($(ARCH), aarch64)
     # NVDIMM/virtio-pmem has issues on arm64 (cache coherency problems with DAX),
     # so we use virtio-blk-pci instead.
     VMROOTFSDRIVER_QEMU := virtio-blk-pci
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    # runtime-rs lacks ARM CPU hotplug support (pflash/UEFI, SMP topology,
+    # QMP vCPU add for virt machine type). Use static sandbox resource
+    # management to size the VM upfront instead.
+    DEFSTATICRESOURCEMGMT_QEMU := true
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
@@ -416,9 +511,6 @@ endif
     # Most users will want to set this to "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
     # for better security. Note: "elevateprivileges=deny" doesn't work with daemonize option.
     DEFSECCOMPSANDBOXPARAM := ""
-    # Default is empty string "" to match Rust default None (when commented out in config).
-    # Most users will want to set this to "system_u:system_r:container_t" for SELinux support.
-    DEFGUESTSELINUXLABEL := ""
 endif
 
 ifneq (,$(FCCMD))
@@ -481,9 +573,10 @@ USER_VARS += CONFIG_QEMU_IN
 USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
 USER_VARS += CONFIG_QEMU_COCO_DEV_IN
+USER_VARS += CONFIG_QEMU_NVIDIA_GPU_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
-USER_VARS += USE_BUILDIN_DB
+USER_VARS += USE_BUILTIN_DB
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -495,6 +588,12 @@ USER_VARS += CLHPATH
 USER_VARS += CLHVALIDHYPERVISORPATHS
 USER_VARS += QEMUPATH
 USER_VARS += QEMUVALIDHYPERVISORPATHS
+USER_VARS += QEMUSNPCMD
+USER_VARS += QEMUSNPPATH
+USER_VARS += QEMUSNPVALIDHYPERVISORPATHS
+USER_VARS += QEMUTDXCMD
+USER_VARS += QEMUTDXPATH
+USER_VARS += QEMUTDXVALIDHYPERVISORPATHS
 USER_VARS += FIRMWAREPATH_CLH
 USER_VARS += KERNELPATH_CLH
 USER_VARS += FCCMD
@@ -506,8 +605,10 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += DEFMAXMEMSZ_FC
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
+USER_VARS += IMAGENAME_NV
 USER_VARS += IMAGECONFIDENTIALNAME
 USER_VARS += IMAGEPATH
+USER_VARS += IMAGEPATH_NV
 USER_VARS += IMAGECONFIDENTIALPATH
 USER_VARS += INITRDNAME
 USER_VARS += INITRDCONFIDENTIALNAME
@@ -522,12 +623,14 @@ USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
 USER_VARS += KERNELPATH_DB
 USER_VARS += KERNELPATH_QEMU
+USER_VARS += KERNELPATH_NV
 USER_VARS += KERNELPATH_QEMU_SE
 USER_VARS += KERNELPATH_FC
 USER_VARS += KERNELPATH_COCO
 USER_VARS += KERNELPATH
 USER_VARS += KERNELVIRTIOFSPATH
 USER_VARS += FIRMWAREPATH
+USER_VARS += FIRMWAREPATH_NV
 USER_VARS += FIRMWAREVOLUMEPATH
 USER_VARS += MACHINEACCELERATORS
 USER_VARS += CPUFEATURES
@@ -566,6 +669,8 @@ USER_VARS += DEFNETWORKMODEL_CLH
 USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFDISABLEGUESTEMPTYDIR
+USER_VARS += DEFEMPTYDIRMODE
+USER_VARS += DEFEMPTYDIRMODE_COCO
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFDISABLEGUESTSELINUX
@@ -588,9 +693,7 @@ USER_VARS += DEFVIRTIOFSEXTRAARGS
 USER_VARS += DEFENABLEANNOTATIONS
 USER_VARS += DEFENABLEANNOTATIONS_COCO
 USER_VARS += DEFENABLEIOTHREADS
-USER_VARS += DEFINDEPIOTHREADS
 USER_VARS += DEFSECCOMPSANDBOXPARAM
-USER_VARS += DEFGUESTSELINUXLABEL
 USER_VARS += DEFENABLEVHOSTUSERSTORE
 USER_VARS += DEFVHOSTUSERSTOREPATH
 USER_VARS += DEFVALIDVHOSTUSERSTOREPATHS
@@ -604,6 +707,7 @@ USER_VARS += DEFSANDBOXCGROUPONLY_DB
 USER_VARS += DEFSANDBOXCGROUPONLY_FC
 USER_VARS += DEFSANDBOXCGROUPONLY_CLH
 USER_VARS += DEFSANDBOXCGROUPONLY_REMOTE
+USER_VARS += DEFENABLEVCPUSPINNING_QEMU
 USER_VARS += DEFSTATICRESOURCEMGMT_DB
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFSTATICRESOURCEMGMT_CLH
@@ -617,6 +721,7 @@ USER_VARS += BUILDFLAGS
 USER_VARS += RUNTIMENAME
 USER_VARS += HYPERVISOR_DB
 USER_VARS += HYPERVISOR_CLH
+USER_VARS += HYPERVISOR_NAME_CLH
 USER_VARS += HYPERVISOR_QEMU
 USER_VARS += HYPERVISOR_FC
 USER_VARS += PIPESIZE
@@ -630,13 +735,38 @@ USER_VARS += DEFFORCEGUESTPULL
 USER_VARS += QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT
 USER_VARS += DEFCREATECONTAINERTIMEOUT
 USER_VARS += DEFCREATECONTAINERTIMEOUT_COCO
-USER_VARS += QEMUTDXEXPERIMENTALCMD
 USER_VARS += FIRMWARE_SNP_PATH
-USER_VARS += FIRMWARE_VOLUME_SNP_PATH
 USER_VARS += KERNELTDXPARAMS
 USER_VARS += DEFSHAREDFS_QEMU_TDX_VIRTIOFS
 USER_VARS += FIRMWARETDVFPATH
-USER_VARS += DEFPODRESOURCEAPISOCK
+USER_VARS += KERNELPARAMS_NV
+USER_VARS += KERNELPARAMS_CONFIDENTIAL_NV
+USER_VARS += KERNELVERITYPARAMS_NV
+USER_VARS += DEFAULTVCPUS_NV
+USER_VARS += DEFAULTMEMORY_NV
+USER_VARS += DEFAULTTIMEOUT_NV
+USER_VARS += DEFAULTLAUNCHPROCESSTIMEOUT_NV
+USER_VARS += DEFAULTPCIEROOTPORT_NV
+USER_VARS += DEFDISABLEIMAGENVDIMM_NV
+USER_VARS += DEFSANDBOXCGROUPONLY_NV
+USER_VARS += DEFENABLEVCPUSPINNING_NV
+USER_VARS += DEFSTATICRESOURCEMGMT_NV
+USER_VARS += DEFVFIOMODE_NV
+USER_VARS += DEFKUBELETROOTDIR
+USER_VARS += DEFPODRESOURCEAPISOCK_NV
+USER_VARS += DEFROOTFSTYPE_NV
+USER_VARS += VMROOTFSDRIVER_NV
+USER_VARS += DEFDIALTIMEOUTMS_NV
+USER_VARS += DEFRECONNECTTIMEOUTMS_NV
+USER_VARS += IMAGENAME_CONFIDENTIAL_NV
+USER_VARS += IMAGEPATH_CONFIDENTIAL_NV
+USER_VARS += KERNELNAME_CONFIDENTIAL_NV
+USER_VARS += KERNELPATH_CONFIDENTIAL_NV
+USER_VARS += KERNELVERITYPARAMS_CONFIDENTIAL_NV
+USER_VARS += FIRMWARESNPPATH_NV
+USER_VARS += FIRMWARETDVFPATH_NV
+USER_VARS += CONFIG_QEMU_NVIDIA_GPU_SNP_IN
+USER_VARS += CONFIG_QEMU_NVIDIA_GPU_TDX_IN
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \
@@ -651,7 +781,7 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 EXTRA_RUSTFEATURES :=
 
 # if use dragonball hypervisor, add the feature to build dragonball in runtime
-ifeq ($(USE_BUILDIN_DB),true)
+ifeq ($(USE_BUILTIN_DB),true)
     EXTRA_RUSTFEATURES +=  dragonball
 endif
 
@@ -676,6 +806,9 @@ GENERATED_VARS = \
 		CONFIG_FC_IN \
 		CONFIG_QEMU_TDX_IN \
 		CONFIG_QEMU_SNP_IN \
+		CONFIG_QEMU_NVIDIA_GPU_IN \
+		CONFIG_QEMU_NVIDIA_GPU_SNP_IN \
+		CONFIG_QEMU_NVIDIA_GPU_TDX_IN \
 		$(USER_VARS)
 
 
@@ -727,6 +860,10 @@ define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
+define MAKE_KERNEL_NAME_NV
+$(if $(findstring uncompressed,$1),vmlinux-nvidia-gpu.container,vmlinuz-nvidia-gpu.container)
+endef
+
 .DEFAULT_GOAL := default
 
 GENERATED_FILES += $(CONFIGS)
@@ -738,7 +875,7 @@ static-checks-build: $(GENERATED_FILES)
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
@@ -748,7 +885,7 @@ $(GENERATED_FILES): %: %.in
 
 ##TARGET optimize: optimized  build
 optimize: $(SOURCES) | show-summary show-header
-	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
+	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
 
 ##TARGET clean: clean build
 clean: clean-generated-files
@@ -760,17 +897,8 @@ clean: clean-generated-files
 clean-generated-files:
 	@rm -f $(GENERATED_FILES)
 
-vendor:
-	@cargo vendor
-
-ifeq ($(ARCH),x86_64)
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
-else
-check:
-	@echo "$(ARCH) is not currently supported"
-	exit 0
-endif
 
 ##TARGET run: build and run agent
 run:
@@ -874,5 +1002,4 @@ install-configs: $(CONFIGS)
 	help \
 	optimize \
 	show-header \
-	show-summary \
-	vendor
+	show-summary

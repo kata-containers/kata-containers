@@ -11,6 +11,8 @@ use std::sync::Arc;
 
 use dbs_arch::cpuid::{process_cpuid, VmSpec};
 use dbs_arch::gdt::gdt_entry;
+use dbs_boot::FirmwareType;
+use dbs_interrupt::InterruptManager;
 use dbs_utils::metric::IncMetric;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::CpuId;
@@ -45,7 +47,7 @@ impl Vcpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new_x86_64(
         id: u8,
-        vcpu_fd: Arc<VcpuFd>,
+        vcpu_fd: VcpuFd,
         io_mgr: IoManagerCached,
         cpuid: CpuId,
         exit_evt: EventFd,
@@ -53,6 +55,7 @@ impl Vcpu {
         vcpu_state_sender: Sender<VcpuStateEvent>,
         create_ts: TimestampUs,
         support_immediate_exit: bool,
+        irq_manager: Arc<Box<dyn InterruptManager>>,
     ) -> Result<Self> {
         let (event_sender, event_receiver) = channel();
         let (response_sender, response_receiver) = channel();
@@ -72,6 +75,7 @@ impl Vcpu {
             support_immediate_exit,
             metrics: Arc::new(VcpuMetrics::default()),
             cpuid,
+            irq_manager,
         })
     }
 
@@ -91,8 +95,14 @@ impl Vcpu {
         vm_as: &GuestAddressSpaceImpl,
         kernel_start_addr: Option<GuestAddress>,
         _pgtable_addr: Option<GuestAddress>,
+        firmware_type: Option<FirmwareType>,
     ) -> Result<()> {
         self.set_cpuid(vcpu_config)?;
+
+        // tdshim will handle the initialization of MSR, regs and sregs
+        if firmware_type == Some(FirmwareType::Tdshim) {
+            return Ok(());
+        }
 
         dbs_arch::regs::setup_msrs(&self.fd).map_err(VcpuError::MSRSConfiguration)?;
         if let Some(start_addr) = kernel_start_addr {

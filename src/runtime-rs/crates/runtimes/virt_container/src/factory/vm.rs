@@ -49,7 +49,7 @@ pub struct TemplateVm {
 /// VmConfig holds all configuration information required to start a new VM instance.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VmConfig {
-    /// Type of hypervisor to be used (e.g., qemu, cloud-hypervisor).
+    /// Type of hypervisor to be used (e.g., qemu, clh).
     #[serde(default)]
     pub hypervisor_name: String,
     #[serde(default)]

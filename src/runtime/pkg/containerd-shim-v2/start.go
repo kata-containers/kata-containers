@@ -9,9 +9,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/containerd/containerd/api/types/task"
 	"github.com/sirupsen/logrus"
 
-	"github.com/containerd/containerd/api/types/task"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 )
 
@@ -45,6 +45,19 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 			return err
 		}
 		go watchSandbox(ctx, s)
+
+		// If no network endpoints were discovered during sandbox creation,
+		// schedule an async rescan. This handles runtimes that configure
+		// networking after task creation (e.g. Docker 26+ configures
+		// networking after the Start response, and prestart hooks may
+		// not have run yet on slower architectures).
+		// RescanNetwork is idempotent — it returns immediately if
+		// endpoints already exist.
+		go func() {
+			if err := s.sandbox.RescanNetwork(s.ctx); err != nil {
+				shimLog.WithError(err).Error("async network rescan failed — container may lack networking")
+			}
+		}()
 
 		// We use s.ctx(`ctx` derived from `s.ctx`) to check for cancellation of the
 		// shim context and the context passed to startContainer for tracing.

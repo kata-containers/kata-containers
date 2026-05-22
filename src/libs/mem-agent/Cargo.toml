@@ -1,7 +1,9 @@
 [package]
 name = "mem-agent"
 version = "0.2.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
 slog = "2.5.2"

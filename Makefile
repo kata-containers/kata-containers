@@ -20,7 +20,7 @@ TOOLS += kata-ctl
 TOOLS += log-parser
 TOOLS += trace-forwarder
 
-STANDARD_TARGETS = build check clean install static-checks-build test vendor
+STANDARD_TARGETS = build check clean install static-checks-build test
 
 # Variables for the build-and-publish-kata-debug target
 KATA_DEBUG_REGISTRY ?= ""
@@ -43,14 +43,14 @@ generate-protocols:
 static-checks: static-checks-build
 	bash tests/static-checks.sh
 
-docs-url-alive-check:
-	bash ci/docs-url-alive-check.sh
-
 build-and-publish-kata-debug:
 	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG}
 
-docs-serve:
-	docker run --rm -p 8000:8000 -v ./docs:/docs:ro -v ${PWD}/zensical.toml:/zensical.toml:ro zensical/zensical serve --config-file /zensical.toml -a 0.0.0.0:8000
+docs-build:
+	docker build -t kata-docs:latest -f ./docs/Dockerfile ./docs
+
+docs-serve: docs-build
+	docker run --rm -p 8000:8000 -v ${PWD}:/docs:ro kata-docs:latest serve --config-file /docs/mkdocs.yaml -a 0.0.0.0:8000
 
 .PHONY: \
 	all \
@@ -58,5 +58,5 @@ docs-serve:
 	install-tarball \
 	default \
 	static-checks \
-	docs-url-alive-check \
+	docs-build \
 	docs-serve

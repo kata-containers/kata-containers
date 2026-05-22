@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 
+use kata_sys_util::netns::NetnsGuard;
 use std::any::Any;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -29,7 +30,7 @@ use nydus_api::ConfigV2;
 use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
 use rlimit::Resource;
-use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_queue::QueueT;
 use vm_memory::{
     FileOffset, GuestAddress, GuestAddressSpace, GuestRegionMmap, GuestUsize, MmapRegion,
@@ -233,6 +234,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             CachePolicy::Always => Duration::from_secs(CACHE_ALWAYS_TIMEOUT),
             CachePolicy::Never => Duration::from_secs(CACHE_NONE_TIMEOUT),
             CachePolicy::Auto => Duration::from_secs(CACHE_AUTO_TIMEOUT),
+            CachePolicy::Metadata => Duration::from_secs(CACHE_AUTO_TIMEOUT),
         }
     }
 
@@ -453,6 +455,11 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         prefetch_list_path: Option<String>,
     ) -> FsResult<()> {
         debug!("http_server rafs");
+        // We need to make sure the nydus worker thread in the runD main process's network namespace
+        // instead of the vmm thread's netns, which wouldn't access the host network.
+        let _netns_guard =
+            NetnsGuard::new("/proc/self/ns/net").map_err(|e| FsError::BackendFs(e.to_string()))?;
+
         let file = Path::new(&source);
         let (mut rafs, rafs_cfg) = match config.as_ref() {
             Some(cfg) => {
@@ -541,7 +548,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 )));
             }
         };
-        let any_fs = rootfs.deref().as_any();
+        let any_fs = rootfs.0.deref().as_any();
         if let Some(fs_swap) = any_fs.downcast_ref::<Rafs>() {
             let mut file = <dyn RafsIoRead>::from_file(&source)
                 .map_err(|e| FsError::BackendFs(format!("RafsIoRead failed: {e:?}")))?;
@@ -611,8 +618,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         };
 
         let region = Arc::new(
-            GuestRegionMmap::new(mmap_region, GuestAddress(guest_addr))
-                .map_err(Error::InsertMmap)?,
+            GuestRegionMmap::new(mmap_region, GuestAddress(guest_addr)).ok_or(Error::InsertMmap)?,
         );
         self.handler.insert_region(region.clone())?;
 

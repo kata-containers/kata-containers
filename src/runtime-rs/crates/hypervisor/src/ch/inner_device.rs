@@ -13,6 +13,7 @@ use crate::utils::open_named_tuntap;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
+use crate::ProtectionDeviceConfig;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
@@ -28,10 +29,13 @@ use ch_config::ch_api::{
 use ch_config::convert::DEFAULT_NUM_PCI_SEGMENTS;
 use ch_config::DiskConfig;
 use ch_config::ImageType;
-use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
+use ch_config::{
+    net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, ProtectionDevConfig, VsockConfig,
+};
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::config::hypervisor::RateLimiterConfig;
 use kata_types::rootless::is_rootless;
+
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::os::fd::AsRawFd;
@@ -40,9 +44,6 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
-
-pub const DEFAULT_FS_QUEUES: usize = 1;
-const DEFAULT_FS_QUEUE_SIZE: u16 = 1024;
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -72,6 +73,7 @@ impl CloudHypervisorInner {
                 DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
                 DeviceType::Vfio(_) => self.pending_devices.insert(0, device.clone()),
+                DeviceType::Protection(_) => self.pending_devices.insert(0, device.clone()),
                 _ => {
                     debug!(
                         sl!(),
@@ -138,23 +140,8 @@ impl CloudHypervisorInner {
             ));
         }
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
-        let num_queues: usize = if device.config.queue_num > 0 {
-            device.config.queue_num as usize
-        } else {
-            DEFAULT_FS_QUEUES
-        };
-
-        let queue_size: u16 = if device.config.queue_num > 0 {
-            u16::try_from(device.config.queue_size)?
-        } else {
-            DEFAULT_FS_QUEUE_SIZE
-        };
+        let num_queues = device.config.queue_num as usize;
+        let queue_size = u16::try_from(device.config.queue_size)?;
 
         let socket_path = if device.config.sock_path.starts_with('/') {
             PathBuf::from(device.config.sock_path)
@@ -172,11 +159,7 @@ impl CloudHypervisorInner {
             ..Default::default()
         };
 
-        let response = cloud_hypervisor_vm_fs_add(
-            socket.try_clone().context("failed to clone socket")?,
-            fs_config,
-        )
-        .await?;
+        let response = cloud_hypervisor_vm_fs_add(&self.api_socket, fs_config).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "fs add response: {:?}", detail);
@@ -201,23 +184,13 @@ impl CloudHypervisorInner {
 
         let sysfsdev = primary_device.sysfs_path.clone();
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         let device_config = DeviceConfig {
             path: PathBuf::from(sysfsdev),
             iommu: false,
             ..Default::default()
         };
 
-        let response = cloud_hypervisor_vm_device_add(
-            socket.try_clone().context("failed to clone socket")?,
-            device_config,
-        )
-        .await?;
+        let response = cloud_hypervisor_vm_device_add(&self.api_socket, device_config).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "VFIO add response: {:?}", detail);
@@ -247,22 +220,12 @@ impl CloudHypervisorInner {
             ));
         }
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         let clh_device_id = clh_device_id.unwrap();
         let rm_data = VmRemoveDeviceData {
             id: clh_device_id.clone(),
         };
 
-        let response = cloud_hypervisor_vm_device_remove(
-            socket.try_clone().context("failed to clone socket")?,
-            rm_data,
-        )
-        .await?;
+        let response = cloud_hypervisor_vm_device_remove(&self.api_socket, rm_data).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "device remove response: {:?}", detail);
@@ -296,11 +259,6 @@ impl CloudHypervisorInner {
 
     async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
         let hvsock_config = device.config.clone();
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
 
         let vsock_config = VsockConfig {
             cid: hvsock_config.guest_cid.into(),
@@ -308,11 +266,7 @@ impl CloudHypervisorInner {
             ..Default::default()
         };
 
-        let response = cloud_hypervisor_vm_vsock_add(
-            socket.try_clone().context("failed to clone socket")?,
-            vsock_config,
-        )
-        .await?;
+        let response = cloud_hypervisor_vm_vsock_add(&self.api_socket, vsock_config).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "hvsock add response: {:?}", detail);
@@ -323,11 +277,6 @@ impl CloudHypervisorInner {
 
     async fn handle_block_device(&mut self, device: BlockDevice) -> Result<DeviceType> {
         let mut block_dev = device.clone();
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
 
         let mut disk_config = DiskConfig::try_from(device.config.clone())?;
         disk_config.direct = device
@@ -347,11 +296,7 @@ impl CloudHypervisorInner {
         );
         disk_config.rate_limiter_config = block_rate_limit;
 
-        let response = cloud_hypervisor_vm_blockdev_add(
-            socket.try_clone().context("failed to clone socket")?,
-            disk_config,
-        )
-        .await?;
+        let response = cloud_hypervisor_vm_blockdev_add(&self.api_socket, disk_config).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "blockdev add response: {:?}", detail);
@@ -368,12 +313,6 @@ impl CloudHypervisorInner {
     async fn handle_network_device(&mut self, device: NetworkDevice) -> Result<DeviceType> {
         let netdev = device.clone();
 
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
-            .map_err(|e| anyhow!(e))?;
-
         let mut clh_net_config = NetConfig::try_from(device.config)?;
         // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
         clh_net_config.tap = None;
@@ -384,12 +323,8 @@ impl CloudHypervisorInner {
 
         let fds = files.iter().map(|f| f.as_raw_fd()).collect();
 
-        let response = cloud_hypervisor_vm_netdev_add_with_fds(
-            socket.try_clone().context("failed to clone socket")?,
-            clh_net_config,
-            fds,
-        )
-        .await?;
+        let response =
+            cloud_hypervisor_vm_netdev_add_with_fds(&self.api_socket, clh_net_config, fds).await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "netdev add response: {:?}", detail);
@@ -404,10 +339,12 @@ impl CloudHypervisorInner {
         Option<Vec<FsConfig>>,
         Option<Vec<NetConfig>>,
         Option<Vec<DeviceConfig>>,
+        Option<ProtectionDevConfig>,
     )> {
         let mut shared_fs_devices = Vec::<FsConfig>::new();
         let mut network_devices = Vec::<NetConfig>::new();
         let mut host_devices = Vec::<DeviceConfig>::new();
+        let mut protection_device = ProtectionDevConfig::default();
 
         while let Some(dev) = self.pending_devices.pop() {
             match dev {
@@ -512,6 +449,20 @@ impl CloudHypervisorInner {
                     );
                     host_devices.push(device_config);
                 }
+                DeviceType::Protection(pdev) => {
+                    let config = pdev.config;
+                    match config {
+                        ProtectionDeviceConfig::SevSnp(sevsnp_cfg) => {
+                            if sevsnp_cfg.is_snp {
+                                protection_device.host_data = sevsnp_cfg.host_data;
+                            }
+                        }
+                        ProtectionDeviceConfig::Tdx(tdx_config) => {
+                            protection_device.mrconfigid = tdx_config.mrconfigid;
+                        }
+                        _ => info!(sl!(), "CH: unsupported protection device type"),
+                    }
+                }
                 _ => continue,
             }
         }
@@ -520,6 +471,7 @@ impl CloudHypervisorInner {
             Some(shared_fs_devices),
             Some(network_devices),
             Some(host_devices),
+            Some(protection_device),
         ))
     }
 }
@@ -581,17 +533,8 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         let cfg = settings.cfg;
         let vm_path = settings.vm_path;
 
-        let num_queues: usize = if cfg.queue_num > 0 {
-            cfg.queue_num as usize
-        } else {
-            DEFAULT_FS_QUEUES
-        };
-
-        let queue_size: u16 = if cfg.queue_num > 0 {
-            u16::try_from(cfg.queue_size)?
-        } else {
-            DEFAULT_FS_QUEUE_SIZE
-        };
+        let num_queues = cfg.queue_num as usize;
+        let queue_size = u16::try_from(cfg.queue_size)?;
 
         let socket_path = if cfg.sock_path.starts_with('/') {
             PathBuf::from(cfg.sock_path)

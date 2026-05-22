@@ -146,6 +146,8 @@ type hypervisor struct {
 	BlockDeviceCacheSet            bool                      `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool                      `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush        bool                      `toml:"block_device_cache_noflush"`
+	BlockDeviceLogicalSectorSize   uint32                    `toml:"block_device_logical_sector_size"`
+	BlockDevicePhysicalSectorSize  uint32                    `toml:"block_device_physical_sector_size"`
 	EnableVhostUserStore           bool                      `toml:"enable_vhost_user_store"`
 	VhostUserDeviceReconnect       uint32                    `toml:"vhost_user_reconnect_timeout_sec"`
 	DisableBlockDeviceUse          bool                      `toml:"disable_block_device_use"`
@@ -222,12 +224,13 @@ func (r runtime) emptyDirMode() (string, error) {
 }
 
 type agent struct {
-	KernelModules       []string `toml:"kernel_modules"`
-	Debug               bool     `toml:"enable_debug"`
-	Tracing             bool     `toml:"enable_tracing"`
-	DebugConsoleEnabled bool     `toml:"debug_console_enabled"`
-	DialTimeout         uint32   `toml:"dial_timeout"`
-	CdhApiTimeout       uint32   `toml:"cdh_api_timeout"`
+	KernelModules        []string `toml:"kernel_modules"`
+	Debug                bool     `toml:"enable_debug"`
+	Tracing              bool     `toml:"enable_tracing"`
+	DebugConsoleEnabled  bool     `toml:"debug_console_enabled"`
+	DialTimeout          uint32   `toml:"dial_timeout"`
+	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
+	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
 }
 
 func (orig *tomlConfig) Clone() tomlConfig {
@@ -593,6 +596,20 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 	return "", fmt.Errorf("Invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
 }
 
+func (h hypervisor) blockDeviceLogicalSectorSize() (uint32, error) {
+	if err := validateBlockDeviceSectorSize(cfgBlockDeviceLogicalSectorSize, h.BlockDeviceLogicalSectorSize); err != nil {
+		return 0, err
+	}
+	return h.BlockDeviceLogicalSectorSize, nil
+}
+
+func (h hypervisor) blockDevicePhysicalSectorSize() (uint32, error) {
+	if err := validateBlockDeviceSectorSize(cfgBlockDevicePhysicalSectorSize, h.BlockDevicePhysicalSectorSize); err != nil {
+		return 0, err
+	}
+	return h.BlockDevicePhysicalSectorSize, nil
+}
+
 func (h hypervisor) blockDeviceAIO() (string, error) {
 	supportedBlockAIO := []string{config.AIOIOUring, config.AIONative, config.AIOThreads}
 
@@ -782,6 +799,10 @@ func (a agent) cdhApiTimout() uint32 {
 	return a.CdhApiTimeout
 }
 
+func (a agent) launchProcessTimeout() uint32 {
+	return a.LaunchProcessTimeout
+}
+
 func (a agent) debug() bool {
 	return a.Debug
 }
@@ -875,6 +896,28 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeLinux:        h.DisableSeLinux,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
 	}, nil
+}
+
+const (
+	cfgBlockDeviceLogicalSectorSize  = "block_device_logical_sector_size"
+	cfgBlockDevicePhysicalSectorSize = "block_device_physical_sector_size"
+)
+
+func validateBlockDeviceSectorSize(name string, size uint32) error {
+	if size == 0 {
+		return nil
+	}
+	if size < 512 || size > 65536 || (size&(size-1)) != 0 {
+		return fmt.Errorf("invalid %s %d: must be 0 or a power of 2 between 512 and 65536", name, size)
+	}
+	return nil
+}
+
+func validateBlockDeviceSectorSizes(logical, physical uint32) error {
+	if logical != 0 && physical != 0 && logical > physical {
+		return fmt.Errorf("invalid sector sizes: logical (%d) must not be larger than physical (%d)", logical, physical)
+	}
+	return nil
 }
 
 func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
@@ -973,88 +1016,104 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	blockLogicalSectorSize, err := h.blockDeviceLogicalSectorSize()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	blockPhysicalSectorSize, err := h.blockDevicePhysicalSectorSize()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if err := validateBlockDeviceSectorSizes(blockLogicalSectorSize, blockPhysicalSectorSize); err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
-		HypervisorPath:           hypervisor,
-		HypervisorPathList:       h.HypervisorPathList,
-		KernelPath:               kernel,
-		InitrdPath:               initrd,
-		ImagePath:                image,
-		RootfsType:               rootfsType,
-		FirmwarePath:             firmware,
-		FirmwareVolumePath:       firmwareVolume,
-		PFlash:                   pflashes,
-		MachineAccelerators:      machineAccelerators,
-		CPUFeatures:              cpuFeatures,
-		KernelParams:             vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		KernelVerityParams:       h.kernelVerityParams(),
-		HypervisorMachineType:    machineType,
-		QgsPort:                  h.qgsPort(),
-		NumVCPUsF:                h.defaultVCPUs(),
-		DefaultMaxVCPUs:          h.defaultMaxVCPUs(),
-		MemorySize:               h.defaultMemSz(),
-		MemSlots:                 h.defaultMemSlots(),
-		MemOffset:                h.defaultMemOffset(),
-		DefaultMaxMemorySize:     h.defaultMaxMemSz(),
-		VirtioMem:                h.VirtioMem,
-		EntropySource:            h.GetEntropySource(),
-		EntropySourceList:        h.EntropySourceList,
-		DefaultBridges:           h.defaultBridges(),
-		DisableBlockDeviceUse:    h.DisableBlockDeviceUse,
-		SharedFS:                 sharedFS,
-		VirtioFSDaemon:           h.VirtioFSDaemon,
-		VirtioFSDaemonList:       h.VirtioFSDaemonList,
-		HypervisorLoglevel:       h.defaultHypervisorLoglevel(),
-		VirtioFSCacheSize:        h.VirtioFSCacheSize,
-		VirtioFSCache:            h.defaultVirtioFSCache(),
-		VirtioFSQueueSize:        h.VirtioFSQueueSize,
-		VirtioFSExtraArgs:        h.VirtioFSExtraArgs,
-		MemPrealloc:              h.MemPrealloc,
-		ReclaimGuestFreedMemory:  h.ReclaimGuestFreedMemory,
-		HugePages:                h.HugePages,
-		IOMMU:                    h.IOMMU,
-		IOMMUPlatform:            h.getIOMMUPlatform(),
-		GuestNUMANodes:           h.defaultGuestNUMANodes(),
-		FileBackedMemRootDir:     h.FileBackedMemRootDir,
-		FileBackedMemRootList:    h.FileBackedMemRootList,
-		Debug:                    h.Debug,
-		DisableNestingChecks:     h.DisableNestingChecks,
-		BlockDeviceDriver:        blockDriver,
-		BlockDeviceAIO:           blockAIO,
-		BlockDeviceCacheSet:      h.BlockDeviceCacheSet,
-		BlockDeviceCacheDirect:   h.BlockDeviceCacheDirect,
-		BlockDeviceCacheNoflush:  h.BlockDeviceCacheNoflush,
-		EnableIOThreads:          h.EnableIOThreads,
-		IndepIOThreads:           h.indepiothreads(),
-		Msize9p:                  h.msize9p(),
-		DisableImageNvdimm:       h.DisableImageNvdimm,
-		HotPlugVFIO:              h.hotPlugVFIO(),
-		ColdPlugVFIO:             h.coldPlugVFIO(),
-		PCIeRootPort:             h.pcieRootPort(),
-		PCIeSwitchPort:           h.pcieSwitchPort(),
-		DisableVhostNet:          h.DisableVhostNet,
-		EnableVhostUserStore:     h.EnableVhostUserStore,
-		VhostUserStorePath:       h.vhostUserStorePath(),
-		VhostUserStorePathList:   h.VhostUserStorePathList,
-		VhostUserDeviceReconnect: h.VhostUserDeviceReconnect,
-		SeccompSandbox:           h.SeccompSandbox,
-		GuestHookPath:            h.guestHookPath(),
-		RxRateLimiterMaxRate:     rxRateLimiterMaxRate,
-		TxRateLimiterMaxRate:     txRateLimiterMaxRate,
-		EnableAnnotations:        h.EnableAnnotations,
-		GuestMemoryDumpPath:      h.GuestMemoryDumpPath,
-		GuestMemoryDumpPaging:    h.GuestMemoryDumpPaging,
-		ConfidentialGuest:        h.ConfidentialGuest,
-		SevSnpGuest:              h.SevSnpGuest,
-		GuestSwap:                h.GuestSwap,
-		Rootless:                 h.Rootless,
-		LegacySerial:             h.LegacySerial,
-		DisableSeLinux:           h.DisableSeLinux,
-		DisableGuestSeLinux:      h.DisableGuestSeLinux,
-		ExtraMonitorSocket:       extraMonitorSocket,
-		SnpIdBlock:               h.SnpIdBlock,
-		SnpIdAuth:                h.SnpIdAuth,
-		SnpGuestPolicy:           h.SnpGuestPolicy,
-		MeasurementAlgo:          h.GetMeasurementAlgo(),
+		HypervisorPath:                hypervisor,
+		HypervisorPathList:            h.HypervisorPathList,
+		KernelPath:                    kernel,
+		InitrdPath:                    initrd,
+		ImagePath:                     image,
+		RootfsType:                    rootfsType,
+		FirmwarePath:                  firmware,
+		FirmwareVolumePath:            firmwareVolume,
+		PFlash:                        pflashes,
+		MachineAccelerators:           machineAccelerators,
+		CPUFeatures:                   cpuFeatures,
+		KernelParams:                  vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:            h.kernelVerityParams(),
+		HypervisorMachineType:         machineType,
+		QgsPort:                       h.qgsPort(),
+		NumVCPUsF:                     h.defaultVCPUs(),
+		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
+		MemorySize:                    h.defaultMemSz(),
+		MemSlots:                      h.defaultMemSlots(),
+		MemOffset:                     h.defaultMemOffset(),
+		DefaultMaxMemorySize:          h.defaultMaxMemSz(),
+		VirtioMem:                     h.VirtioMem,
+		EntropySource:                 h.GetEntropySource(),
+		EntropySourceList:             h.EntropySourceList,
+		DefaultBridges:                h.defaultBridges(),
+		DisableBlockDeviceUse:         h.DisableBlockDeviceUse,
+		SharedFS:                      sharedFS,
+		VirtioFSDaemon:                h.VirtioFSDaemon,
+		VirtioFSDaemonList:            h.VirtioFSDaemonList,
+		HypervisorLoglevel:            h.defaultHypervisorLoglevel(),
+		VirtioFSCacheSize:             h.VirtioFSCacheSize,
+		VirtioFSCache:                 h.defaultVirtioFSCache(),
+		VirtioFSQueueSize:             h.VirtioFSQueueSize,
+		VirtioFSExtraArgs:             h.VirtioFSExtraArgs,
+		MemPrealloc:                   h.MemPrealloc,
+		ReclaimGuestFreedMemory:       h.ReclaimGuestFreedMemory,
+		HugePages:                     h.HugePages,
+		IOMMU:                         h.IOMMU,
+		IOMMUPlatform:                 h.getIOMMUPlatform(),
+		GuestNUMANodes:                h.defaultGuestNUMANodes(),
+		FileBackedMemRootDir:          h.FileBackedMemRootDir,
+		FileBackedMemRootList:         h.FileBackedMemRootList,
+		Debug:                         h.Debug,
+		DisableNestingChecks:          h.DisableNestingChecks,
+		BlockDeviceDriver:             blockDriver,
+		BlockDeviceAIO:                blockAIO,
+		BlockDeviceCacheSet:           h.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:        h.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush:       h.BlockDeviceCacheNoflush,
+		BlockDeviceLogicalSectorSize:  blockLogicalSectorSize,
+		BlockDevicePhysicalSectorSize: blockPhysicalSectorSize,
+		EnableIOThreads:               h.EnableIOThreads,
+		IndepIOThreads:                h.indepiothreads(),
+		Msize9p:                       h.msize9p(),
+		DisableImageNvdimm:            h.DisableImageNvdimm,
+		HotPlugVFIO:                   h.hotPlugVFIO(),
+		ColdPlugVFIO:                  h.coldPlugVFIO(),
+		PCIeRootPort:                  h.pcieRootPort(),
+		PCIeSwitchPort:                h.pcieSwitchPort(),
+		DisableVhostNet:               h.DisableVhostNet,
+		EnableVhostUserStore:          h.EnableVhostUserStore,
+		VhostUserStorePath:            h.vhostUserStorePath(),
+		VhostUserStorePathList:        h.VhostUserStorePathList,
+		VhostUserDeviceReconnect:      h.VhostUserDeviceReconnect,
+		SeccompSandbox:                h.SeccompSandbox,
+		GuestHookPath:                 h.guestHookPath(),
+		RxRateLimiterMaxRate:          rxRateLimiterMaxRate,
+		TxRateLimiterMaxRate:          txRateLimiterMaxRate,
+		EnableAnnotations:             h.EnableAnnotations,
+		GuestMemoryDumpPath:           h.GuestMemoryDumpPath,
+		GuestMemoryDumpPaging:         h.GuestMemoryDumpPaging,
+		ConfidentialGuest:             h.ConfidentialGuest,
+		SevSnpGuest:                   h.SevSnpGuest,
+		GuestSwap:                     h.GuestSwap,
+		Rootless:                      h.Rootless,
+		LegacySerial:                  h.LegacySerial,
+		DisableSeLinux:                h.DisableSeLinux,
+		DisableGuestSeLinux:           h.DisableGuestSeLinux,
+		ExtraMonitorSocket:            extraMonitorSocket,
+		SnpIdBlock:                    h.SnpIdBlock,
+		SnpIdAuth:                     h.SnpIdAuth,
+		SnpGuestPolicy:                h.SnpGuestPolicy,
+		MeasurementAlgo:               h.GetMeasurementAlgo(),
 	}, nil
 }
 
@@ -1283,42 +1342,58 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
 	}
 
+	blockLogicalSectorSize, err := h.blockDeviceLogicalSectorSize()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	blockPhysicalSectorSize, err := h.blockDevicePhysicalSectorSize()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if err := validateBlockDeviceSectorSizes(blockLogicalSectorSize, blockPhysicalSectorSize); err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	return vc.HypervisorConfig{
-		HypervisorPath:        hypervisor,
-		HypervisorPathList:    h.HypervisorPathList,
-		KernelPath:            kernel,
-		InitrdPath:            initrd,
-		ImagePath:             image,
-		RootfsType:            rootfsType,
-		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
-		KernelVerityParams:    h.kernelVerityParams(),
-		HypervisorMachineType: machineType,
-		NumVCPUsF:             h.defaultVCPUs(),
-		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
-		MemorySize:            h.defaultMemSz(),
-		MemSlots:              h.defaultMemSlots(),
-		MemOffset:             h.defaultMemOffset(),
-		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
-		EntropySource:         h.GetEntropySource(),
-		DefaultBridges:        h.defaultBridges(),
-		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
-		SharedFS:              sharedFS,
-		VirtioFSDaemon:        h.VirtioFSDaemon,
-		VirtioFSDaemonList:    h.VirtioFSDaemonList,
-		HypervisorLoglevel:    h.defaultHypervisorLoglevel(),
-		VirtioFSCacheSize:     h.VirtioFSCacheSize,
-		VirtioFSCache:         h.defaultVirtioFSCache(),
-		VirtioFSExtraArgs:     h.VirtioFSExtraArgs,
-		HugePages:             h.HugePages,
-		Debug:                 h.Debug,
-		DisableNestingChecks:  h.DisableNestingChecks,
-		BlockDeviceDriver:     blockDriver,
-		DisableVhostNet:       true,
-		GuestHookPath:         h.guestHookPath(),
-		EnableAnnotations:     h.EnableAnnotations,
-		DisableSeccomp:        h.DisableSeccomp,
-		DisableSeLinux:        h.DisableSeLinux,
-		DisableGuestSeLinux:   h.DisableGuestSeLinux,
+		HypervisorPath:                hypervisor,
+		HypervisorPathList:            h.HypervisorPathList,
+		KernelPath:                    kernel,
+		InitrdPath:                    initrd,
+		ImagePath:                     image,
+		RootfsType:                    rootfsType,
+		KernelParams:                  vc.DeserializeParams(strings.Fields(kernelParams)),
+		KernelVerityParams:            h.kernelVerityParams(),
+		HypervisorMachineType:         machineType,
+		NumVCPUsF:                     h.defaultVCPUs(),
+		DefaultMaxVCPUs:               h.defaultMaxVCPUs(),
+		MemorySize:                    h.defaultMemSz(),
+		MemSlots:                      h.defaultMemSlots(),
+		MemOffset:                     h.defaultMemOffset(),
+		DefaultMaxMemorySize:          h.defaultMaxMemSz(),
+		EntropySource:                 h.GetEntropySource(),
+		DefaultBridges:                h.defaultBridges(),
+		DisableBlockDeviceUse:         h.DisableBlockDeviceUse,
+		SharedFS:                      sharedFS,
+		VirtioFSDaemon:                h.VirtioFSDaemon,
+		VirtioFSDaemonList:            h.VirtioFSDaemonList,
+		HypervisorLoglevel:            h.defaultHypervisorLoglevel(),
+		VirtioFSCacheSize:             h.VirtioFSCacheSize,
+		VirtioFSCache:                 h.defaultVirtioFSCache(),
+		VirtioFSExtraArgs:             h.VirtioFSExtraArgs,
+		HugePages:                     h.HugePages,
+		Debug:                         h.Debug,
+		DisableNestingChecks:          h.DisableNestingChecks,
+		BlockDeviceDriver:             blockDriver,
+		BlockDeviceLogicalSectorSize:  blockLogicalSectorSize,
+		BlockDevicePhysicalSectorSize: blockPhysicalSectorSize,
+		DisableVhostNet:               true,
+		GuestHookPath:                 h.guestHookPath(),
+		EnableAnnotations:             h.EnableAnnotations,
+		DisableSeccomp:                h.DisableSeccomp,
+		DisableSeLinux:                h.DisableSeLinux,
+		DisableGuestSeLinux:           h.DisableGuestSeLinux,
 	}, nil
 }
 
@@ -1394,13 +1469,14 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for _, agent := range tomlConf.Agent {
 		config.AgentConfig = vc.KataAgentConfig{
-			LongLiveConn:       true,
-			Debug:              agent.debug(),
-			Trace:              agent.trace(),
-			KernelModules:      agent.kernelModules(),
-			EnableDebugConsole: agent.debugConsoleEnabled(),
-			DialTimeout:        agent.dialTimout(),
-			CdhApiTimeout:      agent.cdhApiTimout(),
+			LongLiveConn:         true,
+			Debug:                agent.debug(),
+			Trace:                agent.trace(),
+			KernelModules:        agent.kernelModules(),
+			EnableDebugConsole:   agent.debugConsoleEnabled(),
+			DialTimeout:          agent.dialTimout(),
+			CdhApiTimeout:        agent.cdhApiTimout(),
+			LaunchProcessTimeout: agent.launchProcessTimeout(),
 		}
 	}
 
@@ -1950,11 +2026,11 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 		return nil
 	}
 	if hypervisorType == vc.ClhHypervisor {
-		if coldPlug != config.NoPort {
-			return fmt.Errorf("cold-plug not supported on CLH")
+		if coldPlug != config.NoPort && coldPlug != config.RootPort {
+			return fmt.Errorf("only cold-plug=%s or %s supported on CLH", config.NoPort, config.RootPort)
 		}
-		if hotPlug != config.RootPort {
-			return fmt.Errorf("only hot-plug=%s supported on CLH", config.RootPort)
+		if hotPlug != config.NoPort && hotPlug != config.RootPort {
+			return fmt.Errorf("only hot-plug=%s or %s supported on CLH", config.NoPort, config.RootPort)
 		}
 	}
 

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	v1 "github.com/containerd/cgroups/stats/v1"
 	v2 "github.com/containerd/cgroups/v2/stats"
@@ -328,6 +329,81 @@ func (s *Sandbox) GetHypervisorPid() (int, error) {
 	}
 
 	return pids[0], nil
+}
+
+// RescanNetwork re-scans the network namespace for endpoints if none have
+// been discovered yet. This is idempotent: if endpoints already exist it
+// returns immediately. It enables Docker 26+ support where networking is
+// configured after task creation but before Start.
+//
+// Docker 26+ configures networking (veth pair, IP addresses) between
+// Create and Start. The interfaces may not be present immediately, so
+// this method polls until they appear or a timeout is reached.
+//
+// When new endpoints are found, the guest agent is informed about the
+// interfaces and routes so that networking becomes functional inside the VM.
+func (s *Sandbox) RescanNetwork(ctx context.Context) error {
+	if s.config.NetworkConfig.DisableNewNetwork {
+		return nil
+	}
+	if len(s.network.Endpoints()) > 0 {
+		return nil
+	}
+
+	const maxWait = 5 * time.Second
+	const pollInterval = 50 * time.Millisecond
+	deadline := time.NewTimer(maxWait)
+	defer deadline.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	s.Logger().Debug("waiting for network interfaces in namespace")
+
+	for {
+		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
+			return err
+		}
+		if len(s.network.Endpoints()) > 0 {
+			return s.configureGuestNetwork(ctx)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			s.Logger().Warn("no network interfaces found after timeout — networking may be configured by prestart hooks")
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+// configureGuestNetwork informs the guest agent about discovered network
+// endpoints so that interfaces and routes become functional inside the VM.
+func (s *Sandbox) configureGuestNetwork(ctx context.Context) error {
+	endpoints := s.network.Endpoints()
+	s.Logger().WithField("endpoints", len(endpoints)).Info("configuring hotplugged network in guest")
+
+	// Note: ARP neighbors (3rd return value) are not propagated here
+	// because the agent interface only exposes per-entry updates. The
+	// full setupNetworks path in kataAgent handles them; this path is
+	// only reached for late-discovered endpoints where neighbor entries
+	// are populated dynamically by the kernel.
+	interfaces, routes, _, err := generateVCNetworkStructures(ctx, endpoints)
+	if err != nil {
+		return fmt.Errorf("generating network structures: %w", err)
+	}
+	for _, ifc := range interfaces {
+		if _, err := s.agent.updateInterface(ctx, ifc); err != nil {
+			return fmt.Errorf("updating interface %s in guest: %w", ifc.Name, err)
+		}
+	}
+	if len(routes) > 0 {
+		if _, err := s.agent.updateRoutes(ctx, routes); err != nil {
+			return fmt.Errorf("updating routes in guest: %w", err)
+		}
+	}
+	return nil
 }
 
 // GetAllContainers returns all containers.
@@ -808,21 +884,38 @@ func (s *Sandbox) createResourceController() error {
 			resources.Devices = spec.Linux.Resources.Devices
 
 			intptr := func(i int64) *int64 { return &i }
-			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
+			// Compare existing entries by value (nil-safe). Comparing the
+			// *int64 fields directly against intptr(...) only compares
+			// addresses, which never matches because intptr() returns a fresh
+			// pointer on every call.
 			nullDeviceExist := false
 			urandomDeviceExist := false
 			ptmxDeviceExist := false
-			for _, device := range resources.Devices {
-				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
-					nullDeviceExist = true
+			loopControlDeviceExist := false
+			loopBlockDeviceExist := false
+			for _, d := range resources.Devices {
+				if d.Major == nil {
+					continue
 				}
-
-				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
-					urandomDeviceExist = true
-				}
-
-				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
-					ptmxDeviceExist = true
+				switch d.Type {
+				case "c":
+					if d.Minor == nil {
+						continue
+					}
+					switch {
+					case *d.Major == 1 && *d.Minor == 3:
+						nullDeviceExist = true
+					case *d.Major == 1 && *d.Minor == 9:
+						urandomDeviceExist = true
+					case *d.Major == 5 && *d.Minor == 2:
+						ptmxDeviceExist = true
+					case *d.Major == 10 && *d.Minor == 237:
+						loopControlDeviceExist = true
+					}
+				case "b":
+					if *d.Major == 7 && d.Minor == nil {
+						loopBlockDeviceExist = true
+					}
 				}
 			}
 
@@ -849,6 +942,27 @@ func (s *Sandbox) createResourceController() error {
 					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
 				}...)
 
+			}
+
+			// When sandbox_cgroup_only is enabled the shim threads inherit
+			// the sandbox device cgroup, so any rootfs whose mount source is
+			// a regular file backed by a loop device (e.g. the blockfile
+			// snapshotter) needs /dev/loop-control and the /dev/loopN block
+			// nodes allowlisted, otherwise containerd's loop setup fails
+			// with EPERM on open("/dev/loop-control").
+			if s.config.SandboxCgroupOnly {
+				if !loopControlDeviceExist {
+					// "/dev/loop-control"
+					resources.Devices = append(resources.Devices, specs.LinuxDeviceCgroup{
+						Type: "c", Major: intptr(10), Minor: intptr(237), Access: rwm, Allow: true,
+					})
+				}
+				if !loopBlockDeviceExist {
+					// "/dev/loop*" (block major 7, any minor)
+					resources.Devices = append(resources.Devices, specs.LinuxDeviceCgroup{
+						Type: "b", Major: intptr(7), Access: rwm, Allow: true,
+					})
+				}
 			}
 
 			if spec.Linux.Resources.CPU != nil {

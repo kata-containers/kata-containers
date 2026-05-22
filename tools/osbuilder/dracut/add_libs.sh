@@ -27,7 +27,7 @@ agent_binary="$1"
 non_standard_libs=("libutil.so")
 install_items=""
 
-if [ ! -x "${agent_binary}" ]; then
+if [[ ! -x "${agent_binary}" ]]; then
 	echo >&2 "ERROR: ${agent_binary} is not an executable file"
 	usage 1
 fi
@@ -35,7 +35,7 @@ fi
 # Cover both cases of "not a dynamic executable" being printed to STDERR
 # and "statically linked" being printed to STDOUT
 linked_libs="$(ldd "${agent_binary}" 2>&1)"
-if [ "$(wc -l <<< "${linked_libs}")" == 1 ]; then
+if [[ "$(wc -l <<< "${linked_libs}")" == 1 ]]; then
 	echo >&2 "Agent appears to be linked statically, exiting"
 	exit 0
 fi

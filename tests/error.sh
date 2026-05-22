@@ -11,7 +11,7 @@ stderr()
 {
 	local msg="$*"
 
-	echo >&2 "$msg"
+	echo >&2 "${msg}"
 }
 
 # Simplified version of die that should be called by functions that
@@ -21,7 +21,7 @@ _fatal()
 {
 	local msg="$*"
 
-	echo >&2 "FATAL: $msg"
+	echo >&2 "FATAL: ${msg}"
 	exit 1
 }
 
@@ -29,14 +29,14 @@ _fatal()
 resolve_path()
 {
 	local file="${1:-}"
-	[ -z "$file" ] && _fatal "need file to resolve"
+	[[ -z "${file}" ]] && _fatal "need file to resolve"
 
 	local path
 
-	path=$(readlink --canonicalize-existing "$file" || \
-		_fatal "failed to resolve file '$file'")
+	path=$(readlink --canonicalize-existing "${file}" || \
+		_fatal "failed to resolve file '${file}'")
 
-	echo "$path"
+	echo "${path}"
 }
 
 show_proc_hierarchy()
@@ -56,19 +56,15 @@ show_proc_hierarchy()
 
 		local current=''
 
-		[ "${pid}" = "${$}" ] && current=", current='yes'"
+		[[ "${pid}" = "${$}" ]] && current=", current='yes'"
 
-		details=$(ps --no-headers -p "$pid" -o ppid,cmd)
+		details=$(ps --no-headers -p "${pid}" -o ppid,cmd)
 
-		# The parent PID is always the first column due to the
-		# format specifier used above.
-		local ppid=$(echo "$details" | awk '{print $1}')
+		local ppid
+		ppid=$(echo "${details}" | awk '{print $1}')
 
-		# But the command part has a variable number of fields
-		# (since it could contain any number of spaces).
-		# Hence, delete the first field (PPID) and what
-		# remains is the entire command line.
-		local cmd=$(echo "$details" |\
+		local cmd
+		cmd=$(echo "${details}" |\
 			awk '{$1=""; print $0}' |\
 			sed \
 			-e 's/^ *//g' \
@@ -79,11 +75,11 @@ show_proc_hierarchy()
 			"${pid}" \
 			"${cmd}" \
 			"${current}")
-		stderr "$msg"
+		stderr "${msg}"
 
-		[ "$pid" = 1 ] && break
+		[[ "${pid}" = 1 ]] && break
 
-		pid="$ppid"
+		pid="${ppid}"
 	done
 }
 
@@ -93,9 +89,9 @@ show_stacktrace()
 	local err_func="${2:-}"
 	local err_path="${3:-}"
 
-	[ -z "$err_line" ] && _fatal "need error location line number"
-	[ -z "$err_func" ] && _fatal "need error location func"
-	[ -z "$err_path" ] && _fatal "need error location file path"
+	[[ -z "${err_line}" ]] && _fatal "need error location line number"
+	[[ -z "${err_func}" ]] && _fatal "need error location func"
+	[[ -z "${err_path}" ]] && _fatal "need error location file path"
 
 	local line
 	local func
@@ -108,16 +104,16 @@ show_stacktrace()
 	for ((i = 0; ; i++))
 	do
 		local result
-		result=$(caller "$i" || true)
+		result=$(caller "${i}" || true)
 
-		[ -z "$result" ] && break
+		[[ -z "${result}" ]] && break
 
-		line=$(echo "$result"|awk '{print $1}')
-		func=$(echo "$result"|awk '{print $2}')
-		file=$(echo "$result"|awk '{print $3}')
+		line=$(echo "${result}"|awk '{print $1}')
+		func=$(echo "${result}"|awk '{print $2}')
+		file=$(echo "${result}"|awk '{print $3}')
 
 		local path
-		path=$(resolve_path "$file")
+		path=$(resolve_path "${file}")
 
 		local msg
 
@@ -125,9 +121,9 @@ show_stacktrace()
 
 		# Add a visual marker showing where the original error was
 		# detected.
-		[ "${line}" = "${err_line}" ] && \
-		[ "${func}" = "${err_func}" ] && \
-		[ "${path}" = "${err_path}" ] && \
+		[[ "${line}" = "${err_line}" ]] && \
+		[[ "${func}" = "${err_func}" ]] && \
+		[[ "${path}" = "${err_path}" ]] && \
 		current=", current='yes'"
 
 		msg=$(printf "  %d: {function: '%s', file: '%s', line: %d%s}\n" \
@@ -137,7 +133,7 @@ show_stacktrace()
 			"${line}" \
 			"${current}" )
 
-		stderr "$msg"
+		stderr "${msg}"
 	done
 }
 
@@ -151,9 +147,9 @@ dump_details()
 	local err_func="${2:-}"
 	local err_path="${3:-}"
 
-	[ -z "$err_line" ] && _fatal "need error location line number"
-	[ -z "$err_func" ] && _fatal "need error location func"
-	[ -z "$err_path" ] && _fatal "need error location file path"
+	[[ -z "${err_line}" ]] && _fatal "need error location line number"
+	[[ -z "${err_func}" ]] && _fatal "need error location func"
+	[[ -z "${err_path}" ]] && _fatal "need error location file path"
 
 	# Spacer
 	stderr
@@ -161,12 +157,12 @@ dump_details()
 	stderr "script:"
 	stderr "  name: '$0'"
 	stderr "  pid: $$"
-	stderr "  directory: '$PWD'"
-	stderr "  details: '$(ls -dlZ "$PWD")'"
+	stderr "  directory: '${PWD}'"
+	stderr "  details: '$(ls -dlZ "${PWD}")'"
 	stderr "failure:"
-	stderr "  function: '$func'"
-	stderr "  file: '$path'"
-	stderr "  line: $line"
+	stderr "  function: '${func}'"
+	stderr "  file: '${path}'"
+	stderr "  line: ${line}"
 	stderr "  name: '$0'"
 
 	show_stacktrace \
@@ -190,8 +186,8 @@ dump_details()
 		>&2
 
 	stderr "user:"
-	stderr "  uid: {value: $UID, name: '$(getent passwd "$UID"|cut -d: -f1)'}"
-	stderr "  euid: {value: $EUID , name: '$(getent passwd "$EUID"|cut -d: -f1)'}"
+	stderr "  uid: {value: ${UID}, name: '$(getent passwd "${UID}"|cut -d: -f1)'}"
+	stderr "  euid: {value: ${EUID} , name: '$(getent passwd "${EUID}"|cut -d: -f1)'}"
 	stderr "  groups: '$(id)'"
 
 	stderr "bash:"

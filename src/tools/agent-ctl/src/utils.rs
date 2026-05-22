@@ -13,7 +13,7 @@ use protocols::agent::{CopyFileRequest, CreateContainerRequest, SetPolicyRequest
 use protocols::oci::{
     Mount as ttrpcMount, Process as ttrpcProcess, Root as ttrpcRoot, Spec as ttrpcSpec,
 };
-use rand::Rng;
+use rand::RngExt;
 use safe_path::scoped_join;
 use serde::de::DeserializeOwned;
 use slog::{debug, warn};
@@ -214,11 +214,11 @@ pub fn get_option(name: &str, options: &mut Options, args: &str) -> Result<Strin
 
 pub fn generate_random_hex_string(len: u32) -> String {
     const CHARSET: &[u8] = b"abcdef0123456789";
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let str: String = (0..len)
         .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
+            let idx = rng.random_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect();

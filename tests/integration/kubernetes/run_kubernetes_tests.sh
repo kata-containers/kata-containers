@@ -8,14 +8,18 @@
 set -e
 set -o pipefail
 
-kubernetes_dir=$(dirname "$(readlink -f "$0")")
+kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
+# shellcheck source=/dev/null
 source "${kubernetes_dir}/../../common.bash"
 
 cleanup() {
 	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
 	pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
 		| grep '^custom-node-debugger' || true)
-	[ -n "$pods_to_be_deleted" ] && kubectl delete pod -n kube-system $pods_to_be_deleted || true
+	if [[ -n "${pods_to_be_deleted}" ]]; then
+		# shellcheck disable=SC2086
+		kubectl delete pod -n kube-system ${pods_to_be_deleted} || true
+	fi
 }
 
 trap cleanup EXIT
@@ -27,24 +31,38 @@ K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 
-if [ -n "${K8S_TEST_UNION:-}" ]; then
-	K8S_TEST_UNION=($K8S_TEST_UNION)
+if [[ -n "${K8S_TEST_UNION:-}" ]]; then
+	# shellcheck disable=SC2206
+	K8S_TEST_UNION=(${K8S_TEST_UNION})
 else
 	# Before we use containerd 2.0 with 'image pull per runtime class' feature
 	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
 	K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION=( \
+		"k8s-confidential.bats" \
 		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
 		"k8s-confidential-attestation.bats" \
+		"k8s-measured-rootfs.bats" \
+	)
+
+	K8S_TEST_SMALL_HOST_TEE_POLICY_UNION=( \
+		"k8s-policy-hard-coded.bats" \
+		"k8s-policy-deployment.bats" \
+		"k8s-policy-deployment-sc.bats" \
+		"k8s-policy-job.bats" \
+		"k8s-policy-logs.bats" \
+		"k8s-policy-pod.bats" \
+		"k8s-policy-pvc.bats" \
+		"k8s-policy-rc.bats" \
+		"k8s-trusted-ephemeral-data-storage.bats" \
 	)
 
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-empty-image.bats" \
 		"k8s-guest-pull-image.bats" \
-		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-block-volume.bats" \
@@ -67,23 +85,15 @@ else
 		"k8s-kill-all-process-in-container.bats" \
 		"k8s-limit-range.bats" \
 		"k8s-liveness-probes.bats" \
-		"k8s-measured-rootfs.bats" \
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
 		"k8s-openvpn.bats" \
+		"k8s-termination-log.bats" \
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
-		"k8s-policy-hard-coded.bats" \
-		"k8s-policy-deployment.bats" \
-		"k8s-policy-deployment-sc.bats" \
-		"k8s-policy-job.bats" \
-		"k8s-policy-logs.bats" \
-		"k8s-policy-pod.bats" \
-		"k8s-policy-pvc.bats" \
-		"k8s-policy-rc.bats" \
 		"k8s-port-forward.bats" \
 		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
@@ -93,7 +103,6 @@ else
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
-		"k8s-trusted-ephemeral-data-storage.bats" \
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
@@ -108,31 +117,34 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=("${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]}" "${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]}" "${K8S_TEST_SMALL_HOST_UNION[@]}")
 			;;
 		normal)
-			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
+			K8S_TEST_UNION=("${K8S_TEST_NORMAL_HOST_UNION[@]}")
 			;;
 		all|baremetal)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			K8S_TEST_UNION=("${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]}" "${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]}" "${K8S_TEST_SMALL_HOST_UNION[@]}" "${K8S_TEST_NORMAL_HOST_UNION[@]}")
 			;;
 		baremetal-attestation)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
+			K8S_TEST_UNION=("${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]}")
 			;;
 		baremetal-no-attestation)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			K8S_TEST_UNION=("${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]}" "${K8S_TEST_SMALL_HOST_UNION[@]}" "${K8S_TEST_NORMAL_HOST_UNION[@]}")
+			;;
+		baremetal-small-tee)
+			K8S_TEST_UNION=("${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]}" "${K8S_TEST_SMALL_HOST_TEE_POLICY_UNION[@]}")
 			;;
 		*)
-			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
-			return 1
+			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal | baremetal-attestation | baremetal-no-attestation | baremetal-small-tee" >&2
+			exit 1
 			;;
 	esac
 fi
 
 # we may need to skip a few test cases when running on non-x86_64 arch
 arch_config_file="${kubernetes_dir}/filter_out_per_arch/${TARGET_ARCH}.yaml"
-if [ -f "${arch_config_file}" ]; then
-	arch_k8s_test_union=$(${kubernetes_dir}/filter_k8s_test.sh ${arch_config_file} "${K8S_TEST_UNION[*]}")
+if [[ -f "${arch_config_file}" ]]; then
+	arch_k8s_test_union=$("${kubernetes_dir}/filter_k8s_test.sh" "${arch_config_file}" "${K8S_TEST_UNION[*]}")
 	mapfile -d " " -t K8S_TEST_UNION <<< "${arch_k8s_test_union}"
 fi
 

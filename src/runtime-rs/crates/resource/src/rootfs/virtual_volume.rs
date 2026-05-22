@@ -15,6 +15,7 @@ use oci_spec::runtime as oci;
 use serde_json;
 use tokio::sync::RwLock;
 
+use agent::Storage;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_types::{
     annotations,
@@ -184,8 +185,8 @@ impl super::Rootfs for VirtualVolume {
         Ok(vec![])
     }
 
-    async fn get_storage(&self) -> Option<agent::Storage> {
-        Some(self.storages[0].clone())
+    async fn get_storage(&self) -> Option<Vec<Storage>> {
+        Some(self.storages.clone())
     }
 
     async fn get_device_id(&self) -> Result<Option<String>> {

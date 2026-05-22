@@ -67,6 +67,13 @@ install_userspace_components() {
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq libnvidia-compute nvidia-settings
+
+	# Needed for confidential-data-hub and NVAT runtime dependencies
+	eval "${APT_INSTALL}" cryptsetup-bin dmsetup         \
+		libargon2-1 e2fsprogs libxml2
+
+	apt-mark hold cryptsetup-bin dmsetup libargon2-1     \
+		e2fsprogs libxml2
 }
 
 setup_apt_repositories() {

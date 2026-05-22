@@ -10,6 +10,7 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
 
+# when using hostPath, ensure directory is writable by container user
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
@@ -54,27 +55,8 @@ NGC_API_KEY_BASE64=$(
 )
 export NGC_API_KEY_BASE64
 
-# Sealed secret format for TEE pods (vault type pointing to KBS resource)
-# Format: sealed.<base64url JWS header>.<base64url payload>.<base64url signature>
-# IMPORTANT: JWS uses base64url encoding WITHOUT padding (no trailing '=')
-# We use tr to convert standard base64 (+/) to base64url (-_) and remove padding (=)
-# For vault type, header and signature can be placeholders since the payload
-# contains the KBS resource path where the actual secret is stored.
-#
-# Vault type sealed secret payload for instruct pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/instruct",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/instruct","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_INSTRUCT="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD}.fakesignature"
+# pre-created signed sealed secrets for TEE pods (from confidential_common.sh)
+NGC_API_KEY_SEALED_SECRET_INSTRUCT="${SEALED_SECRET_PRECREATED_NIM_INSTRUCT}"
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 
 # Base64 encode the sealed secret for use in Kubernetes Secret data field
@@ -82,28 +64,14 @@ export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_INSTRUCT}" | base64 -w0)
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64
 
-# Vault type sealed secret payload for embedqa pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/embedqa",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/embedqa","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_EMBEDQA="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD}.fakesignature"
+NGC_API_KEY_SEALED_SECRET_EMBEDQA="${SEALED_SECRET_PRECREATED_NIM_EMBEDQA}"
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA
 
 NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_EMBEDQA}" | base64 -w0)
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64
 
 setup_langchain_flow() {
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
+    ensure_cicd_python_venv
 
     pip install --upgrade pip
     [[ "$(pip show langchain 2>/dev/null | awk '/^Version:/{print $2}')" = "0.2.5" ]] || pip install langchain==0.2.5
@@ -141,6 +109,7 @@ url = "${cc_kbs_address}"
 
 [image]
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
+image_security_policy_uri = "kbs:///default/security-policy/nim"
 '''
 EOF
 }
@@ -163,6 +132,9 @@ setup_kbs_credentials() {
     # The sealed secrets in the pod YAML point to these KBS resource paths.
     kbs_set_resource "default" "ngc-api-key" "instruct" "${NGC_API_KEY}"
     kbs_set_resource "default" "ngc-api-key" "embedqa" "${NGC_API_KEY}"
+
+    # Enforce signed images for nvcr.io/nim (instruct and embedqa) in the guest.
+    setup_kbs_nim_image_policy
 }
 
 create_inference_pod() {
@@ -209,13 +181,6 @@ setup_file() {
 
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
-    export PYENV_ROOT="${HOME}/.pyenv"
-    [[ -d ${PYENV_ROOT}/bin ]] && export PATH="${PYENV_ROOT}/bin:${PATH}"
-    eval "$(pyenv init - bash)"
-
-    # shellcheck disable=SC1091  # Virtual environment will be created during test execution
-    python3 -m venv "${HOME}"/.cicd/venv
-
     setup_langchain_flow
 
     policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -223,16 +188,51 @@ setup_file() {
 
     if [ "${TEE}" = "true" ]; then
         setup_kbs_credentials
+        # provision signing public key to KBS so that CDH can verify pre-created, signed secret.
+        setup_sealed_secret_signing_public_key
         # Overwrite the empty default-initdata.toml with our CDH configuration.
         # This must happen AFTER create_tmp_policy_settings_dir() copies the empty
         # file and BEFORE auto_generate_policy() runs.
         create_nim_initdata_file "${policy_settings_dir}/default-initdata.toml"
+
+        # Container image layer storage: one block device and PV/PVC per pod.
+        storage_config_template="${pod_config_dir}/confidential/trusted-storage.yaml.in"
+
+        instruct_storage_mib=57344
+        local_device_instruct=$(create_loop_device /tmp/trusted-image-storage-instruct.img "$instruct_storage_mib")
+        storage_config_instruct=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").instruct.XXX")
+        PV_NAME=trusted-block-pv-instruct PVC_NAME=trusted-pvc-instruct \
+            PV_STORAGE_CAPACITY="${instruct_storage_mib}Mi" PVC_STORAGE_REQUEST="${instruct_storage_mib}Mi" \
+            LOCAL_DEVICE="$local_device_instruct" NODE_NAME="$node" \
+            envsubst < "$storage_config_template" > "$storage_config_instruct"
+        retry_kubectl_apply "$storage_config_instruct"
+
+        if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
+            embedqa_storage_mib=8192
+            local_device_embedqa=$(create_loop_device /tmp/trusted-image-storage-embedqa.img "$embedqa_storage_mib")
+            storage_config_embedqa=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").embedqa.XXX")
+            PV_NAME=trusted-block-pv-embedqa PVC_NAME=trusted-pvc-embedqa \
+                PV_STORAGE_CAPACITY="${embedqa_storage_mib}Mi" PVC_STORAGE_REQUEST="${embedqa_storage_mib}Mi" \
+                LOCAL_DEVICE="$local_device_embedqa" NODE_NAME="$node" \
+                envsubst < "$storage_config_template" > "$storage_config_embedqa"
+            retry_kubectl_apply "$storage_config_embedqa"
+        fi
     fi
 
     create_inference_pod
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
-         create_embedqa_pod
+        create_embedqa_pod
+    fi
+
+    # BATS_TEST_COMPLETED is per-test and remains empty in teardown_file.
+    # Persist file-level state so success does not trigger journal dumps.
+    touch "${BATS_FILE_TMPDIR}/setup-file-completed"
+}
+
+teardown() {
+    if [[ "${BATS_TEST_COMPLETED:-}" != "1" && -z "${BATS_TEST_SKIPPED:-}" ]]; then
+        touch "${BATS_FILE_TMPDIR}/test-failed"
     fi
 }
 
@@ -292,8 +292,6 @@ setup_file() {
     QUESTION="What is the capital of France?"
     ANSWER="The capital of France is Paris."
 
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
     # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >"${HOME}"/.cicd/venv/langchain_nim.py
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
@@ -325,8 +323,6 @@ EOF
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
     [[ -n "${MODEL_NAME}" ]]
 
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
     cat <<EOF >"${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
 import os
 from langchain.chains import ConversationalRetrievalChain, LLMChain
@@ -501,5 +497,17 @@ teardown_file() {
         [ -f "${POD_EMBEDQA_YAML}" ] && kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
     fi
 
-    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}" >&3
+    if [[ "${TEE}" = "true" ]]; then
+        kubectl delete --ignore-not-found pvc trusted-pvc-instruct trusted-pvc-embedqa
+        kubectl delete --ignore-not-found pv trusted-block-pv-instruct trusted-block-pv-embedqa
+        kubectl delete --ignore-not-found storageclass local-storage
+        cleanup_loop_device /tmp/trusted-image-storage-instruct.img || true
+        cleanup_loop_device /tmp/trusted-image-storage-embedqa.img || true
+    fi
+
+    local bats_test_completed=1
+    if [[ ! -f "${BATS_FILE_TMPDIR}/setup-file-completed" || -f "${BATS_FILE_TMPDIR}/test-failed" ]]; then
+        bats_test_completed=
+    fi
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${bats_test_completed}" >&3
 }

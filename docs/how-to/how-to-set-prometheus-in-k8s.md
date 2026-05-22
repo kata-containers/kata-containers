@@ -17,7 +17,7 @@ You must have a running Kubernetes cluster first. If not, [install a Kubernetes 
 Also you should ensure that `kubectl` working correctly.
 
 > **Note**: More information about Kubernetes integrations:
->   - [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
+>   - [Run Kata Containers with Kubernetes](how-to-use-k8s-with-crio-and-kata.md)
 >   - [How to use Kata Containers and Containerd](containerd-kata.md)
 >   - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
 

@@ -17,8 +17,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use hyper::StatusCode;
 use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
-use reqwest::StatusCode;
 use slog::{debug, error, o};
 use vmm_sys_util::terminal::Terminal;
 

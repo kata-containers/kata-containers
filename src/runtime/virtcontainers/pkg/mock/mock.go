@@ -261,6 +261,10 @@ func (p *HybridVSockTTRPCMockImp) SetPolicy(ctx context.Context, req *pb.SetPoli
 	return &gpb.Empty{}, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) GetDiagnosticData(ctx context.Context, req *pb.GetDiagnosticDataRequest) (*pb.GetDiagnosticDataResponse, error) {
+	return &pb.GetDiagnosticDataResponse{}, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) AddSwapPath(ctx context.Context, req *pb.AddSwapPathRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }

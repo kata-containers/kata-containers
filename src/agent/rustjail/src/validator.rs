@@ -352,12 +352,12 @@ mod tests {
                 .unwrap(),
         ];
 
-        assert_eq!(contain_namespace(&namespaces, "net"), true);
-        assert_eq!(contain_namespace(&namespaces, "uts"), true);
+        assert!(contain_namespace(&namespaces, "net"));
+        assert!(contain_namespace(&namespaces, "uts"));
 
-        assert_eq!(contain_namespace(&namespaces, ""), false);
-        assert_eq!(contain_namespace(&namespaces, "Net"), false);
-        assert_eq!(contain_namespace(&namespaces, "ipc"), false);
+        assert!(!contain_namespace(&namespaces, ""));
+        assert!(!contain_namespace(&namespaces, "Net"));
+        assert!(!contain_namespace(&namespaces, "ipc"));
     }
 
     #[test]

@@ -8,8 +8,7 @@ pub(crate) mod address;
 pub(crate) mod link;
 
 use anyhow::{anyhow, Result};
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::{rng, Rng};
 
 pub(crate) fn parse_mac(s: &str) -> Option<hypervisor::Address> {
     let v: Vec<_> = s.split(':').collect();
@@ -40,7 +39,7 @@ pub(crate) fn get_mac_addr(b: &[u8]) -> Result<String> {
 /// x2-xx-xx-xx-xx-xx, x6-xx-xx-xx-xx-xx, xA-xx-xx-xx-xx-xx, xE-xx-xx-xx-xx-xx.
 pub(crate) fn generate_private_mac_addr() -> String {
     let mut addr: [u8; 6] = [0, 0, 0, 0, 0, 0];
-    OsRng.fill_bytes(&mut addr);
+    rng().fill_bytes(&mut addr);
     addr[0] = (addr[0] | 2) & 0xfe;
     // This is a safty unwrap since the len of addr is 6
     get_mac_addr(&addr).unwrap()

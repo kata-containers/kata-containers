@@ -69,12 +69,6 @@ kernel_params = "@KERNELPARAMS@"
 # If you want that qemu uses the default firmware leave this option empty
 firmware = "@FIRMWAREPATH@"
 
-# Path to the firmware volume.
-# firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
-# as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
-# can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWAREVOLUMEPATH@"
-
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
@@ -82,12 +76,12 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
 # comma-separated list of seccomp sandbox features to control the syscall access.
-# For example, `seccompsandbox= "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
+# For example, `seccomp_sandbox = "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
 # Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 # Recommended value when enabling: "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
-seccompsandbox = "@DEFSECCOMPSANDBOXPARAM@"
+seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
@@ -168,7 +162,6 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
 #   - virtio-fs (default)
-#   - virtio-9p
 #   - virtio-fs-nydus
 #   - none
 shared_fs = "@DEFSHAREDFS_QEMU_SEL_VIRTIOFS@"
@@ -250,6 +243,16 @@ block_device_cache_direct = false
 # Denotes whether flush requests for the device are ignored.
 # Default false
 block_device_cache_noflush = false
+
+# Specifies the logical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_logical_sector_size = 0
+
+# Specifies the physical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_physical_sector_size = 0
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently only implemented
@@ -344,18 +347,6 @@ msize_9p = @DEFMSIZE9P@
 #
 # Default is false
 disable_image_nvdimm = true
-
-# Enable hot-plugging of VFIO devices to a bridge-port,
-# root-port or switch-port.
-# The default setting is "no-port"
-hot_plug_vfio = "no-port"
-
-# In a confidential compute environment hot-plugging can compromise
-# security.
-# Enable cold-plugging of VFIO devices to a bridge-port,
-# root-port or switch-port.
-# The default setting is "no-port", which means disabled.
-cold_plug_vfio = "no-port"
 
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
@@ -460,9 +451,6 @@ guest_memory_dump_paging = false
 # be default_memory.
 enable_guest_swap = false
 
-# use legacy serial for guest console if available and implemented for architecture. Default false
-use_legacy_serial = false
-
 # disable applying SELinux on the VMM process (default false)
 disable_selinux = @DEFDISABLESELINUX@
 
@@ -474,7 +462,7 @@ disable_selinux = @DEFDISABLESELINUX@
 disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
 
-[factory]
+[hypervisor.qemu.factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
 # agent memory by mapping it readonly. It helps speeding up new container
@@ -533,17 +521,22 @@ kernel_modules = []
 debug_console_enabled = false
 
 # Agent dial timeout in millisecond.
-# (default: 10)
-dial_timeout_ms = 90
+# (default: 100)
+dial_timeout_ms = 100
 
 # Agent reconnect timeout in millisecond.
-# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
+# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 450)
 # If you find pod cannot connect to the agent when starting, please
 # consider increasing this value to increase the retry times.
 # You'd better not change the value of dial_timeout_ms, unless you have an
 # idea of what you are doing.
-# (default: 3000)
-reconnect_timeout_ms = 5000
+# (default: 45000)
+reconnect_timeout_ms = 45000
+
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# (agent default when unset: 6)
+launch_process_timeout = 6
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -557,6 +550,10 @@ reconnect_timeout_ms = 5000
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
 # Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+
+# Confidential Data Hub API timeout value in milliseconds
+# (default: 50000)
+cdh_api_timeout_ms = 50000
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -596,16 +593,7 @@ disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 # vCPUs pinning settings
 # if enabled, each vCPU thread will be scheduled to a fixed CPU
 # qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
-enable_vcpus_pinning = false
-
-# Apply a custom SELinux security policy to the container process inside the VM.
-# This is used when you want to apply a type other than the default `container_t`,
-# so general users should not uncomment and apply it.
-# (format: "user:role:type")
-# Note: You cannot specify MCS policy with the label because the sensitivity levels and
-# categories are determined automatically by high-level container runtimes such as containerd.
-# Example value when enabling: "system_u:system_r:container_t"
-guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
+enable_vcpus_pinning = @DEFENABLEVCPUSPINNING_QEMU@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
@@ -677,6 +665,18 @@ vfio_mode = "@DEFVFIOMODE_SE@"
 # If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
 disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
+
+# Specifies how Kubernetes emptyDir volumes are handled.
+# Options:
+#
+#   - shared-fs (default)
+#     Shares the emptyDir folder with the guest using the method given
+#     by the `shared_fs` setting.
+#
+#   - block-encrypted
+#     Plugs a block device to be encrypted in the guest.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,

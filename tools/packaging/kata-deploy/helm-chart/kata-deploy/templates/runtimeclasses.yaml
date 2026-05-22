@@ -26,10 +26,22 @@ handler: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
 {{- else }}
 handler: kata-{{ .shim }}
 {{- end }}
+{{- /* Overhead section - controlled by global or per-shim overheadEnabled flag (default: true) */ -}}
+{{- $shimOverheadEnabled := true -}}
+{{- if hasKey .root.Values.runtimeClasses "overheadEnabled" -}}
+{{- $shimOverheadEnabled = .root.Values.runtimeClasses.overheadEnabled -}}
+{{- end -}}
+{{- with .shimConfig.runtimeClass -}}
+{{- if hasKey . "overheadEnabled" -}}
+{{- $shimOverheadEnabled = .overheadEnabled -}}
+{{- end -}}
+{{- end -}}
+{{- if $shimOverheadEnabled }}
 overhead:
   podFixed:
     memory: {{ .config.memory | quote }}
     cpu: {{ .config.cpu | quote }}
+{{- end }}
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
@@ -83,7 +95,7 @@ scheduling:
 
 {{- $runtimeClassConfigs := dict
   "clh" (dict "memory" "130Mi" "cpu" "250m")
-  "cloud-hypervisor" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
   "dragonball" (dict "memory" "130Mi" "cpu" "250m")
   "fc" (dict "memory" "130Mi" "cpu" "250m")
   "qemu" (dict "memory" "160Mi" "cpu" "250m")
@@ -96,9 +108,12 @@ scheduling:
   "qemu-snp-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu" (dict "memory" "4096Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-snp" (dict "memory" "20480Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-tdx" (dict "memory" "20480Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
   "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
   "remote" (dict "memory" "120Mi" "cpu" "250m")

@@ -79,6 +79,9 @@ pub const KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE: &str =
     "io.katacontainers.config.agent.container_pipe_size";
 /// An annotation key to specify the size of the pipes created for containers.
 pub const CONTAINER_PIPE_SIZE_KERNEL_PARAM: &str = "agent.container_pipe_size";
+/// An annotation to specify the Confidential Data Hub API timeout in milliseconds.
+pub const KATA_ANNO_CFG_AGENT_CDH_API_TIMEOUT: &str =
+    "io.katacontainers.config.agent.cdh_api_timeout_ms";
 
 // Hypervisor related annotations
 /// Prefix for Hypervisor configurations.
@@ -257,7 +260,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR: &str =
     "io.katacontainers.config.hypervisor.rootless";
 
 // Hypervisor Shared File System related annotations
-/// A sandbox annotation to specify the shared file system type, either inline-virtio-fs (default), virtio-9p, virtio-fs or virtio-fs-nydus.
+/// A sandbox annotation to specify the shared file system type, either virtio-fs(default), inline-virtio-fs, virtio-fs-nydus or none.
 pub const KATA_ANNO_CFG_HYPERVISOR_SHARED_FS: &str =
     "io.katacontainers.config.hypervisor.shared_fs";
 /// A sandbox annotations to specify virtio-fs vhost-user daemon path.
@@ -272,8 +275,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_CACHE_SIZE: &str =
 /// A sandbox annotation to pass options to virtiofsd daemon.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
-/// A sandbox annotation to specify as the msize for 9p shares.
-pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
 /// The initdata annotation passed in when CVM launchs
 pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
     "io.katacontainers.config.hypervisor.cc_init_data";
@@ -286,6 +287,20 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
     "io.katacontainers.config.hypervisor.default_gpu_model";
 
+/// A sandbox annotation that specifies the logical sector size reported by block devices to the
+/// guest, in bytes. Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+/// NOTE: the annotation key uses "blk_logical_sector_size" rather than
+/// "block_device_logical_sector_size" because Kubernetes enforces a 63-character limit on
+/// annotation name segments.
+pub const KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE: &str =
+    "io.katacontainers.config.hypervisor.blk_logical_sector_size";
+/// A sandbox annotation that specifies the physical sector size reported by block devices to the
+/// guest, in bytes. Common values are 512 and 4096. Set to 0 to use the hypervisor default.
+/// NOTE: the annotation key uses "blk_physical_sector_size" rather than
+/// "block_device_physical_sector_size" because Kubernetes enforces a 63-character limit on
+/// annotation name segments.
+pub const KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE: &str =
+    "io.katacontainers.config.hypervisor.blk_physical_sector_size";
 /// Block device specific annotation for num_queues
 pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES: &str =
     "io.katacontainers.config.hypervisor.block_device_num_queues";
@@ -324,6 +339,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_NETWORK_QUEUES: &str =
 /// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 pub const KATA_ANNO_CFG_SANDBOX_CGROUP_ONLY: &str =
     "io.katacontainers.config.runtime.sandbox_cgroup_only";
+/// A sandbox annotation that controls pinning of vCPU threads to host CPUs.
+pub const KATA_ANNO_CFG_ENABLE_VCPUS_PINNING: &str =
+    "io.katacontainers.config.runtime.enable_vcpus_pinning";
 /// A sandbox annotation that determines if create a netns for hypervisor process.
 pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
     "io.katacontainers.config.runtime.disable_new_netns";
@@ -975,14 +993,48 @@ impl Annotation {
                             hv.shared_fs.virtio_fs_extra_args.push(arg.to_string());
                         }
                     }
-                    KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P => match self.get_value::<u32>(key) {
-                        Ok(v) => {
-                            hv.shared_fs.msize_9p = v.unwrap_or_default();
+                    KATA_ANNO_CFG_HYPERVISOR_BLK_LOGICAL_SECTOR_SIZE => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                let size = v.unwrap_or_default();
+                                if let Err(e) =
+                                    crate::config::hypervisor::validate_block_device_sector_size(
+                                        size,
+                                    )
+                                {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        e.to_string(),
+                                    ));
+                                }
+                                hv.blockdev_info.block_device_logical_sector_size = size;
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
                         }
-                        Err(_e) => {
-                            return Err(u32_err);
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_BLK_PHYSICAL_SECTOR_SIZE => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                let size = v.unwrap_or_default();
+                                if let Err(e) =
+                                    crate::config::hypervisor::validate_block_device_sector_size(
+                                        size,
+                                    )
+                                {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        e.to_string(),
+                                    ));
+                                }
+                                hv.blockdev_info.block_device_physical_sector_size = size;
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
                         }
-                    },
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES => {
                         match self.get_value::<usize>(key) {
                             Ok(v) => {
@@ -1031,6 +1083,14 @@ impl Annotation {
                     KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_AGENT_CDH_API_TIMEOUT => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            ag.cdh_api_timeout_ms = v.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(u32_err);
@@ -1102,6 +1162,14 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
+                    KATA_ANNO_CFG_ENABLE_VCPUS_PINNING => match self.get_value::<bool>(key) {
+                        Ok(r) => {
+                            config.runtime.enable_vcpus_pinning = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
+                        }
+                    },
                     KATA_ANNO_CFG_DISABLE_NEW_NETNS => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.disable_new_netns = r.unwrap_or_default();
@@ -1131,6 +1199,18 @@ impl Annotation {
                     }
                 }
             }
+        }
+
+        // Validate cross-field constraint: logical sector size must not exceed physical.
+        // Individual sizes are validated inside the loop, but the cross-field check must
+        // run after both annotations have been applied.
+        let logical = hv.blockdev_info.block_device_logical_sector_size;
+        let physical = hv.blockdev_info.block_device_physical_sector_size;
+        if logical != 0 && physical != 0 && logical > physical {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid sector sizes: logical ({logical}) must not be larger than physical ({physical})"),
+            ));
         }
 
         config.adjust_config()?;

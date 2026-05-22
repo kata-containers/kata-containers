@@ -42,11 +42,33 @@ impl K8sClient {
             .with_context(|| format!("Failed to get node: {}", self.node_name))
     }
 
-    pub async fn get_node_field(&self, jsonpath: &str) -> Result<String> {
+    /// Return `.status.nodeInfo.containerRuntimeVersion` for the bound node,
+    /// or an error if the field isn't populated. Avoids deep-cloning the
+    /// whole `Node` into a `serde_json::Value` tree just to walk a static
+    /// path.
+    pub async fn get_container_runtime_version(&self) -> Result<String> {
         let node = self.get_node().await?;
-        // Convert Node to serde_json::Value for JSONPath parsing
-        let node_value = serde_json::to_value(&node)?;
-        get_jsonpath_value(&node_value, jsonpath)
+        node.status
+            .as_ref()
+            .and_then(|s| s.node_info.as_ref())
+            .map(|i| i.container_runtime_version.clone())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Node '{}' is missing status.nodeInfo.containerRuntimeVersion",
+                    self.node_name
+                )
+            })
+    }
+
+    /// Return the value of a single label from `.metadata.labels` on the
+    /// bound node, or `None` if the label is absent.
+    pub async fn get_node_label(&self, key: &str) -> Result<Option<String>> {
+        let node = self.get_node().await?;
+        Ok(node
+            .metadata
+            .labels
+            .as_ref()
+            .and_then(|labels| labels.get(key).cloned()))
     }
 
     pub async fn label_node(
@@ -94,30 +116,41 @@ impl K8sClient {
         Ok(())
     }
 
-    pub async fn count_kata_deploy_daemonsets(&self) -> Result<usize> {
+    /// Returns whether a non-terminating DaemonSet with this exact name
+    /// exists in the current namespace. Used to decide whether this pod is
+    /// being restarted (true) or uninstalled (false).
+    pub async fn own_daemonset_exists(&self, daemonset_name: &str) -> Result<bool> {
+        use k8s_openapi::api::apps::v1::DaemonSet;
+        use kube::api::Api;
+
+        let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
+        match ds_api.get_opt(daemonset_name).await? {
+            Some(ds) => Ok(ds.metadata.deletion_timestamp.is_none()),
+            None => Ok(false),
+        }
+    }
+
+    /// Returns how many non-terminating DaemonSets across all namespaces
+    /// have a name containing "kata-deploy". Used to decide whether shared
+    /// node-level resources (node label, CRI restart) should be cleaned up:
+    /// they are only safe to remove when no kata-deploy instance remains
+    /// on the cluster.
+    pub async fn count_any_kata_deploy_daemonsets(&self) -> Result<usize> {
         use k8s_openapi::api::apps::v1::DaemonSet;
         use kube::api::{Api, ListParams};
 
-        let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
-        let lp = ListParams::default();
-        let daemonsets = ds_api.list(&lp).await?;
+        let ds_api: Api<DaemonSet> = Api::all(self.client.clone());
+        let daemonsets = ds_api.list(&ListParams::default()).await?;
 
-        // Note: We use client-side filtering here because Kubernetes field selectors
-        // don't support "contains" operations - they only support exact matches and comparisons.
-        // Filtering by name containing "kata-deploy" requires client-side processing.
-        // Exclude DaemonSets that are terminating (have deletion_timestamp) so that when our
-        // DaemonSet pod runs cleanup on SIGTERM during uninstall, we count 0 and remove the label.
         let count = daemonsets
             .iter()
             .filter(|ds| {
-                if ds.metadata.deletion_timestamp.is_some() {
-                    return false;
-                }
-                ds.metadata
-                    .name
-                    .as_ref()
-                    .map(|n| n.contains("kata-deploy"))
-                    .unwrap_or(false)
+                ds.metadata.deletion_timestamp.is_none()
+                    && ds
+                        .metadata
+                        .name
+                        .as_ref()
+                        .is_some_and(|n| n.contains("kata-deploy"))
             })
             .count();
 
@@ -471,96 +504,21 @@ impl K8sClient {
     }
 }
 
-/// Split a JSONPath string by dots, but respect escaped dots (\.)
-/// Example: "metadata.labels.microk8s\.io/cluster" -> ["metadata", "labels", "microk8s.io/cluster"]
-fn split_jsonpath(path: &str) -> Vec<String> {
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    let mut chars = path.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            // Check if next char is a dot (escaped dot)
-            if chars.peek() == Some(&'.') {
-                current.push(chars.next().unwrap()); // Add the dot literally
-            } else {
-                current.push(c); // Keep the backslash
-            }
-        } else if c == '.' {
-            if !current.is_empty() {
-                parts.push(current);
-                current = String::new();
-            }
-        } else {
-            current.push(c);
-        }
-    }
-
-    if !current.is_empty() {
-        parts.push(current);
-    }
-
-    parts
-}
-
-/// Get value from JSON using JSONPath-like syntax (simplified)
-fn get_jsonpath_value(obj: &serde_json::Value, jsonpath: &str) -> Result<String> {
-    // Simple JSONPath implementation for common cases
-    // Supports: .field, .field.subfield, [index], escaped dots (\.)
-    let mut current = serde_json::to_value(obj)?;
-
-    // Split by unescaped dots only
-    let parts = split_jsonpath(jsonpath.trim_start_matches('.'));
-
-    for part in parts {
-        if part.is_empty() {
-            continue;
-        }
-
-        // Handle array access [index]
-        if let Some((key, index_str)) = part.split_once('[') {
-            if !key.is_empty() {
-                current = current
-                    .get(key)
-                    .ok_or_else(|| anyhow::anyhow!("Field '{key}' not found"))?
-                    .clone();
-            }
-            let index = index_str
-                .trim_end_matches(']')
-                .parse::<usize>()
-                .map_err(|_| anyhow::anyhow!("Invalid array index"))?;
-            current = current
-                .as_array()
-                .and_then(|a| a.get(index))
-                .ok_or_else(|| anyhow::anyhow!("Array index {index} out of bounds"))?
-                .clone();
-        } else {
-            current = current
-                .get(&part)
-                .ok_or_else(|| anyhow::anyhow!("Field '{part}' not found"))?
-                .clone();
-        }
-    }
-
-    match current {
-        serde_json::Value::String(s) => Ok(s),
-        serde_json::Value::Number(n) => Ok(n.to_string()),
-        serde_json::Value::Bool(b) => Ok(b.to_string()),
-        _ => Ok(serde_json::to_string(&current)?),
-    }
-}
-
 // Public API functions that use the client
-pub async fn get_node_field(config: &Config, jsonpath: &str) -> Result<String> {
+pub async fn get_container_runtime_version(config: &Config) -> Result<String> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.get_node_field(jsonpath).await
+    client.get_container_runtime_version().await
+}
+
+pub async fn get_node_label(config: &Config, key: &str) -> Result<Option<String>> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client.get_node_label(key).await
 }
 
 pub async fn get_node_ready_status(config: &Config) -> Result<String> {
     let client = K8sClient::new(&config.node_name).await?;
     let node = client.get_node().await?;
 
-    // Find the Ready condition in the node status
     if let Some(status) = &node.status {
         if let Some(conditions) = &status.conditions {
             for condition in conditions {
@@ -584,9 +542,14 @@ pub async fn label_node(
     client.label_node(label_key, label_value, overwrite).await
 }
 
-pub async fn count_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.count_kata_deploy_daemonsets().await
+    client.own_daemonset_exists(&config.daemonset_name).await
+}
+
+pub async fn count_any_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client.count_any_kata_deploy_daemonsets().await
 }
 
 pub async fn crd_exists(config: &Config, crd_name: &str) -> Result<bool> {
@@ -621,56 +584,4 @@ pub async fn update_runtimeclass(
 ) -> Result<()> {
     let client = K8sClient::new(&config.node_name).await?;
     client.update_runtimeclass(runtimeclass).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_split_jsonpath_simple() {
-        let parts = split_jsonpath("metadata.labels.foo");
-        assert_eq!(parts, vec!["metadata", "labels", "foo"]);
-    }
-
-    #[test]
-    fn test_split_jsonpath_escaped_dot() {
-        // microk8s\.io/cluster should become a single key: microk8s.io/cluster
-        let parts = split_jsonpath(r"metadata.labels.microk8s\.io/cluster");
-        assert_eq!(parts, vec!["metadata", "labels", "microk8s.io/cluster"]);
-    }
-
-    #[test]
-    fn test_split_jsonpath_multiple_escaped_dots() {
-        let parts = split_jsonpath(r"a\.b\.c.d");
-        assert_eq!(parts, vec!["a.b.c", "d"]);
-    }
-
-    #[test]
-    fn test_get_jsonpath_value() {
-        let json = json!({
-            "status": {
-                "nodeInfo": {
-                    "containerRuntimeVersion": "containerd://1.7.0"
-                }
-            }
-        });
-
-        let result = get_jsonpath_value(&json, ".status.nodeInfo.containerRuntimeVersion").unwrap();
-        assert_eq!(result, "containerd://1.7.0");
-    }
-
-    #[test]
-    fn test_get_jsonpath_value_with_escaped_dot() {
-        let json = json!({
-            "metadata": {
-                "labels": {
-                    "microk8s.io/cluster": "true"
-                }
-            }
-        });
-
-        let result = get_jsonpath_value(&json, r".metadata.labels.microk8s\.io/cluster").unwrap();
-        assert_eq!(result, "true");
-    }
 }

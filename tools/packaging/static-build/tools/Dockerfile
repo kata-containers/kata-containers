@@ -61,10 +61,21 @@ RUN ARCH=$(uname -m) && \
     rm /tmp/oras.tar.gz && \
     oras version
 
-# Tools only build for x86_64
-RUN rustup target add x86_64-unknown-linux-musl
+RUN ARCH=$(uname -m) && \
+    case "${ARCH}" in \
+        x86_64) MUSL_TARGET="x86_64-unknown-linux-musl" ;; \
+        aarch64) MUSL_TARGET="aarch64-unknown-linux-musl" ;; \
+        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    esac && \
+    rustup target add "${MUSL_TARGET}"
 
-RUN kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
-    curl -fsSOL "https://go.dev/dl/go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
-    tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
-    rm "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz"
+RUN ARCH=$(uname -m) && \
+    case "${ARCH}" in \
+        x86_64) GO_ARCH="amd64" ;; \
+        aarch64) GO_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    esac && \
+    kernelname=$(uname -s | tr '[:upper:]' '[:lower:]') && \
+    curl -fsSOL "https://go.dev/dl/go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz" && \
+    tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz" && \
+    rm "go${GO_TOOLCHAIN}.${kernelname}-${GO_ARCH}.tar.gz"

@@ -29,6 +29,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tarball-s390x
+  cancel-in-progress: true
+
 jobs:
   build-asset:
     name: build-asset
@@ -47,18 +51,21 @@ jobs:
           - pause-image
           - qemu
           - virtiofsd
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     env:
-      PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
+      PERFORM_ATTESTATION: ${{ inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
@@ -98,7 +105,7 @@ jobs:
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
       # for pushing attestations to the registry
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           registry: ghcr.io
@@ -113,7 +120,7 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
@@ -134,16 +141,19 @@ jobs:
           - rootfs-image-confidential
           - rootfs-initrd
           - rootfs-initrd-confidential
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
@@ -156,7 +166,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -165,8 +175,8 @@ jobs:
       - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
@@ -181,7 +191,7 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
@@ -196,7 +206,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - name: Rebase atop of the latest target branch
@@ -206,7 +216,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -221,8 +231,8 @@ jobs:
 
       - name: Build boot-image-se
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "boot-image-se"
-          make boot-image-se-tarball
+          make install-prebuilt-artifacts
+          make DEPS= boot-image-se-tarball
           build_dir=$(readlink -f build)
           sudo cp -r "${build_dir}" "kata-build"
           sudo chown -R "$(id -u)":"$(id -g)" "kata-build"
@@ -230,7 +240,7 @@ jobs:
           HKD_PATH: "host-key-document"
 
       - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-boot-image-se.tar.zst
@@ -248,8 +258,11 @@ jobs:
           - agent
           - coco-guest-components
           - pause-image
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
-      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
+      - uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # v6.0.0
         if: ${{ inputs.stage == 'release' }}
         with:
           name: kata-artifacts-s390x-${{ matrix.asset}}${{ inputs.tarball-suffix }}
@@ -261,16 +274,24 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        asset:
+          - shim-v2-go
+          - shim-v2-rust
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
@@ -283,23 +304,23 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
           merge-multiple: true
 
-      - name: Build shim-v2
+      - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
-          KATA_ASSET: shim-v2
-          TAR_OUTPUT: shim-v2.tar.gz
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
           ARTEFACT_REGISTRY: ghcr.io
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
@@ -308,17 +329,18 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           MEASURED_ROOTFS: no
 
-      - name: store-artifact shim-v2
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: kata-artifacts-s390x-shim-v2${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-shim-v2.tar.zst
+          name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 
   create-kata-tarball:
     name: create-kata-tarball
     runs-on: ubuntu-24.04-s390x
+    timeout-minutes: 10
     needs:
       - build-asset
       - build-asset-rootfs
@@ -328,7 +350,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -340,7 +362,7 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -350,8 +372,18 @@ jobs:
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
         env:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+      - name: Check kata tarball size (GitHub release asset limit)
+        run: |
+          # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
+          GITHUB_ASSET_MAX_BYTES=2147483648
+          tarball_size=$(stat -c "%s" kata-static.tar.zst)
+          if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
+            echo "::error::tarball size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
+            exit 1
+          fi
+          echo "tarball size: ${tarball_size} bytes"
       - name: store-artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.zst

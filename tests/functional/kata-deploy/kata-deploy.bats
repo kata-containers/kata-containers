@@ -109,7 +109,7 @@ EOF
 
 	echo ""
 	echo "::group::kata-deploy logs"
-	kubectl -n kube-system logs --tail=200 -l name=kata-deploy
+	kubectl -n kube-system logs -l name=kata-deploy
 	echo "::endgroup::"
 
 	echo ""

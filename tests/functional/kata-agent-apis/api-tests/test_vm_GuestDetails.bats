@@ -22,10 +22,10 @@ setup_file() {
     rm -rf $test_dir
 }
 
-@test "Test GetGuestDetails: Boot cloud hypervisor pod vm and run GetGuestDetails" {
-    info "Boot cloud hypervisor vm, establish connection with agent inside the vm and send GetGuestDetails command"
+@test "Test GetGuestDetails: Boot clh pod vm and run GetGuestDetails" {
+    info "Boot clh vm, establish connection with agent inside the vm and send GetGuestDetails command"
     local cmds=()
-    cmds+=("--vm cloud-hypervisor -c GetGuestDetails")
+    cmds+=("--vm clh -c GetGuestDetails")
     run_agent_ctl "${cmds[@]}"
 }
 

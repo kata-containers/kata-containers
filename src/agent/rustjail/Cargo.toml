@@ -61,4 +61,3 @@ test-utils.workspace = true
 
 [features]
 seccomp = ["libseccomp"]
-standard-oci-runtime = []

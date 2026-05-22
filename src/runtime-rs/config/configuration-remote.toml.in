@@ -150,9 +150,9 @@ enable_tracing = false
 
 debug_console_enabled = false
 
-# Agent connection dialing timeout value in seconds
-# (default: 30)
-dial_timeout = 30
+# Agent connection dialing timeout value in milliseconds
+# (default: 30000)
+dial_timeout_ms = 30000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -204,15 +204,6 @@ agent_name = "kata"
 # Note: The remote hypervisor has a different guest, so currently requires this to be set to true
 disable_guest_seccomp = true
 
-
-# Apply a custom SELinux security policy to the container process inside the VM.
-# This is used when you want to apply a type other than the default `container_t`,
-# so general users should not uncomment and apply it.
-# (format: "user:role:type")
-# Note: You cannot specify MCS policy with the label because the sensitivity levels and
-# categories are determined automatically by high-level container runtimes such as containerd.
-# Example value when enabling: "system_u:system_r:container_t"
-guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).

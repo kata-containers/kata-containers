@@ -59,7 +59,14 @@ async fn handle_block_storage(
         .contains(&"encryption_key=ephemeral".to_string());
 
     if has_ephemeral_encryption {
-        crate::rpc::cdh_secure_mount("BlockDevice", dev_num, "LUKS", &storage.mount_point).await?;
+        crate::rpc::cdh_secure_mount(
+            "block-device",
+            dev_num,
+            "luks2",
+            &storage.mount_point,
+            "-O ^has_journal -m 0 -i 163840 -I 128",
+        )
+        .await?;
         set_ownership(logger, storage)?;
         new_device(storage.mount_point.clone())
     } else {
@@ -156,8 +163,8 @@ impl StorageHandler for VirtioBlkCcwHandler {
         let ccw_device = ccw::Device::from_str(&storage.source)?;
         let dev_path = get_virtio_blk_ccw_device_name(ctx.sandbox, &ccw_device).await?;
         storage.source = dev_path;
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
+        let dev_num = get_device_number(&storage.source, None)?;
+        handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
 
     #[cfg(not(target_arch = "s390x"))]

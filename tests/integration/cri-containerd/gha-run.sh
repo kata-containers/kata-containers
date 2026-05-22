@@ -9,8 +9,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# shellcheck disable=SC2034
 kata_tarball_dir="${2:-kata-artifacts}"
 cri_containerd_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=/dev/null
 source "${cri_containerd_dir}/../../common.bash"
 
 function install_dependencies() {
@@ -51,6 +53,7 @@ function install_dependencies() {
 	#   - cri-container-cni release tarball already includes CNI plugins
 	# - cri-tools
 	declare -a github_deps
+	# shellcheck disable=SC2154
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
 	github_deps[2]="runc:$(get_from_kata_deps ".externals.runc.latest")"
@@ -63,10 +66,11 @@ function install_dependencies() {
 
 	# Clone containerd as we'll need to build it in order to run the tests
 	# base_version: The version to be intalled in the ${major}.${minor} format
-	clone_cri_containerd $(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")
+	clone_cri_containerd "$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 }
 
 function run() {
+	# shellcheck disable=SC2154
 	info "Running cri-containerd tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor

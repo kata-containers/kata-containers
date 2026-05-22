@@ -28,8 +28,8 @@ use crate::{
         VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
         WriteStreamRequest,
     },
-    GetGuestDetailsRequest, OomEventResponse, SetPolicyRequest, WaitProcessResponse,
-    WriteStreamResponse,
+    GetDiagnosticDataRequest, GetDiagnosticDataResponse, GetGuestDetailsRequest, OomEventResponse,
+    SetPolicyRequest, WaitProcessResponse, WriteStreamResponse,
 };
 
 fn trans_vec<F: Sized + Clone, T: From<F>>(from: Vec<F>) -> Vec<T> {
@@ -114,6 +114,7 @@ impl From<Storage> for agent::Storage {
             fs_group: from_option(from.fs_group),
             options: trans_vec(from.options),
             mount_point: from.mount_point,
+            shared: from.shared,
             ..Default::default()
         }
     }
@@ -751,6 +752,22 @@ impl From<SetPolicyRequest> for agent::SetPolicyRequest {
             policy: from.policy,
             ..Default::default()
         }
+    }
+}
+
+impl From<GetDiagnosticDataRequest> for agent::GetDiagnosticDataRequest {
+    fn from(from: GetDiagnosticDataRequest) -> Self {
+        Self {
+            log_type: from.log_type,
+            container_id: from.container_id,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<agent::GetDiagnosticDataResponse> for GetDiagnosticDataResponse {
+    fn from(from: agent::GetDiagnosticDataResponse) -> Self {
+        Self { data: from.data }
     }
 }
 

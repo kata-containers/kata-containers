@@ -3,52 +3,50 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[workspace]
-resolver = "2"
-
 [package]
 name = "kata-ctl"
 version = "0.0.1"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-anyhow = "1.0.31"
-clap = { version = "4.5.13", features = ["derive", "cargo"] }
-serde_json = "1.0.85"
-thiserror = "1.0.35"
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive", "cargo"] }
+serde_json.workspace = true
+thiserror.workspace = true
 privdrop = "0.5.2"
 nix = "0.25.0"
 strum = "0.24.1"
 strum_macros = "0.24.3"
-serde = { version = "1.0.149", features = ["derive"] }
-url = "2.5.4"
-futures = "0.3.24"
+serde.workspace = true
+url.workspace = true
+futures.workspace = true
 base64 = "0.13.0"
-toml = "0.5.8"
+toml.workspace = true
 sys-info = "0.9.1"
 
-shim-interface = { path = "../../libs/shim-interface" }
-kata-types = { path = "../../libs/kata-types", features = ["safe-path"] }
-kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
-agent = { path = "../../runtime-rs/crates/agent" }
-virt_container = { path = "../../runtime-rs/crates/runtimes/virt_container" }
-serial_test = "0.10.0"
-vmm-sys-util = "0.11.0"
+shim-interface.workspace = true
+kata-types.workspace = true
+kata-sys-util.workspace = true
+agent.workspace = true
+virt_container.workspace = true
+serial_test.workspace = true
+vmm-sys-util.workspace = true
 epoll = "4.0.1"
-libc = "0.2.138"
+libc.workspace = true
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
-logging = { path = "../../libs/logging" }
-slog = "2.7.0"
-slog-scope = "4.4.0"
-hyper = "0.14.20"
-tokio = { version = "1.44.2", features = ["signal"] }
+logging.workspace = true
+slog.workspace = true
+slog-scope.workspace = true
+hyper.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 
-prometheus = { version = "0.14.0", features = ["process"] }
-procfs = "0.12.0"
-lazy_static = "1.2"
+prometheus.workspace = true
+procfs.workspace = true
+lazy_static.workspace = true
 
 # for log-parser
 serde_yaml = "0.9"
@@ -57,16 +55,17 @@ quick-xml = { version = "0.28", features = ["serialize"] }
 csv = "1.2"
 serde_with = "2.3"
 chrono = { version = "0.4", features = ["serde"] }
+rstest = "0.26.1"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",
     "native-tls",
 ] }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = [
+reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "blocking",
     "rustls-tls",
@@ -74,10 +73,10 @@ reqwest = { version = "0.11", default-features = false, features = [
 
 [dev-dependencies]
 semver = "1.0.12"
-tempfile = "3.19.1"
+tempfile.workspace = true
 nix = "0.25.0"
-test-utils = { path = "../../libs/test-utils" }
-micro_http = { git = "https://github.com/firecracker-microvm/micro-http", branch = "main" }
+test-utils.workspace = true
+micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]

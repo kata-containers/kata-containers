@@ -18,10 +18,10 @@ image = "@IMAGEPATH_NV@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
-rootfs_type = @DEFROOTFSTYPE@
+#   - erofs (default for NVIDIA)
+rootfs_type = @DEFROOTFSTYPE_NV@
 
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
@@ -245,6 +245,16 @@ block_device_cache_direct = false
 # Denotes whether flush requests for the device are ignored.
 # Default false
 block_device_cache_noflush = false
+
+# Specifies the logical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_logical_sector_size = 0
+
+# Specifies the physical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_physical_sector_size = 0
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently implemented
@@ -578,7 +588,14 @@ debug_console_enabled = false
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
-dial_timeout = 90
+dial_timeout = @DEFAULTTIMEOUT_NV@
+
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# With NVIDIA GPUs and NVSwitches, the attestation-agent needs extra time
+# to collect evidence during initialization.
+# (agent default when unset: 6)
+launch_process_timeout = @DEFAULTLAUNCHPROCESSTIMEOUT_NV@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -614,7 +631,7 @@ disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 # vCPUs pinning settings
 # if enabled, each vCPU thread will be scheduled to a fixed CPU
 # qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
-enable_vcpus_pinning = false
+enable_vcpus_pinning = @DEFENABLEVCPUPINNING_NV@
 
 # Apply a custom SELinux security policy to the container process inside the VM.
 # This is used when you want to apply a type other than the default `container_t`,

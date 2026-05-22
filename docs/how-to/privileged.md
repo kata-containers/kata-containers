@@ -73,5 +73,5 @@ See below example config:
   privileged_without_host_devices = true
 ```
 
- - [Kata Containers with CRI-O](../how-to/run-kata-with-k8s.md#cri-o)
+ - [Kata Containers with CRI-O](../how-to/how-to-use-k8s-with-crio-and-kata.md#cri-o)
 

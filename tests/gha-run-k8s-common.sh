@@ -5,11 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
 source "${tests_dir}/common.bash"
-kubernetes_dir="${tests_dir}/integration/kubernetes"
+# shellcheck source=/dev/null
+source "${tests_dir}/hypervisor_helpers.sh"
+: "${kubernetes_dir:=${tests_dir}/integration/kubernetes}"
+# repo_root_dir is set by common.bash
+# shellcheck disable=SC2154
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
-AZ_REGION="${AZ_REGION:-eastus}"
+AZ_REGION="${AZ_REGION:-eastus2}"
 AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
@@ -51,7 +56,7 @@ wait_for_api_and_retry_uninstall() {
 
 	local api_wait=0
 	local api_timeout=300
-	while [ "$api_wait" -lt "$api_timeout" ]; do
+	while [[ "${api_wait}" -lt "${api_timeout}" ]]; do
 		if kubectl get nodes --request-timeout=5s &>/dev/null; then
 			echo "Kubernetes API is available after uninstall"
 			break
@@ -296,45 +301,12 @@ function deploy_k0s() {
 	sudo chown "${USER}":"${USER}" ~/.kube/config
 }
 
-# If the rendered containerd config (v3) does not import the drop-in dir, write
-# the full V3 template (from tests/containerd-config-v3.tmpl) with the given
-# import path and restart the service.
-# Args: containerd_dir (e.g. /var/lib/rancher/k3s/agent/etc/containerd), service_name (e.g. k3s or rke2-server).
-function _setup_containerd_v3_template_if_needed() {
-	local containerd_dir="$1"
-	local service_name="$2"
-	local template_file="${tests_dir}/containerd-config-v3.tmpl"
-	local rendered_v3="${containerd_dir}/config-v3.toml"
-	local imports_path="${containerd_dir}/config-v3.toml.d/*.toml"
-	if sudo test -f "${rendered_v3}" && sudo grep -q 'config-v3\.toml\.d' "${rendered_v3}" 2>/dev/null; then
-		return 0
-	fi
-	if [[ ! -f "${template_file}" ]]; then
-		echo "Template not found: ${template_file}" >&2
-		return 1
-	fi
-	sudo mkdir -p "${containerd_dir}/config-v3.toml.d"
-	sed "s|__CONTAINERD_IMPORTS_PATH__|${imports_path}|g" "${template_file}" | sudo tee "${containerd_dir}/config-v3.toml.tmpl" > /dev/null
-	sudo systemctl restart "${service_name}"
-}
-
-function setup_k3s_containerd_v3_template_if_needed() {
-	_setup_containerd_v3_template_if_needed "/var/lib/rancher/k3s/agent/etc/containerd" "k3s"
-}
-
-function setup_rke2_containerd_v3_template_if_needed() {
-	_setup_containerd_v3_template_if_needed "/var/lib/rancher/rke2/agent/etc/containerd" "rke2-server"
-}
-
 function deploy_k3s() {
 	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
-
-	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
-	setup_k3s_containerd_v3_template_if_needed
 
 	# Download the kubectl binary into /usr/bin and remove /usr/local/bin/kubectl
 	#
@@ -405,9 +377,6 @@ function deploy_rke2() {
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
 
-	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
-	setup_rke2_containerd_v3_template_if_needed
-
 	# Link the kubectl binary into /usr/bin
 	sudo ln -sf /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
 
@@ -462,27 +431,61 @@ function disable_swap() {
 	sudo swapoff -a
 }
 
-# Always deploys the latest k8s version
+# Deploys the latest k8s version, falling back to the previous minor if
+# the latest has broken/missing package dependencies.
 function do_deploy_k8s() {
-	# Add the pkgs.k8s.io repo
-	curl -fsSL https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/Release.key | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+	local k8s_version
+	k8s_version=$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)
+	[[ -z "${k8s_version}" ]] && die "Failed to fetch Kubernetes stable version"
 
-	# Pin the packages to ensure they'll be downloaded from the pkgs.k8s.io repo
-	#
-	# This is needed as the github runner uses the azure repo which already has
-	# kubernetes packages, and those packages simply don't work well with the
-	# runner.
-	cat <<EOF | sudo tee /etc/apt/preferences.d/kubernetes
-Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
-Pin: origin pkgs.k8s.io
-Pin-Priority: 1000
-EOF
+	local major minor prev_version
+	major="${k8s_version%%.*}"
+	minor="${k8s_version##*.}"
+	if [[ "${minor}" -eq 0 ]]; then
+		die "Cannot fallback from ${k8s_version} (minor version is 0)"
+	fi
+	prev_version="${major}.$((minor - 1))"
 
-	# Install the packages
-	sudo apt-get update
-   	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
-   	sudo apt-mark hold kubeadm kubelet kubectl
+	local version=""
+	local candidate
+	for candidate in "${k8s_version}" "${prev_version}"; do
+		info "Trying Kubernetes ${candidate}"
+
+		curl -fsSL "https://pkgs.k8s.io/core:/stable:/${candidate}/deb/Release.key" \
+			| sudo gpg --batch --yes --no-tty --dearmor \
+				-o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+		echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${candidate}/deb/ /" \
+			| sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+		# Pin the packages to ensure they'll be downloaded from the
+		# pkgs.k8s.io repo.
+		#
+		# This is needed as the github runner uses the azure repo which
+		# already has kubernetes packages, and those packages simply
+		# don't work well with the runner.
+		cat <<-EOF | sudo tee /etc/apt/preferences.d/kubernetes
+		Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
+		Pin: origin pkgs.k8s.io
+		Pin-Priority: 1000
+		EOF
+
+		sudo apt-get update
+		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl \
+			--allow-downgrades >/dev/null 2>&1; then
+			version="${candidate}"
+			break
+		fi
+		warn "Kubernetes ${candidate} packages have unmet dependencies, trying previous minor version"
+	done
+
+	if [[ -z "${version}" ]]; then
+		echo "Failed to find a Kubernetes version with installable packages (tried ${k8s_version} and ${prev_version})" >&2
+		return 1
+	fi
+
+	info "Installing Kubernetes ${version}"
+	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
+	sudo apt-mark hold kubeadm kubelet kubectl
 
 	# Deploy k8s using kubeadm with CreateContainerRequest (CRI) timeout set to 600s,
 	# mainly for CoCo (Confidential Containers) tests (attestation, policy, image pull, VM start).
@@ -505,9 +508,9 @@ runtimeRequestTimeout: "600s"
 EOF
 	sudo kubeadm init --config "${kubeadm_config}"
 	rm -f "${kubeadm_config}"
-	mkdir -p $HOME/.kube
-	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
-	sudo chown $(id -u):$(id -g) $HOME/.kube/config
+	mkdir -p "${HOME}/.kube"
+	sudo cp -i /etc/kubernetes/admin.conf "${HOME}/.kube/config"
+	sudo chown "$(id -u):$(id -g)" "${HOME}/.kube/config"
 
 	# Deploy flannel
 	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
@@ -587,9 +590,28 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# Install erofs specific dependencies
+				# Install erofs-utils >= 1.8 from Ubuntu 25.10
+				# (Questing Quokka) so that mkfs.erofs supports the
+				# flags containerd's erofs differ needs (e.g. -T0,
+				# --mkfs-time, --sort).  Ubuntu 24.04 ships 1.7.1
+				# which is too old.
+				sudo apt-get -y install --no-install-recommends \
+					software-properties-common
+				sudo add-apt-repository -y \
+					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+				# Pin questing packages low so only explicitly
+				# requested packages are pulled from that release.
+				sudo tee /etc/apt/preferences.d/questing-pin > /dev/null <<-'APTPIN'
+				Package: *
+				Pin: release n=questing
+				Pin-Priority: 100
+				APTPIN
 				sudo apt-get update
-				sudo apt-get -y install erofs-utils fsverity
+				sudo apt-get -y install --no-install-recommends \
+					-t questing erofs-utils fsverity
+				sudo rm -f /etc/apt/preferences.d/questing-pin
+				sudo add-apt-repository -y --remove \
+					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
 
 				# Load the erofs module
 				sudo modprobe erofs
@@ -603,7 +625,9 @@ function deploy_k8s() {
 				# the way we should enable verity support on a live disk.
 				sudo tune2fs -O verity "${root_device}"
 			fi
-			deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION}
+			# CONTAINER_ENGINE and CONTAINER_ENGINE_VERSION are set by the caller
+			# shellcheck disable=SC2153,SC2154
+			deploy_vanilla_k8s "${CONTAINER_ENGINE}" "${CONTAINER_ENGINE_VERSION}"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
@@ -652,7 +676,7 @@ function helm_helper() {
 	ensure_helm
 
 	# Update dependencies before configuring values
-	pushd ${helm_chart_dir}
+	pushd "${helm_chart_dir}"
 	helm dependencies update
 	popd
 
@@ -671,10 +695,12 @@ function helm_helper() {
 					base_values_file="${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml"
 				fi
 				;;
-			qemu-snp|qemu-tdx|qemu-se|qemu-se-runtime-rs|qemu-cca|qemu-coco-dev|qemu-coco-dev-runtime-rs)
-				# Use TEE example file
-				if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
-					base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
+			*)
+				# Use TEE example file for confidential computing hypervisors
+				if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+					if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
+						base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
+					fi
 				fi
 				;;
 		esac
@@ -727,48 +753,38 @@ function helm_helper() {
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
+			# shellcheck disable=SC2034
 			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
 				# Most shims support amd64 and arm64, some have specific arch requirements
-				case "${shim}" in
-					qemu-se|qemu-se-runtime-rs)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
-						;;
-					qemu-cca)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
-						;;
-					qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-tdx-runtime-rs|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
-						;;
-					qemu-runtime-rs)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
-						;;
-					qemu-coco-dev|qemu-coco-dev-runtime-rs)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
-						;;
-					qemu-nvidia-gpu)
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\"]" "${values_yaml}"
-						;;
-					*)
-						# Default: support amd64, arm64, s390x, ppc64le
-						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
-						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\", \"ppc64le\"]" "${values_yaml}"
-						;;
-				esac
+				yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+
+				if is_se_hypervisor "${shim}"; then
+					yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
+				elif is_cca_hypervisor "${shim}"; then
+					yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
+				elif is_snp_hypervisor "${shim}" || is_tdx_hypervisor "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
+				# qemu-coco-dev-runtime-rs is checked explicitly because
+				# qemu-coco-dev (Go runtime) does not support arm64.
+				elif [[ "${shim}" == "qemu-runtime-rs" ]] || [[ "${shim}" == "qemu-coco-dev-runtime-rs" ]]; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
+				elif is_non_tee_hypervisor "${shim}"; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
+				elif [[ "${shim}" == "qemu-nvidia-gpu" ]]; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\"]" "${values_yaml}"
+				else
+					# Default: support amd64, arm64, s390x, ppc64le
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\", \"ppc64le\"]" "${values_yaml}"
+				fi
 
 				# Explicitly unset defaults for TEE shims - these will be set based on env vars:
 				# - snapshotter: nydus if HELM_SNAPSHOTTER_HANDLER_MAPPING is set
 				# - forceGuestPull: true if HELM_EXPERIMENTAL_FORCE_GUEST_PULL is set
 				# - guestPull: true if HELM_PULL_TYPE_MAPPING contains guest-pull
-				if echo "${tee_shims}" | grep -qw "${shim}"; then
+				if is_confidential_runtime_class "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.containerd.snapshotter = \"\"" "${values_yaml}"
 					yq -i ".shims.${shim}.containerd.forceGuestPull = false" "${values_yaml}"
 					yq -i ".shims.${shim}.crio.guestPull = false" "${values_yaml}"
@@ -789,23 +805,6 @@ function helm_helper() {
 		# Note: snapshotter.setup (global) is separate from containerd.snapshotter (per-shim)
 		# Always unset first to clear any defaults from base file
 		yq -i ".snapshotter.setup = []" "${values_yaml}"
-
-		# For TDX and SNP shims, snapshotter.setup must ALWAYS be disabled in CI
-		# Check if any TDX/SNP shims are enabled
-		disable_snapshotter_setup=false
-		for shim in ${HELM_SHIMS}; do
-			case "${shim}" in
-				qemu-tdx|qemu-snp|qemu-nvidia-gpu-tdx|qemu-nvidia-gpu-snp)
-					disable_snapshotter_setup=true
-					break
-					;;
-			esac
-		done
-
-		# Safety check: Fail if EXPERIMENTAL_SETUP_SNAPSHOTTER is set when using SNP/TDX shims
-		if [[ "${disable_snapshotter_setup}" == "true" ]] && [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
-			die "ERROR: HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER cannot be set when using SNP/TDX shims (qemu-snp, qemu-tdx, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-tdx). snapshotter.setup must always be disabled for these shims."
-		fi
 
 		if [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
 			# Convert space-separated or comma-separated list to YAML array
@@ -834,7 +833,8 @@ function helm_helper() {
 					converted_annotations+=" "
 				fi
 				# Convert space-separated to comma-separated: "foo bar" -> "foo,bar"
-				local annotations_comma=$(echo "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" | sed 's/ /,/g')
+				local annotations_comma
+			annotations_comma="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS// /,}"
 				converted_annotations+="${shim}:${annotations_comma}"
 			done
 			HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${converted_annotations}"
@@ -1004,13 +1004,14 @@ VERIFICATION_POD_EOF
 		echo "Enabling deployment verification with runtimeClass: ${runtime_class}"
 		helm_set_file_args="--set-file verification.pod=${verification_yaml}"
 		# Clean up temp file on exit
-		trap "rm -f ${verification_yaml}" EXIT
+		trap 'rm -f '"${verification_yaml}"'' EXIT
 	fi
 
 	echo "::group::Final kata-deploy manifests used in the test"
 	cat "${values_yaml}"
 	echo ""
 	# ${helm_set_file_args} is intentionally left unquoted
+	# shellcheck disable=SC2086
 	helm template "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system
 	[[ "$(yq .image.reference "${values_yaml}")" = "${HELM_IMAGE_REFERENCE}" ]] || die "Failed to set image reference"
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
@@ -1027,6 +1028,7 @@ VERIFICATION_POD_EOF
 	set +e # Disable immediate exit on failure
 	while true; do
 		# ${helm_set_file_args} is intentionally left unquoted
+		# shellcheck disable=SC2086
 		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system --debug
 		ret=${?}
 		if [[ ${ret} -eq 0 ]]; then
@@ -1047,20 +1049,35 @@ VERIFICATION_POD_EOF
 		return 1
 	fi
 
-	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
-	# like kata-deploy on CI. So wait for pods being Running in the "traditional" way.
-	local cmd
-	cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "${cmd}"
-
-	# FIXME: This is needed as the kata-deploy pod will be set to "Ready"
-	# when it starts running, which may cause issues like not having the
-	# node properly labeled or the artefacts properly deployed when the
-	# tests actually start running.
-	sleep 60s
+	# helm --wait is ineffective for single-node clusters with maxUnavailable=1
+	# (the DaemonSet is considered ready with 0 ready pods). First wait until at
+	# least one kata-deploy pod exists, then wait on the pod readiness condition
+	# instead — the readiness probe (/readyz) returns 200 only after install
+	# completes (artifacts extracted, CRI restarted, node labeled).
+	local pod_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
+	while true; do
+		if [[ -n "$(kubectl -n kube-system get pod -l name=kata-deploy -o name 2>/dev/null)" ]]; then
+			break
+		fi
+		if (( SECONDS >= pod_wait_deadline )); then
+			echo "ERROR: Timed out waiting for kata-deploy pod to be created"
+			return 1
+		fi
+		sleep 1
+	done
+	if ! kubectl -n kube-system wait pod -l name=kata-deploy --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
+		echo "::group::kata-deploy pod describe (install timed out)"
+		kubectl -n kube-system describe pod -l name=kata-deploy || true
+		echo "::endgroup::"
+		echo "::group::kata-deploy logs (install timed out)"
+		kubectl -n kube-system logs -l name=kata-deploy --all-containers --previous 2>/dev/null || true
+		kubectl -n kube-system logs -l name=kata-deploy --all-containers 2>/dev/null || true
+		echo "::endgroup::"
+		return 1
+	fi
 
 	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
+	kubectl_retry -n kube-system logs -l name=kata-deploy
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"

@@ -19,9 +19,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source lib.sh for common functions (die, info, get_from_kata_deps, arch_to_golang, etc.)
 if [[ -f "${script_dir}/lib.sh" ]]; then
+	# shellcheck source=/dev/null
 	source "${script_dir}/lib.sh"
 elif [[ -f "${script_dir}/../../tools/packaging/scripts/lib.sh" ]]; then
-	# When sourced from ci/install_libseccomp.sh in the repo
+	# shellcheck source=/dev/null
 	source "${script_dir}/../../tools/packaging/scripts/lib.sh"
 fi
 

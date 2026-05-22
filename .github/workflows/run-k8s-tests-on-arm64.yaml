@@ -22,6 +22,10 @@ on:
         type: string
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-k8s-arm64
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -35,6 +39,9 @@ jobs:
           - qemu-runtime-rs
         k8s:
           - kubeadm
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: arm64-k8s
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -46,7 +53,7 @@ jobs:
       K8S_TEST_HOST_TYPE: all
       TARGET_ARCH: "aarch64"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -79,7 +86,7 @@ jobs:
         continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: k8s-tests-${{ matrix.vmm }}-${{ matrix.k8s }}-${{ inputs.tag }}
           path: /tmp/artifacts

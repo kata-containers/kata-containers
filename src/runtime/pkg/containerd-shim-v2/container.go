@@ -7,6 +7,7 @@ package containerdshim
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
@@ -22,6 +23,7 @@ type container struct {
 	ttyio       *ttyIO
 	spec        *specs.Spec
 	exitTime    time.Time
+	execsMu     sync.RWMutex
 	execs       map[string]*exec
 	exitIOch    chan struct{}
 	stdinPipe   io.WriteCloser

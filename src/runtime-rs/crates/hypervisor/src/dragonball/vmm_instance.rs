@@ -60,6 +60,7 @@ impl VmmInstance {
         let vmm_shared_info = Arc::new(RwLock::new(InstanceInfo::new(
             String::from(id),
             DRAGONBALL_VERSION.to_string(),
+            None,
         )));
 
         let to_vmm_fd = EventFd::new(libc::EFD_NONBLOCK)

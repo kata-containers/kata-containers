@@ -5,24 +5,29 @@ on:
         required: true
         type: string
 
+# No workflow-level `concurrency` here: this file is only `workflow_call`'d. Each
+# caller already uses `concurrency` + `cancel-in-progress` so a new push cancels the
+# whole tree. A top-level group on the reusable workflow was too coarse—it matched
+# every parallel `uses` with the same caller + PR + instance, so self-hosted matrix
+# legs (arm, s390x, ppc64le) cancelled each other. Job-level `concurrency` below is
+# enough to supersede in-flight matrix cells on a new run without blocking unrelated
+# parallel callers that share `inputs.instance`.
+
 permissions: {}
-
-
 name: Build checks
 jobs:
   check:
     name: check
+    timeout-minutes: 60
     runs-on: >-
       ${{
         ( contains(inputs.instance, 's390x') && matrix.component.name == 'runtime' ) && 's390x' ||
-        ( contains(inputs.instance, 'ppc64le') && (matrix.component.name == 'runtime' || matrix.component.name == 'agent') ) && 'ppc64le' ||
         inputs.instance
       }}
     strategy:
       fail-fast: false
       matrix:
         command:
-          - "make vendor"
           - "make check"
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
@@ -48,6 +53,7 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
+              - protobuf-compiler
           - name: libs
             path: src/libs
             needs:
@@ -75,7 +81,9 @@ jobs:
               - protobuf-compiler
         instance:
           - ${{ inputs.instance }}
-
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.instance }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Adjust a permission for repo
         run: |
@@ -84,7 +92,7 @@ jobs:
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
 
       - name: Checkout the code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -119,7 +127,7 @@ jobs:
         if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
         run: sudo apt-get update && sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
-        if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make vendor' && matrix.command != 'make check'
+        if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make check'
         run: |
           libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
           gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -128,7 +136,7 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> "$GITHUB_ENV"
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
-        if: contains(matrix.component.needs, 'protobuf-compiler') && matrix.command != 'make vendor'
+        if: contains(matrix.component.needs, 'protobuf-compiler')
         run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: contains(matrix.component.needs, 'clang') && matrix.command == 'make check'

@@ -245,8 +245,8 @@ pub enum Error {
     #[error("set user memory region failed: {0}")]
     SetUserMemoryRegion(kvm_ioctls::Error),
     /// Inserting mmap region failed.
-    #[error("inserting mmap region failed: {0}")]
-    InsertMmap(vm_memory::mmap::Error),
+    #[error("inserting mmap region failed")]
+    InsertMmap,
     /// Failed to set madvise on guest memory region.
     #[error("failed to set madvice() on guest memory region")]
     Madvise(#[source] nix::Error),
@@ -375,7 +375,7 @@ pub mod tests {
         AddressSpace, AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType,
     };
     use dbs_boot::layout::{GUEST_MEM_END, GUEST_MEM_START, GUEST_PHYS_END};
-    use dbs_interrupt::KvmIrqManager;
+    use dbs_interrupt::{InterruptManager, KvmIrqManager};
     use kvm_ioctls::{Kvm, VmFd};
     use virtio_queue::{QueueSync, QueueT};
     use vm_memory::{

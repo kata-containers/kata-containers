@@ -19,6 +19,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -138,6 +139,17 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 			rootFs.Source = realPath
 		}
 		sandboxConfig.Containers[0].RootFs = rootFs
+	}
+
+	// Docker 26+ may set up networking before task creation instead of using
+	// prestart hooks. The netns path is not in the OCI spec but can be
+	// discovered from Docker's libnetwork hook args which contain the sandbox
+	// ID that maps to /var/run/docker/netns/<sandbox_id>.
+	if sandboxConfig.NetworkConfig.NetworkID == "" && !sandboxConfig.NetworkConfig.DisableNewNetwork {
+		if dockerNetns := utils.DockerNetnsPath(&ociSpec); dockerNetns != "" {
+			sandboxConfig.NetworkConfig.NetworkID = dockerNetns
+			kataUtilsLogger.WithField("netns", dockerNetns).Info("discovered Docker network namespace from hook args")
+		}
 	}
 
 	// Important to create the network namespace before the sandbox is

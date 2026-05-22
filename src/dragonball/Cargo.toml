@@ -13,12 +13,13 @@ edition = "2018"
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
+dbs-acpi = { workspace = true }
 dbs-address-space = { workspace = true }
 dbs-allocator = { workspace = true }
 dbs-arch = { workspace = true }
 dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
-dbs-interrupt = { workspace = true, features = ["kvm-irq"] }
+dbs-interrupt = { workspace = true, features = ["kvm-irq", "split-irq"] }
 dbs-legacy-devices = { workspace = true }
 dbs-upcall = { workspace = true, optional = true }
 dbs-utils = { workspace = true }
@@ -50,6 +51,7 @@ vm-memory = { workspace = true, features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
 vfio-bindings = { workspace = true, optional = true }
 vfio-ioctls = { workspace = true, optional = true }
+kata-sys-util = { path = "../libs/kata-sys-util" }
 
 [dev-dependencies]
 slog-async = "2.7.0"

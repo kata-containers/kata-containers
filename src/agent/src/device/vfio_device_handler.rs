@@ -69,7 +69,8 @@ impl DeviceHandler for VfioPciDeviceHandler {
 
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(pcipath)?;
 
-            let guestdev = wait_for_pci_device(ctx.sandbox, root_complex, &pcipath).await?;
+            let guestdev =
+                wait_for_pci_device(ctx.logger, ctx.sandbox, root_complex, &pcipath).await?;
             if vfio_in_guest {
                 pci_driver_override(ctx.logger, SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
 
@@ -301,24 +302,62 @@ async fn associate_ap_device(apqn: &Apqn, mkvp: &str) -> Result<()> {
     Ok(apqn.set_associate_state(AssocState::Associated(secret_idx))?)
 }
 
+fn pci_addr_from_sysfs_path(sysfs_abs: &Path) -> Result<pci::Address> {
+    // sysfs_abs like: /sys/devices/pci0000:00/0000:00:06.0/0000:02:00.0
+    let name = sysfs_abs
+        .file_name()
+        .ok_or_else(|| anyhow!("bad sysfs path (no file_name): {:?}", sysfs_abs))?
+        .to_str()
+        .ok_or_else(|| anyhow!("bad sysfs path (non-utf8): {:?}", sysfs_abs))?;
+
+    pci::Address::from_str(name)
+        .map_err(|e| anyhow!("failed to parse pci bdf from sysfs '{}': {e}", name))
+}
+
 pub async fn wait_for_pci_device(
+    logger: &Logger,
     sandbox: &Arc<Mutex<Sandbox>>,
     root_complex: &str,
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    info!(logger, "wait_for_pci_device at {}", pcipath);
+    let root_bus_rel = create_pci_root_bus_path(root_complex); // "/devices/pci0000:00"
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, &root_bus_rel); // "/sys/devices/pci0000:00"
+    info!(
+        logger,
+        "wait_for_pci_device: root_bus_sysfs {} pcipath {}", &root_bus_sysfs, pcipath
+    );
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?; // "/0000:00:06.0/0000:02:00.0"
+
+    // "/sys/devices/pci0000:00/0000:00:06.0/0000:02:00.0"
+    let sysfs_abs = format!("{root_bus_sysfs}{sysfs_rel_path}");
+    let sysfs_abs_path = std::path::PathBuf::from(&sysfs_abs);
+
+    if tokio::fs::metadata(&sysfs_abs_path).await.is_ok() {
+        info!(
+            logger,
+            "wait_for_pci_device: PCI device {} already exists at {}", pcipath, sysfs_abs
+        );
+        return pci_addr_from_sysfs_path(&sysfs_abs_path);
+    } else {
+        info!(
+            logger,
+            "wait_for_pci_device: Waiting uevent for PCI device {} at {}", pcipath, sysfs_abs
+        );
+    }
+
     let matcher = PciMatcher::new(&sysfs_rel_path, root_complex)?;
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
 
+    // uev.devpath like "/devices/pci0000:00/0000:00:06.0/0000:02:00.0"
     let addr = uev
         .devpath
         .rsplit('/')
         .next()
         .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", &uev.devpath))?;
-    let addr = pci::Address::from_str(addr)?;
-    Ok(addr)
+
+    pci::Address::from_str(addr)
 }
 
 // Represents an IOMMU group

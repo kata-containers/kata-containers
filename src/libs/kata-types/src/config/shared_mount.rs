@@ -8,6 +8,7 @@ use std::io::Result;
 use regex::Regex;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SharedMount {
     /// Name is used to identify a pair of shared mount points.
     /// This field cannot be omitted.
@@ -143,7 +144,6 @@ mod tests {
                 shared_mount_annotation: r#"
                 {
                     "name": "test",
-                    "src": "sidecar",
                     "src_path": "/mnt/storage",
                     "dst_ctr": "app",
                     "dst_path": "/mnt/storage"
@@ -156,7 +156,6 @@ mod tests {
                 {
                     "name": "test",
                     "src_ctr": "sidecar",
-                    "src_dir": "/mnt/storage",
                     "dst_ctr": "app",
                     "dst_path": "/mnt/storage"
                 }"#,
@@ -169,7 +168,6 @@ mod tests {
                     "name": "test",
                     "src_ctr": "sidecar",
                     "src_path": "/mnt/storage",
-                    "dst_container": "app",
                     "dst_path": "/mnt/storage"
                 }"#,
                 result: false,
@@ -181,8 +179,7 @@ mod tests {
                     "name": "test",
                     "src_ctr": "sidecar",
                     "src_path": "/mnt/storage",
-                    "dst_ctr": "app",
-                    "path": "/mnt/storage"
+                    "dst_ctr": "app"
                 }"#,
                 result: false,
                 message: "shared_mount: field 'dst_path' couldn't be empty.",

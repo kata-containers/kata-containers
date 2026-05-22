@@ -11,26 +11,30 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly agent_builder="${script_dir}/build-static-agent.sh"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
 
 container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
-[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
+# shellcheck disable=SC2154
+[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
-	(docker $BUILDX build $PLATFORM \
+# shellcheck disable=SC2154,SC2086
+docker pull "${container_image}" || \
+	(docker ${BUILDX} build ${PLATFORM} \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
+# shellcheck disable=SC2154
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	--env DESTDIR=${DESTDIR} \
-	--env AGENT_POLICY=${AGENT_POLICY:-no} \
-	--env INIT_DATA=${INIT_DATA:-yes} \
-	--env LIBSECCOMP_VERSION=${LIBSECCOMP_VERSION} \
-	--env LIBSECCOMP_URL=${LIBSECCOMP_URL} \
-	--env GPERF_VERSION=${GPERF_VERSION} \
-	--env GPERF_URL=${GPERF_URL} \
+	--env DESTDIR="${DESTDIR}" \
+	--env AGENT_POLICY="${AGENT_POLICY:-no}" \
+	--env INIT_DATA="${INIT_DATA:-yes}" \
+	--env LIBSECCOMP_VERSION="${LIBSECCOMP_VERSION}" \
+	--env LIBSECCOMP_URL="${LIBSECCOMP_URL}" \
+	--env GPERF_VERSION="${GPERF_VERSION}" \
+	--env GPERF_URL="${GPERF_URL}" \
 	--env ORAS_CACHE_HELPER="${repo_root_dir}/tools/packaging/scripts/download-with-oras-cache.sh" \
 	--env USE_ORAS_CACHE="${USE_ORAS_CACHE:-yes}" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-no}" \

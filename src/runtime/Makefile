@@ -65,8 +65,6 @@ INITRDCONFIDENTIALNAME = $(PROJECT_TAG)-initrd-confidential.img
 
 IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
 IMAGENAME_CONFIDENTIAL_NV = $(PROJECT_TAG)-nvidia-gpu-confidential.img
-INITRDNAME_NV = $(PROJECT_TAG)-initrd-nvidia-gpu.img
-INITRDNAME_CONFIDENTIAL_NV = $(PROJECT_TAG)-initrd-nvidia-gpu-confidential.img
 
 TARGET = $(BIN_PREFIX)-runtime
 RUNTIME_OUTPUT = $(CURDIR)/$(TARGET)
@@ -136,8 +134,6 @@ INITRDCONFIDENTIALPATH := $(PKGDATADIR)/$(INITRDCONFIDENTIALNAME)
 
 IMAGEPATH_NV := $(PKGDATADIR)/$(IMAGENAME_NV)
 IMAGEPATH_CONFIDENTIAL_NV := $(PKGDATADIR)/$(IMAGENAME_CONFIDENTIAL_NV)
-INITRDPATH_NV := $(PKGDATADIR)/$(INITRDNAME_NV)
-INITRDPATH_CONFIDENTIAL_NV := $(PKGDATADIR)/$(INITRDNAME_CONFIDENTIAL_NV)
 
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
@@ -147,7 +143,13 @@ DEFROOTFSTYPE := $(ROOTFSTYPE_EXT4)
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
 
-FIRMWAREPATH_NV = $(FIRMWAREPATH)
+FIRMWAREPATH_NV :=
+ifeq ($(ARCH),amd64)
+    FIRMWAREPATH_NV := $(PREFIXDEPS)/share/$(EDK2_NAME)/OVMF.fd
+endif
+ifeq ($(ARCH),arm64)
+    FIRMWAREPATH_NV := $(PREFIXDEPS)/share/$(EDK2_NAME)/AAVMF_CODE.fd
+endif
 
 FIRMWARETDVFPATH := $(PREFIXDEPS)/share/ovmf/OVMF.inteltdx.fd
 FIRMWARETDVFPATH_NV := $(FIRMWARETDVFPATH)
@@ -221,8 +223,10 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+# Security note: do not enable "virtio_fs_extra_args" by default.
+# Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 DEFEMPTYDIRMODE := shared-fs
@@ -290,6 +294,10 @@ DEFVFIOMODE := guest-kernel
 DEFSANDBOXCGROUPONLY ?= false
 
 DEFSTATICRESOURCEMGMT ?= false
+DEFSTATICRESOURCEMGMT_QEMU ?= false
+ifeq ($(ARCH),arm64)
+    DEFSTATICRESOURCEMGMT_QEMU = true
+endif
 DEFSTATICRESOURCEMGMT_TEE = true
 DEFSTATICRESOURCEMGMT_NV = true
 
@@ -483,23 +491,28 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_CONFIDENTIAL_NV = $(KERNELDIR)/$(KERNELNAME_CONFIDENTIAL_NV)
 
     DEFAULTVCPUS_NV = 1
-    DEFAULTMEMORY_NV = 2048
+    DEFAULTMEMORY_NV = 8192
     DEFAULTTIMEOUT_NV = 1200
+    DEFAULTLAUNCHPROCESSTIMEOUT_NV = 15
     DEFAULTVFIOPORT_NV = root-port
     DEFAULTPCIEROOTPORT_NV = 8
 
-    # Disable the devtmpfs mount in guest. NVRC does this, and later kata-agent
-    # attempts this as well in a non-failing manner. Otherwise, NVRC fails when
-    # using an image and /dev is already mounted.
     KERNELPARAMS_NV = "cgroup_no_v1=all"
-    KERNELPARAMS_NV += "devtmpfs.mount=0"
     KERNELPARAMS_NV += "pci=realloc"
     KERNELPARAMS_NV += "pci=nocrs"
     KERNELPARAMS_NV += "pci=assign-busses"
 
+    KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV)
+    KERNELPARAMS_CONFIDENTIAL_NV += "nvrc.smi.srs=1"
+
     # Setting this to false can lead to cgroup leakages in the host
     # Best practice for production is to set this to true
     DEFSANDBOXCGROUPONLY_NV = true
+
+    DEFENABLEVCPUPINNING_NV = true
+
+    # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
+    DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
 
     ifneq (,$(QEMUFW))
         FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
@@ -660,10 +673,6 @@ USER_VARS += IMAGENAME_NV
 USER_VARS += IMAGENAME_CONFIDENTIAL_NV
 USER_VARS += IMAGEPATH_NV
 USER_VARS += IMAGEPATH_CONFIDENTIAL_NV
-USER_VARS += INITRDNAME_NV
-USER_VARS += INITRDNAME_CONFIDENTIAL_NV
-USER_VARS += INITRDPATH_NV
-USER_VARS += INITRDPATH_CONFIDENTIAL_NV
 USER_VARS += KERNELNAME_NV
 USER_VARS += KERNELPATH_NV
 USER_VARS += KERNELNAME_CONFIDENTIAL_NV
@@ -673,10 +682,14 @@ USER_VARS += DEFAULTMEMORY_NV
 USER_VARS += DEFAULTVFIOPORT_NV
 USER_VARS += DEFAULTPCIEROOTPORT_NV
 USER_VARS += KERNELPARAMS_NV
+USER_VARS += KERNELPARAMS_CONFIDENTIAL_NV
 USER_VARS += KERNELVERITYPARAMS_NV
 USER_VARS += KERNELVERITYPARAMS_CONFIDENTIAL_NV
 USER_VARS += DEFAULTTIMEOUT_NV
+USER_VARS += DEFAULTLAUNCHPROCESSTIMEOUT_NV
 USER_VARS += DEFSANDBOXCGROUPONLY_NV
+USER_VARS += DEFENABLEVCPUPINNING_NV
+USER_VARS += DEFROOTFSTYPE_NV
 USER_VARS += DEFROOTFSTYPE
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
@@ -793,6 +806,7 @@ USER_VARS += DEFENTROPYSOURCE
 USER_VARS += DEFVALIDENTROPYSOURCES
 USER_VARS += DEFSANDBOXCGROUPONLY
 USER_VARS += DEFSTATICRESOURCEMGMT
+USER_VARS += DEFSTATICRESOURCEMGMT_QEMU
 USER_VARS += DEFSTATICRESOURCEMGMT_CLH
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFSTATICRESOURCEMGMT_STRATOVIRT
@@ -826,7 +840,7 @@ QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 BUILDTAGS :=
 
 # go build common flags
-BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
+BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
@@ -923,8 +937,7 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	pre-commit \
 	show-header \
 	show-summary \
-	show-variables \
-	vendor
+	show-variables
 
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
@@ -950,7 +963,7 @@ go-test: $(GENERATED_FILES)
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
-	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+	for s in $$(go list ./...); do if ! go test -failfast -v -p 1 $$s; then break; fi; done
 
 GOLANGCI_LINT_FILE := ../../tests/.golangci.yml
 GOLANGCI_LINT_NAME = golangci-lint
@@ -972,7 +985,7 @@ lint: all
 pre-commit: lint fast-test
 
 coverage:
-	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
+	go test -v -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
 install: all install-runtime install-containerd-shim-v2 install-monitor
@@ -1000,14 +1013,6 @@ install-scripts: $(SCRIPTS)
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
-
-handle_vendor:
-	go mod tidy
-	go mod vendor
-	go mod verify
-
-vendor: handle_vendor
-	./hack/tree_status.sh
 
 static-checks-build: $(GENERATED_FILES)
 

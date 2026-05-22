@@ -13,7 +13,7 @@ use dbs_address_space::AddressSpace;
 use dbs_arch::gic::GICDevice;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::pmu::PmuError;
-use dbs_boot::InitrdConfig;
+use dbs_boot::{FirmwareType, InitrdConfig};
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_ioctls::VmFd;
@@ -34,6 +34,7 @@ use crate::address_space_manager::{
     AddressManagerError, AddressSpaceMgr, AddressSpaceMgrBuilder, GuestAddressSpaceImpl,
     GuestMemoryImpl,
 };
+use crate::api::v1::ConfidentialVmType;
 use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
@@ -211,6 +212,8 @@ pub struct Vm {
 
     #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
+
+    firmware_type: Option<FirmwareType>,
 }
 
 impl Vm {
@@ -233,6 +236,18 @@ impl Vm {
             api_shared_info.clone(),
         )
         .map_err(Error::DeviceMgrError)?;
+
+        #[cfg(target_arch = "x86_64")]
+        let firmware_type = if api_shared_info.read().unwrap().confidential_vm_type
+            == Some(ConfidentialVmType::TDX)
+        {
+            Some(FirmwareType::Tdshim)
+        } else {
+            None
+        };
+
+        #[cfg(not(target_arch = "x86_64"))]
+        let firmware_type = None;
 
         Ok(Vm {
             epoll_manager,
@@ -258,6 +273,8 @@ impl Vm {
             irqchip_handle: None,
             #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
+
+            firmware_type,
         })
     }
 
@@ -408,6 +425,15 @@ impl Vm {
             AddressManagerError::GuestMemoryNotInitialized,
         ))
     }
+
+    /// Get confidential VM type for micro VM, if any
+    pub fn confidential_vm_type(&self) -> Option<ConfidentialVmType> {
+        self.shared_info
+            .read()
+            .unwrap()
+            .confidential_vm_type
+            .clone()
+    }
 }
 
 impl Vm {
@@ -425,6 +451,8 @@ impl Vm {
             self.shared_info.clone(),
             self.device_manager.io_manager(),
             self.epoll_manager.clone(),
+            #[cfg(target_arch = "x86_64")]
+            self.device_manager.irq_manager(),
         )?;
         self.vcpu_manager = Some(vcpu_manager);
 
@@ -595,6 +623,9 @@ impl Vm {
         let mut address_space_param = AddressSpaceMgrBuilder::new(&mem_type, &mem_file_path)
             .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
+        address_space_param.toggle_use_firmware(self.firmware_type.is_some());
+        #[cfg(target_arch = "x86_64")]
+        address_space_param.toggle_kvm_mem_attr_private(self.kvm_mem_attr_private());
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
             .map_err(StartMicroVmError::AddressManagerError)?;
@@ -642,7 +673,7 @@ impl Vm {
         image: &mut F,
     ) -> std::result::Result<InitrdConfig, LoadInitrdError>
     where
-        F: Read + Seek,
+        F: Read + Seek + vm_memory::ReadVolatile,
     {
         use crate::error::LoadInitrdError::*;
 
@@ -666,7 +697,7 @@ impl Vm {
 
         // Load the image into memory
         vm_memory
-            .read_from(GuestAddress(address), image, size)
+            .read_volatile_from(GuestAddress(address), image, size)
             .map_err(|_| LoadInitrd)?;
 
         Ok(InitrdConfig {
@@ -1070,6 +1101,7 @@ pub mod tests {
             kernel_file.into_file(),
             None,
             cmd_line,
+            None,
         ));
 
         vm.init_devices(epoll_mgr).unwrap();
@@ -1132,7 +1164,7 @@ pub mod tests {
         let vm_memory = vm.address_space.vm_memory().unwrap();
         vm_memory.write_obj(code, load_addr).unwrap();
 
-        let vcpu_fd = vm.vm_fd().create_vcpu(0).unwrap();
+        let mut vcpu_fd = vm.vm_fd().create_vcpu(0).unwrap();
         let mut vcpu_sregs = vcpu_fd.get_sregs().unwrap();
         assert_ne!(vcpu_sregs.cs.base, 0);
         assert_ne!(vcpu_sregs.cs.selector, 0);

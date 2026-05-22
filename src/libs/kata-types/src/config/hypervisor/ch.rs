@@ -18,7 +18,7 @@ use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{resolve_path, validate_path};
 
 /// Hypervisor name for CH, used to index `TomlConfig::hypervisor`.
-pub const HYPERVISOR_NAME_CH: &str = "cloud-hypervisor";
+pub const HYPERVISOR_NAME_CH: &str = "clh";
 
 /// Configuration information for CH.
 #[derive(Default, Debug)]

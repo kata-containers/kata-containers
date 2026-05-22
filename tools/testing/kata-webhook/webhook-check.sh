@@ -10,8 +10,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-webhook_dir=$(dirname $0)
+webhook_dir=$(dirname "$0")
+# shellcheck source=/dev/null
 source "${webhook_dir}/../../../tests/common.bash"
+# shellcheck source=/dev/null
 source "${webhook_dir}/common.bash"
 
 readonly hello_pod="hello-kata-webhook"
@@ -20,8 +22,9 @@ RUNTIME_CLASS="${RUNTIME_CLASS:-$(kubectl get configmap kata-webhook -o jsonpath
 
 cleanup() {
 	{
-	kubectl get -n ${WEBHOOK_NS} pod/${hello_pod} && \
-		kubectl delete -n ${WEBHOOK_NS} pod/${hello_pod}
+	# shellcheck disable=SC2154
+	kubectl get -n "${WEBHOOK_NS}" pod/"${hello_pod}" && \
+		kubectl delete -n "${WEBHOOK_NS}" pod/"${hello_pod}"
 	} &>/dev/null
 }
 trap cleanup EXIT
@@ -30,18 +33,19 @@ trap cleanup EXIT
 #
 check_deployed() {
 	local timeout="60s"
-	kubectl get -n ${WEBHOOK_NS} deployment/${WEBHOOK_SVC} &>/dev/null || \
+	# shellcheck disable=SC2154
+	kubectl get -n "${WEBHOOK_NS}" deployment/"${WEBHOOK_SVC}" &>/dev/null || \
 		die "The ${WEBHOOK_SVC} deployment does not exist"
 
-	kubectl wait -n ${WEBHOOK_NS} deployment/${WEBHOOK_SVC} \
-		--for condition=Available --timeout ${timeout} &>/dev/null || \
+	kubectl wait -n "${WEBHOOK_NS}" deployment/"${WEBHOOK_SVC}" \
+		--for condition=Available --timeout "${timeout}" &>/dev/null || \
 		die "The ${WEBHOOK_SVC} deployment is unavailable after ${timeout} waiting"
 }
 
 # Check the webhook is working as expected.
 #
 check_working() {
-	kubectl get -n ${WEBHOOK_NS} pod/${hello_pod} &>/dev/null && \
+	kubectl get -n "${WEBHOOK_NS}" pod/"${hello_pod}" &>/dev/null && \
 		die "${hello_pod} pod exists, cannot reliably check the webhook"
 
 	cat <<-EOF | kubectl apply -f -
@@ -67,9 +71,10 @@ check_working() {
 	        seccompProfile:
 	          type: RuntimeDefault
 	EOF
-	local class_name=$(kubectl get -n ${WEBHOOK_NS} \
-		-o jsonpath='{.spec.runtimeClassName}' pod/${hello_pod})
-	if [ "${class_name}" != "${RUNTIME_CLASS}" ]; then
+	local class_name
+	class_name=$(kubectl get -n "${WEBHOOK_NS}" \
+		-o jsonpath='{.spec.runtimeClassName}' pod/"${hello_pod}")
+	if [[ "${class_name}" != "${RUNTIME_CLASS}" ]]; then
 		warn "RuntimeClassName expected ${RUNTIME_CLASS}, got ${class_name}"
 		die "kata-webhook is not working"
 	fi
@@ -77,7 +82,7 @@ check_working() {
 
 main() {
 	info "Going to check the kata-webhook installation"
-	[ -n "${KUBECONFIG:-}" ] || die "KUBECONFIG should be exported"
+	[[ -n "${KUBECONFIG:-}" ]] || die "KUBECONFIG should be exported"
 	check_deployed
 	check_working
 	info "kata-webhook is up and working"

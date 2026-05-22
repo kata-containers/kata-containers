@@ -60,6 +60,7 @@ pub struct Storage {
     pub fs_group: Option<FSGroup>,
     pub options: Vec<String>,
     pub mount_point: String,
+    pub shared: bool,
 }
 
 #[derive(PartialEq, Clone, Default)]
@@ -618,6 +619,17 @@ pub struct AddSwapPathRequest {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct SetPolicyRequest {
     pub policy: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct GetDiagnosticDataRequest {
+    pub log_type: String,
+    pub container_id: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct GetDiagnosticDataResponse {
+    pub data: String,
 }
 
 #[cfg(test)]

@@ -59,6 +59,23 @@ impl std::fmt::Display for BlockDeviceAio {
     }
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum BlockDeviceFormat {
+    #[default]
+    Raw,
+    Vmdk,
+}
+
+impl std::fmt::Display for BlockDeviceFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
+            BlockDeviceFormat::Raw => "raw".to_string(),
+            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
+        };
+        write!(f, "{to_string}")
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
     /// Path of the drive.
@@ -70,6 +87,9 @@ pub struct BlockConfig {
 
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
+
+    /// raw, vmdk, etc. And default to raw if not set.
+    pub format: BlockDeviceFormat,
 
     /// Specifies cache-related options for block devices.
     /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
@@ -112,6 +132,12 @@ pub struct BlockConfig {
 
     /// block device multi-queue
     pub num_queues: usize,
+
+    /// Logical sector size in bytes reported to the guest. 0 means use hypervisor default.
+    pub logical_sector_size: u32,
+
+    /// Physical sector size in bytes reported to the guest. 0 means use hypervisor default.
+    pub physical_sector_size: u32,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -150,7 +176,6 @@ impl Device for BlockDevice {
 
         match h.add_device(DeviceType::Block(self.clone())).await {
             Ok(dev) => {
-                // Update device info with the one received from device attach
                 if let DeviceType::Block(blk) = dev {
                     self.config = blk.config;
                 }

@@ -64,6 +64,9 @@ pub struct PolicyData {
 
     /// Device settings read from genpolicy-settings.json.
     pub devices: Devices,
+
+    /// Cluster-level settings read from genpolicy-settings.json.
+    pub cluster_config: ClusterConfig,
 }
 
 /// OCI Container spec. This struct is very similar to the Spec struct from
@@ -371,6 +374,9 @@ pub struct AddARPNeighborsRequestDefaults {
     /// Explicitly blocked IP address ranges.
     /// Should include loopback addresses and other CIDRs that should not be routed outside the VM.
     forbidden_cidrs_regex: Vec<String>,
+
+    /// Allowed neighbor states. See https://www.man7.org/linux/man-pages/man8/ip-neighbour.8.html
+    allowed_states: Vec<u32>,
 }
 
 /// Settings specific to each kata agent endpoint, loaded from
@@ -406,6 +412,9 @@ pub struct RequestDefaults {
 
     /// Allow Host writing to Guest containers stdin.
     pub WriteStreamRequest: bool,
+
+    /// Allow Host to retrieve diagnostic data from the Guest.
+    pub GetDiagnosticDataRequest: bool,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -470,6 +479,11 @@ pub struct ClusterConfig {
     /// Whether emptyDirs are encrypted with modified metadata in the
     /// mount and a storage object for the block device.
     pub encrypted_emptydir: bool,
+
+    /// Cgroup v2 mount options that may appear beyond what genpolicy embeds
+    /// (e.g. "nsdelegate", "memory_recursiveprot" on newer kernels).
+    #[serde(default)]
+    pub cgroup_mount_extras_allowed: Vec<String>,
 }
 
 /// Describes patterns for supported VFIO devices.
@@ -638,6 +652,7 @@ impl AgentPolicy {
             common: self.config.settings.common.clone(),
             sandbox: self.config.settings.sandbox.clone(),
             devices: self.config.settings.devices.clone(),
+            cluster_config: self.config.settings.cluster_config.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -796,6 +811,22 @@ impl AgentPolicy {
             }
         }
 
+        // Whether these appear on the OCI spec depends on the container runtime configuration
+        // (e.g. containerd `container_annotations` allowlisting `io.kubernetes.container.*`).
+        // When allowed, the kubelet passes path/policy (defaults: /dev/termination-log, File).
+        // Do not put them in OCI.Annotations — that would require every CreateContainer input to
+        // carry the same keys. Optional keys are allowed via runtime_anno_patterns instead.
+        if !is_pause_container {
+            runtime_anno_patterns.insert(
+                "^io\\.kubernetes\\.container\\.terminationMessagePath$".to_string(),
+                "^/.*$".to_string(),
+            );
+            runtime_anno_patterns.insert(
+                "^io\\.kubernetes\\.container\\.terminationMessagePolicy$".to_string(),
+                "^(File|FallbackToLogsOnError)$".to_string(),
+            );
+        }
+
         for default_device in &c_settings.Linux.Devices {
             linux.Devices.push(default_device.clone())
         }
@@ -883,7 +914,7 @@ impl AgentPolicy {
             &self.config_maps,
             &self.secrets,
             namespace,
-            resource.get_annotations(),
+            resource,
             service_account_name,
         );
         debug!(
@@ -970,6 +1001,16 @@ impl AgentPolicy {
                 &process.User
             );
         }
+
+        yaml::apply_pod_fs_group_and_supplemental_groups(
+            &mut process,
+            resource.get_pod_security_context(),
+            is_pause_container,
+        );
+        debug!(
+            "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
+            &process.User
+        );
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Container-level settings from user's YAML.

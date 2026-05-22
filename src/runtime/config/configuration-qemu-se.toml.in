@@ -249,6 +249,16 @@ block_device_cache_direct = false
 # Default false
 block_device_cache_noflush = false
 
+# Specifies the logical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_logical_sector_size = 0
+
+# Specifies the physical sector size, in bytes, reported by block devices to the guest.
+# Common values are 512 and 4096. Set to 0 to use the QEMU/hypervisor default.
+# Default 0
+block_device_physical_sector_size = 0
+
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently implemented
 # for virtio-scsi and virtio-blk.
@@ -563,6 +573,11 @@ debug_console_enabled = false
 # (default: 30)
 dial_timeout = 90
 
+# Timeout in seconds for guest components (attestation-agent, confidential-data-hub)
+# to create their Unix sockets after being spawned by the agent.
+# (agent default when unset: 6)
+launch_process_timeout = 6
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
@@ -689,7 +704,7 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
 #
-emptydir_mode = "@DEFEMPTYDIRMODE@"
+emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,

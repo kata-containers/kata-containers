@@ -26,7 +26,7 @@
 //! information and ensure data out of the container rootfs directory won't be affected
 //! by the container. There are several types of attacks related to container mount namespace:
 //! - symlink based attack
-//! - Time of check to time of use (TOCTTOU)
+//! - Time of check to time of use (TOCTOU)
 //!
 //! This crate provides several mechanisms for container runtimes to safely handle filesystem paths
 //! when preparing mount namespace for containers.
@@ -35,13 +35,13 @@
 //! - [scoped_resolve()](crate::scoped_resolve()): resolve `unsafe_path` to a relative path,
 //!   rooted at and constrained by `root`.
 //! - [struct PinnedPathBuf](crate::PinnedPathBuf): safe version of `PathBuf` to protect from
-//!   TOCTTOU style of attacks, which ensures:
+//!   TOCTOU style of attacks, which ensures:
 //!     - the value of [`PinnedPathBuf::as_path()`] never changes.
 //!     - the path returned by [`PinnedPathBuf::as_path()`] is always a symlink.
 //!     - the filesystem object referenced by the symlink [`PinnedPathBuf::as_path()`] never changes.
 //!     - the value of [`PinnedPathBuf::target()`] never changes.
 //! - [struct ScopedDirBuilder](crate::ScopedDirBuilder): safe version of `DirBuilder` to protect
-//!   from symlink race and TOCTTOU style of attacks, which enhances security by:
+//!   from symlink race and TOCTOU style of attacks, which enhances security by:
 //!     - ensuring the new directories are created under a specified `root` directory.
 //!     - avoiding symlink race attacks during making directories.
 //!     - returning a [PinnedPathBuf] for the last level of directory, so it could be used for other

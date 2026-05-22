@@ -18,7 +18,7 @@ The host kernel must be equal to or later than upstream version [6.11](https://c
 
 [`sev-utils`](https://github.com/amd/sev-utils/blob/coco-202501150000/docs/snp.md) is an easy way to install the required host kernel with the `setup-host` command. However, it will also build compatible guest kernel, OVMF, and QEMU components which are not necessary as these components are packaged with kata. The `sev-utils` script utility can be used with these additional components to test the memory encrypted launch and attestation of a base QEMU SNP guest.
 
-For a simplified way to build just the upstream compatible host kernel, use the Confidential Containers fork of [AMDESE AMDSEV](https://github.com/confidential-containers/amdese-amdsev/tree/amd-snp-202501150000). Individual components can be built by running the following command:
+For a simplified way to build just the upstream compatible host kernel, use the Confidential Containers fork of [`amdese-amdsev`](https://github.com/confidential-containers/amdese-amdsev/tree/amd-snp-202501150000). Individual components can be built by running the following command:
 
 ```
 ./build.sh kernel host --install
@@ -65,7 +65,7 @@ $ ./configure --enable-virtfs --target-list=x86_64-softmmu --enable-debug
 $ make -j "$(nproc)"
 $ popd
 ```
-- Create cert-chain for SNP attestation ( using [snphost](https://github.com/virtee/snphost/blob/main/docs/snphost.1.adoc) )
+- Create cert-chain for SNP attestation ( using [`snphost`](https://github.com/virtee/snphost/blob/main/docs/snphost.1.adoc) )
 ```bash
 $ git clone https://github.com/virtee/snphost.git && cd snphost/
 $ cargo build
@@ -95,6 +95,10 @@ path = "/path/to/qemu/build/qemu-system-x86_64"
 - Use `virtio-9p` device since `virtio-fs` is unsupported due to bugs / shortcomings in QEMU version [`snp-v3`](https://github.com/AMDESE/qemu/tree/snp-v3) for SEV and SEV-SNP (change value)
 ```toml
 shared_fs = "virtio-9p"
+```
+- Use `blockfile` snapshotter: Since virtio-fs remains unsupported due to bugs in QEMU snp-v3, and virtio-9p is no longer supported in runtime-rs, it is recommended to use the blockfile snapshotter. This allows container images to be managed via block devices without relying on a shared file system. To enable this, set the `snapshotter` to `blockfile` in the containerd config file, please refer to [blockfile guide](https://github.com/containerd/containerd/blob/main/docs/snapshotters/blockfile.md) for more information. Additionally, shared_fs should be set to "none" since no shared file system is used.
+```toml
+shared_fs = "none"
 ```
 - Disable `virtiofsd` since it is no longer required (comment out)
 ```toml
@@ -178,4 +182,3 @@ sudo reboot
 ```bash
 sudo rmmod kvm_amd && sudo modprobe kvm_amd sev_snp=0
 ```
-

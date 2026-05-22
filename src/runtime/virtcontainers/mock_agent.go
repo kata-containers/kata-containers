@@ -272,3 +272,7 @@ func (n *mockAgent) setIPTables(ctx context.Context, isIPv6 bool, data []byte) e
 func (n *mockAgent) setPolicy(ctx context.Context, policy string) error {
 	return nil
 }
+
+func (n *mockAgent) getDiagnosticData(ctx context.Context, logType string, containerID string) (string, error) {
+	return "", nil
+}

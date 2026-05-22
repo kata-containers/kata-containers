@@ -9,7 +9,8 @@ use std::{fs::File, os::unix::io::AsRawFd};
 use anyhow::{Context, Result};
 use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
-use rand::Rng;
+use rand::rng as thread_rng;
+use rand::RngExt;
 
 use kata_types::sl;
 
@@ -55,8 +56,8 @@ impl Drop for NetnsGuard {
 
 // generate the network namespace name
 pub fn generate_netns_name() -> String {
-    let mut rng = rand::thread_rng();
-    let random_bytes: [u8; 16] = rng.gen();
+    let mut rng = thread_rng();
+    let random_bytes: [u8; 16] = rng.random();
     format!(
         "cnitest-{}-{}-{}-{}-{}",
         hex::encode(&random_bytes[..4]),

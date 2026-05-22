@@ -71,6 +71,11 @@ pub mod kvm;
 #[cfg(feature = "kvm-irq")]
 pub use self::kvm::KvmIrqManager;
 
+#[cfg(all(target_arch = "x86_64", feature = "split-irq"))]
+pub mod userspace;
+#[cfg(all(target_arch = "x86_64", feature = "split-irq"))]
+pub use self::userspace::{ioapic::*, manager::UserspaceIoapicManager};
+
 /// Reuse std::io::Result to simplify interoperability among crates.
 pub type Result<T> = std::io::Result<T>;
 
@@ -128,7 +133,13 @@ pub struct MsiIrqSourceConfig {
 ///
 /// The InterruptManager implementations should protect itself from concurrent accesses internally,
 /// so it could be invoked from multi-threaded context.
-pub trait InterruptManager {
+pub trait InterruptManager: Send + Sync {
+    /// Prepare the interrupt manager for generating interrupts into the target VM.
+    /// No-op by default.
+    fn initialize(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Create an [InterruptSourceGroup](trait.InterruptSourceGroup.html) object to manage interrupt
     /// sources for a virtual device.
     ///
@@ -153,9 +164,37 @@ pub trait InterruptManager {
     /// before calling destroy_group(). This assumption helps to simplify InterruptSourceGroup
     /// implementations.
     fn destroy_group(&self, group: Arc<Box<dyn InterruptSourceGroup>>) -> Result<()>;
+
+    /// In cases of userspace irq management, guest kernel might try to query the emulated IOAPIC
+    /// registers via MMIO read operations, and with this function, the manager would be able to
+    /// handle these requests according to the IOAPIC protocol.
+    /// No-op by default.
+    ///
+    /// # Arguments
+    /// * addr: target address for MMIO read operation
+    /// * data: buffer where the query result is stored
+    fn ioapic_read(&self, _addr: u64, _data: &mut [u8]) -> Result<()> {
+        Ok(())
+    }
+
+    /// In cases of userspace irq management, guest kernel might try to update the emulated IOAPIC
+    /// registers via MMIO write operations, and with this function, the manager would be able to
+    /// handle these requests according to the IOAPIC protocol.
+    /// No-op by default.
+    ///
+    /// # Arguments
+    /// * addr: target address for MMIO write operation
+    /// * data: new value for IOAPIC registers
+    fn ioapic_write(&self, _addr: u64, _data: &[u8]) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl<T: InterruptManager> InterruptManager for Arc<T> {
+    fn initialize(&self) -> Result<()> {
+        self.deref().initialize()
+    }
+
     fn create_group(
         &self,
         type_: InterruptSourceType,
@@ -170,6 +209,41 @@ impl<T: InterruptManager> InterruptManager for Arc<T> {
         group: Arc<Box<dyn InterruptSourceGroup>>,
     ) -> std::result::Result<(), Error> {
         self.deref().destroy_group(group)
+    }
+
+    fn ioapic_read(&self, addr: u64, data: &mut [u8]) -> Result<()> {
+        self.deref().ioapic_read(addr, data)
+    }
+
+    fn ioapic_write(&self, addr: u64, data: &[u8]) -> Result<()> {
+        self.deref().ioapic_write(addr, data)
+    }
+}
+
+impl InterruptManager for Arc<Box<dyn InterruptManager>> {
+    fn initialize(&self) -> Result<()> {
+        self.deref().initialize()
+    }
+
+    fn create_group(
+        &self,
+        type_: InterruptSourceType,
+        base: InterruptIndex,
+        count: InterruptIndex,
+    ) -> Result<Arc<Box<dyn InterruptSourceGroup>>> {
+        self.deref().create_group(type_, base, count)
+    }
+
+    fn destroy_group(&self, group: Arc<Box<dyn InterruptSourceGroup>>) -> Result<()> {
+        self.deref().destroy_group(group)
+    }
+
+    fn ioapic_read(&self, addr: u64, data: &mut [u8]) -> Result<()> {
+        self.deref().ioapic_read(addr, data)
+    }
+
+    fn ioapic_write(&self, addr: u64, data: &[u8]) -> Result<()> {
+        self.deref().ioapic_write(addr, data)
     }
 }
 
