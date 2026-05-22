@@ -412,28 +412,58 @@ fn current_arch() -> &'static str {
 }
 
 /// Parse shim-components.json and return the union of component tarball names
-/// required by all shims listed in `config.shims_for_arch` for the current arch.
-fn collect_required_tarballs(config: &Config) -> Result<HashSet<String>> {
+/// required and optional for all shims listed in `config.shims_for_arch` for the current arch.
+///
+/// Backward compatibility:
+/// - legacy format: `shims.<shim>.<arch> = ["component-a", "component-b"]`
+/// - new format: `shims.<shim>.<arch>.required` + `.optional`
+fn collect_tarballs_by_requirement(config: &Config) -> Result<(HashSet<String>, HashSet<String>)> {
     let arch = current_arch();
     let json_str = fs::read_to_string(SHIM_COMPONENTS_PATH)
         .with_context(|| format!("Failed to read {SHIM_COMPONENTS_PATH}"))?;
     let doc: serde_json::Value =
         serde_json::from_str(&json_str).context("Failed to parse shim-components.json")?;
+    collect_tarballs_by_requirement_from_doc(config, &doc, arch)
+}
+
+fn collect_tarballs_by_requirement_from_doc(
+    config: &Config,
+    doc: &serde_json::Value,
+    arch: &str,
+) -> Result<(HashSet<String>, HashSet<String>)> {
     let shims_map = doc["shims"]
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("shim-components.json is missing the 'shims' object"))?;
 
     let mut required: HashSet<String> = HashSet::new();
+    let mut optional: HashSet<String> = HashSet::new();
     for shim in &config.shims_for_arch {
-        match shims_map
-            .get(shim.as_str())
-            .and_then(|v| v.get(arch))
-            .and_then(|v| v.as_array())
-        {
-            Some(tarballs) => {
-                for t in tarballs {
+        match shims_map.get(shim.as_str()).and_then(|v| v.get(arch)) {
+            // Legacy array: all entries are required
+            Some(arch_entry) if arch_entry.is_array() => {
+                for t in arch_entry
+                    .as_array()
+                    .expect("arch_entry checked as array")
+                {
                     if let Some(name) = t.as_str() {
                         required.insert(name.to_string());
+                    }
+                }
+            }
+            // Object format: required + optional arrays
+            Some(arch_entry) if arch_entry.is_object() => {
+                if let Some(required_list) = arch_entry.get("required").and_then(|v| v.as_array()) {
+                    for t in required_list {
+                        if let Some(name) = t.as_str() {
+                            required.insert(name.to_string());
+                        }
+                    }
+                }
+                if let Some(optional_list) = arch_entry.get("optional").and_then(|v| v.as_array()) {
+                    for t in optional_list {
+                        if let Some(name) = t.as_str() {
+                            optional.insert(name.to_string());
+                        }
                     }
                 }
             }
@@ -445,9 +475,17 @@ fn collect_required_tarballs(config: &Config) -> Result<HashSet<String>> {
                     arch
                 );
             }
+            Some(_) => {
+                log::warn!(
+                    "Shim '{}' entry for architecture '{}' has an unsupported format in shim-components.json; \
+                     no tarballs will be extracted for it",
+                    shim,
+                    arch
+                );
+            }
         }
     }
-    Ok(required)
+    Ok((required, optional))
 }
 
 /// Extract a `.tar.zst` tarball into `dest_dir`, stripping the leading `opt/kata/` prefix
@@ -606,7 +644,7 @@ fn extract_tarball(tarball_path: &Path, dest_dir: &str) -> Result<()> {
 /// Using an in-memory set (rather than on-disk markers) avoids any risk of
 /// stale state surviving across pod restarts.
 fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
-    let required = collect_required_tarballs(config)?;
+    let (required, optional) = collect_tarballs_by_requirement(config)?;
 
     if required.is_empty() {
         log::warn!(
@@ -652,6 +690,40 @@ fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) 
         extract_tarball(&tarball_path, &config.host_install_dir).with_context(|| {
             format!(
                 "Failed to extract component '{}' from {}",
+                component,
+                tarball_path.display()
+            )
+        })?;
+
+        extracted.insert(component.clone());
+    }
+
+    let mut sorted_optional: Vec<_> = optional.iter().collect();
+    sorted_optional.sort();
+
+    for component in sorted_optional {
+        if extracted.contains(component.as_str()) {
+            info!("Optional component '{}' already extracted, skipping", component);
+            continue;
+        }
+
+        let tarball_name = format!("kata-static-{}.tar.zst", component);
+        let tarball_path = Path::new(TARBALLS_DIR).join(&tarball_name);
+
+        if !tarball_path.exists() {
+            log::warn!(
+                "Optional component tarball not found: {}. \
+                 Continuing without '{}'.",
+                tarball_path.display(),
+                component
+            );
+            continue;
+        }
+
+        info!("Extracting optional component '{}'", component);
+        extract_tarball(&tarball_path, &config.host_install_dir).with_context(|| {
+            format!(
+                "Failed to extract optional component '{}' from {}",
                 component,
                 tarball_path.display()
             )
@@ -1335,6 +1407,7 @@ async fn configure_mariner(config: &Config) -> Result<()> {
 mod tests {
     use super::*;
     use rstest::rstest;
+    use serde_json::json;
 
     #[rstest]
     #[case("qemu", "qemu")]
@@ -1628,5 +1701,65 @@ mod tests {
 
         fs::remove_dir_all(&runtime_dir).unwrap();
         assert!(!runtime_dir.exists());
+    }
+
+    #[test]
+    fn test_collect_tarballs_by_requirement_mixed_manifest_formats() {
+        let config = Config {
+            node_name: "test-node".to_string(),
+            debug: false,
+            shims_for_arch: vec!["qemu-se".to_string(), "qemu".to_string()],
+            default_shim_for_arch: "qemu".to_string(),
+            allowed_hypervisor_annotations_for_arch: Vec::new(),
+            snapshotter_handler_mapping_for_arch: None,
+            agent_https_proxy: None,
+            agent_no_proxy: None,
+            pull_type_mapping_for_arch: None,
+            installation_prefix: None,
+            multi_install_suffix: None,
+            helm_post_delete_hook: false,
+            experimental_setup_snapshotter: None,
+            experimental_force_guest_pull_for_arch: Vec::new(),
+            dest_dir: "/opt/kata".to_string(),
+            host_install_dir: "/host/opt/kata".to_string(),
+            crio_drop_in_conf_dir: String::new(),
+            crio_drop_in_conf_file: String::new(),
+            crio_drop_in_conf_file_debug: String::new(),
+            containerd_conf_file: String::new(),
+            containerd_conf_file_backup: String::new(),
+            containerd_drop_in_conf_file: String::new(),
+            daemonset_name: "kata-deploy".to_string(),
+            custom_runtimes_enabled: false,
+            custom_runtimes: Vec::new(),
+        };
+
+        let doc = json!({
+            "shims": {
+                "qemu-se": {
+                    "s390x": {
+                        "required": ["shim-v2-go", "kernel"],
+                        "optional": ["rootfs-initrd-confidential", "boot-image-se"]
+                    }
+                },
+                "qemu": {
+                    "s390x": ["qemu", "virtiofsd"]
+                }
+            }
+        });
+
+        let (required, optional) =
+            collect_tarballs_by_requirement_from_doc(&config, &doc, "s390x").unwrap();
+
+        let required_expected: HashSet<String> = ["shim-v2-go", "kernel", "qemu", "virtiofsd"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let optional_expected: HashSet<String> = ["rootfs-initrd-confidential", "boot-image-se"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        assert_eq!(required, required_expected);
+        assert_eq!(optional, optional_expected);
     }
 }
