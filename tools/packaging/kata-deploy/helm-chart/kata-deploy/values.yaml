@@ -475,7 +475,6 @@ runtimeClasses:
 
 env:
   installationPrefix: ""
-  hostOS: ""
   # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
   # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
   #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).

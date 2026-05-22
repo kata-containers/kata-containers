@@ -78,6 +78,10 @@ jobs:
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       GH_PR_NUMBER: ${{ inputs.pr-number }}
+      # For cbl-mariner AKS jobs with clh/clh-runtime-rs, tests/gha-run-k8s-common.sh
+      # (helm_helper) automatically switches the base chart values file to
+      # tools/packaging/kata-deploy/helm-chart/kata-deploy/azure-tests*.values.yaml
+      # so Azure-specific custom runtimes are tested without patching default values.yaml.
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"

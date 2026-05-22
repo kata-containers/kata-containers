@@ -695,6 +695,18 @@ function helm_helper() {
 					base_values_file="${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml"
 				fi
 				;;
+			clh)
+				# On AKS Mariner tests, use dedicated values that make kata default point to clh-azure.
+				if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]] && [[ -f "${helm_chart_dir}/azure-tests.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/azure-tests.values.yaml"
+				fi
+				;;
+			clh-runtime-rs)
+				# On AKS Mariner tests, use dedicated values that make kata default point to clh-azure-runtime-rs.
+				if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]] && [[ -f "${helm_chart_dir}/azure-tests-runtime-rs.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/azure-tests-runtime-rs.values.yaml"
+				fi
+				;;
 			*)
 				# Use TEE example file for confidential computing hypervisors
 				if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
