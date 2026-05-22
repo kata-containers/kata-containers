@@ -19,8 +19,10 @@ use std::thread;
 use dbs_interrupt::{InterruptManager, IOAPIC_BASE, IOAPIC_SIZE};
 use dbs_utils::metric::IncMetric;
 use dbs_utils::time::TimestampUs;
+#[cfg(target_arch = "x86_64")]
+use kvm_bindings::{kvm_memory_attributes, KVM_MEMORY_ATTRIBUTE_PRIVATE};
 use kvm_bindings::{KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
-use kvm_ioctls::{VcpuExit, VcpuFd};
+use kvm_ioctls::{VcpuExit, VcpuFd, VmFd};
 use libc::{c_int, c_void, siginfo_t};
 use log::{error, info};
 use seccompiler::{apply_filter, BpfProgram, Error as SecError};
@@ -35,6 +37,9 @@ use crate::IoManagerCached;
 #[cfg(target_arch = "x86_64")]
 #[path = "x86_64.rs"]
 mod x86_64;
+
+#[cfg(target_arch = "x86_64")]
+pub use x86_64::{KVM_HC_MAP_GPA_RANGE, KVM_MAP_GPA_RANGE_ENCRYPTED};
 
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64.rs"]
@@ -119,6 +124,11 @@ pub enum VcpuError {
     /// The call to KVM_SET_CPUID2 failed on x86_64.
     #[error("failure while calling KVM_SET_CPUID2 on x86_64")]
     SetSupportedCpusFailed(#[source] kvm_ioctls::Error),
+
+    #[cfg(target_arch = "x86_64")]
+    /// Fail to set memory attributes for hypercall
+    #[error("failure while setting memory attributes")]
+    SetMemoryAttributes(#[source] kvm_ioctls::Error),
 }
 
 #[cfg(target_arch = "aarch64")]
@@ -283,6 +293,8 @@ pub struct Vcpu {
     io_mgr: IoManagerCached,
     // Records vCPU create time stamp
     create_ts: TimestampUs,
+    // VM fd that current vCPU belongs to
+    vm_fd: Arc<VmFd>,
 
     // The receiving end of events channel owned by the vcpu side.
     event_receiver: Receiver<VcpuEvent>,
@@ -529,6 +541,30 @@ impl Vcpu {
                             Err(VcpuError::VcpuUnhandledKvmExit)
                         }
                     },
+                    #[cfg(target_arch = "x86_64")]
+                    VcpuExit::Hypercall(hc_exit) => {
+                        if hc_exit.nr == KVM_HC_MAP_GPA_RANGE {
+                            let gpa = hc_exit.args[0];
+                            let size = hc_exit.args[1] * dbs_boot::PAGE_SIZE as u64;
+                            let attributes = hc_exit.args[2];
+                            let mem_attr = if (attributes & KVM_MAP_GPA_RANGE_ENCRYPTED) != 0 {
+                                KVM_MEMORY_ATTRIBUTE_PRIVATE
+                            } else {
+                                0
+                            };
+                            self.vm_fd
+                                .set_memory_attributes(kvm_memory_attributes {
+                                    address: gpa,
+                                    size,
+                                    attributes: mem_attr as u64,
+                                    flags: 0,
+                                })
+                                .map_err(VcpuError::SetMemoryAttributes)?;
+                            Ok(VcpuEmulation::Handled)
+                        } else {
+                            Err(VcpuError::VcpuUnhandledKvmExit)
+                        }
+                    }
                     r => {
                         self.metrics.failures.inc();
                         // TODO: Are we sure we want to finish running a vcpu upon
@@ -865,7 +901,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     fn create_vcpu() -> (Vcpu, Receiver<VcpuStateEvent>) {
         let kvm_context = KvmContext::new(None).unwrap();
-        let vm = kvm_context.kvm().create_vm().unwrap();
+        let vm = Arc::new(kvm_context.kvm().create_vm().unwrap());
         let vcpu_fd = vm.create_vcpu(0).unwrap();
         let io_manager = IoManagerCached::new(Arc::new(ArcSwap::new(Arc::new(IoManager::new()))));
         let supported_cpuid = kvm_context
@@ -876,11 +912,12 @@ pub mod tests {
         let (tx, rx) = channel();
         let time_stamp = TimestampUs::default();
         let irq_manager: Arc<Box<dyn InterruptManager>> =
-            Arc::new(Box::new(KvmIrqManager::new(Arc::new(vm))));
+            Arc::new(Box::new(KvmIrqManager::new(vm.clone())));
 
         let vcpu = Vcpu::new_x86_64(
             0,
             vcpu_fd,
+            vm,
             io_manager,
             supported_cpuid,
             reset_event_fd,
@@ -915,6 +952,7 @@ pub mod tests {
         let vcpu = Vcpu::new_aarch64(
             0,
             vcpu_fd,
+            vm,
             io_manager,
             reset_event_fd,
             vcpu_state_event,

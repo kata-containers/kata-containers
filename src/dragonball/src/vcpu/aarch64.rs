@@ -44,6 +44,7 @@ impl Vcpu {
     pub fn new_aarch64(
         id: u8,
         vcpu_fd: VcpuFd,
+        vm_fd: Arc<VmFd>,
         io_mgr: IoManagerCached,
         exit_evt: EventFd,
         vcpu_state_event: EventFd,
@@ -56,6 +57,7 @@ impl Vcpu {
 
         Ok(Vcpu {
             fd: vcpu_fd,
+            vm_fd,
             id,
             io_mgr,
             create_ts,
