@@ -1,0 +1,19 @@
+[Unit]
+Description=Datadog System Probe
+Requires=sys-kernel-debug.mount
+After=sys-kernel-debug.mount
+
+[Service]
+Type=simple
+PIDFile=/tmp/system-probe.pid
+Restart=always
+RestartSec=10
+ExecStart=/usr/local/bin/start-system-probe run --pid=/tmp/system-probe.pid
+ExecReload=/bin/kill -HUP $MAINPID
+StartLimitInterval=10
+StartLimitBurst=5
+
+EnvironmentFile=/etc/datadog-agent/system-probe.env
+
+[Install]
+WantedBy=kata-containers.target

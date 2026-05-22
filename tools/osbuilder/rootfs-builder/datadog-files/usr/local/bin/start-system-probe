@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# Fetch datadog-agent token
+token_path=$(ls /run/kata-containers/shared/containers/*/datadog-agent/auth/token 2>/dev/null | head -n 1)
+[ -n "${token_path}" ] && export DD_AUTH_TOKEN_FILE_PATH="${token_path}"
+
+# Get DD_SITE from container env variables
+for config_path in /run/kata-containers/*/config.json /run/kata-containers/*/*/config.json; do
+    [ -f "${config_path}" ] || continue
+    dd_site=$(grep -oE '"DD_SITE=[^"]+"' "${config_path}" | head -n 1 | sed -e 's/^"DD_SITE=//' -e 's/"$//')
+    if [ -n "${dd_site}" ]; then
+        export DD_SITE="${dd_site}"
+        break
+    fi
+done
+
+exec /opt/datadog-agent/embedded/bin/system-probe "$@"

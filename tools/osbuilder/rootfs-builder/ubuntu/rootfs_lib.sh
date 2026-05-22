@@ -20,12 +20,16 @@ build_rootfs() {
 	# shellcheck disable=SC2154
 	if ! mmdebstrap --mode auto --arch "${DEB_ARCH}" --variant required \
 			--components="${REPO_COMPONENTS}" \
+			--setup-hook "/kata-containers/tools/osbuilder/hooks/setup_datadog_keyring.sh" \
 			--customize-hook "/kata-containers/tools/osbuilder/hooks/download_generate_sbom.sh" \
-			--include "${PACKAGES},${EXTRA_PKGS}" "${OS_VERSION}" "${rootfs_dir}" "${REPO_URL}"; then
+			--include "${PACKAGES},${EXTRA_PKGS}" "${OS_VERSION}" "${rootfs_dir}" \
+			"${REPO_URL}" \
+			"deb [signed-by=/tmp/datadog-archive-keyring.gpg] https://apt.datadoghq.com/ stable 7"; then
 		echo "ERROR: mmdebstrap failed, cannot proceed" && exit 1
 	else
 		echo "INFO: mmdebstrap succeeded"
 	fi
+	rm -f "/tmp/datadog-archive-keyring.gpg"
 	rm -rf "${rootfs_dir}/var/run"
 	ln -s /run "${rootfs_dir}/var/run"
 	cp --remove-destination /etc/resolv.conf "${rootfs_dir}/etc"
