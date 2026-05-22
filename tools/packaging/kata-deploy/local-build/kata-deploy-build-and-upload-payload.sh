@@ -25,6 +25,7 @@ ARTIFACTS_STAGE_DIR="${KATA_DEPLOY_DIR}/kata-artifacts"
 # Docker build context (local-build/ is excluded via .dockerignore).
 mkdir -p "${ARTIFACTS_STAGE_DIR}"
 cp "${ARTIFACTS_BUILD_DIR}"/kata-static-*.tar.zst "${ARTIFACTS_STAGE_DIR}/"
+cp "${ARTIFACTS_BUILD_DIR}"/kata-deploy-static-*.tar.zst "${ARTIFACTS_STAGE_DIR}/"
 
 cleanup() {
 	rm -rf "${ARTIFACTS_STAGE_DIR}"

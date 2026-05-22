@@ -73,6 +73,10 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
+define BUILD_KATA_DEPLOY_COMPONENT
+	$(MK_DIR)/kata-deploy-build-components-tarballs.sh $1
+endef
+
 define DUMMY
 	$(call BUILD,"dummy")
 	mv $(MK_DIR)/build/kata-static-dummy.tar.zst $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.zst
@@ -233,6 +237,12 @@ trace-forwarder-tarball: copy-scripts-for-the-tools-build
 
 virtiofsd-tarball:
 	${MAKE} $@-build
+
+kata-deploy-binary-tarball:
+	$(call BUILD_KATA_DEPLOY_COMPONENT,kata-deploy-binary)
+
+nydus-snapshotter-for-coco-guest-pull-tarball:
+	$(call BUILD_KATA_DEPLOY_COMPONENT,nydus-snapshotter-for-coco-guest-pull)
 
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
