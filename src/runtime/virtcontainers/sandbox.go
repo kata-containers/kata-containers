@@ -2989,10 +2989,39 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 		return nil
 	}
 
+	expectedVCPUs := int(s.config.HypervisorConfig.NumVCPUs())
+
 	vCPUThreadsMap, err := s.hypervisor.GetThreadIDs(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get vCPU thread ids from hypervisor: %v", err)
 	}
+
+	// QEMU may not have spawned all vCPU threads yet. Retry with
+	// exponential backoff until we see the expected count.
+	if len(vCPUThreadsMap.vcpus) < expectedVCPUs {
+		const maxAttempts = 10
+		backoff := 50 * time.Millisecond
+		for attempt := 2; attempt <= maxAttempts && len(vCPUThreadsMap.vcpus) < expectedVCPUs; attempt++ {
+			s.Logger().WithFields(logrus.Fields{
+				"have":    len(vCPUThreadsMap.vcpus),
+				"want":    expectedVCPUs,
+				"attempt": attempt,
+			}).Debug("waiting for all vCPU threads to be available")
+			time.Sleep(backoff)
+			backoff *= 2
+			vCPUThreadsMap, err = s.hypervisor.GetThreadIDs(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get vCPU thread ids from hypervisor: %v", err)
+			}
+		}
+		if len(vCPUThreadsMap.vcpus) < expectedVCPUs {
+			s.Logger().WithFields(logrus.Fields{
+				"have": len(vCPUThreadsMap.vcpus),
+				"want": expectedVCPUs,
+			}).Warn("not all vCPU threads available after retries; pinning available ones")
+		}
+	}
+
 	cpuSetStr, _, err := s.getSandboxCPUSet()
 	if err != nil {
 		return fmt.Errorf("failed to get CPUSet config: %v", err)
