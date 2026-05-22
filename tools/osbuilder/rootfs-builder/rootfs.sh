@@ -913,6 +913,15 @@ delete_unnecessary_files()
 	done
 }
 
+############### [DATADOG] ###############
+setup_rootfs_dd_specific()
+{
+	if [ -d "${script_dir}/datadog-files" ]; then
+		cp -a "${script_dir}/datadog-files/." "${ROOTFS_DIR}/"
+	fi
+}
+########################################
+
 main()
 {
 	parse_arguments "$@"
@@ -931,6 +940,7 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
+	setup_rootfs_dd_specific
 
 	if [[ "${BUILD_VARIANT}" = "nvidia-gpu" ]]; then
 		setup_nvidia_gpu_rootfs_stage_one
