@@ -17,6 +17,8 @@ use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{
     ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
@@ -361,6 +363,11 @@ impl VirtioNetDeviceMgr {
             None => None,
         };
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         let net_device = Net::new(
             cfg.host_dev_name.clone(),
             cfg.guest_mac(),
@@ -368,6 +375,7 @@ impl VirtioNetDeviceMgr {
             epoll_mgr,
             rx_rate_limiter,
             tx_rate_limiter,
+            f_access_platform,
         )?;
 
         Ok(Box::new(net_device))

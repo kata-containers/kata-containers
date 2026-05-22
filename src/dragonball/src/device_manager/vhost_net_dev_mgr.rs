@@ -14,6 +14,8 @@ use virtio_queue::QueueSync;
 
 use super::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestRegionImpl};
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfos};
 
 /// Default number of virtio queues, one rx/tx pair.
@@ -155,11 +157,16 @@ impl VhostNetDeviceMgr {
             "host_dev_name" => &cfg.host_dev_name,
         );
         let epoll_mgr = ctx.epoll_mgr.clone().ok_or(VirtioError::InvalidInput)?;
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
         Ok(Box::new(Net::new(
             cfg.host_dev_name.clone(),
             cfg.guest_mac(),
             Arc::new(cfg.queue_sizes()),
             epoll_mgr,
+            f_access_platform,
         )?))
     }
 

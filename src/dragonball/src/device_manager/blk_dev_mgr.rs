@@ -31,6 +31,8 @@ use virtio_queue::QueueSync;
 use vm_memory::GuestRegionMmap;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo};
 use crate::device_manager::blk_dev_mgr::BlockDeviceError::InvalidDeviceId;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
@@ -726,12 +728,18 @@ impl BlockDeviceMgr {
             }
         }
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         Ok(Box::new(Block::new(
             block_files,
             cfg.is_read_only,
             Arc::new(cfg.queue_sizes()),
             epoll_mgr,
             limiters,
+            f_access_platform,
         )?))
     }
 

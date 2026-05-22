@@ -54,7 +54,7 @@ use dbs_upcall::{
 use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::api::v1::InstanceInfo;
+use crate::api::v1::{ConfidentialVmType, InstanceInfo};
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::PciSystemManager;
 use crate::error::StartMicroVmError;
@@ -427,6 +427,14 @@ impl DeviceOpContext {
 
     pub(crate) fn logger(&self) -> &slog::Logger {
         &self.logger
+    }
+
+    pub(crate) fn get_confidential_vm_type(&self) -> Option<ConfidentialVmType> {
+        self.shared_info
+            .read()
+            .unwrap()
+            .confidential_vm_type
+            .clone()
     }
 
     #[allow(unused_variables)]

@@ -20,7 +20,7 @@ use dbs_utils::{
 };
 use log::{debug, error, info, warn};
 use virtio_bindings::bindings::virtio_blk::*;
-use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::{VIRTIO_F_ACCESS_PLATFORM, VIRTIO_F_VERSION_1};
 use virtio_queue::QueueT;
 use vm_memory::GuestMemoryRegion;
 use vmm_sys_util::eventfd::{EventFd, EFD_NONBLOCK};
@@ -83,6 +83,7 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
         rate_limiters: Vec<RateLimiter>,
+        f_access_platform: bool,
     ) -> Result<Self> {
         let num_queues = disk_images.len();
 
@@ -102,6 +103,10 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
         avail_features |= 1u64 << VIRTIO_BLK_F_SIZE_MAX;
         avail_features |= 1u64 << VIRTIO_BLK_F_SEG_MAX;
+
+        if f_access_platform {
+            avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
+        }
 
         if is_disk_read_only {
             avail_features |= 1u64 << VIRTIO_BLK_F_RO;
@@ -865,6 +870,7 @@ mod tests {
             Arc::new(vec![128]),
             epoll_mgr,
             vec![],
+            false,
         )
         .unwrap();
 
@@ -922,6 +928,7 @@ mod tests {
                 Arc::new(vec![128]),
                 epoll_mgr.clone(),
                 vec![],
+                false,
             )
             .unwrap();
 
@@ -959,6 +966,7 @@ mod tests {
                 Arc::new(vec![128]),
                 epoll_mgr.clone(),
                 vec![],
+                false,
             )
             .unwrap();
             dev.disk_images = vec![];
@@ -997,6 +1005,7 @@ mod tests {
                 Arc::new(vec![128]),
                 epoll_mgr,
                 vec![],
+                false,
             )
             .unwrap();
 
@@ -1034,6 +1043,7 @@ mod tests {
             Arc::new(vec![128]),
             epoll_mgr,
             vec![],
+            false,
         )
         .unwrap();
 
