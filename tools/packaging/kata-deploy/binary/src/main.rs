@@ -348,62 +348,102 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
 /// Label the node and verify the label sticks, retrying if necessary.
 ///
-/// On rke2/k3s a CRI restart also restarts the kubelet. The kubelet may
-/// briefly re-register the node with its cached label set, clobbering the
-/// label we just applied via the API. We work around this by verifying the
-/// label value after setting it and re-applying if needed.
+/// On rke2/k3s a CRI restart also restarts the kubelet, and `wait_till_node_is_ready`
+/// can return on a *stale* Ready=True observation from before the kubelet has
+/// actually finished restarting (the kubelet only re-publishes node status every
+/// ~10 s by default). That means a naive "apply + verify once" round-trips entirely
+/// inside the window where the kubelet hasn't re-registered yet: we'd happily
+/// confirm the label is set, declare install done, and only then would the kubelet
+/// come back up and clobber the label with its cached set.
+///
+/// To outlive that race we require the label to remain at `label_value` for
+/// `STABILITY_CHECKS` consecutive observations spaced `CHECK_INTERVAL` apart
+/// (≈ 15 s by default — comfortably more than the kubelet's status-update period).
+/// If it ever drifts inside that window we re-apply and restart the stability
+/// counter. The whole thing is bounded by `MAX_APPLY_ATTEMPTS`.
 async fn label_node_with_retry(
     config: &config::Config,
     label_key: &str,
     label_value: &str,
 ) -> Result<()> {
-    const MAX_ATTEMPTS: u32 = 10;
+    const MAX_APPLY_ATTEMPTS: u32 = 12;
+    const STABILITY_CHECKS: u32 = 6;
+    const CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
     const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
-    for attempt in 1..=MAX_ATTEMPTS {
+    for attempt in 1..=MAX_APPLY_ATTEMPTS {
         k8s::label_node(config, label_key, Some(label_value), true).await?;
+        info!(
+            "Applied label {}={} (attempt {}/{}); verifying stability ({} checks @ {}s)",
+            label_key,
+            label_value,
+            attempt,
+            MAX_APPLY_ATTEMPTS,
+            STABILITY_CHECKS,
+            CHECK_INTERVAL.as_secs(),
+        );
 
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let mut stable_count: u32 = 0;
+        let mut needs_reapply = false;
+        while stable_count < STABILITY_CHECKS {
+            tokio::time::sleep(CHECK_INTERVAL).await;
 
-        match k8s::get_node_label(config, label_key).await {
-            Ok(Some(val)) if val == label_value => {
-                info!(
-                    "Label {}={} confirmed on node (attempt {})",
-                    label_key, label_value, attempt
-                );
-                return Ok(());
-            }
-            Ok(actual) => {
-                log::warn!(
-                    "Label {}={} did not stick (got {:?}), retrying ({}/{})",
-                    label_key,
-                    label_value,
-                    actual,
-                    attempt,
-                    MAX_ATTEMPTS
-                );
-            }
-            Err(e) => {
-                log::warn!(
-                    "Failed to verify label {} (attempt {}/{}): {}",
-                    label_key,
-                    attempt,
-                    MAX_ATTEMPTS,
-                    e
-                );
+            match k8s::get_node_label(config, label_key).await {
+                Ok(Some(val)) if val == label_value => {
+                    stable_count += 1;
+                    info!(
+                        "Label {}={} stable {}/{}",
+                        label_key, label_value, stable_count, STABILITY_CHECKS
+                    );
+                }
+                Ok(actual) => {
+                    log::warn!(
+                        "Label {}={} drifted to {:?} after {}/{} stable observation(s); \
+                         re-applying (attempt {}/{})",
+                        label_key,
+                        label_value,
+                        actual,
+                        stable_count,
+                        STABILITY_CHECKS,
+                        attempt,
+                        MAX_APPLY_ATTEMPTS,
+                    );
+                    needs_reapply = true;
+                    break;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to verify label {} during stability check \
+                         (attempt {}/{}): {}; will re-apply",
+                        label_key,
+                        attempt,
+                        MAX_APPLY_ATTEMPTS,
+                        e,
+                    );
+                    needs_reapply = true;
+                    break;
+                }
             }
         }
 
-        if attempt < MAX_ATTEMPTS {
+        if !needs_reapply {
+            info!(
+                "Label {}={} confirmed stable on node after {} apply attempt(s)",
+                label_key, label_value, attempt
+            );
+            return Ok(());
+        }
+
+        if attempt < MAX_APPLY_ATTEMPTS {
             tokio::time::sleep(RETRY_DELAY).await;
         }
     }
 
     anyhow::bail!(
-        "Failed to set label {}={} after {} attempts",
+        "Label {}={} did not remain stable after {} apply attempts",
         label_key,
         label_value,
-        MAX_ATTEMPTS
+        MAX_APPLY_ATTEMPTS
     );
 }
 

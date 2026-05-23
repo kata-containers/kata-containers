@@ -107,9 +107,21 @@ setup_file() {
 	echo "# Kata RuntimeClasses: ${rc_count}" >&3
 	[[ ${rc_count} -gt 0 ]]
 
-	# Node must have the kata-runtime label
-	local label
-	label=$(kubectl get nodes -o jsonpath='{.items[0].metadata.labels.katacontainers\.io/kata-runtime}')
+	# Node must have the kata-runtime label.
+	# On rke2/k3s the kubelet can re-publish the node a few seconds after
+	# install completes; even with the in-installer stability check, give
+	# the label a brief polling window here so a one-off blip doesn't fail
+	# the assertion before it self-heals.
+	local label=""
+	local retries=0
+	while [[ ${retries} -lt 90 ]]; do
+		label=$(kubectl get nodes -o jsonpath='{.items[0].metadata.labels.katacontainers\.io/kata-runtime}' 2>/dev/null || echo "")
+		if [[ "${label}" == "true" ]]; then
+			break
+		fi
+		retries=$((retries + 1))
+		sleep 2
+	done
 	echo "# Node label katacontainers.io/kata-runtime: ${label}" >&3
 	[[ "${label}" == "true" ]]
 }
