@@ -581,7 +581,7 @@ impl RuntimeHandlerManager {
                     sandbox_id: status.sandbox_id,
                     pid: status.pid,
                     state: status.state,
-                    created_at: None,
+                    created_at: status.created_at,
                     exited_at: None,
                 }))
             }

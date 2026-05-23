@@ -315,6 +315,7 @@ externals:
     version: "v1.7.25"
     lts: "v1.7"
     active: "v2.2"
+    sandbox_api: "v2.3"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"

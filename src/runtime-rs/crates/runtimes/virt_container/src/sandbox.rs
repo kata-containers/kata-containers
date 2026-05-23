@@ -75,8 +75,9 @@ use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 use strum::Display;
-use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
@@ -94,14 +95,27 @@ pub enum SandboxState {
     Stopped,
 }
 
+impl SandboxState {
+    fn to_cri_state(self) -> &'static str {
+        match self {
+            SandboxState::Running => "SANDBOX_READY",
+            SandboxState::Init | SandboxState::Stopped => "SANDBOX_NOTREADY",
+        }
+    }
+}
+
 struct SandboxInner {
     state: SandboxState,
+    exit_info: Option<SandboxExitInfo>,
+    created_at: Option<SystemTime>,
 }
 
 impl SandboxInner {
     pub fn new() -> Self {
         Self {
             state: SandboxState::Init,
+            exit_info: None,
+            created_at: None,
         }
     }
 }
@@ -115,6 +129,7 @@ pub struct VirtSandbox {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     monitor: Arc<HealthCheck>,
+    exit_notify_tx: watch::Sender<bool>,
     sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
     factory: Option<Factory>,
@@ -130,6 +145,7 @@ impl std::fmt::Debug for VirtSandbox {
             .field("agent", &"<Agent>")
             .field("hypervisor", &self.hypervisor)
             .field("monitor", &"<HealthCheck>")
+            .field("exit_notify_tx", &"<watch::Sender<bool>>")
             .field("sandbox_config", &self.sandbox_config)
             .field("factory", &self.factory)
             .finish()
@@ -148,6 +164,7 @@ impl VirtSandbox {
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
+        let (exit_notify_tx, _) = watch::channel(false);
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
@@ -156,6 +173,7 @@ impl VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            exit_notify_tx,
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
@@ -172,6 +190,20 @@ impl VirtSandbox {
 
     pub fn get_hypervisor(&self) -> Arc<dyn Hypervisor> {
         self.hypervisor.clone()
+    }
+
+    async fn record_stop(&self, exit_status: u32, exited_at: std::time::SystemTime) {
+        let mut inner = self.inner.write().await;
+        if inner.state == SandboxState::Stopped {
+            return;
+        }
+
+        inner.state = SandboxState::Stopped;
+        inner.exit_info = Some(SandboxExitInfo {
+            exit_status,
+            exited_at: Some(exited_at),
+        });
+        let _ = self.exit_notify_tx.send(true);
     }
 
     #[instrument]
@@ -751,6 +783,22 @@ impl Sandbox for VirtSandbox {
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
 
+        let sandbox = self.clone();
+        // wait for vm exit in background, and record the exit status and time when vm exited.
+        tokio::spawn(async move {
+            match sandbox.hypervisor.wait_vm().await {
+                Ok(exit_code) => {
+                    sandbox
+                        .record_stop(exit_code as u32, SystemTime::now())
+                        .await;
+                }
+                Err(err) => {
+                    warn!(sl!(), "failed waiting for sandbox VM exit: {:?}", err);
+                    sandbox.record_stop(255, SystemTime::now()).await;
+                }
+            }
+        });
+
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
             if let Some(hooks) = sandbox_config.hooks.as_ref() {
@@ -843,6 +891,7 @@ impl Sandbox for VirtSandbox {
             .context("create sandbox")?;
 
         inner.state = SandboxState::Running;
+        inner.created_at = Some(std::time::SystemTime::now());
 
         // get and store guest details
         self.store_guest_details()
@@ -937,40 +986,80 @@ impl Sandbox for VirtSandbox {
             .await
             .context("start template vm")?;
         info!(sl!(), "vm started from template");
+
+        let sandbox = self.clone();
+        tokio::spawn(async move {
+            match sandbox.hypervisor.wait_vm().await {
+                Ok(exit_code) => {
+                    sandbox
+                        .record_stop(exit_code as u32, SystemTime::now())
+                        .await;
+                }
+                Err(err) => {
+                    warn!(sl!(), "failed waiting for sandbox VM exit: {:?}", err);
+                    sandbox.record_stop(255, SystemTime::now()).await;
+                }
+            }
+        });
+
         Ok(())
     }
 
     async fn status(&self) -> Result<SandboxStatus> {
-        info!(sl!(), "get sandbox status");
         let inner = self.inner.read().await;
-        let state = inner.state.to_string();
+        let state = inner.state.to_cri_state().to_string();
 
         Ok(SandboxStatus {
             sandbox_id: self.sid.clone(),
             pid: std::process::id(),
             state,
-            ..Default::default()
+            info: std::collections::HashMap::new(),
+            created_at: inner.created_at,
         })
     }
 
     async fn wait(&self) -> Result<SandboxExitInfo> {
         info!(sl!(), "wait sandbox");
-        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
-        Ok(SandboxExitInfo {
-            exit_status: exit_code as u32,
-            exited_at: Some(std::time::SystemTime::now()),
-        })
+        {
+            let inner = self.inner.read().await;
+            if inner.state == SandboxState::Stopped {
+                return Ok(inner.exit_info.clone().unwrap_or_default());
+            }
+        }
+
+        let mut exit_notify_rx = self.exit_notify_tx.subscribe();
+        while !*exit_notify_rx.borrow() {
+            exit_notify_rx
+                .changed()
+                .await
+                .context("wait for sandbox stop notification")?;
+        }
+
+        let inner = self.inner.read().await;
+        Ok(inner.exit_info.clone().unwrap_or_default())
     }
 
     async fn stop(&self) -> Result<()> {
-        let mut sandbox_inner = self.inner.write().await;
+        let state = {
+            let sandbox_inner = self.inner.read().await;
+            sandbox_inner.state
+        };
 
-        if sandbox_inner.state != SandboxState::Stopped {
-            info!(sl!(), "begin stop sandbox");
-            self.hypervisor.stop_vm().await.context("stop vm")?;
-            sandbox_inner.state = SandboxState::Stopped;
-            info!(sl!(), "sandbox stopped");
+        if state == SandboxState::Stopped {
+            return Ok(());
         }
+
+        info!(sl!(), "begin stop sandbox");
+        if state == SandboxState::Init {
+            let _ = self.hypervisor.stop_vm().await;
+            self.record_stop(0, SystemTime::now()).await;
+            info!(sl!(), "sandbox stopped during Init");
+            return Ok(());
+        }
+
+        self.hypervisor.stop_vm().await.context("stop vm")?;
+        self.wait().await.context("wait for vm exit after stop")?;
+        info!(sl!(), "sandbox stopped");
 
         Ok(())
     }
@@ -1251,6 +1340,7 @@ impl Persist for VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            exit_notify_tx: watch::channel(false).0,
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
