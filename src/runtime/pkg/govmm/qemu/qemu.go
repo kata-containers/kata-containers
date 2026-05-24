@@ -1894,6 +1894,13 @@ func (b PCIeRootPortDevice) QemuParams(config *Config) []string {
 		if b.Addr == "" {
 			b.Addr = "0x00"
 		}
+	}
+	// Emit addr= whenever caller pinned it, not only when multifunction is
+	// on. Callers (e.g. kata's nested-bridge topology) need to know exactly
+	// which slot the root port lands on so the guest PCI path computed by
+	// the runtime matches what the kernel will see in sysfs. Auto-assigned
+	// addresses would silently shift the root port and break that lookup.
+	if b.Addr != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("addr=%s", b.Addr))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf("multifunction=%v", multifunction))
