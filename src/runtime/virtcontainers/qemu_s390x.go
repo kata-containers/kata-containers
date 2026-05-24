@@ -305,8 +305,8 @@ func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device,
 	return devices, fmt.Errorf("S390x does not support appending a vIOMMU")
 }
 
-func (q *qemuS390x) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
-	ccwDev, err := types.CcwDeviceFrom(bridgeAddr, devAddr)
+func (q *qemuS390x) setEndpointDevicePath(endpoint Endpoint, bridge types.Bridge, devAddr string) error {
+	ccwDev, err := types.CcwDeviceFrom(bridge.Addr, devAddr)
 	if err != nil {
 		return err
 	}
