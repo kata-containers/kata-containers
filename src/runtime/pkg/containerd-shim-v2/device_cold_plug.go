@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -39,12 +40,15 @@ func coldPlugDevices(ctx context.Context, s *service, ociSpec *specs.Spec) error
 		return nil
 	}
 
-	kubeletSock := s.config.PodResourceAPISock
-	if kubeletSock != "" {
+	if kubeletPodResourceSocketAvailable(s.config.PodResourceAPISock) {
 		return coldPlugWithAPI(ctx, s, ociSpec)
 	}
 
-	shimLog.Debug("config.PodResourceAPISock not set, skip k8s based device cold plug")
+	if s.config.PodResourceAPISock != "" {
+		shimLog.Debugf("config.PodResourceAPISock %q not available, fall back to CDI annotations", s.config.PodResourceAPISock)
+	} else {
+		shimLog.Debug("config.PodResourceAPISock not set, use CDI annotations for cold plug")
+	}
 
 	// Here we deal with CDI devices that are cold-plugged
 	// for the single_container (nerdctl, podman, ...) use-case.
@@ -56,6 +60,20 @@ func coldPlugDevices(ctx context.Context, s *service, ociSpec *specs.Spec) error
 		return fmt.Errorf("CDI device injection failed: %w", err)
 	}
 	return nil
+}
+
+// kubeletPodResourceSocketAvailable reports whether the configured kubelet Pod
+// Resources API socket exists and can be used for Kubernetes-based cold plug.
+func kubeletPodResourceSocketAvailable(sock string) bool {
+	if sock == "" {
+		return false
+	}
+	fi, err := os.Stat(sock)
+	if err != nil {
+		return false
+	}
+
+	return (fi.Mode() & os.ModeSocket) != 0
 }
 
 func coldPlugWithAPI(ctx context.Context, s *service, ociSpec *specs.Spec) error {
