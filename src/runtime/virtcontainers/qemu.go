@@ -3339,19 +3339,20 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 		bus           string
 		chassis       string
 		multiFunction bool
-		addr          string
 	)
 	switch machineType {
 	case QemuQ35, QemuVirt:
 		bus = defaultBridgeBus
 		chassis = "0"
 		multiFunction = false
-		addr = "0"
 	default:
 		return devices
 	}
 
 	for i := uint32(0); i < number; i++ {
+		// Leave Addr empty so QEMU auto-assigns the PCI slot on
+		// pcie.0. Pinning addr=0 here would collide with the Q35 host
+		// bridge (mch) which already occupies 0000:00:00.0.
 		devices = append(devices,
 			govmmQemu.PCIeRootPortDevice{
 				ID:            fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, i),
@@ -3359,7 +3360,6 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 				Chassis:       chassis,
 				Slot:          strconv.FormatUint(uint64(i), 10),
 				Multifunction: multiFunction,
-				Addr:          addr,
 			},
 		)
 	}
@@ -3397,14 +3397,15 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	}
 
 	// Using an own ID for the root port, so we do not clash with already
-	// existing root ports adding "s" for switch prefix
+	// existing root ports adding "s" for switch prefix. Leave Addr unset
+	// so QEMU auto-assigns the PCI slot on pcie.0 (pinning addr=0 would
+	// collide with the Q35 mch host bridge at 0000:00:00.0).
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
 		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
 		Bus:           defaultBridgeBus,
 		Chassis:       "1",
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,
-		Addr:          "0",
 	}
 
 	devices = append(devices, pcieRootPort)
