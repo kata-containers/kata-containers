@@ -65,13 +65,13 @@ kernel_verity_params = "@KERNELVERITYPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWAREPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
 # as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
 # can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWAREVOLUMEPATH@"
+firmware_volume = "@FIRMWAREVOLUMEPATH_NV@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
