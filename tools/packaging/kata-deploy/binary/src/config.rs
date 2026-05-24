@@ -545,9 +545,17 @@ impl Config {
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
 
-        // Check if drop-in files can be used based on containerd version
-        let use_drop_in =
-            manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
+        // Get containerd version once for drop-in and conf.d capability checks.
+        // Not required for k0s (drop-ins are always supported there).
+        let container_runtime_version = if matches!(runtime, "k0s-worker" | "k0s-controller") {
+            None
+        } else {
+            Some(k8s::get_container_runtime_version(self).await?)
+        };
+        let use_drop_in = manager::is_containerd_capable_of_drop_in(
+            runtime,
+            container_runtime_version.as_deref(),
+        );
 
         let paths = match runtime {
             "k0s-worker" | "k0s-controller" => ContainerdPaths {
@@ -572,7 +580,6 @@ impl Config {
                 // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
                 // missing we bail; the cluster must configure the template with the import
                 // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
-                let container_runtime_version = k8s::get_container_runtime_version(self).await.ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
                     k3s_rke2_rendered_config_path(),
                     container_runtime_version.as_deref(),
@@ -614,14 +621,37 @@ impl Config {
                     plugin_id: Some(k3s_rke2_containerd_plugin_id(use_v3).to_string()),
                 }
             }
-            _ => ContainerdPaths {
-                config_file: self.containerd_conf_file.clone(),
-                backup_file: self.containerd_conf_file_backup.clone(),
-                imports_file: Some(self.containerd_conf_file.clone()),
-                drop_in_file: self.containerd_drop_in_conf_file.clone(),
-                use_drop_in,
-                plugin_id: None,
-            },
+            _ => {
+                // For containerd >= 2.2.0, use /etc/containerd/conf.d/ which is auto-imported
+                // by containerd, avoiding the need to modify the main config entirely.
+                let supports_conf_d = container_runtime_version
+                    .as_deref()
+                    .map(manager::containerd_version_is_2_2_or_newer)
+                    .unwrap_or(false);
+
+                let (imports_file, drop_in_file) = if supports_conf_d {
+                    let drop_in = if let Some(ref suffix) = self.multi_install_suffix {
+                        format!("/etc/containerd/conf.d/kata-deploy-{suffix}.toml")
+                    } else {
+                        "/etc/containerd/conf.d/kata-deploy.toml".to_string()
+                    };
+                    (None, drop_in)
+                } else {
+                    (
+                        Some(self.containerd_conf_file.clone()),
+                        self.containerd_drop_in_conf_file.clone(),
+                    )
+                };
+
+                ContainerdPaths {
+                    config_file: self.containerd_conf_file.clone(),
+                    backup_file: self.containerd_conf_file_backup.clone(),
+                    imports_file,
+                    drop_in_file,
+                    use_drop_in,
+                    plugin_id: None,
+                }
+            }
         };
 
         Ok(paths)
