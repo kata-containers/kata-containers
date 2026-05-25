@@ -240,7 +240,7 @@ get_kernel_frag_path() {
 	local kernel_path="$2"
 	local arch="$3"
 	local cmdpath="${kernel_path}/scripts/kconfig/merge_config.sh"
-	local config_path="${arch_path}/.config"
+	local config_path="${kernel_path}/.config.generated"
 
 	local arch_configs
 	arch_configs="$(ls "${arch_path}"/*.conf)"
