@@ -9,6 +9,7 @@ use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
+use semver::{Version, VersionReq};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -572,31 +573,34 @@ pub async fn containerd_snapshotter_version_check(config: &Config) -> Result<()>
     )
 }
 
+/// Minimum containerd release for the built-in erofs snapshotter and differ.
+const EROFS_CONTAINERD_MIN_VERSION: &str = "2.3.1";
+
+fn strip_containerd_runtime_version_prefix(container_runtime_version: &str) -> &str {
+    container_runtime_version
+        .strip_prefix("containerd://")
+        .unwrap_or(container_runtime_version)
+}
+
+fn erofs_containerd_min_version_req() -> Result<VersionReq> {
+    VersionReq::parse(&format!(">={EROFS_CONTAINERD_MIN_VERSION}"))
+        .context("Failed to parse erofs containerd minimum version requirement")
+}
+
+fn erofs_containerd_min_version_error() -> String {
+    format!(
+        "In order to use erofs-snapshotter containerd must be {EROFS_CONTAINERD_MIN_VERSION} or newer"
+    )
+}
+
 fn check_containerd_erofs_version_support(container_runtime_version: &str) -> Result<()> {
-    let containerd_prefix = "containerd://";
-    let containerd_version = container_runtime_version
-        .strip_prefix(containerd_prefix)
-        .unwrap_or(container_runtime_version);
+    let version_str = strip_containerd_runtime_version_prefix(container_runtime_version);
+    let version =
+        Version::parse(version_str).context("Invalid containerd version format")?;
+    let requirement = erofs_containerd_min_version_req()?;
 
-    let min_version_major = 2;
-    let min_version_minor = 2;
-
-    let parts: Vec<&str> = containerd_version.split('.').collect();
-    if parts.len() < 2 {
-        return Err(anyhow::anyhow!("Invalid containerd version format"));
-    }
-
-    let major: u32 = parts[0].parse().context("Failed to parse major version")?;
-    let minor_str: String = parts[1]
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    let minor: u32 = minor_str.parse().context("Failed to parse minor version")?;
-
-    if min_version_major > major || (min_version_major == major && min_version_minor > minor) {
-        return Err(anyhow::anyhow!(
-            "In order to use erofs-snapshotter containerd must be 2.2.0 or newer"
-        ));
+    if !requirement.matches(&version) {
+        return Err(anyhow::anyhow!(erofs_containerd_min_version_error()));
     }
 
     Ok(())
@@ -873,13 +877,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("containerd://2.2.0")]
-    #[case("containerd://2.2.0-rc.1")]
-    #[case("containerd://2.2.1")]
-    #[case("containerd://2.3.0")]
+    #[case("containerd://2.3.1")]
+    #[case("containerd://2.3.1+k3s1")]
+    #[case("containerd://2.3.2")]
     #[case("containerd://3.0.0")]
-    #[case("containerd://2.3.0-beta.0")]
-    #[case("2.2.0")]
+    #[case("2.3.1")]
     fn test_check_containerd_erofs_version_support_passing(#[case] version: &str) {
         assert!(
             check_containerd_erofs_version_support(version).is_ok(),
@@ -889,25 +891,50 @@ mod tests {
     }
 
     #[rstest]
-    #[case("containerd://2.1.0", "containerd must be 2.2.0 or newer")]
-    #[case("containerd://2.1.5-rc.1", "containerd must be 2.2.0 or newer")]
-    #[case("containerd://2.0.0", "containerd must be 2.2.0 or newer")]
-    #[case("containerd://1.7.0", "containerd must be 2.2.0 or newer")]
-    #[case("containerd://1.6.28", "containerd must be 2.2.0 or newer")]
-    #[case("2.1.0", "containerd must be 2.2.0 or newer")]
-    #[case("invalid", "Invalid containerd version format")]
-    #[case("containerd://abc.2.0", "Failed to parse major version")]
-    fn test_check_containerd_erofs_version_support_failing(
+    #[case("containerd://2.2.0")]
+    #[case("containerd://2.2.1")]
+    #[case("containerd://2.3.0")]
+    #[case("containerd://2.3.0-beta.0")]
+    #[case("containerd://2.3.1-rc.1")]
+    #[case("containerd://2.3.1-k3s1")]
+    #[case("containerd://2.1.0")]
+    #[case("containerd://2.1.5-rc.1")]
+    #[case("containerd://2.0.0")]
+    #[case("containerd://1.7.0")]
+    #[case("containerd://1.6.28")]
+    #[case("2.1.0")]
+    fn test_check_containerd_erofs_version_support_failing_too_old(#[case] version: &str) {
+        let result = check_containerd_erofs_version_support(version);
+        assert!(result.is_err(), "Expected {} to fail", version);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            erofs_containerd_min_version_error()
+        );
+    }
+
+    #[rstest]
+    #[case("invalid")]
+    #[case("containerd://abc.2.0")]
+    fn test_check_containerd_erofs_version_support_failing_parse_error(
         #[case] version: &str,
-        #[case] expected_error: &str,
     ) {
         let result = check_containerd_erofs_version_support(version);
         assert!(result.is_err(), "Expected {} to fail", version);
         assert!(
-            result.unwrap_err().to_string().contains(expected_error),
-            "Expected error for {} to contain '{}'",
-            version,
-            expected_error
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid containerd version format"),
+            "Expected error for {} to mention invalid containerd version format",
+            version
         );
+    }
+
+    #[test]
+    fn test_erofs_containerd_min_version_req_matches_minimum_release() {
+        let requirement = erofs_containerd_min_version_req().unwrap();
+        let minimum =
+            Version::parse(EROFS_CONTAINERD_MIN_VERSION).expect("valid minimum version");
+        assert!(requirement.matches(&minimum));
     }
 }

@@ -26,7 +26,7 @@ This section provides a quick overview of the steps to get started with EROFS sn
 |-----------|-------------------|
 | Linux kernel | >= 5.4 (with `erofs` module, higher recommended) |
 | erofs-utils | >= 1.8 (fsmerge `mkfs_options` require >= 1.8.2) |
-| containerd | >= 2.2 (with EROFS snapshotter and differ support, higher recommended) |
+| containerd | >= 2.3.1 (with EROFS snapshotter and differ support, higher recommended) |
 | Kata Containers | Latest `main` branch with runtime-rs |
 | QEMU | >= 5.0 (VMDK flat-extent support and >= 9.0  higher recommended) |
 
@@ -61,7 +61,7 @@ $ sudo modprobe erofs
 
 #### Enable the EROFS snapshotter and differ
 
-> **Note**: The following settings target containerd v2.3.0-beta.0 and erofs-utils v1.8.10. Compatibility for other versions is not guaranteed, as configuration options evolve. Always cross-reference with the official documentation for your current version.
+> **Note**: The following settings target containerd v2.3.1 and erofs-utils v1.8.10. Compatibility for other versions is not guaranteed, as configuration options evolve. Always cross-reference with the official documentation for your current version.
 
 Edit your containerd configuration (typically `/etc/containerd/config.toml`):
 

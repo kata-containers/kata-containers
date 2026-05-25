@@ -32,6 +32,7 @@ kube = { version = "2.0", default-features = false, features = [
 libc.workspace = true
 log.workspace = true
 regex.workspace = true
+semver = "1.0.12"
 serde_json.workspace = true
 serde_yaml = "0.9"
 tar = "0.4.45"
