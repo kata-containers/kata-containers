@@ -2603,7 +2603,24 @@ impl<'a> QemuCmdLine<'a> {
         {
             qemu_cmd_line.add_seccomp_sandbox(seccomp_sandbox);
         }
+
+        // For confidential guests (SEV/SEV-SNP/TDX), `-bios` is appended later
+        // by `add_{sev,sev_snp,tdx}_protection_device()` via the
+        // ProtectionDevice handling in QemuInner::start_vm(), using the
+        // firmware copied into the ProtectionDeviceConfig. For non-CC guests
+        // there is no such code path, so wire `boot_info.firmware` directly
+        // here. Otherwise the firmware configured in the TOML (e.g. OVMF.fd
+        // for the nvidia-gpu profile) would silently never reach qemu's
+        // command line.
+        if !config.security_info.confidential_guest && !config.boot_info.firmware.is_empty() {
+            qemu_cmd_line.add_bios(&config.boot_info.firmware);
+        }
+
         Ok(qemu_cmd_line)
+    }
+
+    fn add_bios(&mut self, firmware: &str) {
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
     }
 
     /// Takes ownership of the CCW subchannel, leaving `None` in its place.
