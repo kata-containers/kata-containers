@@ -98,6 +98,30 @@ jobs:
           RUST_BACKTRACE: "1"
           RUST_LIB_BACKTRACE: "0"
 
+  kata-deploy-binary-build-check:
+    name: kata-deploy-binary-build-check
+    runs-on: ubuntu-22.04
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install rust
+        run: |
+          export PATH="$PATH:/usr/local/bin"
+          ./tests/install_rust.sh
+      - name: Run kata-deploy rust checks
+        run: |
+          export PATH="$PATH:${HOME}/.cargo/bin"
+          cargo fmt -p kata-deploy --check
+          cargo clippy -p kata-deploy --all-targets --all-features -- -D warnings
+          RUSTFLAGS="-D warnings" cargo test -p kata-deploy -- --test-threads=1
+
   static-checks:
     name: static-checks
     runs-on: ubuntu-22.04

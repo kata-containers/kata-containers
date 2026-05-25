@@ -159,6 +159,46 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  build-kata-deploy-components:
+    name: build-kata-deploy-components
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        component:
+          - kata-deploy-binary
+          - nydus-snapshotter-for-coco-guest-pull
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Build ${{ matrix.component }}
+        run: |
+          make "${KATA_DEPLOY_COMPONENT}-tarball"
+          mkdir -p kata-deploy-build
+          cp "tools/packaging/kata-deploy/local-build/build/kata-deploy-static-${KATA_DEPLOY_COMPONENT}.tar.zst" kata-deploy-build/
+        env:
+          KATA_DEPLOY_COMPONENT: ${{ matrix.component }}
+
+      - name: store-artifact ${{ matrix.component }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kata-artifacts-amd64-${{ matrix.component }}${{ inputs.tarball-suffix }}
+          path: kata-deploy-build/kata-deploy-static-${{ matrix.component }}.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-rootfs:
     name: build-asset-rootfs
     runs-on: ubuntu-22.04
