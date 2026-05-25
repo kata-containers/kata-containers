@@ -182,13 +182,18 @@ get_kernel_modules_dir() {
 	echo "${kernel_modules_dir}"
 }
 
-cleanup_and_fail_shim_v2_rust_specifics() {
+cleanup_and_fail_shim_v2_specifics() {
+	local component="${1:-}"
+	local component_tarball_path="${2:-}"
+	local extra_tarballs="${3:-}"
+	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-rust-root_hash_${variant}.txt"
+		local root_hash_file="${tarball_dir}/${component}-root_hash_${variant}.txt"
 		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
 
-	cleanup_and_fail "${1:-}" "${2:-}"
+	cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"
 }
 
 cleanup_and_fail() {
@@ -229,15 +234,22 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	return 0
 }
 
-install_cached_shim_v2_rust_tarball_compare_root_hashes() {
+install_cached_shim_v2_tarball_compare_root_hashes() {
+	local component="${1:-}"
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-		# Skip if one or the other does not exist.
-		[[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ]] && continue
+		local image_root_hash="${tarball_dir}/root_hash_${variant}.txt"
+		local cached_root_hash="${component}-root_hash_${variant}.txt"
 
-		diff "${tarball_dir}/root_hash_${variant}.txt" "shim-v2-rust-root_hash_${variant}.txt" || return 1
+		# Skip if the current image tarball did not ship a root hash for this variant.
+		[[ ! -f "${image_root_hash}" ]] && continue
+
+		if [[ ! -f "${cached_root_hash}" ]] || ! cmp -s "${image_root_hash}" "${cached_root_hash}"; then
+			info "Measured rootfs hash mismatch for ${component} variant ${variant}; rebuilding shim"
+			return 1
+		fi
 		found_any="yes"
 	done
 	[[ -z "${found_any}" ]] && return 0
@@ -260,7 +272,8 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	if [[ "${component}" = "shim-v2-rust" ]]; then
+	if [[ "${MEASURED_ROOTFS}" = "yes" ]] && \
+		{ [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; }; then
 		install_cached_shim_v2_tarball_get_root_hash
 	fi
 
@@ -282,8 +295,9 @@ install_cached_tarball_component() {
 	fi
 	sha256sum -c "${component}-sha256sum" || { cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}"; return 1; }
 
-	if [[ "${component}" = "shim-v2-rust" ]]; then
-		install_cached_shim_v2_rust_tarball_compare_root_hashes || { cleanup_and_fail_shim_v2_rust_specifics "${component_tarball_path}" "${extra_tarballs}"; return 1; }
+	if [[ "${MEASURED_ROOTFS}" = "yes" ]] && \
+		{ [[ "${component}" = "shim-v2-go" ]] || [[ "${component}" = "shim-v2-rust" ]]; }; then
+		install_cached_shim_v2_tarball_compare_root_hashes "${component}" || { cleanup_and_fail_shim_v2_specifics "${component}" "${component_tarball_path}" "${extra_tarballs}"; return 1; }
 	fi
 
 	info "Using cached tarball of ${component}"
@@ -1637,15 +1651,15 @@ handle_build() {
 					"kata-static-${build_target}-modules.tar.zst"
 				)
 				;;
-		shim-v2-rust)
+		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 				local found_any=""
 				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 					# The variants could be built independently we need to check if
 					# they exist and then push them to the registry
-					[[ -f "${workdir}/shim-v2-rust-root_hash_${variant}.txt" ]] && files_to_push+=("shim-v2-rust-root_hash_${variant}.txt") && found_any="yes"
+					[[ -f "${workdir}/${build_target}-root_hash_${variant}.txt" ]] && files_to_push+=("${build_target}-root_hash_${variant}.txt") && found_any="yes"
 				done
-				[[ -z "${found_any}" ]] && die "No files to push for shim-v2-rust with MEASURED_ROOTFS support"
+				[[ -z "${found_any}" ]] && die "No files to push for ${build_target} with MEASURED_ROOTFS support"
 			fi
 			;;
 			*)
