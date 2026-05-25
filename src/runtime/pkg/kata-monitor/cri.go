@@ -9,7 +9,6 @@ package katamonitor
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/url"
 
 	"github.com/pkg/errors"
@@ -25,26 +24,15 @@ const (
 	unixProtocol = "unix"
 )
 
-// getAddressAndDialer returns the address parsed from the given endpoint and a context dialer.
-func getAddressAndDialer(endpoint string) (string, func(ctx context.Context, addr string) (net.Conn, error), error) {
-	protocol, addr, err := parseEndpointWithFallbackProtocol(endpoint, unixProtocol)
-	if err != nil {
-		return "", nil, err
-	}
-	if protocol != unixProtocol {
-		return "", nil, fmt.Errorf("only support unix socket endpoint")
-	}
-
-	return addr, dial, nil
-}
-
 func getConnection(endPoint string) (*grpc.ClientConn, error) {
 	var conn *grpc.ClientConn
-	addr, dialer, err := getAddressAndDialer(endPoint)
+	protocol, addr, err := parseEndpointWithFallbackProtocol(endPoint, unixProtocol)
 	if err != nil {
 		return nil, err
 	}
-	conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
+	// Pass the full URI to NewClient so it can pick the right resolver based on the scheme
+	addr = protocol + "://" + addr
+	conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		errMsg := errors.Wrapf(err, "connect endpoint '%s', make sure you are running as root and the endpoint has been started", endPoint)
 		return nil, errMsg
@@ -74,10 +62,6 @@ func getRuntimeClient(runtimeEndpoint string) (pb.RuntimeServiceClient, *grpc.Cl
 
 	runtimeClient := pb.NewRuntimeServiceClient(conn)
 	return runtimeClient, conn, nil
-}
-
-func dial(ctx context.Context, addr string) (net.Conn, error) {
-	return (&net.Dialer{}).DialContext(ctx, unixProtocol, addr)
 }
 
 func parseEndpointWithFallbackProtocol(endpoint string, fallbackProtocol string) (protocol string, addr string, err error) {

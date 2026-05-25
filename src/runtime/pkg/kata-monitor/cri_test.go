@@ -11,19 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetAddressAndDialer(t *testing.T) {
-	assert := assert.New(t)
-
-	endpoint := "/no/protocol"
-	addr, _, err := getAddressAndDialer(endpoint)
-	assert.Nil(err, "endpoints with no protocol are deprecated but should be accepted")
-	assert.Equal(endpoint, addr, "failed address parsing")
-
-	endpoint = "tcp://hostname:1234"
-	_, _, err = getAddressAndDialer(endpoint)
-	assert.NotNil(err, "only unix endpoints should be accepted")
-}
-
 func TestParseEndpointWithFallbackProtocol(t *testing.T) {
 	assert := assert.New(t)
 
