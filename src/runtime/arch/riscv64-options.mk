@@ -11,3 +11,4 @@ MACHINEACCELERATORS :=
 CPUFEATURES :=
 
 QEMUCMD := qemu-system-riscv64
+CLHCMD := cloud-hypervisor
