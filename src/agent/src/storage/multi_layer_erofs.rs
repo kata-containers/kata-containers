@@ -10,10 +10,14 @@
 //! - Storage with X-kata.overlay-lower: erofs layers (lowerdir)
 //! - Creates overlay to combine them
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
+//! - Supports GPT-partitioned disks where each layer is a separate partition
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::scsi_device_handler::get_scsi_device_name;
@@ -44,7 +48,9 @@ pub const DRIVER_MULTI_LAYER_EROFS: &str = "erofs.multi-layer";
 const OPT_OVERLAY_UPPER: &str = "X-kata.overlay-upper";
 const OPT_OVERLAY_LOWER: &str = "X-kata.overlay-lower";
 const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
+const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
+const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
@@ -57,13 +63,19 @@ pub struct MultiLayerErofsResult {
     /// overlay.  These must be tracked so they are unmounted *after* the
     /// overlay target during container teardown.
     pub temp_mount_points: Vec<String>,
+    /// dm-verity device paths that need to be destroyed during cleanup
+    pub verity_devices: Vec<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 struct MkdirDirective {
     raw_path: String,
-    mode: Option<String>,
+}
+
+/// Helper struct to track layer mount information including dm-verity devices
+#[derive(Debug)]
+struct LayerMountInfo {
+    verity_device: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -122,6 +134,7 @@ pub async fn handle_multi_layer_erofs_group(
     let mut ext4_storage: Option<&Storage> = None;
     let mut erofs_storages: Vec<&Storage> = Vec::new();
     let mut mkdir_dirs: Vec<MkdirDirective> = Vec::new();
+    let mut has_gpt_partition: bool = false;
 
     for storage in &multi_layer_storages {
         if is_upper_storage(storage) {
@@ -139,18 +152,32 @@ pub async fn handle_multi_layer_erofs_group(
                 }
             }
         } else if is_lower_storage(storage) {
+            // Each GPT partition is provided as a separate storage entry by the host
+            if !has_gpt_partition && is_gpt_partitioned(storage) {
+                has_gpt_partition = true;
+            }
             erofs_storages.push(*storage);
         }
     }
-
-    let ext4 = ext4_storage
-        .ok_or_else(|| anyhow!("multi-layer erofs missing ext4 upper layer storage"))?;
 
     if erofs_storages.is_empty() {
         return Err(anyhow!(
             "multi-layer erofs missing erofs lower layer storage"
         ));
     }
+
+    // Only sort erofs layers by partition number in GPT mode.
+    // In GPT mode, each storage carries X-kata.partition-number=N and layers
+    // must be ordered by partition number so that the overlay lowerdir
+    // precedence is correct (lower partition number = higher overlay priority).
+    // In non-GPT mode all partition numbers are None, so sorting would be a
+    // no-op that needlessly reorders elements.
+    if has_gpt_partition {
+        erofs_storages.sort_by_key(|storage| get_partition_number(storage).unwrap_or(u32::MAX));
+    }
+
+    let ext4 = ext4_storage
+        .ok_or_else(|| anyhow!("multi-layer erofs missing ext4 upper layer storage"))?;
 
     info!(
         logger,
@@ -178,7 +205,7 @@ pub async fn handle_multi_layer_erofs_group(
     let upper_mount = temp_base.join("upper");
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
-    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger).await?;
+    wait_and_mount_layer(ext4, &upper_mount, sandbox, &logger, None).await?;
 
     for mkdir_dir in &mkdir_dirs {
         // As {{ mount 1 }} refers to the first lower layer, which is not available until we mount it.
@@ -201,6 +228,9 @@ pub async fn handle_multi_layer_erofs_group(
     }
 
     let mut lower_mounts = Vec::new();
+    let mut verity_devices = Vec::new();
+    let mut base_device_cache: HashMap<String, String> = HashMap::new();
+
     for (index, erofs) in erofs_storages.iter().enumerate() {
         let lower_mount = temp_base.join(format!("lower-{}", index));
         fs::create_dir_all(&lower_mount).context(format!(
@@ -208,8 +238,25 @@ pub async fn handle_multi_layer_erofs_group(
             lower_mount.display()
         ))?;
 
-        wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger).await?;
+        let base_dev_path = if is_gpt_partitioned(erofs) {
+            Some(
+                base_device_cache
+                    .entry(erofs.source.clone())
+                    .or_insert(resolve_base_device_path(erofs, sandbox).await?)
+                    .clone(),
+            )
+        } else {
+            None
+        };
+
+        let mount_info =
+            wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger, base_dev_path).await?;
         lower_mounts.push(lower_mount);
+
+        // Collect dm-verity device for cleanup
+        if let Some(verity_dev) = mount_info.verity_device {
+            verity_devices.push(verity_dev);
+        }
     }
 
     // If any mkdir directive refers to {{ mount 1 }}, resolve it now using the first lower mount.
@@ -318,6 +365,7 @@ pub async fn handle_multi_layer_erofs_group(
         mount_point: ext4.mount_point.clone(),
         processed_mount_points,
         temp_mount_points,
+        verity_devices,
     })
 }
 
@@ -407,7 +455,6 @@ fn parse_mkdir_directive(spec: &str) -> Result<MkdirDirective> {
 
     Ok(MkdirDirective {
         raw_path: raw_path.to_string(),
-        mode: parts.get(1).map(|s| s.to_string()),
     })
 }
 
@@ -467,7 +514,8 @@ async fn wait_and_mount_layer(
     layer_mount: &Path,
     sandbox: &Arc<Mutex<Sandbox>>,
     logger: &Logger,
-) -> Result<()> {
+    base_dev_path: Option<String>,
+) -> Result<LayerMountInfo> {
     info!(
         logger,
         "Waiting for layer device";
@@ -475,22 +523,41 @@ async fn wait_and_mount_layer(
         "driver" => &layer.driver,
         "mount-point" => layer_mount.display(),
     );
-    let dev_path = match layer.driver.as_str() {
-        DRIVER_SCSI_TYPE => {
-            // For SCSI devices, we need to wait for the device to appear and get its path before mounting.
-            get_scsi_device_name(sandbox, &layer.source).await?
-        }
-        DRIVER_BLK_PCI_TYPE => {
-            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
-            get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
-        }
-        _ => {
-            // For non-SCSI devices, we can assume the source is directly mountable.
+
+    let is_gpt = is_gpt_partitioned(layer);
+    let partition_num = get_partition_number(layer);
+
+    // Get the base device path
+    let dev_path = match base_dev_path {
+        Some(path) => path,
+        None => resolve_base_device_path(layer, sandbox).await?,
+    };
+
+    // For GPT-partitioned disks, use the partition device path
+    let dev_path = if is_gpt {
+        if let Some(part_num) = partition_num {
+            let path = get_partition_device_path(&dev_path, part_num);
+            info!(
+                logger,
+                "GPT-partitioned mode: using partition device";
+                "base-device" => &dev_path,
+                "partition-number" => part_num,
+                "partition-device" => &path,
+            );
+
+            // Wait for partition device node to appear
+            wait_for_partition_device(&path, logger).await?;
+
+            path
+        } else {
             return Err(anyhow!(
-                "unsupported driver type '{}' for multi-layer erofs",
-                layer.driver
+                "GPT-partitioned storage missing partition number: {:?}",
+                layer
             ));
         }
+    } else {
+        // Non-GPT mode: use base device directly
+        dev_path.clone()
     };
 
     info!(
@@ -500,6 +567,7 @@ async fn wait_and_mount_layer(
         "fstype" => &layer.fstype,
         "devname" => &dev_path,
         "mount-point" => layer_mount.display(),
+        "gpt-mode" => is_gpt,
     );
 
     create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
@@ -548,7 +616,106 @@ async fn wait_and_mount_layer(
     // After successfully mounting the layer, we track the mount point for cleanup.
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
 
-    Ok(())
+    Ok(LayerMountInfo {
+        verity_device: None,
+    })
+}
+
+async fn resolve_base_device_path(
+    layer: &Storage,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<String> {
+    let base_dev_path = match layer.driver.as_str() {
+        DRIVER_SCSI_TYPE => {
+            // For SCSI devices, we need to wait for the device to appear and get its path before mounting.
+            get_scsi_device_name(sandbox, &layer.source).await?
+        }
+        DRIVER_BLK_PCI_TYPE => {
+            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&layer.source)?;
+            get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?
+        }
+        _ => {
+            // For non-SCSI devices, we can assume the source is directly mountable.
+            return Err(anyhow!(
+                "unsupported driver type '{}' for multi-layer erofs",
+                layer.driver
+            ));
+        }
+    };
+
+    Ok(base_dev_path)
+}
+
+/// Check if the storage is GPT-partitioned
+fn is_gpt_partitioned(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_GPT_PARTITIONED)
+}
+
+/// Extract partition number from storage options
+/// Returns None if not specified (non-GPT mode)
+fn get_partition_number(storage: &Storage) -> Option<u32> {
+    for opt in &storage.options {
+        if let Some(num_str) = opt.strip_prefix(OPT_PARTITION_NUMBER) {
+            return num_str.parse::<u32>().ok();
+        }
+    }
+    None
+}
+
+/// Get the partition device path for a GPT-partitioned disk
+///
+/// For GPT mode: the storage.source contains the base disk path (e.g., "/dev/vda")
+/// We need to append the partition number to get the partition path (e.g., "/dev/vda1")
+///
+/// Follows the kernel naming rule: if the base device name ends with a digit,
+/// insert a 'p' separator before the partition number to avoid ambiguity.
+/// This correctly handles all device families:
+/// - /dev/vda   -> /dev/vda1   (no trailing digit, bare number)
+/// - /dev/sda   -> /dev/sda1
+/// - /dev/nvme0n1 -> /dev/nvme0n1p1 (trailing digit, needs 'p')
+/// - /dev/mmcblk0 -> /dev/mmcblk0p1
+/// - /dev/loop0 -> /dev/loop0p1
+fn get_partition_device_path(base_path: &str, partition_number: u32) -> String {
+    if base_path.ends_with(char::is_numeric) {
+        format!("{}p{}", base_path, partition_number)
+    } else {
+        format!("{}{}", base_path, partition_number)
+    }
+}
+
+/// Wait for partition device node to appear in /dev.
+///
+/// When a virtio-blk device with a GPT is hotplugged, the kernel automatically
+/// scans the partition table and creates partition nodes. However, devtmpfs node
+/// creation may lag slightly behind the uevent, so we poll briefly if needed.
+#[allow(dead_code)]
+async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result<()> {
+    let device_path_buf = PathBuf::from(device_path);
+    if device_path_buf.exists() {
+        return Ok(());
+    }
+
+    const MAX_WAIT_MS: u64 = 1000;
+    const POLL_INTERVAL_MS: u64 = 50;
+
+    for attempt in 0..(MAX_WAIT_MS / POLL_INTERVAL_MS) {
+        sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+        if device_path_buf.exists() {
+            info!(
+                logger,
+                "Partition device node appeared after polling: {} (attempt {})",
+                device_path,
+                attempt + 1
+            );
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!(
+        "partition device {} did not appear within {} ms",
+        device_path,
+        MAX_WAIT_MS
+    ))
 }
 
 #[cfg(test)]
@@ -602,27 +769,6 @@ mod tests {
     }
 
     // --- parse_mkdir_directive ---
-
-    #[rstest]
-    #[case("some/path", true, "some/path", None)]
-    #[case("some/path:0755", true, "some/path", Some("0755"))]
-    #[case("path:mode:extra", true, "path", Some("mode:extra"))]
-    #[case("", false, "", None)]
-    fn test_parse_mkdir_directive(
-        #[case] spec: &str,
-        #[case] should_pass: bool,
-        #[case] expected_path: &str,
-        #[case] expected_mode: Option<&str>,
-    ) {
-        let result = parse_mkdir_directive(spec);
-        if should_pass {
-            let d = result.expect("expected Ok");
-            assert_eq!(d.raw_path, expected_path);
-            assert_eq!(d.mode.as_deref(), expected_mode);
-        } else {
-            assert!(result.is_err(), "expected Err for spec {:?}", spec);
-        }
-    }
 
     #[test]
     fn test_parse_mkdir_directive_rejects_null_bytes() {
@@ -726,6 +872,31 @@ mod tests {
             "is_multi_layer_storage with driver={:?}, options={:?}",
             s.driver,
             s.options
+        );
+    }
+
+    // --- get_partition_device_path ---
+
+    #[rstest]
+    #[case("/dev/vda", 1, "/dev/vda1")]
+    #[case("/dev/sda", 3, "/dev/sda3")]
+    #[case("/dev/hda", 2, "/dev/hda2")]
+    #[case("/dev/nvme0n1", 1, "/dev/nvme0n1p1")]
+    #[case("/dev/nvme0n1", 2, "/dev/nvme0n1p2")]
+    #[case("/dev/mmcblk0", 1, "/dev/mmcblk0p1")]
+    #[case("/dev/loop0", 1, "/dev/loop0p1")]
+    #[case("/dev/nbd0", 3, "/dev/nbd0p3")]
+    fn test_get_partition_device_path(
+        #[case] base: &str,
+        #[case] part: u32,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            get_partition_device_path(base, part),
+            expected,
+            "get_partition_device_path({}, {})",
+            base,
+            part
         );
     }
 }

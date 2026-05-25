@@ -91,7 +91,7 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
-        "1",
+        "0",
     )?;
 
     Ok(())

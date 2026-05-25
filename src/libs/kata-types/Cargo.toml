@@ -31,7 +31,9 @@ sha2 = "0.10.8"
 flate2 = "1.1"
 nix = "0.26.4"
 oci-spec = { version = "0.8.1", features = ["runtime"] }
-
+gpt = "4.1.0"
+scopeguard = "1.0.0"
+crc = "3.4.0"
 safe-path = { path = "../safe-path", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

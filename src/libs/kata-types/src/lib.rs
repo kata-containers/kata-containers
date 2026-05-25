@@ -54,6 +54,9 @@ pub mod rootless;
 /// machine type
 pub mod machine_type;
 
+/// GPT (GUID Partition Table) disk layout and metadata generation.
+pub mod gpt_disk;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};
