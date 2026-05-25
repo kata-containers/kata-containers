@@ -189,7 +189,46 @@ func TestQemuArchBaseCPUTopology(t *testing.T) {
 		MaxCPUs: defaultMaxVCPUs,
 	}
 
-	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs)
+	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs, 0)
+	assert.Equal(expectedSMP, smp)
+}
+
+func TestQemuArchBaseCPUTopologyNUMA(t *testing.T) {
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+	vcpus := uint32(2)
+	maxvcpus := uint32(8)
+	numNUMA := uint32(2)
+
+	expectedSMP := govmmQemu.SMP{
+		CPUs:    vcpus,
+		Sockets: numNUMA,
+		Cores:   maxvcpus / numNUMA,
+		Threads: defaultThreads,
+		MaxCPUs: maxvcpus,
+	}
+
+	smp := qemuArchBase.cpuTopology(vcpus, maxvcpus, numNUMA)
+	assert.Equal(expectedSMP, smp)
+}
+
+func TestQemuArchBaseCPUTopologyNUMAUneven(t *testing.T) {
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+	vcpus := uint32(2)
+	maxvcpus := uint32(5)
+	numNUMA := uint32(2)
+
+	coresPerSocket := (maxvcpus + numNUMA - 1) / numNUMA
+	expectedSMP := govmmQemu.SMP{
+		CPUs:    vcpus,
+		Sockets: numNUMA,
+		Cores:   coresPerSocket,
+		Threads: defaultThreads,
+		MaxCPUs: numNUMA * coresPerSocket * defaultThreads,
+	}
+
+	smp := qemuArchBase.cpuTopology(vcpus, maxvcpus, numNUMA)
 	assert.Equal(expectedSMP, smp)
 }
 

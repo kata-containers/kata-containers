@@ -506,6 +506,17 @@ To stop the pod, run: `kubectl delete pod cuda-vectoradd-kata`.
 
 ### Next steps
 
+#### NUMA topology for GPU locality
+
+On multi-NUMA hosts, enabling NUMA support ensures GPU memory accesses stay
+local to the NUMA node where the GPU is physically attached, avoiding
+cross-NUMA latency. The NVIDIA GPU configuration templates ship with
+`enable_numa = true` by default.
+
+For details on NUMA configuration, topology verification, and
+troubleshooting, see the
+[NUMA support guide](../how-to/how-to-use-numa-with-kata.md).
+
 #### Use multi-GPU passthrough
 
 If you have machines supporting multi-GPU passthrough, use a pod deployment

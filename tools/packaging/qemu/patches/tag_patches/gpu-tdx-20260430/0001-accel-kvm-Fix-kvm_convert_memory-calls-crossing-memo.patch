@@ -1,0 +1,94 @@
+From 6b0eaa20aa91e9d82e0bf72b4ade6e83d18a4c9f Mon Sep 17 00:00:00 2001
+From: Ashish Kalra <ashish.kalra@amd.com>
+Date: Thu, 18 Sep 2025 22:10:35 +0000
+Subject: [PATCH] accel/kvm: Fix kvm_convert_memory calls crossing memory
+ regions
+
+Page conversion call can span multiple memory regions, potentially
+resulting in a conversion failure if the memory range being converted
+extends beyond the boundaries of the referenced memory region.
+
+Handle the case of page conversion call straddling across memory
+regions.
+
+Signed-off-by: Ashish Kalra <ashish.kalra@amd.com>
+Signed-off-by: Michael Roth <michael.roth@amd.com>
+---
+ accel/kvm/kvm-all.c | 27 ++++++++++++++++++++-------
+ 1 file changed, 20 insertions(+), 7 deletions(-)
+
+diff --git a/accel/kvm/kvm-all.c b/accel/kvm/kvm-all.c
+index 63230743d0..a1b2c3e5f4 100644
+--- a/accel/kvm/kvm-all.c
++++ b/accel/kvm/kvm-all.c
+@@ -3342,6 +3342,7 @@ static void kvm_eat_signals(CPUState *cpu)
+ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+ {
+     MemoryRegionSection section;
++    hwaddr convert_size;
+     ram_addr_t offset;
+     MemoryRegion *mr;
+     RAMBlock *rb;
+@@ -3359,6 +3360,11 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+         return ret;
+     }
+ 
++    /*
++     * Page conversions can span multiple memory regions, for example, if two
++     * memory backends are added to support two different NUMA nodes/policies.
++     */
++next_memory_region:
+     section = memory_region_find(get_system_memory(), start, size);
+     mr = section.mr;
+     if (!mr) {
+@@ -3397,10 +3403,13 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+         goto out_unref;
+     }
+ 
++    convert_size = (section.offset_within_region + size > mr->size) ?
++                   mr->size - section.offset_within_region : size;
++
+     if (to_private) {
+-        ret = kvm_set_memory_attributes_private(start, size);
++        ret = kvm_set_memory_attributes_private(start, convert_size);
+     } else {
+-        ret = kvm_set_memory_attributes_shared(start, size);
++        ret = kvm_set_memory_attributes_shared(start, convert_size);
+     }
+     if (ret) {
+         goto out_unref;
+@@ -3410,11 +3419,11 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+     rb = qemu_ram_block_from_host(addr, false, &offset);
+ 
+     ret = ram_block_attributes_state_change(rb->attributes,
+-                                            offset, size, to_private);
++                                            offset, convert_size, to_private);
+     if (ret) {
+         error_report("Failed to notify the listener the state change of "
+                      "(0x%"HWADDR_PRIx" + 0x%"HWADDR_PRIx") to %s",
+-                     start, size, to_private ? "private" : "shared");
++                     start, convert_size, to_private ? "private" : "shared");
+         goto out_unref;
+     }
+ 
+@@ -3426,9 +3435,15 @@ int kvm_convert_memory(hwaddr start, hwaddr size, bool to_private)
+              */
+             goto out_unref;
+         }
+-        ret = ram_block_discard_range(rb, offset, size);
++        ret = ram_block_discard_range(rb, offset, convert_size);
+     } else {
+-        ret = ram_block_discard_guest_memfd_range(rb, offset, size);
++        ret = ram_block_discard_guest_memfd_range(rb, offset, convert_size);
++    }
++
++    if (size - convert_size) {
++        start += convert_size;
++        size -= convert_size;
++        goto next_memory_region;
+     }
+ 
+ out_unref:
+-- 
+2.43.0
+

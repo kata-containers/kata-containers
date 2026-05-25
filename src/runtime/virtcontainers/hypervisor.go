@@ -803,6 +803,15 @@ type HypervisorConfig struct {
 	// GuestNUMANodes defines guest NUMA topology and mapping to host NUMA nodes and CPUs.
 	GuestNUMANodes []types.GuestNUMANode
 
+	// NUMAMapping is the raw user-provided NUMA mapping (TOML
+	// `numa_mapping` or the io.katacontainers.config.hypervisor.numa_mapping
+	// annotation). When empty, GuestNUMANodes was auto-derived from the
+	// host topology and may be right-sized at sandbox creation (e.g.
+	// collapsed to a single host node when the sandbox fits, or
+	// restricted to host nodes containing attached VFIO devices). When
+	// non-empty, the topology is honored verbatim.
+	NUMAMapping []string
+
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool

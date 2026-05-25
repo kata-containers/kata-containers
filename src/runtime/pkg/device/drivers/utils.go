@@ -46,6 +46,7 @@ var (
 	PCISysFsSlotsMaxBusSpeed PCISysFsProperty = "max_bus_speed" // /sys/bus/pci/slots/xxx/max_bus_speed
 	PCISysFsDevicesVendor    PCISysFsProperty = "vendor"        // /sys/bus/pci/devices/xxx/vendor
 	PCISysFsDevicesDevice    PCISysFsProperty = "device"        // /sys/bus/pci/devices/xxx/device
+	PCISysFsDevicesNUMANode  PCISysFsProperty = "numa_node"     // /sys/bus/pci/devices/xxx/numa_node
 )
 
 func deviceLogger() *logrus.Entry {
@@ -83,6 +84,20 @@ func GetPCIDeviceProperty(bdf string, property PCISysFsProperty) string {
 		return ""
 	}
 	return rlt
+}
+
+// GetPCIDeviceNUMANode returns the host NUMA node for a PCI device.
+// Returns -1 if the device has no NUMA affinity or the value cannot be read.
+func GetPCIDeviceNUMANode(bdf string) int {
+	raw := GetPCIDeviceProperty(bdf, PCISysFsDevicesNUMANode)
+	if raw == "" {
+		return -1
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 func readPCIProperty(propertyPath string) (string, error) {
@@ -240,6 +255,7 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 		Class:    pciClass,
 		VendorID: vendorID,
 		DeviceID: deviceID,
+		NUMANode: GetPCIDeviceNUMANode(deviceBDF),
 		Port:     device.Port,
 		HostPath: device.HostPath,
 	}
@@ -291,7 +307,6 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 			vendorID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
 			deviceID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
 
-			// Do not directly assign to `vfio` -- need to access field still
 			vfio = config.VFIODev{
 				ID:       id,
 				Type:     vfioDeviceType,
@@ -301,6 +316,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Class:    pciClass,
 				VendorID: vendorID,
 				DeviceID: deviceID,
+				NUMANode: GetPCIDeviceNUMANode(deviceBDF),
 				Port:     device.Port,
 				HostPath: device.HostPath,
 			}
@@ -315,6 +331,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				SysfsDev:  deviceSysfsDev,
 				Type:      config.VFIOAPDeviceMediatedType,
 				APDevices: devices,
+				NUMANode:  -1,
 				Port:      device.Port,
 			}
 		default:
