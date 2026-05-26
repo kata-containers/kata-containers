@@ -258,6 +258,7 @@ pub async fn handle_multi_layer_erofs_group(
             upper_storage = Some(*storage);
         } else if is_lower_storage(storage) {
             // Each GPT partition is provided as a separate storage entry by the host
+            // No special handling needed here - just add to erofs_storages
             if !has_gpt_partition && is_gpt_partitioned(storage) {
                 has_gpt_partition = true;
             }
@@ -530,6 +531,11 @@ fn is_upper_storage(storage: &Storage) -> bool {
 fn is_lower_storage(storage: &Storage) -> bool {
     storage.options.iter().any(|o| o == OPT_OVERLAY_LOWER)
         || (storage.fstype == EROFS_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
+}
+
+/// Check if dm-verity is enabled for this storage
+fn is_dmverity_enabled(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_DMVERITY_ENABLED)
 }
 
 /// Parse dm-verity configuration from storage options
@@ -921,21 +927,22 @@ async fn wait_and_mount_layer(
 
     let is_gpt = is_gpt_partitioned(layer);
     let partition_num = get_partition_number(layer);
+    let dmverity_enabled = is_dmverity_enabled(layer);
 
     // Get the base device path
-    let dev_path = match base_dev_path {
+    let base_dev_path = match base_dev_path {
         Some(path) => path,
         None => resolve_base_device_path(layer, sandbox).await?,
     };
 
     // For GPT-partitioned disks, use the partition device path
-    let dev_path = if is_gpt {
+    let partition_path = if is_gpt {
         if let Some(part_num) = partition_num {
-            let path = get_partition_device_path(&dev_path, part_num);
+            let path = get_partition_device_path(&base_dev_path, part_num);
             info!(
                 logger,
                 "GPT-partitioned mode: using partition device";
-                "base-device" => &dev_path,
+                "base-device" => &base_dev_path,
                 "partition-number" => part_num,
                 "partition-device" => &path,
             );
@@ -943,7 +950,7 @@ async fn wait_and_mount_layer(
             // Wait for partition device node to appear
             wait_for_partition_device(&path, logger).await?;
 
-            path
+            Some(path)
         } else {
             return Err(anyhow!(
                 "GPT-partitioned storage missing partition number: {:?}",
@@ -951,8 +958,33 @@ async fn wait_and_mount_layer(
             ));
         }
     } else {
+        // Non-GPT mode: no partition path
+        None
+    };
+
+    // Determine the device path to mount
+    // If dm-verity is enabled, we'll create a verity device and mount that instead
+    let (dev_path, verity_device_path) = if dmverity_enabled {
+        // dm-verity mode: create verity device from partition
+        let partition = partition_path.as_ref().ok_or_else(|| {
+            anyhow!("dm-verity requires GPT-partitioned storage with partition number")
+        })?;
+
+        // Create dm-verity device
+        let verity_device = create_partition_dmverity_device(partition, layer, logger)?;
+        info!(
+            logger,
+            "Using dm-verity device for mount";
+            "partition" => partition,
+            "verity-device" => &verity_device,
+        );
+        (verity_device.clone(), Some(verity_device))
+    } else if let Some(ref partition) = partition_path {
+        // GPT mode without dm-verity: use partition directly
+        (partition.clone(), None)
+    } else {
         // Non-GPT mode: use base device directly
-        dev_path.clone()
+        (base_dev_path.clone(), None)
     };
 
     info!(
@@ -963,6 +995,7 @@ async fn wait_and_mount_layer(
         "devname" => &dev_path,
         "mount-point" => layer_mount.display(),
         "gpt-mode" => is_gpt,
+        "dmverity-enabled" => dmverity_enabled,
     );
 
     create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
@@ -1012,7 +1045,7 @@ async fn wait_and_mount_layer(
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
 
     Ok(LayerMountInfo {
-        verity_device: None,
+        verity_device: verity_device_path,
     })
 }
 
@@ -1083,7 +1116,6 @@ fn get_partition_device_path(base_path: &str, partition_number: u32) -> String {
 /// When a virtio-blk device with a GPT is hotplugged, the kernel automatically
 /// scans the partition table and creates partition nodes. However, devtmpfs node
 /// creation may lag slightly behind the uevent, so we poll briefly if needed.
-#[allow(dead_code)]
 async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result<()> {
     let device_path_buf = PathBuf::from(device_path);
     if device_path_buf.exists() {
