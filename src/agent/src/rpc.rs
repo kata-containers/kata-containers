@@ -87,6 +87,7 @@ use crate::passfd_io;
 use crate::pci;
 use crate::random;
 use crate::sandbox::{Sandbox, SandboxError};
+use crate::storage::multi_layer_erofs::cleanup_dmverity_devices;
 use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
@@ -2094,6 +2095,15 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
                 cid,
                 err
             );
+        }
+    }
+
+    // Cleanup dm-verity devices for this container (after all mounts are unmounted)
+    if let Some(verity_devices) = sandbox.container_verity_devices.remove(cid) {
+        if !verity_devices.is_empty() {
+            // Cleanup dm-verity devices for this container, ignoring any errors
+            // since we want to proceed with cleanup as much as possible
+            cleanup_dmverity_devices(&verity_devices, &sandbox.logger);
         }
     }
 

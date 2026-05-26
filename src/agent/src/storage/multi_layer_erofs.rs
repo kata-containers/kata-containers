@@ -741,6 +741,62 @@ fn create_dmverity_device(verity_info: &DmVerityInfo, source_device_path: &Path)
     Ok(dev_path)
 }
 
+/// Destroy a dm-verity device
+fn destroy_dmverity_device(verity_device_name: &str) -> Result<()> {
+    let dm = devicemapper::DM::new()?;
+    let name = devicemapper::DmName::new(verity_device_name)?;
+
+    dm.device_remove(&devicemapper::DevId::Name(name), dm_opts_deferred_remove())
+        .context(format!("remove DmverityDevice {}", verity_device_name))?;
+
+    Ok(())
+}
+
+/// Destroy dm-verity device by path
+fn destroy_partition_dmverity_device(verity_device_path: &str, logger: &Logger) -> Result<()> {
+    // The verity device path is /dev/mapper/<name> (as created by create_dm_dev_node).
+    // Extract the DM device name for removal. Also remove the mknod-created device node.
+    let device_name = verity_device_path
+        .strip_prefix("/dev/mapper/")
+        .unwrap_or(verity_device_path)
+        .to_string();
+
+    destroy_dmverity_device(&device_name).context("Failed to destroy dm-verity device")?;
+    info!(
+        logger,
+        "Destroying dm-verity device";
+        "device-name" => &device_name,
+    );
+
+    // Remove the device node we created with mknod.
+    remove_dm_dev_node(verity_device_path);
+
+    Ok(())
+}
+
+/// Cleanup all dm-verity devices for a multi-layer EROFS mount
+pub fn cleanup_dmverity_devices(verity_devices: &[String], logger: &Logger) {
+    info!(
+        logger,
+        "Cleaning up {} dm-verity devices",
+        verity_devices.len()
+    );
+
+    // Destroy in reverse order
+    for verity_device in verity_devices.iter().rev() {
+        if let Err(e) = destroy_partition_dmverity_device(verity_device, logger) {
+            warn!(
+                logger,
+                "Failed to destroy dm-verity device";
+                "device-path" => verity_device,
+                "error" => format!("{:#}", e),
+            );
+        }
+    }
+
+    info!(logger, "dm-verity device cleanup completed");
+}
+
 /// Validate that a container ID does not contain path traversal sequences.
 ///
 /// Container IDs are used to construct filesystem paths. A malicious ID containing
