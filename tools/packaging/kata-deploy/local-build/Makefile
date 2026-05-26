@@ -183,7 +183,11 @@ qemu-tarball:
 
 # DEPS is rebound per target below; prereqs expand at parse time, so each rule
 # freezes the current DEPS. `make DEPS=` from the command line zeros all of them.
+ifeq ($(FAKE_SE_IMAGE),true)
+DEPS :=
+else
 DEPS := kernel-tarball rootfs-initrd-confidential-tarball
+endif
 boot-image-se-tarball: $(DEPS)
 	${MAKE} $@-build
 

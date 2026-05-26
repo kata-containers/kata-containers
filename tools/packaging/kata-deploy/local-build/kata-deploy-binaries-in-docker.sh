@@ -161,6 +161,7 @@ docker run \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
+	--env FAKE_SE_IMAGE="${FAKE_SE_IMAGE:-}" \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \

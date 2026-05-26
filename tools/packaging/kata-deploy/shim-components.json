@@ -28,10 +28,10 @@
       "x86_64": ["shim-v2-rust", "qemu-tdx-experimental", "virtiofsd", "kernel", "rootfs-image-confidential", "ovmf-tdx"]
     },
     "qemu-se": {
-      "s390x": ["shim-v2-go", "qemu", "virtiofsd", "kernel", "rootfs-image-confidential"]
+      "s390x": ["shim-v2-go", "qemu", "virtiofsd", "kernel", "rootfs-initrd-confidential", "boot-image-se"]
     },
     "qemu-se-runtime-rs": {
-      "s390x": ["shim-v2-rust", "qemu", "virtiofsd", "kernel", "rootfs-image-confidential"]
+      "s390x": ["shim-v2-rust", "qemu", "virtiofsd", "kernel", "rootfs-initrd-confidential", "boot-image-se"]
     },
     "qemu-nvidia-gpu": {
       "x86_64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia-gpu", "ovmf"]
