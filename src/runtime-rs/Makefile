@@ -482,6 +482,7 @@ endif
     DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
     # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
     DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
+    DEFSHAREDFS_QEMU_NVIDIA_GPU_RUNTIME_RS := none
     # NVIDIA profile: rootfs block driver (avoid virtio-pmem/DAX for this stack)
     VMROOTFSDRIVER_NV := virtio-blk-pci
     # Agent client: hybrid vsock retry delay (ms); vsock path uses this as initial backoff (clamped in agent)
@@ -606,6 +607,7 @@ USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
 USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += CONFIG_QEMU_NVIDIA_GPU_IN
+USER_VARS += DEFSHAREDFS_QEMU_NVIDIA_GPU_RUNTIME_RS
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILTIN_DB

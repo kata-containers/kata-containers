@@ -179,6 +179,13 @@ setup_file() {
     export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml.in"
     export POD_EMBEDQA_YAML="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml"
 
+    if is_runtime_rs && [[ "${TEE}" != "true" ]]; then
+        export POD_INSTRUCT_YAML_IN="${pod_config_dir}/${POD_NAME_INSTRUCT}-runtime-rs.yaml.in"
+        export POD_INSTRUCT_YAML="${pod_config_dir}/${POD_NAME_INSTRUCT}-runtime-rs.yaml"
+        export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}-runtime-rs.yaml.in"
+        export POD_EMBEDQA_YAML="${pod_config_dir}/${POD_NAME_EMBEDQA}-runtime-rs.yaml"
+    fi
+
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
     setup_langchain_flow
