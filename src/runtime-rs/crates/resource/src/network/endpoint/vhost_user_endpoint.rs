@@ -78,12 +78,12 @@ impl Endpoint for VhostUserEndpoint {
         self.guest_mac.clone()
     }
 
-    async fn attach(&self) -> Result<()> {
+    async fn attach(&self) -> Result<Option<String>> {
         let config = self.get_network_config();
         do_handle_device(&self.dev_mgr, &DeviceConfig::VhostUserNetworkCfg(config))
             .await
             .context("handle device")?;
-        Ok(())
+        Ok(None)
     }
 
     async fn detach(&self, h: &dyn Hypervisor) -> Result<()> {
