@@ -1016,7 +1016,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
     unistd::chdir("/")?;
 
     let process_cwd = process.cwd().display().to_string();
-    if process_cwd.is_empty() {
+    if !process_cwd.is_empty() {
         // Although the process.cwd string can be unclean/malicious (../../dev, etc),
         // we are running on our own mount namespace and we just chrooted into the
         // container's root. It's safe to create CWD from there.
@@ -1337,6 +1337,52 @@ mod tests {
 
         let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default());
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+    }
+
+    // Regression test for the bug where the create_dir_all guard was inverted
+    // and CWD was only created when process.cwd was empty (the opposite of
+    // what we want).  See PR #2375 (original fix for #2374) and the regression
+    // introduced by PR #9944 ("agent: Align agent OCI spec with oci-spec-rs").
+    #[test]
+    #[serial(chdir)]
+    fn test_finish_rootfs_creates_missing_cwd() {
+        let stdout_fd = std::io::stdout().as_raw_fd();
+
+        // Pick a unique absolute path that does not yet exist on disk.  The
+        // function chdirs to "/" before creating CWD, so the path is taken to
+        // be relative to the (test process's) filesystem root.
+        let unique = format!(
+            "kata-rustjail-cwd-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        );
+        let cwd_path = std::path::PathBuf::from("/tmp").join(&unique);
+        assert!(
+            !cwd_path.exists(),
+            "test cwd path unexpectedly already exists: {:?}",
+            cwd_path,
+        );
+
+        let mut spec = oci::Spec::default();
+        spec.set_linux(Some(oci::Linux::default()));
+
+        let mut process = oci::Process::default();
+        process.set_cwd(cwd_path.clone());
+
+        let ret = finish_rootfs(stdout_fd, &spec, &process);
+
+        let created = cwd_path.exists();
+        let _ = remove_dir_all(&cwd_path);
+
+        assert!(ret.is_ok(), "finish_rootfs failed: {:?}", ret);
+        assert!(
+            created,
+            "finish_rootfs did not create process.cwd: {:?}",
+            cwd_path,
+        );
     }
 
     #[test]
