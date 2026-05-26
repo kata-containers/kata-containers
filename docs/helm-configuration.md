@@ -93,6 +93,14 @@ customRuntimes:
 
 Again, view the default [`values.yaml`](#parameters) file for more details.
 
+### Drop-In Runtime Configuration
+
+The base runtime configuration shipped with Kata Containers can be modified using an
+overlay method. This can be done directly on the filesystem using the instructions 
+found [here](runtime-configuration.md#drop-in-files).
+You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
+chart to achieve the same results.
+
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the
@@ -394,49 +402,3 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
 
-## Customizing Configuration with Drop-in Files
-
-When kata-deploy installs Kata Containers, the base configuration files should not
-be modified directly. Instead, use drop-in configuration files to customize
-settings. This approach ensures your customizations survive kata-deploy upgrades.
-
-### How Drop-in Files Work
-
-The Kata runtime reads the base configuration file and then applies any `.toml`
-files found in the `config.d/` directory alongside it. Files are processed in
-alphabetical order, with later files overriding earlier settings.
-
-### Creating Custom Drop-in Files
-
-To add custom settings, create a `.toml` file in the appropriate `config.d/`
-directory. Use a numeric prefix to control the order of application.
-
-**Reserved prefixes** (used by kata-deploy):
-
-- `10-*`: Core kata-deploy settings
-- `20-*`: Debug settings
-- `30-*`: Kernel parameters
-
-**Recommended prefixes for custom settings**: `50-89`
-
-### Drop-In Config Examples
-
-#### Adding Custom Kernel Parameters
-
-```bash
-# SSH into the node or use kubectl exec
-sudo mkdir -p /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/
-sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-custom.toml << 'EOF'
-[hypervisor.qemu]
-kernel_params = "my_param=value"
-EOF
-```
-
-#### Changing Default Memory Size
-
-```bash
-sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-memory.toml << 'EOF'
-[hypervisor.qemu]
-default_memory = 4096
-EOF
-```
