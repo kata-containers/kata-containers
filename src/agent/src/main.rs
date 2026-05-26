@@ -106,6 +106,7 @@ const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
 const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
+const NO_REBOOT_ENV_VAR: &str = "KATA_AGENT_NO_REBOOT";
 
 /// Path of ocicrypt config file. This is used by CDH when decrypting image.
 /// TODO: remove this when we move the launch of CDH out of the kata-agent.
@@ -347,10 +348,27 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if init_mode {
         sync();
-        let _ = reboot(RebootMode::RB_POWER_OFF);
+        // The agent is the init process (PID 1) and would normally power off
+        // the VM on exit. Allow disabling that behavior with an env var for
+        // environments where another init component is responsible for
+        // shutdown (for example NVRC-based images).
+        if !is_no_reboot_enabled() {
+            let _ = reboot(RebootMode::RB_POWER_OFF);
+        }
     }
 
     result
+}
+
+fn is_no_reboot_enabled() -> bool {
+    let Ok(value) = env::var(NO_REBOOT_ENV_VAR) else {
+        return false;
+    };
+
+    value
+        .parse::<bool>()
+        .or_else(|_err| value.parse::<u64>().map(|v| !matches!(v, 0)))
+        .unwrap_or(false)
 }
 
 #[instrument]
