@@ -1169,30 +1169,6 @@ impl ToQemuParams for VhostVsock {
 }
 
 #[derive(Debug)]
-struct NumaNode {
-    memdev: String,
-}
-
-impl NumaNode {
-    fn new(memdev: &str) -> NumaNode {
-        NumaNode {
-            memdev: memdev.to_owned(),
-        }
-    }
-}
-
-#[async_trait]
-impl ToQemuParams for NumaNode {
-    async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut params = Vec::new();
-        params.push("node".to_owned());
-        params.push(format!("memdev={}", self.memdev));
-
-        Ok(vec!["-numa".to_owned(), params.join(",")])
-    }
-}
-
-#[derive(Debug)]
 struct Serial {
     character_device: String,
 }
@@ -1606,6 +1582,17 @@ impl ToQemuParams for DeviceIntelIommu {
     }
 }
 
+// First PCI slot used for a bridge on the root bus (x86_64: 0 and 1 are platform).
+const BRIDGE_PCI_START_ADDR: u32 = 2;
+// Chassis base for per-bridge root ports hosting nested pcie-pci-bridges under OVMF.
+const NESTED_ROOT_PORT_CHASSIS_BASE: u32 = 16;
+
+fn use_nested_pcie_bridges(config: &HypervisorConfig) -> bool {
+    config.machine_info.machine_type == "q35"
+        && !config.security_info.confidential_guest
+        && !config.boot_info.firmware.is_empty()
+}
+
 #[derive(Debug)]
 struct DevicePciBridge {
     driver: String,
@@ -1636,10 +1623,7 @@ impl DevicePciBridge {
             // Each bridge is required to be assigned a unique chassis id > 0.
             chassis_nr: bridge_idx + 1,
             shpc: false,
-            // 2 is documented by the go runtime as the first slot available
-            // for a bridge (on x86_64)
-            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu_arch_base.go#L212)
-            addr: 2 + bridge_idx,
+            addr: BRIDGE_PCI_START_ADDR + bridge_idx,
             // Values taken from the go runtime implementation which comments
             // the choices as follows:
             // Certain guest BIOS versions think !SHPC means no hotplug, and
@@ -1671,6 +1655,79 @@ impl ToQemuParams for DevicePciBridge {
         params.push(format!("mem-reserve={}", self.mem_reserve));
         params.push(format!("pref64-reserve={}", self.pref64_reserve));
         Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+/// Per-bridge pcie-root-port + pcie-pci-bridge pair for Q35 + OVMF.
+///
+/// OVMF only honours PCI Firmware Spec resource-reservation hints on PCIe
+/// root/downstream ports, not on legacy pci-bridge devices directly on pcie.0.
+#[derive(Debug)]
+struct DeviceNestedPcieBridge {
+    bridge_idx: u32,
+}
+
+impl DeviceNestedPcieBridge {
+    fn new(bridge_idx: u32) -> Self {
+        Self { bridge_idx }
+    }
+
+    fn bridge_id(&self) -> String {
+        format!("pci-bridge-{}", self.bridge_idx)
+    }
+
+    fn root_port_id(&self) -> String {
+        format!("rp-{}", self.bridge_id())
+    }
+
+    fn root_port_addr(&self) -> u32 {
+        BRIDGE_PCI_START_ADDR + self.bridge_idx
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceNestedPcieBridge {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let root_port = PCIeRootPortDevice::new(self.root_port_id(), DEFAULT_PCIE_ROOT_BUS)
+            .with_chassis(NESTED_ROOT_PORT_CHASSIS_BASE + self.bridge_idx)
+            .with_slot(0)
+            .with_addr(self.root_port_addr().to_string())
+            .with_bus_reserve("0x1")
+            .with_io_reserve("4k")
+            .with_mem_reserve("1m")
+            .with_pref64_reserve("1m");
+
+        let pcie_pci_bridge =
+            DevicePciePciBridge::new(&self.root_port_id(), &self.bridge_id());
+
+        let mut params = root_port.qemu_params().await?;
+        params.extend(pcie_pci_bridge.qemu_params().await?);
+        Ok(params)
+    }
+}
+
+#[derive(Debug)]
+struct DevicePciePciBridge {
+    bus: String,
+    id: String,
+}
+
+impl DevicePciePciBridge {
+    fn new(bus: &str, id: &str) -> Self {
+        Self {
+            bus: bus.to_owned(),
+            id: id.to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DevicePciePciBridge {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-device".to_owned(),
+            format!("pcie-pci-bridge,bus={},id={}", self.bus, self.id),
+        ])
     }
 }
 
@@ -2069,6 +2126,10 @@ pub struct PCIeRootPortDevice {
     multifunction: bool,
     /// PCI address; supports simple ("0x5") and complex multifunction ("0x5.0x1") formats.
     addr: String,
+    bus_reserve: Option<String>,
+    io_reserve: Option<String>,
+    mem_reserve: Option<String>,
+    pref64_reserve: Option<String>,
 }
 
 impl PCIeRootPortDevice {
@@ -2089,7 +2150,31 @@ impl PCIeRootPortDevice {
             slot: None,
             multifunction: false,
             addr: DEFAULT_START_ADDR.to_string(),
+            bus_reserve: None,
+            io_reserve: None,
+            mem_reserve: None,
+            pref64_reserve: None,
         }
+    }
+
+    pub fn with_bus_reserve(mut self, reserve: impl Into<String>) -> Self {
+        self.bus_reserve = Some(reserve.into());
+        self
+    }
+
+    pub fn with_io_reserve(mut self, reserve: impl Into<String>) -> Self {
+        self.io_reserve = Some(reserve.into());
+        self
+    }
+
+    pub fn with_mem_reserve(mut self, reserve: impl Into<String>) -> Self {
+        self.mem_reserve = Some(reserve.into());
+        self
+    }
+
+    pub fn with_pref64_reserve(mut self, reserve: impl Into<String>) -> Self {
+        self.pref64_reserve = Some(reserve.into());
+        self
     }
 
     pub fn with_port(mut self, port: u16) -> Self {
@@ -2151,6 +2236,19 @@ impl ToQemuParams for PCIeRootPortDevice {
             if self.multifunction { "on" } else { "off" }
         )
         .unwrap();
+
+        if let Some(bus_reserve) = &self.bus_reserve {
+            write!(params, ",bus-reserve={bus_reserve}").unwrap();
+        }
+        if let Some(io_reserve) = &self.io_reserve {
+            write!(params, ",io-reserve={io_reserve}").unwrap();
+        }
+        if let Some(mem_reserve) = &self.mem_reserve {
+            write!(params, ",mem-reserve={mem_reserve}").unwrap();
+        }
+        if let Some(pref64_reserve) = &self.pref64_reserve {
+            write!(params, ",pref64-reserve={pref64_reserve}").unwrap();
+        }
 
         Ok(vec!["-device".to_string(), params])
     }
@@ -2581,6 +2679,10 @@ pub struct QemuCmdLine<'a> {
 
     knobs: Knobs,
 
+    // Emitted after all other devices, matching govmm append order (kernel, then
+    // devices, then -bios) so OVMF sees the full PCI topology at firmware init.
+    bios: Option<Bios>,
+
     devices: Vec<Box<dyn ToQemuParams>>,
     ccw_subchannel: Option<CcwSubChannel>,
 }
@@ -2601,6 +2703,7 @@ impl<'a> QemuCmdLine<'a> {
             cpu: Cpu::new(config),
             qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
+            bios: None,
             devices: Vec::new(),
             ccw_subchannel,
         };
@@ -2660,7 +2763,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_bios(&mut self, firmware: &str) {
-        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+        self.bios = Some(Bios::new(firmware.to_owned()));
     }
 
     /// Takes ownership of the CCW subchannel, leaving `None` in its place.
@@ -2714,9 +2817,15 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_bridges(&mut self, count: u32) {
+        let use_nested = use_nested_pcie_bridges(self.config);
         for idx in 0..count {
-            let bridge = DevicePciBridge::new(self.config, idx);
-            self.devices.push(Box::new(bridge));
+            if use_nested {
+                self.devices
+                    .push(Box::new(DeviceNestedPcieBridge::new(idx)));
+            } else {
+                let bridge = DevicePciBridge::new(self.config, idx);
+                self.devices.push(Box::new(bridge));
+            }
         }
     }
 
@@ -2776,15 +2885,19 @@ impl<'a> QemuCmdLine<'a> {
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        match bus_type {
-            VirtioBusType::Pci => {
-                self.machine.set_nvdimm(true);
-                self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
-            }
-            VirtioBusType::Ccw => {
-                self.machine.set_memory_backend(&mem_file.id);
-            }
+        // runtime-rs does not implement guest NUMA topology (Go's enable_numa /
+        // buildNUMATopology).  Bind shared guest RAM via -machine
+        // memory-backend=, not nvdimm=on plus a lone -numa node.
+        //
+        // Keep memory hotplug slots when rootfs itself uses nvdimm, otherwise
+        // add_nvdimm() for the rootfs image fails at startup because it
+        // requires maxmem and slots to be set.
+        if self.config.boot_info.vm_rootfs_driver != "nvdimm"
+            && self.config.boot_info.vm_rootfs_driver != "virtio-pmem"
+        {
+            self.memory.set_maxmem_size(0).set_num_slots(0);
         }
+        self.machine.set_memory_backend(&mem_file.id);
     }
 
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
@@ -3248,8 +3361,11 @@ impl<'a> QemuCmdLine<'a> {
                 continue;
             }
 
+            // Match Go genericAppendPCIeRootPort: all placeholder root ports share
+            // chassis 0 and are distinguished by slot. Using index+1 here collided
+            // with nested pcie-pci-bridge (chassis 1) under OVMF and broke boot.
             let root_port_dev = PCIeRootPortDevice::new(rp.port_id(), &rp.bus)
-                .with_chassis(index + 1)
+                .with_chassis(0)
                 .with_slot(index)
                 .with_multifunction(multi_function)
                 .with_addr(addr);
@@ -3350,6 +3466,10 @@ impl<'a> QemuCmdLine<'a> {
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
+        }
+
+        if let Some(bios) = &self.bios {
+            result.append(&mut bios.qemu_params().await?);
         }
 
         result.append(&mut self.knobs.qemu_params().await?);
