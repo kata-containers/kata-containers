@@ -211,6 +211,7 @@ ttrpc = "0.8.4"
 url = "2.5.4"
 which = "4.3.0"
 gpt = "4.1.0"
+devicemapper = { version = "0.34", default-features = false }
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy
 # binary runs once at pod start and then idles waiting for SIGTERM, so we
@@ -221,3 +222,4 @@ gpt = "4.1.0"
 [profile.release.package."kata-deploy"]
 opt-level = "z"
 codegen-units = 1
+
