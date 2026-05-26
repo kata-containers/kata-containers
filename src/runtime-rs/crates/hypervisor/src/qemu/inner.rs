@@ -18,7 +18,7 @@ use crate::{
 
 use crate::utils::{
     bytes_to_megs, create_dir_all_with_inherit_owner, enter_netns, get_jailer_root, megs_to_bytes,
-    set_groups, vm_cleanup,
+    set_groups, uses_native_ccw_bus, vm_cleanup,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -942,14 +942,29 @@ impl QemuInner {
         };
 
         match device {
-            DeviceType::Network(ref network_device) => {
+            DeviceType::Network(mut network_device) => {
                 let (netdev, virtio_net_device) = get_network_device(
                     &self.config,
                     &network_device.config.host_dev_name,
                     network_device.config.guest_mac.clone().unwrap(),
                     &mut None,
                 )?;
-                qmp.hotplug_network_device(&netdev, &virtio_net_device)?
+                qmp.hotplug_network_device(&netdev, &virtio_net_device)?;
+
+                // On s390x the NIC is plugged onto the virtual channel subsystem
+                // (virtio-net-ccw) and has no PCI address, so the PCI-path lookup
+                // below does not apply.  The agent matches the CCW interface via
+                // its uevent instead; forcing a PCI-path resolution here would
+                // fail and abort the whole NIC attach (breaking guest networking).
+                if !uses_native_ccw_bus() {
+                    let frontend_id = format!("frontend-{}", virtio_net_device.get_netdev_id());
+                    let pci_path = qmp
+                        .get_device_by_qdev_id(&frontend_id)
+                        .context("get network device pci path")?;
+                    network_device.config.pci_path = Some(pci_path);
+                }
+
+                return Ok(DeviceType::Network(network_device));
             }
             DeviceType::Block(mut block_device) => {
                 let block_driver = &self.config.blockdev_info.block_device_driver;

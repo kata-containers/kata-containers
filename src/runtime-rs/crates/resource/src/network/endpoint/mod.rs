@@ -23,15 +23,31 @@ pub use vhost_user_endpoint::VhostUserEndpoint;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
+use hypervisor::device::driver::NetworkConfig;
+use hypervisor::device::{DeviceConfig, DeviceType};
 use hypervisor::Hypervisor;
+use tokio::sync::RwLock;
+use std::sync::Arc;
 
 use super::EndpointState;
+
+pub(crate) async fn attach_network_device(
+    d: &Arc<RwLock<DeviceManager>>,
+    config: NetworkConfig,
+) -> Result<Option<String>> {
+    let device_info = do_handle_device(d, &DeviceConfig::NetworkCfg(config)).await?;
+    match device_info {
+        DeviceType::Network(net) => Ok(net.config.pci_path.map(|p| p.to_string())),
+        _ => Ok(None),
+    }
+}
 
 #[async_trait]
 pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn name(&self) -> String;
     async fn hardware_addr(&self) -> String;
-    async fn attach(&self) -> Result<()>;
+    async fn attach(&self) -> Result<Option<String>>;
     async fn detach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
     async fn save(&self) -> Option<EndpointState>;
     /// Returns the guest PCI path for this endpoint if it is a cold-plugged

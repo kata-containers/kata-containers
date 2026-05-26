@@ -8,13 +8,14 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
-use hypervisor::device::{DeviceConfig, DeviceType};
-use hypervisor::{Hypervisor, NetworkConfig, NetworkDevice};
+use hypervisor::device::device_manager::DeviceManager;
+use hypervisor::device::driver::NetworkConfig;
+use hypervisor::device::DeviceType;
+use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::TapEndpointState;
-use super::Endpoint;
+use super::{attach_network_device, Endpoint};
 use crate::network::network_pair::{get_link_by_name, NetworkInterface};
 use crate::network::{utils, EndpointState};
 
@@ -89,12 +90,11 @@ impl Endpoint for TapEndpoint {
         self.guest_mac.clone()
     }
 
-    async fn attach(&self) -> Result<()> {
+    async fn attach(&self) -> Result<Option<String>> {
         let config = self.get_network_config().context("Get network config")?;
-        do_handle_device(&self.dev_mgr, &DeviceConfig::NetworkCfg(config))
+        attach_network_device(&self.dev_mgr, config)
             .await
-            .context("Handle device")?;
-        Ok(())
+            .context("Handle device")
     }
 
     async fn detach(&self, h: &dyn Hypervisor) -> Result<()> {
