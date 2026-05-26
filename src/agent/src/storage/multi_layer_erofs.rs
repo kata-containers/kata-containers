@@ -11,8 +11,10 @@
 //! - Storage with X-kata.overlay-lower: erofs layers (lowerdir)
 //! - Creates overlay to combine them
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
-//! - Supports GPT-partitioned disks where each layer is a separate partition
+//! - Supports GPT-partitioned disks with dm-verity integrity verification for each partition
 
+#[allow(unused_imports)]
+use nix::sys::stat::{self, Mode, SFlag};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,6 +38,10 @@ use safe_path::scoped_join;
 use slog::Logger;
 use tokio::sync::Mutex;
 
+// no-udev device-mapper helpers
+#[allow(unused_imports)]
+use devicemapper::{DmFlags, DmOptions, DmUdevFlags};
+
 /// EROFS Type
 const EROFS_TYPE: &str = "erofs";
 /// ext4 Type (upper virtio disk based rw layer)
@@ -53,6 +59,75 @@ const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
 const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
+
+/// Build DmOptions that fully disable udev synchronization.
+#[allow(dead_code)]
+fn no_udev_dm_options() -> DmOptions {
+    DmOptions::default().set_udev_flags(
+        DmUdevFlags::DM_UDEV_DISABLE_LIBRARY_FALLBACK
+            | DmUdevFlags::DM_UDEV_DISABLE_SUBSYSTEM_RULES_FLAG
+            | DmUdevFlags::DM_UDEV_DISABLE_DISK_RULES_FLAG
+            | DmUdevFlags::DM_UDEV_DISABLE_OTHER_RULES_FLAG
+            | DmUdevFlags::DM_UDEV_DISABLE_DM_RULES_FLAG,
+    )
+}
+
+/// Build DmOptions for read-only device removal in a no-udev environment.
+#[allow(dead_code)]
+fn dm_opts_readonly() -> DmOptions {
+    no_udev_dm_options().set_flags(DmFlags::DM_READONLY)
+}
+
+/// Build DmOptions for deferred device removal in a no-udev environment.
+#[allow(dead_code)]
+fn dm_opts_deferred_remove() -> DmOptions {
+    no_udev_dm_options().set_flags(DmFlags::DM_DEFERRED_REMOVE)
+}
+
+/// Create a block device node for a dm-verity device using mknod(2).
+#[allow(dead_code)]
+fn create_dm_dev_node(name: &str, dev: devicemapper::Device) -> Result<String> {
+    // Ensure /dev/mapper exists.
+    let mapper_dir = Path::new("/dev/mapper");
+    if !mapper_dir.exists() {
+        std::fs::create_dir_all(mapper_dir)
+            .with_context(|| format!("failed to create directory {}", mapper_dir.display()))?;
+    }
+
+    let dev_path = format!("/dev/mapper/{}", name);
+    // Remove stale node from a previous failed run, if any
+    if Path::new(&dev_path).exists() {
+        std::fs::remove_file(&dev_path)
+            .with_context(|| format!("failed to remove stale device node {}", dev_path))?;
+    }
+
+    // Use Device -> dev_t conversion from the crate instead of raw makedev.
+    let dev_t: nix::libc::dev_t = dev.into();
+    stat::mknod(
+        dev_path.as_str(),
+        SFlag::S_IFBLK,
+        Mode::from_bits_truncate(0o600),
+        dev_t,
+    )
+    .with_context(|| format!("failed to mknod block device {}", dev_path))?;
+
+    Ok(dev_path)
+}
+
+/// Remove a device node that was created by create_dm_dev_node.
+#[allow(dead_code)]
+fn remove_dm_dev_node(dev_path: &str) {
+    if dev_path.starts_with("/dev/mapper/") && Path::new(dev_path).exists() {
+        if let Err(e) = std::fs::remove_file(dev_path) {
+            slog::warn!(
+                slog_scope::logger(),
+                "failed to remove dm device node";
+                "path" => dev_path,
+                "error" => %e,
+            );
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}

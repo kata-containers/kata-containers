@@ -60,6 +60,7 @@ tracing-subscriber.workspace = true
 # TODO: bump tracing-opentelemetry to sync with version in workspace
 tracing-opentelemetry = "0.17.0"
 opentelemetry.workspace = true
+devicemapper.workspace = true
 
 # Configuration
 serde.workspace = true
