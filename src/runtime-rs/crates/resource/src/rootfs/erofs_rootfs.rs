@@ -730,6 +730,19 @@ impl ErofsMultiLayerRootfs {
                         // Track GPT metadata files (head + padding) for cleanup
                         gpt_metadata_paths.push(gpt_files.head_path.clone());
                         gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+                        for idx in 0..layout.partitions.len() {
+                            if idx > 0 {
+                                // Check for padding files (only created when there are gaps)
+                                let pad_path = gpt_files
+                                    .head_path
+                                    .parent()
+                                    .unwrap()
+                                    .join(format!("pad-{}.img", idx));
+                                if pad_path.exists() {
+                                    gpt_metadata_paths.push(pad_path);
+                                }
+                            }
+                        }
 
                         info!(
                             sl!(),
