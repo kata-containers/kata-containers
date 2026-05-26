@@ -1,0 +1,82 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# runtime-rs non-TEE EROFS variant. This relies on the no-rwlayer EROFS path
+# where the overlay upper/work directories are backed by guest memory under
+# /run/kata-containers, so NIM cache writes can stay on the container rootfs.
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_INSTRUCT}
+  labels:
+    app: ${POD_NAME_INSTRUCT}
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata
+  imagePullSecrets:
+    - name: ngc-secret-instruct
+  containers:
+  - name: ${POD_NAME_INSTRUCT}
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    # Ports exposed by the container:
+    ports:
+      - containerPort: 8000
+        name: http-openai
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 150
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 45
+    env:
+      - name: NGC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: ngc-api-key-instruct
+            key: api-key
+    # GPU resource limit (for NVIDIA GPU)
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        cpu: "16"
+        memory: "128Gi"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-instruct
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-instruct
+type: Opaque
+data:
+  api-key: "${NGC_API_KEY_BASE64}"

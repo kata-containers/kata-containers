@@ -167,8 +167,12 @@ setup() {
     # Same pattern as k8s-nvidia-nim.bats: choose manifest by TEE; each YAML has literal secret names.
     local tee_suffix=""
     [[ "${TEE}" = "true" ]] && tee_suffix="-tee"
-    export NIM_YAML_IN="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}.yaml.in"
-    export NIM_YAML="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}.yaml"
+    local runtime_rs_suffix=""
+    if is_runtime_rs && [[ "${TEE}" != "true" ]]; then
+        runtime_rs_suffix="-runtime-rs"
+    fi
+    export NIM_YAML_IN="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}${runtime_rs_suffix}.yaml.in"
+    export NIM_YAML="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}${runtime_rs_suffix}.yaml"
 
     if [[ "${TEE}" = "true" ]]; then
         setup_kbs_credentials

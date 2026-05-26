@@ -9,7 +9,7 @@
 debug: false
 
 snapshotter:
-  setup: ["nydus"]
+  setup: ["nydus", "erofs"]
 
 # Enable NVIDIA GPU shims
 # Disable all shims at once, then enable only the ones we need
@@ -36,7 +36,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
+      snapshotter: "erofs"
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
