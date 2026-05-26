@@ -388,6 +388,10 @@ impl QemuInner {
                 if let Some(subchannel) = cmdline.take_ccw_subchannel() {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                let bridge_count = self.config.device_info.default_bridges;
+                if bridge_count > 0 {
+                    qmp.init_pci_bridges(bridge_count);
+                }
                 self.qmp = Some(qmp);
             }
             Err(e) => {
