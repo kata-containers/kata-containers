@@ -143,6 +143,81 @@ fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
     }
 }
 
+fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
+    if !paths.use_drop_in {
+        anyhow::bail!(
+            "Containerd user drop-in requires drop-in support, but runtime config is in non-drop-in mode"
+        );
+    }
+
+    let (base_drop_in, base_import_path) = if paths.drop_in_file.starts_with("/etc/containerd/") {
+        (
+            Path::new(&paths.drop_in_file).to_path_buf(),
+            paths.drop_in_file.clone(),
+        )
+    } else {
+        (
+            Path::new("/host").join(paths.drop_in_file.trim_start_matches('/')),
+            paths.drop_in_file.clone(),
+        )
+    };
+
+    let parent = base_drop_in.parent().ok_or_else(|| {
+        anyhow::anyhow!("Failed to resolve parent directory for {:?}", base_drop_in)
+    })?;
+    let user_file_name = "zz-kata-deploy-user.toml";
+    let host_path = parent.join(user_file_name);
+
+    let import_parent = Path::new(&base_import_path)
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to resolve import parent for {base_import_path}"))?;
+    let import_path = import_parent
+        .join(user_file_name)
+        .to_string_lossy()
+        .to_string();
+
+    Ok((host_path, import_path))
+}
+
+fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -> Result<()> {
+    let Some(source_file) = config.containerd_user_drop_in_source_file.as_ref() else {
+        return Ok(());
+    };
+
+    let source_path = Path::new(source_file);
+    if !source_path.exists() {
+        anyhow::bail!(
+            "Configured CONTAINERD_USER_DROP_IN_SOURCE_FILE does not exist: {}",
+            source_file
+        );
+    }
+
+    let (user_drop_in_path, user_drop_in_import_path) =
+        get_user_containerd_drop_in_output_path(paths)?;
+    if let Some(parent) = user_drop_in_path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!("Failed to create user containerd drop-in directory: {parent:?}")
+        })?;
+    }
+
+    fs::copy(source_path, &user_drop_in_path).with_context(|| {
+        format!(
+            "Failed to copy user containerd drop-in from {:?} to {:?}",
+            source_path, user_drop_in_path
+        )
+    })?;
+
+    if let Some(imports_file) = &paths.imports_file {
+        toml_utils::append_to_toml_array(
+            Path::new(imports_file),
+            ".imports",
+            &format!("\"{}\"", user_drop_in_import_path),
+        )?;
+    }
+
+    Ok(())
+}
+
 fn write_containerd_runtime_config(
     config_file: &Path,
     pluginid: &str,
@@ -445,6 +520,8 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
     }
 
+    configure_user_containerd_drop_in(config, &paths)?;
+
     log::info!("Successfully configured all containerd runtimes");
     Ok(())
 }
@@ -454,6 +531,21 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     let paths = config.get_containerd_paths(runtime).await?;
 
     if paths.use_drop_in {
+        if config.containerd_user_drop_in_source_file.is_some() {
+            let (user_drop_in_path, user_drop_in_import_path) =
+                get_user_containerd_drop_in_output_path(&paths)?;
+            if let Some(imports_file) = &paths.imports_file {
+                toml_utils::remove_from_toml_array(
+                    Path::new(imports_file),
+                    ".imports",
+                    &format!("\"{}\"", user_drop_in_import_path),
+                )?;
+            }
+            if user_drop_in_path.exists() {
+                fs::remove_file(&user_drop_in_path)?;
+            }
+        }
+
         // Remove drop-in from imports array (if we added it; K3s/RKE2 have imports_file = None)
         if let Some(imports_file) = &paths.imports_file {
             toml_utils::remove_from_toml_array(

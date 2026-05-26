@@ -1,0 +1,16 @@
+{{- if .Values.containerd.userDropIn | trim }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-containerd-user-dropin-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-containerd-user-dropin
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+data:
+  containerd-user-dropin.toml: |
+{{ .Values.containerd.userDropIn | indent 4 }}
+{{- end }}

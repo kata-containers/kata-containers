@@ -25,6 +25,14 @@ containerd:
   # or auto-detects based on the runtime (k0s, microk8s, k3s/rke2).
   # Example: "my-config.toml"
   configFileName: ""
+  # Optional user-provided containerd drop-in TOML content.
+  # This is written as an extra drop-in loaded after kata-deploy's generated drop-in,
+  # so user keys can override kata-deploy defaults.
+  # Example: set erofs snapshotter default size to zero:
+  # userDropIn: |
+  #   [plugins.'io.containerd.snapshotter.v1.erofs']
+  #     default_size = 0
+  userDropIn: ""
 
 # Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
 # Examples:
