@@ -60,6 +60,10 @@ pub struct Qmp {
     // Transferred from QemuCmdLine after boot so that hotplug allocations
     // continue from where boot-time allocations left off.
     ccw_subchannel: Option<CcwSubChannel>,
+
+    // Hot-plug slot tracking for cold-plugged pci-bridge-N devices. Mirrors
+    // virtcontainers/types/bridges.go Bridge.Devices (slots 1..30).
+    pci_bridge_devices: HashMap<String, HashMap<i64, String>>,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -87,6 +91,7 @@ impl Qmp {
                 )),
                 guest_memory_block_size: 0,
                 ccw_subchannel: None,
+                pci_bridge_devices: HashMap::new(),
             };
 
             let info = qmp.qmp.handshake().context("qmp handshake failed")?;
@@ -115,6 +120,14 @@ impl Qmp {
 
     pub fn set_ccw_subchannel(&mut self, subchannel: CcwSubChannel) {
         self.ccw_subchannel = Some(subchannel);
+    }
+
+    /// Initialise PCI bridge slot maps for cold-plugged `pci-bridge-N` devices.
+    pub fn init_pci_bridges(&mut self, count: u32) {
+        for idx in 0..count {
+            self.pci_bridge_devices
+                .insert(format!("pci-bridge-{idx}"), HashMap::new());
+        }
     }
 
     pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
@@ -741,44 +754,64 @@ impl Qmp {
     }
 
     fn find_free_slot(&mut self) -> Result<(String, i64)> {
-        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
-        for pci_info in &pci {
-            for pci_dev in &pci_info.devices {
-                let pci_bridge = match &pci_dev.pci_bridge {
-                    Some(bridge) => bridge,
-                    None => continue,
-                };
+        // Prefer in-memory bridge state (matches Go virtcontainers/types/bridges.go).
+        let mut bridge_ids: Vec<&str> = self
+            .pci_bridge_devices
+            .keys()
+            .map(String::as_str)
+            .collect();
+        bridge_ids.sort_by(|a, b| {
+            let parse_idx = |id: &str| {
+                id.strip_prefix("pci-bridge-")
+                    .and_then(|n| n.parse::<u32>().ok())
+            };
+            match (parse_idx(a), parse_idx(b)) {
+                (Some(ai), Some(bi)) => ai.cmp(&bi),
+                _ => a.cmp(b),
+            }
+        });
 
-                info!(sl!(), "found PCI bridge: {}", pci_dev.qdev_id);
-
-                if let Some(bridge_devices) = &pci_bridge.devices {
-                    let occupied_slots = bridge_devices
-                        .iter()
-                        .map(|pci_dev| pci_dev.slot)
-                        .collect::<Vec<_>>();
-
+        for bridge_id in bridge_ids {
+            let occupied = self.pci_bridge_devices.get(bridge_id).unwrap();
+            for slot in PCI_BRIDGE_FIRST_HOTPLUG_SLOT..=PCI_BRIDGE_MAX_CAPACITY {
+                if !occupied.contains_key(&slot) {
                     info!(
                         sl!(),
-                        "already occupied slots on bridge {}: {:#?}",
-                        pci_dev.qdev_id,
-                        occupied_slots
+                        "found free slot on bridge {}: {}", bridge_id, slot
                     );
-
-                    // from virtcontainers' bridges.go
-                    let pci_bridge_max_capacity = 30;
-                    for slot in 0..pci_bridge_max_capacity {
-                        if !occupied_slots.contains(&slot) {
-                            info!(
-                                sl!(),
-                                "found free slot on bridge {}: {}", pci_dev.qdev_id, slot
-                            );
-                            return Ok((pci_dev.qdev_id.clone(), slot));
-                        }
-                    }
+                    return Ok((bridge_id.to_string(), slot));
                 }
             }
         }
+
+        // Fallback: walk query-pci tree. Under OVMF, pcie-pci-bridge (pci-bridge-N)
+        // is nested under rp-pci-bridge-N, not at the root of the PCI tree.
+        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
+        for pci_info in &pci {
+            if let Some((bus, slot)) = find_free_slot_in_pci_devices(&pci_info.devices) {
+                info!(
+                    sl!(),
+                    "found free slot on bridge {} via query-pci: {}", bus, slot
+                );
+                return Ok((bus, slot));
+            }
+        }
+
         Err(anyhow!("no free slots on PCI bridges"))
+    }
+
+    fn record_pci_bridge_slot(&mut self, bridge_id: &str, slot: i64, device_id: &str) {
+        if let Some(devices) = self.pci_bridge_devices.get_mut(bridge_id) {
+            devices.insert(slot, device_id.to_owned());
+        } else {
+            warn!(
+                sl!(),
+                "record_pci_bridge_slot: bridge {} not in pci_bridge_devices, slot {} for device {} not tracked",
+                bridge_id,
+                slot,
+                device_id
+            );
+        }
     }
 
     fn pass_fd(&mut self, fd: RawFd, fdname: &str) -> Result<()> {
@@ -833,7 +866,7 @@ impl Qmp {
 
         let frontend_id = format!("frontend-{}", virtio_net_device.get_netdev_id());
 
-        let bus = if use_ccw_bus {
+        let pci_hotplug = if use_ccw_bus {
             let subchannel = self.ccw_subchannel.as_mut().ok_or_else(|| {
                 anyhow!("CCW subchannel not available for virtio-net-ccw hotplug")
             })?;
@@ -853,11 +886,18 @@ impl Qmp {
                 "vectors".to_owned(),
                 (2 * virtio_net_device.get_num_queues() + 2).into(),
             );
-            if virtio_net_device.get_disable_modern() {
-                netdev_frontend_args.insert("disable-modern".to_owned(), true.into());
-            }
-            Some(bus)
+            // Never force legacy (disable-modern) virtio on a hot-plugged PCI
+            // NIC.  A legacy-only virtio device needs an I/O BAR, but the NIC is
+            // hot-plugged behind a pcie-pci-bridge whose I/O window can be
+            // exhausted (e.g. by the GPU root-port pool), making the I/O BAR
+            // unassignable and the guest virtio-pci probe fail with -EIO.  The
+            // Go runtime hot-plugs NICs with disable-modern=false for the same
+            // reason; modern/transitional virtio uses MMIO and has no such
+            // dependency.  disable-modern is only meaningful for cold-plug.
+            Some((bus, slot))
         };
+
+        let bus = pci_hotplug.as_ref().map(|(bus, _)| bus.clone());
 
         let mut fd_names = vec![];
         for (idx, fd) in netdev.get_fds().iter().enumerate() {
@@ -946,6 +986,10 @@ impl Qmp {
             sl!(),
             "hotplug_network_device(): successfully added {}", frontend_id
         );
+
+        if let Some((bridge_id, slot)) = pci_hotplug {
+            self.record_pci_bridge_slot(&bridge_id, slot, &frontend_id);
+        }
 
         Ok(())
     }
@@ -1354,7 +1398,7 @@ impl Qmp {
 
             self.device_add_with_rollback(
                 &node_name,
-                Some(bus),
+                Some(bus.clone()),
                 block_driver,
                 blkdev_add_args,
             )?;
@@ -1362,6 +1406,7 @@ impl Qmp {
             let pci_path = self
                 .get_device_by_qdev_id(&node_name)
                 .context("get device by qdev_id failed")?;
+            self.record_pci_bridge_slot(&bus, slot, &node_name);
             info!(
                 sl!(),
                 "hotplug block device return pci path: {:?}", &pci_path
@@ -1589,6 +1634,43 @@ fn vcpu_id_from_core_id(core_id: i64) -> String {
 /// s390x and ppc64le use a flat CPU topology.
 fn is_flat_cpu_topology(driver: &str) -> bool {
     matches!(driver, "host-s390x-cpu" | "host-powerpc64-cpu")
+}
+
+const PCI_BRIDGE_MAX_CAPACITY: i64 = 30;
+const PCI_BRIDGE_FIRST_HOTPLUG_SLOT: i64 = 1;
+
+fn free_slot_on_pci_bridge(pci_dev: &PciDeviceInfo) -> Option<i64> {
+    if !pci_dev.qdev_id.starts_with("pci-bridge-") {
+        return None;
+    }
+
+    let occupied_slots: Vec<i64> = pci_dev
+        .pci_bridge
+        .as_ref()
+        .and_then(|bridge| bridge.devices.as_ref())
+        .map(|devices| devices.iter().map(|dev| dev.slot).collect())
+        .unwrap_or_default();
+
+    (PCI_BRIDGE_FIRST_HOTPLUG_SLOT..=PCI_BRIDGE_MAX_CAPACITY)
+        .find(|slot| !occupied_slots.contains(slot))
+}
+
+fn find_free_slot_in_pci_devices(devices: &[PciDeviceInfo]) -> Option<(String, i64)> {
+    for pci_dev in devices {
+        if let Some(slot) = free_slot_on_pci_bridge(pci_dev) {
+            return Some((pci_dev.qdev_id.clone(), slot));
+        }
+
+        if let Some(ref bridge) = pci_dev.pci_bridge {
+            if let Some(ref children) = bridge.devices {
+                if let Some(found) = find_free_slot_in_pci_devices(children) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+
+    None
 }
 
 // The get_pci_path_by_qdev_id function searches a device list for a device matching a given qdev_id,

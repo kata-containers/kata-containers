@@ -414,6 +414,10 @@ impl QemuInner {
                         self.config.shared_fs.shared_fs.as_deref(),
                     ).context("Failed to setup virtio-mem during VM initialization")?;
                 }
+                let bridge_count = self.config.device_info.default_bridges;
+                if bridge_count > 0 {
+                    qmp.init_pci_bridges(bridge_count);
+                }
                 self.qmp = Some(qmp);
             }
             Err(e) => {

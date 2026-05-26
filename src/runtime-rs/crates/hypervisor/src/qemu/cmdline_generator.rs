@@ -1397,10 +1397,6 @@ impl DeviceVirtioNet {
     pub fn get_num_queues(&self) -> u32 {
         self.num_queues
     }
-
-    pub fn get_disable_modern(&self) -> bool {
-        self.disable_modern
-    }
 }
 
 #[async_trait]
