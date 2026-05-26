@@ -37,8 +37,6 @@ on:
         required: true
       AZ_SUBSCRIPTION_ID:
         required: true
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
       NGC_API_KEY:
@@ -129,7 +127,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:

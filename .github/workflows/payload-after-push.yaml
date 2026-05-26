@@ -53,7 +53,6 @@ jobs:
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-ppc64le:

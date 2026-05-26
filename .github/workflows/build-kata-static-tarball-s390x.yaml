@@ -21,8 +21,6 @@ on:
         type: string
         default: ""
     secrets:
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
