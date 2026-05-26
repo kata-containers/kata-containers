@@ -118,6 +118,7 @@ nvgpu-tarball:
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
 		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
+		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
 else
 nvgpu-tarball:
@@ -304,12 +305,15 @@ kata-deploy-binary-tarball:
 nydus-snapshotter-for-coco-guest-pull-tarball:
 	$(call BUILD_KATA_DEPLOY_COMPONENT,nydus-snapshotter-for-coco-guest-pull)
 
+FINAL_TARBALL_MERGE_MODE ?= merge
+
 merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh \
 		build \
 		"$(MK_DIR)/../../../../versions.yaml" \
 		kata-static.tar.zst \
-		"$(FINAL_TARBALL_INPUTS)"
+		"$(FINAL_TARBALL_INPUTS)" \
+		"$(FINAL_TARBALL_MERGE_MODE)"
 
 .PHONY: install-prebuilt-artifacts
 install-prebuilt-artifacts:
