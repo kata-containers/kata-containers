@@ -26,7 +26,7 @@ use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::mount::create_mount_destination;
+use kata_sys_util::mount::{create_mount_destination, Mounter};
 use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
@@ -313,22 +313,21 @@ pub async fn handle_multi_layer_erofs_group(
     )
     .context("failed to create overlay mount destination")?;
 
-    let overlay_options = format!(
-        "upperdir={},lowerdir={},workdir={}",
-        upperdir.display(),
-        lowerdir,
-        workdir.display()
-    );
+    let overlay_mount = kata_types::mount::Mount {
+        source: OVERLAY_TYPE.to_string(),
+        destination: PathBuf::from(&ext4.mount_point),
+        fs_type: OVERLAY_TYPE.to_string(),
+        options: vec![
+            format!("upperdir={}", upperdir.display()),
+            format!("lowerdir={}", lowerdir),
+            format!("workdir={}", workdir.display()),
+        ],
+        ..Default::default()
+    };
 
-    baremount(
-        Path::new(OVERLAY_TYPE),
-        Path::new(&ext4.mount_point),
-        OVERLAY_TYPE,
-        nix::mount::MsFlags::empty(),
-        &overlay_options,
-        &logger,
-    )
-    .context("failed to mount overlay")?;
+    overlay_mount
+        .mount(Path::new(&ext4.mount_point))
+        .context("failed to mount overlay")?;
 
     info!(
         logger,
