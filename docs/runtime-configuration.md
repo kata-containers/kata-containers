@@ -3,9 +3,9 @@
 
 ## Drop-in Files
 
-When kata-deploy installs Kata Containers, the base configuration files at 
-`/opt/kata/bin/share/defaults` should not be modified directly. Instead, use 
-drop-in configuration files to customize settings. This approach ensures your 
+When kata-deploy installs Kata Containers, the base configuration files at
+`/opt/kata/share/defaults/kata-containers` should not be modified directly. Instead, use
+drop-in configuration files to customize settings. This approach ensures your
 customizations survive kata-deploy upgrades.
 
 ### How Drop-in Files Work

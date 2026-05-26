@@ -96,7 +96,7 @@ Again, view the default [`values.yaml`](#parameters) file for more details.
 ### Drop-In Runtime Configuration
 
 The base runtime configuration shipped with Kata Containers can be modified using an
-overlay method. This can be done directly on the filesystem using the instructions 
+overlay method. This can be done directly on the filesystem using the instructions
 found [here](runtime-configuration.md#drop-in-files).
 You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
 chart to achieve the same results.

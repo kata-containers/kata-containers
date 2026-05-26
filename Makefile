@@ -56,6 +56,11 @@ CSPELL_IMAGE ?= ghcr.io/streetsidesoftware/cspell@sha256:f02e91044d7ab4c31aab76e
 docs-spellcheck:
 	docker run --rm -v ${PWD}:/workdir:ro -w /workdir ${CSPELL_IMAGE} --config .cspell.yaml "**/*.md" "**/*.rst" "**/*.txt"
 
+docs-editorconfig-checker:
+	docker run --rm --volume=${PWD}:/check mstruebing/editorconfig-checker:v3.7
+
+docs-lint: docs-spellcheck docs-editorconfig-checker
+
 .PHONY: \
 	all \
 	kata-tarball \
@@ -63,4 +68,7 @@ docs-spellcheck:
 	default \
 	static-checks \
 	docs-build \
-	docs-serve
+	docs-serve \
+	docs-spellcheck \
+	docs-editorconfig-checker \
+	docs-lint
