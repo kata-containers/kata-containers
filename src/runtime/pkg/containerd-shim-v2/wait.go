@@ -62,51 +62,71 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 
 	timeStamp := time.Now()
 
-	s.mu.Lock()
 	if execID == "" {
+		s.mu.Lock()
+		c.status = task.Status_STOPPED
+		c.exit = uint32(ret)
+		c.exitTime = timeStamp
+		s.mu.Unlock()
+
+		// Publish the exit code before sandbox teardown. Do not hold s.mu
+		// during Stop/Delete: containerd's Wait RPC needs the mutex to look
+		// up the container, and slow guest shutdown must not block it.
+		c.exitCh <- uint32(ret)
+		shimLog.WithFields(logrus.Fields{
+			"container": c.id,
+			"exit-code": ret,
+		}).Info("Publishing container exit status")
+		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
+
+		// Notify containerd before sandbox teardown. Docker/containerd rely on
+		// the TaskExit event, not only the Wait RPC; slow guest shutdown can
+		// take long enough that the shim is SIGKILL'd before this would run.
+		go cReap(s, int(ret), c.id, execID, timeStamp)
+
 		// Take care of the use case where it is a sandbox.
 		// Right after the container representing the sandbox has
 		// been deleted, let's make sure we stop and delete the
 		// sandbox.
-
 		if c.cType.IsSandbox() {
-			// cancel watcher
-			if s.monitor != nil {
+			s.mu.Lock()
+			monitor := s.monitor
+			s.mu.Unlock()
+			if monitor != nil {
 				shimLog.WithField("sandbox", s.sandbox.ID()).Info("cancel watcher")
-				s.monitor <- nil
+				monitor <- nil
 			}
-			if err = s.sandbox.Stop(ctx, true); err != nil {
-				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
-			}
+			go func() {
+				if err := s.sandbox.Stop(s.ctx, true); err != nil {
+					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+				}
 
-			if err = s.sandbox.Delete(ctx); err != nil {
-				shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
-			}
+				if err := s.sandbox.Delete(s.ctx); err != nil {
+					shimLog.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+				}
+			}()
 		} else {
-			if _, err = s.sandbox.StopContainer(ctx, c.id, true); err != nil {
-				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
-			}
+			go func() {
+				if _, err := s.sandbox.StopContainer(s.ctx, c.id, true); err != nil {
+					shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
+				}
+			}()
 		}
-		c.status = task.Status_STOPPED
-		c.exit = uint32(ret)
-		c.exitTime = timeStamp
-
-		c.exitCh <- uint32(ret)
-		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
 	} else {
+		s.mu.Lock()
 		execs.status = task.Status_STOPPED
 		execs.exitCode = ret
 		execs.exitTime = timeStamp
+		s.mu.Unlock()
 
 		execs.exitCh <- uint32(ret)
 		shimLog.WithFields(logrus.Fields{
 			"container": c.id,
 			"exec":      execID,
 		}).Debug("The container exec status is StatusStopped")
-	}
-	s.mu.Unlock()
 
-	go cReap(s, int(ret), c.id, execID, timeStamp)
+		go cReap(s, int(ret), c.id, execID, timeStamp)
+	}
 
 	return ret, nil
 }
