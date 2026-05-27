@@ -446,6 +446,7 @@ pub fn update_env_pci(
 
         let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
+        let mut translation_skipped = false;
         for host_addr_str in val.split(',') {
             let host_addr = match pci::Address::from_str(host_addr_str) {
                 Ok(addr) => addr,
@@ -458,15 +459,41 @@ pub fn update_env_pci(
                     continue 'env_loop;
                 }
             };
-            let host_guest = pcimap
-                .get(cid)
-                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
-            let guest_addr = host_guest
-                .get(&host_addr)
-                .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+            let host_guest = match pcimap.get(cid) {
+                Some(m) => m,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        "update_env_pci: no per-container pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
+            let guest_addr = match host_guest.get(&host_addr) {
+                Some(g) => g,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        pcimap_size = host_guest.len(),
+                        "update_env_pci: host PCI address missing in pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
 
             guest_addrs.push(format!("{guest_addr}"));
             addr_map.insert(host_addr_str.to_string(), format!("{guest_addr}"));
+        }
+
+        if translation_skipped {
+            // Keep both PCIDEVICE_* and matching *_INFO untouched.
+            continue 'env_loop;
         }
 
         pci_dev_map.insert(format!("{name}_INFO"), addr_map);
@@ -1242,6 +1269,60 @@ mod tests {
         );
         // Real PCI addresses should still be translated
         assert_eq!(env[2], "PCIDEVICE_REAL=0000:01:01.0");
+    }
+
+    #[test]
+    fn test_update_env_pci_missing_cid_in_pcimap() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:06:02.6".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+                .to_string(),
+            "OTHER=value".to_string(),
+        ];
+        let pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+
+        let cid = "container-0".to_string();
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(
+            res.is_ok(),
+            "must not error when pcimap[cid] missing: {:?}",
+            res
+        );
+
+        // Both PCIDEVICE_* and *_INFO stay untouched.
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:06:02.6");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+        );
+        assert_eq!(env[2], "OTHER=value");
+    }
+
+    #[test]
+    fn test_update_env_pci_unknown_host_bdf() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}".to_string(),
+        ];
+
+        let cid = "container-0".to_string();
+        let mut inner: HashMap<pci::Address, pci::Address> = HashMap::new();
+        inner.insert(
+            pci::Address::from_str("0000:1a:01.0").unwrap(),
+            pci::Address::from_str("0000:01:01.0").unwrap(),
+        );
+        let mut pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pcimap.insert(cid.clone(), inner);
+
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(res.is_ok(), "must not error on partial pcimap: {:?}", res);
+
+        // Must leave env vars untouched (no half-translation).
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}"
+        );
     }
 
     #[test]
