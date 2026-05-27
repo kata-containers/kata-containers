@@ -102,7 +102,18 @@ impl Network for NetworkWithNetns {
         let inner = self.inner.read().await;
         let mut interfaces = vec![];
         for e in &inner.entity_list {
-            interfaces.push(e.network_info.interface().await.context("interface")?);
+            let mut iface = e.network_info.interface().await.context("interface")?;
+            // For cold-plugged physical (VFIO) endpoints, fill device_path
+            // with the guest PCI path so the agent can do PCI-path-based MAC
+            // reconciliation for IB/RoCE VFs. device_path is empty by default
+            // because network_info_from_link builds the Interface before
+            // attach() runs.
+            if iface.device_path.is_empty() {
+                if let Some(pci_path) = e.endpoint.guest_pci_path().await {
+                    iface.device_path = pci_path;
+                }
+            }
+            interfaces.push(iface);
         }
         Ok(interfaces)
     }

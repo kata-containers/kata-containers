@@ -34,4 +34,12 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn attach(&self) -> Result<()>;
     async fn detach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
     async fn save(&self) -> Option<EndpointState>;
+    /// Returns the guest PCI path for this endpoint if it is a cold-plugged
+    /// physical (VFIO) device, e.g. `"05/00"`. Used to populate
+    /// `Interface.device_path` in `update_interface` so the agent can do
+    /// PCI-path-based MAC reconciliation for IB/RoCE VFs.
+    /// Default: `None` (non-physical endpoints do not have a PCI path).
+    async fn guest_pci_path(&self) -> Option<String> {
+        None
+    }
 }
