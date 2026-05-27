@@ -101,17 +101,55 @@ pub fn containerd_version_is_2_or_newer(runtime_version: &str) -> bool {
     false
 }
 
-/// Check if a containerd version string supports drop-in files.
-/// Wrapper around containerd_version_is_2_or_newer for call sites that need Result.
-fn check_containerd_version_supports_drop_in(runtime_version: &str) -> Result<()> {
-    if containerd_version_is_2_or_newer(runtime_version) {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(
-            "containerd version does not support drop-in files (requires >= 2.0), got '{}'",
-            runtime_version
-        ))
+/// Returns true if containerRuntimeVersion (e.g. "containerd://2.2.0-k3s1") indicates
+/// containerd 2.2.0 or newer, false otherwise. Used to check if conf.d auto-import is supported
+/// (containerd >= 2.2.0 always imports /etc/containerd/conf.d/).
+pub fn containerd_version_is_2_2_or_newer(runtime_version: &str) -> bool {
+    let version_re = match Regex::new(r"containerd://(\d+)\.(\d+)") {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    if let Some(caps) = version_re.captures(runtime_version) {
+        if let (Ok(major), Ok(minor)) = (
+            caps.get(1).unwrap().as_str().parse::<u32>(),
+            caps.get(2).unwrap().as_str().parse::<u32>(),
+        ) {
+            return major > 2 || (major == 2 && minor >= 2);
+        }
     }
+    // Also support bare version strings like "2.2.0"
+    let version_re = match Regex::new(r"^(\d+)\.(\d+)") {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    if let Some(caps) = version_re.captures(runtime_version) {
+        if let (Ok(major), Ok(minor)) = (
+            caps.get(1).unwrap().as_str().parse::<u32>(),
+            caps.get(2).unwrap().as_str().parse::<u32>(),
+        ) {
+            return major > 2 || (major == 2 && minor >= 2);
+        }
+    }
+    false
+}
+
+/// Pure version of the drop-in capability check. Takes an optional containerd version string
+/// instead of making its own k8s API call. Used by `get_containerd_paths` which already has the
+/// version available.
+pub fn is_containerd_capable_of_drop_in(runtime: &str, runtime_version: Option<&str>) -> bool {
+    if RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT.contains(&runtime) {
+        return false;
+    }
+
+    // k0s always supports drop-in files (auto-loads from containerd.d/)
+    if runtime == "k0s-worker" || runtime == "k0s-controller" {
+        return true;
+    }
+
+    // Check containerd version - only 2.0+ supports drop-in files properly
+    runtime_version
+        .map(containerd_version_is_2_or_newer)
+        .unwrap_or(false)
 }
 
 pub async fn is_containerd_capable_of_using_drop_in_files(
@@ -121,16 +159,17 @@ pub async fn is_containerd_capable_of_using_drop_in_files(
     if RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT.contains(&runtime) {
         return Ok(false);
     }
-
     // k0s always supports drop-in files (auto-loads from containerd.d/)
-    if runtime == "k0s-worker" || runtime == "k0s-controller" {
-        return Ok(true);
-    }
+    let runtime_version = if runtime == "k0s-worker" || runtime == "k0s-controller" {
+        None
+    } else {
+        Some(k8s::get_container_runtime_version(config).await?)
+    };
 
-    // Check containerd version - only 2.0+ supports drop-in files properly
-    let runtime_version = k8s::get_container_runtime_version(config).await?;
-
-    Ok(check_containerd_version_supports_drop_in(&runtime_version).is_ok())
+    Ok(is_containerd_capable_of_drop_in(
+        runtime,
+        runtime_version.as_deref(),
+    ))
 }
 
 pub async fn configure_cri_runtime(config: &Config, runtime: &str) -> Result<()> {
@@ -211,27 +250,58 @@ mod tests {
         );
     }
 
-    // --- check_containerd_version_supports_drop_in (Result wrapper) ---
+    // --- is_containerd_capable_of_drop_in (pure version) ---
 
     #[rstest]
-    #[case("containerd://2.0.0", true)]
-    #[case("containerd://2.1.5-k3s1", true)]
+    #[case("containerd", Some("containerd://2.2.0"), true)]
+    #[case("containerd", Some("containerd://2.0.0"), true)]
+    #[case("containerd", Some("containerd://1.7.0"), false)]
+    #[case("containerd", None, false)]
+    #[case("crio", Some("containerd://2.2.0"), false)]
+    #[case("crio", None, false)]
+    #[case("k0s-worker", None, true)]
+    #[case("k0s-controller", None, true)]
+    fn test_is_containerd_capable_of_drop_in(
+        #[case] runtime: &str,
+        #[case] version: Option<&str>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(
+            is_containerd_capable_of_drop_in(runtime, version),
+            expected,
+            "runtime: {}, version: {:?}",
+            runtime,
+            version
+        );
+    }
+
+    // --- containerd_version_is_2_2_or_newer ---
+
+    #[rstest]
+    #[case("containerd://2.2.0", true)]
+    #[case("containerd://2.2.0-rc.1", true)]
+    #[case("containerd://2.2.1", true)]
+    #[case("containerd://2.3.0", true)]
+    #[case("containerd://3.0.0", true)]
+    #[case("containerd://2.2.2-bd1.34", true)]
+    #[case("containerd://2.0.0", false)]
+    #[case("containerd://2.1.5", false)]
+    #[case("containerd://2.1.0", false)]
     #[case("containerd://1.7.15", false)]
     #[case("containerd://1.6.28", false)]
     #[case("containerd://", false)]
+    #[case("2.2.0", true)]
+    #[case("2.2.1", true)]
+    #[case("2.3.0", true)]
+    #[case("2.1.0", false)]
     #[case("1.7.0", false)]
     #[case("not-a-version", false)]
-    fn test_check_containerd_version_supports_drop_in(
-        #[case] version: &str,
-        #[case] expected_ok: bool,
-    ) {
-        let result = check_containerd_version_supports_drop_in(version);
+    fn test_containerd_version_is_2_2_or_newer(#[case] version: &str, #[case] expected: bool) {
         assert_eq!(
-            result.is_ok(),
-            expected_ok,
-            "version: {}, result: {:?}",
-            version,
-            result
+            containerd_version_is_2_2_or_newer(version),
+            expected,
+            "version: {}",
+            version
         );
     }
 }
