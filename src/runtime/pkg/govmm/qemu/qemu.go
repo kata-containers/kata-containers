@@ -2078,6 +2078,15 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
+	// Emit `id=` for the QEMU vfio-pci device so that callers
+	// (notably the cold-plug path) can later resolve the device's
+	// guest PCI path via QMP `qom-get` keyed on this ID.
+	// Without this, QEMU auto-generates an internal name and any
+	// `qomGetPciPath(vfioDev.ID)` call fails with "Device 'X' not
+	// found", as currently happens for cold-plugged VFIO devices.
+	if vfioDev.ID != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vfioDev.ID))
+	}
 	if vfioDev.Transport.isVirtioPCI(config) {
 		if vfioDev.VendorID != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("x-pci-vendor-id=%s", vfioDev.VendorID))
