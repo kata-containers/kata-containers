@@ -229,6 +229,7 @@ impl ConfigOps for Runtime {
             && net_model != "macvtap"
             && net_model != "none"
             && net_model != "tcfilter"
+            && net_model != "l3forwarding"
         {
             return Err(std::io::Error::other(format!(
                 "Invalid internetworking_model `{net_model}` in configuration file",

@@ -6,6 +6,7 @@
 
 pub mod none_model;
 pub mod tc_filter_model;
+pub mod l3_forwarding;
 pub mod test_network_model;
 use std::sync::Arc;
 
@@ -15,10 +16,12 @@ use async_trait::async_trait;
 use super::NetworkPair;
 
 pub(crate) const TC_FILTER_NET_MODEL_STR: &str = "tcfilter";
+pub(crate) const L3_FORWARDING_NET_MODEL_STR: &str = "l3forwarding";
 
 pub enum NetworkModelType {
     NoneModel,
     TcFilter,
+    L3Forwarding,
 }
 
 #[async_trait]
@@ -32,6 +35,9 @@ pub fn new(model: &str) -> Result<Arc<dyn NetworkModel>> {
     match model {
         TC_FILTER_NET_MODEL_STR => Ok(Arc::new(
             tc_filter_model::TcFilterModel::new().context("new tc filter model")?,
+        )),
+        L3_FORWARDING_NET_MODEL_STR => Ok(Arc::new(
+            l3_forwarding::L3ForwardingModel::new().context("new l3 forwarding model")?,
         )),
         _ => Ok(Arc::new(
             none_model::NoneModel::new().context("new none model")?,
