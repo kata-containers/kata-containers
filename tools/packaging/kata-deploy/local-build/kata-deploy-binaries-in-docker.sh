@@ -49,8 +49,10 @@ if [[ "${CROSS_BUILD}" == "true" ]]; then
        [[ -z "${r}" ]] && sudo docker run --privileged --rm tonistiigi/binfmt --install "${TARGET_ARCH}"
 fi
 
-if [[ "${script_dir}" != "${PWD}" ]]; then
-	ln -sf "${script_dir}/build" "${PWD}/build"
+if [[ "${script_dir}" != "${PWD}" && ! -L "${PWD}/build" ]]; then
+	# If a parallel job creates the link between the check and our ln,
+	# accept that and move on; any other failure aborts.
+	ln -s "${script_dir}/build" "${PWD}/build" 2>/dev/null || [[ -L "${PWD}/build" ]]
 fi
 
 # This is the gid of the "docker" group on host. In case of docker in docker builds
@@ -66,7 +68,9 @@ fi
 
 remove_dot_docker_dir=false
 if [[ ! -d "${HOME}/.docker" ]]; then
-	mkdir "${HOME}"/.docker
+	# Tolerate the dir being created by a parallel job between the check
+	# above and this mkdir.
+	mkdir -p "${HOME}"/.docker
 	remove_dot_docker_dir=true
 fi
 

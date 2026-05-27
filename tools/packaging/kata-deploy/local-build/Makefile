@@ -69,6 +69,62 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
 endif
 
+ifeq ($(ARCH), x86_64)
+NVGPU_BASE_TARBALLS = \
+	agent-tarball \
+	busybox-tarball \
+	coco-guest-components-tarball \
+	kernel-nvidia-gpu-tarball \
+	ovmf-sev-tarball \
+	ovmf-tdx-tarball \
+	ovmf-tarball \
+	pause-image-tarball \
+	qemu-snp-experimental-tarball \
+	qemu-tdx-experimental-tarball \
+	qemu-tarball \
+	virtiofsd-tarball \
+	serial-targets
+else ifeq ($(ARCH), aarch64)
+NVGPU_BASE_TARBALLS = \
+	agent-tarball \
+	busybox-tarball \
+	coco-guest-components-tarball \
+	kernel-nvidia-gpu-tarball \
+	ovmf-tarball \
+	pause-image-tarball \
+	qemu-tarball \
+	virtiofsd-tarball \
+	serial-targets
+endif
+NVGPU_FINAL_TARBALL_INPUTS = \
+	kata-static-kernel-nvidia-gpu.tar.zst \
+	kata-static-ovmf-sev.tar.zst \
+	kata-static-ovmf-tdx.tar.zst \
+	kata-static-ovmf.tar.zst \
+	kata-static-pause-image.tar.zst \
+	kata-static-qemu-snp-experimental.tar.zst \
+	kata-static-qemu-tdx-experimental.tar.zst \
+	kata-static-qemu.tar.zst \
+	kata-static-virtiofsd.tar.zst \
+	kata-static-rootfs-image-nvidia-gpu.tar.zst \
+	kata-static-rootfs-image-nvidia-gpu-confidential.tar.zst \
+	kata-static-shim-v2-go.tar.zst \
+	kata-static-shim-v2-rust.tar.zst
+
+
+ifneq ($(NVGPU_BASE_TARBALLS),)
+nvgpu-tarball:
+	${MAKE} -f $(MK_PATH) kata-tarball \
+		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball" \
+		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
+		FINAL_TARBALL_MERGE_MODE=passthrough \
+		DEPS=
+else
+nvgpu-tarball:
+	@echo "nvgpu-tarball: unsupported on $(ARCH)"; exit 1
+endif
+
 define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
@@ -91,13 +147,18 @@ copy-scripts-for-the-tools-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "tools"
 
 all-parallel:
-	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
+	${MAKE} -f $(MK_PATH) all -j $(shell nproc) --output-sync=target V=
+	${MAKE} -f $(MK_PATH) shim-v2-go-tarball shim-v2-rust-tarball V=
 
 all: ${BASE_TARBALLS}
 
-serial-targets:
+serial-targets: $(filter-out serial-targets,$(BASE_TARBALLS))
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	${BASE_SERIAL_TARBALLS}
+
+# Optional explicit allowlist for merge-builds input tarballs.
+# Keep empty for normal targets; set explicitly for NVIDIA flow.
+FINAL_TARBALL_INPUTS ?=
 
 %-tarball-build:
 	$(call BUILD,$*)
@@ -244,9 +305,17 @@ kata-deploy-binary-tarball:
 nydus-snapshotter-for-coco-guest-pull-tarball:
 	$(call BUILD_KATA_DEPLOY_COMPONENT,nydus-snapshotter-for-coco-guest-pull)
 
-merge-builds:
-	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
+FINAL_TARBALL_MERGE_MODE ?= merge
 
+merge-builds:
+	$(MK_DIR)/kata-deploy-merge-builds.sh \
+		build \
+		"$(MK_DIR)/../../../../versions.yaml" \
+		kata-static.tar.zst \
+		"$(FINAL_TARBALL_INPUTS)" \
+		"$(FINAL_TARBALL_MERGE_MODE)"
+
+.PHONY: install-prebuilt-artifacts
 install-prebuilt-artifacts:
 	mv kata-artifacts $(MK_DIR)/build
 
