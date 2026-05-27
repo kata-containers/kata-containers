@@ -201,8 +201,12 @@ function prelabel_node_for_kata_deploy() {
 function prepull_kata_deploy_images() {
 	local kata_deploy_image="${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}"
 
-	info "Pre-pulling kata-deploy image (devmapper): ${kata_deploy_image}"
-	sudo ctr -n k8s.io images pull --snapshotter devmapper "${kata_deploy_image}"
+	# Pull without --snapshotter: configure_devmapper sets
+	# unpack_config = [{platform: linux/amd64, snapshotter: devmapper}]
+	# in containerd.toml, so the transfer service unpacks into devmapper
+	# directly using that config — no SnapshotterCapabilities auto-discovery.
+	info "Pre-pulling kata-deploy image: ${kata_deploy_image}"
+	sudo ctr -n k8s.io images pull "${kata_deploy_image}"
 
 	# Resolve NFD image version from the helm dependency lock file
 	pushd "${helm_chart_dir}" > /dev/null
@@ -215,8 +219,8 @@ function prepull_kata_deploy_images() {
 			| grep "version:" | awk '{print $2}')
 		if [[ -n "${nfd_version}" ]]; then
 			local nfd_image="registry.k8s.io/nfd/node-feature-discovery:v${nfd_version}"
-			info "Pre-pulling NFD image (devmapper): ${nfd_image}"
-			sudo ctr -n k8s.io images pull --snapshotter devmapper "${nfd_image}" || true
+			info "Pre-pulling NFD image: ${nfd_image}"
+			sudo ctr -n k8s.io images pull "${nfd_image}" || true
 		fi
 	fi
 }

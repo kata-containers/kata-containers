@@ -187,10 +187,14 @@ function init() {
 	nginx_digest=$("${GOPATH}/bin/yq" ".docker_images.nginx.digest" "${versions_file}")
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
-	# Pull nginx image
+	# Pull nginx into the content store (no --snapshotter: avoids the
+	# SnapshotterCapabilities RPC that containerd v2.x client.Pull triggers,
+	# which devmapper fails with "no unpack platforms defined").
+	# ctr run --snapshotter devmapper later triggers image.Unpack() via the
+	# container-creation path, which bypasses SnapshotterCapabilities entirely.
 	sudo "${CTR_EXE}" image pull "${nginx_image}"
 	if [ $? != 0 ]; then
-		die "Unable to retry docker image ${nginx_image}"
+		die "Unable to pull docker image ${nginx_image}"
 	fi
 }
 
