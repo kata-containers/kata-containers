@@ -1316,6 +1316,11 @@ type Hypervisor interface {
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
 	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
 	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	// ResolveColdPlugVFIOGuestPciPaths resolves the in-guest PCI path for each
+	// VFIODev with IsPCIe=true and an empty GuestPciPath, writing the result
+	// back onto the device. Hypervisors that do not require this (e.g. CLH,
+	// which already populates GuestPciPath during hot-plug) return nil.
+	ResolveColdPlugVFIOGuestPciPaths(ctx context.Context, vfioDevs []*config.VFIODev) error
 	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
 	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
 	GetTotalMemoryMB(ctx context.Context) uint32

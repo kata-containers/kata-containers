@@ -1334,3 +1334,7 @@ func (fc *firecracker) GenerateSocket(id string) (interface{}, error) {
 func (fc *firecracker) IsRateLimiterBuiltin() bool {
 	return true
 }
+
+func (fc *firecracker) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
+	return nil
+}

@@ -1984,3 +1984,7 @@ func pathExists(path string) bool {
 	}
 	return true
 }
+
+func (clh *cloudHypervisor) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
+	return nil
+}

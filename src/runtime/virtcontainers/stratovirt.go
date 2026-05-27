@@ -1309,3 +1309,7 @@ func (s *stratovirt) GenerateSocket(id string) (interface{}, error) {
 func (s *stratovirt) IsRateLimiterBuiltin() bool {
 	return false
 }
+
+func (s *stratovirt) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
+	return nil
+}

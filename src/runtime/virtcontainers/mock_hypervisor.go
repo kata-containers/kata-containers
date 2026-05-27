@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
@@ -154,4 +155,8 @@ func (m *mockHypervisor) GenerateSocket(id string) (interface{}, error) {
 
 func (m *mockHypervisor) IsRateLimiterBuiltin() bool {
 	return false
+}
+
+func (m *mockHypervisor) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
+	return nil
 }

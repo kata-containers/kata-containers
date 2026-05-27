@@ -1419,6 +1419,31 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		return nil
 	}
 
+	// Resolve the guest PCI path for cold-plugged VFIO PCIe devices whose
+	// GuestPciPath is not yet known. The path is needed below to stamp
+	// Interface.devicePath in the agent proto; without it the agent falls
+	// back to a by-MAC link lookup, which fails for SR-IOV VFs whose
+	// firmware MAC differs from the CNI-assigned MAC after the
+	// vfio-pci unbind/rebind cycle.
+	var coldPlugVFIODevs []*config.VFIODev
+	for _, dev := range sandbox.devManager.GetAllDevices() {
+		if dev.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+		if vfioDevs, ok := dev.GetDeviceInfo().([]*config.VFIODev); ok {
+			for _, vfioDev := range vfioDevs {
+				if vfioDev.IsPCIe && vfioDev.GuestPciPath.IsNil() && vfioDev.ID != "" {
+					coldPlugVFIODevs = append(coldPlugVFIODevs, vfioDev)
+				}
+			}
+		}
+	}
+	if len(coldPlugVFIODevs) > 0 {
+		if err := sandbox.hypervisor.ResolveColdPlugVFIOGuestPciPaths(ctx, coldPlugVFIODevs); err != nil {
+			k.Logger().WithError(err).Warn("setupNetworks: failed to resolve guest PCI paths for cold-plug VFIO devices")
+		}
+	}
+
 	var err error
 	var endpoints []Endpoint
 	if c == nil || c.id == sandbox.id {
@@ -1429,6 +1454,26 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		// creation, so no need to skip them here anymore.
 		for _, ep := range sandbox.network.Endpoints() {
 			if ep.Type() != VfioEndpointType {
+				// For cold-plugged SR-IOV VFs that appear as PhysicalEndpoints,
+				// the guest PCI path is known after resolveColdPlugVFIOGuestPciPaths
+				// has run (during createContainers). Look it up and stamp it on the
+				// endpoint so that generateVCNetworkStructures emits a non-empty
+				// devicePath in the agent Interface proto. Without this the agent
+				// receives devicePath="" and falls back to a by-MAC link lookup,
+				// which fails when the VF firmware MAC differs from the OVN MAC.
+				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
+					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
+						if !guestPath.IsNil() {
+							ep.SetPciPath(guestPath)
+							k.Logger().WithFields(logrus.Fields{
+								"endpoint-name":  ep.Name(),
+								"host-bdf":       pe.BDF,
+								"guest-pci-path": guestPath.String(),
+							}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
+						}
+					}
+				}
 				endpoints = append(endpoints, ep)
 			}
 		}
