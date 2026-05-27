@@ -168,6 +168,15 @@ impl Network for NetworkWithNetns {
         fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
         Ok(())
     }
+
+    async fn endpoints(&self) -> Vec<std::sync::Arc<dyn crate::network::endpoint::Endpoint>> {
+        let inner = self.inner.read().await;
+        inner
+            .entity_list
+            .iter()
+            .map(|e| e.endpoint.clone())
+            .collect()
+    }
 }
 
 /// Lightweight probe: enter the netns and check whether any non-loopback

@@ -345,6 +345,17 @@ impl ResourceManagerInner {
         }
 
         if let Some(network) = self.network.as_ref() {
+            // For cold-plugged physical-endpoint VFs, the PCIe topology
+            // pre-computes a wrong path because the root port has no explicit
+            // addr and QEMU auto-assigns its slot.  Resolve the actual path
+            // via QMP (query-pci + device search) before sending
+            // update_interface to the agent.
+            resolve_physical_endpoint_pci_paths(
+                network.as_ref(),
+                self.hypervisor.as_ref(),
+            )
+            .await;
+
             self.apply_network_to_agent(network.as_ref()).await?;
         }
 
@@ -897,5 +908,43 @@ impl Persist for ResourceManagerInner {
             mem_resource,
             swap_resource,
         })
+    }
+}
+
+/// For each physical-endpoint VF in the network, resolve the actual in-guest
+/// PCIe path via QMP (query-pci) and update the endpoint's `guest_pci_path`.
+///
+/// This must be called after the VM has started (QMP is initialised) and
+/// before `apply_network_to_agent`, because the PCIe topology pre-computes
+/// a wrong path (root port has no explicit addr → QEMU auto-assigns its slot;
+/// only QMP can reveal the actual assignment).
+async fn resolve_physical_endpoint_pci_paths(
+    network: &dyn crate::network::Network,
+    hypervisor: &dyn hypervisor::Hypervisor,
+) {
+    for endpoint in network.endpoints().await {
+        if let Some(hostdev_id) = endpoint.vfio_hostdev_id().await {
+            match hypervisor.resolve_vfio_device_pci_path(&hostdev_id).await {
+                Ok(pci_path) => {
+                    let path_str = pci_path.to_string();
+                    info!(
+                        sl!(),
+                        "resolved physical endpoint guest PCI path: \
+                         hostdev_id={} path={}",
+                        hostdev_id,
+                        path_str
+                    );
+                    endpoint.set_guest_pci_path(path_str).await;
+                }
+                Err(e) => {
+                    warn!(
+                        sl!(),
+                        "failed to resolve guest PCI path for hostdev {}: {}",
+                        hostdev_id,
+                        e
+                    );
+                }
+            }
+        }
     }
 }

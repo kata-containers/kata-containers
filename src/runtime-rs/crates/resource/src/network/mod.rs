@@ -44,6 +44,11 @@ pub trait Network: Send + Sync {
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;
     async fn save(&self) -> Option<Vec<EndpointState>>;
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()>;
+    /// Returns the list of network endpoints. Used to resolve PCI paths
+    /// via QMP before sending update_interface to the agent.
+    async fn endpoints(&self) -> Vec<std::sync::Arc<dyn endpoint::Endpoint>> {
+        vec![]
+    }
 }
 
 pub async fn new(

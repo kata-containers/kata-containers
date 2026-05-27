@@ -62,10 +62,14 @@ pub struct PhysicalEndpoint {
     driver: String,
     vendor_device_id: VendorDevice,
     d: Arc<RwLock<DeviceManager>>,
-    /// Guest PCI path computed by do_add_pcie_endpoint() at attach() time.
-    /// Populated after attach() succeeds; used to set device_path in the
-    /// agent's update_interface request for IB/RoCE GID table population.
+    /// Guest PCI path — populated after QMP resolution in setup_after_start_vm.
+    /// The pre-computed topology path from attach() is WRONG for physical
+    /// endpoints because the root port has no explicit addr; the correct path
+    /// requires QMP query-pci after VM boots.
     guest_pci_path: std::sync::Mutex<Option<String>>,
+    /// QEMU device ID for the cold-plugged VF (e.g. "physical_nic__346_0").
+    /// Stored during attach() for use in QMP-based path resolution.
+    hostdev_id: std::sync::Mutex<Option<String>>,
 }
 
 impl PhysicalEndpoint {
@@ -98,6 +102,7 @@ impl PhysicalEndpoint {
             bdf,
             d,
             guest_pci_path: std::sync::Mutex::new(None),
+            hostdev_id: std::sync::Mutex::new(None),
         })
     }
 }
@@ -163,14 +168,14 @@ impl Endpoint for PhysicalEndpoint {
                 .await
                 .context("do handle device failed.")?;
 
-        // Extract and cache the guest PCI path so guest_pci_path() can
-        // expose it to handle_interfaces() for device_path in update_interface.
+        // Store the QEMU hostdev_id for later QMP-based PCI path resolution.
+        // The topology-computed guest_pci_path from do_add_pcie_endpoint() is
+        // WRONG for physical endpoints (root port has no explicit addr so QEMU
+        // auto-assigns its slot; the correct path requires QMP after VM boot).
         if let hypervisor::device::DeviceType::Vfio(vfio_dev) = device_type {
             if let Some(hostdev) = vfio_dev.devices.first() {
-                if let Some(pci_path) = &hostdev.guest_pci_path {
-                    if let Ok(mut guard) = self.guest_pci_path.lock() {
-                        *guard = Some(pci_path.to_string());
-                    }
+                if let Ok(mut guard) = self.hostdev_id.lock() {
+                    *guard = Some(hostdev.hostdev_id.clone());
                 }
             }
         }
@@ -216,6 +221,16 @@ impl Endpoint for PhysicalEndpoint {
 
     async fn guest_pci_path(&self) -> Option<String> {
         self.guest_pci_path.lock().ok()?.clone()
+    }
+
+    async fn vfio_hostdev_id(&self) -> Option<String> {
+        self.hostdev_id.lock().ok()?.clone()
+    }
+
+    async fn set_guest_pci_path(&self, path: String) {
+        if let Ok(mut guard) = self.guest_pci_path.lock() {
+            *guard = Some(path);
+        }
     }
 }
 

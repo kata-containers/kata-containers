@@ -1154,6 +1154,18 @@ impl QemuInner {
 
         Ok(())
     }
+
+    /// Resolve the in-guest PCIe path for a cold-plugged physical-endpoint VF
+    /// via QMP query-pci. Must be called after the VM has started and QMP is
+    /// initialised. This is the runtime-rs pair of the Go runtime's
+    /// `ResolveColdPlugVFIOGuestPciPaths` / `qomGetPciPath` call.
+    pub(crate) fn resolve_vfio_device_pci_path(&mut self, hostdev_id: &str) -> Result<PciPath> {
+        let qmp = self
+            .qmp
+            .as_mut()
+            .ok_or_else(|| anyhow!("QMP not initialised; cannot resolve PCI path for {}", hostdev_id))?;
+        qmp.get_device_by_qdev_id(hostdev_id)
+    }
 }
 
 #[async_trait]

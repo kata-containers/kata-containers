@@ -42,4 +42,12 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn guest_pci_path(&self) -> Option<String> {
         None
     }
+    /// Returns the QEMU device ID for the cold-plugged VF (e.g.
+    /// `"physical_nic__346_0"`), or `None` for non-physical endpoints.
+    /// Used to resolve the actual guest PCI path via QMP after VM start.
+    async fn vfio_hostdev_id(&self) -> Option<String> {
+        None
+    }
+    /// Update the guest PCI path (called after QMP resolution).
+    async fn set_guest_pci_path(&self, _path: String) {}
 }
