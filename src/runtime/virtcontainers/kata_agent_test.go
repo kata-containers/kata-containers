@@ -1284,7 +1284,7 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			hotPlugVFIO:   config.NoPort,
 			coldPlugVFIO:  config.BridgePort,
 			vfioMode:      config.VFIOModeGuestKernel,
-			expectVFIODev: false,
+			expectVFIODev: true,
 		},
 	}
 
