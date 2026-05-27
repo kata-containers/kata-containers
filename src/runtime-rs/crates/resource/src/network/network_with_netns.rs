@@ -151,17 +151,25 @@ impl Network for NetworkWithNetns {
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let inner = self.inner.read().await;
-        // The network namespace would have been deleted at this point
-        // if it has not been created by virtcontainers.
-        if !inner.network_created {
-            return Ok(());
-        }
+
+        // Always detach endpoints regardless of whether kata created the netns.
+        // Physical endpoints rebind their VF from vfio-pci back to the original
+        // host driver here.  Skipping this when network_created=false would
+        // permanently leave VFs bound to vfio-pci after pod deletion.
         {
             let _netns_guard =
                 netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
             for e in &inner.entity_list {
-                e.endpoint.detach(h).await.context("detach")?;
+                if let Err(err) = e.endpoint.detach(h).await {
+                    warn!(sl!(), "failed to detach endpoint: {}", err);
+                }
             }
+        }
+
+        // Only delete the network namespace if kata created it.
+        // If the CNI created the netns, it will be cleaned up by the CNI.
+        if !inner.network_created {
+            return Ok(());
         }
         let netns = get_from_path(inner.netns_path.clone())?;
         netns.remove()?;
