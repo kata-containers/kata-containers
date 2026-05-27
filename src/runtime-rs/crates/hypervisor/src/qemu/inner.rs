@@ -247,6 +247,66 @@ impl QemuInner {
                         pci_path
                     );
                 }
+                DeviceType::Vfio(vfio_dev) => {
+                    // Cold-plug physical-endpoint VFs (non-IOMMUFD VFIO) onto
+                    // pre-allocated PCIe root ports.  The bus assignment and
+                    // guest PCI path were computed by do_add_pcie_endpoint()
+                    // at device-registration time.
+                    //
+                    // We must emit BOTH:
+                    //   1. the pcie-root-port for vfio_dev.bus (e.g. "rp1")
+                    //   2. the vfio-pci device on that bus
+                    //
+                    // add_pcie_root_ports() skips allocated ports assuming
+                    // VfioModern already emitted them.  For regular Vfio
+                    // (physical endpoints) we have to emit the root port here.
+                    let port_index = vfio_dev
+                        .bus
+                        .strip_prefix("rp")
+                        .and_then(|s| s.parse::<u32>().ok())
+                        .unwrap_or(0);
+                    cmdline.add_physical_endpoint_root_port(&vfio_dev.bus, port_index);
+
+                    for hostdev in &vfio_dev.devices {
+                        let host_bdf =
+                            format!("{}:{}", hostdev.domain, hostdev.bus_slot_func);
+                        let (vendor_id, device_id) =
+                            hostdev.device_vendor_class.as_ref().map_or(
+                                (None, None),
+                                |dvc| {
+                                    let (dev, vendor) =
+                                        dvc.get_device_vendor().unwrap_or((0, 0));
+                                    let v = if vendor != 0 {
+                                        Some(format!("0x{:04x}", vendor))
+                                    } else {
+                                        None
+                                    };
+                                    let d = if dev != 0 {
+                                        Some(format!("0x{:04x}", dev))
+                                    } else {
+                                        None
+                                    };
+                                    (v, d)
+                                },
+                            );
+                        cmdline.add_physical_vfio_device(
+                            &host_bdf,
+                            &hostdev.hostdev_id,
+                            &vfio_dev.bus,
+                            vendor_id.as_deref(),
+                            device_id.as_deref(),
+                        );
+                        info!(
+                            sl!(),
+                            "cold-plug physical VFIO device: host={} id={} bus={} \
+                             guest_pci_path={:?}",
+                            host_bdf,
+                            hostdev.hostdev_id,
+                            vfio_dev.bus,
+                            hostdev.guest_pci_path,
+                        );
+                    }
+                }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
         }
