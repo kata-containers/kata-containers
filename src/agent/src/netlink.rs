@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(not(target_arch = "s390x"))]
+use crate::linux_abi::{create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR};
+#[cfg(not(target_arch = "s390x"))]
+use crate::{device::pcipath_to_sysfs, pci};
 use anyhow::{anyhow, Context, Result};
 use futures::{future, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
@@ -225,6 +229,60 @@ impl Handle {
         let link = self.find_link(LinkFilter::Name("lo")).await?;
         self.enable_link(link.index(), true).await?;
         Ok(())
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    pub fn netdev_name_from_pci_path(&self, dev_tree_path: &str) -> Result<Option<String>> {
+        let (root_complex, pcipath) = pcipath_from_dev_tree_path(dev_tree_path)
+            .with_context(|| format!("invalid PCI path for network interface: {dev_tree_path}"))?;
+        let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
+        let sysfs_rel_path = pcilib_to_sysfs_path(&root_bus_sysfs, &pcipath)?;
+        let net_dir = format!("{root_bus_sysfs}{sysfs_rel_path}/net");
+
+        let mut entries = match fs::read_dir(&net_dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e).with_context(|| format!("failed to read net dir {net_dir}")),
+        };
+
+        if let Some(entry) = entries.next() {
+            let entry = entry.with_context(|| format!("failed to read entry under {net_dir}"))?;
+            let name = entry.file_name().into_string().map_err(|non_utf8| {
+                anyhow!("non-UTF8 netdev name under {}: {:?}", net_dir, non_utf8)
+            })?;
+            return Ok(Some(name));
+        }
+
+        Ok(None)
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    pub async fn set_link_mac_by_name(&self, ifname: &str, mac: &str) -> Result<String> {
+        let link = self.find_link(LinkFilter::Name(ifname)).await?;
+        let prev_mac = link.address();
+        if prev_mac.eq_ignore_ascii_case(mac) {
+            return Ok(prev_mac);
+        }
+
+        let parsed_mac = parse_mac_address(mac)
+            .with_context(|| format!("failed to parse MAC address: {mac}"))?;
+        if link.is_up() {
+            self.enable_link(link.index(), false).await?;
+        }
+
+        let mut request = self.handle.link().set(link.index());
+        request.message_mut().header = link.header.clone();
+        request
+            .address(parsed_mac.to_vec())
+            .execute()
+            .await
+            .with_context(|| format!("failed to set MAC for interface {} to {}", ifname, mac))?;
+
+        if link.is_up() {
+            self.enable_link(link.index(), true).await?;
+        }
+
+        Ok(prev_mac)
     }
 
     /// Retireve available network interfaces.
@@ -666,6 +724,11 @@ impl Handle {
         }
         req.execute().await.context("executing NeighbourAddRequest")
     }
+}
+
+#[cfg(not(target_arch = "s390x"))]
+fn pcilib_to_sysfs_path(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+    pcipath_to_sysfs(root_bus_sysfs, pcipath)
 }
 
 fn format_address(data: &[u8]) -> Result<String> {

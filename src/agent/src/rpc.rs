@@ -1150,9 +1150,51 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
-        self.sandbox
-            .lock()
-            .await
+        let mut sandbox = self.sandbox.lock().await;
+
+        #[cfg(not(target_arch = "s390x"))]
+        if !interface.devicePath.is_empty() && !interface.hwAddr.is_empty() {
+            match sandbox
+                .rtnl
+                .netdev_name_from_pci_path(&interface.devicePath)
+            {
+                Ok(Some(netdev_name)) => {
+                    if let Err(err) = sandbox
+                        .rtnl
+                        .set_link_mac_by_name(&netdev_name, &interface.hwAddr)
+                        .await
+                    {
+                        warn!(
+                            sl(),
+                            "update_interface: VFIO MAC reconciliation failed, fallback to by-MAC lookup";
+                            "device-path" => interface.devicePath.as_str(),
+                            "target-mac" => interface.hwAddr.as_str(),
+                            "netdev" => netdev_name.as_str(),
+                            "error" => format!("{:?}", err),
+                        );
+                    }
+                }
+                Ok(None) => {
+                    info!(
+                        sl(),
+                        "update_interface: no netdev found for PCI path before by-MAC lookup";
+                        "device-path" => interface.devicePath.as_str(),
+                        "target-mac" => interface.hwAddr.as_str(),
+                    );
+                }
+                Err(err) => {
+                    warn!(
+                        sl(),
+                        "update_interface: unable to resolve netdev from PCI path, fallback to by-MAC lookup";
+                        "device-path" => interface.devicePath.as_str(),
+                        "target-mac" => interface.hwAddr.as_str(),
+                        "error" => format!("{:?}", err),
+                    );
+                }
+            }
+        }
+
+        sandbox
             .rtnl
             .update_interface(&interface)
             .await
