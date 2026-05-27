@@ -11,7 +11,7 @@ CCA_HYPERVISORS=("qemu-cca")
 GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${CCA_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
 NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
-FIRECRACKER_HYPERVISORS=("firecracker" "fc")
+FIRECRACKER_HYPERVISORS=("firecracker" "fc" "fc-rs")
 
 ALL_HYPERVISORS=(
 	"clh"

@@ -82,6 +82,9 @@
       "x86_64":  ["shim-v2-go", "firecracker", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"],
       "aarch64": ["shim-v2-go", "firecracker", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"]
     },
+    "fc-rs": {
+      "x86_64":  ["shim-v2-rust", "firecracker", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"]
+    },
     "remote": {
       "x86_64":  ["shim-v2-go"],
       "ppc64le": ["shim-v2-go"],

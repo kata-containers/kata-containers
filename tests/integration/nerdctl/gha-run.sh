@@ -141,6 +141,15 @@ function install_kata_for_nerdctl() {
 	# containerd config via overwrite_containerd_config.
 	if [ "${KATA_HYPERVISOR:-}" = "fc-rs" ]; then
 		configure_devmapper_for_containerd
+
+		# Pre-pull alpine into the content store (no --snapshotter).
+		# nerdctl v2.3.1 calls SnapshotterCapabilities for OCI image indexes
+		# during pull, and devmapper returns nil/empty capabilities, causing
+		# "no unpack platforms defined". Pre-pulling without a snapshotter
+		# populates the content store; when nerdctl run then finds the image
+		# already present, it calls image.Unpack(devmapper) via the container-
+		# creation path which bypasses the SnapshotterCapabilities check.
+		sudo ctr -n default images pull docker.io/library/alpine:latest
 	fi
 }
 
