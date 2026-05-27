@@ -1258,7 +1258,6 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       make([]string, len(devList)),
 	}
 
 	// We always pass the device information to the agent, since
@@ -1268,7 +1267,8 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
-	for i, dev := range devList {
+	var opts []string
+	for _, dev := range devList {
 		if dev.Type == config.VFIOAPDeviceMediatedType {
 			kataDevice.Type = kataVfioApDevType
 			coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -1282,11 +1282,29 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 			}
 			kataDevice.Options = dev.APDevices
 		} else {
-
 			devBDF := drivers.GetBDF(dev.BDF)
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
+			if dev.GuestPciPath.IsNil() {
+				// GuestPciPath could not be resolved (e.g. GPU behind a
+				// pxb-pcie bridge in a NUMA topology where the QOM walk
+				// fails).  The device is already present in the guest via
+				// cold-plug; there is no guest-side setup the agent can
+				// perform without a PCI path, and emitting an empty option
+				// would trip the agent policy checker.  Skip this device.
+				k.Logger().WithFields(logrus.Fields{
+					"host-bdf": devBDF,
+				}).Warn("appendVfioDevice: GuestPciPath unresolved, skipping device option")
+				continue
+			}
+			opts = append(opts, fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath))
 		}
+	}
 
+	if len(opts) == 0 && len(kataDevice.Options) == 0 {
+		// All PCIe devices had unresolvable paths — nothing useful to send.
+		return nil
+	}
+	if len(opts) > 0 {
+		kataDevice.Options = opts
 	}
 
 	return kataDevice
@@ -1323,6 +1341,61 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 	}
 
 	return deviceList
+}
+
+func (k *kataAgent) resolveColdPlugVFIOGuestPciPaths(sandbox *Sandbox, c *Container) error {
+	if sandbox == nil || c == nil {
+		return nil
+	}
+
+	if sandbox.config.HypervisorConfig.ColdPlugVFIO == config.NoPort {
+		return nil
+	}
+
+	q, ok := sandbox.hypervisor.(*qemu)
+	if !ok {
+		return nil
+	}
+
+	if err := q.qmpSetup(); err != nil {
+		return err
+	}
+
+	for _, dev := range c.devices {
+		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
+		if device == nil || device.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+
+		vfioDevs, ok := device.GetDeviceInfo().([]*config.VFIODev)
+		if !ok || vfioDevs == nil {
+			continue
+		}
+
+		for _, vfioDev := range vfioDevs {
+			if vfioDev.Type == config.VFIOAPDeviceMediatedType || !vfioDev.GuestPciPath.IsNil() {
+				continue
+			}
+
+			pciPath, err := q.arch.qomGetPciPath(vfioDev.ID, &q.qmpMonitorCh)
+			if err != nil {
+				// Non-fatal: some PCIe topologies (e.g. pxb-pcie/NUMA) do
+				// not expose an `addr` QOM property and the walk fails.
+				// Leave GuestPciPath nil; appendVfioDevice will skip the
+				// option for this device and the agent falls back to its
+				// existing by-BDF device matching.
+				k.Logger().WithFields(logrus.Fields{
+					"device-id": vfioDev.ID,
+					"host-bdf":  vfioDev.BDF,
+				}).WithError(err).Warn("resolveColdPlugVFIOGuestPciPaths: QMP walk failed, leaving GuestPciPath unset")
+				continue
+			}
+
+			vfioDev.GuestPciPath = pciPath
+		}
+	}
+
+	return nil
 }
 
 // rollbackFailingContainerCreation rolls back important steps that might have
@@ -1484,6 +1557,10 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// Remove all mounts that should be ignored from the spec
 	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
+		return nil, err
+	}
+
+	if err = k.resolveColdPlugVFIOGuestPciPaths(sandbox, c); err != nil {
 		return nil, err
 	}
 
