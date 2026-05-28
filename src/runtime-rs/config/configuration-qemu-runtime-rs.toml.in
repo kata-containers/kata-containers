@@ -381,6 +381,12 @@ disable_image_nvdimm = false
 # Default false
 hotplug_vfio_on_root_bus = false
 
+# Enable cold-plugging of VFIO devices to a PCIe port type.
+# Accepted values: "no-port" (default, disabled), "root-port".
+# When set to "root-port", devices discovered via CDI / Pod Resources
+# are cold-plugged before VM boot.
+cold_plug_vfio = "no-port"
+
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
