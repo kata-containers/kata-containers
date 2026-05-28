@@ -6,7 +6,7 @@
 
 pub mod none_model;
 pub mod tc_filter_model;
-pub mod l3_forwarding;
+pub mod l3_forwarding_model;
 pub mod test_network_model;
 use std::sync::Arc;
 
@@ -37,7 +37,7 @@ pub fn new(model: &str) -> Result<Arc<dyn NetworkModel>> {
             tc_filter_model::TcFilterModel::new().context("new tc filter model")?,
         )),
         L3_FORWARDING_NET_MODEL_STR => Ok(Arc::new(
-            l3_forwarding::L3ForwardingModel::new().context("new l3 forwarding model")?,
+            l3_forwarding_model::L3ForwardingModel::new().context("new l3 forwarding model")?,
         )),
         _ => Ok(Arc::new(
             none_model::NoneModel::new().context("new none model")?,
