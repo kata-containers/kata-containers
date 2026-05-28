@@ -112,7 +112,6 @@ options:
 	boot-image-se
 	coco-guest-components
 	cloud-hypervisor
-	cloud-hypervisor-glibc
 	firecracker
 	genpolicy
 	kata-ctl
@@ -985,17 +984,6 @@ install_clh() {
 	install_clh_helper "musl" "${features}"
 }
 
-# Install static cloud-hypervisor-glibc asset
-install_clh_glibc() {
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		features="mshv"
-	else
-		features=""
-	fi
-
-	install_clh_helper "gnu" "${features}" "-glibc"
-}
-
 # Install static stratovirt asset
 install_stratovirt() {
 	local stratovirt_version
@@ -1467,8 +1455,6 @@ handle_build() {
 	coco-guest-components) install_coco_guest_components ;;
 
 	cloud-hypervisor) install_clh ;;
-
-	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
 
