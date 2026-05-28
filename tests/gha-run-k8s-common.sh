@@ -1052,30 +1052,41 @@ VERIFICATION_POD_EOF
 	# least one kata-deploy pod exists, then wait on the pod readiness condition
 	# instead — the readiness probe (/readyz) returns 200 only after install
 	# completes (artifacts extracted, CRI restarted, node labeled).
+	local pod_label_name="kata-deploy"
+	local multi_install_suffix=""
+	multi_install_suffix="$(yq -r '.env.multiInstallSuffix // ""' "${values_yaml}")"
+	if [[ -n "${multi_install_suffix}" ]]; then
+		pod_label_name="${pod_label_name}-${multi_install_suffix}"
+	fi
+
 	local pod_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
 	while true; do
-		if [[ -n "$(kubectl -n kube-system get pod -l name=kata-deploy -o name 2>/dev/null)" ]]; then
+		if [[ -n "$(kubectl -n kube-system get pod -l "name=${pod_label_name}" -o name 2>/dev/null)" ]]; then
 			break
 		fi
 		if (( SECONDS >= pod_wait_deadline )); then
 			echo "ERROR: Timed out waiting for kata-deploy pod to be created"
+			echo "::group::kata-deploy daemonset status (no pod created)"
+			kubectl -n kube-system get ds -l "name=${pod_label_name}" -o wide || true
+			kubectl -n kube-system describe ds -l "name=${pod_label_name}" || true
+			echo "::endgroup::"
 			return 1
 		fi
 		sleep 1
 	done
-	if ! kubectl -n kube-system wait pod -l name=kata-deploy --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
+	if ! kubectl -n kube-system wait pod -l "name=${pod_label_name}" --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
 		echo "::group::kata-deploy pod describe (install timed out)"
-		kubectl -n kube-system describe pod -l name=kata-deploy || true
+		kubectl -n kube-system describe pod -l "name=${pod_label_name}" || true
 		echo "::endgroup::"
 		echo "::group::kata-deploy logs (install timed out)"
-		kubectl -n kube-system logs -l name=kata-deploy --all-containers --previous 2>/dev/null || true
-		kubectl -n kube-system logs -l name=kata-deploy --all-containers 2>/dev/null || true
+		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous 2>/dev/null || true
+		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers 2>/dev/null || true
 		echo "::endgroup::"
 		return 1
 	fi
 
 	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs -l name=kata-deploy
+	kubectl_retry -n kube-system logs -l "name=${pod_label_name}"
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"
