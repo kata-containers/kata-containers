@@ -856,7 +856,7 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 
 	netPair := endpoint.NetworkPair()
 
-	queues := 0
+	queues := 1
 	caps := h.Capabilities(ctx)
 	if caps.IsMultiQueueSupported() {
 		queues = int(h.HypervisorConfig().NumVCPUs())
