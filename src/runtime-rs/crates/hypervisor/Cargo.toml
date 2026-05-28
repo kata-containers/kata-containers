@@ -80,6 +80,7 @@ dragonball = { features = [
   "vhost-user-net",
   "virtio-balloon",
   "virtio-blk",
+  "virtio-blk-vmdk",
   "virtio-fs",
   "virtio-mem",
   "virtio-net",
