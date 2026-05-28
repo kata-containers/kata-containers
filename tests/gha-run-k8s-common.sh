@@ -26,7 +26,6 @@ HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
 HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
 HELM_DEBUG="${HELM_DEBUG:-}"
 HELM_DEFAULT_SHIM="${HELM_DEFAULT_SHIM:-}"
-HELM_HOST_OS="${HELM_HOST_OS:-}"
 HELM_IMAGE_REFERENCE="${HELM_IMAGE_REFERENCE:-}"
 HELM_IMAGE_TAG="${HELM_IMAGE_TAG:-}"
 HELM_K8S_DISTRIBUTION="${HELM_K8S_DISTRIBUTION:-}"
@@ -712,15 +711,16 @@ function helm_helper() {
 	# Enable node-feature-discovery deployment
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
-	# Do not enable on cbl-mariner yet, as the deployment is failing on those
-	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]]; then
-		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
-	fi
-
 	# Do not enable on nvidia-gpu-* tests, as it'll be deployed by the GPU operator
 	if [[ "${KATA_HYPERVISOR}" == *"nvidia-gpu"* ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 		yq -i ".runtimeClasses.createDefault = true" "${values_yaml}"
+	fi
+
+	# Azure CLH jobs run on CBL-Mariner AKS nodes; keep NFD disabled to avoid
+	# virtualization gating preventing kata-deploy pod creation.
+	if [[ "${KATA_HYPERVISOR}" == *azure* ]]; then
+		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 	fi
 
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
@@ -961,8 +961,6 @@ function helm_helper() {
 		[[ -n "${HELM_CREATE_RUNTIME_CLASSES}" ]] && yq -i ".runtimeClasses.enabled = ${HELM_CREATE_RUNTIME_CLASSES}" "${values_yaml}"
 		[[ -n "${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" ]] && yq -i ".runtimeClasses.createDefault = ${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" "${values_yaml}"
 
-		# Legacy env.* settings that don't have structured equivalents yet
-		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
 	fi
 
 	# Enable verification during deployment if HELM_VERIFY_DEPLOYMENT is set

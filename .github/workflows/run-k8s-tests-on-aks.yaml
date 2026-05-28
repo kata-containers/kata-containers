@@ -47,21 +47,21 @@ jobs:
       matrix:
         include:
           - host_os: cbl-mariner
-            vmm: clh
+            vmm: clh-azure
             instance-type: small
             genpolicy-pull-method: oci-distribution
           - host_os: cbl-mariner
-            vmm: clh
+            vmm: clh-azure
             instance-type: small
             genpolicy-pull-method: containerd
           - host_os: cbl-mariner
-            vmm: clh
+            vmm: clh-azure
             instance-type: normal
           - host_os: cbl-mariner
-            vmm: clh-runtime-rs
+            vmm: clh-azure-runtime-rs
             instance-type: small
           - host_os: cbl-mariner
-            vmm: clh-runtime-rs
+            vmm: clh-azure-runtime-rs
             instance-type: normal
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-k8s-tests-aks-${{ toJSON(matrix) }}
