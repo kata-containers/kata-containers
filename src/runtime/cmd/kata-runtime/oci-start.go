@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/urfave/cli"
 )
@@ -34,8 +35,21 @@ func runStartCommand(ctx context.Context, containerID string) error {
 	}
 	defer sandbox.Release(ctx)
 
-	if _, err := sandbox.StartContainer(ctx, containerID); err != nil {
+	if err := sandbox.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start container %q: %w", containerID, err)
+	}
+
+	exitCode, err := sandbox.WaitProcess(ctx, containerID, containerID)
+	if err != nil {
+		sandbox.Stop(ctx, true)
+		return fmt.Errorf("failed to wait for container %q: %w", containerID, err)
+	}
+
+	// Stop the sandbox so the shim process exits, which conmon needs to detect container completion.
+	sandbox.Stop(ctx, true)
+
+	if exitCode != 0 {
+		os.Exit(int(exitCode))
 	}
 	return nil
 }
