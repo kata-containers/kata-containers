@@ -175,7 +175,23 @@ shims:
     containerd:
       snapshotter: ""
 
+  clh-azure:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
   clh-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  clh-azure-runtime-rs:
     enabled: ~
     supportedArches:
       - amd64

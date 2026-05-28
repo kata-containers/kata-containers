@@ -61,12 +61,18 @@
       "s390x":   ["shim-v2-rust", "qemu", "kernel", "rootfs-image-confidential"]
     },
     "clh": {
-      "x86_64":  ["shim-v2-go", "cloud-hypervisor", "cloud-hypervisor-glibc", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd", "rootfs-image-mariner"],
+      "x86_64":  ["shim-v2-go", "cloud-hypervisor", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"],
       "aarch64": ["shim-v2-go", "cloud-hypervisor", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"]
     },
+    "clh-azure": {
+      "x86_64": ["shim-v2-go", "cloud-hypervisor", "virtiofsd", "kernel", "kernel-debug", "rootfs-image-mariner"]
+    },
     "clh-runtime-rs": {
-      "x86_64":  ["shim-v2-rust", "cloud-hypervisor", "cloud-hypervisor-glibc", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd", "rootfs-image-mariner"],
+      "x86_64":  ["shim-v2-rust", "cloud-hypervisor", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"],
       "aarch64": ["shim-v2-rust", "cloud-hypervisor", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"]
+    },
+    "clh-azure-runtime-rs": {
+      "x86_64": ["shim-v2-rust", "cloud-hypervisor", "virtiofsd", "kernel", "kernel-debug", "rootfs-image-mariner"]
     },
     "dragonball": {
       "x86_64":  ["shim-v2-rust", "virtiofsd", "nydus", "kernel-dragonball-experimental", "rootfs-image", "rootfs-initrd"],

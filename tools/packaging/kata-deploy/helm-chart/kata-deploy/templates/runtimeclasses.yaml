@@ -95,7 +95,9 @@ scheduling:
 
 {{- $runtimeClassConfigs := dict
   "clh" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-azure" (dict "memory" "130Mi" "cpu" "250m")
   "clh-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-azure-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
   "dragonball" (dict "memory" "130Mi" "cpu" "250m")
   "fc" (dict "memory" "130Mi" "cpu" "250m")
   "qemu" (dict "memory" "160Mi" "cpu" "250m")
