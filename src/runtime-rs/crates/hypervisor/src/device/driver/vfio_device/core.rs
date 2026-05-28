@@ -19,6 +19,7 @@ const SYS_PCI_DEVS: &str = "/sys/bus/pci/devices";
 const DEV_IOMMU: &str = "/dev/iommu";
 const DEV_VFIO_DEVICES: &str = "/dev/vfio/devices";
 const SYS_CLASS_VFIO_DEV: &str = "/sys/class/vfio-dev";
+const SYS_VFIO_AP: &str = "/sys/devices/vfio_ap";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VfioIommufdBackend {
@@ -47,6 +48,10 @@ pub struct VfioDevice {
     pub primary: DeviceInfo,
     pub labels: BTreeMap<String, String>,
     pub health: Health,
+
+    /// APQNs (Adjunct Processor Queue Numbers) for MediatedAp devices, e.g. ["0a.0001", "0b.0002"].
+    /// Populated by discover_vfio_ap_device(); empty for all non-AP device types.
+    pub ap_devices: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -656,6 +661,7 @@ fn discover_vfio_device_for_iommu_group(gid: u32, group_devnode: PathBuf) -> Res
         primary: primary_device,
         labels,
         health,
+        ap_devices: Vec::new(),
     })
 }
 
@@ -769,4 +775,97 @@ pub fn is_dev_vfio_group_path(host_path: &str) -> bool {
 
     // Valid if remainder is non-empty and contains only digits
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Returns true if the VFIO group at `group_devnode` (e.g. `/dev/vfio/N`) contains
+/// an s390x AP mediated device.  Detection works by resolving the sysfs symlinks for
+/// every entry in `/sys/kernel/iommu_groups/<N>/devices/` and checking whether any of
+/// them resolves to a path under `/sys/devices/vfio_ap`.
+pub fn is_vfio_ap_device(group_devnode: &Path) -> bool {
+    let gid = match parse_dev_vfio_group_id(&group_devnode.to_string_lossy()) {
+        Some(id) => id,
+        None => return false,
+    };
+    let group_devices_dir = Path::new(SYS_IOMMU_GROUPS)
+        .join(gid.to_string())
+        .join("devices");
+    let rd = match fs::read_dir(&group_devices_dir) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    for ent in rd.flatten() {
+        let link_path = group_devices_dir.join(ent.file_name());
+        if let Ok(resolved) = fs::canonicalize(&link_path) {
+            if resolved.starts_with(SYS_VFIO_AP) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Discovers an s390x VFIO-AP mediated device from its VFIO group path (`/dev/vfio/N`).
+///
+/// Reads the `matrix` file from the mdev's sysfs path to obtain the list of APQNs
+/// (Adjunct Processor Queue Numbers) assigned to this matrix device.
+pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
+    let gid = parse_dev_vfio_group_id(&group_devnode.to_string_lossy())
+        .ok_or_else(|| anyhow!("Invalid VFIO group path: {}", group_devnode.display()))?;
+
+    let group_devices_dir = Path::new(SYS_IOMMU_GROUPS)
+        .join(gid.to_string())
+        .join("devices");
+
+    // Enumerate IOMMU group entries and find the AP mdev symlink.
+    let mut ap_sysfs_path: Option<PathBuf> = None;
+    for ent in fs::read_dir(&group_devices_dir)
+        .with_context(|| format!("Failed to read {}", group_devices_dir.display()))?
+        .flatten()
+    {
+        let link_path = group_devices_dir.join(ent.file_name());
+        if let Ok(resolved) = fs::canonicalize(&link_path) {
+            if resolved.starts_with(SYS_VFIO_AP) {
+                ap_sysfs_path = Some(resolved);
+                break;
+            }
+        }
+    }
+
+    let sysfs_dev = ap_sysfs_path
+        .ok_or_else(|| anyhow!("No VFIO-AP device found in IOMMU group {}", gid))?;
+
+    // Read APQNs from the `matrix` sysfs attribute (one APQN per line, e.g. "0a.0001").
+    let matrix_path = sysfs_dev.join("matrix");
+    let matrix_raw = fs::read_to_string(&matrix_path)
+        .with_context(|| format!("Failed to read {}", matrix_path.display()))?;
+    let ap_devices: Vec<String> = matrix_raw
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    let primary = DeviceInfo {
+        addr: DeviceAddress::MdevUuid(
+            sysfs_dev
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
+        ),
+        sysfs_path: sysfs_dev.clone(),
+        ..Default::default()
+    };
+
+    Ok(VfioDevice {
+        id: format!("vfio-ap-{}", gid),
+        device_type: VfioDeviceType::MediatedAp,
+        bus_mode: VfioBusMode::Ccw,
+        iommu_group: None,
+        iommu_group_id: Some(gid),
+        iommufd: None,
+        devices: vec![primary.clone()],
+        primary,
+        labels: BTreeMap::new(),
+        health: Health::Healthy,
+        ap_devices,
+    })
 }

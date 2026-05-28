@@ -13,7 +13,10 @@ use crate::device::pci_path::PciPath;
 use crate::device::topology::{PCIePort, PCIeTopology};
 use crate::device::util::{do_decrease_count, do_increase_count};
 use crate::device::{Device, DeviceType, PCIeDevice};
-use crate::vfio_device::core::{discover_vfio_device, discover_vfio_group_device, VfioDevice};
+use crate::vfio_device::core::{
+    discover_vfio_ap_device, discover_vfio_device, discover_vfio_group_device, is_vfio_ap_device,
+    VfioDevice, VfioDeviceType,
+};
 use crate::Hypervisor;
 
 /// Identifies a specific port on a PCI bus: (bus_name, bus_slot, port_id)
@@ -64,6 +67,11 @@ pub struct VfioDeviceBase {
     /// - VFIO Volume:     "vfio_vol_"
     /// - VFIO NVMe:       "vfio_nvme_"
     pub hostdev_prefix: String,
+
+    /// APQNs assigned to this device (s390x VFIO-AP only).
+    /// Each entry is a string like "0a.0001" read from the mdev matrix sysfs file.
+    /// Empty for all non-AP device types.
+    pub ap_devices: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -95,18 +103,33 @@ fn vfio_modern_group_discovery_path(base: &VfioDeviceBase) -> PathBuf {
 
 impl VfioDeviceModern {
     pub fn new(device_id: String, base: &VfioDeviceBase) -> Result<Self> {
-        // For modern VFIO devices, we require the specific device cdev path to be provided in the configuration.
-        // This allows us to directly discover the device context without needing to resolve group devices.
-        // If the device node is not provided, we can optionally fallback to group device discovery,
-        // but this is less efficient and may not be supported in all environments.
+        let group_path = vfio_modern_group_discovery_path(base);
+
+        // s390x VFIO-AP: mediated AP devices have no PCI BDF; discover them separately.
+        if is_vfio_ap_device(&group_path) {
+            let device = discover_vfio_ap_device(&group_path)?;
+            let mut config = base.clone();
+            config.ap_devices = device.ap_devices.clone();
+            return Ok(Self {
+                device_id,
+                device,
+                config,
+                device_options: Vec::new(),
+                is_allocated: false,
+                attach_count: 0,
+            });
+        }
+
+        // PCI / iommufd path: use the iommu_device_node cdev when available, otherwise
+        // fall back to group-device discovery.
         let device = if let Some(ref node) = base.iommu_device_node {
             if !node.as_os_str().is_empty() {
                 discover_vfio_device(node)?
             } else {
-                discover_vfio_group_device(vfio_modern_group_discovery_path(base))?
+                discover_vfio_group_device(group_path)?
             }
         } else {
-            discover_vfio_group_device(vfio_modern_group_discovery_path(base))?
+            discover_vfio_group_device(group_path)?
         };
         Ok(Self {
             device_id,
@@ -196,21 +219,31 @@ impl Device for VfioDeviceModernHandle {
             return Ok(());
         }
 
-        // Register the device in the virtual PCIe topology
-        let topo = pcie_topo.as_deref_mut().ok_or_else(|| {
-            anyhow::anyhow!("VFIO device requires a PCIe topology but none was provided")
-        })?;
-        self.register(topo).await?;
+        let is_ap = self
+            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
+            .await;
 
-        // Request Hypervisor to perform the actual hardware passthrough
-        if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
-            error!(sl!(), "failed to attach vfio device: {:?}", e);
-
-            // Rollback state on failure
-            self.decrease_attach_count().await?;
-            self.unregister(topo).await?;
-            return Err(e);
+        if is_ap {
+            // AP devices have no PCIe topology; call the hypervisor directly.
+            if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
+                error!(sl!(), "failed to attach vfio-ap device: {:?}", e);
+                self.decrease_attach_count().await?;
+                return Err(e);
+            }
+        } else {
+            // PCI devices must be registered in the topology first.
+            let topo = pcie_topo.as_deref_mut().ok_or_else(|| {
+                anyhow::anyhow!("VFIO device requires a PCIe topology but none was provided")
+            })?;
+            self.register(topo).await?;
+            if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
+                error!(sl!(), "failed to attach vfio device: {:?}", e);
+                self.decrease_attach_count().await?;
+                self.unregister(topo).await?;
+                return Err(e);
+            }
         }
+
         info!(
             sl!(),
             "vfio device {:?} attached successfully",
@@ -247,9 +280,14 @@ impl Device for VfioDeviceModernHandle {
         let virt = self.with(|d| d.config.virt_path.clone()).await;
         let device_index = virt.map(|(idx, _)| idx);
 
-        // Unregister from PCIe topology
-        if let Some(topo) = pcie_topo {
-            self.unregister(topo).await?;
+        // AP devices have no PCIe topology to unregister from.
+        let is_ap = self
+            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
+            .await;
+        if !is_ap {
+            if let Some(topo) = pcie_topo {
+                self.unregister(topo).await?;
+            }
         }
 
         Ok(device_index)
@@ -279,6 +317,14 @@ impl Device for VfioDeviceModernHandle {
 impl PCIeDevice for VfioDeviceModernHandle {
     /// Reserves a bus and port in the PCIe topology for this device.
     async fn register(&mut self, topo: &mut PCIeTopology) -> Result<()> {
+        // AP devices have no PCIe topology.
+        if self
+            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
+            .await
+        {
+            return Ok(());
+        }
+
         let device_id = self.device_id().await;
         let port_type = self.with(|d| d.config.port).await;
 
@@ -299,6 +345,14 @@ impl PCIeDevice for VfioDeviceModernHandle {
 
     /// Releases the reserved PCIe resources and resets attachment state.
     async fn unregister(&mut self, topo: &mut PCIeTopology) -> Result<()> {
+        // AP devices have no PCIe topology.
+        if self
+            .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
+            .await
+        {
+            return Ok(());
+        }
+
         let device_id = self.device_id().await;
         topo.release_bus_for_device(&device_id)?;
 
