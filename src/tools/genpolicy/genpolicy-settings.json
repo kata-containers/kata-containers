@@ -31,7 +31,8 @@
             "io.kubernetes.cri.sandbox-log-directory": "^/var/log/pods/$(sandbox-namespace)_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
             "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
             "io.kubernetes.cri.sandbox-namespace": "default",
-            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)"
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)",
+            "io.katacontainers.config.hypervisor.cc_init_data": ".+"
         },
         "Process": {
             "NoNewPrivileges": true,
