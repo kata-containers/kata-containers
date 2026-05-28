@@ -62,6 +62,7 @@ vhost-user-fs = ["vhost-user"]
 vhost-user-net = ["vhost-user"]
 virtio-balloon = ["virtio-mmio"]
 virtio-blk = ["virtio-mmio"]
+virtio-blk-vmdk = ["virtio-blk"]
 virtio-fs = ["fuse-backend-rs/virtiofs", "nydus-rafs/virtio-fs", "virtio-mmio"]
 virtio-fs-pro = [
   "nydus-storage/backend-oss",

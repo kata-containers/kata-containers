@@ -6,8 +6,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+mod backend;
+pub use self::backend::{build_backend, BackendOpenParams};
 mod device;
 pub use self::device::*;
+mod format;
+pub use self::format::{detect_disk_format, DiskImageFormat};
 mod handler;
 pub(crate) use self::handler::*;
 mod request;

@@ -68,6 +68,7 @@ acpi = []
 atomic-guest-memory = ["vm-memory/backend-atomic"]
 hotplug = ["virtio-vsock"]
 virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
+virtio-blk-vmdk = ["dbs-virtio-devices/virtio-blk-vmdk", "virtio-blk"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory

@@ -7,6 +7,17 @@ pub use self::localfile::LocalFile;
 pub mod aio;
 pub mod io_uring;
 
+#[cfg(feature = "virtio-blk-vmdk")]
+pub mod vmdk;
+#[cfg(feature = "virtio-blk-vmdk")]
+mod vmdk_descriptor;
+#[cfg(feature = "virtio-blk-vmdk")]
+mod vmdk_engine;
+#[cfg(feature = "virtio-blk-vmdk")]
+mod vmdk_flat;
+#[cfg(feature = "virtio-blk-vmdk")]
+pub use self::vmdk::VmdkFile;
+
 use std::io::{self, Read, Seek, Write};
 use std::os::unix::io::RawFd;
 
