@@ -5,10 +5,14 @@
 //
 
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
+use crate::virtio_blk_modern::BlockSourceFormat;
 use crate::VhostUserConfig;
 use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
@@ -28,7 +32,11 @@ use dragonball::device_manager::{
     blk_dev_mgr::BlockDeviceType,
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
-use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
+use kata_types::{
+    config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME,
+    vmdk::{validate_vmdk_layout, VmdkConfig},
+};
+use tempfile::NamedTempFile;
 use virtio_bindings::bindings::virtio_blk::VIRTIO_BLK_ID_BYTES;
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -37,6 +45,141 @@ const DEFAULT_VIRTIO_FS_QUEUE_SIZE: i32 = 1024;
 
 const VIRTIO_FS: &str = "virtio-fs";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
+
+/// Materialize a structured multi-extent block source as one immutable raw image.
+///
+/// Dragonball's runtime path only needs one jail resource and one self-contained
+/// block artifact. The VMDK structure is therefore used as an in-memory
+/// layout description, not exposed to Dragonball as a native VMDK backend.
+fn materialize_vmdk_as_raw(path: &str, vmdk: &VmdkConfig, is_readonly: bool) -> Result<()> {
+    if !is_readonly {
+        return Err(anyhow!(
+            "Dragonball structured block source must be read-only"
+        ));
+    }
+    let output = Path::new(path);
+    if output.exists() {
+        return Err(anyhow!(
+            "refusing to replace existing Dragonball raw block source {}",
+            output.display()
+        ));
+    }
+
+    validate_vmdk_layout(vmdk).context("validate Dragonball structured block source")?;
+    let total_sectors = vmdk
+        .total_sectors()
+        .ok_or_else(|| anyhow!("Dragonball structured block source size overflow"))?;
+    let total_bytes = total_sectors
+        .checked_mul(512)
+        .ok_or_else(|| anyhow!("Dragonball raw block source byte size overflow"))?;
+    let parent = output.parent().ok_or_else(|| {
+        anyhow!(
+            "Dragonball raw block source has no parent directory: {}",
+            output.display()
+        )
+    })?;
+
+    let mut temporary = NamedTempFile::new_in(parent).with_context(|| {
+        format!(
+            "create temporary Dragonball raw block source in {}",
+            parent.display()
+        )
+    })?;
+    temporary
+        .as_file_mut()
+        .set_len(total_bytes)
+        .context("size temporary Dragonball raw block source")?;
+
+    let mut written = 0_u64;
+    let mut buffer = vec![0_u8; 1024 * 1024];
+    for extent in &vmdk.extents {
+        let source_offset = extent
+            .file_offset
+            .checked_mul(512)
+            .ok_or_else(|| anyhow!("Dragonball block extent offset overflow"))?;
+        let extent_bytes = extent
+            .sectors
+            .checked_mul(512)
+            .ok_or_else(|| anyhow!("Dragonball block extent size overflow"))?;
+        let required_bytes = source_offset
+            .checked_add(extent_bytes)
+            .ok_or_else(|| anyhow!("Dragonball block extent end overflow"))?;
+
+        let mut source = File::open(&extent.path_on_host)
+            .with_context(|| format!("open Dragonball block extent {}", extent.path_on_host))?;
+        let source_len = source
+            .metadata()
+            .with_context(|| format!("stat Dragonball block extent {}", extent.path_on_host))?
+            .len();
+        if source_len < required_bytes {
+            return Err(anyhow!(
+                "Dragonball block extent {} is shorter than its declared layout: {} < {} bytes",
+                extent.path_on_host,
+                source_len,
+                required_bytes
+            ));
+        }
+        source
+            .seek(SeekFrom::Start(source_offset))
+            .with_context(|| format!("seek Dragonball block extent {}", extent.path_on_host))?;
+
+        let mut remaining = extent_bytes;
+        while remaining > 0 {
+            let chunk_len = usize::try_from(remaining.min(buffer.len() as u64))
+                .context("convert Dragonball block copy length")?;
+            let read = source
+                .read(&mut buffer[..chunk_len])
+                .with_context(|| format!("read Dragonball block extent {}", extent.path_on_host))?;
+            if read == 0 {
+                return Err(anyhow!(
+                    "short copy from Dragonball block extent {}: {} bytes remaining",
+                    extent.path_on_host,
+                    remaining
+                ));
+            }
+            temporary
+                .as_file_mut()
+                .write_all(&buffer[..read])
+                .with_context(|| {
+                    format!("write Dragonball block extent {}", extent.path_on_host)
+                })?;
+            let read = read as u64;
+            remaining -= read;
+            written = written
+                .checked_add(read)
+                .ok_or_else(|| anyhow!("Dragonball raw block source write size overflow"))?;
+        }
+    }
+
+    if written != total_bytes {
+        return Err(anyhow!(
+            "Dragonball raw block source size mismatch: wrote {} of {} bytes",
+            written,
+            total_bytes
+        ));
+    }
+    temporary
+        .as_file_mut()
+        .flush()
+        .context("flush Dragonball raw block source")?;
+    temporary
+        .as_file()
+        .sync_all()
+        .context("sync Dragonball raw block source")?;
+    temporary
+        .as_file()
+        .set_permissions(std::fs::Permissions::from_mode(0o400))
+        .context("make Dragonball raw block source immutable")?;
+    temporary.persist_noclobber(output).map_err(|error| {
+        anyhow!(
+            "publish Dragonball raw block source {}: {}",
+            output.display(),
+            error.error
+        )
+    })?;
+
+    Ok(())
+}
 
 impl DragonballInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -73,6 +216,7 @@ impl DragonballInner {
                     driver_option,
                     sparse,
                     serial_override,
+                    source,
                 ) = {
                     let dev = block_device.lock().await;
                     let cfg = &dev.config;
@@ -85,8 +229,24 @@ impl DragonballInner {
                         cfg.driver_option.clone(),
                         cfg.discard_unmap,
                         cfg.serial_override.clone(),
+                        cfg.source.clone(),
                     )
                 };
+
+                if let BlockSourceFormat::Vmdk(vmdk) = source {
+                    let raw_path = path_on_host.clone();
+                    tokio::task::spawn_blocking(move || {
+                        materialize_vmdk_as_raw(&raw_path, &vmdk, is_readonly)
+                    })
+                    .await
+                    .context("wait for Dragonball raw block materialization")?
+                    .context("materialize Dragonball structured block source")?;
+                    info!(
+                        sl!(),
+                        "materialized structured block source as Dragonball RawBlock: {}",
+                        path_on_host
+                    );
+                }
 
                 let use_pci_bus = if driver_option == KATA_BLK_DEV_TYPE {
                     Some(true)
@@ -549,6 +709,86 @@ impl DragonballInner {
                 e
             )
         })
+    }
+}
+
+#[cfg(test)]
+mod block_source_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn materializes_ordered_extents_as_read_only_raw_block() {
+        let directory = tempdir().unwrap();
+        let first = directory.path().join("first.raw");
+        let second = directory.path().join("second.raw");
+        let output = directory.path().join("merged.raw");
+        fs::write(&first, [vec![0x11; 512], vec![0x22; 512]].concat()).unwrap();
+        fs::write(&second, vec![0x33; 512]).unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(first.to_str().unwrap(), 1, 1);
+        vmdk.push_extent(second.to_str().unwrap(), 1, 0);
+
+        materialize_vmdk_as_raw(output.to_str().unwrap(), &vmdk, true).unwrap();
+
+        let data = fs::read(&output).unwrap();
+        assert_eq!(data.len(), 1024);
+        assert!(data[..512].iter().all(|byte| *byte == 0x22));
+        assert!(data[512..].iter().all(|byte| *byte == 0x33));
+        assert_eq!(
+            fs::metadata(output).unwrap().permissions().mode() & 0o777,
+            0o400
+        );
+    }
+
+    #[test]
+    fn rejects_short_extent_without_publishing_output() {
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("short.raw");
+        let output = directory.path().join("merged.raw");
+        fs::write(&source, vec![0x11; 513]).unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(source.to_str().unwrap(), 2, 0);
+
+        let error = materialize_vmdk_as_raw(output.to_str().unwrap(), &vmdk, true).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("shorter than its declared layout"));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn refuses_to_replace_existing_output() {
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("source.raw");
+        let output = directory.path().join("merged.raw");
+        fs::write(&source, vec![0x11; 512]).unwrap();
+        fs::write(&output, b"keep").unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(source.to_str().unwrap(), 1, 0);
+
+        let error = materialize_vmdk_as_raw(output.to_str().unwrap(), &vmdk, true).unwrap_err();
+        assert!(error.to_string().contains("refusing to replace existing"));
+        assert_eq!(fs::read(output).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn rejects_writable_structured_source() {
+        let directory = tempdir().unwrap();
+        let source = directory.path().join("source.raw");
+        let output = directory.path().join("merged.raw");
+        fs::write(&source, vec![0x11; 512]).unwrap();
+
+        let mut vmdk = VmdkConfig::default();
+        vmdk.push_extent(source.to_str().unwrap(), 1, 0);
+
+        let error = materialize_vmdk_as_raw(output.to_str().unwrap(), &vmdk, false).unwrap_err();
+        assert!(error.to_string().contains("must be read-only"));
+        assert!(!output.exists());
     }
 }
 
