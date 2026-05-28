@@ -18,12 +18,13 @@ use kata_types::config::hypervisor::{
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    vfio_device::VfioDeviceModernHandle, vhost_user_blk::VhostUserBlkDevice, BlockConfig,
-    BlockConfigModern, BlockDevice, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor,
-    NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
-    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
-    KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
-    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
+    vhost_user_blk::VhostUserBlkDevice,
+    BlockConfig, BlockConfigModern, BlockDevice, BlockDeviceModernHandle, HybridVsockDevice,
+    Hypervisor, NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice,
+    VhostUserConfig, VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE,
+    KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW,
+    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -722,6 +723,36 @@ pub async fn get_block_device_info(d: &RwLock<DeviceManager>) -> BlockDeviceInfo
 
 pub async fn get_shared_fs_info(d: &RwLock<DeviceManager>) -> SharedFsInfo {
     d.read().await.get_shared_fs_info().await
+}
+
+/// Returns the APQN list for a cold-plugged VFIO-AP device whose
+/// `iommu_group_devnode` matches `host_path`, or `None` if no such device is
+/// registered in the device manager.
+///
+/// Used by `handler_devices` to bypass `do_handle_device` for VFIO-AP devices
+/// that were cold-plugged before VM boot.  VFIO-AP devices have no PCIe BDF so
+/// the BDF-keyed `cold_plug_bdfs` map cannot catch them; this lookup fills that
+/// gap without touching reference counts or the QMP hot-plug path.
+pub async fn find_cold_plugged_vfio_ap(
+    d: &RwLock<DeviceManager>,
+    host_path: &str,
+) -> Option<Vec<String>> {
+    // Avoid holding the DeviceManager read-lock across .await points.
+    let devices: Vec<ArcMutexDevice> = {
+        let dm = d.read().await;
+        dm.devices.values().cloned().collect()
+    };
+    for dev in devices {
+        if let DeviceType::VfioModern(inner) = dev.lock().await.get_device_info().await {
+            let guard = inner.lock().await;
+            if guard.device.device_type == VfioDeviceType::MediatedAp
+                && guard.config.iommu_group_devnode == Path::new(host_path)
+            {
+                return Some(guard.config.ap_devices.clone());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]

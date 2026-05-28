@@ -11,23 +11,27 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        device_manager::{
+            do_handle_device, find_cold_plugged_vfio_ap, get_block_device_info, DeviceManager,
+        },
         util::{get_host_path, DEVICE_TYPE_BLOCK, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
     utils::uses_native_ccw_bus,
+    vfio_device::is_vfio_ap_device,
     BlockConfig, BlockDeviceAio, Hypervisor, VfioConfig,
 };
 use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
+    device::DRIVER_VFIO_AP_COLD_TYPE,
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
 };
 use libc::NUD_PERMANENT;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::{runtime, sync::RwLock};
 
 use crate::{
@@ -661,6 +665,43 @@ impl ResourceManagerInner {
                         continue;
                     }
 
+                    // VFIO-AP devices have no PCIe BDF, so cold_plug_bdfs above
+                    // cannot catch them.  If this device was registered in the
+                    // device manager during cold-plug (prepare_coldplug_raw_vfio_devices
+                    // or CDI), retrieve its APQN list and build the agent device
+                    // directly — calling do_handle_device on an already-present
+                    // device would attempt a QMP device_add and fail.
+                    if is_vfio_ap_device(Path::new(&host_path)) {
+                        if let Some(ap_devs) =
+                            find_cold_plugged_vfio_ap(&self.device_manager, &host_path).await
+                        {
+                            let container_path = d.path().display().to_string();
+                            let group_num = d
+                                .path()
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or_default()
+                                .to_string();
+                            let agent_device = Device {
+                                id: group_num,
+                                container_path,
+                                field_type: DRIVER_VFIO_AP_COLD_TYPE.to_string(),
+                                options: ap_devs,
+                                ..Default::default()
+                            };
+                            info!(
+                                sl!(),
+                                "vfio-ap cold-plugged agent device: {:?}", agent_device
+                            );
+                            devices.push(ContainerDevice {
+                                device_info: None,
+                                device: agent_device,
+                            });
+                            continue;
+                        }
+                        // Not registered as cold-plugged — fall through to do_handle_device.
+                    }
+
                     let bus_type = if uses_native_ccw_bus() {
                         "ccw".to_string()
                     } else {
@@ -681,6 +722,14 @@ impl ResourceManagerInner {
                     if let DeviceType::VfioModern(vfio_dev) = device_info.clone() {
                         info!(sl!(), "device info: {:?}", vfio_dev.lock().await);
                         let vfio_device = vfio_dev.lock().await;
+
+                        let group_num = d
+                            .path()
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or_default()
+                            .to_string();
+
                         let guest_pci_path = vfio_device
                             .config
                             .guest_pci_path
@@ -697,15 +746,8 @@ impl ResourceManagerInner {
                         // vfio mode: vfio-pci and vfio-pci-gk for x86_64
                         // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
                         // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
-                        // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
                         let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                            "vfio" => {
-                                if bus_type == "ccw" {
-                                    "vfio-ap".to_string()
-                                } else {
-                                    "vfio-pci".to_string()
-                                }
-                            }
+                            "vfio" => "vfio-pci".to_string(),
                             _ => "vfio-pci-gk".to_string(),
                         };
                         let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
@@ -713,12 +755,6 @@ impl ResourceManagerInner {
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:
                         //   i_vfio_device.id == concat("", ["vfio", suffix])
-                        let group_num = d
-                            .path()
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or_default()
-                            .to_string();
                         let agent_device = Device {
                             id: group_num,
                             container_path: d.path().display().to_string().clone(),
