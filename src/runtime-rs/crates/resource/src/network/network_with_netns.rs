@@ -102,7 +102,18 @@ impl Network for NetworkWithNetns {
         let inner = self.inner.read().await;
         let mut interfaces = vec![];
         for e in &inner.entity_list {
-            interfaces.push(e.network_info.interface().await.context("interface")?);
+            let mut iface = e.network_info.interface().await.context("interface")?;
+            // For cold-plugged physical (VFIO) endpoints, fill device_path
+            // with the guest PCI path so the agent can do PCI-path-based MAC
+            // reconciliation for IB/RoCE VFs. device_path is empty by default
+            // because network_info_from_link builds the Interface before
+            // attach() runs.
+            if iface.device_path.is_empty() {
+                if let Some(pci_path) = e.endpoint.guest_pci_path().await {
+                    iface.device_path = pci_path;
+                }
+            }
+            interfaces.push(iface);
         }
         Ok(interfaces)
     }
@@ -140,22 +151,39 @@ impl Network for NetworkWithNetns {
 
     async fn remove(&self, h: &dyn Hypervisor) -> Result<()> {
         let inner = self.inner.read().await;
-        // The network namespace would have been deleted at this point
-        // if it has not been created by virtcontainers.
-        if !inner.network_created {
-            return Ok(());
-        }
+
+        // Always detach endpoints regardless of whether kata created the netns.
+        // Physical endpoints rebind their VF from vfio-pci back to the original
+        // host driver here.  Skipping this when network_created=false would
+        // permanently leave VFs bound to vfio-pci after pod deletion.
         {
             let _netns_guard =
                 netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
             for e in &inner.entity_list {
-                e.endpoint.detach(h).await.context("detach")?;
+                if let Err(err) = e.endpoint.detach(h).await {
+                    warn!(sl!(), "failed to detach endpoint: {}", err);
+                }
             }
+        }
+
+        // Only delete the network namespace if kata created it.
+        // If the CNI created the netns, it will be cleaned up by the CNI.
+        if !inner.network_created {
+            return Ok(());
         }
         let netns = get_from_path(inner.netns_path.clone())?;
         netns.remove()?;
         fs::remove_dir_all(inner.netns_path.clone()).context("failed to remove netns path")?;
         Ok(())
+    }
+
+    async fn endpoints(&self) -> Vec<std::sync::Arc<dyn crate::network::endpoint::Endpoint>> {
+        let inner = self.inner.read().await;
+        inner
+            .entity_list
+            .iter()
+            .map(|e| e.endpoint.clone())
+            .collect()
     }
 }
 

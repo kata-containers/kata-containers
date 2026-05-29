@@ -1258,7 +1258,6 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       make([]string, len(devList)),
 	}
 
 	// We always pass the device information to the agent, since
@@ -1268,7 +1267,8 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
-	for i, dev := range devList {
+	var opts []string
+	for _, dev := range devList {
 		if dev.Type == config.VFIOAPDeviceMediatedType {
 			kataDevice.Type = kataVfioApDevType
 			coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -1282,11 +1282,29 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 			}
 			kataDevice.Options = dev.APDevices
 		} else {
-
 			devBDF := drivers.GetBDF(dev.BDF)
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
+			if dev.GuestPciPath.IsNil() {
+				// GuestPciPath could not be resolved (e.g. GPU behind a
+				// pxb-pcie bridge in a NUMA topology where the QOM walk
+				// fails).  The device is already present in the guest via
+				// cold-plug; there is no guest-side setup the agent can
+				// perform without a PCI path, and emitting an empty option
+				// would trip the agent policy checker.  Skip this device.
+				k.Logger().WithFields(logrus.Fields{
+					"host-bdf": devBDF,
+				}).Warn("appendVfioDevice: GuestPciPath unresolved, skipping device option")
+				continue
+			}
+			opts = append(opts, fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath))
 		}
+	}
 
+	if len(opts) == 0 && len(kataDevice.Options) == 0 {
+		// All PCIe devices had unresolvable paths — nothing useful to send.
+		return nil
+	}
+	if len(opts) > 0 {
+		kataDevice.Options = opts
 	}
 
 	return kataDevice
@@ -1325,6 +1343,109 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 	return deviceList
 }
 
+// appendPhysicalEndpointDevices synthesises a vfio-pci-gk device entry for
+// each cold-plugged physical (SR-IOV VF) network endpoint that has a resolved
+// guest PCI path.  The NVIDIA BF3 SR-IOV device plugin only injects the VF
+// BDF as a PCIDEVICE_* environment variable; it does not add the VFIO char
+// device to linux.devices.  Without this helper the agent's
+// container_has_vfio_device() gate stays closed and
+// expose_guest_infiniband_devices() is never triggered.
+func (k *kataAgent) appendPhysicalEndpointDevices(deviceList []*grpc.Device, sandbox *Sandbox) []*grpc.Device {
+	if sandbox == nil {
+		return deviceList
+	}
+	for _, ep := range sandbox.network.Endpoints() {
+		if ep.Type() != PhysicalEndpointType {
+			continue
+		}
+		pe, ok := ep.(*PhysicalEndpoint)
+		if !ok || pe.BDF == "" || ep.PciPath().IsNil() {
+			continue
+		}
+		guestPath := ep.PciPath()
+
+		vfioDevPath, err := drivers.GetVFIODevPath(pe.BDF)
+		if err != nil {
+			k.Logger().WithFields(logrus.Fields{
+				"host-bdf": pe.BDF,
+			}).WithError(err).Warn("appendPhysicalEndpointDevices: cannot get VFIO device path, skipping VFIO device exposure")
+			continue
+		}
+
+		groupNum := filepath.Base(vfioDevPath)
+		devBDF := drivers.GetBDF(pe.BDF)
+
+		k.Logger().WithFields(logrus.Fields{
+			"host-bdf":       pe.BDF,
+			"guest-pci-path": guestPath.String(),
+			"vfio-path":      vfioDevPath,
+		}).Info("appendPhysicalEndpointDevices: injecting vfio-pci-gk entry for cold-plug physical endpoint")
+
+		deviceList = append(deviceList, &grpc.Device{
+			ContainerPath: vfioDevPath,
+			Id:            groupNum,
+			Type:          kataVfioPciGuestKernelDevType,
+			Options:       []string{fmt.Sprintf("0000:%s=%s", devBDF, guestPath)},
+		})
+	}
+	return deviceList
+}
+
+func (k *kataAgent) resolveColdPlugVFIOGuestPciPaths(sandbox *Sandbox, c *Container) error {
+	if sandbox == nil || c == nil {
+		return nil
+	}
+
+	if sandbox.config.HypervisorConfig.ColdPlugVFIO == config.NoPort {
+		return nil
+	}
+
+	q, ok := sandbox.hypervisor.(*qemu)
+	if !ok {
+		return nil
+	}
+
+	if err := q.qmpSetup(); err != nil {
+		return err
+	}
+
+	for _, dev := range c.devices {
+		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
+		if device == nil || device.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+
+		vfioDevs, ok := device.GetDeviceInfo().([]*config.VFIODev)
+		if !ok || vfioDevs == nil {
+			continue
+		}
+
+		for _, vfioDev := range vfioDevs {
+			if vfioDev.Type == config.VFIOAPDeviceMediatedType || !vfioDev.GuestPciPath.IsNil() {
+				continue
+			}
+
+			pciPath, err := q.arch.qomGetPciPath(vfioDev.ID, &q.qmpMonitorCh)
+			if err != nil {
+				// Non-fatal: some PCIe topologies (e.g. pxb-pcie/NUMA) do
+				// not expose an `addr` QOM property and the walk fails.
+				// Leave GuestPciPath nil; appendVfioDevice will skip the
+				// option for this device and the agent falls back to its
+				// existing by-BDF device matching.
+				k.Logger().WithFields(logrus.Fields{
+					"device-id": vfioDev.ID,
+					"host-bdf":  vfioDev.BDF,
+				}).WithError(err).Warn("resolveColdPlugVFIOGuestPciPaths: QMP walk failed, leaving GuestPciPath unset")
+				continue
+			}
+
+			vfioDev.GuestPciPath = pciPath
+		}
+	}
+
+	return nil
+}
+
 // rollbackFailingContainerCreation rolls back important steps that might have
 // been performed before the container creation failed.
 // - Unmount container volumes.
@@ -1346,6 +1467,31 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		return nil
 	}
 
+	// Resolve the guest PCI path for cold-plugged VFIO PCIe devices whose
+	// GuestPciPath is not yet known. The path is needed below to stamp
+	// Interface.devicePath in the agent proto; without it the agent falls
+	// back to a by-MAC link lookup, which fails for SR-IOV VFs whose
+	// firmware MAC differs from the CNI-assigned MAC after the
+	// vfio-pci unbind/rebind cycle.
+	var coldPlugVFIODevs []*config.VFIODev
+	for _, dev := range sandbox.devManager.GetAllDevices() {
+		if dev.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+		if vfioDevs, ok := dev.GetDeviceInfo().([]*config.VFIODev); ok {
+			for _, vfioDev := range vfioDevs {
+				if vfioDev.IsPCIe && vfioDev.GuestPciPath.IsNil() && vfioDev.ID != "" {
+					coldPlugVFIODevs = append(coldPlugVFIODevs, vfioDev)
+				}
+			}
+		}
+	}
+	if len(coldPlugVFIODevs) > 0 {
+		if err := sandbox.hypervisor.ResolveColdPlugVFIOGuestPciPaths(ctx, coldPlugVFIODevs); err != nil {
+			k.Logger().WithError(err).Warn("setupNetworks: failed to resolve guest PCI paths for cold-plug VFIO devices")
+		}
+	}
+
 	var err error
 	var endpoints []Endpoint
 	if c == nil || c.id == sandbox.id {
@@ -1356,6 +1502,26 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		// creation, so no need to skip them here anymore.
 		for _, ep := range sandbox.network.Endpoints() {
 			if ep.Type() != VfioEndpointType {
+				// For cold-plugged SR-IOV VFs that appear as PhysicalEndpoints,
+				// the guest PCI path is known after resolveColdPlugVFIOGuestPciPaths
+				// has run (during createContainers). Look it up and stamp it on the
+				// endpoint so that generateVCNetworkStructures emits a non-empty
+				// devicePath in the agent Interface proto. Without this the agent
+				// receives devicePath="" and falls back to a by-MAC link lookup,
+				// which fails when the VF firmware MAC differs from the OVN MAC.
+				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
+					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
+						if !guestPath.IsNil() {
+							ep.SetPciPath(guestPath)
+							k.Logger().WithFields(logrus.Fields{
+								"endpoint-name":  ep.Name(),
+								"host-bdf":       pe.BDF,
+								"guest-pci-path": guestPath.String(),
+							}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
+						}
+					}
+				}
 				endpoints = append(endpoints, ep)
 			}
 		}
@@ -1487,8 +1653,26 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	if err = k.resolveColdPlugVFIOGuestPciPaths(sandbox, c); err != nil {
+		return nil, err
+	}
+
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
+
+	// The SR-IOV device plugin for physical network VFs only injects the BDF
+	// as a PCIDEVICE_* env var; it does not add a VFIO char device to
+	// linux.devices.  That means appendDevices() finds nothing VFIO-related
+	// in c.devices, so the agent never receives a vfio-pci-gk entry, the
+	// container_has_vfio_device() gate stays closed, and
+	// expose_guest_infiniband_devices() is never called — leaving
+	// /dev/infiniband absent from the container even though the guest kernel
+	// created the IB devices.
+	//
+	// Walk the sandbox's physical endpoints: for each one with a resolved
+	// guest PCI path (set by setupNetworks/ResolveColdPlugVFIOGuestPciPaths)
+	// synthesise a vfio-pci-gk device entry so the agent gate fires.
+	ctrDevices = k.appendPhysicalEndpointDevices(ctrDevices, sandbox)
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.

@@ -345,6 +345,17 @@ impl ResourceManagerInner {
         }
 
         if let Some(network) = self.network.as_ref() {
+            // For cold-plugged physical-endpoint VFs, the PCIe topology
+            // pre-computes a wrong path because the root port has no explicit
+            // addr and QEMU auto-assigns its slot.  Resolve the actual path
+            // via QMP (query-pci + device search) before sending
+            // update_interface to the agent.
+            resolve_physical_endpoint_pci_paths(
+                network.as_ref(),
+                self.hypervisor.as_ref(),
+            )
+            .await;
+
             self.apply_network_to_agent(network.as_ref()).await?;
         }
 
@@ -491,6 +502,35 @@ impl ResourceManagerInner {
     pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
 
+        // Build a map of host_bdf -> Option<guest_pci_path> for cold-plugged
+        // physical (VFIO) network endpoints.  When a VFIO char device in the
+        // OCI spec belongs to one of these endpoints we bypass the
+        // do_handle_device hot-plug path (the device is already in QEMU) and
+        // build the ContainerDevice directly, mirroring Go's appendVfioDevice.
+        // This also triggers the agent's container_has_vfio_device() gate,
+        // which drives the guest-kernel VFIO network device setup (Ethernet,
+        // RoCE and InfiniBand) — including, for IB/RoCE VFs,
+        // expose_guest_infiniband_devices() injecting /dev/infiniband/* into
+        // the container.
+        //
+        // IMPORTANT: every physical-endpoint BDF is recorded here regardless of
+        // whether its guest PCI path has been resolved yet (the QMP resolution
+        // in setup_after_start_vm can fail or be racy).  The decision to skip
+        // do_handle_device must depend only on the device being a cold-plugged
+        // endpoint — never on the guest PCI path being known — otherwise an
+        // unresolved path would send the already-cold-plugged VF down the
+        // hot-plug path and fail with ENOENT.
+        let mut cold_plug_bdfs: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
+        if let Some(network) = &self.network {
+            for endpoint in network.endpoints().await {
+                if let Some(bdf) = endpoint.host_bdf().await {
+                    let path = endpoint.guest_pci_path().await;
+                    cold_plug_bdfs.insert(bdf, path);
+                }
+            }
+        }
+
         let linux_devices = linux.devices().clone().unwrap_or_default();
         for d in linux_devices.iter() {
             match d.typ() {
@@ -544,6 +584,68 @@ impl ResourceManagerInner {
                         .context("get host path failed")?;
                     // First of all, filter vfio devices.
                     if !host_path.starts_with("/dev/vfio") {
+                        continue;
+                    }
+
+                    // `/dev/vfio/vfio` is the legacy VFIO container control
+                    // node, not a passthrough device — it has no IOMMU group
+                    // and no BDF.  The SR-IOV device plugin lists it alongside
+                    // the VF group node; running do_handle_device on it fails
+                    // with ENOENT.  Skip it unconditionally.
+                    if host_path == "/dev/vfio/vfio" {
+                        continue;
+                    }
+
+                    let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+                        "vfio" => "vfio-pci",
+                        _ => "vfio-pci-gk",
+                    };
+
+                    // If this VFIO char device belongs to a cold-plugged
+                    // physical endpoint, it is already present in QEMU.  We
+                    // MUST NOT call do_handle_device on it — that would try to
+                    // hot-plug an already-present device and fail with ENOENT.
+                    //
+                    // Match on the host BDF(s) the device exposes (resolved via
+                    // its IOMMU group / iommufd cdev) against the physical
+                    // endpoint set.  vfio_path_to_bdfs returns *every* BDF in
+                    // the group so a legacy multi-device group is matched
+                    // deterministically.  The skip depends only on BDF
+                    // membership, never on the guest PCI path being resolved.
+                    let matched_bdf = vfio_path_to_bdfs(&host_path)
+                        .into_iter()
+                        .find(|bdf| cold_plug_bdfs.contains_key(bdf));
+                    if let Some(host_bdf) = matched_bdf {
+                        // unwrap: contains_key above guarantees presence
+                        let maybe_guest_path = cold_plug_bdfs.get(&host_bdf).unwrap();
+                        if let Some(guest_pci_path) = maybe_guest_path {
+                            let container_path = d.path().display().to_string();
+                            let group_num = d
+                                .path()
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or_default()
+                                .to_string();
+                            let agent_device = Device {
+                                id: group_num,
+                                container_path,
+                                field_type: vfio_mode.to_string(),
+                                options: vec![format!("{}={}", host_bdf, guest_pci_path)],
+                                ..Default::default()
+                            };
+                            devices.push(ContainerDevice {
+                                device_info: None,
+                                device: agent_device,
+                            });
+                        } else {
+                            warn!(
+                                sl!(),
+                                "handler_devices: cold-plug VFIO device has no \
+                                 resolved guest PCI path, skipping agent device entry";
+                                "host_bdf" => &host_bdf,
+                            );
+                        }
+                        // Always skip do_handle_device for cold-plugged devices.
                         continue;
                     }
 
@@ -700,6 +802,85 @@ impl ResourceManagerInner {
                 }
             }
         }
+
+        // The SR-IOV device plugin for physical network VFs injects the BDF
+        // as a PCIDEVICE_* env var only — it does not add the VFIO char device
+        // to linux.devices.  That means the LinuxDeviceType::C loop above
+        // never fires for these endpoints, the cold_plug_bdfs map was built
+        // but never consumed, and the agent's container_has_vfio_device() gate
+        // stays closed (so no guest-kernel VFIO network device setup runs).
+        //
+        // For every cold-plug endpoint still unmatched (guest PCI path in the
+        // map but no corresponding device pushed above), derive the VFIO group
+        // char path from sysfs and synthesise a vfio-pci-gk ContainerDevice,
+        // mirroring what the Go runtime does in appendPhysicalEndpointDevices.
+        let seen_bdfs: std::collections::HashSet<String> = devices
+            .iter()
+            .filter_map(|cd| {
+                cd.device.options.first().and_then(|opt| {
+                    let bdf_part = opt.split('=').next()?;
+                    // strip leading "0000:" to get "BB:DD.F"
+                    let stripped = bdf_part.trim_start_matches("0000:");
+                    Some(format!("0000:{}", stripped))
+                })
+            })
+            .collect();
+
+        let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+            "vfio" => "vfio-pci",
+            _ => "vfio-pci-gk",
+        };
+
+        for (host_bdf, maybe_guest_path) in &cold_plug_bdfs {
+            if seen_bdfs.contains(host_bdf) {
+                continue;
+            }
+            let guest_pci_path = match maybe_guest_path {
+                Some(p) => p,
+                None => {
+                    warn!(
+                        sl!(),
+                        "handler_devices: cold-plug physical endpoint has no resolved \
+                         guest PCI path, skipping VFIO device exposure";
+                        "host_bdf" => host_bdf,
+                    );
+                    continue;
+                }
+            };
+            if let Some(vfio_group_path) = bdf_to_vfio_group_path(host_bdf) {
+                let group_num = std::path::Path::new(&vfio_group_path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                info!(
+                    sl!(),
+                    "handler_devices: injecting vfio-pci-gk entry for cold-plug \
+                     physical endpoint";
+                    "host_bdf" => host_bdf,
+                    "guest_pci_path" => guest_pci_path,
+                    "vfio_group" => &vfio_group_path,
+                );
+                let agent_device = Device {
+                    id: group_num,
+                    container_path: vfio_group_path,
+                    field_type: vfio_mode.to_string(),
+                    options: vec![format!("{}={}", host_bdf, guest_pci_path)],
+                    ..Default::default()
+                };
+                devices.push(ContainerDevice {
+                    device_info: None,
+                    device: agent_device,
+                });
+            } else {
+                warn!(
+                    sl!(),
+                    "handler_devices: cannot resolve VFIO group for {}, skipping VFIO device exposure",
+                    host_bdf
+                );
+            }
+        }
+
         Ok(devices)
     }
 
@@ -720,6 +901,13 @@ impl ResourceManagerInner {
     }
 
     pub async fn cleanup(&self) -> Result<()> {
+        // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
+        if let Some(network) = &self.network {
+            if let Err(err) = network.remove(self.hypervisor.as_ref()).await {
+                warn!(sl!(), "failed to remove network: {}", err);
+            }
+        }
+
         // clean up cgroup
         self.cgroups_resource
             .delete()
@@ -897,5 +1085,111 @@ impl Persist for ResourceManagerInner {
             mem_resource,
             swap_resource,
         })
+    }
+}
+
+/// For each physical-endpoint VF in the network, resolve the actual in-guest
+/// PCIe path via QMP (query-pci) and update the endpoint's `guest_pci_path`.
+///
+/// This must be called after the VM has started (QMP is initialised) and
+/// before `apply_network_to_agent`, because the PCIe topology pre-computes
+/// a wrong path (root port has no explicit addr → QEMU auto-assigns its slot;
+/// only QMP can reveal the actual assignment).
+/// Map a PCI BDF (e.g. `"0000:06:02.2"`) to the VFIO group char device path
+/// (e.g. `"/dev/vfio/343"`).  Returns `None` if sysfs cannot be read.
+fn bdf_to_vfio_group_path(bdf: &str) -> Option<String> {
+    // /sys/bus/pci/devices/<bdf>/iommu_group is a symlink like
+    // ../../kernel/iommu_groups/343  — the basename is the group number.
+    let iommu_link = format!("/sys/bus/pci/devices/{}/iommu_group", bdf);
+    let target = std::fs::read_link(&iommu_link).ok()?;
+    let group = target.file_name()?.to_str()?.to_string();
+    // Verify the char device exists before returning.
+    let vfio_path = format!("/dev/vfio/{}", group);
+    if std::path::Path::new(&vfio_path).exists() {
+        Some(vfio_path)
+    } else {
+        None
+    }
+}
+
+/// Resolve a VFIO char device path to *all* host PCI BDFs it exposes.
+///
+/// Handles two formats:
+/// - Legacy group interface: `/dev/vfio/343`
+///   Reads `/sys/kernel/iommu_groups/343/devices/` and returns every BDF in
+///   the group (a group may contain more than one device).
+/// - iommufd cdev interface: `/dev/vfio/devices/vfio1`
+///   Reads `/sys/class/vfio_device/vfio1/device` symlink to find the BDF.
+///
+/// Returns an empty vector if the path cannot be resolved.  Returning all
+/// BDFs (rather than just the first) makes cold-plug endpoint matching
+/// deterministic regardless of `read_dir` ordering.
+fn vfio_path_to_bdfs(vfio_path: &str) -> Vec<String> {
+    let file_name = match std::path::Path::new(vfio_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+    {
+        Some(n) => n.to_string(),
+        None => return vec![],
+    };
+
+    // iommufd cdev path: /dev/vfio/devices/vfioN — file name starts with "vfio"
+    // and cannot be parsed as a plain integer.
+    if file_name.parse::<u32>().is_err() {
+        // /sys/class/vfio_device/<name>/device -> ../../../../bus/pci/devices/<bdf>
+        let dev_link = format!("/sys/class/vfio_device/{}/device", file_name);
+        match std::fs::read_link(&dev_link)
+            .ok()
+            .and_then(|t| t.file_name().and_then(|n| n.to_str()).map(String::from))
+        {
+            Some(bdf) => return vec![bdf],
+            None => return vec![],
+        }
+    }
+
+    // Legacy group path: /dev/vfio/N — return every device BDF in the group.
+    let group = match file_name.parse::<u32>() {
+        Ok(g) => g,
+        Err(_) => return vec![],
+    };
+    let sysfs = format!("/sys/kernel/iommu_groups/{}/devices", group);
+    let entries = match std::fs::read_dir(&sysfs) {
+        Ok(e) => e,
+        Err(_) => return vec![],
+    };
+    entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect()
+}
+
+async fn resolve_physical_endpoint_pci_paths(
+    network: &dyn crate::network::Network,
+    hypervisor: &dyn hypervisor::Hypervisor,
+) {
+    for endpoint in network.endpoints().await {
+        if let Some(hostdev_id) = endpoint.vfio_hostdev_id().await {
+            match hypervisor.resolve_vfio_device_pci_path(&hostdev_id).await {
+                Ok(pci_path) => {
+                    let path_str = pci_path.to_string();
+                    info!(
+                        sl!(),
+                        "resolved physical endpoint guest PCI path: \
+                         hostdev_id={} path={}",
+                        hostdev_id,
+                        path_str
+                    );
+                    endpoint.set_guest_pci_path(path_str).await;
+                }
+                Err(e) => {
+                    warn!(
+                        sl!(),
+                        "failed to resolve guest PCI path for hostdev {}: {}",
+                        hostdev_id,
+                        e
+                    );
+                }
+            }
+        }
     }
 }

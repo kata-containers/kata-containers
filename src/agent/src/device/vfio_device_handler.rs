@@ -67,6 +67,19 @@ impl DeviceHandler for VfioPciDeviceHandler {
             let host =
                 pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
 
+            // An empty pcipath means the runtime could not resolve the guest PCI
+            // path (e.g. GPU behind a pxb-pcie bridge in a NUMA topology where
+            // the QOM walk fails).  Skip guest-device lookup and PCI fixup for
+            // this device — the device is already present in the guest and does
+            // not need driver override or address remapping.
+            if pcipath.is_empty() {
+                warn!(
+                    ctx.logger,
+                    "vfio device {:?} has empty guest PCI path, skipping guest-side setup", opt
+                );
+                continue;
+            }
+
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(pcipath)?;
 
             let guestdev =

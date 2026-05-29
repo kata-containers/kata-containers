@@ -2224,6 +2224,10 @@ pub struct PCIeVfioDevice {
     host_bdf: String,
     bus: String,
     addr: String,
+    /// Optional QEMU device ID (e.g. `physical_nic_340_0`). When set, emits
+    /// `id=<id>` on the command line so that callers can look the device up
+    /// via QMP (`qom-get`) or the runtime can match it to a guest PCI path.
+    id: Option<String>,
     iommufd: Option<String>,
     x_pci_vendor_id: Option<String>,
     x_pci_device_id: Option<String>,
@@ -2239,10 +2243,33 @@ impl PCIeVfioDevice {
             host_bdf: host_bdf.into(),
             bus: bus.into(),
             addr: "0x0".to_string(),
+            id: None,
             iommufd: Some(iommufd.into()),
             x_pci_vendor_id: None,
             x_pci_device_id: None,
         }
+    }
+
+    /// Creates a `PCIeVfioDevice` without an IOMMUFD handle, for use with
+    /// pre-existing PCIe root ports (cold-plug of physical network VFs).
+    pub fn new_without_iommufd(
+        host_bdf: impl Into<String>,
+        bus: impl Into<String>,
+    ) -> Self {
+        Self {
+            host_bdf: host_bdf.into(),
+            bus: bus.into(),
+            addr: "0x0".to_string(),
+            id: None,
+            iommufd: None,
+            x_pci_vendor_id: None,
+            x_pci_device_id: None,
+        }
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = Some(id.into());
+        self
     }
 
     #[allow(dead_code)]
@@ -2270,6 +2297,10 @@ impl ToQemuParams for PCIeVfioDevice {
         write!(params, "vfio-pci,host={}", self.host_bdf).unwrap();
         write!(params, ",bus={}", self.bus).unwrap();
         write!(params, ",addr={}", self.addr).unwrap();
+
+        if let Some(id) = &self.id {
+            write!(params, ",id={}", id).unwrap();
+        }
 
         if let Some(iommufd) = &self.iommufd {
             write!(params, ",iommufd={}", iommufd).unwrap();
@@ -2968,6 +2999,42 @@ impl<'a> QemuCmdLine<'a> {
     ///
     /// -device pcie-root-port,port=24,chassis=9,id=pci.9,bus=pcie.0,multifunction=on,addr=0x4
     /// -device vfio-pci,host=0000:21:00.0,x-pci-vendor-id=0x10de,x-pci-device-id=0x2321,bus=pci.1,addr=0x0,iommufd=iommufd0
+    /// Emits the `pcie-root-port` for a physical-endpoint VF.
+    /// `add_pcie_root_ports` skips allocated ports (assuming VfioModern
+    /// emitted them); for regular Vfio (physical endpoints) we must emit
+    /// the root port here, before the vfio-pci device that references it.
+    pub fn add_physical_endpoint_root_port(&mut self, port_id: &str, port_index: u32) {
+        let root_port = PCIeRootPortDevice::new(port_id, DEFAULT_PCIE_ROOT_BUS)
+            .with_chassis(port_index + 1)
+            .with_slot(port_index)
+            .with_multifunction(false)
+            .with_addr("0");
+        self.devices.push(Box::new(root_port));
+    }
+
+    /// Adds a single `-device vfio-pci` entry for a physical network VF that
+    /// was already cold-plugged onto a pre-existing PCIe root port.  Does not
+    /// emit a root port or an IOMMUFD object — the root port is assumed to
+    /// have been added by `add_pcie_root_ports` and the VF uses the standard
+    /// legacy VFIO container interface, not IOMMUFD.
+    pub fn add_physical_vfio_device(
+        &mut self,
+        host_bdf: &str,
+        id: &str,
+        bus: &str,
+        x_pci_vendor_id: Option<&str>,
+        x_pci_device_id: Option<&str>,
+    ) {
+        let mut dev = PCIeVfioDevice::new_without_iommufd(host_bdf, bus).with_id(id);
+        if let Some(vid) = x_pci_vendor_id {
+            dev = dev.with_vendor_id(vid);
+        }
+        if let Some(did) = x_pci_device_id {
+            dev = dev.with_device_id(did);
+        }
+        self.devices.push(Box::new(dev));
+    }
+
     pub fn add_vfio_device(&mut self, config: VfioDeviceConfig) -> Result<()> {
         self.add_iommufd("iommufd0")?;
 

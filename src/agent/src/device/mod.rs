@@ -16,6 +16,7 @@ use cdi::annotations::parse_annotations;
 use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
 use cdi::spec_dirs::with_spec_dirs;
 use container_device_interface as cdi;
+use kata_sys_util::pcilibs::{is_vfio_device_type, snapshot_infiniband};
 use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
@@ -247,7 +248,33 @@ pub async fn add_devices(
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
+
+    // Expose any RDMA / InfiniBand char devices the guest kernel
+    // created for cold-plugged VFs, but only for containers that
+    // actually requested at least one VFIO device. Without this gate
+    // every container — including unrelated workloads sharing the
+    // sandbox — would get `/dev/infiniband/*` mapped in plus matching
+    // device cgroup `allow` entries, which weakens per-container
+    // isolation for no benefit. Cold-plug VFIO + guest-kernel RDMA
+    // is the only flow that needs `uverbs<N>` / `rdma_cm`, and that
+    // flow always shows up in `devices` with one of the VFIO driver
+    // types.
+    if container_has_vfio_device(devices) {
+        expose_guest_infiniband_devices(logger, spec).context("expose_guest_infiniband_devices")?;
+    }
+
     update_spec_devices(logger, spec, dev_updates)
+}
+
+/// Returns true if `devices` contains at least one entry whose
+/// `type_` matches one of the VFIO driver constants. Callers use
+/// this to gate host-wide VFIO-only side effects (e.g. exposing
+/// `/dev/infiniband/*` to the container) so the agent does not
+/// widen device access for unrelated containers.
+fn container_has_vfio_device(devices: &[Device]) -> bool {
+    devices
+        .iter()
+        .any(|d| is_vfio_device_type(d.type_.as_str()))
 }
 
 pub fn dump_nvidia_cdi_yaml(logger: &Logger) -> Result<()> {
@@ -446,6 +473,7 @@ pub fn update_env_pci(
 
         let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
+        let mut translation_skipped = false;
         for host_addr_str in val.split(',') {
             let host_addr = match pci::Address::from_str(host_addr_str) {
                 Ok(addr) => addr,
@@ -458,15 +486,41 @@ pub fn update_env_pci(
                     continue 'env_loop;
                 }
             };
-            let host_guest = pcimap
-                .get(cid)
-                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
-            let guest_addr = host_guest
-                .get(&host_addr)
-                .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+            let host_guest = match pcimap.get(cid) {
+                Some(m) => m,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        "update_env_pci: no per-container pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
+            let guest_addr = match host_guest.get(&host_addr) {
+                Some(g) => g,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        pcimap_size = host_guest.len(),
+                        "update_env_pci: host PCI address missing in pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
 
             guest_addrs.push(format!("{guest_addr}"));
             addr_map.insert(host_addr_str.to_string(), format!("{guest_addr}"));
+        }
+
+        if translation_skipped {
+            // Keep both PCIDEVICE_* and matching *_INFO untouched.
+            continue 'env_loop;
         }
 
         pci_dev_map.insert(format!("{name}_INFO"), addr_map);
@@ -729,6 +783,153 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
+    Ok(())
+}
+
+/// Walk `/dev/infiniband/` and append every char device found to the
+/// workload container's OCI spec, so that applications inside the
+/// container can use the guest's RDMA stack.
+///
+/// Only called when the container has at least one VFIO device
+/// (`container_has_vfio_device`), so this is a no-op for unrelated
+/// containers sharing the sandbox.
+///
+/// If `/dev/infiniband/` does not exist or is empty the function
+/// returns `Ok(())` immediately — the guest simply does not have IB
+/// devices (no mlx5_ib or VF not yet rebound).
+fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<()> {
+    let ib_dir = std::path::Path::new("/dev/infiniband");
+    if !ib_dir.exists() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband does not \
+             exist, skipping (no IB driver in guest, or VF not yet rebound)";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    let entries: Vec<_> = match fs::read_dir(ib_dir) {
+        Ok(it) => it.flatten().collect(),
+        Err(e) => {
+            warn!(
+                logger,
+                "expose_guest_infiniband_devices: read_dir(/dev/infiniband) failed: {e}"
+            );
+            return Ok(());
+        }
+    };
+
+    if entries.is_empty() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband is empty, skipping";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    struct IbDev {
+        path: PathBuf,
+        name: String,
+        major: i64,
+        minor: i64,
+        mode: u32,
+        uid: u32,
+        gid: u32,
+    }
+
+    let mut ib_devs: Vec<IbDev> = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+
+        let metadata = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(
+                    logger,
+                    "expose_guest_infiniband_devices: skipping {} (stat: {e})",
+                    path.display()
+                );
+                continue;
+            }
+        };
+
+        if !metadata.file_type().is_char_device() {
+            continue;
+        }
+
+        let rdev = metadata.rdev();
+        ib_devs.push(IbDev {
+            path,
+            name,
+            major: stat::major(rdev) as i64,
+            minor: stat::minor(rdev) as i64,
+            mode: (metadata.mode() & 0o7777) as u32,
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        });
+    }
+
+    // Pass 1: append LinuxDevice entries to spec.linux.devices.
+    {
+        let linux = spec
+            .linux_mut()
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+        for ib in &ib_devs {
+            let device = oci::LinuxDeviceBuilder::default()
+                .path(ib.path.clone())
+                .typ(oci::LinuxDeviceType::C)
+                .major(ib.major)
+                .minor(ib.minor)
+                .file_mode(ib.mode)
+                .uid(ib.uid)
+                .gid(ib.gid)
+                .build()
+                .map_err(|e| {
+                    anyhow!("failed to build LinuxDevice for {}: {e}", ib.path.display())
+                })?;
+
+            if let Some(devices) = linux.devices_mut() {
+                let already = devices
+                    .iter()
+                    .any(|d| d.path().display().to_string() == ib.path.display().to_string());
+                if !already {
+                    devices.push(device);
+                }
+            } else {
+                linux.set_devices(Some(vec![device]));
+            }
+        }
+    }
+
+    // Pass 2: cgroup allow rules.
+    let mut exposed: Vec<String> = Vec::with_capacity(ib_devs.len());
+    for ib in &ib_devs {
+        let info = DeviceInfo {
+            cgroup_type: String::from("c"),
+            guest_major: ib.major,
+            guest_minor: ib.minor,
+        };
+        insert_devices_cgroup_rule(logger, spec, &info, true, "rwm")
+            .context("insert IB device cgroup rule")?;
+        exposed.push(format!(
+            "{}({}:{},mode=0o{:o})",
+            ib.name, ib.major, ib.minor, ib.mode
+        ));
+    }
+
+    info!(
+        logger,
+        "expose_guest_infiniband_devices: injected {} guest IB char device(s)",
+        exposed.len();
+        "exposed" => exposed.join(","),
+        "snapshot" => snapshot_infiniband(),
+    );
+
     Ok(())
 }
 
@@ -1242,6 +1443,60 @@ mod tests {
         );
         // Real PCI addresses should still be translated
         assert_eq!(env[2], "PCIDEVICE_REAL=0000:01:01.0");
+    }
+
+    #[test]
+    fn test_update_env_pci_missing_cid_in_pcimap() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:06:02.6".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+                .to_string(),
+            "OTHER=value".to_string(),
+        ];
+        let pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+
+        let cid = "container-0".to_string();
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(
+            res.is_ok(),
+            "must not error when pcimap[cid] missing: {:?}",
+            res
+        );
+
+        // Both PCIDEVICE_* and *_INFO stay untouched.
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:06:02.6");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+        );
+        assert_eq!(env[2], "OTHER=value");
+    }
+
+    #[test]
+    fn test_update_env_pci_unknown_host_bdf() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}".to_string(),
+        ];
+
+        let cid = "container-0".to_string();
+        let mut inner: HashMap<pci::Address, pci::Address> = HashMap::new();
+        inner.insert(
+            pci::Address::from_str("0000:1a:01.0").unwrap(),
+            pci::Address::from_str("0000:01:01.0").unwrap(),
+        );
+        let mut pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pcimap.insert(cid.clone(), inner);
+
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(res.is_ok(), "must not error on partial pcimap: {:?}", res);
+
+        // Must leave env vars untouched (no half-translation).
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}"
+        );
     }
 
     #[test]

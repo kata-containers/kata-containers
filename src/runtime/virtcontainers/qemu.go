@@ -1848,6 +1848,48 @@ func (q *qemu) togglePauseSandbox(ctx context.Context, pause bool) error {
 	return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
 }
 
+// ResolveColdPlugVFIOGuestPciPaths implements Hypervisor. For each VFIODev
+// with IsPCIe=true and an empty GuestPciPath, it queries QMP to find the
+// in-guest PCI path and writes it back onto the device.
+func (q *qemu) ResolveColdPlugVFIOGuestPciPaths(ctx context.Context, vfioDevs []*config.VFIODev) error {
+	if len(vfioDevs) == 0 {
+		return nil
+	}
+	if err := q.qmpSetup(); err != nil {
+		return fmt.Errorf("ResolveColdPlugVFIOGuestPciPaths: qmpSetup: %w", err)
+	}
+	for _, vfioDev := range vfioDevs {
+		if vfioDev == nil || !vfioDev.IsPCIe {
+			continue
+		}
+		if !vfioDev.GuestPciPath.IsNil() {
+			q.Logger().WithFields(logrus.Fields{
+				"qemu-device-id": vfioDev.ID,
+				"host-bdf":       vfioDev.BDF,
+				"guest-pci-path": vfioDev.GuestPciPath.String(),
+			}).Debug("ResolveColdPlugVFIOGuestPciPaths: skipping device with pre-computed guest PCI path")
+			continue
+		}
+		guestPath, err := q.arch.qomGetPciPath(vfioDev.ID, &q.qmpMonitorCh)
+		if err != nil {
+			q.Logger().WithFields(logrus.Fields{
+				"qemu-device-id": vfioDev.ID,
+				"host-bdf":       vfioDev.BDF,
+			}).WithError(err).Warn("ResolveColdPlugVFIOGuestPciPaths: failed to resolve guest PCI path")
+			continue
+		}
+		vfioDev.GuestPciPath = guestPath
+		q.Logger().WithFields(logrus.Fields{
+			"qemu-device-id": vfioDev.ID,
+			"host-bdf":       vfioDev.BDF,
+			"port":           vfioDev.Port,
+			"bus":            vfioDev.Bus,
+			"guest-pci-path": guestPath.String(),
+		}).Info("ResolveColdPlugVFIOGuestPciPaths: resolved guest PCI path")
+	}
+	return nil
+}
+
 func (q *qemu) qmpSetup() error {
 	q.qmpMonitorCh.Lock()
 	defer q.qmpMonitorCh.Unlock()
