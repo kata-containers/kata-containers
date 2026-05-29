@@ -290,7 +290,14 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeCo
 
 	// Try to get the config file from the env KATA_CONF_FILE
 	if configPath == "" {
-		configPath = os.Getenv("KATA_CONF_FILE")
+		envConfigPath := os.Getenv("KATA_CONF_FILE")
+		if envConfigPath != "" {
+			if isShippedKataConfigPath(envConfigPath) {
+				configPath = envConfigPath
+			} else {
+				return nil, fmt.Errorf("invalid KATA_CONF_FILE %q: only shipped Kata configuration files are accepted", envConfigPath)
+			}
+		}
 	}
 
 	_, runtimeConfig, err := katautils.LoadConfiguration(configPath, false)
@@ -304,6 +311,26 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeCo
 	}
 
 	return &runtimeConfig, nil
+}
+
+func isShippedKataConfigPath(configPath string) bool {
+	resolvedConfigPath, err := katautils.ResolvePath(configPath)
+	if err != nil {
+		return false
+	}
+
+	for _, defaultConfigPath := range katautils.GetDefaultConfigFilePaths() {
+		resolvedDefaultPath, err := katautils.ResolvePath(defaultConfigPath)
+		if err != nil {
+			continue
+		}
+
+		if resolvedConfigPath == resolvedDefaultPath {
+			return true
+		}
+	}
+
+	return false
 }
 
 func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {

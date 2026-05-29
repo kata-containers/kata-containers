@@ -5,6 +5,10 @@ authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
+[dev-dependencies]
+rstest = { workspace = true }
+tempfile = { workspace = true }
+
 [dependencies]
 anyhow = { workspace = true }
 lazy_static = { workspace = true }

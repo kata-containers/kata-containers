@@ -235,7 +235,7 @@ This `ConfigPath` option is optional. If you want to use a different configurati
 
 > **Note:** In this example, the specified `ConfigPath` is valid in Kubernetes/Containerd workflow with containerd v1.7+ but doesn't work with ctr and nerdctl.
 
-If you do not specify it, `shimv2` first tries to get the configuration file from the environment variable `KATA_CONF_FILE`. If you want to adopt this way, you should first create a shell script as `containerd-shim-kata-v2` which is placed under the path of `/usr/local/bin/`. The following is an example of the shell script `containerd-shim-kata-qemu-v2` which specifies the configuration file with `KATA_CONF_FILE`
+If you do not specify it, `shimv2` first tries to get the configuration file from the environment variable `KATA_CONF_FILE`. For security, this value is accepted only when it resolves to one of Kata's shipped default configuration files. If you want to adopt this way, you should first create a shell script as `containerd-shim-kata-v2` which is placed under the path of `/usr/local/bin/`. The following is an example of the shell script `containerd-shim-kata-qemu-v2` which specifies the configuration file with `KATA_CONF_FILE`
 
 > **Note:** Just use containerd 2.x configuration as an example, the configuration for containerd 1.7.x is similar, just replace `io.containerd.cri.v1.runtime` with `io.containerd.grpc.v1.cri`
 

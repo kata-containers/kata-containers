@@ -65,7 +65,8 @@ The shimv2 runtime looks for its configuration in the following places (in order
   [shimv2](/docs/design/architecture/README.md#shim-v2-architecture)
   options passed to the runtime.
 
-- The value of the `KATA_CONF_FILE` environment variable.
+- The value of the `KATA_CONF_FILE` environment variable, if it resolves to one
+  of the shipped default configuration files.
 
 - The [default configuration paths](#stateless-systems).
 

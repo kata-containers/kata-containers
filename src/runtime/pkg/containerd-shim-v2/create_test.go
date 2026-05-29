@@ -19,9 +19,11 @@ import (
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
@@ -406,6 +408,18 @@ func TestCreateLoadRuntimeConfig(t *testing.T) {
 	_, err = loadRuntimeConfig(s, r)
 	assert.Error(err)
 
+	// existing but non-shipped config should be rejected
+	maliciousConfig := path.Join(tmpdir, "malicious.toml")
+	err = os.WriteFile(maliciousConfig, []byte("[hypervisor.qemu]\n"), os.FileMode(0640))
+	assert.NoError(err)
+	err = os.Setenv("KATA_CONF_FILE", maliciousConfig)
+	assert.NoError(err)
+	option.ConfigPath = ""
+	r.Options, err = protobuf.MarshalAnyToProto(option)
+	assert.NoError(err)
+	_, err = loadRuntimeConfig(s, r)
+	assert.Error(err)
+
 	// 1. shimv2 create task option
 	option.ConfigPath = config
 	r.Options, err = protobuf.MarshalAnyToProto(option)
@@ -421,4 +435,62 @@ func TestCreateLoadRuntimeConfig(t *testing.T) {
 	assert.NoError(err)
 	_, err = loadRuntimeConfig(s, r)
 	assert.NoError(err)
+}
+
+func TestIsShippedKataConfigPath(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	// Setup: Create test config files
+	shippedConfigPath := path.Join(tmpdir, "shipped.toml")
+	maliciousConfigPath := path.Join(tmpdir, "malicious.toml")
+	nonExistentPath := path.Join(tmpdir, "nonexistent.toml")
+
+	require.NoError(t, os.WriteFile(shippedConfigPath, []byte("[hypervisor.qemu]\n"), 0640))
+	require.NoError(t, os.WriteFile(maliciousConfigPath, []byte("[hypervisor.qemu]\n"), 0640))
+
+	// Configure shipped path
+	defaultConfigPaths := katautils.GetDefaultConfigFilePaths()
+	defer katautils.SetConfigOptions("", defaultConfigPaths[1], defaultConfigPaths[0])
+	katautils.SetConfigOptions("", shippedConfigPath, "")
+
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+		reason   string
+	}{
+		{
+			name:     "shipped config is accepted",
+			path:     shippedConfigPath,
+			expected: true,
+			reason:   "path matches configured default",
+		},
+		{
+			name:     "malicious config is rejected",
+			path:     maliciousConfigPath,
+			expected: false,
+			reason:   "path does not match any default",
+		},
+		{
+			name:     "non-existent path is rejected",
+			path:     nonExistentPath,
+			expected: false,
+			reason:   "path cannot be resolved",
+		},
+		{
+			name:     "empty path is rejected",
+			path:     "",
+			expected: false,
+			reason:   "empty path is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isShippedKataConfigPath(tt.path)
+			assert.Equal(t, tt.expected, result,
+				"isShippedKataConfigPath(%q) = %v, want %v: %s",
+				tt.path, result, tt.expected, tt.reason)
+		})
+	}
 }
