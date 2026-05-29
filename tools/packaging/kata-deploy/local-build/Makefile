@@ -332,3 +332,15 @@ install-prebuilt-artifacts:
 
 install-tarball:
 	tar --zstd -xf ./kata-static.tar.zst -C /
+
+# Push the kata-deploy image and helm chart for the host arch. Caller is
+# responsible for `docker login` / `helm registry login` before invoking.
+# This target expects explicit REGISTRY/TAG/CHART_REGISTRY/CHART_VERSION args.
+kata-deploy-publish:
+	@set -eu; \
+	tmpdir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmpdir"' EXIT; \
+	tar --zstd -xf "$(CURDIR)/kata-static.tar.zst" -C "$$tmpdir"; \
+	"$(MK_DIR)/kata-deploy-build-and-upload-payload.sh" "$(REGISTRY)" "$(TAG)" "$$tmpdir"; \
+	"$(MK_DIR)/kata-deploy-build-and-upload-helm-chart.sh" \
+		"$(REGISTRY)" "$(TAG)" "$(CHART_REGISTRY)" "$(CHART_VERSION)"

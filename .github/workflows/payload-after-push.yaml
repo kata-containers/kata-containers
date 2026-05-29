@@ -190,14 +190,13 @@ jobs:
 
       - name: Push helm chart to the OCI registries
         run: |
-          echo "Adjusting the Chart.yaml and values.yaml"
-          yq eval '.version = "0.0.0-dev" | .appVersion = "0.0.0-dev"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
-          yq eval '.image.reference = "quay.io/kata-containers/kata-deploy-ci" | .image.tag = "kata-containers-latest"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
-
-          echo "Generating the chart package"
-          helm dependencies update tools/packaging/kata-deploy/helm-chart/kata-deploy
-          helm package tools/packaging/kata-deploy/helm-chart/kata-deploy
-
-          echo "Pushing the chart to the OCI registries"
-          helm push "kata-deploy-0.0.0-dev.tgz" oci://quay.io/kata-containers/kata-deploy-charts
-          helm push "kata-deploy-0.0.0-dev.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
+            quay.io/kata-containers/kata-deploy-ci \
+            kata-containers-latest \
+            quay.io/kata-containers/kata-deploy-charts \
+            0.0.0-dev
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
+            quay.io/kata-containers/kata-deploy-ci \
+            kata-containers-latest \
+            ghcr.io/kata-containers/kata-deploy-charts \
+            0.0.0-dev
