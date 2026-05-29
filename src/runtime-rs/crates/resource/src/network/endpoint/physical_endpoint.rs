@@ -223,6 +223,10 @@ impl Endpoint for PhysicalEndpoint {
         self.guest_pci_path.lock().ok()?.clone()
     }
 
+    async fn host_bdf(&self) -> Option<String> {
+        Some(self.bdf.clone())
+    }
+
     async fn vfio_hostdev_id(&self) -> Option<String> {
         self.hostdev_id.lock().ok()?.clone()
     }

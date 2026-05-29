@@ -50,4 +50,11 @@ pub trait Endpoint: std::fmt::Debug + Send + Sync {
     }
     /// Update the guest PCI path (called after QMP resolution).
     async fn set_guest_pci_path(&self, _path: String) {}
+    /// Returns the host BDF for this endpoint if it is a cold-plugged
+    /// physical (VFIO) device, e.g. `"0000:06:02.5"`. Used to build the
+    /// VFIO device option string for the agent `CreateContainer` request.
+    /// Default: `None`.
+    async fn host_bdf(&self) -> Option<String> {
+        None
+    }
 }
