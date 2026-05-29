@@ -16,9 +16,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
 REGISTRY="${1:-"quay.io/kata-containers/kata-deploy"}"
 TAG="${2:-}"
+ARTIFACTS_BUILD_DIR="${3:-${REPO_ROOT}/tools/packaging/kata-deploy/local-build/build}"
 
 KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
-ARTIFACTS_BUILD_DIR="${KATA_DEPLOY_DIR}/local-build/build"
 ARTIFACTS_STAGE_DIR="${KATA_DEPLOY_DIR}/kata-artifacts"
 
 # Stage the component tarballs into a directory that is visible to the
