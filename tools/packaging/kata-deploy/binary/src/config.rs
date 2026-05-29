@@ -159,6 +159,7 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub containerd_user_drop_in_source_file: Option<String>,
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
@@ -265,6 +266,10 @@ impl Config {
         let containerd_conf_file_backup = format!("{containerd_conf_file}.bak");
         let containerd_drop_in_conf_file =
             format!("{dest_dir}/containerd/config.d/kata-deploy.toml");
+        let containerd_user_drop_in_source_file = env::var("CONTAINERD_USER_DROP_IN_SOURCE_FILE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         let helm_post_delete_hook =
             env::var("HELM_POST_DELETE_HOOK").unwrap_or_else(|_| "false".to_string()) == "true";
@@ -314,6 +319,7 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            containerd_user_drop_in_source_file,
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
@@ -522,6 +528,10 @@ impl Config {
             self.experimental_force_guest_pull_for_arch.join(",")
         );
         info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
+        info!(
+            "* CONTAINERD_USER_DROP_IN_SOURCE_FILE: {:?}",
+            self.containerd_user_drop_in_source_file
+        );
         info!(
             "* CUSTOM_RUNTIMES_ENABLED: {}",
             self.custom_runtimes_enabled

@@ -43,6 +43,7 @@ K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -812,6 +813,31 @@ function helm_helper() {
 			for snapshotter in "${snapshotter_list[@]}"; do
 				yq -i ".snapshotter.setup += [\"${snapshotter}\"]" "${values_yaml}"
 			done
+		fi
+
+		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then
+			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
+				die "EROFS_SNAPSHOTTER_MODE is only supported with SNAPSHOTTER=erofs"
+			fi
+
+			local erofs_default_size
+			case "${EROFS_SNAPSHOTTER_MODE}" in
+				disk)
+					erofs_default_size="10G"
+					;;
+				memory)
+					erofs_default_size="0"
+					;;
+				*)
+					die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
+					;;
+			esac
+
+			HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+
+			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
+				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
 		fi
 
 		if [[ -z "${HELM_SHIMS}" ]]; then
