@@ -733,7 +733,14 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 	switch expectedLink.Type() {
 	case (&netlink.Tuntap{}).Type():
 		flags := netlink.TUNTAP_VNET_HDR | netlink.TUNTAP_NO_PI
-		if queues > 0 {
+		// Only mark the tap multi-queue when more than one queue is actually
+		// requested. Adding IFF_MULTI_QUEUE (TUNTAP_MULTI_QUEUE_DEFAULTS) to a
+		// single-queue tap is harmless for VMMs that consume the pre-opened fd
+		// (QEMU/CLH), but Firecracker opens the tap by name itself without
+		// IFF_MULTI_QUEUE, and opening a multi-queue tap without that flag
+		// fails with EINVAL (TapOpen ... Invalid argument). Keep single-queue
+		// taps plain so all VMMs can open them.
+		if queues > 1 {
 			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
 		} else {
 			// We need to enforce `queues = 1` here in case
