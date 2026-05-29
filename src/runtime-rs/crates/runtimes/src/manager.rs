@@ -809,19 +809,16 @@ impl Env for RootlessEnv {
 }
 
 /// Config override ordering(high to low):
-/// 1. podsandbox annotation
-/// 2. environment variable
-/// 3. shimv2 create task option
-/// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
+/// 1. environment variable
+/// 2. shimv2 create task option
+/// 3. If above two are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 #[instrument]
 fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
     let annotation = Annotation::new(an.clone());
 
-    let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
-        path
-    } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
+    let config_path = if let Ok(path) = std::env::var(KATA_CONF_FILE) {
         path
     } else if let Some(option) = option {
         // Parse the containerd runtime options protobuf message to extract the config path.

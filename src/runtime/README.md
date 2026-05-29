@@ -61,9 +61,6 @@ Each option has a comment explaining its use.
 
 The shimv2 runtime looks for its configuration in the following places (in order):
 
-- The `io.data containers.config.config_path` annotation specified
-  in the OCI configuration file (`config.json` file) used to create the pod sandbox.
-
 - The containerd
   [shimv2](/docs/design/architecture/README.md#shim-v2-architecture)
   options passed to the runtime.

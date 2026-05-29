@@ -39,7 +39,6 @@ pub const KATA_ANNO_CFG_PREFIX: &str = "io.katacontainers.config.";
 /// Prefix for Kata container annotations
 pub const KATA_ANNO_CONTAINER_PREFIX: &str = "io.katacontainers.container.";
 /// The annotation key to fetch runtime configuration file.
-pub const SANDBOX_CFG_PATH_KEY: &str = "io.katacontainers.config_path";
 
 // OCI section
 /// The annotation key to fetch the OCI configuration file path.
@@ -425,11 +424,6 @@ impl Annotation {
 
 // Miscellaneous annotations.
 impl Annotation {
-    /// Get the annotation of sandbox configuration file path.
-    pub fn get_sandbox_config_path(&self) -> Option<String> {
-        self.get(SANDBOX_CFG_PATH_KEY)
-    }
-
     /// Get the annotation of bundle path.
     pub fn get_bundle_path(&self) -> Option<String> {
         self.get(BUNDLE_PATH_KEY)

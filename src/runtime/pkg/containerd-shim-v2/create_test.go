@@ -23,7 +23,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 )
@@ -393,11 +392,9 @@ func TestCreateLoadRuntimeConfig(t *testing.T) {
 		ctx: context.Background(),
 	}
 	r := &taskAPI.CreateTaskRequest{}
-	anno := make(map[string]string)
 
 	// set all to fake path
 	fakeConfig := "foobar"
-	anno[vcAnnotations.SandboxConfigPathKey] = fakeConfig
 	option := &crioption.Options{ConfigPath: fakeConfig}
 	r.Options, err = protobuf.MarshalAnyToProto(option)
 	assert.NoError(err)
@@ -406,28 +403,22 @@ func TestCreateLoadRuntimeConfig(t *testing.T) {
 	defer os.Setenv("KATA_CONF_FILE", "")
 
 	// fake config should fail
-	_, err = loadRuntimeConfig(s, r, anno)
+	_, err = loadRuntimeConfig(s, r)
 	assert.Error(err)
 
-	// 1. podsandbox annotation
-	anno[vcAnnotations.SandboxConfigPathKey] = config
-	_, err = loadRuntimeConfig(s, r, anno)
-	assert.NoError(err)
-	anno[vcAnnotations.SandboxConfigPathKey] = ""
-
-	// 2. shimv2 create task option
+	// 1. shimv2 create task option
 	option.ConfigPath = config
 	r.Options, err = protobuf.MarshalAnyToProto(option)
 	assert.NoError(err)
-	_, err = loadRuntimeConfig(s, r, anno)
+	_, err = loadRuntimeConfig(s, r)
 	assert.NoError(err)
 	option.ConfigPath = ""
 	r.Options, err = protobuf.MarshalAnyToProto(option)
 	assert.NoError(err)
 
-	// 3. environment
+	// 2. environment
 	err = os.Setenv("KATA_CONF_FILE", config)
 	assert.NoError(err)
-	_, err = loadRuntimeConfig(s, r, anno)
+	_, err = loadRuntimeConfig(s, r)
 	assert.NoError(err)
 }
