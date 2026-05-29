@@ -44,6 +44,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Version annotations for RuntimeClass objects.
+Uses AppVersion (Kata Containers release), matching the default kata-deploy image tag.
+*/}}
+{{- define "kata-deploy.runtimeclassAnnotations" -}}
+katacontainers.io/kata-version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+
+{{/*
 Set the correct containerd conf path depending on the k8s distribution.
 If containerd.configDir is set explicitly, use that instead.
 */}}

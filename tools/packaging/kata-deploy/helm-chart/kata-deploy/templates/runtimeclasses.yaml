@@ -21,6 +21,8 @@ metadata:
 {{- else }}
     kata-deploy/instance: "default"
 {{- end }}
+  annotations:
+{{- include "kata-deploy.runtimeclassAnnotations" .root | nindent 4 }}
 {{- if .root.Values.env.multiInstallSuffix }}
 handler: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
 {{- else }}
