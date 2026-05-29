@@ -1343,6 +1343,54 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 	return deviceList
 }
 
+// appendPhysicalEndpointDevices synthesises a vfio-pci-gk device entry for
+// each cold-plugged physical (SR-IOV VF) network endpoint that has a resolved
+// guest PCI path.  The NVIDIA BF3 SR-IOV device plugin only injects the VF
+// BDF as a PCIDEVICE_* environment variable; it does not add the VFIO char
+// device to linux.devices.  Without this helper the agent's
+// container_has_vfio_device() gate stays closed and
+// expose_guest_infiniband_devices() is never triggered.
+func (k *kataAgent) appendPhysicalEndpointDevices(deviceList []*grpc.Device, sandbox *Sandbox) []*grpc.Device {
+	if sandbox == nil {
+		return deviceList
+	}
+	for _, ep := range sandbox.network.Endpoints() {
+		if ep.Type() != PhysicalEndpointType {
+			continue
+		}
+		pe, ok := ep.(*PhysicalEndpoint)
+		if !ok || pe.BDF == "" || ep.PciPath().IsNil() {
+			continue
+		}
+		guestPath := ep.PciPath()
+
+		vfioDevPath, err := drivers.GetVFIODevPath(pe.BDF)
+		if err != nil {
+			k.Logger().WithFields(logrus.Fields{
+				"host-bdf": pe.BDF,
+			}).WithError(err).Warn("appendPhysicalEndpointDevices: cannot get VFIO device path, skipping VFIO device exposure")
+			continue
+		}
+
+		groupNum := filepath.Base(vfioDevPath)
+		devBDF := drivers.GetBDF(pe.BDF)
+
+		k.Logger().WithFields(logrus.Fields{
+			"host-bdf":       pe.BDF,
+			"guest-pci-path": guestPath.String(),
+			"vfio-path":      vfioDevPath,
+		}).Info("appendPhysicalEndpointDevices: injecting vfio-pci-gk entry for cold-plug physical endpoint")
+
+		deviceList = append(deviceList, &grpc.Device{
+			ContainerPath: vfioDevPath,
+			Id:            groupNum,
+			Type:          kataVfioPciGuestKernelDevType,
+			Options:       []string{fmt.Sprintf("0000:%s=%s", devBDF, guestPath)},
+		})
+	}
+	return deviceList
+}
+
 func (k *kataAgent) resolveColdPlugVFIOGuestPciPaths(sandbox *Sandbox, c *Container) error {
 	if sandbox == nil || c == nil {
 		return nil
@@ -1611,6 +1659,20 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
+
+	// The SR-IOV device plugin for physical network VFs only injects the BDF
+	// as a PCIDEVICE_* env var; it does not add a VFIO char device to
+	// linux.devices.  That means appendDevices() finds nothing VFIO-related
+	// in c.devices, so the agent never receives a vfio-pci-gk entry, the
+	// container_has_vfio_device() gate stays closed, and
+	// expose_guest_infiniband_devices() is never called — leaving
+	// /dev/infiniband absent from the container even though the guest kernel
+	// created the IB devices.
+	//
+	// Walk the sandbox's physical endpoints: for each one with a resolved
+	// guest PCI path (set by setupNetworks/ResolveColdPlugVFIOGuestPciPaths)
+	// synthesise a vfio-pci-gk device entry so the agent gate fires.
+	ctrDevices = k.appendPhysicalEndpointDevices(ctrDevices, sandbox)
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.

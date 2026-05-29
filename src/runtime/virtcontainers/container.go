@@ -1043,6 +1043,69 @@ func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo
 	return deviceInfos, nil
 }
 
+// physicalEndpointBDFs returns the set of host PCI BDFs backing physical
+// network endpoints already cold-plugged into the sandbox.
+func (c *Container) physicalEndpointBDFs() map[string]struct{} {
+	bdfs := map[string]struct{}{}
+	if c.sandbox == nil || c.sandbox.network == nil {
+		return bdfs
+	}
+	for _, ep := range c.sandbox.network.Endpoints() {
+		if ep.Type() != PhysicalEndpointType {
+			continue
+		}
+		if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+			bdfs[pe.BDF] = struct{}{}
+		}
+	}
+	return bdfs
+}
+
+// vfioDeviceIsPhysicalEndpoint reports whether the VFIO device at devPath
+// resolves to a BDF owned by a physical network endpoint.
+func (c *Container) vfioDeviceIsPhysicalEndpoint(devPath string, endpointBDFs map[string]struct{}) bool {
+	for _, bdf := range vfioDeviceBDFs(devPath) {
+		if _, ok := endpointBDFs[bdf]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// vfioDeviceBDFs resolves a VFIO device path to the host PCI BDF(s) it exposes.
+// Handles both the iommufd cdev (/dev/vfio/devices/vfio<N>) and the legacy
+// group node (/dev/vfio/<group>, which may contain multiple devices).
+func vfioDeviceBDFs(devPath string) []string {
+	if strings.HasPrefix(filepath.Base(devPath), "vfio") {
+		// IOMMUFD device (/dev/vfio/devices/vfio<NUM>): single device per char dev
+		major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
+		if err != nil {
+			return nil
+		}
+		bdf, err := deviceUtils.GetBDFFromVFIODev(major, minor)
+		if err != nil {
+			return nil
+		}
+		return []string{bdf}
+	}
+	// Legacy VFIO group (/dev/vfio/<GROUP>): may contain multiple devices
+	vfioGroup := filepath.Base(devPath)
+	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+	deviceFiles, err := os.ReadDir(iommuDevicesPath)
+	if err != nil {
+		return nil
+	}
+	var bdfs []string
+	for _, deviceFile := range deviceFiles {
+		bdf, _, _, err := deviceUtils.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
+		if err != nil {
+			continue
+		}
+		bdfs = append(bdfs, bdf)
+	}
+	return bdfs
+}
+
 func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
@@ -1069,24 +1132,29 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 	hotPlugDevices := []config.DeviceInfo{}
 	vfioColdPlugDevices := []config.DeviceInfo{}
 
-	for i, vfio := range deviceInfos {
-		// If device is already attached during sandbox creation, e.g.
-		// with an CDI annotation, skip it in the container creation and
-		// only create the proper CDI annotation for the kata-agent
-		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
-			if dev.HostPath == vfio.ContainerPath {
-				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
-			}
-		}
-		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
-			if dev.HostPath == vfio.ContainerPath {
-				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
-			}
-		}
+	// VFs that back a physical network endpoint are already cold-plugged into
+	// QEMU during sandbox network setup (PhysicalEndpoint.Attach -> AddDevice).
+	// The SR-IOV device plugin sometimes ALSO lists the same VF in the
+	// container's linux.devices.  Attaching it again here fails ("port is not
+	// set" / already present), so build the set of BDFs owned by physical
+	// endpoints and skip any container VFIO device that resolves to one of
+	// them.  Exposing these VFs to the agent is handled separately by
+	// kata_agent.appendPhysicalEndpointDevices().
+	physicalEndpointBDFs := c.physicalEndpointBDFs()
 
+	for i, vfio := range deviceInfos {
 		// Only considering VFIO updates for Port and ColdPlug or
 		// HotPlug updates
 		isVFIODevice := deviceManager.IsVFIODevice(vfio.ContainerPath)
+
+		if isVFIODevice && len(physicalEndpointBDFs) > 0 {
+			if c.vfioDeviceIsPhysicalEndpoint(vfio.ContainerPath, physicalEndpointBDFs) {
+				c.Logger().WithField("device", vfio.ContainerPath).Info(
+					"skipping VFIO device already cold-plugged as a physical network endpoint")
+				continue
+			}
+		}
+
 		if hotPlugVFIO && isVFIODevice {
 			deviceInfos[i].ColdPlug = false
 			deviceInfos[i].Port = c.sandbox.config.HypervisorConfig.HotPlugVFIO
