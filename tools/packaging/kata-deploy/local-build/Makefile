@@ -69,11 +69,17 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
 endif
 
+PUBLISH_COMPONENT_TARBALLS = \
+	kata-deploy-binary-tarball \
+	nydus-snapshotter-for-coco-guest-pull-tarball
+
 ifeq ($(ARCH), x86_64)
+
 NVGPU_BASE_TARBALLS = \
 	agent-tarball \
 	busybox-tarball \
 	coco-guest-components-tarball \
+	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
 	ovmf-sev-tarball \
 	ovmf-tdx-tarball \
@@ -89,6 +95,7 @@ NVGPU_BASE_TARBALLS = \
 	agent-tarball \
 	busybox-tarball \
 	coco-guest-components-tarball \
+	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
 	ovmf-tarball \
 	pause-image-tarball \
@@ -96,7 +103,11 @@ NVGPU_BASE_TARBALLS = \
 	virtiofsd-tarball \
 	serial-targets
 endif
+# Include kata-deploy static payload tarballs so `make kata-deploy-publish`
+# can consume a single nvgpu bundle without rebuilding extra components.
 NVGPU_FINAL_TARBALL_INPUTS = \
+	kata-deploy-static-kata-deploy-binary.tar.zst \
+	kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst \
 	kata-static-kernel-nvidia-gpu.tar.zst \
 	kata-static-ovmf-sev.tar.zst \
 	kata-static-ovmf-tdx.tar.zst \
