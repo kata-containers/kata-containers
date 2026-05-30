@@ -13,7 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "${script_dir}/../../.." && pwd)"
 
 image_ref="${1:?image ref is required (e.g. quay.io/org/repo:tag)}"
-shim_tarball="${2:?path to kata-static-shim-v2-go.tar.zst is required}"
+source_tarball="${2:?path to kata-static.tar.zst is required}"
 push_image="${3:-true}"
 
 case "$(uname -m)" in
@@ -30,12 +30,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tar --zstd -xf "${shim_tarball}" -C "${tmpdir}"
+# Extract only kata-monitor from the source tarball.
+monitor_entry=""
+while IFS= read -r entry; do
+	case "${entry}" in
+		opt/kata/bin/kata-monitor|./opt/kata/bin/kata-monitor)
+			monitor_entry="${entry}"
+			break
+			;;
+	esac
+done < <(tar --zstd -tf "${source_tarball}")
 
-if [[ ! -x "${tmpdir}/opt/kata/bin/kata-monitor" ]]; then
-	echo "kata-monitor binary not found in ${shim_tarball}" >&2
+if [[ -z "${monitor_entry}" ]]; then
+	echo "kata-monitor binary entry not found in ${source_tarball}" >&2
 	exit 1
 fi
+
+tar --zstd -xf "${source_tarball}" -C "${tmpdir}" "${monitor_entry}"
+monitor_entry="${monitor_entry#./}"
+monitor_binary="${tmpdir}/${monitor_entry}"
+
+if [[ ! -f "${monitor_binary}" ]]; then
+	echo "kata-monitor binary extraction failed from ${source_tarball}" >&2
+	exit 1
+fi
+
+chmod +x "${monitor_binary}"
 
 push_flag=()
 if [[ "${push_image}" == "true" ]]; then
