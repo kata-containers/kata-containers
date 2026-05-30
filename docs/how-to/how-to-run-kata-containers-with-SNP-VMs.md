@@ -108,7 +108,7 @@ shared_fs = "none"
 ```toml
 disable_image_nvdimm = true
 ```
-- Disable shared memory (uncomment)
+- Disable shared memory (uncomment; only applies to Go runtime)
 ```toml
 file_mem_backend = ""
 ```
