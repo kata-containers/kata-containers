@@ -20,7 +20,7 @@ use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
     annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
     config::TomlConfig,
-    container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
+    container::update_ocispec_annotations,
     k8s::{self, container_type},
 };
 use oci_spec::runtime as oci;
@@ -106,12 +106,15 @@ impl Container {
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
         let disable_guest_selinux = get_disable_guest_selinux(&toml_config);
         let annotations = spec.annotations().clone().unwrap_or_default();
+        // Tag the spec with the actual container type. Previously every
+        // non-pod-container was forced to "pod_sandbox", which made standalone
+        // engines (Docker/nerdctl/podman) look like a pod sandbox. The agent
+        // skips CDI device injection for "pod_sandbox", so the NVIDIA CDI edits
+        // carried in the "cdi.k8s.io/*" annotations were never applied and the
+        // GPU userspace (e.g. nvidia-smi) was missing in the guest. Emitting
+        // "single_container" matches the Go runtime and lets the agent inject.
         let container_typ = container_type(&spec);
-        let pod_type_anno = if container_typ.is_pod_container() {
-            (CONTAINER_TYPE_KEY.to_string(), POD_CONTAINER.to_string())
-        } else {
-            (CONTAINER_TYPE_KEY.to_string(), POD_SANDBOX.to_string())
-        };
+        let pod_type_anno = (CONTAINER_TYPE_KEY.to_string(), container_typ.to_string());
 
         let bund_path_anno = (BUNDLE_PATH_KEY.to_string(), config.bundle.clone());
         let updated_annotations = update_ocispec_annotations(
