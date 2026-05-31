@@ -380,8 +380,11 @@ fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
         return None;
     }
 
-    match device_class.parse::<u32>() {
-        Ok(cid_u32) => {
+    // The sysfs `class` attribute is a hex string (e.g. "0x040300"), so it must
+    // be parsed base-16. Parsing it as decimal always fails, which previously
+    // caused every device to be treated as passthrough-capable.
+    match parse_class_code_u32(&device_class) {
+        Some(cid_u32) => {
             // PCI class code is 24 bits, shift right 8 to get base+sub class
             let class_code = u64::from(cid_u32) >> 8;
             for &bitmask in bitmasks {
@@ -391,7 +394,7 @@ fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
             }
             None
         }
-        _ => None,
+        None => None,
     }
 }
 
@@ -603,6 +606,24 @@ fn discover_vfio_device_for_iommu_group(gid: u32, group_devnode: PathBuf) -> Res
         if let DeviceAddress::Pci(bdf) = &d.addr {
             d.vfio_cdev = discover_vfio_cdev_for_pci(&bdf.to_string(), gid);
         }
+    }
+
+    // Drop functions that only share the GPU's IOMMU group but must not be
+    // passed through (audio controllers, bridges), reusing the same
+    // IOMMU_IGNORE classification as validate_group_basic. Everything derived
+    // below (vfio_cdevs, the IOMMUFD backend cdevs and the primary device) is
+    // built from this filtered list. Passing such a function would otherwise
+    // emit an extra vfio-pci entry reusing the GPU's cold-plug root-port and
+    // IOMMUFD object ids, making QEMU abort with a duplicate-id error.
+    devices.retain(|d| match &d.addr {
+        DeviceAddress::Pci(bdf) => filter_bridge_device(&bdf.to_string(), IOMMU_IGNORE).is_none(),
+        _ => true,
+    });
+    if devices.is_empty() {
+        return Err(anyhow!(
+            "IOMMU group {} has no passthrough-capable devices",
+            gid
+        ));
     }
 
     let labels = build_group_labels(&devices);
