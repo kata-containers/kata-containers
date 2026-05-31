@@ -674,6 +674,14 @@ impl RuntimeHandlerManager {
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
                     sandbox.stop().await.context("stop sandbox")?;
+
+                    // Release sandbox resources (cgroup, network, mounts, ...)
+                    // as soon as the sandbox container exits instead of waiting
+                    // for an explicit ShutdownContainer/Delete RPC.  Engines
+                    // like Docker only send those when the container is removed
+                    // (e.g. with `--rm`); without this the sandbox cgroup would
+                    // leak and collide with the next run.
+                    sandbox.cleanup().await.context("cleanup sandbox")?;
                 }
                 Ok(TaskResponse::WaitProcess(exit_status))
             }

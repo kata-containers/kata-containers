@@ -109,6 +109,11 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
+    // Whether sandbox resources (cgroup, network, mounts, ...) have already
+    // been released.  Teardown can be driven both by the sandbox container
+    // exiting and by an explicit shutdown RPC, so guard against running the
+    // cleanup twice.
+    cleaned: bool,
 }
 
 impl SandboxInner {
@@ -117,6 +122,7 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
+            cleaned: false,
         }
     }
 }
@@ -1132,6 +1138,16 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // Teardown may be triggered both when the sandbox container exits and
+        // by a later shutdown RPC; only release the resources once.
+        {
+            let mut inner = self.inner.write().await;
+            if inner.cleaned {
+                return Ok(());
+            }
+            inner.cleaned = true;
+        }
+
         info!(sl!(), "delete hypervisor");
         self.hypervisor
             .cleanup()
