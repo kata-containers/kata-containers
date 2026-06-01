@@ -138,7 +138,8 @@ impl Endpoint for PhysicalEndpoint {
                         sl!(),
                         "set_vf_admin_mac: skipped for {} ({}), \
                          falling back to in-guest MAC reconciliation",
-                        self.bdf, e
+                        self.bdf,
+                        e
                     );
                 }
             }
@@ -253,8 +254,8 @@ fn set_vf_admin_mac_sync(vf_bdf: &str, mac: &str) -> Result<()> {
 
     // The caller runs inside the pod netns. The PF lives in the host netns.
     // Enter the host netns for the duration of the netlink RTM_SETLINK call.
-    let _host_ns = NetnsGuard::new("/proc/1/ns/net")
-        .context("enter host netns for VF admin MAC")?;
+    let _host_ns =
+        NetnsGuard::new("/proc/1/ns/net").context("enter host netns for VF admin MAC")?;
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_io()
@@ -262,8 +263,7 @@ fn set_vf_admin_mac_sync(vf_bdf: &str, mac: &str) -> Result<()> {
         .context("build runtime for VF admin MAC")?;
 
     rt.block_on(async {
-        let (connection, mut handle, _) =
-            new_connection().context("rtnetlink new_connection")?;
+        let (connection, mut handle, _) = new_connection().context("rtnetlink new_connection")?;
         tokio::spawn(connection);
 
         let pf_index = {
@@ -281,12 +281,11 @@ fn set_vf_admin_mac_sync(vf_bdf: &str, mac: &str) -> Result<()> {
         //   ip link set <PF> vf <N> mac <MAC>
         let mut link_msg = LinkMessage::default();
         link_msg.header.index = pf_index;
-        link_msg.attributes.push(LinkAttribute::VfInfoList(vec![
-            LinkVfInfo(vec![VfInfo::Mac(VfInfoMac::new(
-                vf_index as u32,
-                &mac_bytes,
-            ))]),
-        ]));
+        link_msg
+            .attributes
+            .push(LinkAttribute::VfInfoList(vec![LinkVfInfo(vec![
+                VfInfo::Mac(VfInfoMac::new(vf_index as u32, &mac_bytes)),
+            ])]));
 
         let mut req: NetlinkMessage<RouteNetlinkMessage> =
             NetlinkMessage::from(RouteNetlinkMessage::SetLink(link_msg));
@@ -307,8 +306,7 @@ fn parse_mac_str(mac: &str) -> Result<[u8; 6]> {
     }
     let mut out = [0u8; 6];
     for (i, p) in parts.iter().enumerate() {
-        out[i] = u8::from_str_radix(p, 16)
-            .with_context(|| format!("invalid MAC octet {:?}", p))?;
+        out[i] = u8::from_str_radix(p, 16).with_context(|| format!("invalid MAC octet {:?}", p))?;
     }
     Ok(out)
 }
@@ -316,8 +314,7 @@ fn parse_mac_str(mac: &str) -> Result<[u8; 6]> {
 fn resolve_vf_pf_path(vf_bdf: &str) -> Result<(String, usize)> {
     use std::fs;
     let physfn = format!("/sys/bus/pci/devices/{}/physfn", vf_bdf);
-    let pf_target = std::fs::read_link(&physfn)
-        .with_context(|| format!("readlink {}", physfn))?;
+    let pf_target = std::fs::read_link(&physfn).with_context(|| format!("readlink {}", physfn))?;
     let pf_bdf = pf_target
         .file_name()
         .ok_or_else(|| anyhow!("no file_name in physfn target"))?
@@ -325,8 +322,7 @@ fn resolve_vf_pf_path(vf_bdf: &str) -> Result<(String, usize)> {
         .into_owned();
 
     let pf_dir = format!("/sys/bus/pci/devices/{}", pf_bdf);
-    let entries = fs::read_dir(&pf_dir)
-        .with_context(|| format!("read_dir {}", pf_dir))?;
+    let entries = fs::read_dir(&pf_dir).with_context(|| format!("read_dir {}", pf_dir))?;
 
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -362,10 +358,16 @@ fn pf_netdev_name(pf_bdf: &str) -> Result<String> {
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     match names.len() {
-        0 => Err(anyhow!("no netdev under {} (PF not bound to driver?)", net_dir)),
+        0 => Err(anyhow!(
+            "no netdev under {} (PF not bound to driver?)",
+            net_dir
+        )),
         1 => Ok(names.remove(0)),
         _ => {
-            warn!(sl!(), "PF {} has multiple netdevs {:?}, picking first", pf_bdf, names);
+            warn!(
+                sl!(),
+                "PF {} has multiple netdevs {:?}, picking first", pf_bdf, names
+            );
             Ok(names.remove(0))
         }
     }
