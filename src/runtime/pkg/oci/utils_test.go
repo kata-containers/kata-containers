@@ -1263,6 +1263,13 @@ func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	return &spec
 }
 
+func makeSizingAnnotationsWithShares(memory, quota, period, shares string) *specs.Spec {
+	spec := makeSizingAnnotations(memory, quota, period)
+	spec.Annotations[ctrAnnotations.SandboxCPUShares] = shares
+
+	return spec
+}
+
 func TestCalculateContainerSizing(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1375,6 +1382,42 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			spec:        makeSizingAnnotations("4294967296", "400", "100"),
 			expectedCPU: 4,
 			expectedMem: 4096,
+		},
+		// cpuManagerPolicy=static: kubelet leaves the quota
+		// unconstrained (-1) and pins CPUs via cpuset, so the CPU
+		// count must be derived from the shares (1024 shares per CPU).
+		{
+			spec:        makeSizingAnnotationsWithShares("1048576", "-1", "100", "2048"),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
+		// Shares that don't divide evenly are rounded up.
+		{
+			spec:        makeSizingAnnotationsWithShares("0", "-1", "100", "1536"),
+			expectedCPU: 2,
+			expectedMem: 0,
+		},
+		// BestEffort sandbox: no CPU request means quota is 0/absent,
+		// but the cgroup still carries the floor shares value (2). This
+		// must contribute 0 vCPUs, otherwise every sandbox (e.g. a
+		// peer-pod) would be inflated by one vCPU.
+		{
+			spec:        makeSizingAnnotationsWithShares("0", "0", "100", "2"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		// An explicit quota always wins over shares: the shares-based
+		// fallback only applies when the quota is unconstrained.
+		{
+			spec:        makeSizingAnnotationsWithShares("0", "200", "100", "8192"),
+			expectedCPU: 2,
+			expectedMem: 0,
+		},
+		// Unconstrained quota but no shares set: nothing to derive from.
+		{
+			spec:        makeSizingAnnotationsWithShares("0", "-1", "100", "0"),
+			expectedCPU: 0,
+			expectedMem: 0,
 		},
 	}
 

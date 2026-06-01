@@ -1513,9 +1513,16 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
 
 	// When cpuManagerPolicy=static is in use, kubelet sets quota=-1
-	// (unconstrained) and assigns CPUs via cpuset instead. Fall back
-	// to deriving the CPU count from shares (1024 shares per CPU).
-	if numCPU == 0 && shares > 0 {
+	// (unconstrained) and assigns CPUs via cpuset instead. In that case
+	// we derive the CPU count from the CPU shares (1024 shares per CPU).
+	//
+	// We must gate this on quota being explicitly unconstrained (< 0)
+	// rather than on numCPU == 0: a quota of 0 (or absent) means a
+	// BestEffort sandbox with no CPU request, which has to contribute 0
+	// vCPUs. Such a sandbox still carries the cgroup-floor shares value
+	// (2), and deriving from it would inflate every sandbox by one vCPU
+	// (e.g. peer-pods would boot default_vcpus+1).
+	if quota < 0 && numCPU == 0 && shares > 0 {
 		numCPU = float32(math.Ceil(float64(shares) / 1024.0))
 	}
 
