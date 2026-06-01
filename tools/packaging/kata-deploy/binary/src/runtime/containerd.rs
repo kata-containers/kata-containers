@@ -489,6 +489,9 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
             log::info!("Successfully added drop-in to imports array");
         } else {
             log::info!("Runtime auto-loads drop-in files, skipping imports");
+            // Migrating to conf.d: drop any stale import a pre-conf.d
+            // kata-deploy left in the main config so it can't dangle later.
+            remove_legacy_drop_in_import(config)?;
         }
     }
 
@@ -523,6 +526,57 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
     configure_user_containerd_drop_in(config, &paths)?;
 
     log::info!("Successfully configured all containerd runtimes");
+    Ok(())
+}
+
+/// Defensively remove a legacy kata-deploy entry from the main containerd
+/// config's `imports` array.
+///
+/// kata-deploy versions predating the conf.d migration registered their drop-in
+/// by appending `{dest_dir}/containerd/config.d/kata-deploy.toml` to the
+/// `imports` array of the main containerd config. Since the conf.d migration
+/// (containerd >= 2.2.0) we write to the auto-imported `/etc/containerd/conf.d/`
+/// directory instead and no longer touch the `imports` array. When a node is
+/// upgraded from a pre-conf.d kata-deploy to a conf.d-aware one, that stale
+/// import survives: the new code never adds it (so never removes it either).
+///
+/// On uninstall we delete the artifacts directory (`dest_dir`) — including the
+/// file the stale import still points at — and then restart containerd. The
+/// restart fails because containerd imports a path that no longer exists,
+/// wedging the node (pods stuck Terminating, new pods unable to start).
+///
+/// Scrubbing the stale import keeps the main config self-consistent across the
+/// version boundary. It is a no-op on fresh conf.d installs (nothing to remove)
+/// and on runtimes that still manage `imports` themselves (handled separately).
+fn remove_legacy_drop_in_import(config: &Config) -> Result<()> {
+    remove_legacy_drop_in_import_from(
+        Path::new(&config.containerd_conf_file),
+        &config.containerd_drop_in_conf_file,
+    )
+}
+
+/// Pure core of [`remove_legacy_drop_in_import`], separated out so it can be
+/// unit tested without constructing a full [`Config`].
+fn remove_legacy_drop_in_import_from(main_config: &Path, legacy_import: &str) -> Result<()> {
+    if !main_config.exists() {
+        return Ok(());
+    }
+
+    // get_toml_array returns an empty Vec when the file has no `imports` array,
+    // so this never errors (or accidentally removes anything) on a config we
+    // never touched.
+    let imports = toml_utils::get_toml_array(main_config, ".imports").unwrap_or_default();
+    if !imports.iter().any(|entry| entry == legacy_import) {
+        return Ok(());
+    }
+
+    log::info!(
+        "Removing stale legacy kata-deploy import '{}' from {}",
+        legacy_import,
+        main_config.display()
+    );
+    toml_utils::remove_from_toml_array(main_config, ".imports", &format!("\"{legacy_import}\""))?;
+
     Ok(())
 }
 
@@ -563,6 +617,15 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
         if drop_in_path.exists() {
             fs::remove_file(&drop_in_path)?;
         }
+
+        // When `imports_file` is None (e.g. conf.d auto-import on containerd
+        // >= 2.2.0) we don't manage the imports array, so a stale entry left by
+        // a pre-conf.d kata-deploy would otherwise dangle once the artifacts
+        // are removed and containerd is restarted. Scrub it defensively.
+        if paths.imports_file.is_none() {
+            remove_legacy_drop_in_import(config)?;
+        }
+
         return Ok(());
     }
 
@@ -1001,5 +1064,49 @@ mod tests {
             version,
             expected_error
         );
+    }
+
+    const LEGACY_IMPORT: &str = "/opt/kata/containerd/config.d/kata-deploy.toml";
+
+    #[rstest]
+    // Node upgraded from a pre-conf.d kata-deploy: the stale legacy import is
+    // scrubbed while unrelated imports are preserved.
+    #[case(
+        Some(concat!(
+            "version = 2\n\nimports = [\"/etc/containerd/conf.d/*.toml\", ",
+            "\"/opt/kata/containerd/config.d/kata-deploy.toml\"]\n"
+        )),
+        vec!["/etc/containerd/conf.d/*.toml"]
+    )]
+    // Config we never touched (no imports array): no-op, must not error.
+    #[case(Some("version = 2\n\n[plugins]\n"), vec![])]
+    // imports present but without our legacy entry: left untouched.
+    #[case(
+        Some("imports = [\"/etc/containerd/conf.d/*.toml\"]\n"),
+        vec!["/etc/containerd/conf.d/*.toml"]
+    )]
+    // No main config on disk (e.g. crio-only nodes): no-op, must not be created.
+    #[case(None, vec![])]
+    fn test_remove_legacy_drop_in_import(
+        #[case] initial_content: Option<&str>,
+        #[case] expected_imports: Vec<&str>,
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        if let Some(content) = initial_content {
+            std::fs::write(&path, content).unwrap();
+        }
+
+        remove_legacy_drop_in_import_from(&path, LEGACY_IMPORT).unwrap();
+
+        match initial_content {
+            Some(_) => {
+                let imports = toml_utils::get_toml_array(&path, ".imports").unwrap();
+                let expected: Vec<String> =
+                    expected_imports.iter().map(|s| s.to_string()).collect();
+                assert_eq!(imports, expected);
+            }
+            None => assert!(!path.exists(), "missing config must not be created"),
+        }
     }
 }
