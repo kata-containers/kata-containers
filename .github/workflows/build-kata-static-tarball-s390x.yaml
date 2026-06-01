@@ -21,8 +21,6 @@ on:
         type: string
         default: ""
     secrets:
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
@@ -47,6 +45,7 @@ jobs:
         asset:
           - agent
           - coco-guest-components
+          - fake-boot-image-se
           - kernel
           - pause-image
           - qemu
@@ -80,10 +79,16 @@ jobs:
       - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          make "${KATA_ASSET}-tarball"
+          if [ "${KATA_ASSET}" = "fake-boot-image-se" ]; then
+            make FAKE_SE_IMAGE=true boot-image-se-tarball
+            TARBALL_NAME="boot-image-se"
+          else
+            make "${KATA_ASSET}-tarball"
+            TARBALL_NAME="${KATA_ASSET}"
+          fi
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${TARBALL_NAME}"*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -96,7 +101,7 @@ jobs:
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' }}
         env:
           ASSET: ${{ matrix.asset }}
         run: |
@@ -113,7 +118,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' }}
         with:
           subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
           subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
@@ -123,7 +128,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
+          path: kata-build/kata-static-${{ matrix.asset == 'fake-boot-image-se' && 'boot-image-se' || matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 
@@ -238,60 +243,11 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  build-asset-boot-image-se:
-    name: build-asset-boot-image-se
-    runs-on: s390x
-    needs: [build-asset, build-asset-rootfs]
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: get-artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-          merge-multiple: true
-
-      - name: Place a host key document
-        run: |
-          mkdir -p "host-key-document"
-          cp "${CI_HKD_PATH}" "host-key-document"
-        env:
-          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
-
-      - name: Build boot-image-se
-        run: |
-          make install-prebuilt-artifacts
-          make DEPS= boot-image-se-tarball
-          build_dir=$(readlink -f build)
-          sudo cp -r "${build_dir}" "kata-build"
-          sudo chown -R "$(id -u)":"$(id -g)" "kata-build"
-        env:
-          HKD_PATH: "host-key-document"
-
-      - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-boot-image-se.tar.zst
-          retention-days: 1
-          if-no-files-found: error
-
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
-    needs: [build-asset-rootfs, build-asset-boot-image-se]
+    needs: build-asset-rootfs
     strategy:
       matrix:
         asset:
@@ -384,7 +340,6 @@ jobs:
     needs:
       - build-asset
       - build-asset-rootfs
-      - build-asset-boot-image-se
       - build-asset-shim-v2
     permissions:
       contents: read
