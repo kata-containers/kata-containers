@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use std::process::Command;
 
 pub const RUST_SHIMS: &[&str] = &[
+    "clh-azure-runtime-rs",
     "clh-runtime-rs",
     "dragonball",
     "qemu-runtime-rs",

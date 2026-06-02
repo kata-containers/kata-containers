@@ -47,7 +47,6 @@ jobs:
           - agent
           - busybox
           - cloud-hypervisor
-          - cloud-hypervisor-glibc
           - coco-guest-components
           - firecracker
           - kernel
@@ -65,9 +64,6 @@ jobs:
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
-        exclude:
-          - asset: cloud-hypervisor-glibc
-            stage: release
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true

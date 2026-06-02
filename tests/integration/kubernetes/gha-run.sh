@@ -199,7 +199,7 @@ function deploy_kata() {
 	fi
 
 	ANNOTATIONS="default_vcpus"
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == *azure* ]]; then
 		ANNOTATIONS="image kernel default_vcpus cc_init_data"
 	fi
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
@@ -214,11 +214,6 @@ function deploy_kata() {
 	PULL_TYPE_MAPPING=""
 	if [[ "${PULL_TYPE}" != "default" ]]; then
 		PULL_TYPE_MAPPING="${KATA_HYPERVISOR}:${PULL_TYPE}"
-	fi
-
-	HOST_OS=""
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		HOST_OS="${KATA_HOST_OS}"
 	fi
 
 	# nydus and erofs are always deployed by kata-deploy; set this unconditionally
@@ -246,7 +241,6 @@ function deploy_kata() {
 	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
 	export HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 	export HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL}"
-	export HELM_HOST_OS="${HOST_OS}"
 	helm_helper
 }
 
@@ -316,7 +310,7 @@ function run_tests() {
 		echo "start_time=${start_time}" >> "${GITHUB_ENV}"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "clh-runtime-rs" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+	if [[ "${KATA_HYPERVISOR}" =~ ^clh(-azure)?-runtime-rs$ ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		if [[ -n "${GITHUB_ENV}" ]]; then
 			KATA_TEST_VERBOSE=true
 			export KATA_TEST_VERBOSE
