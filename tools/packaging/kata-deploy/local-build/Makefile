@@ -40,8 +40,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-mariner-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball \
-	cloud-hypervisor-glibc-tarball
+	cloud-hypervisor-tarball
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
 	kernel-debug-tarball \
@@ -188,9 +187,6 @@ coco-guest-components-tarball:
 	${MAKE} $@-build
 
 cloud-hypervisor-tarball:
-	${MAKE} $@-build
-
-cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
 firecracker-tarball:

@@ -350,11 +350,7 @@ impl ResourceManagerInner {
             // addr and QEMU auto-assigns its slot.  Resolve the actual path
             // via QMP (query-pci + device search) before sending
             // update_interface to the agent.
-            resolve_physical_endpoint_pci_paths(
-                network.as_ref(),
-                self.hypervisor.as_ref(),
-            )
-            .await;
+            resolve_physical_endpoint_pci_paths(network.as_ref(), self.hypervisor.as_ref()).await;
 
             self.apply_network_to_agent(network.as_ref()).await?;
         }
@@ -1184,9 +1180,7 @@ async fn resolve_physical_endpoint_pci_paths(
                 Err(e) => {
                     warn!(
                         sl!(),
-                        "failed to resolve guest PCI path for hostdev {}: {}",
-                        hostdev_id,
-                        e
+                        "failed to resolve guest PCI path for hostdev {}: {}", hostdev_id, e
                     );
                 }
             }

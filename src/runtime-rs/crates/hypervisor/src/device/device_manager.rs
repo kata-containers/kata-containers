@@ -12,7 +12,9 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
-use kata_types::config::hypervisor::{BlockDeviceInfo, SharedFsInfo, TopologyConfigInfo, VIRTIO_SCSI};
+use kata_types::config::hypervisor::{
+    BlockDeviceInfo, SharedFsInfo, TopologyConfigInfo, VIRTIO_SCSI,
+};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{

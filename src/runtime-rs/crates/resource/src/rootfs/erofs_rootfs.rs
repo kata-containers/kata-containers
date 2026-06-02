@@ -925,9 +925,9 @@ impl ErofsMultiLayerRootfs {
             erofs_storages,
             vmdk_path,
             gpt_metadata_paths,
-            generated_artifacts_dir: PathBuf::from(
-                kata_types::build_path(DEFAULT_KATA_GUEST_ROOT_SHARED_FS),
-            )
+            generated_artifacts_dir: PathBuf::from(kata_types::build_path(
+                DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
+            ))
             .join(sid)
             .join(cid),
         })
@@ -974,7 +974,8 @@ impl Rootfs for ErofsMultiLayerRootfs {
         // Helper function to safely remove a file if it exists and is within the specified directory.
         let safely_remove_file = |path: &Path, dir: &Path| -> Result<()> {
             if path.starts_with(dir) && path.exists() {
-                fs::remove_file(path).context(format!("failed to remove file: {}", path.display()))?;
+                fs::remove_file(path)
+                    .context(format!("failed to remove file: {}", path.display()))?;
             }
             Ok(())
         };

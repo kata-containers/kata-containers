@@ -196,7 +196,12 @@ impl CgroupsResourceInner {
 
             // QEMU may not have spawned all vCPU threads yet. Retry with
             // exponential backoff until we see the expected count.
-            let expected = hypervisor.hypervisor_config().await.cpu_info.default_vcpus.ceil() as usize;
+            let expected = hypervisor
+                .hypervisor_config()
+                .await
+                .cpu_info
+                .default_vcpus
+                .ceil() as usize;
             if expected > 0 && tids.vcpus.len() < expected {
                 const MAX_ATTEMPTS: u32 = 10;
                 let mut backoff = Duration::from_millis(50);

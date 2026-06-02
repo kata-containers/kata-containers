@@ -15,7 +15,9 @@ FIRECRACKER_HYPERVISORS=("firecracker" "fc")
 
 ALL_HYPERVISORS=(
 	"clh"
+	"clh-azure"
 	"clh-runtime-rs"
+	"clh-azure-runtime-rs"
 	"dragonball"
 	"qemu"
 	"qemu-runtime-rs"
