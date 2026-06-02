@@ -47,6 +47,10 @@ fn kata_guest_root_shared_fs() -> String {
 /// If the container is a PodSandbox, it returns "pause".
 /// Otherwise, it attempts to find the image name using the appropriate Kubernetes
 /// annotation key.
+///
+/// If no container type annotation is found (SingleContainer case), it falls back to
+/// checking for image name annotations directly. This supports standalone container
+/// runtimes like nerdctl that may only provide the image name annotation.
 pub fn get_image_reference(spec_annotations: &HashMap<String, String>) -> Result<&str> {
     info!(
         sl!(),
@@ -72,6 +76,26 @@ pub fn get_image_reference(spec_annotations: &HashMap<String, String>) -> Result
                 };
             }
         }
+    }
+
+    // Fallback for SingleContainer case: if no container type annotation is found,
+    // try to get image name directly. This supports standalone container runtimes
+    // (e.g., nerdctl) that may only provide the image name annotation without the
+    // container type annotation.
+    if let Some(image_name) = spec_annotations.get(KUBERNETES_CRI_IMAGE_NAME) {
+        info!(
+            sl!(),
+            "Found image name without container type annotation (SingleContainer): {}", image_name
+        );
+        return Ok(image_name.as_str());
+    }
+
+    if let Some(image_name) = spec_annotations.get(KUBERNETES_CRIO_IMAGE_NAME) {
+        info!(
+            sl!(),
+            "Found CRI-O image name without container type annotation (SingleContainer): {}", image_name
+        );
+        return Ok(image_name.as_str());
     }
 
     Err(anyhow!("no target image reference found"))
@@ -256,6 +280,25 @@ mod tests {
         let image_ref_result_pod_sandbox = get_image_reference(&annotations_pod_sandbox);
         assert!(image_ref_result_pod_sandbox.is_ok());
         assert_eq!(image_ref_result_pod_sandbox.unwrap(), "pause");
+        // Test SingleContainer fallback (no container type annotation)
+        let mut annotations_single = HashMap::new();
+        annotations_single.insert(
+            "io.kubernetes.cri.image-name".to_string(),
+            "example-image-single".to_string(),
+        );
+        let image_ref_result_single = get_image_reference(&annotations_single);
+        assert!(image_ref_result_single.is_ok());
+        assert_eq!(image_ref_result_single.unwrap(), "example-image-single");
+
+        // Test SingleContainer fallback with CRI-O annotation
+        let mut annotations_single_crio = HashMap::new();
+        annotations_single_crio.insert(
+            "io.kubernetes.cri-o.ImageName".to_string(),
+            "example-image-single-crio".to_string(),
+        );
+        let image_ref_result_single_crio = get_image_reference(&annotations_single_crio);
+        assert!(image_ref_result_single_crio.is_ok());
+        assert_eq!(image_ref_result_single_crio.unwrap(), "example-image-single-crio");
     }
 
     #[tokio::test]
