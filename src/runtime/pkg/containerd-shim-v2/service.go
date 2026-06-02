@@ -153,6 +153,10 @@ type service struct {
 
 	// shim's pid
 	pid uint32
+
+	vsockUDSCancel    context.CancelFunc
+	vsockUDSConns     sync.Map
+	vsockUDSForwardWg sync.WaitGroup
 }
 
 func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {
@@ -984,6 +988,8 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	katatrace.StopTracing(s.rootCtx)
 
 	s.cancel()
+
+	s.stopVsockUDSForward()
 
 	// Since we only send an shutdown qmp command to qemu when do stopSandbox, and
 	// didn't wait until qemu process's exit, thus we'd better to make sure it had

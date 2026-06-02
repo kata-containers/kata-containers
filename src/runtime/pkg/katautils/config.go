@@ -203,6 +203,7 @@ type runtime struct {
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
 	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
 	KubeletRootDir            string   `toml:"kubelet_root_dir"`
+	VsockUDSForward           []string `toml:"vsock_uds_forward"`
 }
 
 // emptyDirMode returns a valid emptydir_mode value, defaulting to shared-fs
@@ -1751,6 +1752,14 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.ForceGuestPull = tomlConf.Runtime.ForceGuestPull
 	config.PodResourceAPISock = tomlConf.Runtime.PodResourceAPISock
 	config.KubeletRootDir = tomlConf.Runtime.KubeletRootDir
+
+	port, uds, err := ParseVsockUDSForwardList(tomlConf.Runtime.VsockUDSForward)
+	if err != nil {
+		return "", config, fmt.Errorf("runtime.vsock_uds_forward: %w", err)
+	}
+	config.VsockUDSForwardPort = port
+	config.VsockUDSForwardUDS = uds
+	config.VsockUDSForward = tomlConf.Runtime.VsockUDSForward
 
 	return resolved, config, nil
 }
