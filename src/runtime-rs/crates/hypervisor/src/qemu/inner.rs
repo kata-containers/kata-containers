@@ -268,14 +268,13 @@ impl QemuInner {
                     cmdline.add_physical_endpoint_root_port(&vfio_dev.bus, port_index);
 
                     for hostdev in &vfio_dev.devices {
-                        let host_bdf =
-                            format!("{}:{}", hostdev.domain, hostdev.bus_slot_func);
+                        let host_bdf = format!("{}:{}", hostdev.domain, hostdev.bus_slot_func);
                         let (vendor_id, device_id) =
-                            hostdev.device_vendor_class.as_ref().map_or(
-                                (None, None),
-                                |dvc| {
-                                    let (dev, vendor) =
-                                        dvc.get_device_vendor().unwrap_or((0, 0));
+                            hostdev
+                                .device_vendor_class
+                                .as_ref()
+                                .map_or((None, None), |dvc| {
+                                    let (dev, vendor) = dvc.get_device_vendor().unwrap_or((0, 0));
                                     let v = if vendor != 0 {
                                         Some(format!("0x{:04x}", vendor))
                                     } else {
@@ -287,8 +286,7 @@ impl QemuInner {
                                         None
                                     };
                                     (v, d)
-                                },
-                            );
+                                });
                         cmdline.add_physical_vfio_device(
                             &host_bdf,
                             &hostdev.hostdev_id,
@@ -1160,10 +1158,12 @@ impl QemuInner {
     /// initialised. This is the runtime-rs pair of the Go runtime's
     /// `ResolveColdPlugVFIOGuestPciPaths` / `qomGetPciPath` call.
     pub(crate) fn resolve_vfio_device_pci_path(&mut self, hostdev_id: &str) -> Result<PciPath> {
-        let qmp = self
-            .qmp
-            .as_mut()
-            .ok_or_else(|| anyhow!("QMP not initialised; cannot resolve PCI path for {}", hostdev_id))?;
+        let qmp = self.qmp.as_mut().ok_or_else(|| {
+            anyhow!(
+                "QMP not initialised; cannot resolve PCI path for {}",
+                hostdev_id
+            )
+        })?;
         qmp.get_device_by_qdev_id(hostdev_id)
     }
 }

@@ -126,7 +126,7 @@ pub fn arch_guest_protection(
         // shouldn't hurt to double-check and have better logging if anything
         // goes wrong.
 
-        let fn0 = unsafe { x86_64::__cpuid(0) };
+        let fn0 = x86_64::__cpuid(0);
         // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
         // interpreted byte-wise as ASCII.  No need to bother here with an
         // actual conversion to string though.
@@ -139,7 +139,7 @@ pub fn arch_guest_protection(
         }
 
         // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
-        let fn8000_001f = unsafe { x86_64::__cpuid(0x8000_001f) };
+        let fn8000_001f = x86_64::__cpuid(0x8000_001f);
         if fn8000_001f.eax & 0x10 == 0 {
             return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
         }

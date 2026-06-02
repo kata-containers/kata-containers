@@ -2252,10 +2252,7 @@ impl PCIeVfioDevice {
 
     /// Creates a `PCIeVfioDevice` without an IOMMUFD handle, for use with
     /// pre-existing PCIe root ports (cold-plug of physical network VFs).
-    pub fn new_without_iommufd(
-        host_bdf: impl Into<String>,
-        bus: impl Into<String>,
-    ) -> Self {
+    pub fn new_without_iommufd(host_bdf: impl Into<String>, bus: impl Into<String>) -> Self {
         Self {
             host_bdf: host_bdf.into(),
             bus: bus.into(),

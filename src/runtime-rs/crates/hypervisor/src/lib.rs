@@ -12,8 +12,8 @@ logging::logger_with_subsystem!(sl, "hypervisor");
 pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
-use device::DeviceType;
 pub use device::pci_path::PciPath;
+use device::DeviceType;
 #[cfg(all(
     feature = "dragonball",
     any(target_arch = "x86_64", target_arch = "aarch64")
