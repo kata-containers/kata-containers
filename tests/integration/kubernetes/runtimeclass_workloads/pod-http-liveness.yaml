@@ -11,6 +11,8 @@ metadata:
   name: liveness-http
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
   containers:
   - name: liveness
     image: ${agnhost_image}

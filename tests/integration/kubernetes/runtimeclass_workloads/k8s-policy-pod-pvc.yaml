@@ -9,6 +9,8 @@ metadata:
   name: policy-pod-pvc
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   containers:
     - name: busybox
       image: "quay.io/prometheus/busybox:latest"

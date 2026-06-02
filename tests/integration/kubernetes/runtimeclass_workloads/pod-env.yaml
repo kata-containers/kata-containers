@@ -9,6 +9,8 @@ metadata:
   name: test-env
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   containers:
     - name: test-container
       image: quay.io/prometheus/busybox:latest

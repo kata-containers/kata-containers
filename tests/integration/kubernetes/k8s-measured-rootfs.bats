@@ -41,7 +41,8 @@ setup() {
 	nginx_digest=$(get_from_kata_deps ".docker_images.nginx.digest")
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
-	pod_config="$(new_pod_config "${nginx_image}" "kata-${KATA_HYPERVISOR}")"
+	pod_config="$(new_pod_config "${nginx_image}" "kata-${KATA_HYPERVISOR}" \
+		"" "" "1, 2, 3, 4, 6, 10, 11, 20, 26, 27")"
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 
 	incorrect_hash="1111111111111111111111111111111111111111111111111111111111111111"

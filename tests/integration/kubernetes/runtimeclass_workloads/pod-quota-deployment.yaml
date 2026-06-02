@@ -18,6 +18,8 @@ spec:
         purpose: quota-demo
     spec:
       runtimeClassName: kata
+      securityContext:
+        supplementalGroups: [10]
       containers:
       - name: pod-quota-demo
         image: quay.io/prometheus/busybox:latest

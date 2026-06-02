@@ -9,6 +9,8 @@ metadata:
   name: default-cpu-test
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   containers:
   - name: default-cpu-demo-ctr
     image: quay.io/prometheus/busybox:latest
