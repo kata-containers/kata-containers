@@ -38,7 +38,53 @@ export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 export TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
-function configure_devmapper() {
+function _configure_containerd_snapshotter() {
+	local snapshotter_name="${1}"
+	local tomlq_filter="${2}"
+
+	local containerd_config_file
+	case "${KUBERNETES}" in
+		k3s)
+			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
+			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
+			;;
+		kubeadm|vanilla)
+			containerd_config_file="/etc/containerd/config.toml"
+			;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	install_tomlq
+
+	local containerd_arch
+	containerd_arch="$(uname -m)"
+	case "${containerd_arch}" in
+		x86_64) containerd_arch="amd64" ;;
+		aarch64|arm64) containerd_arch="arm64" ;;
+	esac
+
+	echo "Updating containerd config with tomlq for ${snapshotter_name} snapshotter..."
+	local config_tmp_file
+	config_tmp_file="$(sudo mktemp)"
+	# shellcheck disable=SC2016
+	sudo cat "${containerd_config_file}" | tomlq -t --arg platform "linux/${containerd_arch}" "${tomlq_filter}" | sudo tee "${config_tmp_file}" > /dev/null
+	sudo mv "${config_tmp_file}" "${containerd_config_file}"
+
+	uninstall_tomlq
+
+	case "${KUBERNETES}" in
+		k3s) sudo systemctl restart k3s ;;
+		vanilla|kubeadm) sudo systemctl restart containerd ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	sleep 60s
+	sudo cat "${containerd_config_file}"
+
+	info "${snapshotter_name} snapshotter configured"
+}
+
+function _setup_devmapper_device() {
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
 	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
@@ -62,75 +108,12 @@ EOF
 	sudo systemctl daemon-reload
 	sudo systemctl enable --now containerd-devmapper
 
-	# Time to setup the thin pool for consumption.
-	# The table arguments are such.
-	# start block in the virtual device
-	# length of the segment (block device size in bytes / Sector size (512)
-	# metadata device
-	# block data device
-	# data_block_size Currently set it 512 (128KB)
-	# low_water_mark. Copied this from containerd snapshotter test setup
-	# no. of feature arguments
-	# Skip zeroing blocks for new volumes.
 	sudo dmsetup create contd-thin-pool \
 		--table "0 20971520 thin-pool /dev/loop21 /dev/loop20 512 32768 1 skip_block_zeroing"
+}
 
-	case "${KUBERNETES}" in
-		k3s)
-			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
-			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
-			;;
-		kubeadm)
-			containerd_config_file="/etc/containerd/config.toml"
-			;;
-		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
-	esac
-
-	# We need to use tomlq to update the containerd config with the devmapper configuration,
-	# as it's a more complex update that involves adding new entries and modifying existing ones
-	# for two different containerd versions.
-	install_tomlq
-
-	containerd_arch="$(uname -m)"
-	case "${containerd_arch}" in
-		x86_64) containerd_arch="amd64" ;;
-		aarch64|arm64) containerd_arch="arm64" ;;
-	esac
-
-	echo "Updating containerd config with tomlq..."
-	config_tmp_file="$(sudo mktemp)"
-	# shellcheck disable=SC2016
-	sudo cat "${containerd_config_file}" | tomlq -t --arg platform "linux/${containerd_arch}" '
-		.plugins["io.containerd.snapshotter.v1.devmapper"].pool_name = "contd-thin-pool"
-		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
-		| .plugins["io.containerd.transfer.v1.local"].unpack_config =
-			[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
-		| if .version == 3 then
-			.plugins["io.containerd.cri.v1.images"].snapshotter = "devmapper"
-		  else
-			.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "devmapper"
-		  end
-	' | sudo tee "${config_tmp_file}" > /dev/null
-	sudo mv "${config_tmp_file}" "${containerd_config_file}"
-
-	# We only need tomlq for this configuration.
-	# yq, installed by install_tomlq, might cause an issue with go-based yq used by CI.
-	# So we uninstall tomlq to remove the yq from PATH and avoid any potential conflict.
-	uninstall_tomlq
-
-	case "${KUBERNETES}" in
-		k3s)
-			sudo systemctl restart k3s ;;
-		kubeadm)
-			sudo systemctl restart containerd ;;
-		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
-	esac
-
-	sleep 60s
-	sudo cat "${containerd_config_file}"
-
-	if [[ "${KUBERNETES}" = 'k3s' ]]
-	then
+function _verify_devmapper() {
+	if [[ "${KUBERNETES}" = 'k3s' ]]; then
 		local ctr_dm_status
 		local result
 
@@ -149,11 +132,76 @@ EOF
 	sudo dmsetup status -v
 }
 
+function _setup_blockfile_device() {
+	sudo mkdir -p /opt/containerd
+	sudo dd if=/dev/zero of=/opt/containerd/blockfile bs=1M count=500
+	sudo mkfs.ext4 /opt/containerd/blockfile
+}
+
+function _configure_fc_shared_fs() {
+	if is_firecracker_hypervisor; then
+		local fc_config=""
+		for candidate in \
+			"/opt/kata/share/defaults/kata-containers/runtimes/fc/configuration-fc.toml" \
+			"/opt/kata/share/defaults/kata-containers/configuration-fc.toml" \
+			"/etc/kata-containers/configuration-fc.toml"; do
+			if [[ -f "${candidate}" ]]; then
+				fc_config="${candidate}"
+				break
+			fi
+		done
+		if [[ -z "${fc_config}" ]]; then
+			warn "FC kata config not found, shared_fs unchanged"
+			return 0
+		fi
+		info "Setting shared_fs=none in ${fc_config}"
+		sudo sed -i 's/^#\?shared_fs.*/shared_fs = "none"/' "${fc_config}"
+	fi
+}
+
+# shellcheck disable=SC2016
+readonly devmapper_tomlq_filter='
+	.plugins["io.containerd.snapshotter.v1.devmapper"].pool_name = "contd-thin-pool"
+	| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
+	| .plugins["io.containerd.transfer.v1.local"].unpack_config =
+		[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
+	| if .version == 3 then
+		.plugins["io.containerd.cri.v1.images"].snapshotter = "devmapper"
+	  else
+		.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "devmapper"
+	  end
+'
+
+# shellcheck disable=SC2016
+readonly blockfile_tomlq_filter='
+	.plugins["io.containerd.snapshotter.v1.blockfile"].root_path = "/var/lib/containerd-blockfile"
+	| .plugins["io.containerd.snapshotter.v1.blockfile"].scratch_file = "/opt/containerd/blockfile"
+	| .plugins["io.containerd.snapshotter.v1.blockfile"].fs_type = "ext4"
+	| .plugins["io.containerd.snapshotter.v1.blockfile"].mount_options = []
+	| .plugins["io.containerd.snapshotter.v1.blockfile"].recreate_scratch = true
+	| .plugins["io.containerd.transfer.v1.local"].unpack_config =
+		[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "blockfile"})]
+	| if .version == 3 then
+		.plugins["io.containerd.cri.v1.images"].snapshotter = "blockfile"
+	  else
+		.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "blockfile"
+	  end
+'
+
 function configure_snapshotter() {
 	echo "::group::Configuring ${SNAPSHOTTER}"
 
 	case "${SNAPSHOTTER}" in
-		devmapper) configure_devmapper ;;
+		devmapper)
+			_setup_devmapper_device
+			_configure_containerd_snapshotter "devmapper" "${devmapper_tomlq_filter}"
+			_verify_devmapper
+			;;
+		blockfile)
+			_setup_blockfile_device
+			_configure_containerd_snapshotter "blockfile" "${blockfile_tomlq_filter}"
+			_configure_fc_shared_fs
+			;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
 
