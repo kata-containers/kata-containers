@@ -286,10 +286,10 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              1
             ],
-            "GID": 0,
-            "UID": 0,
+            "GID": 1,
+            "UID": 2,
             "Username": ""
           }
         },
@@ -612,10 +612,10 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              1
             ],
-            "GID": 0,
-            "UID": 0,
+            "GID": 1,
+            "UID": 2,
             "Username": ""
           }
         },
