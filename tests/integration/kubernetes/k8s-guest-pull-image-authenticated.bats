@@ -22,6 +22,7 @@ setup() {
 
     setup_common || die "setup_common failed"
     AUTHENTICATED_IMAGE="${AUTHENTICATED_IMAGE:-quay.io/kata-containers/confidential-containers-auth:test}"
+    authenticated_image_supplemental_groups="10"
     AUTHENTICATED_IMAGE_USER=${AUTHENTICATED_IMAGE_USER:-}
     AUTHENTICATED_IMAGE_PASSWORD=${AUTHENTICATED_IMAGE_PASSWORD:-}
     CREDENTIALS_KBS_URI="kbs:///default/credentials/test"
@@ -90,7 +91,8 @@ EOF
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} ${AUTHENTICATED_IMAGE_PASSWORD}
 
-    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node"
+    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
@@ -105,7 +107,8 @@ EOF
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} "junk"
 
-    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node"
+    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "kbs:///default/credentials/test" "" "resource" "$node" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
@@ -119,7 +122,8 @@ EOF
 @test "Test that creating a container from an authenticated image, with no credentials fails" {
 
     # Create pod config, but don't add agent.image_registry_auth annotation
-    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "" "" "resource" "$node"
+    create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "" "" "resource" "$node" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
@@ -136,7 +140,8 @@ EOF
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} ${AUTHENTICATED_IMAGE_PASSWORD}
 
     initdata=$(get_initdata_with_auth_registry_config)
-    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
@@ -153,7 +158,8 @@ EOF
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} "junk"
 
     initdata=$(get_initdata_with_auth_registry_config)
-    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
@@ -169,7 +175,8 @@ EOF
 
     # Create pod config, but don't add image_registry_auth to initdata
     initdata=$(get_initdata_with_cdh_image_section "")
-    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${authenticated_image_supplemental_groups}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
