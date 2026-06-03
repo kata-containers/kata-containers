@@ -31,10 +31,23 @@ generate_base_values() {
 	local output_file="$1"
 	local extra_values_file="${2:-}"
 
+	local kata_deploy_image="${DOCKER_REGISTRY}/${DOCKER_REPO}"
+	local dispatcher_image
+	if [[ "${kata_deploy_image}" == *-ci ]]; then
+		dispatcher_image="${kata_deploy_image%-ci}-job-dispatcher-ci"
+	else
+		dispatcher_image="${kata_deploy_image}-job-dispatcher"
+	fi
+
 	cat > "${output_file}" <<EOF
 image:
   reference: ${DOCKER_REGISTRY}/${DOCKER_REPO}
   tag: ${DOCKER_TAG}
+
+job:
+  dispatcherImage:
+    reference: ${dispatcher_image}
+    tag: ${DOCKER_TAG}
 
 k8sDistribution: "${KUBERNETES}"
 debug: true

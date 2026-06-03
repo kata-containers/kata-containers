@@ -392,6 +392,21 @@ reference:tag (tag defaults to Chart.AppVersion).
 {{- end -}}
 
 {{/*
+Dispatcher image reference for the job-mode dispatcher (kata-deploy-job-dispatcher).
+Supports tag (reference:tag) and digest (reference@sha256:...) formats; tag
+defaults to Chart.AppVersion.
+*/}}
+{{- define "kata-deploy.dispatcherImage" -}}
+{{- $ref := .Values.job.dispatcherImage.reference -}}
+{{- $tag := default .Chart.AppVersion .Values.job.dispatcherImage.tag | toString -}}
+{{- if contains "@" $ref -}}
+{{- $ref -}}
+{{- else -}}
+{{- printf "%s:%s" $ref $tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Get snapshotter setup list from structured config
 */}}
 {{- define "kata-deploy.getSnapshotterSetup" -}}
@@ -589,6 +604,166 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
 - name: CUSTOM_RUNTIMES_ENABLED
   value: "true"
+{{- end }}
+{{- end -}}
+
+{{/*
+Build a Kubernetes label-selector STRING (the form accepted by the apiserver
+and `kubectl --selector`) from an equality map plus a list of match-expression
+requirements. This is handed to `kata-deploy-job-dispatcher --node-selector`, which
+resolves the actual target nodes LIVE at run time (so node membership is never
+frozen into the Helm release).
+
+Arguments (dict):
+  eq    - equality label map           -> "k=v"
+  exprs - list of {key, operator, values}:
+            Exists       -> "key"
+            DoesNotExist -> "!key"
+            In           -> "key in (v1,v2)"
+            NotIn        -> "key notin (v1,v2)"
+
+Returns the comma-joined selector string (possibly empty, meaning "all nodes").
+*/}}
+{{- define "kata-deploy.nodeLabelSelector" -}}
+{{- $parts := list -}}
+{{- range $k, $v := (.eq | default dict) -}}
+{{- $parts = append $parts (printf "%s=%s" $k $v) -}}
+{{- end -}}
+{{- range $expr := (.exprs | default list) -}}
+{{- $op := $expr.operator -}}
+{{- if eq $op "Exists" -}}
+{{- $parts = append $parts $expr.key -}}
+{{- else if eq $op "DoesNotExist" -}}
+{{- $parts = append $parts (printf "!%s" $expr.key) -}}
+{{- else if eq $op "In" -}}
+{{- $parts = append $parts (printf "%s in (%s)" $expr.key (join "," ($expr.values | default list))) -}}
+{{- else if eq $op "NotIn" -}}
+{{- $parts = append $parts (printf "%s notin (%s)" $expr.key (join "," ($expr.values | default list))) -}}
+{{- else -}}
+{{- fail (printf "nodeSelectorExpressions: unsupported operator %q for key %q (use In, NotIn, Exists, DoesNotExist)" $op $expr.key) -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $parts -}}
+{{- end -}}
+
+{{/*
+Per-node staged Job manifest (deploymentMode: job), embedded verbatim into the
+job-templates ConfigMap. The dispatcher (kata-deploy-job-dispatcher) clones this once per
+target node, injecting metadata.name + spec.template.spec.nodeName, so the
+template itself carries NO node identity and NO Helm hook annotations.
+
+Arguments (dict):
+  root  - top-level context (.)
+  stage - "install" | "cleanup"
+
+install pipeline:  host-check -> artifacts -> cri (initContainers) ; label (main)
+cleanup pipeline:  unlabel -> revert-cri    (initContainers) ; remove-artifacts (main)
+
+Emitted at column 0 (a standalone Job document); embed with `indent` at the call
+site under a ConfigMap data key.
+*/}}
+{{- define "kata-deploy.perNodeJob" -}}
+{{- $root := .root -}}
+{{- $stage := .stage -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    kata-deploy/stage: {{ $stage }}
+spec:
+  backoffLimit: {{ $root.Values.job.backoffLimit }}
+  ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        kata-deploy/stage: {{ $stage }}
+    spec:
+{{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      serviceAccountName: {{ include "kata-deploy.serviceAccountName" $root }}
+      restartPolicy: Never
+      hostPID: true
+{{- with $root.Values.tolerations }}
+      tolerations:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with $root.Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
+{{- if eq $stage "install" }}
+      initContainers:
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" true "mountHost" true) | nindent 8 }}
+      containers:
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "label" "action" "install-stage-label" "privileged" false "mountHost" false) | nindent 8 }}
+{{- else }}
+      initContainers:
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "unlabel" "action" "cleanup-stage-unlabel" "privileged" false "mountHost" false) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" true "mountHost" true) | nindent 8 }}
+      containers:
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
+{{- end }}
+      volumes:
+{{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
+{{- end -}}
+
+{{/*
+Service account name (honoring multiInstallSuffix), shared by all kata-deploy
+workloads (DaemonSet and staged Jobs).
+*/}}
+{{- define "kata-deploy.serviceAccountName" -}}
+{{- if .Values.env.multiInstallSuffix -}}
+{{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+{{- else -}}
+{{ .Chart.Name }}-sa
+{{- end -}}
+{{- end -}}
+
+{{/*
+ServiceAccount name for the job-mode dispatcher (kata-deploy-job-dispatcher). Separate from
+kata-deploy.serviceAccountName: the dispatcher is a pure API client (list nodes,
+manage Jobs) and must NOT carry the privileged kata-deploy host-mutation rights.
+*/}}
+{{- define "kata-deploy.dispatcherServiceAccountName" -}}
+{{- if .Values.env.multiInstallSuffix -}}
+{{ .Chart.Name }}-dispatcher-sa-{{ .Values.env.multiInstallSuffix }}
+{{- else -}}
+{{ .Chart.Name }}-dispatcher-sa
+{{- end -}}
+{{- end -}}
+
+{{/*
+Render a single staged-pipeline container that runs one kata-deploy stage action.
+Used by the per-node staged install/cleanup Jobs (deploymentMode: job).
+
+Arguments (dict):
+  root        - the top-level context (.)
+  name        - container name
+  action      - kata-deploy subcommand (e.g. install-stage-cri)
+  privileged  - bool, whether the container runs privileged (host nsenter/restart)
+  mountHost   - bool, whether to mount the host paths (crio/containerd/host)
+
+Emitted at column 0; indent with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.stageContainer" -}}
+- name: {{ .name }}
+  image: {{ include "kata-deploy.image" .root }}
+  imagePullPolicy: {{ .root.Values.imagePullPolicy }}
+  command: ["/usr/bin/kata-deploy", "{{ .action }}"]
+  env:
+{{- include "kata-deploy.commonEnv" .root | nindent 4 }}
+  securityContext:
+    privileged: {{ .privileged }}
+{{- if .mountHost }}
+  volumeMounts:
+{{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
 {{- end }}
 {{- end -}}
 

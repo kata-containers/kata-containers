@@ -1,3 +1,106 @@
+# Deployment model for installing/cleaning up Kata on nodes.
+#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
+#              every matching node and reverts it on pod termination (uninstall).
+#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
+#              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
+#              the selected nodes LIVE, and creates one node-pinned install Job
+#              per node - paced to job.parallelism and guaranteeing one install
+#              per node. Each per-node Job runs the staged pipeline as ordered
+#              initContainers and exits. Uninstall works the same way via a
+#              pre-delete dispatcher (reverse pipeline).
+#
+# Why a dispatcher instead of rendering per-node Jobs in the chart: Helm stores
+# the whole rendered release in one ~1 MiB Secret and runs hook resources
+# sequentially, and neither an Indexed Job nor a JobSet can guarantee one pod
+# per node once parallelism < node-count (the scheduler ignores completed pods
+# when balancing spread). The dispatcher keeps the release O(1), enumerates nodes
+# at run time, and paces a guaranteed-coverage rollout with built-in Jobs only.
+#
+# NOTE on "job" mode and new nodes:
+#   The dispatcher only runs on `helm install` / `helm upgrade` / `helm uninstall`.
+#   When you add nodes later, re-run `helm upgrade` so the dispatcher enumerates
+#   and installs the new nodes (the staged actions are idempotent, so already-
+#   installed nodes are skipped). This is intentional: it avoids an always-on
+#   privileged component on every node.
+deploymentMode: daemonset  # daemonset | job
+
+# Settings specific to deploymentMode: job
+job:
+  # Dispatcher image: the dispatcher that fans out per-node Jobs. It only talks to
+  # the Kubernetes API (lists nodes, creates/watches Jobs); it never touches the
+  # host. Supports reference:tag or reference@sha256:digest; tag defaults to the
+  # chart appVersion.
+  dispatcherImage:
+    reference: quay.io/kata-containers/kata-deploy-job-dispatcher
+    tag: ""
+  # Maximum number of nodes processed concurrently (the dispatcher keeps at most
+  # this many per-node Jobs in flight, refilling as they finish). Lower it to
+  # pace the rollout (e.g. limit how many CRI runtimes restart at once on a big
+  # fleet); raise it to install faster. Effectively capped at the node count.
+  parallelism: 100
+  # How to choose which nodes get a per-node INSTALL Job. Precedence:
+  #   1. job.nodes (explicit list of node names) - if non-empty, used verbatim
+  #      (passed to the dispatcher as --nodes).
+  #   2. otherwise a label selector built from job.nodeSelector (equality) ANDed
+  #      with job.nodeSelectorExpressions (In/NotIn/Exists/DoesNotExist) is
+  #      passed to the dispatcher, which resolves matching nodes LIVE at run time.
+  #   3. if both are empty, ALL nodes are targeted.
+  #
+  # DEFAULT: target worker (non-control-plane) nodes, so no custom labeling is
+  # required. Override these freely:
+  #   - Target nodes with a specific label:
+  #       job:
+  #         nodeSelector: { kata-containers: "enabled" }
+  #   - Target every node (including control-plane), e.g. single-node clusters/CI:
+  #       job:
+  #         nodeSelectorExpressions: []
+  #   - Richer expressions:
+  #       job:
+  #         nodeSelectorExpressions:
+  #           - { key: kubernetes.io/os, operator: In, values: ["linux"] }
+  #           - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
+  #   - Pin to explicit nodes:
+  #       job:
+  #         nodes: ["worker-1", "worker-2"]
+  nodes: []
+  # Equality label selector (ANDed with nodeSelectorExpressions). Ignored when
+  # job.nodes is set. Empty by default.
+  nodeSelector: {}
+  # Kubernetes-style label selector requirements (ANDed with nodeSelector).
+  # Each entry: { key, operator, values }. operator is one of:
+  #   In | NotIn (values required) | Exists | DoesNotExist (values must be empty).
+  # Default selects nodes that are NOT control-plane/master (i.e. worker nodes).
+  # Set to [] to disable role filtering and target all discovered nodes.
+  nodeSelectorExpressions:
+    - key: node-role.kubernetes.io/control-plane
+      operator: DoesNotExist
+    - key: node-role.kubernetes.io/master
+      operator: DoesNotExist
+  # Node selection for the UNINSTALL (pre-delete hook) dispatcher. Same precedence
+  # and semantics as install (cleanup.nodes, else cleanup.nodeSelector ANDed with
+  # cleanup.nodeSelectorExpressions, else all nodes).
+  #
+  # The cleanup dispatcher resolves nodes LIVE when it runs at `helm uninstall`
+  # (the dispatcher does the lookup), so - unlike a frozen Helm-rendered hook -
+  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime",
+  # i.e. exactly the nodes install actually labeled. Override to clean a
+  # different set, e.g.:
+  #   job:
+  #     cleanup:
+  #       nodes: ["worker-1"]
+  cleanup:
+    nodes: []
+    nodeSelector: {}
+    nodeSelectorExpressions:
+      - key: katacontainers.io/kata-runtime
+        operator: Exists
+  # How long finished per-node Jobs are retained before automatic garbage
+  # collection (seconds). Applies to both install and cleanup per-node Jobs.
+  ttlSecondsAfterFinished: 600
+  # Per-node retry budget: retries for a single node's Job before it is marked
+  # failed. One node failing never aborts the others.
+  backoffLimit: 3
+
 imagePullPolicy: Always
 
 imagePullSecrets: []

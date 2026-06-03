@@ -1,3 +1,4 @@
+{{- if eq (.Values.deploymentMode | default "daemonset") "daemonset" -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
 {{- $existingNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
 {{- if $existingNFDNamespace -}}
@@ -204,3 +205,4 @@ spec:
   updateStrategy:
     {{- toYaml . | nindent 4 }}
 {{- end}}
+{{- end -}}
