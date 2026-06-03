@@ -17,3 +17,6 @@ spec:
         fieldRef:
           apiVersion: v1
           fieldPath: metadata.labels['labels.test.com/test-label1']
+    securityContext:
+      runAsUser: 2
+      runAsGroup: 1

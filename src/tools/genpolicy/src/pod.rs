@@ -1214,6 +1214,18 @@ impl Container {
         }
     }
 
+    pub fn run_as_user(&self) -> Option<i64> {
+        self.securityContext
+            .as_ref()
+            .and_then(|context| context.runAsUser)
+    }
+
+    pub fn run_as_group(&self) -> Option<i64> {
+        self.securityContext
+            .as_ref()
+            .and_then(|context| context.runAsGroup)
+    }
+
     // Count NVIDIA passthrough GPU requests using an explicit allowlist of resource keys.
     pub fn get_nvidia_pgpu_count(&self, pgpu_resource_keys: &[String]) -> Option<usize> {
         let limits = self.resources.as_ref()?.limits.as_ref()?;

@@ -12,6 +12,9 @@ spec:
     volumeMounts:
     - name: tmp
       mountPath: /mnt
+    securityContext:
+      runAsUser: 65535
+      runAsGroup: 0
   volumes:
   - name: tmp
     emptyDir: {}

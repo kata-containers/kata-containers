@@ -15,3 +15,6 @@ spec:
       resources:
         limits:
           nvidia.com/pgpu: "2"
+      securityContext:
+        runAsUser: 65535
+        runAsGroup: 0
