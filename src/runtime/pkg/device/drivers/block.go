@@ -61,12 +61,13 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 	}
 
 	drive := &config.BlockDrive{
-		File:     device.DeviceInfo.HostPath,
-		Format:   "raw",
-		ID:       utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
-		Index:    index,
-		Pmem:     device.DeviceInfo.Pmem,
-		ReadOnly: device.DeviceInfo.ReadOnly,
+		File:         device.DeviceInfo.HostPath,
+		Format:       "raw",
+		ID:           utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
+		Index:        index,
+		Pmem:         device.DeviceInfo.Pmem,
+		ReadOnly:     device.DeviceInfo.ReadOnly,
+		DiscardUnmap: device.DeviceInfo.DiscardUnmap,
 	}
 
 	if fs, ok := device.DeviceInfo.DriverOptions[config.FsTypeOpt]; ok {

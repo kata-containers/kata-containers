@@ -148,6 +148,35 @@ func TestSetEphemeralStorageType(t *testing.T) {
 		"Unexpected mount type, got %s expected ephemeral", mountType)
 }
 
+func TestSetEphemeralStorageTypeHostEmptyDirModes(t *testing.T) {
+	assert := assert.New(t)
+
+	dir := t.TempDir()
+	emptyDirPath := filepath.Join(dir, vc.K8sEmptyDir, "disk-volume")
+	err := os.MkdirAll(emptyDirPath, testDirMode)
+	assert.NoError(err)
+
+	newSpec := func() specs.Spec {
+		return specs.Spec{
+			Mounts: []specs.Mount{
+				{
+					Source: emptyDirPath,
+					Type:   "bind",
+				},
+			},
+		}
+	}
+
+	ociSpec := SetEphemeralStorageType(newSpec(), false, vc.EmptyDirModeSharedFs)
+	assert.Equal(vc.KataLocalDevType, ociSpec.Mounts[0].Type)
+
+	ociSpec = SetEphemeralStorageType(newSpec(), false, vc.EmptyDirModeVirtioBlkEncrypted)
+	assert.Equal("bind", ociSpec.Mounts[0].Type)
+
+	ociSpec = SetEphemeralStorageType(newSpec(), false, vc.EmptyDirModeVirtioBlkPlain)
+	assert.Equal("bind", ociSpec.Mounts[0].Type)
+}
+
 func TestSetKernelParams(t *testing.T) {
 	assert := assert.New(t)
 

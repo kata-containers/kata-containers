@@ -73,6 +73,12 @@ const (
 	// EmptyDirModeVirtioBlkEncrypted is the emptydir_mode value for encrypted virtio-blk emptyDir.
 	EmptyDirModeVirtioBlkEncrypted = "block-encrypted"
 
+	// EmptyDirModeVirtioBlkPlain is the emptydir_mode value for plain virtio-blk emptyDir.
+	EmptyDirModeVirtioBlkPlain = "block-plain"
+
+	// blockVolumeDiscardOption requests discard support for block volume mounts.
+	blockVolumeDiscardOption = "discard"
+
 	// encryptionKeyDriverOption is the driver option used to specify
 	// an encryption key for a Storage struct.
 	encryptionKeyDriverOption = "encryption_key"
@@ -2057,6 +2063,9 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	if m.EncryptionKey != "" {
 		option := fmt.Sprintf("%s=%s", encryptionKeyDriverOption, m.EncryptionKey)
 		vol.DriverOptions = append(vol.DriverOptions, option)
+	}
+	if m.BlockDeviceCreateFs {
+		vol.DriverOptions = append(vol.DriverOptions, volume.BlockVolumeCreateFsDriverKey)
 	}
 
 	vol.Shared = m.Shared

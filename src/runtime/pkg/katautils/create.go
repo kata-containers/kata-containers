@@ -107,7 +107,9 @@ func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool, empt
 			//   disableGuestEmptyDir and emptyDirMode.
 			if vc.IsHugePageEmptyDir(mnt.Source) {
 				ociSpec.Mounts[idx].Type = vc.KataLocalDevType
-			} else if !disableGuestEmptyDir && emptyDirMode != vc.EmptyDirModeVirtioBlkEncrypted {
+			} else if !disableGuestEmptyDir &&
+				emptyDirMode != vc.EmptyDirModeVirtioBlkEncrypted &&
+				emptyDirMode != vc.EmptyDirModeVirtioBlkPlain {
 				ociSpec.Mounts[idx].Type = vc.KataLocalDevType
 			}
 		}
