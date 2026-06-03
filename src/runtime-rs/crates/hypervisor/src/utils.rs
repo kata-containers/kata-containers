@@ -334,20 +334,51 @@ pub struct SocketAddress {
 
 impl SocketAddress {
     pub fn new(port: u32) -> Self {
+        Self::new_with_socket_path(port, QGS_SOCKET_PATH)
+    }
+
+    fn new_with_socket_path(port: u32, socket_path: &str) -> Self {
         if port == 0 {
-            Self {
-                typ: "unix".to_string(),
-                cid: "".to_string(),
-                port: "".to_string(),
-                path: QGS_SOCKET_PATH.to_string(),
+            match std::fs::metadata(socket_path) {
+                Ok(_) => {
+                    return Self {
+                        typ: "unix".to_string(),
+                        cid: "".to_string(),
+                        port: "".to_string(),
+                        path: socket_path.to_string(),
+                    };
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // Socket not present; fall back to vsock for backwards compatibility.
+                    warn!(
+                        sl!(),
+                        "QGS socket {} not found, falling back to vsock port 4050", socket_path
+                    );
+                }
+                Err(e) => {
+                    // Unexpected error (e.g. permission denied) — log it so misconfiguration
+                    // is not silently masked, then fall back to vsock.
+                    warn!(
+                        sl!(),
+                        "QGS socket {} inaccessible ({}), falling back to vsock port 4050",
+                        socket_path,
+                        e
+                    );
+                }
             }
-        } else {
-            Self {
+            return Self {
                 typ: "vsock".to_string(),
                 cid: format!("{}", 2),
-                port: port.to_string(),
+                port: "4050".to_string(),
                 path: "".to_string(),
-            }
+            };
+        }
+
+        Self {
+            typ: "vsock".to_string(),
+            cid: format!("{}", 2),
+            port: port.to_string(),
+            path: "".to_string(),
         }
     }
 }
@@ -462,9 +493,20 @@ mod tests {
 
     #[test]
     fn test_unix_address_new() {
-        let socket = SocketAddress::new(0);
+        let dir = TempDir::new().unwrap();
+        let sock = dir.path().join("qgs.socket");
+        std::fs::File::create(&sock).unwrap();
+
+        // Socket present: must return unix type
+        let socket = SocketAddress::new_with_socket_path(0, sock.to_str().unwrap());
         assert_eq!(socket.typ, "unix");
-        assert_eq!(socket.path, "/var/run/tdx-qgs/qgs.socket");
+        assert_eq!(socket.path, sock.to_str().unwrap());
+
+        // Socket absent: must fall back to vsock port 4050
+        let socket = SocketAddress::new_with_socket_path(0, "/nonexistent/qgs.socket");
+        assert_eq!(socket.typ, "vsock");
+        assert_eq!(socket.cid, "2");
+        assert_eq!(socket.port, "4050");
     }
 
     #[test]
@@ -476,9 +518,21 @@ mod tests {
 
     #[test]
     fn test_socket_address_serialize_deserialize() {
-        let socket = SocketAddress::new(0);
+        let dir = TempDir::new().unwrap();
+        let sock = dir.path().join("qgs.socket");
+        std::fs::File::create(&sock).unwrap();
+        let sock_str = sock.to_str().unwrap();
+
+        // Socket present: unix type
+        let socket = SocketAddress::new_with_socket_path(0, sock_str);
         let serialized = serde_json::to_string(&socket).unwrap();
-        let expected_json = r#"{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}"#;
+        let expected_json = format!(r#"{{"type":"unix","path":"{sock_str}"}}"#);
+        assert_eq!(expected_json, serialized);
+
+        // Socket absent: vsock fallback
+        let socket = SocketAddress::new_with_socket_path(0, "/nonexistent/qgs.socket");
+        let serialized = serde_json::to_string(&socket).unwrap();
+        let expected_json = r#"{"type":"vsock","cid":"2","port":"4050"}"#;
         assert_eq!(expected_json, serialized);
     }
 

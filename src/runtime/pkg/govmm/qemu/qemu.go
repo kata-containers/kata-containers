@@ -46,9 +46,11 @@ type Machine struct {
 const (
 	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
 	MachineTypeMicrovm string = "microvm"
-	// (fixed) Unix Domain Socket Path served by Intel TDX Quote Generation Service
-	qgsSocketPath string = "/var/run/tdx-qgs/qgs.socket"
 )
+
+// qgsSocketPath is the Unix Domain Socket path served by the Intel TDX Quote
+// Generation Service. Declared as a var so tests can override it.
+var qgsSocketPath = "/var/run/tdx-qgs/qgs.socket"
 
 // hasPCIeRoot reports whether the configured QEMU machine type exposes a
 // `pcie.0` root complex (q35 on x86, virt on arm64).  Machines such as
@@ -538,7 +540,13 @@ func (t *TdxQomObject) String() string {
 
 func getQgsSocketAddress(portNum uint32) SocketAddress {
 	if portNum == 0 {
-		return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		// Check if the Unix socket exists
+		if _, err := os.Stat(qgsSocketPath); err == nil {
+			return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		}
+		// Fall back to port 4050 with vsock for backwards compatibility
+		log.Printf("Warning: QGS socket %s not found, falling back to vsock port 4050", qgsSocketPath)
+		return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: "4050"}
 	}
 
 	return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: fmt.Sprint(portNum)}
