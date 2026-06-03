@@ -33,22 +33,24 @@ function install_dependencies() {
 	# directly from their releases on GitHub:
 	# - containerd
 	#   - cri-container-cni release tarball already includes CNI plugins
-	# - cri-tools
 	# - nydus
 	# - nydus-snapshotter
 	declare -a github_deps
 	# shellcheck disable=SC2154
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
-	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
-	github_deps[2]="nydus:$(get_from_kata_deps ".externals.nydus.version")"
-	github_deps[3]="nydus_snapshotter:$(get_from_kata_deps ".externals.nydus-snapshotter.version")"
-	github_deps[4]="runc:$(get_from_kata_deps ".externals.runc.latest")"
-	github_deps[5]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
+	github_deps[1]="nydus:$(get_from_kata_deps ".externals.nydus.version")"
+	github_deps[2]="nydus_snapshotter:$(get_from_kata_deps ".externals.nydus-snapshotter.version")"
+	github_deps[3]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+	github_deps[4]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"
 		"install_${dep[0]}" "${dep[1]}"
 	done
+
+	# cri-tools is resolved at install time to the absolute latest
+	# release, so it is not pinned via versions.yaml.
+	install_cri_tools
 }
 
 function run() {
