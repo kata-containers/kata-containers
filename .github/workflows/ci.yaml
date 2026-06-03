@@ -65,7 +65,7 @@ jobs:
     secrets:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
-  publish-kata-deploy-payload-amd64:
+  publish-kata-deploy-image-amd64:
     needs: build-kata-static-tarball-amd64
     permissions:
       contents: read
@@ -116,7 +116,7 @@ jobs:
     secrets:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
-  publish-kata-deploy-payload-arm64:
+  publish-kata-deploy-image-arm64:
     needs: build-kata-static-tarball-arm64
     permissions:
       contents: read
@@ -179,7 +179,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-s390x:
+  publish-kata-deploy-image-s390x:
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
@@ -216,7 +216,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-ppc64le:
+  publish-kata-deploy-image-ppc64le:
     needs: build-kata-static-tarball-ppc64le
     permissions:
       contents: read
@@ -307,7 +307,7 @@ jobs:
 
   run-kata-monitor-k8s-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-amd64, publish-kata-monitor-image-amd64]
+    needs: [publish-kata-deploy-image-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-k8s-tests.yaml
     with:
       registry: ghcr.io
@@ -321,7 +321,7 @@ jobs:
 
   run-k8s-tests-on-aks:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
 
     permissions:
@@ -342,7 +342,7 @@ jobs:
 
   run-k8s-tests-on-free-runner:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
     uses: ./.github/workflows/run-k8s-tests-on-free-runner.yaml
@@ -357,7 +357,7 @@ jobs:
 
   run-k8s-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-arm64
+    needs: publish-kata-deploy-image-arm64
     uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
     with:
       registry: ghcr.io
@@ -370,7 +370,7 @@ jobs:
   run-kata-coco-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
     needs:
-      - publish-kata-deploy-payload-arm64
+      - publish-kata-deploy-image-arm64
       - build-and-publish-tee-confidential-unencrypted-image
     uses: ./.github/workflows/run-kata-coco-tests-arm64-k8s.yaml
     with:
@@ -386,7 +386,7 @@ jobs:
 
   run-k8s-tests-on-nvidia-gpu:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -404,7 +404,7 @@ jobs:
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs:
-     - publish-kata-deploy-payload-amd64
+     - publish-kata-deploy-image-amd64
      - build-and-publish-tee-confidential-unencrypted-image
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     permissions:
@@ -428,7 +428,7 @@ jobs:
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
+    needs: [publish-kata-deploy-image-s390x, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
     with:
       registry: ghcr.io
@@ -442,7 +442,7 @@ jobs:
 
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-ppc64le
+    needs: publish-kata-deploy-image-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
     with:
       registry: ghcr.io
@@ -454,7 +454,7 @@ jobs:
 
   run-kata-deploy-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-amd64]
+    needs: [publish-kata-deploy-image-amd64]
     uses: ./.github/workflows/run-kata-deploy-tests.yaml
     with:
       registry: ghcr.io

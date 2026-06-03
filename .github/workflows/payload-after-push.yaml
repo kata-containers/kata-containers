@@ -67,7 +67,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-amd64:
+  publish-kata-deploy-image-amd64:
     needs: build-assets-amd64
     permissions:
       contents: read
@@ -85,7 +85,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-arm64:
+  publish-kata-deploy-image-arm64:
     needs: build-assets-arm64
     permissions:
       contents: read
@@ -103,7 +103,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-s390x:
+  publish-kata-deploy-image-s390x:
     needs: build-assets-s390x
     permissions:
       contents: read
@@ -121,7 +121,7 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-ppc64le:
+  publish-kata-deploy-image-ppc64le:
     needs: build-assets-ppc64le
     permissions:
       contents: read
@@ -217,7 +217,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x, publish-kata-deploy-payload-ppc64le]
+    needs: [publish-kata-deploy-image-amd64, publish-kata-deploy-image-arm64, publish-kata-deploy-image-s390x, publish-kata-deploy-image-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
