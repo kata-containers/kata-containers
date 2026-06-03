@@ -40,6 +40,12 @@ $ helm show values "${CHART}" --version "${VERSION}"
 This installs the `kata-deploy` DaemonSet and the default Kata `RuntimeClass`
 resources on your cluster.
 
+> **Note:** the DaemonSet is the default install model, but it is no longer the
+> only one. You can instead install Kata via short-lived, staged per-node Jobs
+> (no always-on component on the node) by setting `deploymentMode: job`. See
+> [Deployment Modes (DaemonSet vs Job)](helm-configuration.md#deployment-modes-daemonset-vs-job)
+> for details and node-selection options.
+
 To see what versions of the chart are available:
 
 ```sh
