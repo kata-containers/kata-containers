@@ -1274,7 +1274,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with blk: start")
 
     i_storage.driver == "blk"
-    regex.match("^[0-9]{2}/[0-9]{2}$", i_storage.source)
+    regex.match("^[0-9a-f]{2}(/[0-9a-f]{2})?$", i_storage.source)
 
     allow_block_storage(p_storages, i_storage, bundle_id, sandbox_id)
 

@@ -476,9 +476,9 @@ pub struct ClusterConfig {
     ///           as the only value* in AdditionalGids.
     pub pause_container_id_policy: String,
 
-    /// Whether emptyDirs are encrypted with modified metadata in the
-    /// mount and a storage object for the block device.
-    pub encrypted_emptydir: bool,
+    /// How emptyDirs are represented in the policy.
+    /// Supported values are "shared-fs", "block-encrypted", and "block-plain".
+    pub emptydir_type: String,
 
     /// Cgroup v2 mount options that may appear beyond what genpolicy embeds
     /// (e.g. "nsdelegate", "memory_recursiveprot" on newer kernels).
