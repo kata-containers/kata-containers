@@ -78,6 +78,7 @@ else
 		"k8s-erofs-dmverity.bats" \
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
+		"k8s-graceful-termination.bats" \
 		"k8s-hostname.bats" \
 		"k8s-hostpath-volume.bats" \
 		"k8s-inotify.bats" \

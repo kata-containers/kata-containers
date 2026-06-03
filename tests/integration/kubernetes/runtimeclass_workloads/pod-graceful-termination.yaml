@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2026 Schwarz Digits Cloud GmbH & Co. KG
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: graceful-termination-test
+spec:
+  runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
+  containers:
+  - name: sigterm-trap
+    image: quay.io/prometheus/busybox:latest
+    command:
+    - "/bin/sh"
+    - "-c"
+    - |
+      echo -n 'start' > /dev/termination-log
+      trap "echo -n ', received SIGINT' >> /dev/termination-log; wait" SIGINT
+      trap "echo -n ', received SIGTERM' >> /dev/termination-log; wait" SIGTERM
+      tail -f /dev/null & wait
+      # (We use wait to allow busybox ash to receive the TERM signal, see e.g. https://unix.stackexchange.com/a/387854)
+      # (wait in the traps is needed so we continue waiting after the first wait is interrupted)
+      # (Ultimatelly, the container will be killed by a SIGKILL after terminationGracePeriodSeconds)
+      echo -n ', normal exit' >> /dev/termination-log
+  terminationGracePeriodSeconds: 1
