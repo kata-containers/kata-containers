@@ -2097,10 +2097,11 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 	}
 
 	qblkDevice := govmmQemu.BlockDevice{
-		ID:       drive.ID,
-		File:     drive.File,
-		ReadOnly: drive.ReadOnly,
-		AIO:      govmmQemu.BlockDeviceAIO(q.config.BlockDeviceAIO),
+		ID:           drive.ID,
+		File:         drive.File,
+		ReadOnly:     drive.ReadOnly,
+		DiscardUnmap: drive.DiscardUnmap,
+		AIO:          govmmQemu.BlockDeviceAIO(q.config.BlockDeviceAIO),
 	}
 
 	if drive.Swap {
@@ -2157,7 +2158,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			iothreadID = fmt.Sprintf("%s_%d", indepIOThreadsPrefix, 0)
 		}
 
-		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, iothreadID, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAddWithDiscard(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, drive.DiscardUnmap, iothreadID, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
@@ -2176,7 +2177,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 		if err != nil {
 			return err
 		}
-		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAddWithDiscard(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false, drive.DiscardUnmap, q.config.BlockDeviceLogicalSectorSize, q.config.BlockDevicePhysicalSectorSize); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioSCSI:
