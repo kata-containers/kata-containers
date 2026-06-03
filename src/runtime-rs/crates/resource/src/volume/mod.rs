@@ -5,8 +5,8 @@
 //
 
 mod block_volume;
+pub(crate) mod block_emptydir_volume;
 mod default_volume;
-pub(crate) mod encrypted_emptydir_volume;
 mod ephemeral_volume;
 pub mod hugepage;
 mod local_volume;
@@ -27,7 +27,6 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
-use kata_types::config::EMPTYDIR_MODE_BLOCK_ENCRYPTED;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -53,7 +52,7 @@ pub trait Volume: Send + Sync {
 #[derive(Default)]
 pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
-    ephemeral_disks: Vec<encrypted_emptydir_volume::EphemeralDiskInfo>,
+    ephemeral_disks: Vec<block_emptydir_volume::EphemeralDiskInfo>,
 }
 
 #[derive(Default)]
@@ -101,18 +100,19 @@ impl VolumeResource {
                     ephemeral_volume::EphemeralVolume::new(m)
                         .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
-            } else if encrypted_emptydir_volume::is_encrypted_emptydir_volume(m, emptydir_mode) {
-                let vol = encrypted_emptydir_volume::EncryptedEmptyDirVolume::new(d, m, sid)
+            } else if block_emptydir_volume::is_block_emptydir_volume(m, emptydir_mode) {
+                let vol = block_emptydir_volume::BlockEmptyDirVolume::new(d, m, sid, emptydir_mode)
                     .await
-                    .with_context(|| format!("new encrypted emptydir volume {m:?}"))?;
+                    .with_context(|| format!("new block emptydir volume {m:?}"))?;
                 let vol_arc: Arc<dyn Volume> = Arc::new(vol.clone());
                 let mut inner = self.inner.write().await;
                 inner.ephemeral_disks.push(vol.disk_info);
                 drop(inner);
                 vol_arc
             } else if need_local_volume(m, fs_sharing_supported, emptydir_mode) {
-                // This branch comes after the is_encrypted_emptydir_volume() branch
-                // to ensure encrypted handling takes precedence.
+                // This branch comes after is_block_emptydir_volume() so
+                // block-encrypted and block-plain emptyDirs are handled as
+                // block devices before falling back to guest-local storage.
                 warn!(
                     sl!(),
                     "handling emptyDir as guest-local volume because fs sharing is unsupported; Kubelet cannot enforce sizeLimit-based eviction",
@@ -224,7 +224,7 @@ impl VolumeResource {
 /// starve the host storage.
 fn need_local_volume(m: &oci::Mount, fs_sharing_supported: bool, emptydir_mode: &str) -> bool {
     !fs_sharing_supported
-        && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+        && !block_emptydir_volume::is_block_emptydir_mode(emptydir_mode)
         && m.source()
             .as_ref()
             .is_some_and(|src| is_disk_empty_dir(&src.display().to_string()))
