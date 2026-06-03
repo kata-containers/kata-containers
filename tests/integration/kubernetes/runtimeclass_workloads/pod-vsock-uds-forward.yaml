@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2026 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# vsock_uds_forward is enabled via a config.d drop-in written by k8s-vsock-uds-forward.bats.
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vsock-uds-forward-pod
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+    - name: vsock-uds-forward-test
+      image: quay.io/kata-containers/alpine:3.22.0
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          IFS=: read -r major minor _ </sys/class/misc/vsock/dev
+          mknod /dev/vsock c "$major" "$minor"
+          chmod 666 /dev/vsock
+          apk add --no-cache socat
+          GUEST_UDS=/tmp/kata-vsock-fwd.sock
+          (
+          while true; do
+            rm -f "$GUEST_UDS"
+            socat -d -d VSOCK-LISTEN:15001,reuseaddr UNIX-LISTEN:${GUEST_UDS},reuseaddr
+          done
+          ) >>/tmp/kata-guest-socat.log 2>&1 &
+          exec sleep infinity
