@@ -3651,6 +3651,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kata-deploy-job-dispatcher"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "k8s-openapi",
+ "kube",
+ "log",
+ "rstest 0.18.2",
+ "serde_yaml 0.9.34+deprecated",
+ "tokio",
+]
+
+[[package]]
 name = "kata-sys-util"
 version = "0.1.0"
 dependencies = [

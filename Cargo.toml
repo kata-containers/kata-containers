@@ -48,6 +48,9 @@ members = [
   # kata-deploy (Kubernetes installer binary)
   "tools/packaging/kata-deploy/binary",
 
+  # kata-deploy-job-dispatcher (generic per-node Job dispatcher)
+  "tools/packaging/kata-deploy/job-dispatcher",
+
   # runtime-rs
   "src/runtime-rs",
   "src/runtime-rs/crates/agent",
