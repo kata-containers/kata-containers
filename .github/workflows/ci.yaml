@@ -297,12 +297,13 @@ jobs:
 
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
+    needs: [build-kata-static-tarball-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      kata-monitor-image: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci:${{ inputs.tag }}-amd64
 
   run-k8s-tests-on-aks:
     if: ${{ inputs.skip-test != 'yes' }}

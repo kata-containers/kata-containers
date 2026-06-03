@@ -12,6 +12,14 @@ on:
         required: false
         type: string
         default: ""
+      kata-monitor-image:
+        description: >-
+          Container image reference for kata-monitor to be exercised by
+          the tests. When unset the tests fall back to running the
+          kata-monitor binary installed from the kata-static tarball.
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-kata-monitor
@@ -39,6 +47,7 @@ jobs:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KATA_MONITOR_IMAGE: ${{ inputs.kata-monitor-image }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -65,6 +74,10 @@ jobs:
 
       - name: Install kata
         run: bash tests/functional/kata-monitor/gha-run.sh install-kata kata-artifacts
+
+      - name: Pre-pull kata-monitor image
+        if: ${{ inputs.kata-monitor-image != '' }}
+        run: sudo docker pull "${KATA_MONITOR_IMAGE}"
 
       - name: Run kata-monitor tests
         run: bash tests/functional/kata-monitor/gha-run.sh run
