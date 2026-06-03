@@ -63,12 +63,27 @@ function run() {
 	bash "${kata_monitor_dir}/kata-monitor-tests.sh"
 }
 
+function run_helm_tests() {
+	# shellcheck disable=SC2154
+	info "Running kata-monitor helm-chart tests"
+
+	pushd "${kata_monitor_dir}"
+	bash run-kata-monitor-helm-tests.sh
+	popd
+}
+
+function report_helm_tests() {
+	report_bats_tests "${kata_monitor_dir}"
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
 		install-kata) install_kata ;;
 		run) run ;;
+		run-helm-tests) run_helm_tests ;;
+		report-helm-tests) report_helm_tests ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

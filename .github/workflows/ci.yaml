@@ -305,6 +305,20 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       kata-monitor-image: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci:${{ inputs.tag }}-amd64
 
+  run-kata-monitor-k8s-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: [publish-kata-deploy-payload-amd64, publish-kata-monitor-image-amd64]
+    uses: ./.github/workflows/run-kata-monitor-k8s-tests.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      pr-number: ${{ inputs.pr-number }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      kata-monitor-image-reference: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci
+      kata-monitor-image-tag: ${{ inputs.tag }}-amd64
+
   run-k8s-tests-on-aks:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
