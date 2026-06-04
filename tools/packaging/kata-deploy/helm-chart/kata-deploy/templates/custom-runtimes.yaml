@@ -49,9 +49,20 @@ data:
 {{- end }}
 ---
 # RuntimeClasses for custom runtimes
+{{- $runtimeClassConfigs := fromYaml (include "kata-deploy.runtimeClassConfigs" .) | default dict }}
 {{- range $name, $runtime := .Values.customRuntimes.runtimes }}
 {{- if $runtime.runtimeClass }}
-{{ $runtime.runtimeClass }}
+{{- $runtimeClassObj := fromYaml $runtime.runtimeClass | default dict }}
+{{- $inheritBaseOverhead := true }}
+{{- if hasKey $runtime "inheritBaseOverhead" }}
+{{- $inheritBaseOverhead = $runtime.inheritBaseOverhead }}
+{{- end }}
+{{- if and $inheritBaseOverhead (hasKey $runtimeClassConfigs (default "" $runtime.baseConfig)) }}
+{{- $defaultOverhead := deepCopy (index $runtimeClassConfigs $runtime.baseConfig) }}
+{{- $runtimeOverhead := dig "overhead" "podFixed" (dict) $runtimeClassObj }}
+{{- $_ := set $runtimeClassObj "overhead" (dict "podFixed" (mergeOverwrite $defaultOverhead $runtimeOverhead)) }}
+{{- end }}
+{{ toYaml $runtimeClassObj }}
 ---
 {{- end }}
 {{- end }}
