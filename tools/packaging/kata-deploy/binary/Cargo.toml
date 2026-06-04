@@ -34,7 +34,7 @@ log.workspace = true
 regex.workspace = true
 serde_json.workspace = true
 serde_yaml = "0.9"
-tar = "0.4.45"
+tar = "0.4.46"
 tokio = { workspace = true, features = [
     "rt-multi-thread",
     "macros",
