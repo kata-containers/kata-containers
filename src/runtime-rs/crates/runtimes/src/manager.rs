@@ -535,6 +535,29 @@ impl RuntimeHandlerManager {
 
             Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
+            // A teardown RPC must still make the shim daemon exit even when
+            // the runtime instance was never (fully) created -- e.g. after a
+            // failed CreateContainer.  In that case containerd's follow-up
+            // Shutdown would otherwise hit `get_runtime_instance()`, fail with
+            // "runtime not ready", and the service loop would never receive
+            // `Action::Shutdown`.  Because the shim ignores SIGTERM the daemon
+            // would then be left running and orphaned by containerd.
+            if let TaskRequest::ShutdownContainer(_) = &req {
+                if self.get_runtime_instance().await.is_err() {
+                    warn!(
+                        sl!(),
+                        "shutdown requested but runtime instance is not ready; \
+                         forcing shim exit to avoid an orphaned shim process"
+                    );
+                    let sender = self.inner.read().await.msg_sender.clone();
+                    sender
+                        .send(Message::new(Action::Shutdown))
+                        .await
+                        .context("send shutdown message")?;
+                    return Ok(TaskResponse::ShutdownContainer);
+                }
+            }
+
             self.handler_task_request(req)
                 .await
                 .context("handler TaskRequest")
@@ -949,4 +972,36 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::types::ShutdownRequest;
+    use tokio::sync::mpsc::channel;
+
+    // A ShutdownContainer RPC that arrives before any runtime instance was
+    // created (e.g. after a failed CreateContainer) must still drive the shim
+    // daemon to exit, otherwise the process is orphaned.  Verify it returns
+    // ShutdownContainer and emits Action::Shutdown on the service channel.
+    #[tokio::test]
+    async fn test_shutdown_without_runtime_instance_forces_exit() {
+        let (sender, mut receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+
+        let resp = manager
+            .handler_task_message(TaskRequest::ShutdownContainer(ShutdownRequest {
+                container_id: "test-sid".to_string(),
+                is_now: true,
+            }))
+            .await
+            .expect("shutdown should succeed even without a runtime instance");
+
+        assert!(matches!(resp, TaskResponse::ShutdownContainer));
+
+        let msg = receiver
+            .try_recv()
+            .expect("an Action::Shutdown message must be sent to stop the daemon");
+        assert!(matches!(msg.action, Action::Shutdown));
+    }
 }
