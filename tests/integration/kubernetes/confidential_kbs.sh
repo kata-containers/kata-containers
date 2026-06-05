@@ -19,19 +19,30 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-HTTPS_PROXY="${HTTPS_PROXY:-}"
+HTTP_PROXY="${HTTP_PROXY:-${http_proxy:-}}"
+HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
+# Cluster-internal and RFC1918 addresses must bypass corporate proxies so trustee
+# gRPC (AS ↔ RVPS) and in-cluster HTTP do not time out behind a MITM proxy.
+readonly _trustee_default_no_proxy="localhost,127.0.0.1,::1,.svc,.svc.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
 readonly COCO_KBS_DIR="${COCO_TRUSTEE_DIR}/kbs"
+# The Helm chart directory inside the trustee repo
+readonly COCO_HELM_CHART_DIR="${COCO_TRUSTEE_DIR}/deployment/helm-chart"
+# The Helm release name
+readonly HELM_RELEASE_NAME="trustee"
 # The k8s namespace where the kbs service is deployed
-readonly KBS_NS="coco-tenant"
+readonly KBS_NS="coco-trustee"
 # The private key file used for CLI authentication
 readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
-# The kbs service name
-readonly KBS_SVC_NAME="kbs"
+# The kbs service name (Helm chart names it <release>-kbs)
+readonly KBS_SVC_NAME="trustee-kbs"
 # The kbs ingress name
-readonly KBS_INGRESS_NAME="kbs"
+readonly KBS_INGRESS_NAME="trustee-kbs"
+# The bootstrap secret name holding admin keys
+readonly KBS_BOOTSTRAP_SECRET="trustee-bootstrap-user-keys"
 # Workdir for installing snphost
 readonly SNPHOST_DIR="/tmp/snphost-workdir"
 
@@ -315,46 +326,44 @@ ensure_snphost() {
 
 # Delete the kbs on Kubernetes
 #
-# Note: assume the kbs sources were cloned to $COCO_TRUSTEE_DIR
-#
 function kbs_k8s_delete() {
-	pushd "${COCO_KBS_DIR}"
-	if [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
-		kubectl delete -k config/kubernetes/overlays/ibm-se
-	else
-		kubectl delete -k config/kubernetes/overlays/
-	fi
+	helm uninstall "${HELM_RELEASE_NAME}" -n "${KBS_NS}" || true
 
 	# Verify that KBS namespace resources were properly deleted
-	cmd="kubectl get all -n ${KBS_NS} 2>&1 | grep 'No resources found'"
+	local cmd="kubectl get all -n ${KBS_NS} 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "${cmd}"
-	popd
+
+	kubectl delete ns "${KBS_NS}" --ignore-not-found --wait=false
 }
 
-# Deploy the kbs on Kubernetes
+# Deploy the kbs on Kubernetes via the Trustee Helm chart.
 #
 # Parameters:
-#	$1 - apply the specificed ingress handler to expose the service externally
+#	$1 - ingress type to expose the service externally (nodeport|aks|"")
+#
+# Environment (optional):
+#	NVIDIA_VERIFIER_MODE - remote (default) | local: overrides the NVIDIA verifier
+#	                       type when KATA_HYPERVISOR matches *nvidia-gpu*.
 #
 function kbs_k8s_deploy() {
-	local image
-	local image_tag
 	local ingress=${1:-}
 	local repo
+	local version
+	local image_kbs
+	local image_as
+	local image_rvps
 	local svc_host
 	local timeout
-	local kbs_ip
-	local kbs_port
-	local version
 
-	# yq is needed by get_from_kata_deps
 	ensure_yq
+	ensure_helm
 
 	# Read from versions.yaml
 	repo=$(get_from_kata_deps ".externals.coco-trustee.url")
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
-	image=$(get_from_kata_deps ".externals.coco-trustee.image")
-	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
+	image_kbs=$(get_from_kata_deps ".externals.coco-trustee.image_kbs")
+	image_as=$(get_from_kata_deps ".externals.coco-trustee.image_as")
+	image_rvps=$(get_from_kata_deps ".externals.coco-trustee.image_rvps")
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -369,111 +378,254 @@ function kbs_k8s_deploy() {
 		rm -rf "${COCO_TRUSTEE_DIR}"
 	fi
 
-	echo "::group::Clone the kbs sources"
+	echo "::group::Clone the trustee sources"
 	git clone --depth 1 "${repo}" "${COCO_TRUSTEE_DIR}"
 	pushd "${COCO_TRUSTEE_DIR}"
 	git fetch --depth=1 origin "${version}"
-	git checkout FETCH_HEAD -b kbs_$$
+	git checkout FETCH_HEAD -b trustee_$$
 	popd
 	echo "::endgroup::"
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/"
+	# Split image references into repository and tag.
+	# Format is "repo:tag" (e.g. "quay.io/fidencio/trustee:helm-tests-kbs-grpc-as")
+	local kbs_repo="${image_kbs%:*}"
+	local kbs_tag="${image_kbs##*:}"
+	local as_repo="${image_as%:*}"
+	local as_tag="${image_as##*:}"
+	local rvps_repo="${image_rvps%:*}"
+	local rvps_tag="${image_rvps##*:}"
 
-	# Tests should fill kbs resources later, however, the deployment
-	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/key.bin
+	# Build Helm --set arguments for verifier configuration.
+	# These supplement the values file and avoid embedding YAML inside the heredoc.
+	local helm_set_args=()
 
-	# For qemu-se* runtime, prepare the necessary resources
-	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
-		mv overlays/key.bin overlays/ibm-se/key.bin
-		prepare_credentials_for_qemu_se
-		# SE_SKIP_CERTS_VERIFICATION should be set to true
-		# to skip the verification of the certificates
-		sed -i "s/false/true/g" overlays/ibm-se/patch.yaml
+	if [[ "${KATA_HYPERVISOR}" == *snp* ]]; then
+		helm_set_args+=(--set "as.snpVerifier.enabled=true")
 	fi
 
-	echo "::group::Update the kbs container image"
-	install_kustomize
-	pushd base
-	kustomize edit set image "kbs-container-image=${image}:${image_tag}"
-	popd
-	echo "::endgroup::"
-	[[ -n "${ingress}" ]] && _handle_ingress "${ingress}"
+	if [[ "${KATA_HYPERVISOR}" == *nvidia-gpu* ]]; then
+		local nvidia_verifier_type
+		nvidia_verifier_type="$(printf '%s' "${NVIDIA_VERIFIER_MODE:-remote}" | sed 's/./\u&/')"
+		helm_set_args+=(--set "as.nvidiaVerifier.type=${nvidia_verifier_type}")
+	fi
 
-	echo "::group::Deploy the KBS"
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		if [[ -n "${HTTPS_PROXY}" ]]; then
-			# Ideally this should be something kustomizable on trustee side.
-			#
-			# However, for now let's take the bullet and do it here, and revert this as
-			# soon as https://github.com/confidential-containers/trustee/issues/567 is
-			# solved.
-			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
-				ensure_yq
+	if [[ "${KATA_HYPERVISOR}" == *tdx* ]]; then
+		helm_set_args+=(--set "as.intelDcap.enabled=true")
+	fi
 
-				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"${HTTPS_PROXY}\"}]" -i deployment.yaml
-			popd
+	# Build Helm values override
+	local values_file
+	values_file=$(mktemp -t trustee-helm-values-XXXXX.yaml)
+	cat > "${values_file}" <<-EOF
+	kbs:
+	  image:
+	    repository: "${kbs_repo}"
+	    tag: "${kbs_tag}"
+	  service:
+	    exposeLoadBalancer: false
+	as:
+	  image:
+	    repository: "${as_repo}"
+	    tag: "${as_tag}"
+	rvps:
+	  image:
+	    repository: "${rvps_repo}"
+	    tag: "${rvps_tag}"
+	EOF
+
+	# Handle ingress / nodeport
+	if [[ "${ingress}" = "nodeport" ]]; then
+		cat >> "${values_file}" <<-EOF
+		nodePort:
+		  enabled: true
+		EOF
+	elif [[ "${ingress}" = "aks" ]]; then
+		echo "::group::Enable approuting (application routing) add-on"
+		enable_cluster_approuting ""
+		echo "::endgroup::"
+
+		cat >> "${values_file}" <<-EOF
+		ingress:
+		  enabled: true
+		  className: "webapprouting.kubernetes.azure.com"
+		  host: ""
+		EOF
+	fi
+
+	# Handle HTTP(S) proxy: set both spellings and NO_PROXY so AS/KBS/Rust stacks do
+	# not send in-cluster traffic to the corporate proxy (TDX Intel CI; SNP has no proxy).
+	# Helm --set treats commas as key separators; escape them with \, for literal commas.
+	local kbs_env_idx=0
+	if [[ -n "${HTTPS_PROXY}" || -n "${HTTP_PROXY}" ]]; then
+		local merged_no_proxy
+		if [[ -n "${NO_PROXY}" ]]; then
+			merged_no_proxy="${NO_PROXY},${_trustee_default_no_proxy}"
+		else
+			merged_no_proxy="${_trustee_default_no_proxy}"
 		fi
+		local helm_http_proxy="${HTTP_PROXY//,/\\,}"
+		local helm_https_proxy="${HTTPS_PROXY//,/\\,}"
+		local helm_no_proxy="${merged_no_proxy//,/\\,}"
+		local idx
+		for component in kbs as; do
+			idx=0
+			if [[ -n "${HTTP_PROXY}" ]]; then
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=HTTP_PROXY")
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_http_proxy}")
+				idx=$((idx + 1))
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=http_proxy")
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_http_proxy}")
+				idx=$((idx + 1))
+			fi
+			if [[ -n "${HTTPS_PROXY}" ]]; then
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=HTTPS_PROXY")
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_https_proxy}")
+				idx=$((idx + 1))
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=https_proxy")
+				helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_https_proxy}")
+				idx=$((idx + 1))
+			fi
+			helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=NO_PROXY")
+			helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_no_proxy}")
+			idx=$((idx + 1))
+			helm_set_args+=(--set "${component}.extraEnvVars[${idx}].name=no_proxy")
+			helm_set_args+=(--set "${component}.extraEnvVars[${idx}].value=${helm_no_proxy}")
+			[[ "${component}" == "kbs" ]] && kbs_env_idx=$((idx + 1))
+		done
 	fi
 
-	./deploy-kbs.sh
+	# Handle IBM SE (s390x) — uses a separate values file merged via helm -f
+	local extra_values_files=()
+	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
+		prepare_credentials_for_qemu_se
+		helm_set_args+=(--set "kbs.extraEnvVars[${kbs_env_idx}].name=SE_SKIP_CERTS_VERIFICATION")
+		helm_set_args+=(--set "kbs.extraEnvVars[${kbs_env_idx}].value=true")
+		local se_values
+		se_values=$(mktemp -t trustee-helm-se-XXXXX.yaml)
+		cat > "${se_values}" <<-EOF
+		kbs:
+		  extraVolumes:
+		    - name: ibmse-creds
+		      hostPath:
+		        path: "${IBM_SE_CREDS_DIR}"
+		        type: Directory
+		  extraVolumeMounts:
+		    - name: ibmse-creds
+		      mountPath: /run/confidential-containers/ibmse
+		      readOnly: true
+		EOF
+		extra_values_files+=(-f "${se_values}")
+	fi
 
-	# Check the private key used to install the KBS exist and save it in a
-	# well-known location. That's the access key used by the kbs-client.
-	local install_key="${PWD}/base/kbs.key"
-	if [[ ! -f "${install_key}" ]]; then
-		echo "ERROR: KBS private key not found at ${install_key}"
+	# Baremetal / self-hosted CI clusters keep the same Kubernetes API; a prior
+	# run may leave the Helm release secret behind (e.g. pending-install after a
+	# timeout). helm install then fails with "cannot reuse a name that is still
+	# in use".
+	if helm status "${HELM_RELEASE_NAME}" -n "${KBS_NS}" &>/dev/null; then
+		echo "Removing existing Helm release ${HELM_RELEASE_NAME} in namespace ${KBS_NS}"
+		helm uninstall "${HELM_RELEASE_NAME}" -n "${KBS_NS}" --wait --timeout 5m
+	fi
+
+	echo "::group::Deploy Trustee via Helm"
+	echo "Helm values override:"
+	cat "${values_file}"
+
+	if ! helm install "${HELM_RELEASE_NAME}" "${COCO_HELM_CHART_DIR}" \
+		--namespace "${KBS_NS}" --create-namespace \
+		-f "${values_file}" \
+		"${extra_values_files[@]}" \
+		"${helm_set_args[@]}" \
+		--wait --timeout 5m --debug 2>&1; then
+		echo "ERROR: helm install failed"
+		echo "::group::DEBUG - helm status"
+		helm status "${HELM_RELEASE_NAME}" -n "${KBS_NS}" 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - all resources"
+		kubectl -n "${KBS_NS}" get all 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - pods"
+		kubectl -n "${KBS_NS}" get pods -o wide 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - describe pods"
+		kubectl -n "${KBS_NS}" describe pods 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - services"
+		kubectl -n "${KBS_NS}" get svc -o wide 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - endpoints"
+		kubectl -n "${KBS_NS}" get endpoints 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - secrets"
+		kubectl -n "${KBS_NS}" get secrets 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - deployments"
+		kubectl -n "${KBS_NS}" get deployments -o wide 2>&1 || true
+		kubectl -n "${KBS_NS}" describe deployments 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - jobs"
+		kubectl -n "${KBS_NS}" get jobs 2>&1 || true
+		kubectl -n "${KBS_NS}" describe jobs 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - events"
+		kubectl -n "${KBS_NS}" get events --sort-by='.lastTimestamp' 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - kbs logs"
+		kubectl -n "${KBS_NS}" logs -l app=kbs --all-containers 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - as logs"
+		kubectl -n "${KBS_NS}" logs -l app=attestation-service --all-containers 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - rvps logs"
+		kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service 2>&1 || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - node status"
+		kubectl get nodes -o wide 2>&1 || true
+		kubectl describe nodes 2>&1 || true
+		echo "::endgroup::"
+		rm -f "${values_file}"
 		return 1
 	fi
+
+	rm -f "${values_file}"
+
+	# Extract the admin private key from the bootstrap secret
 	sudo mkdir -p "$(dirname "${KBS_PRIVATE_KEY}")"
-	sudo cp -f "${install_key}" "${KBS_PRIVATE_KEY}"
+	kubectl get secret "${KBS_BOOTSTRAP_SECRET}" -n "${KBS_NS}" \
+		-o jsonpath='{.data.KBS_ADMIN_PRIVATE_KEY}' | \
+		base64 -d | sudo tee "${KBS_PRIVATE_KEY}" > /dev/null
+	echo "::endgroup::"
 
-	popd
-
-	if ! waitForProcess "120" "10" "kubectl -n \"${KBS_NS}\" get pods | \
-		grep -q '^kbs-.*Running.*'"; then
-		echo "ERROR: KBS service pod isn't running"
-		echo "::group::DEBUG - describe kbs deployments"
-		kubectl -n "${KBS_NS}" get deployments || true
+	# Verify all three pods are running
+	echo "::group::Verify pods are running"
+	if ! waitForProcess "120" "10" \
+		"kubectl -n ${KBS_NS} wait --for=condition=Ready pod -l app.kubernetes.io/instance=trustee --timeout=0 2>/dev/null"; then
+		echo "ERROR: Not all Trustee pods are running"
+		echo "::group::DEBUG - pods"
+		kubectl -n "${KBS_NS}" get pods || true
 		echo "::endgroup::"
-		echo "::group::DEBUG - describe kbs pod"
-		kubectl -n "${KBS_NS}" describe pod -l app=kbs || true
+		echo "::group::DEBUG - describe pods"
+		kubectl -n "${KBS_NS}" describe pods || true
 		echo "::endgroup::"
 		echo "::group::DEBUG - kbs logs"
 		kubectl -n "${KBS_NS}" logs -l app=kbs || true
 		echo "::endgroup::"
+		echo "::group::DEBUG - as logs"
+		kubectl -n "${KBS_NS}" logs -l app=attestation-service || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - rvps logs"
+		kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service || true
+		echo "::endgroup::"
 		return 1
 	fi
+	echo "All Trustee pods are running"
 	echo "::endgroup::"
 
 	echo "::group::Post deploy actions"
 	_post_deploy "${ingress}"
 	echo "::endgroup::"
 
-	# By default, the KBS service is reachable within the cluster only,
-	# thus the following healthy checker should run from a pod. So start a
-	# debug pod where it will try to get a response from the service. The
-	# expected response is '404 Not Found' because it will request an endpoint
-	# that does not exist.
-	#
-	echo "::group::Check the service healthy"
-	kbs_ip=$(kubectl get -o jsonpath='{.spec.clusterIP}' svc "${KBS_SVC_NAME}" -n "${KBS_NS}" 2>/dev/null)
-	kbs_port=$(kubectl get -o jsonpath='{.spec.ports[0].port}' svc "${KBS_SVC_NAME}" -n "${KBS_NS}" 2>/dev/null)
-
-	local pod=kbs-checker-$$
-	kubectl run "${pod}" --image=quay.io/prometheus/busybox --restart=Never -- \
-		sh -c "wget -O- --timeout=60 \"${kbs_ip}:${kbs_port}\" || true"
-	if ! waitForProcess "60" "10" "kubectl logs \"${pod}\" 2>/dev/null | grep -q \"404 Not Found\""; then
-		echo "ERROR: KBS service is not responding to requests"
-		echo "::group::DEBUG - kbs logs"
-		kubectl -n "${KBS_NS}" logs -l app=kbs || true
-		echo "::endgroup::"
-		kubectl delete pod "${pod}"
-		return 1
-	fi
-	kubectl delete pod "${pod}"
-	echo "KBS service respond to requests"
-	echo "::endgroup::"
+	# The KBS readiness probe hits /healthz, so a Ready pod (verified
+	# above) already confirms the endpoint is working.
 
 	if [[ -n "${ingress}" ]]; then
 		echo "::group::Check the kbs service is exposed"
@@ -487,9 +639,9 @@ function kbs_k8s_deploy() {
 		# the host name will take a while to start resolving.
 		timeout=350
 		echo "Trying to connect at ${svc_host}. Timeout=${timeout}"
-		if ! waitForProcess "${timeout}" "30" "curl -s -I \"${svc_host}\" | grep -q \"404 Not Found\""; then
+		if ! waitForProcess "${timeout}" "30" "curl -s \"${svc_host}/healthz\" -o /dev/null -w '%{http_code}' | grep -q '200'"; then
 			echo "ERROR: service seems to not respond on ${svc_host} host"
-			curl -I "${svc_host}"
+			curl -I "${svc_host}/healthz"
 			return 1
 		fi
 		echo "KBS service respond to requests at ${svc_host}"
@@ -512,10 +664,10 @@ kbs_k8s_svc_host() {
 			sleep 5
 		done
 		echo "${host}"
-	elif kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
-			local host
-			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "${KBS_NS}")
-			echo "${host}"
+	elif kubectl get svc "${KBS_SVC_NAME}-nodeport" -n "${KBS_NS}" &>/dev/null; then
+		local host
+		host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+		echo "${host}"
 	else
 		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" \
 			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
@@ -529,8 +681,8 @@ kbs_k8s_svc_port() {
 	if kubectl get ingress -n "${KBS_NS}" 2>/dev/null | grep -q kbs; then
 		# Assume served on default HTTP port 80
 		echo "80"
-	elif kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" &>/dev/null; then
-		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" -o jsonpath='{.spec.ports[0].nodePort}'
+	elif kubectl get svc "${KBS_SVC_NAME}-nodeport" -n "${KBS_NS}" &>/dev/null; then
+		kubectl get svc "${KBS_SVC_NAME}-nodeport" -n "${KBS_NS}" -o jsonpath='{.spec.ports[0].nodePort}'
 	else
 		kubectl get svc "${KBS_SVC_NAME}" -n "${KBS_NS}" \
 			-o jsonpath='{.spec.ports[0].port}' 2>/dev/null
@@ -558,6 +710,12 @@ kbs_k8s_print_logs() {
 
 	echo "::group::DEBUG - kbs logs since ${start_time}"
 	kubectl -n "${KBS_NS}" logs -l app=kbs --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
+	echo "::group::DEBUG - as logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=attestation-service --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
+	echo "::group::DEBUG - rvps logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=reference-value-provider-service --since-time="${iso_start_time}" --timestamps=true || true
 	echo "::endgroup::"
 }
 
@@ -590,52 +748,6 @@ _ensure_rust() {
 			return 1
 		fi
 	fi
-}
-
-# Choose the appropriated ingress handler.
-#
-# To add a new handler, create a function named as _handle_ingress_NAME where
-# NAME is the handler name. This is enough for this method to pick up the right
-# implementation.
-#
-_handle_ingress() {
-	local ingress="$1"
-
-	type -a "_handle_ingress_${ingress}" &>/dev/null || {
-		echo "ERROR: ingress '${ingress}' handler not implemented";
-		return 1;
-	}
-
-	"_handle_ingress_${ingress}"
-}
-
-# Implement the ingress handler for AKS.
-#
-_handle_ingress_aks() {
-	echo "::group::Enable approuting (application routing) add-on"
-	enable_cluster_approuting ""
-	echo "::endgroup::"
-
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
-
-	echo "::group::$(pwd)/ingress.yaml"
-	# We don't use a cluster DNS zone, instead get the ingress public IP,
-	# thus KBS_INGRESS_HOST is set empty.
-	KBS_INGRESS_CLASS="webapprouting.kubernetes.azure.com" \
-		KBS_INGRESS_HOST="\"\"" \
-		envsubst < ingress.yaml | tee ingress.yaml.tmp
-	echo "::endgroup::"
-	mv ingress.yaml.tmp ingress.yaml
-
-	kustomize edit add resource ingress.yaml
-	popd
-}
-
-# Implements the ingress handler for servernode
-#
-_handle_ingress_nodeport() {
-	# By exporting this variable the kbs deploy script will install the nodeport service
-	export DEPLOYMENT_DIR=nodeport
 }
 
 # Run further actions after the kbs was deployed, usually to apply further
