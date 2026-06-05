@@ -134,29 +134,8 @@ function _verify_devmapper() {
 
 function _setup_blockfile_device() {
 	sudo mkdir -p /opt/containerd
-	sudo dd if=/dev/zero of=/opt/containerd/blockfile bs=1M count=500
+	sudo truncate -s 512M /opt/containerd/blockfile
 	sudo mkfs.ext4 /opt/containerd/blockfile
-}
-
-function _configure_fc_shared_fs() {
-	if is_firecracker_hypervisor; then
-		local fc_config=""
-		for candidate in \
-			"/opt/kata/share/defaults/kata-containers/runtimes/fc/configuration-fc.toml" \
-			"/opt/kata/share/defaults/kata-containers/configuration-fc.toml" \
-			"/etc/kata-containers/configuration-fc.toml"; do
-			if [[ -f "${candidate}" ]]; then
-				fc_config="${candidate}"
-				break
-			fi
-		done
-		if [[ -z "${fc_config}" ]]; then
-			warn "FC kata config not found, shared_fs unchanged"
-			return 0
-		fi
-		info "Setting shared_fs=none in ${fc_config}"
-		sudo sed -i 's/^#\?shared_fs.*/shared_fs = "none"/' "${fc_config}"
-	fi
 }
 
 # shellcheck disable=SC2016
@@ -178,7 +157,6 @@ readonly blockfile_tomlq_filter='
 	| .plugins["io.containerd.snapshotter.v1.blockfile"].scratch_file = "/opt/containerd/blockfile"
 	| .plugins["io.containerd.snapshotter.v1.blockfile"].fs_type = "ext4"
 	| .plugins["io.containerd.snapshotter.v1.blockfile"].mount_options = []
-	| .plugins["io.containerd.snapshotter.v1.blockfile"].recreate_scratch = true
 	| .plugins["io.containerd.transfer.v1.local"].unpack_config =
 		[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "blockfile"})]
 	| if .version == 3 then
@@ -200,7 +178,6 @@ function configure_snapshotter() {
 		blockfile)
 			_setup_blockfile_device
 			_configure_containerd_snapshotter "blockfile" "${blockfile_tomlq_filter}"
-			_configure_fc_shared_fs
 			;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
