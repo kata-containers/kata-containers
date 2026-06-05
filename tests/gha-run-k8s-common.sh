@@ -666,6 +666,51 @@ function delete_test_runners(){
 	done
 }
 
+function dump_k8s_namespace_state() {
+	local namespace="${1}"
+	local pod_label="${2:-}"
+	local pod_names=()
+	local pod_name
+	local pod
+
+	echo "::group::${namespace} namespace pods"
+	if [[ -n "${pod_label}" ]]; then
+		kubectl -n "${namespace}" get pods -l "${pod_label}" -o wide || true
+	else
+		kubectl -n "${namespace}" get pods -o wide || true
+	fi
+	echo "::endgroup::"
+
+	echo "::group::${namespace} namespace events"
+	if [[ -n "${pod_label}" ]]; then
+		mapfile -t pod_names < <(kubectl -n "${namespace}" get pods -l "${pod_label}" -o name 2>/dev/null || true)
+	else
+		mapfile -t pod_names < <(kubectl -n "${namespace}" get pods -o name 2>/dev/null || true)
+	fi
+
+	if [[ ${#pod_names[@]} -eq 0 ]]; then
+		echo "No pods found to query events in namespace ${namespace}"
+	else
+		for pod in "${pod_names[@]}"; do
+			pod_name="${pod#pod/}"
+			kubectl -n "${namespace}" get events \
+				--field-selector "involvedObject.kind=Pod,involvedObject.name=${pod_name}" \
+				--sort-by=.lastTimestamp || true
+		done
+	fi
+	echo "::endgroup::"
+
+	echo "::group::${namespace} namespace pod describe"
+	if [[ ${#pod_names[@]} -eq 0 ]]; then
+		echo "No pods found to describe in namespace ${namespace}"
+	else
+		for pod in "${pod_names[@]}"; do
+			kubectl -n "${namespace}" describe "${pod}" || true
+		done
+	fi
+	echo "::endgroup::"
+}
+
 function helm_helper() {
 	local max_tries
 	local interval
@@ -1053,12 +1098,14 @@ VERIFICATION_POD_EOF
 	while true; do
 		# ${helm_set_file_args} is intentionally left unquoted
 		# shellcheck disable=SC2086
-		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system --debug
+		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system --debug --wait --timeout "${KATA_DEPLOY_WAIT_TIMEOUT}s"
 		ret=${?}
 		if [[ ${ret} -eq 0 ]]; then
 			echo "Helm install succeeded!"
 			break
 		fi
+		echo "Helm install attempt ${i} failed, collecting kube-system diagnostics"
+		dump_k8s_namespace_state "kube-system" "name=kata-deploy"
 		i=$((i+1))
 		if [[ ${i} -lt ${max_tries} ]]; then
 			echo "Retrying after ${interval} seconds (Attempt ${i} of ${max_tries})"
@@ -1096,11 +1143,13 @@ VERIFICATION_POD_EOF
 			kubectl -n kube-system get ds -l "name=${pod_label_name}" -o wide || true
 			kubectl -n kube-system describe ds -l "name=${pod_label_name}" || true
 			echo "::endgroup::"
+			dump_k8s_namespace_state "kube-system" "name=${pod_label_name}"
 			return 1
 		fi
 		sleep 1
 	done
 	if ! kubectl -n kube-system wait pod -l "name=${pod_label_name}" --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
+		dump_k8s_namespace_state "kube-system" "name=${pod_label_name}"
 		echo "::group::kata-deploy pod describe (install timed out)"
 		kubectl -n kube-system describe pod -l "name=${pod_label_name}" || true
 		echo "::endgroup::"

@@ -14,6 +14,43 @@
 
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
+HELM_TIMEOUT="${HELM_TIMEOUT:-15m}"
+
+# Dump detailed pod state in the deployment namespace to speed up CI debugging.
+dump_namespace_pod_state() {
+	local pod_label="name=kata-deploy"
+	local pod_names=()
+	local pod_name
+	local pod
+
+	echo "::group::${HELM_NAMESPACE} pods"
+	kubectl -n "${HELM_NAMESPACE}" get pods -l "${pod_label}" -o wide || true
+	echo "::endgroup::"
+
+	echo "::group::${HELM_NAMESPACE} events"
+	mapfile -t pod_names < <(kubectl -n "${HELM_NAMESPACE}" get pods -l "${pod_label}" -o name 2>/dev/null || true)
+	if [[ ${#pod_names[@]} -eq 0 ]]; then
+		echo "No kata-deploy pods found for event query in namespace ${HELM_NAMESPACE}"
+	else
+		for pod in "${pod_names[@]}"; do
+			pod_name="${pod#pod/}"
+			kubectl -n "${HELM_NAMESPACE}" get events \
+				--field-selector "involvedObject.kind=Pod,involvedObject.name=${pod_name}" \
+				--sort-by=.lastTimestamp || true
+		done
+	fi
+	echo "::endgroup::"
+
+	echo "::group::${HELM_NAMESPACE} pod describe"
+	if [[ ${#pod_names[@]} -eq 0 ]]; then
+		echo "No pods found to describe in namespace ${HELM_NAMESPACE}"
+	else
+		for pod in "${pod_names[@]}"; do
+			kubectl -n "${HELM_NAMESPACE}" describe "${pod}" || true
+		done
+	fi
+	echo "::endgroup::"
+}
 
 # Get the path to the helm chart
 get_chart_path() {
@@ -98,7 +135,7 @@ deploy_kata() {
 
 	helm_cmd+=(
 		--namespace "${HELM_NAMESPACE}"
-		--wait --timeout "${HELM_TIMEOUT:-10m}"
+		--wait --timeout "${HELM_TIMEOUT}"
 	)
 
 	# Run helm install.
@@ -116,11 +153,15 @@ deploy_kata() {
 
 	if [[ ${ret} -ne 0 ]]; then
 		echo "Helm install failed with exit code ${ret}" >&2
+		dump_namespace_pod_state
 		return "${ret}"
 	fi
 
 	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
-		--for=condition=Ready --timeout="${HELM_TIMEOUT:-10m}" 2>/dev/null || true
+		--for=condition=Ready --timeout="${HELM_TIMEOUT}" 2>/dev/null || {
+		dump_namespace_pod_state
+		true
+	}
 
 	return 0
 }
