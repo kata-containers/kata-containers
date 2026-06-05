@@ -141,7 +141,17 @@ spec:
       - name: kube-kata
         image: {{ include "kata-deploy.image" . }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
-        command: ["/usr/bin/kata-deploy", "install"]
+        {{- $logLevel := .Values.logLevel | default "" | trim -}}
+        {{- if and (not $logLevel) .Values.debug -}}
+        {{- $logLevel = "debug" -}}
+        {{- end }}
+        command:
+        - /usr/bin/kata-deploy
+        {{- if $logLevel }}
+        - --log-level
+        - {{ $logLevel | quote }}
+        {{- end }}
+        - install
         env:
         - name: NODE_NAME
           valueFrom:

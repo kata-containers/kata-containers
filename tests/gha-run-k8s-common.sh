@@ -1105,14 +1105,17 @@ VERIFICATION_POD_EOF
 		kubectl -n kube-system describe pod -l "name=${pod_label_name}" || true
 		echo "::endgroup::"
 		echo "::group::kata-deploy logs (install timed out)"
-		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous 2>/dev/null || true
-		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers 2>/dev/null || true
+		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
+		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps 2>/dev/null || true
 		echo "::endgroup::"
 		return 1
 	fi
 
-	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs -l "name=${pod_label_name}"
+	echo "::group::kata-deploy logs (current)"
+	kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps || true
+	echo "::endgroup::"
+	echo "::group::kata-deploy logs (previous)"
+	kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"

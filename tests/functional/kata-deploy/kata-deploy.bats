@@ -108,8 +108,11 @@ EOF
 	rm -f "${verification_yaml}"
 
 	echo ""
-	echo "::group::kata-deploy logs"
-	kubectl -n kube-system logs -l name=kata-deploy
+	echo "::group::kata-deploy logs (current)"
+	kubectl -n kube-system logs -l name=kata-deploy --all-containers --tail=-1 --timestamps || true
+	echo "::endgroup::"
+	echo "::group::kata-deploy logs (previous)"
+	kubectl -n kube-system logs -l name=kata-deploy --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
 	echo "::endgroup::"
 
 	echo ""
