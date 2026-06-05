@@ -282,6 +282,13 @@ function get_initdata_with_cdh_image_section() {
 
 	CC_KBS_ADDRESS=$(kbs_k8s_svc_http_addr)
 
+	local cdh_proxy_section=""
+	if is_tdx_hypervisor && [[ -n "${HTTPS_PROXY}" ]]; then
+		cdh_proxy_section="
+[image.image_pull_proxy]
+https_proxy = \"${HTTPS_PROXY}\""
+	fi
+
 	 initdata_annotation=$(gzip -c << EOF | base64 -w0
 version = "0.1.0"
 algorithm = "sha256"
@@ -298,6 +305,7 @@ name = "cc_kbc"
 url = "${CC_KBS_ADDRESS}"
 
 ${CDH_IMAGE_SECTION}
+${cdh_proxy_section}
 '''
 
 "policy.rego" = '''
