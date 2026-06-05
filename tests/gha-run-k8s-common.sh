@@ -622,6 +622,11 @@ function deploy_k8s() {
 					sudo modprobe dm-verity
 
 					# Verify modules loaded successfully
+					if [[ ! -d /sys/module/dm_mod ]]; then
+						>&2 echo "ERROR: dm_mod kernel module not available after modprobe"
+						>&2 echo "dm-verity support requires dm-mod and dm-verity kernel modules"
+						exit 1
+					fi
 					if [[ ! -d /sys/module/dm_verity ]]; then
 						>&2 echo "ERROR: dm_verity kernel module not available after modprobe"
 						>&2 echo "dm-verity support requires dm-mod and dm-verity kernel modules"
