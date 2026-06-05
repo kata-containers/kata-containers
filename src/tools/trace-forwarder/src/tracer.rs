@@ -1,44 +1,43 @@
 // Copyright (c) 2020-2021 Intel Corporation
+// Copyright (c) 2026 IBM Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use opentelemetry::KeyValue;
-use std::net::SocketAddr;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::Resource;
 
-pub fn create_jaeger_trace_exporter(
-    jaeger_service_name: String,
-    jaeger_host: String,
-    jaeger_port: u32,
-) -> Result<opentelemetry_jaeger::Exporter, std::io::Error> {
-    let exporter_type = "jaeger";
+pub fn create_otlp_trace_exporter(
+    service_name: String,
+    otlp_endpoint: String,
+) -> Result<TracerProvider, std::io::Error> {
+    let exporter_type = "otlp";
 
-    let jaeger_addr = format!("{jaeger_host}:{jaeger_port}");
-
-    let socket_addr: SocketAddr = match jaeger_addr.parse() {
-        Ok(a) => a,
-        Err(e) => {
-            return Err(std::io::Error::other(format!(
-                "failed to parse Jaeger address: {:?}",
-                e.to_string()
-            )))
-        }
-    };
-
-    let exporter = match opentelemetry_jaeger::new_pipeline()
-        .with_service_name(jaeger_service_name)
-        .with_agent_endpoint(socket_addr.to_string())
-        .with_tags(vec![KeyValue::new("exporter", exporter_type)])
-        .init_exporter()
+    // Create OTLP exporter
+    let exporter = match opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(otlp_endpoint)
+        .build()
     {
-        Ok(x) => x,
+        Ok(e) => e,
         Err(e) => {
             return Err(std::io::Error::other(format!(
-                "failed to create exporter: {:?}",
-                e.to_string()
+                "failed to create OTLP exporter: {:?}",
+                e
             )))
         }
     };
 
-    Ok(exporter)
+    // Create tracer provider with resource attributes
+    let provider = TracerProvider::builder()
+        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
+        .with_resource(Resource::new(vec![
+            KeyValue::new("service.name", service_name),
+            KeyValue::new("exporter", exporter_type),
+        ]))
+        .build();
+
+    Ok(provider)
 }

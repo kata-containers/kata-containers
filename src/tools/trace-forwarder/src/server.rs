@@ -1,15 +1,17 @@
 // Copyright (c) 2020-2021 Intel Corporation
+// Copyright (c) 2026 IBM Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 use crate::handler;
 use anyhow::{anyhow, Result};
-use opentelemetry::sdk::export::trace::SpanExporter;
+use opentelemetry::trace::TracerProvider as _;
 use privdrop::PrivDrop;
 use slog::{debug, o, Logger};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixListener;
+use std::sync::Arc;
 use vsock::{SockAddr, VsockListener};
 
 use crate::tracer;
@@ -30,9 +32,8 @@ pub enum VsockType {
 pub struct VsockTraceServer {
     pub vsock: VsockType,
 
-    pub jaeger_host: String,
-    pub jaeger_port: u32,
-    pub jaeger_service_name: String,
+    pub otlp_endpoint: String,
+    pub service_name: String,
 
     pub logger: Logger,
     pub dump_only: bool,
@@ -42,43 +43,42 @@ impl VsockTraceServer {
     pub fn new(
         logger: &Logger,
         vsock: VsockType,
-        jaeger_host: &str,
-        jaeger_port: u32,
-        jaeger_service_name: &str,
+        otlp_endpoint: &str,
+        service_name: &str,
         dump_only: bool,
     ) -> Self {
         let logger = logger.new(o!("subsystem" => "server"));
 
         VsockTraceServer {
             vsock,
-            jaeger_host: jaeger_host.to_string(),
-            jaeger_port,
-            jaeger_service_name: jaeger_service_name.to_string(),
+            otlp_endpoint: otlp_endpoint.to_string(),
+            service_name: service_name.to_string(),
             logger,
             dump_only,
         }
     }
 
     pub fn start(&self) -> Result<()> {
-        let result = tracer::create_jaeger_trace_exporter(
-            self.jaeger_service_name.clone(),
-            self.jaeger_host.clone(),
-            self.jaeger_port,
-        );
+        let provider = tracer::create_otlp_trace_exporter(
+            self.service_name.clone(),
+            self.otlp_endpoint.clone(),
+        )?;
 
-        let mut exporter = result?;
+        // Get a tracer from the provider and wrap in Arc for sharing across connections
+        let tracer = provider.tracer("kata-trace-forwarder");
+        let shared_tracer = Arc::new(tracer);
 
         match &self.vsock {
             VsockType::Standard { port, cid } => start_std_vsock(
                 self.logger.clone(),
-                &mut exporter,
+                shared_tracer.clone(),
                 *port,
                 *cid,
                 self.dump_only,
             ),
             VsockType::Hybrid { socket_path } => start_hybrid_vsock(
                 self.logger.clone(),
-                &mut exporter,
+                shared_tracer,
                 socket_path,
                 self.dump_only,
             ),
@@ -102,7 +102,7 @@ fn drop_privs(logger: &Logger) -> Result<()> {
 
 fn start_hybrid_vsock(
     logger: Logger,
-    exporter: &mut dyn SpanExporter,
+    tracer: Arc<opentelemetry_sdk::trace::Tracer>,
     socket_path: &str,
     dump_only: bool,
 ) -> Result<()> {
@@ -130,7 +130,7 @@ fn start_hybrid_vsock(
 
         let fd = conn.as_raw_fd();
 
-        handler::handle_connection(logger.clone(), fd, exporter, dump_only)?;
+        handler::handle_connection(logger.clone(), fd, &tracer, dump_only)?;
     }
 
     Ok(())
@@ -138,7 +138,7 @@ fn start_hybrid_vsock(
 
 fn start_std_vsock(
     logger: Logger,
-    exporter: &mut dyn SpanExporter,
+    tracer: Arc<opentelemetry_sdk::trace::Tracer>,
     port: u32,
     cid: u32,
     dump_only: bool,
@@ -156,7 +156,7 @@ fn start_std_vsock(
 
         let fd = conn.as_raw_fd();
 
-        handler::handle_connection(logger.clone(), fd, exporter, dump_only)?;
+        handler::handle_connection(logger.clone(), fd, &tracer, dump_only)?;
     }
 
     Ok(())
