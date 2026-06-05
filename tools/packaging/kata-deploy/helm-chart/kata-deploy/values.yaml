@@ -569,6 +569,8 @@ verification:
 #
 # IMPORTANT: The base config is copied AFTER kata-deploy has applied its modifications
 # (debug, proxy, annotations). Custom runtimes inherit these settings from their base.
+# RuntimeClass overhead defaults are also inherited from baseConfig when not set.
+# Set inheritBaseOverhead: false to disable that inheritance for a custom runtime.
 #
 # Usage with values file (recommended):
 #   Create a custom-runtimes.values.yaml file:
@@ -597,6 +599,7 @@ verification:
 #           scheduling:
 #             nodeSelector:
 #               katacontainers.io/kata-runtime: "true"
+#         inheritBaseOverhead: true        # Optional: set false to remove inherited overhead
 #         # Optional: CRI-specific configuration
 #         containerd:
 #           snapshotter: "nydus"  # Configure containerd snapshotter (nydus, erofs, etc.)
@@ -619,6 +622,7 @@ customRuntimes:
   #     dropIn: ""                      # Optional: TOML overrides for config.d
   #     runtimeClass: |
   #       <full RuntimeClass YAML>
+  #     inheritBaseOverhead: true       # Optional: set false to avoid baseConfig overhead inheritance
   #     containerd:
   #       snapshotter: ""  # Optional: nydus, erofs, or empty for default
   #     crio:
