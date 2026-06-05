@@ -616,6 +616,19 @@ function deploy_k8s() {
 				# Load the erofs module
 				sudo modprobe erofs
 
+				# Load device-mapper and dm-verity kernel modules.
+				if [[ "${EROFS_SNAPSHOTTER_MODE:-}" == "integrity" ]]; then
+					sudo modprobe dm-mod
+					sudo modprobe dm-verity
+
+					# Verify modules loaded successfully
+					if [[ ! -d /sys/module/dm_verity ]]; then
+						>&2 echo "ERROR: dm_verity kernel module not available after modprobe"
+						>&2 echo "dm-verity support requires dm-mod and dm-verity kernel modules"
+						exit 1
+					fi
+				fi
+
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
 				#
@@ -827,6 +840,9 @@ function helm_helper() {
 					;;
 				memory)
 					erofs_default_size="0"
+					;;
+				integrity)
+					erofs_default_size="10G"
 					;;
 				*)
 					die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
