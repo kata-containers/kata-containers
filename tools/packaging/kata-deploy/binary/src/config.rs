@@ -22,6 +22,34 @@ pub const K3S_RKE2_CONTAINERD_V2_TMPL: &str = "/etc/containerd/config.toml.tmpl"
 /// snapshotter field, and the base name for the data directory and socket path on the host.
 pub const NYDUS_FOR_KATA_TEE: &str = "nydus-for-kata-tee";
 
+/// Check if containerd config has an imports directive that would auto-load conf.d files.
+/// Returns true if the config file has "imports = [...]" directive that includes /etc/containerd/conf.d.
+fn config_has_containerd_confd_import(config_file: &str) -> bool {
+    use crate::utils::toml as toml_utils;
+
+    let has_conf_d_import = toml_utils::get_toml_array(Path::new(config_file), ".imports")
+        .map(|imports| {
+            imports
+                .iter()
+                .any(|path| path.contains("/etc/containerd/conf.d"))
+        })
+        .unwrap_or(false);
+
+    if has_conf_d_import {
+        info!(
+            "Found imports directive with /etc/containerd/conf.d in {}, will use conf.d auto-loading",
+            config_file
+        );
+    } else {
+        info!(
+            "No imports directive with /etc/containerd/conf.d in {}, will add it explicitly",
+            config_file
+        );
+    }
+
+    has_conf_d_import
+}
+
 /// Resolves whether to use the containerd 2.x split-CRI layout (true) or the v1 CRI gRPC layout (false) for K3s/RKE2.
 /// 1. Tries config.toml: if it has `version = 2` use legacy CRI table; if `version >= 3` (including 4+) use split CRI.
 /// 2. Else falls back to the node's containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1").
@@ -634,9 +662,13 @@ impl Config {
             _ => {
                 // For containerd >= 2.2.0, use /etc/containerd/conf.d/ which is auto-imported
                 // by containerd, avoiding the need to modify the main config entirely.
+                // Check if the config actually has imports before skipping adding it explicitly.
                 let supports_conf_d = container_runtime_version
                     .as_deref()
-                    .map(manager::containerd_version_is_2_2_or_newer)
+                    .map(|v| {
+                        manager::containerd_version_is_2_2_or_newer(v)
+                            && config_has_containerd_confd_import(&self.containerd_conf_file)
+                    })
                     .unwrap_or(false);
 
                 let (imports_file, drop_in_file) = if supports_conf_d {
