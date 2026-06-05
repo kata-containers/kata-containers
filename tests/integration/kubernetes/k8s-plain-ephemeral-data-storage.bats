@@ -20,9 +20,6 @@ skip_unsupported_runtime() {
 		clh-runtime-rs|clh-azure-runtime-rs|dragonball)
 			skip "block-plain emptyDir uses runtime-rs BlockModern, whose VMM glue is missing for ${KATA_HYPERVISOR}"
 			;;
-		clh-azure)
-			skip "block-plain emptyDir requires guest mkfs.ext4, which is not included in the Azure Linux UVM rootfs"
-			;;
 	esac
 }
 
