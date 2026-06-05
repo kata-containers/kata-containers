@@ -104,35 +104,6 @@ add_annotations_to_yaml() {
 	esac
 }
 
-add_cbl_mariner_annotation_to_yaml() {
-	local -r yaml_file="$1"
-
-	local -r mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
-	local -r mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
-
-	local -r mariner_annotation_image="io.katacontainers.config.hypervisor.image"
-	local -r mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
-
-	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
-	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_image}" "${mariner_image_path}"
-}
-
-add_cbl_mariner_specific_annotations() {
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Adding annotations for cbl-mariner"
-
-		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
-		do
-			add_cbl_mariner_annotation_to_yaml "${K8S_TEST_YAML}"
-		done
-
-		for K8S_TEST_YAML in runtimeclass_workloads_work/openvpn/*.yaml
-		do
-			add_cbl_mariner_annotation_to_yaml "${K8S_TEST_YAML}"
-		done
-	fi
-}
-
 add_runtime_handler_annotation_to_yaml() {
 	local -r yaml_file="$1"
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
@@ -162,7 +133,6 @@ add_runtime_handler_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	add_cbl_mariner_specific_annotations
 	add_runtime_handler_annotations
 }
 
