@@ -85,14 +85,14 @@ EOF
 
 	# Timeouts can be customized via environment variables:
 	# - KATA_DEPLOY_TIMEOUT: Overall helm timeout (includes all hooks)
-	#   Default: 600s (10 minutes)
+	#   Default: 900s (15 minutes)
 	# - KATA_DEPLOY_DAEMONSET_TIMEOUT: Time to wait for kata-deploy DaemonSet rollout (image pull + pod start)
-	#   Default: 300s (5 minutes) - accounts for large image downloads
+	#   Default: 900s (15 minutes) - accounts for large image downloads
 	# - KATA_DEPLOY_VERIFICATION_TIMEOUT: Time to wait for verification pod to complete
-	#   Default: 120s (2 minutes) - verification pod execution time
-	local helm_timeout="${KATA_DEPLOY_TIMEOUT:-600s}"
-	local daemonset_timeout="${KATA_DEPLOY_DAEMONSET_TIMEOUT:-300}"
-	local verification_timeout="${KATA_DEPLOY_VERIFICATION_TIMEOUT:-120}"
+	#   Default: 180s (3 minutes) - verification pod execution time
+	local helm_timeout="${KATA_DEPLOY_TIMEOUT:-900s}"
+	local daemonset_timeout="${KATA_DEPLOY_DAEMONSET_TIMEOUT:-900}"
+	local verification_timeout="${KATA_DEPLOY_VERIFICATION_TIMEOUT:-180}"
 
 	echo "Timeout configuration:"
 	echo "  Helm overall: ${helm_timeout}"
