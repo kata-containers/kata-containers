@@ -215,6 +215,8 @@ fn configure_user_containerd_drop_in(config: &Config, paths: &ContainerdPaths) -
         )?;
     }
 
+    utils::debug_log_file_contents("Containerd user drop-in", &user_drop_in_path);
+
     Ok(())
 }
 
@@ -524,6 +526,21 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
     }
 
     configure_user_containerd_drop_in(config, &paths)?;
+
+    utils::debug_log_file_contents(
+        "Containerd main config/template",
+        Path::new(&paths.config_file),
+    );
+    if is_k3s_or_rke2(runtime) {
+        utils::debug_log_file_contents(
+            "Containerd rendered config",
+            Path::new(crate::config::k3s_rke2_rendered_config_path()),
+        );
+    }
+    if paths.use_drop_in {
+        let drop_in_file = get_containerd_output_path(&paths);
+        utils::debug_log_file_contents("Containerd kata-deploy drop-in", &drop_in_file);
+    }
 
     log::info!("Successfully configured all containerd runtimes");
     Ok(())

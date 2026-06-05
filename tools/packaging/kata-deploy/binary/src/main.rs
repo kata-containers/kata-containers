@@ -22,8 +22,33 @@ const DETECTED_RUNTIME_ENV: &str = "KATA_DEPLOY_DETECTED_RUNTIME";
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Override kata-deploy log verbosity.
+    #[arg(long, value_enum)]
+    log_level: Option<LogLevel>,
+
     #[arg(value_enum)]
     action: Action,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl From<LogLevel> for log::LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        match value {
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Trace => log::LevelFilter::Trace,
+        }
+    }
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -54,23 +79,23 @@ enum Action {
 // probe and the pod is restarted before install can finish.
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+
     // Set log level based on DEBUG environment variable
-    // This must be done before initializing the logger
+    // unless explicitly overridden via --log-level.
     let debug_enabled = std::env::var("DEBUG")
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false);
 
-    let log_level = if debug_enabled {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
+    let log_level = match args.log_level {
+        Some(level) => level.into(),
+        None if debug_enabled => log::LevelFilter::Debug,
+        None => log::LevelFilter::Info,
     };
 
     env_logger::Builder::from_default_env()
         .filter_level(log_level)
         .init();
-
-    let args = Args::parse();
 
     // Check if running as root (UID 0)
     if unsafe { libc::geteuid() } != 0 {

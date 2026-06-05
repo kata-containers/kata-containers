@@ -309,6 +309,19 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             &drop_in_dest,
             &format!("custom runtime drop-in for {}", runtime.handler),
         )?;
+
+        let custom_config_file =
+            Path::new(&handler_dir).join(format!("configuration-{}.toml", runtime.base_config));
+        let custom_cfg_label = format!(
+            "Kata custom runtime configuration (handler={}, base={})",
+            runtime.handler, runtime.base_config
+        );
+        let custom_dropin_label = format!(
+            "Kata custom runtime drop-in (handler={}, base={})",
+            runtime.handler, runtime.base_config
+        );
+        utils::debug_log_file_contents(&custom_cfg_label, &custom_config_file);
+        utils::debug_log_directory_file_contents(&custom_dropin_label, Path::new(&config_d_dir));
     }
 
     info!(
@@ -933,6 +946,11 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
     {
         configure_experimental_force_guest_pull(&kata_config_file).await?;
     }
+
+    let cfg_label = format!("Kata runtime configuration (shim={})", shim);
+    let dropin_label = format!("Kata runtime drop-in (shim={})", shim);
+    utils::debug_log_file_contents(&cfg_label, &kata_config_file);
+    utils::debug_log_directory_file_contents(&dropin_label, Path::new(&config_d_dir));
 
     Ok(())
 }
