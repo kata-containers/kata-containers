@@ -310,3 +310,31 @@ $ free -m
 Mem:           1989          52          43           0        1893        1904
 Swap:             0           0           0
 ```
+
+## Large images and Confidential GPU workloads (NIM / KBS guest pull)
+
+Confidential GPU pods (Intel TDX + NVIDIA passthrough + KBS guest image pull) often
+need **longer timeouts** than the NVIDIA shim defaults (`create_container_timeout = 1200`,
+`agent.image_pull_timeout = 1200`). Effective guest-pull time is bounded by the **minimum**
+of:
+
+| Layer | Setting | Typical CC production value |
+|-------|---------|----------------------------|
+| Kubelet | `--runtime-request-timeout` | `2h` |
+| Kata shim | `create_container_timeout` in runtime TOML | `7200` or higher |
+| Kata agent | `agent.image_pull_timeout` kernel param / TOML | `7200` |
+| Per-pod | `io.katacontainers.config.runtime.create_container_timeout` annotation | `7200` |
+
+Recommended cluster setup:
+
+1. Set kubelet `runtime-request-timeout=2h` on GPU worker nodes.
+2. Deploy kata-deploy with extended timeouts — see
+   [`try-kata-nvidia-gpu-cc.values.yaml`](../../tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu-cc.values.yaml)
+   (requires kata-deploy `shims.<shim>.dropIn`; see [kata-containers#13183](https://github.com/kata-containers/kata-containers/pull/13183)).
+3. Set pod `resources.limits.memory` high enough for guest `/run` tmpfs during unpack
+   (see [kata-containers#13179](https://github.com/kata-containers/kata-containers/issues/13179)).
+
+When KBS attestation succeeds but image pull fails, distinguish **Trustee/KBS** issues
+(`ttrpc request error`, missing NVCR credentials) from **CDH guest pull** timeouts
+(`[CDH] Image Pull error`, `create container timeout`). See
+[CoCo troubleshooting — Trustee vs CDH](https://github.com/confidential-containers/confidential-containers/blob/main/guides/troubleshooting.md#trustee-kbs-vs-cdh-guest-image-pull).

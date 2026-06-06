@@ -1,0 +1,87 @@
+# Example values for Confidential Containers + NVIDIA GPU TDX (Intel TDX + guest pull)
+#
+# Extends try-kata-nvidia-gpu.values.yaml with CC-oriented timeouts for large
+# guest image pulls (e.g. NVIDIA NIM containers via KBS + CDH).
+#
+# Requires kata-deploy with shims.<shim>.dropIn support (kata-containers PR #13183
+# or later). Until merged upstream, use customRuntimes dropIn as fallback.
+#
+# Also set kubelet runtime-request-timeout=2h on GPU nodes (RKE2 machineSelectorConfig).
+#
+# Usage:
+#   helm upgrade --install kata-deploy \
+#     oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION \
+#     -n kube-system \
+#     -f try-kata-nvidia-gpu.values.yaml \
+#     -f try-kata-nvidia-gpu-cc.values.yaml
+
+debug: false
+
+snapshotter:
+  setup: ["nydus"]
+
+shims:
+  disableAll: true
+
+  qemu-nvidia-gpu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    # Cluster-wide CC timeouts — complements per-pod
+    # io.katacontainers.config.runtime.create_container_timeout (see kata-containers#13180)
+    dropIn: |
+      [runtime]
+      create_container_timeout = 7200
+      [agent.kata]
+      dial_timeout = 7200
+      launch_process_timeout = 120
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+      overhead:
+        memory: "51200Mi"
+        cpu: "1.0"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    dropIn: |
+      [agent.kata]
+      dial_timeout_ms = 7200000
+      launch_process_timeout = 120
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+      overhead:
+        memory: "51200Mi"
+        cpu: "1.0"
+
+defaultShim:
+  amd64: qemu-nvidia-gpu-tdx
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
