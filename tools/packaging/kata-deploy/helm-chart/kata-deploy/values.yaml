@@ -154,6 +154,7 @@ snapshotter:
 #   shims:
 #     <shim-name>:
 #       enabled: ~                    # true | false | ~ (null = follow disableAll)
+#       dropIn: ""                    # optional Kata TOML drop-in applied as 50-user-overrides.toml
 #       supportedArches:              # list of supported architectures
 #         - amd64
 #       allowedHypervisorAnnotations: []  # hypervisor annotations to pass through

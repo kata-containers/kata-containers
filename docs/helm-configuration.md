@@ -35,6 +35,9 @@ Shims can also have configuration options specific to them:
     enabled: ~
     supportedArches:
       - amd64
+    dropIn: |
+      [agent.kata]
+      dial_timeout = 999
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -45,6 +48,10 @@ Shims can also have configuration options specific to them:
       # nodeSelector:
         # nvidia.com/cc.ready.state: "false"
 ```
+
+The optional `shims.<shim>.dropIn` field lets you add a custom Kata drop-in for a
+default (non-custom) runtime. kata-deploy writes it as
+`config.d/50-user-overrides.toml` for that shim.
 
 It's best to reference the default `values.yaml` file above for more details.
 

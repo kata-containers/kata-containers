@@ -1,6 +1,8 @@
-{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+{{- $hasCustomRuntimes := and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes -}}
+{{- $hasDefaultRuntimeDropIns := eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true" -}}
+{{- if or $hasCustomRuntimes $hasDefaultRuntimeDropIns }}
 ---
-# ConfigMap containing custom runtime configurations and drop-in files
+# ConfigMap containing custom runtime configuration and runtime drop-ins
 # This is mounted into the kata-deploy pod at /custom-configs/
 apiVersion: v1
 kind: ConfigMap
@@ -14,6 +16,7 @@ metadata:
   labels:
     {{- include "kata-deploy.labels" . | nindent 4 }}
 data:
+{{- if $hasCustomRuntimes }}
   # Format: handler:baseConfig:containerd_snapshotter:crio_pulltype
   custom-runtimes.list: |
 {{- range $name, $runtime := .Values.customRuntimes.runtimes }}
@@ -31,7 +34,7 @@ data:
     {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}
 {{- end }}
 {{- end }}
-{{- /* Generate drop-in files for each runtime */ -}}
+{{- /* Generate drop-in files for each custom runtime */ -}}
 {{- range $name, $runtime := .Values.customRuntimes.runtimes }}
 {{- $handler := "" }}
 {{- if $runtime.runtimeClass }}
@@ -47,6 +50,20 @@ data:
 {{ $runtime.dropIn | indent 4 }}
 {{- end }}
 {{- end }}
+{{- end }}
+{{- /* Generate drop-in files for enabled default shims */ -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- range $shimName := keys .Values.shims | sortAlpha }}
+{{- if ne $shimName "disableAll" }}
+{{- $shimConfig := index $.Values.shims $shimName -}}
+{{- $shimEnabled := eq (include "kata-deploy.isShimEnabled" (dict "shimConfig" $shimConfig "disableAll" $disableAll) | trim) "true" -}}
+{{- if and $shimEnabled $shimConfig.dropIn (ne (trim $shimConfig.dropIn) "") }}
+  dropin-{{ $shimName }}.toml: |
+{{ $shimConfig.dropIn | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $hasCustomRuntimes }}
 ---
 # RuntimeClasses for custom runtimes
 {{- $runtimeClassConfigs := fromYaml (include "kata-deploy.runtimeClassConfigs" .) | default dict }}
@@ -64,6 +81,7 @@ data:
 {{- end }}
 {{ toYaml $runtimeClassObj }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
