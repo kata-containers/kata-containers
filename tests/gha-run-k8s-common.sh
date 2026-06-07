@@ -543,8 +543,6 @@ function deploy_vanilla_k8s() {
 	case "${container_engine}" in
 		containerd)
 			install_cri_containerd "${container_engine_version}"
-			sudo mkdir -p /etc/containerd
-			containerd config default | sed -e 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
 			;;
 		*) die "${container_engine} is not a container engine supported by this script" ;;
 	esac
