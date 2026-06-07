@@ -5,6 +5,7 @@
 //
 
 use std::collections::{HashMap, HashSet};
+use std::error::Error as _;
 use std::process;
 use std::str::FromStr;
 use std::time::Duration;
@@ -41,6 +42,36 @@ pub(crate) struct CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
+    fn is_already_exists_error(err: &cgroups_rs::manager::Error) -> bool {
+        let mut source = err.source();
+
+        while let Some(inner_err) = source {
+            if let Some(io_err) = inner_err.downcast_ref::<std::io::Error>() {
+                if io_err.kind() == std::io::ErrorKind::AlreadyExists {
+                    return true;
+                }
+            }
+
+            source = inner_err.source();
+        }
+
+        false
+    }
+
+    fn add_proc_with_existing_retry(
+        cgroup: &mut CgroupManager,
+        pid: CgroupPid,
+        context: &str,
+    ) -> Result<()> {
+        match cgroup.add_proc(pid) {
+            Ok(_) => Ok(()),
+            Err(err) if Self::is_already_exists_error(&err) => cgroup
+                .add_proc(pid)
+                .with_context(|| format!("{context} (retry after pre-existing cgroup)")),
+            Err(err) => Err(err).context(context.to_string()),
+        }
+    }
+
     /// Create cgroup managers according to the cgroup configuration.
     ///
     /// # Returns
@@ -90,13 +121,17 @@ impl CgroupsResourceInner {
         // The runtime is prioritized to be added to the overhead cgroup.
         let pid = CgroupPid::from(process::id() as u64);
         if let Some(overhead_cgroup) = overhead_cgroup.as_mut() {
-            overhead_cgroup
-                .add_proc(pid)
-                .context("add runtime to overhead cgroup")?;
+            Self::add_proc_with_existing_retry(
+                overhead_cgroup,
+                pid,
+                "add runtime to overhead cgroup",
+            )?;
         } else {
-            sandbox_cgroup
-                .add_proc(pid)
-                .context("add runtime to sandbox cgroup")?;
+            Self::add_proc_with_existing_retry(
+                &mut sandbox_cgroup,
+                pid,
+                "add runtime to sandbox cgroup",
+            )?;
         }
 
         Ok(Self {
