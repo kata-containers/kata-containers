@@ -629,44 +629,82 @@ function containerd_render_config_default_with_imports() {
 	' >"${out}"
 }
 
-# Configures containerd
+# Configures containerd for CI; handles schema v2 (containerd v1.x) and v3+ (containerd v2.x).
+#
+# containerd 2.x (schema v3+) loads conf.d drop-in fragments, so the base config is
+# regenerated from "containerd config default" (which already imports conf.d) and the
+# Kata runtime / rootful-socket overrides are written there.  containerd 1.x (schema
+# v2) does not honour conf.d the same way, so its config.toml is replaced wholesale
+# with a complete, self-contained file.
 function overwrite_containerd_config() {
-	containerd_config="/etc/containerd/config.toml"
-	base_config_dir=$(dirname "${containerd_config}")
-	sudo mkdir -p "${base_config_dir}"
-	sudo tee "${containerd_config}" << EOF
+	local containerd_config="/etc/containerd/config.toml"
+	local conf_dir drop_in hv cfg_path shim_binary schema cd_bin runc_path
+
+	conf_dir="$(dirname "${containerd_config}")/conf.d"
+	drop_in="${conf_dir}/50-kata-containers-ci.toml"
+
+	schema="$(_containerd_resolved_schema_version)"
+	hv="${KATA_HYPERVISOR:-qemu}"
+	cfg_path="${KATA_CONFIG_PATH:-/opt/kata/share/defaults/kata-containers/configuration-${hv}.toml}"
+	shim_binary="$(command -v "containerd-shim-kata-${hv}-v2" 2>/dev/null || true)"
+	[[ -n "${shim_binary}" ]] || shim_binary="/usr/local/bin/containerd-shim-kata-${hv}-v2"
+
+	sudo mkdir -p "$(dirname "${containerd_config}")"
+
+	if [[ "${schema}" -ge 3 ]]; then
+		# Always regenerate from the installed binary so the schema version and
+		# all fields match exactly what this containerd binary expects.  Keeping a
+		# stale config.toml from a different containerd version causes MigrateConfigTo
+		# to panic on schema mismatches (e.g. a config with version=3 loaded by an
+		# older binary whose migrations slice only covers versions 0-2).
+		info "Regenerating ${containerd_config} from containerd config default"
+		cd_bin="$(command -v containerd)"
+		sudo mkdir -p "${conf_dir}"
+		sudo "${cd_bin}" config default | sudo tee "${containerd_config}" > /dev/null
+		ensure_containerd_conf_d_rootful_api_sockets
+
+		# containerd v2.x (schema v3+): io.containerd.cri.v1.runtime plugin path,
+		# written as a conf.d drop-in fragment.
+		sudo tee "${drop_in}" >/dev/null << EOF
+[plugins.'io.containerd.cri.v1.runtime'.containerd]
+  default_runtime_name = 'kata'
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
+  runtime_type = 'io.containerd.kata-${hv}.v2'
+  sandboxer = 'podsandbox'
+
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata.options]
+    ConfigPath = '${cfg_path}'
+    BinaryName = '${shim_binary}'
+EOF
+	else
+		# containerd v1.x (schema v2): conf.d drop-ins are not honoured the same
+		# way, so replace config.toml wholesale with a complete, self-contained
+		# file.  The v1.x default API sockets are already root-owned, so no socket
+		# override is required.
+		info "Writing complete ${containerd_config} for containerd v1.x (schema v2)"
+		runc_path="$(command -v runc || echo /usr/bin/runc)"
+		sudo tee "${containerd_config}" >/dev/null << EOF
 version = 2
 
-[plugins]
-  [plugins."io.containerd.grpc.v1.cri"]
-    [plugins."io.containerd.grpc.v1.cri".containerd]
-      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
-          base_runtime_spec = ""
-          cni_conf_dir = ""
-          cni_max_conf_num = 0
-          container_annotations = []
-          pod_annotations = []
-          privileged_without_host_devices = false
-          runtime_engine = ""
-          runtime_path = ""
-          runtime_root = ""
-          runtime_type = "io.containerd.runc.v2"
-          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-            BinaryName = ""
-            CriuImagePath = ""
-            CriuPath = ""
-            CriuWorkPath = ""
-            IoGid = 0
-            IoUid = 0
-            NoNewKeyring = false
-            NoPivotRoot = false
-            Root = ""
-            ShimCgroup = ""
-            SystemdCgroup = false
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
-          runtime_type = "io.containerd.kata.v2"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  default_runtime_name = "kata"
+
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+    runtime_type = "io.containerd.kata-${hv}.v2"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]
+      ConfigPath = "${cfg_path}"
+      BinaryName = "${shim_binary}"
+
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+    runtime_type = "io.containerd.runc.v2"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+      BinaryName = "${runc_path}"
+      SystemdCgroup = true
 EOF
+	fi
 }
 
 # Configures CRI-O
@@ -771,18 +809,22 @@ function enabling_hypervisor() {
 
 
 function check_containerd_config_for_kata() {
-	# check containerd config
-	declare -r line1="default_runtime_name = \"kata\""
-	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
-	declare -r num_lines_containerd=2
 	declare -r containerd_path="/etc/containerd/config.toml"
-	local count_matches
-	count_matches=$(grep -ic  "${line1}\|${line2}" "${containerd_path}" || true)
+	local hv dump
 
-	if [[ "${count_matches}" = "${num_lines_containerd}" ]]; then
+	hv="${KATA_HYPERVISOR:-qemu}"
+
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump 2>/dev/null || true)"
+
+	if [[ -z "${dump}" ]] && [[ -f "${containerd_path}" ]]; then
+		dump="$(sudo cat "${containerd_path}")"
+	fi
+
+	if echo "${dump}" | grep -qE "default_runtime_name[[:space:]]*=[[:space:]]*[\"']kata[\"']" && \
+		echo "${dump}" | grep -qE "runtime_type[[:space:]]*=[[:space:]]*[\"']io\\.containerd\\.kata(-${hv})?\\.v2[\"']"; then
 		info "containerd ok"
 	else
-		info "overwriting containerd configuration w/ a valid one"
+		info "writing Kata overrides for containerd (current schema from containerd config default)"
 		overwrite_containerd_config
 	fi
 }
