@@ -190,7 +190,7 @@ jobs:
       AUTO_GENERATE_POLICY: "yes"
       K8S_TEST_HOST_TYPE: "all"
       CONTAINER_ENGINE: "containerd"
-      CONTAINER_ENGINE_VERSION: "active"
+      CONTAINER_ENGINE_VERSION: "latest"
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -33,7 +33,7 @@ jobs:
         # TODO: enable when https://github.com/kata-containers/kata-containers/issues/9853 is fixed
         #include:
         #  - container_engine: containerd
-        #    containerd_version: lts
+        #    containerd_version: latest
         exclude:
           # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
           - container_engine: containerd

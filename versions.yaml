@@ -312,10 +312,8 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.7.25"
-    lts: "v1.7"
-    active: "v2.2"
-    sandbox_api: "v2.3"
+    minimum: "v1.7"
+    latest: "v2.3"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
