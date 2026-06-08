@@ -95,7 +95,6 @@ guest_unix_request() {
 
 setup() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || skip "vsock UDS forward requires QEMU (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
-	is_runtime_rs && skip "vsock UDS forward requires the Go shim (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
 
 	setup_common || die "setup_common failed"
 	get_pod_config_dir
