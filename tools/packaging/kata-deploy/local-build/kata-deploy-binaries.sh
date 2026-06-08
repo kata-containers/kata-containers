@@ -481,6 +481,11 @@ install_image() {
 
 	info "Create image"
 
+	# Mariner stays on ext4 at the explicit request of the MSFT maintainers.
+	if [[ "${variant}" != "mariner" ]]; then
+		export FS_TYPE="erofs"
+	fi
+
 	if [[ -n "${variant}" ]]; then
 		if [[ "${variant}" == *confidential ]]; then
 			COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"

@@ -33,6 +33,9 @@ AGENT_TARBALL=${AGENT_TARBALL:-""}
 GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
+# Filesystem the guest image will be packed into by image_builder.sh.
+# Used here to apply read-only-root accommodations for erofs (always RO).
+FS_TYPE="${FS_TYPE:-}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 DNF_CONF=${DNF_CONF:-""}
 DISTRO_REPO=${DISTRO_REPO:-""}
@@ -596,6 +599,7 @@ build_rootfs_distro()
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
+			--env FS_TYPE="${FS_TYPE}" \
 			--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
 			--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 			-v "${repo_dir}":"/kata-containers" \
@@ -793,7 +797,19 @@ EOF
 		ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
 		chmod g+rx,o+x "${ROOTFS_DIR}"
 
-		if [[ "${CONFIDENTIAL_GUEST}" == "yes" ]]; then
+		# Guests booted from a read-only root (confidential/measured rootfs use
+		# dm-verity, erofs is read-only by design) cannot have "/" remounted
+		# read-write by systemd-remount-fs. Without the accommodations below the
+		# guest systemd/D-Bus stack fails to come up, which in turn breaks the
+		# agent's systemd cgroup driver (it talks to org.freedesktop.systemd1
+		# over D-Bus). ext4 images are unaffected because "/" is remounted rw.
+		#
+		# These tweaks only make sense for systemd-based images. We're already
+		# in the non-AGENT_INIT branch, but the NVIDIA variants later swap
+		# systemd out for NVRC as the init (see setup_nvrc_init_symlinks), so
+		# they must be excluded here too.
+		if [[ "${BUILD_VARIANT}" != nvidia-gpu* ]] && \
+			{ [[ "${CONFIDENTIAL_GUEST}" == "yes" ]] || [[ "${FS_TYPE}" == "erofs" ]]; }; then
 			info "Tweaking /run to use 50% of the available memory"
 			# Tweak the kata-agent service to have /run using 50% of the memory available
 			# This is needed as, by default, systemd would only allow 10%, which is way
@@ -801,6 +817,41 @@ EOF
 			fstab_file="${ROOTFS_DIR}/etc/fstab"
 			[[ -e "${fstab_file}" ]] && sed -i '/\/run/d' "${fstab_file}"
 			echo "tmpfs /run tmpfs nodev,nosuid,size=50% 0 0" >> "${fstab_file}"
+
+			# systemd and a couple of its early services need to write a tiny bit
+			# of state that lives on the (now read-only) "/": the timestamp file
+			# /etc/.updated and the directory /var/lib/systemd. Without them the
+			# guest D-Bus stack never registers org.freedesktop.systemd1 (so the
+			# agent's systemd cgroup driver times out) and systemd-logind enters
+			# a restart loop. machine-id needs no handling: systemd installs a
+			# transient /etc/machine-id on a read-only root. Expose just those
+			# two paths writable instead of making all of /var (or /etc) so.
+			#
+			# This is done from an early oneshot rather than /etc/fstab on
+			# purpose: a failed /var/lib/systemd fstab mount takes down
+			# local-fs.target and drops the guest into emergency mode.
+			mkdir -p "${ROOTFS_DIR}/var/lib/systemd"
+			touch "${ROOTFS_DIR}/etc/.updated"
+
+			rw_state_unit="${ROOTFS_DIR}/etc/systemd/system/kata-rw-state.service"
+			cat > "${rw_state_unit}" <<'EOF'
+[Unit]
+Description=Kata: writable state for a read-only rootfs
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target basic.target dbus.socket dbus.service systemd-random-seed.service systemd-logind.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c ': > /run/kata-etc-updated; mount --bind /run/kata-etc-updated /etc/.updated; mount -t tmpfs tmpfs /var/lib/systemd'
+
+[Install]
+WantedBy=sysinit.target
+EOF
+			mkdir -p "${ROOTFS_DIR}/etc/systemd/system/sysinit.target.wants"
+			ln -sf "/etc/systemd/system/kata-rw-state.service" \
+				"${ROOTFS_DIR}/etc/systemd/system/sysinit.target.wants/kata-rw-state.service"
 
 			kata_systemd_target="${ROOTFS_DIR}/usr/lib/systemd/system/kata-containers.target"
 			grep -qE "^Requires=.*systemd-remount-fs.service.*" "${kata_systemd_target}" || \
