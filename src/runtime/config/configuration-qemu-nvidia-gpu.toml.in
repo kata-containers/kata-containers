@@ -344,17 +344,6 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # Zero disables reconnecting, and the default is zero.
 vhost_user_reconnect_timeout_sec = 0
 
-# Enable file based guest memory support. The default is an empty string which
-# will disable this feature. In the case of virtio-fs, this is enabled
-# automatically and '/dev/shm' is used as the backing folder.
-# This option will be ignored if VM templating is enabled.
-file_mem_backend = "@DEFFILEMEMBACKEND@"
-
-# List of valid annotations values for the file_mem_backend annotation
-# The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
-valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
-
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
 pflashes = []

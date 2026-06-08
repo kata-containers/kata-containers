@@ -79,7 +79,6 @@ Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you
 | `io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec` | `string`| the timeout for reconnecting vhost user socket (QEMU)
 | `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |
 | `io.katacontainers.config.hypervisor.entropy_source` (R) | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
-| `io.katacontainers.config.hypervisor.file_mem_backend` (R) | string | file based memory backend root directory |
 | `io.katacontainers.config.hypervisor.firmware_hash` | string | container firmware SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.firmware` | string | the guest firmware that will run the container VM |
 | `io.katacontainers.config.hypervisor.firmware_volume_hash` | string | container firmware volume SHA-512 hash value |
@@ -227,7 +226,6 @@ the configuration entry:
 | Key | Config file entry | Comments |
 |-------| ----- | ----- |
 | `entropy_source` | `valid_entropy_sources` | Valid entropy sources, e.g. `/dev/random` |
-| `file_mem_backend`  | `valid_file_mem_backends` | Valid locations for the file-based memory backend root directory |
 | `jailer_path`  | `valid_jailer_paths`| Valid paths for the jailer constraining the container VM (Firecracker) |
 | `path`  | `valid_hypervisor_paths` | Valid hypervisors to run the container VM |
 | `vhost_user_store_path`  | `valid_vhost_user_store_paths` | Valid paths for vhost-user related files|

@@ -540,9 +540,6 @@ type HypervisorConfig struct {
 	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
-
 	// VhostUserStorePath is the directory path where vhost-user devices
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
@@ -587,9 +584,6 @@ type HypervisorConfig struct {
 
 	// Enable annotations by name
 	EnableAnnotations []string
-
-	// FileBackedMemRootList is the list of valid root directories values for annotations
-	FileBackedMemRootList []string
 
 	// PFlash image paths
 	PFlash []string

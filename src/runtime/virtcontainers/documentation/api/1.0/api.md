@@ -216,12 +216,6 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
-
-	// FileBackedMemRootList is the list of valid root directories values for annotations
-	FileBackedMemRootList []string
-
 	// PFlash image paths
 	PFlash []string
 
