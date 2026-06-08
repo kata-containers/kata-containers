@@ -26,6 +26,7 @@ setup() {
 
 # Regression test for https://github.com/kata-containers/kata-containers/issues/12479
 @test "Pod with sandbox_cgroup_only=false starts successfully" {
+	[ "${KATA_HYPERVISOR}" == "fc-rs" ] && skip "sandbox_cgroup_only=false not yet supported on fc-rs: cgroup freeze via systemd units not available in the FC guest"
 	# Create pod
 	kubectl create -f "${yaml_file}"
 

@@ -133,7 +133,7 @@ function go() {
 			name=$(random_name)
 			containers+=("${name}")
 			# shellcheck disable=SC2154
-			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
+			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" ${CTR_SNAPSHOTTER:+--snapshotter "${CTR_SNAPSHOTTER}"} -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
 			((how_many++))
 		done
 
@@ -187,9 +187,14 @@ function init() {
 	nginx_digest=$("${GOPATH}/bin/yq" ".docker_images.nginx.digest" "${versions_file}")
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
-	# Pull nginx image
-	if ! sudo "${CTR_EXE}" image pull "${nginx_image}"; then
-		die "Unable to retry docker image ${nginx_image}"
+	# Pull nginx into the content store (no --snapshotter: avoids the
+	# SnapshotterCapabilities RPC that containerd v2.x client.Pull triggers,
+	# which devmapper fails with "no unpack platforms defined").
+	# ctr run --snapshotter devmapper later triggers image.Unpack() via the
+	# container-creation path, which bypasses SnapshotterCapabilities entirely.
+	sudo "${CTR_EXE}" image pull "${nginx_image}"
+	if [ $? != 0 ]; then
+		die "Unable to pull docker image ${nginx_image}"
 	fi
 }
 

@@ -10,6 +10,7 @@ pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
     "clh-runtime-rs",
     "dragonball",
+    "fc-rs",
     "qemu-runtime-rs",
     "qemu-nvidia-gpu-runtime-rs",
     "qemu-nvidia-gpu-snp-runtime-rs",
@@ -104,6 +105,11 @@ mod tests {
     #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case(
+        "fc-rs",
+        "/opt/kata",
+        "/opt/kata/share/defaults/kata-containers/runtime-rs"
+    )]
     #[case("clh", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
     #[case(
         "clh-runtime-rs",
@@ -163,6 +169,11 @@ mod tests {
         "qemu",
         "/custom/path",
         "/custom/path/share/defaults/kata-containers/runtimes/qemu"
+    )]
+    #[case(
+        "fc-rs",
+        "/opt/kata",
+        "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/fc-rs"
     )]
     fn test_get_kata_containers_config_path(
         #[case] shim: &str,

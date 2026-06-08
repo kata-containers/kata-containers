@@ -76,7 +76,29 @@ impl FcInner {
     }
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
-        debug!(sl(), "Starting sandbox");
+        // For Firecracker, the VMM process was already started in prepare_vm.
+        // Network interfaces must be configured before InstanceStart, but
+        // OCI hooks (which create the container veth via CNI) have not run
+        // yet.  Defer the network flush and InstanceStart to boot_vm(), which
+        // sandbox.rs calls after the hooks + network rescan.
+        debug!(sl(), "FC start_vm: VMM already running; deferring InstanceStart to boot_vm");
+        Ok(())
+    }
+
+    pub(crate) async fn boot_vm(&mut self) -> Result<()> {
+        debug!(sl(), "FC boot_vm: flushing network devices and sending InstanceStart");
+
+        // Flush all buffered network devices.  These were populated by
+        // add_device(Network) after the OCI hooks ran and the netns was
+        // rescanned by sandbox.rs.  FC rejects PUT /network-interfaces once
+        // the VM is running, so this must happen before InstanceStart.
+        let net_devices = std::mem::take(&mut self.pending_net_devices);
+        for (config, device_id) in net_devices {
+            self.add_net_device(&config, device_id)
+                .await
+                .context("configure network interface before InstanceStart")?;
+        }
+
         let body: String = serde_json::json!({
             "action_type": "InstanceStart"
         })
