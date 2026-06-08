@@ -17,10 +17,12 @@ kernel = "@KERNELPATH_CLH_AZURE@"
 image = "@IMAGEPATH_CLH_AZURE@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
 #   - erofs
-rootfs_type = @DEFROOTFSTYPE@
+# The cbl-mariner guest image is built as ext4, so this is pinned to ext4
+# instead of following the global default (which is erofs).
+rootfs_type = @DEFROOTFSTYPE_AZURE@
 
 # Enable running clh VMM as a non-root user.
 # By default clh VMM run as root. When this is set to true, clh VMM process runs as

@@ -138,7 +138,13 @@ IMAGEPATH_CONFIDENTIAL_NV := $(PKGDATADIR)/$(IMAGENAME_CONFIDENTIAL_NV)
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
 ROOTFSTYPE_EROFS := \"erofs\"
-DEFROOTFSTYPE := $(ROOTFSTYPE_EXT4)
+# Guest images shipped by kata-deploy are built as EROFS (read-only, compressed)
+# for every variant except cbl-mariner, so align the runtime default with the
+# image format we actually ship. cbl-mariner keeps shipping an ext4 image and
+# uses the clh-azure profile, which pins DEFROOTFSTYPE_AZURE below back to ext4.
+DEFROOTFSTYPE := $(ROOTFSTYPE_EROFS)
+# cbl-mariner (clh-azure profile) ships an ext4 guest image.
+DEFROOTFSTYPE_AZURE := $(ROOTFSTYPE_EXT4)
 
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
@@ -301,7 +307,12 @@ endif
 DEFSTATICRESOURCEMGMT_TEE = true
 DEFSTATICRESOURCEMGMT_NV = true
 
-DEFDISABLEIMAGENVDIMM ?= false
+# Skip NVDIMM and back the image with virtio-blk by default: the kernel's
+# nd_pmem driver does not support EROFS namespaces (probe fails with
+# -EOPNOTSUPP), and EROFS is now the default image filesystem for every
+# non-Mariner variant. Leaving this as virtio-blk also keeps ext4/xfs images
+# working over the same path.
+DEFDISABLEIMAGENVDIMM ?= true
 DEFDISABLEIMAGENVDIMM_NV = true
 DEFDISABLEIMAGENVDIMM_CLH ?= true
 
@@ -710,6 +721,7 @@ USER_VARS += DEFENABLEVCPUPINNING_NV
 USER_VARS += DEFENABLENUMA_NV
 USER_VARS += DEFROOTFSTYPE_NV
 USER_VARS += DEFROOTFSTYPE
+USER_VARS += DEFROOTFSTYPE_AZURE
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE

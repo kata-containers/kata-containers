@@ -19,9 +19,9 @@ image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 
 # Block storage driver to be used for the VM rootfs is backed
@@ -361,8 +361,11 @@ msize_9p = @DEFMSIZE9P@
 #
 # nvdimm is not supported when `confidential_guest = true`.
 #
-# Default is false
-disable_image_nvdimm = false
+# EROFS (the default guest image filesystem) is not supported by the kernel's
+# nd_pmem driver, so the rootfs is attached as virtio-blk by default.
+#
+# Default is true
+disable_image_nvdimm = true
 
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with

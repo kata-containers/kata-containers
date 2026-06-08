@@ -111,7 +111,13 @@ INITRDCONFIDENTIALPATH := $(PKGDATADIR)/$(INITRDCONFIDENTIALNAME)
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
 ROOTFSTYPE_EROFS := \"erofs\"
-DEFROOTFSTYPE := $(ROOTFSTYPE_EXT4)
+# Guest images shipped by kata-deploy are built as EROFS (read-only, compressed)
+# for every variant except cbl-mariner, so align the runtime default with the
+# image format we actually ship. cbl-mariner keeps shipping an ext4 image and
+# uses the clh-azure profile, which pins DEFROOTFSTYPE_AZURE below back to ext4.
+DEFROOTFSTYPE := $(ROOTFSTYPE_EROFS)
+# cbl-mariner (clh-azure profile) ships an ext4 guest image.
+DEFROOTFSTYPE_AZURE := $(ROOTFSTYPE_EXT4)
 
 FCBINDIR := $(PREFIXDEPS)/bin
 FCPATH = $(FCBINDIR)/$(FCCMD)
@@ -511,7 +517,10 @@ else ifeq ($(ARCH), aarch64)
     # management to size the VM upfront instead.
     DEFSTATICRESOURCEMGMT_QEMU := true
 else
-    VMROOTFSDRIVER_QEMU := virtio-pmem
+    # EROFS is now the default image filesystem and is not supported by the
+    # kernel's nd_pmem driver, so attach the rootfs as virtio-blk-pci on x86_64
+    # too. This mirrors what the NVIDIA stack already does.
+    VMROOTFSDRIVER_QEMU := virtio-blk-pci
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
 endif
     DEFVCPUS_QEMU := 1
@@ -632,6 +641,7 @@ USER_VARS += INITRDCONFIDENTIALNAME
 USER_VARS += INITRDPATH
 USER_VARS += INITRDCONFIDENTIALPATH
 USER_VARS += DEFROOTFSTYPE
+USER_VARS += DEFROOTFSTYPE_AZURE
 USER_VARS += VMROOTFSDRIVER_DB
 USER_VARS += VMROOTFSDRIVER_CLH
 USER_VARS += VMROOTFSDRIVER_QEMU

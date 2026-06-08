@@ -16,6 +16,10 @@ path = "@FCPATH@"
 kernel = "@KERNELPATH_FC@"
 image = "@IMAGEPATH@"
 
+# rootfs filesystem type:
+#   - ext4
+#   - xfs
+#   - erofs (default)
 rootfs_type = @DEFROOTFSTYPE@
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name

@@ -10,10 +10,10 @@ image = "/opt/kata/share/kata-containers/kata-containers.img"
 machine_type = "q35"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
-rootfs_type = "ext4"
+#   - erofs (default)
+rootfs_type = "erofs"
 
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as

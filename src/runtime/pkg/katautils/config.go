@@ -301,7 +301,7 @@ func (h hypervisor) rootfsType() (string, error) {
 	p := h.RootfsType
 
 	if p == "" {
-		p = "ext4"
+		p = "erofs"
 	}
 
 	return p, nil

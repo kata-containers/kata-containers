@@ -15,10 +15,12 @@ kernel = "@KERNELPATH_CLH_AZURE@"
 image = "@IMAGEPATH_CLH_AZURE@"
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
 #   - erofs
-rootfs_type = @DEFROOTFSTYPE@
+# The cbl-mariner guest image is built as ext4, so this is pinned to ext4
+# instead of following the global default (which is erofs).
+rootfs_type = @DEFROOTFSTYPE_AZURE@
 
 # Block storage driver to be used for the VM rootfs is backed
 # by a block device.
