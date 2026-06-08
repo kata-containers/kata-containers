@@ -581,10 +581,7 @@ impl Annotation {
                             hv.indep_iothreads = indep_iothreads;
                         }
                         Err(_e) => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                "failed to parse indep_iothreads",
-                            ));
+                            return Err(u32_err);
                         }
                     },
                     // Hypervisor Block Device related annotations
