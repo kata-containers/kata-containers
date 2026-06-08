@@ -216,6 +216,13 @@ impl RuntimeHandlerManagerInner {
                 .context("failed to construct static resource manager")?
         };
 
+        // For CRI sandboxes, sizing annotations are carried in PodSandboxConfig
+        // and may be absent from the OCI sandbox spec. Fill any missing sizing
+        // values from sandbox annotations before applying static sizing.
+        initial_size_manager
+            .supplement_from_annotations(&sandbox_config.annotations)
+            .context("failed to supplement static resource manager from annotations")?;
+
         initial_size_manager
             .setup_config(&mut config)
             .context("failed to setup static resource mgmt config")?;

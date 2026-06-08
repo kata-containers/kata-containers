@@ -132,6 +132,22 @@ impl InitialSizeManager {
         })
     }
 
+    // Merge sizing values from sandbox annotations when the current source
+    // (typically the OCI spec) does not carry CRI sandbox sizing keys.
+    pub fn supplement_from_annotations(&mut self, annotation: &HashMap<String, String>) -> Result<()> {
+        let from_annotation =
+            InitialSize::try_from(annotation).context("failed to construct static resource")?;
+
+        if self.resource.vcpu == 0.0 {
+            self.resource.vcpu = from_annotation.vcpu;
+        }
+        if self.resource.mem_mb == 0 {
+            self.resource.mem_mb = from_annotation.mem_mb;
+        }
+
+        Ok(())
+    }
+
     pub fn setup_config(&mut self, config: &mut TomlConfig) -> Result<()> {
         // update this data to the hypervisor config for later use by hypervisor
         let hypervisor_name = &config.runtime.hypervisor_name;
@@ -499,5 +515,37 @@ mod tests {
 
         mgr.setup_config(&mut config).unwrap();
         assert_eq!(mgr.get_orig_toml_default_mem(), 256);
+    }
+
+    #[test]
+    fn test_supplement_from_annotations_fills_missing_spec_sizing() {
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 0,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        let ann = HashMap::from([
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                "120000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                (256 * MIB).to_string(),
+            ),
+        ]);
+
+        mgr.supplement_from_annotations(&ann).unwrap();
+
+        const VCPU_TOLERANCE: f32 = 0.0001;
+        assert!((mgr.resource.vcpu - 1.2).abs() < VCPU_TOLERANCE);
+        assert_eq!(mgr.resource.mem_mb, 256);
     }
 }

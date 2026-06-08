@@ -269,7 +269,7 @@ ifneq (,$(DBCMD))
     KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME_DB,$(KERNELTYPE_DB))
     KERNELPATH_DB = $(KERNELDIR)/$(KERNEL_NAME_DB)
     DEFSANDBOXCGROUPONLY_DB := true
-    DEFSTATICRESOURCEMGMT_DB := false
+    DEFSTATICRESOURCEMGMT_DB := true
     RUNTIMENAME := virt_container
     PIPESIZE := 1
     DBSHAREDFS := inline-virtio-fs
@@ -315,7 +315,7 @@ ifneq (,$(CLHCMD))
     VMROOTFSDRIVER_CLH := virtio-blk-pci
 
     DEFSANDBOXCGROUPONLY_CLH := true
-    DEFSTATICRESOURCEMGMT_CLH := false
+    DEFSTATICRESOURCEMGMT_CLH := true
 endif
 
 ifneq (,$(QEMUCMD))
@@ -489,10 +489,10 @@ endif
     KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
 
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := false
+    DEFSTATICRESOURCEMGMT_QEMU := true
 
     # qemu-specific options
-    DEFSANDBOXCGROUPONLY_QEMU := false
+    DEFSANDBOXCGROUPONLY_QEMU := true
     DEFENABLEVCPUSPINNING_QEMU := false
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
@@ -562,7 +562,7 @@ ifneq (,$(REMOTE))
     SYSCONFIG_PATHS += $(SYSCONFDIR_REMOTE)
     CONFIGS += $(CONFIG_REMOTE)
     # remote-specific options (all should be suffixed by "_REMOTE")
-    DEFSANDBOXCGROUPONLY_REMOTE := false
+    DEFSANDBOXCGROUPONLY_REMOTE := true
 endif
 
 ifeq ($(HYPERVISOR),$(HYPERVISOR_DB))
