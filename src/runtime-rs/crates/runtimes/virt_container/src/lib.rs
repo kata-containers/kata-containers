@@ -14,6 +14,7 @@ pub mod factory;
 pub mod health_check;
 pub mod sandbox;
 pub mod sandbox_persist;
+mod vsock_uds_forward;
 
 use std::path::Path;
 use std::sync::Arc;

@@ -809,6 +809,24 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #
 emptydir_mode = "@DEFEMPTYDIRMODE@"
 
+# Expose a host unix socket to the guest as a vsock.
+# When enabled, the shim will dial the guest vsock at guestCID:port.
+# The guest or a sidecar must listen on that port.
+# Once the guest accepts the connection, the workload
+# can send data back to the host which will be forwarded to the
+# host unix socket.
+# When the connection ends, the vsock is torn down and another is created.
+# The guest can continue listening to make more requests.
+# Today, only one port/socket pair is supported.
+# Simultaneous connections on the guest vsock are collapsed into one
+# connection to the host unix socket.
+#
+# Format: ["port:/absolute/unix/socket/path"] (port must be > 1024).
+# Empty list disables the feature.
+# Entries beyond the first one will be ignored.
+# Example: vsock_uds_forward = ["15001:/var/run/server.sock"]
+vsock_uds_forward = []
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.
