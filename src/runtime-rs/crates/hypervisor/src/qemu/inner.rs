@@ -25,7 +25,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::build_path;
-use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW};
+use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::rootless::is_rootless;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -950,15 +950,15 @@ impl QemuInner {
             DeviceType::Block(mut block_device) => {
                 let block_driver = &self.config.blockdev_info.block_device_driver;
 
-                // Determine iothread for virtio-blk devices
+                // Determine iothread for hotplugged virtio-blk-pci devices.
                 // Only attach iothread when:
                 // 1. enable_iothreads is true
                 // 2. indep_iothreads > 0
-                // 3. block driver is not virtio-scsi (i.e., it's virtio-blk)
+                // 3. block driver is virtio-blk-pci
                 // 4. TODO: for more complex cases
                 let iothread = if self.config.enable_iothreads
                     && self.config.indep_iothreads > 0
-                    && *block_driver != kata_types::config::hypervisor::VIRTIO_SCSI
+                    && block_driver == VIRTIO_BLK_PCI
                 {
                     // Use the first independent iothread (indep_iothread_0)
                     Some("indep_iothread_0")
@@ -1066,6 +1066,7 @@ impl QemuInner {
                         logical_sector_size,
                         physical_sector_size,
                         &BlockDeviceFormat::default(),
+                        None,
                     )
                     .context("hotplug block device")?;
 
