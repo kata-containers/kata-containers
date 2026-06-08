@@ -199,6 +199,50 @@ fn write_common_drop_ins(
     Ok(())
 }
 
+fn install_default_runtime_drop_in(shim: &str, config_d_dir: &str) -> Result<()> {
+    let drop_in_source = format!("/custom-configs/dropin-{}.toml", shim);
+    let drop_in_dest = format!("{}/50-user-overrides.toml", config_d_dir);
+    reconcile_optional_drop_in(
+        Some(&drop_in_source),
+        &drop_in_dest,
+        &format!("user drop-in for shim {shim}"),
+    )
+}
+
+fn reconcile_optional_drop_in(
+    source_file: Option<&str>,
+    destination_file: &str,
+    context: &str,
+) -> Result<()> {
+    let destination_path = Path::new(destination_file);
+
+    if let Some(source_file) = source_file {
+        let source_path = Path::new(source_file);
+        if source_path.exists() {
+            info!(
+                "Copying {}: {} -> {}",
+                context, source_file, destination_file
+            );
+            fs::copy(source_path, destination_path).with_context(|| {
+                format!(
+                    "Failed to copy {} from {} to {}",
+                    context, source_file, destination_file
+                )
+            })?;
+            return Ok(());
+        }
+    }
+
+    // Reconcile upgrades/migrations: remove stale override from previous deployments.
+    if destination_path.exists() {
+        info!("Removing stale {}: {}", context, destination_file);
+        fs::remove_file(destination_path)
+            .with_context(|| format!("Failed to remove stale {}: {}", context, destination_file))?;
+    }
+
+    Ok(())
+}
+
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
 /// Custom runtimes inherit the same drop-in configurations as standard runtimes
 /// (installation prefix, debug, kernel_params, and for k0s on Go/remote runtime: kubelet root) plus any user-provided overrides.
@@ -257,22 +301,14 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             container_runtime,
         )?;
 
-        // Copy user-provided drop-in file if provided (at 50-overrides.toml)
-        if let Some(ref drop_in_src) = runtime.drop_in_file {
-            let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
-
-            info!(
-                "Copying drop-in for {}: {} -> {}",
-                runtime.handler, drop_in_src, drop_in_dest
-            );
-
-            fs::copy(drop_in_src, &drop_in_dest).with_context(|| {
-                format!(
-                    "Failed to copy drop-in from {} to {}",
-                    drop_in_src, drop_in_dest
-                )
-            })?;
-        }
+        // Copy user-provided drop-in file if provided (at 50-overrides.toml).
+        // If it was removed from values in a later upgrade/migration, remove stale file.
+        let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
+        reconcile_optional_drop_in(
+            runtime.drop_in_file.as_deref(),
+            &drop_in_dest,
+            &format!("custom runtime drop-in for {}", runtime.handler),
+        )?;
     }
 
     info!(
@@ -885,6 +921,9 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 
     // Generate common drop-in files (shared with custom runtimes)
     write_common_drop_ins(config, shim, &config_d_dir, container_runtime)?;
+
+    // Apply user-provided drop-in for default runtimes, if present.
+    install_default_runtime_drop_in(shim, &config_d_dir)?;
 
     configure_hypervisor_annotations(config, shim, &kata_config_file).await?;
 

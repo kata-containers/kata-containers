@@ -429,3 +429,40 @@ Note: EXPERIMENTAL_FORCE_GUEST_PULL only checks containerd.forceGuestPull, not c
 {{- end -}}
 {{- join "," $shimNames -}}
 {{- end -}}
+
+{{/*
+Returns "true" when a shim is enabled according to `enabled` + `disableAll`.
+Input:
+  dict:
+    shimConfig: the `.Values.shims.<name>` object
+    disableAll: global `.Values.shims.disableAll`
+*/}}
+{{- define "kata-deploy.isShimEnabled" -}}
+{{- $shimEnabled := false -}}
+{{- if eq .shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq .shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not .disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- if $shimEnabled -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+Returns "true" when at least one default shim has a non-empty dropIn value.
+*/}}
+{{- define "kata-deploy.hasDefaultRuntimeDropIns" -}}
+{{- $has := false -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- range $shimName := keys .Values.shims | sortAlpha -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimConfig := index $.Values.shims $shimName -}}
+{{- $shimEnabled := eq (include "kata-deploy.isShimEnabled" (dict "shimConfig" $shimConfig "disableAll" $disableAll) | trim) "true" -}}
+{{- if and $shimEnabled $shimConfig.dropIn (ne (trim $shimConfig.dropIn) "") -}}
+{{- $has = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $has -}}true{{- end -}}
+{{- end -}}

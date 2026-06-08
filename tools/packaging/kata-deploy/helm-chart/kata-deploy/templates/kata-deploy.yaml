@@ -18,6 +18,7 @@
 {{- end -}}
 {{- end -}}
 {{- end -}}
+{{- $hasCustomConfigs := or (and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes) (eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true") -}}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -365,7 +366,7 @@ spec:
           mountPath: /custom-containerd-config/
           readOnly: true
 {{- end }}
-{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+{{- if $hasCustomConfigs }}
         - name: custom-configs
           mountPath: /custom-configs/
           readOnly: true
@@ -389,7 +390,7 @@ spec:
           name: {{ .Chart.Name }}-containerd-user-dropin
 {{- end }}
 {{- end }}
-{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+{{- if $hasCustomConfigs }}
       - name: custom-configs
         configMap:
 {{- if .Values.env.multiInstallSuffix }}
