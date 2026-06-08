@@ -6,3 +6,18 @@ id = "RUSTSEC-2024-0320"
 ignoreUntil = 2026-10-01 # TODO(burgerdev): revisit yml library ecosystem
 reason = "No alternative currently supports 'yes' strings correctly; genpolicy processes only trusted input."
 
+[[IgnoredVulns]]
+# CRI-O Path Traversal vulnerability in log management functions.
+# False positive: kata-containers only imports github.com/cri-o/cri-o/pkg/annotations
+# for string constants. The vulnerable code (UnMountPodLogs, LinkContainerLogs) is not
+# imported or used.
+id = "GO-2025-3426"
+reason = "False positive: only imports pkg/annotations for constants, not vulnerable log management code"
+
+[[IgnoredVulns]]
+# CRI-O High Memory Consumption from File Read vulnerability.
+# False positive: kata-containers only imports github.com/cri-o/cri-o/pkg/annotations
+# for string constants. The vulnerable code (user creation, /etc/passwd reading) is not
+# imported or used.
+id = "GO-2025-3897"
+reason = "False positive: only imports pkg/annotations for constants, not vulnerable user creation code"
