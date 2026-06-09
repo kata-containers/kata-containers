@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ""
+      vmm:
+        description: 'JSON array of VMM names (string)'
+        required: false
+        type: string
+        default: '["qemu", "qemu-runtime-rs", "qemu-coco-dev"]'
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
@@ -41,19 +46,9 @@ jobs:
           - overlayfs
           - devmapper
           - nydus
-        vmm:
-          - qemu
-          - qemu-runtime-rs
-          - qemu-coco-dev
-          - qemu-coco-dev-runtime-rs
+        vmm: ${{ fromJSON(inputs.vmm) }}
         k8s:
           - kubeadm
-        include:
-          - snapshotter: devmapper
-            pull-type: default
-            snapshotter-cmd: configure-snapshotter
-          - snapshotter: nydus
-            pull-type: guest-pull
         exclude:
           - snapshotter: overlayfs
             vmm: qemu
@@ -83,7 +78,6 @@ jobs:
       KATA_HOST_OS: "ubuntu"
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
-      PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       TARGET_ARCH: "s390x"
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
@@ -101,23 +95,29 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Set PULL_TYPE for devmapper
+        run: echo "PULL_TYPE=default" >> "$GITHUB_ENV"
+        if: ${{ matrix.snapshotter == 'devmapper' }}
+
+      - name: Set PULL_TYPE for nydus
+        run: echo "PULL_TYPE=guest-pull" >> "$GITHUB_ENV"
+        if: ${{ matrix.snapshotter == 'nydus' }}
+
       - name: Set SNAPSHOTTER to empty if overlayfs
         run: echo "SNAPSHOTTER=" >> "$GITHUB_ENV"
         if: ${{ matrix.snapshotter == 'overlayfs' }}
 
-      - name: Set KBS and KBS_INGRESS if qemu-coco-dev
+      - name: Set KBS and KBS_INGRESS for CoCo dev VMMs
         run: |
           echo "KBS=true" >> "$GITHUB_ENV"
           echo "KBS_INGRESS=nodeport" >> "$GITHUB_ENV"
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
-        env:
-          SNAPSHOTTER_CMD: ${{ matrix.snapshotter-cmd }}
-        run: bash tests/integration/kubernetes/gha-run.sh "${SNAPSHOTTER_CMD}"
-        if: ${{ matrix.snapshotter != 'overlayfs' && matrix.snapshotter-cmd != '' }}
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
+        if: ${{ matrix.snapshotter == 'devmapper' }}
 
       - name: Deploy Kata
         timeout-minutes: 20
@@ -126,17 +126,17 @@ jobs:
       - name: Uninstall previous `kbs-client`
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 
       - name: Deploy CoCo KBS
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 
       - name: Install `kbs-client`
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
+        if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 
       - name: Run tests
         timeout-minutes: 60
