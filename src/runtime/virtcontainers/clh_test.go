@@ -457,7 +457,8 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 	assert.NoError(err, "persist.GetDriver() unexpected error")
 
 	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
-	os.MkdirAll(dir, os.ModePerm)
+	err = os.MkdirAll(dir, os.ModePerm)
+	assert.NoError(err, "failed to create dir %s", dir)
 
 	err = clh.cleanupVM(false)
 	assert.NoError(err, "persist.GetDriver() unexpected error")
@@ -566,7 +567,8 @@ func TestClhRestoreVM(t *testing.T) {
 	assert.Contains(err.Error(), filepath.Join(clhConfig.VMStorePath, "state.json"))
 
 	// Now create the VM snapshot files and call restoreVM again.
-	os.MkdirAll(clhConfig.VMStorePath, os.ModePerm)
+	err = os.MkdirAll(clhConfig.VMStorePath, os.ModePerm)
+	assert.NoError(err, "failed to create dir %s", clhConfig.VMStorePath)
 	stateFile := filepath.Join(clhConfig.VMStorePath, "state.json")
 	configFile := filepath.Join(clhConfig.VMStorePath, "config.json")
 	err = os.WriteFile(stateFile, []byte("{}"), 0o600)

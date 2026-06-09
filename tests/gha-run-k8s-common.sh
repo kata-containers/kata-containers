@@ -43,6 +43,7 @@ TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
+EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -849,6 +850,26 @@ function helm_helper() {
 
 			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
 				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
+		fi
+
+		# EROFS merge mode ("merged" default, or "unmerged"). This is orthogonal
+		# to EROFS_SNAPSHOTTER_MODE (which controls default_size): it controls
+		# whether containerd merges layers into a single fsmeta.erofs (merged,
+		# runtime-rs only) or keeps per-layer layer.erofs (unmerged, required by
+		# the Go runtime).
+		if [[ -n "${EROFS_MERGE_MODE}" ]]; then
+			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
+				die "EROFS_MERGE_MODE is only supported with SNAPSHOTTER=erofs"
+			fi
+
+			case "${EROFS_MERGE_MODE}" in
+				merged|unmerged) ;;
+				*)
+					die "Unsupported EROFS_MERGE_MODE: ${EROFS_MERGE_MODE}"
+					;;
+			esac
+
+			yq -i ".snapshotter.erofsMergeMode = \"${EROFS_MERGE_MODE}\"" "${values_yaml}"
 		fi
 
 		if [[ -z "${HELM_SHIMS}" ]]; then

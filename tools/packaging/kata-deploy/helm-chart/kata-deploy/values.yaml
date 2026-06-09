@@ -271,6 +271,18 @@ health:
 
 snapshotter:
   setup: ["nydus"]  # ["nydus", "erofs"] or []
+  # EROFS merge mode: "merged" (default) or "unmerged".
+  #
+  # "merged" forces containerd's erofs snapshotter to merge all image layers
+  # into a single fsmeta.erofs (max_unmerged_layers = 0). This layout is only
+  # supported by runtime-rs shims.
+  #
+  # "unmerged" leaves max_unmerged_layers at the containerd default so each
+  # image layer is exposed as its own per-layer layer.erofs. This is the only
+  # layout the Go runtime can consume, so set this when mapping a Go shim to the
+  # erofs snapshotter. When empty, kata-deploy uses its built-in default
+  # (merged).
+  erofsMergeMode: ""
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
