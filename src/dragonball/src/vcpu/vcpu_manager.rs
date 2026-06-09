@@ -30,6 +30,8 @@ use vm_memory::GuestAddress;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::api::v1::InstanceInfo;
 use crate::kvm_context::KvmContext;
 use crate::metric::METRICS;
@@ -259,7 +261,17 @@ impl VcpuManager {
     ) -> Result<Arc<Mutex<Self>>> {
         let support_immediate_exit = kvm_context.kvm().check_extension(Cap::ImmediateExit);
         let max_vcpu_count = vm_config_info.max_vcpu_count;
+        #[cfg(not(target_arch = "x86_64"))]
         let kvm_max_vcpu_count = kvm_context.get_max_vcpus();
+        #[cfg(target_arch = "x86_64")]
+        let kvm_max_vcpu_count =
+            if shared_info.read().unwrap().confidential_vm_type == Some(ConfidentialVmType::TDX) {
+                // For TDX VMs, max vcpu allowed from TDX module might be different from that of
+                // kvm context
+                vm_fd.check_extension_int(Cap::MaxVcpus) as usize
+            } else {
+                kvm_context.get_max_vcpus()
+            };
 
         // check the max vcpu count in kvm. max_vcpu_count is u8 and kvm_context.get_max_vcpus()
         // returns usize, so convert max_vcpu_count to usize instead of converting kvm max vcpu to

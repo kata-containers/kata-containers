@@ -35,7 +35,6 @@ members = [
   "src/dragonball/dbs_interrupt",
   "src/dragonball/dbs_legacy_devices",
   "src/dragonball/dbs_pci",
-  "src/dragonball/dbs_tdx",
   "src/dragonball/dbs_upcall",
   "src/dragonball/dbs_utils",
   "src/dragonball/dbs_virtio_devices",
@@ -100,7 +99,6 @@ dbs-device = { path = "src/dragonball/dbs_device" }
 dbs-interrupt = { path = "src/dragonball/dbs_interrupt" }
 dbs-legacy-devices = { path = "src/dragonball/dbs_legacy_devices" }
 dbs-pci = { path = "src/dragonball/dbs_pci" }
-dbs-tdx = { path = "src/dragonball/dbs_tdx" }
 dbs-upcall = { path = "src/dragonball/dbs_upcall" }
 dbs-utils = { path = "src/dragonball/dbs_utils" }
 dbs-virtio-devices = { path = "src/dragonball/dbs_virtio_devices" }
@@ -186,6 +184,7 @@ slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
+tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "1.0.26"
 tokio = "1.46.1"

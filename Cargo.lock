@@ -1632,16 +1632,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dbs-tdx"
-version = "0.1.0"
-dependencies = [
- "kvm-bindings",
- "serde_json",
- "thiserror 1.0.69",
- "vmm-sys-util 0.15.0",
-]
-
-[[package]]
 name = "dbs-upcall"
 version = "0.3.0"
 dependencies = [
@@ -1890,6 +1880,7 @@ dependencies = [
  "slog-async",
  "slog-scope",
  "slog-term",
+ "tdx",
  "test-utils",
  "thiserror 1.0.69",
  "tracing",
@@ -3205,6 +3196,12 @@ dependencies = [
  "bitflags 1.3.2",
  "libc",
 ]
+
+[[package]]
+name = "iocuddle"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8972d5be69940353d5347a1344cb375d9b457d6809b428b05bb1ca2fb9ce007"
 
 [[package]]
 name = "iovec"
@@ -7690,6 +7687,21 @@ dependencies = [
  "filetime",
  "libc",
  "xattr 1.6.1",
+]
+
+[[package]]
+name = "tdx"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83943e37cf46979f711ad11489c641fa058fd0fae92c122d1fc26a664e82acab"
+dependencies = [
+ "bitflags 2.11.1",
+ "iocuddle",
+ "kvm-bindings",
+ "kvm-ioctls",
+ "libc",
+ "uuid 1.23.1",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
