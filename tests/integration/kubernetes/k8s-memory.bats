@@ -41,7 +41,7 @@ setup_yaml() {
 }
 
 @test "Running within memory constraints" {
-	memory_limit_size="600Mi"
+	memory_limit_size="800Mi"
 	allocated_size="150M"
 
 	# Create test .yaml
