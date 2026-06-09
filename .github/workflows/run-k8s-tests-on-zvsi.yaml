@@ -54,6 +54,9 @@ jobs:
             snapshotter-cmd: configure-snapshotter
           - snapshotter: nydus
             pull-type: guest-pull
+          - snapshotter: nydus
+            vmm: qemu-coco-dev-runtime-rs
+            is-nightly-only: true
         exclude:
           - snapshotter: overlayfs
             vmm: qemu
@@ -89,70 +92,87 @@ jobs:
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
     steps:
+      - name: Check if job should run
+        id: should-run
+        env:
+          IS_NIGHTLY_ONLY: ${{ matrix.is-nightly-only }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        run: |
+          if [ "${IS_NIGHTLY_ONLY}" = "true" ] && [ "${PR_NUMBER}" != "nightly" ]; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping nightly-only job for non-nightly run"
+          else
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: ${{ steps.should-run.outputs.skipped != 'true' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Rebase atop of the latest target branch
+        if: ${{ steps.should-run.outputs.skipped != 'true' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Set SNAPSHOTTER to empty if overlayfs
+        if: ${{ steps.should-run.outputs.skipped != 'true' && matrix.snapshotter == 'overlayfs' }}
         run: echo "SNAPSHOTTER=" >> "$GITHUB_ENV"
-        if: ${{ matrix.snapshotter == 'overlayfs' }}
 
       - name: Set KBS and KBS_INGRESS if qemu-coco-dev
+        if: ${{ steps.should-run.outputs.skipped != 'true' && (matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs') }}
         run: |
           echo "KBS=true" >> "$GITHUB_ENV"
           echo "KBS_INGRESS=nodeport" >> "$GITHUB_ENV"
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        if: ${{ steps.should-run.outputs.skipped != 'true' && matrix.snapshotter != 'overlayfs' && matrix.snapshotter-cmd != '' }}
         env:
           SNAPSHOTTER_CMD: ${{ matrix.snapshotter-cmd }}
         run: bash tests/integration/kubernetes/gha-run.sh "${SNAPSHOTTER_CMD}"
-        if: ${{ matrix.snapshotter != 'overlayfs' && matrix.snapshotter-cmd != '' }}
 
       - name: Deploy Kata
+        if: ${{ steps.should-run.outputs.skipped != 'true' }}
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
 
       - name: Uninstall previous `kbs-client`
+        if: ${{ steps.should-run.outputs.skipped != 'true' && (matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs') }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Deploy CoCo KBS
+        if: ${{ steps.should-run.outputs.skipped != 'true' && (matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs') }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Install `kbs-client`
+        if: ${{ steps.should-run.outputs.skipped != 'true' && (matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs') }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Run tests
+        if: ${{ steps.should-run.outputs.skipped != 'true' }}
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Report tests
-        if: always()
+        if: ${{ always() && steps.should-run.outputs.skipped != 'true' }}
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Delete kata-deploy
-        if: always()
+        if: ${{ always() && steps.should-run.outputs.skipped != 'true' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi
 
       - name: Delete CoCo KBS
-        if: always()
+        if: ${{ always() && steps.should-run.outputs.skipped != 'true' }}
         timeout-minutes: 10
         run: |
           if [ "${KBS}" == "true" ]; then
