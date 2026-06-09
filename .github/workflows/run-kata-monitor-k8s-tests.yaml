@@ -61,7 +61,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
       CONTAINER_ENGINE: containerd
-      CONTAINER_ENGINE_VERSION: active
+      CONTAINER_ENGINE_VERSION: latest
       KATA_MONITOR_IMAGE_REFERENCE: ${{ inputs.kata-monitor-image-reference }}
       KATA_MONITOR_IMAGE_TAG: ${{ inputs.kata-monitor-image-tag }}
       GH_TOKEN: ${{ github.token }}
