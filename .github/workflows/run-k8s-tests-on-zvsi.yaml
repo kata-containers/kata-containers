@@ -34,6 +34,7 @@ permissions: {}
 jobs:
   run-k8s-tests:
     name: run-k8s-tests
+    if: ${{ matrix.is-nightly-only != true || inputs.pr-number == 'nightly' }}
     strategy:
       fail-fast: false
       matrix:
