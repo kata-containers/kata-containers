@@ -56,11 +56,7 @@ jobs:
       matrix:
         include:
           - runner: tdx
-            vmm: qemu-tdx
-          - runner: tdx
             vmm: qemu-tdx-runtime-rs
-          - runner: sev-snp
-            vmm: qemu-snp
           - runner: sev-snp
             vmm: qemu-snp-runtime-rs
     concurrency:
@@ -75,7 +71,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"
       KBS: "true"
-      K8S_TEST_HOST_TYPE: ${{ inputs.tee-test-scope == 'full' && 'baremetal' || 'baremetal-small-tee' }}
+      K8S_TEST_HOST_TYPE: "full"
       KBS_INGRESS: "nodeport"
       SNAPSHOTTER: "nydus"
       PULL_TYPE: "guest-pull"
@@ -83,10 +79,6 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       AUTO_GENERATE_POLICY: "yes"
     steps:
-      - name: Skip non-nightly TDX runtime-rs
-        if: ${{ matrix.vmm == 'qemu-tdx-runtime-rs' && inputs.pr-number != 'nightly' }}
-        run: echo "SKIP_JOB=true" >> "${GITHUB_ENV}"
-
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         if: ${{ env.SKIP_JOB != 'true' }}
         with:
