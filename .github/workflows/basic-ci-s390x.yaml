@@ -28,7 +28,7 @@ jobs:
       # all the tests due to a single flaky instance.
       fail-fast: false
       matrix:
-        containerd_version: ['active']
+        containerd_version: ['minimum']
         vmm: ['qemu-runtime-rs']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        containerd_version: ['lts', 'active']
+        containerd_version: ['minimum', 'latest']
         vmm: ['qemu']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}

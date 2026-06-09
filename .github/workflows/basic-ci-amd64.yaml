@@ -28,7 +28,7 @@ jobs:
       # all the tests due to a single flaky instance.
       fail-fast: false
       matrix:
-        containerd_version: ['sandbox_api']
+        containerd_version: ['latest']
         vmm: ['dragonball', 'clh-runtime-rs', 'qemu-runtime-rs']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-sandboxapi-amd64-${{ toJSON(matrix) }}
@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        containerd_version: ['lts', 'active']
+        containerd_version: ['minimum', 'latest']
         vmm: ['clh', 'clh-runtime-rs', 'dragonball', 'qemu', 'qemu-runtime-rs']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
@@ -136,7 +136,7 @@ jobs:
       # all the tests due to a single flaky instance.
       fail-fast: false
       matrix:
-        containerd_version: ['lts', 'active']
+        containerd_version: ['minimum', 'latest']
         vmm: ['clh', 'qemu', 'dragonball', 'qemu-runtime-rs']
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-nydus-amd64-${{ toJSON(matrix) }}

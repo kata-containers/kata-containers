@@ -441,11 +441,16 @@ function restart_systemd_service_with_no_burst_limit() {
 		sudo systemctl daemon-reload
 	fi
 
-	sudo systemctl restart "${service}"
+	sudo systemctl restart "${service}" || true
 
 	local state
 	state=$(systemctl show "${service}.service" -p SubState | cut -d'=' -f2) || true
-	[[ "${state}" == "running" ]] || { warn "Can't restart the ${service} service"; return 1; }
+	if [[ "${state}" != "running" ]]; then
+		warn "Can't restart the ${service} service (SubState=${state})"
+		warn "journalctl output for ${service}:"
+		sudo journalctl -xeu "${service}.service" --no-pager -n 50 || true
+		return 1
+	fi
 
 	start_burst=$(systemctl show "${service}.service" -p StartLimitBurst | cut -d'=' -f2) || true
 	[[ "${start_burst}" -eq 0 ]] || { warn "Can't set start burst limit for ${service} service"; return 1; }
@@ -464,7 +469,12 @@ function restart_containerd_service() {
 		((counter++))
 	done
 
-	[[ "${counter}" -ge "${retries}" ]] && { warn "Can't connect to containerd socket"; return 1; }
+	if [[ "${counter}" -ge "${retries}" ]]; then
+		warn "Can't connect to containerd socket after ${retries} retries"
+		warn "journalctl output for containerd:"
+		sudo journalctl -xeu containerd.service --no-pager -n 50 || true
+		return 1
+	fi
 
 	clean_env_ctr
 	return 0
@@ -474,44 +484,227 @@ function restart_crio_service() {
 	sudo systemctl restart crio
 }
 
-# Configures containerd
+# Extracts numeric schema from a config blob (effective or file content). Returns 0 when missing/invalid.
+function _containerd_blob_schema_version() {
+	local line val
+	line="$(grep -m1 -E '^[[:space:]]*version[[:space:]]*=' <<< "${1:-}" 2>/dev/null || true)"
+	val="$(sed -e 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*//' -e 's/[[:space:]]*\(#.*\)\?$//' <<< "${line}")"
+	val="${val//\'/}"
+	val="${val//\"/}"
+	val="${val//[[:space:]]/}"
+
+	[[ "${val}" =~ ^[0-9]+$ ]] || { echo "0" && return; }
+	echo "${val}"
+}
+
+# Reads numeric schema version from a containerd config file (leading "version = N" line).
+function _containerd_config_schema_version() {
+	local cfg="${1:?}"
+
+	[[ ! -f "${cfg}" ]] && echo "0" && return
+	_containerd_blob_schema_version "$(cat "${cfg}" 2>/dev/null || sudo cat "${cfg}" 2>/dev/null || true)"
+}
+
+# Requires merged effective config (preferred) or main config file to use schema >= 3.
+function require_containerd_config_schema_v3_plus() {
+	local dump schema
+
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump 2>/dev/null || true)"
+	if [[ -n "${dump}" ]]; then
+		schema="$(_containerd_blob_schema_version "${dump}")"
+	else
+		schema="$(_containerd_config_schema_version "/etc/containerd/config.toml")"
+	fi
+
+	[[ "${schema}" =~ ^[0-9]+$ ]] || die "containerd: could not determine config schema version (expected >= 3)"
+	[[ "${schema}" -ge 3 ]] || die "containerd: config schema version ${schema} is not supported; require version >= 3 (refusing legacy v1/v2)"
+}
+
+# Requires the installed containerd's default config to use schema >= 3 (containerd 2.x).
+function require_containerd_binary_default_schema_v3_plus() {
+	local blob schema
+
+	blob="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config default 2>/dev/null || true)"
+	schema="$(_containerd_blob_schema_version "${blob}")"
+	[[ "${schema}" =~ ^[0-9]+$ ]] || die "containerd: could not read schema from config default (expected >= 3)"
+	[[ "${schema}" -ge 3 ]] || die "containerd defaults to config schema version ${schema}; these tests require containerd 2.x (schema >= 3)"
+}
+
+# Effective config schema: on-disk main (/etc/containerd/config.toml), else merged dump,
+# else binary config default (used to pick [grpc]/[ttrpc] vs server plugin layout).
+function _containerd_resolved_schema_version() {
+	local schema cdbin
+
+	cdbin="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" command -v containerd || true)"
+	[[ -n "${cdbin}" ]] || { echo "0"; return 0; }
+
+	schema="$(_containerd_config_schema_version "/etc/containerd/config.toml")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 3 ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	schema="$(_containerd_blob_schema_version "$("${cdbin}" config dump 2>/dev/null || true)")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 3 ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	schema="$(_containerd_blob_schema_version "$("${cdbin}" config default 2>/dev/null || true)")"
+	if [[ "${schema}" =~ ^[0-9]+$ ]]; then
+		echo "${schema}"
+		return 0
+	fi
+
+	echo "0"
+}
+
+# Emit TOML to stdout: force uid/gid 0 on API sockets for this config schema ($1).
+# Schema v3 uses top-level [grpc]/[ttrpc]; v4+ uses io.containerd.server.v1.* plugins (see containerd-config.toml.5).
+function containerd_emit_rootful_api_socket_overrides() {
+	local schema="${1:?schema argument required}"
+
+	if [[ "${schema}" =~ ^[0-9]+$ ]] && [[ "${schema}" -ge 4 ]]; then
+		cat <<'EOF'
+[plugins.'io.containerd.server.v1.grpc']
+  uid = 0
+  gid = 0
+
+[plugins.'io.containerd.server.v1.ttrpc']
+  uid = 0
+  gid = 0
+EOF
+	else
+		cat <<'EOF'
+[grpc]
+  uid = 0
+  gid = 0
+
+[ttrpc]
+  uid = 0
+  gid = 0
+EOF
+	fi
+}
+
+# Rootful systemd must own API sockets (see containerd "config default" using non-root
+# uid/gid under listeners on newer releases, e.g. 2.3 on amd64).
+#
+# Only containerd 2.x (schema v3+) emits a non-root uid/gid in "config default" and
+# honours conf.d drop-ins, so the override is written as a conf.d fragment there.
+# containerd 1.x (schema v2) already uses root-owned API sockets and does not honour
+# conf.d the same way, so there is nothing to do.
+function ensure_containerd_conf_d_rootful_api_sockets() {
+	local drop_in="/etc/containerd/conf.d/99-kata-ci-rootful-api-sockets.toml"
+	local schema
+
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || return 0
+
+	sudo mkdir -p "$(dirname "${drop_in}")"
+	containerd_emit_rootful_api_socket_overrides "${schema}" | sudo tee "${drop_in}" >/dev/null
+}
+
+# Writes containerd's config default to $1, replacing the imports line so fragments load from $2.
+function containerd_render_config_default_with_imports() {
+	local out="$1"
+	local abs_conf_d="$2"
+	local cd_bin imp_line
+
+	abs_conf_d="${abs_conf_d%/}"
+	cd_bin="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" command -v containerd)"
+	[[ -n "${cd_bin}" ]] || die "containerd not found in PATH"
+
+	imp_line="imports = [\"${abs_conf_d}/*.toml\"]"
+
+	"${cd_bin}" config default | awk -v imp="${imp_line}" '
+		/^imports[[:space:]]*=/ && !did { print imp; did=1; next }
+		{ print }
+		END {
+			if (!did) {
+				print "containerd_render_config_default_with_imports: no imports= line in config default" > "/dev/stderr"
+				exit 2
+			}
+		}
+	' >"${out}"
+}
+
+# Configures containerd for CI; handles schema v2 (containerd v1.x) and v3+ (containerd v2.x).
+#
+# containerd 2.x (schema v3+) loads conf.d drop-in fragments, so the base config is
+# regenerated from "containerd config default" (which already imports conf.d) and the
+# Kata runtime / rootful-socket overrides are written there.  containerd 1.x (schema
+# v2) does not honour conf.d the same way, so its config.toml is replaced wholesale
+# with a complete, self-contained file.
 function overwrite_containerd_config() {
-	containerd_config="/etc/containerd/config.toml"
-	base_config_dir=$(dirname "${containerd_config}")
-	sudo mkdir -p "${base_config_dir}"
-	sudo tee "${containerd_config}" << EOF
+	local containerd_config="/etc/containerd/config.toml"
+	local conf_dir drop_in hv cfg_path shim_binary schema cd_bin runc_path
+
+	conf_dir="$(dirname "${containerd_config}")/conf.d"
+	drop_in="${conf_dir}/50-kata-containers-ci.toml"
+
+	schema="$(_containerd_resolved_schema_version)"
+	hv="${KATA_HYPERVISOR:-qemu}"
+	cfg_path="${KATA_CONFIG_PATH:-/opt/kata/share/defaults/kata-containers/configuration-${hv}.toml}"
+	shim_binary="$(command -v "containerd-shim-kata-${hv}-v2" 2>/dev/null || true)"
+	[[ -n "${shim_binary}" ]] || shim_binary="/usr/local/bin/containerd-shim-kata-${hv}-v2"
+
+	sudo mkdir -p "$(dirname "${containerd_config}")"
+
+	if [[ "${schema}" -ge 3 ]]; then
+		# Always regenerate from the installed binary so the schema version and
+		# all fields match exactly what this containerd binary expects.  Keeping a
+		# stale config.toml from a different containerd version causes MigrateConfigTo
+		# to panic on schema mismatches (e.g. a config with version=3 loaded by an
+		# older binary whose migrations slice only covers versions 0-2).
+		info "Regenerating ${containerd_config} from containerd config default"
+		cd_bin="$(command -v containerd)"
+		sudo mkdir -p "${conf_dir}"
+		sudo "${cd_bin}" config default | sudo tee "${containerd_config}" > /dev/null
+		ensure_containerd_conf_d_rootful_api_sockets
+
+		# containerd v2.x (schema v3+): io.containerd.cri.v1.runtime plugin path,
+		# written as a conf.d drop-in fragment.
+		sudo tee "${drop_in}" >/dev/null << EOF
+[plugins.'io.containerd.cri.v1.runtime'.containerd]
+  default_runtime_name = 'kata'
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
+  runtime_type = 'io.containerd.kata-${hv}.v2'
+  sandboxer = 'podsandbox'
+
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata.options]
+    ConfigPath = '${cfg_path}'
+    BinaryName = '${shim_binary}'
+EOF
+	else
+		# containerd v1.x (schema v2): conf.d drop-ins are not honoured the same
+		# way, so replace config.toml wholesale with a complete, self-contained
+		# file.  The v1.x default API sockets are already root-owned, so no socket
+		# override is required.
+		info "Writing complete ${containerd_config} for containerd v1.x (schema v2)"
+		runc_path="$(command -v runc || echo /usr/bin/runc)"
+		sudo tee "${containerd_config}" >/dev/null << EOF
 version = 2
 
-[plugins]
-  [plugins."io.containerd.grpc.v1.cri"]
-    [plugins."io.containerd.grpc.v1.cri".containerd]
-      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
-          base_runtime_spec = ""
-          cni_conf_dir = ""
-          cni_max_conf_num = 0
-          container_annotations = []
-          pod_annotations = []
-          privileged_without_host_devices = false
-          runtime_engine = ""
-          runtime_path = ""
-          runtime_root = ""
-          runtime_type = "io.containerd.runc.v2"
-          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-            BinaryName = ""
-            CriuImagePath = ""
-            CriuPath = ""
-            CriuWorkPath = ""
-            IoGid = 0
-            IoUid = 0
-            NoNewKeyring = false
-            NoPivotRoot = false
-            Root = ""
-            ShimCgroup = ""
-            SystemdCgroup = false
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
-          runtime_type = "io.containerd.kata.v2"
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  default_runtime_name = "kata"
+
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+    runtime_type = "io.containerd.kata-${hv}.v2"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]
+      ConfigPath = "${cfg_path}"
+      BinaryName = "${shim_binary}"
+
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+    runtime_type = "io.containerd.runc.v2"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+      BinaryName = "${runc_path}"
+      SystemdCgroup = true
 EOF
+	fi
 }
 
 # Configures CRI-O
@@ -616,18 +809,22 @@ function enabling_hypervisor() {
 
 
 function check_containerd_config_for_kata() {
-	# check containerd config
-	declare -r line1="default_runtime_name = \"kata\""
-	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
-	declare -r num_lines_containerd=2
 	declare -r containerd_path="/etc/containerd/config.toml"
-	local count_matches
-	count_matches=$(grep -ic  "${line1}\|${line2}" "${containerd_path}" || true)
+	local hv dump
 
-	if [[ "${count_matches}" = "${num_lines_containerd}" ]]; then
+	hv="${KATA_HYPERVISOR:-qemu}"
+
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump 2>/dev/null || true)"
+
+	if [[ -z "${dump}" ]] && [[ -f "${containerd_path}" ]]; then
+		dump="$(sudo cat "${containerd_path}")"
+	fi
+
+	if echo "${dump}" | grep -qE "default_runtime_name[[:space:]]*=[[:space:]]*[\"']kata[\"']" && \
+		echo "${dump}" | grep -qE "runtime_type[[:space:]]*=[[:space:]]*[\"']io\\.containerd\\.kata(-${hv})?\\.v2[\"']"; then
 		info "containerd ok"
 	else
-		info "overwriting containerd configuration w/ a valid one"
+		info "writing Kata overrides for containerd (current schema from containerd config default)"
 		overwrite_containerd_config
 	fi
 }
@@ -887,13 +1084,19 @@ function install_cri_containerd() {
 	rm -f "${tarball_name}"
 
 	sudo mkdir -p /etc/containerd
-	containerd config default | sudo tee /etc/containerd/config.toml
+	sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+	ensure_containerd_conf_d_rootful_api_sockets
 
+	# Always write the service file pointing at the just-installed binary and
+	# reload systemd so the correct binary is used on the next start.
+	# The runner image may have a pre-installed containerd unit pointing at a
+	# different (older) binary; leaving that in place causes systemd to start
+	# the wrong binary with a config it cannot parse, leading to a panic in
+	# MigrateConfigTo (index out of range because the old binary's migrations
+	# slice is shorter than the config schema version requires).
 	containerd_service="/etc/systemd/system/containerd.service"
-
-	if [[ ! -f "${containerd_service}" ]]; then
-		sudo mkdir -p /etc/systemd/system
-		sudo tee "${containerd_service}"  <<EOF
+	sudo mkdir -p /etc/systemd/system
+	sudo tee "${containerd_service}" > /dev/null <<EOF
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -921,7 +1124,7 @@ OOMScoreAdjust=-999
 [Install]
 WantedBy=multi-user.target
 EOF
-	fi
+	sudo systemctl daemon-reload
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format

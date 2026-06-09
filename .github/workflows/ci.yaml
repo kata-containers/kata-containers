@@ -398,16 +398,16 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          { containerd_version: lts,    vmm: clh              },
-          { containerd_version: lts,    vmm: dragonball       },
-          { containerd_version: lts,    vmm: qemu             },
-          { containerd_version: lts,    vmm: clh-runtime-rs   },
-          { containerd_version: lts,    vmm: qemu-runtime-rs  },
-          { containerd_version: active, vmm: clh              },
-          { containerd_version: active, vmm: dragonball       },
-          { containerd_version: active, vmm: qemu             },
-          { containerd_version: active, vmm: clh-runtime-rs   },
-          { containerd_version: active, vmm: qemu-runtime-rs  },
+          { containerd_version: latest,    vmm: clh              },
+          { containerd_version: latest,    vmm: dragonball       },
+          { containerd_version: latest,    vmm: qemu             },
+          { containerd_version: latest,    vmm: clh-runtime-rs   },
+          { containerd_version: latest,    vmm: qemu-runtime-rs  },
+          { containerd_version: minimum, vmm: clh              },
+          { containerd_version: minimum, vmm: dragonball       },
+          { containerd_version: minimum, vmm: qemu             },
+          { containerd_version: minimum, vmm: clh-runtime-rs   },
+          { containerd_version: minimum, vmm: qemu-runtime-rs  },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ toJSON(matrix) }}
@@ -429,8 +429,8 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          {containerd_version: active, vmm: qemu},
-          {containerd_version: active, vmm: qemu-runtime-rs},
+          {containerd_version: latest, vmm: qemu},
+          {containerd_version: latest, vmm: qemu-runtime-rs},
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
@@ -452,7 +452,7 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          {containerd_version: active, vmm: qemu},
+          {containerd_version: latest, vmm: qemu},
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-ppc64le-${{ toJSON(matrix) }}

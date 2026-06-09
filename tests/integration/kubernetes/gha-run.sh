@@ -105,7 +105,7 @@ EOF
 		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
 		| .plugins["io.containerd.transfer.v1.local"].unpack_config =
 			[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
-		| if .version == 3 then
+		| if (.version // 0) >= 3 then
 			.plugins["io.containerd.cri.v1.images"].snapshotter = "devmapper"
 		  else
 			.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "devmapper"
@@ -280,8 +280,10 @@ function run_tests() {
 		# enabled. Therefore, use containerd's default settings instead of distro's defaults. Note that
 		# the k8s test cluster nodes have their own containerd settings (created by kata-deploy),
 		# independent from the local settings being created here.
-		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+		PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
+		ensure_containerd_conf_d_rootful_api_sockets
+		require_containerd_config_schema_v3_plus
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
 
 		# Allow genpolicy to access the containerd image pull APIs without sudo.
