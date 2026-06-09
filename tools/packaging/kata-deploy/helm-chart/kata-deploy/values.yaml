@@ -101,6 +101,12 @@ resources:
 
 debug: false
 
+# Optional CLI log level override for kata-deploy.
+# Supported values: error, warn, info, debug, trace
+# When empty, debug:true implies --log-level debug; otherwise kata-deploy falls
+# back to DEBUG env var behavior.
+logLevel: ""
+
 # Health probes for the kata-deploy DaemonSet.
 # The binary runs an HTTP health server exposing /healthz (liveness) and /readyz (readiness).
 # /healthz returns 200 as soon as the server starts (process is alive).

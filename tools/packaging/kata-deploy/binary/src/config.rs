@@ -577,6 +577,8 @@ impl Config {
                 );
             }
         }
+
+        log::debug!("Resolved kata-deploy configuration:\n{:#?}", self);
     }
 
     /// Get containerd configuration file paths based on runtime type and containerd version

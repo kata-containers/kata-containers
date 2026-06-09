@@ -179,6 +179,15 @@ log_level = "debug""#
         )?;
     }
 
+    utils::debug_log_file_contents(
+        "CRI-O kata-deploy runtime drop-in",
+        Path::new(&config.crio_drop_in_conf_file),
+    );
+    utils::debug_log_file_contents(
+        "CRI-O kata-deploy debug drop-in",
+        Path::new(&config.crio_drop_in_conf_file_debug),
+    );
+
     Ok(())
 }
 
