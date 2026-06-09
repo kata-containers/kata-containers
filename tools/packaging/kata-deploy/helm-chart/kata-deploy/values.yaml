@@ -10,6 +10,27 @@ kubectlImage:
   reference: quay.io/kata-containers/kubectl
   tag: latest
 
+monitor:
+  enabled: false
+  image:
+    reference: quay.io/kata-containers/kata-monitor
+    tag: ""
+  listenAddress: "0.0.0.0:8090"
+  runtimeEndpoint: "unix:///run/containerd/containerd.sock"
+  logLevel: "info"
+  port: 8090
+  securityContext:
+    privileged: false
+    runAsUser: 0
+    runAsGroup: 0
+  resources:
+    limits:
+      cpu: 200m
+      memory: 300Mi
+    requests:
+      cpu: 200m
+      memory: 300Mi
+
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
 # Containerd configuration overrides

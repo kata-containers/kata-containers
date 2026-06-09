@@ -49,6 +49,14 @@ go_gc_duration_seconds{quantile="0.75"} 0.000229911
 
 ## Configure `kata-monitor`
 
+`kata-monitor` is published as a standalone, multi-arch container image as
+part of every Kata Containers release. Two flavours are available:
+
+| Image | Purpose |
+|---|---|
+| `quay.io/kata-containers/kata-monitor:<release-version>` (also mirrored to `ghcr.io/kata-containers/kata-monitor`) | Released image, built and pushed by the Kata Containers release workflow. A `latest` tag tracks the most recent release. |
+| `quay.io/kata-containers/kata-monitor-ci:latest` (also mirrored to `ghcr.io/kata-containers/kata-monitor-ci`) | Testing image, rebuilt and pushed from every commit landing on `main`. Use this only for evaluation against unreleased changes. |
+
 `kata-monitor` can be started on the cluster as follows:
 
 ```
@@ -56,6 +64,12 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-contai
 ```
 
 This will create a new namespace `kata-system` and a `daemonset` in it.
+
+> **Note**: The bundled `daemonset` uses `quay.io/kata-containers/kata-monitor:latest`.
+> For production deployments, pin the image to a specific release tag
+> (e.g. `quay.io/kata-containers/kata-monitor:3.32.0`) matching the Kata
+> Containers version installed on your nodes. The dedicated
+> `kata-monitor` image is published starting with Kata Containers 3.32.0.
 
 Once the `daemonset` is running, Prometheus should discover `kata-monitor` as a target. You can open `http://<hostIP>:30909/service-discovery` and find `kubernetes-pods` under the `Service Discovery` list
 

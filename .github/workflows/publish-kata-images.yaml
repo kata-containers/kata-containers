@@ -1,0 +1,214 @@
+name: CI | publish-kata-images
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      tags:
+        description: Space-separated list of tags; overrides `tag` when set.
+        required: false
+        type: string
+        default: ""
+      tag-suffix:
+        description: Optional suffix appended to each tag (for example, -amd64).
+        required: false
+        type: string
+        default: ""
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+      runner:
+        default: 'ubuntu-22.04'
+        description: The runner to execute the workflow on. Defaults to 'ubuntu-22.04'.
+        required: false
+        type: string
+      arch:
+        description: The arch of the tarball.
+        required: true
+        type: string
+      image-kind:
+        description: Image kind to publish (`deploy` or `monitor`).
+        required: false
+        type: string
+        default: deploy
+      image-kinds-json:
+        description: JSON list of image kinds, e.g. ["deploy","monitor"].
+        required: false
+        type: string
+        default: ""
+      artifact-name:
+        description: Optional artifact name to download instead of a pattern.
+        required: false
+        type: string
+        default: ""
+      push:
+        description: Whether to push image(s) to registry.
+        required: false
+        type: string
+        default: "true"
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}-${{ inputs.repo }}-${{ inputs.tag }}-${{ inputs.image-kind }}-publish-image
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  publish:
+    name: kata-image
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      matrix:
+        image-kind: ${{ fromJson(inputs.image-kinds-json != '' && inputs.image-kinds-json || format('["{0}"]', inputs.image-kind)) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-artifacts for ${{ inputs.arch }}
+        if: ${{ inputs.artifact-name == '' && matrix.image-kind == 'deploy' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: kata-artifacts-${{ inputs.arch }}-*${{ inputs.tarball-suffix }}
+          path: tools/packaging/kata-deploy/local-build/build
+          merge-multiple: true
+
+      - name: get-kata-static-tarball for ${{ inputs.arch }}
+        if: ${{ inputs.artifact-name == '' && matrix.image-kind == 'monitor' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
+          path: tools/packaging/kata-deploy/local-build/build
+
+      - name: get-kata-artifact by name for ${{ inputs.arch }}
+        if: ${{ inputs.artifact-name != '' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: tools/packaging/kata-deploy/local-build/build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.registry == 'quay.io' && inputs.push == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: quay.io
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Login to Kata Containers ghcr.io
+        if: ${{ (inputs.registry == 'ghcr.io' || inputs.registry == 'quay.io') && inputs.push == 'true' }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build-and-push image for ${{ inputs.arch }}
+        id: build-and-push-kata-payload
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REPO: ${{ inputs.repo }}
+          TAG: ${{ inputs.tag }}
+          TAGS: ${{ inputs.tags }}
+          TAG_SUFFIX: ${{ inputs.tag-suffix }}
+          IMAGE_KIND: ${{ matrix.image-kind }}
+          PUSH_IMAGE: ${{ inputs.push }}
+        run: |
+          if [ "${TAGS}" != "" ]; then
+            tags="${TAGS}"
+          else
+            tags="${TAG}"
+          fi
+
+          case "${IMAGE_KIND}" in
+            deploy)
+              for t in ${tags}; do
+                final_tag="${t}${TAG_SUFFIX}"
+                ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+                  "${REGISTRY}/${REPO}" \
+                  "${final_tag}"
+              done
+              ;;
+            monitor)
+              registries="${REGISTRY}"
+              if [ "${REGISTRY}" = "quay.io" ]; then
+                registries="quay.io ghcr.io"
+              fi
+
+              build_dir="tools/packaging/kata-deploy/local-build/build"
+              monitor_tarball="${build_dir}/kata-static.tar.zst"
+
+              if [ ! -f "${monitor_tarball}" ] && [ -f "${build_dir}/kata-static-shim-v2-go.tar.zst" ]; then
+                # Backward compatibility with older artifacts.
+                monitor_tarball="${build_dir}/kata-static-shim-v2-go.tar.zst"
+              fi
+
+              if [ ! -f "${monitor_tarball}" ]; then
+                echo "Neither kata-static.tar.zst nor kata-static-shim-v2-go.tar.zst found" >&2
+                exit 1
+              fi
+
+              for r in ${registries}; do
+                for t in ${tags}; do
+                  final_tag="${t}${TAG_SUFFIX}"
+                  ./tools/packaging/kata-monitor/build-and-upload-from-tarball.sh \
+                    "${r}/${REPO}:${final_tag}" \
+                    "${monitor_tarball}" \
+                    "${PUSH_IMAGE}"
+                done
+              done
+              ;;
+            *)
+              echo "Invalid image-kind: ${IMAGE_KIND}" >&2
+              exit 1
+              ;;
+          esac

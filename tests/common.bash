@@ -1089,6 +1089,19 @@ function install_cri_containerd() {
 		| sudo tee /etc/containerd/config.toml > /dev/null
 	ensure_containerd_conf_d_rootful_api_sockets
 
+	# Drop a default /etc/crictl.yaml pointing at the freshly-installed
+	# containerd socket so crictl does not probe — and warn loudly about
+	# — the legacy default endpoints (dockershim, CRI-O, cri-dockerd) on
+	# every invocation. cri-tools v1.30+ deprecated the implicit default
+	# endpoint discovery, which means every crictl call without this
+	# config emits noisy validation errors for sockets that do not exist
+	# on the runner.
+	sudo tee /etc/crictl.yaml > /dev/null <<-EOF
+		runtime-endpoint: unix:///run/containerd/containerd.sock
+		image-endpoint: unix:///run/containerd/containerd.sock
+		timeout: 10
+	EOF
+
 	# Always write the service file pointing at the just-installed binary and
 	# reload systemd so the correct binary is used on the next start.
 	# The runner image may have a pre-installed containerd unit pointing at a
@@ -1129,12 +1142,26 @@ EOF
 	sudo systemctl daemon-reload
 }
 
-# base_version: The version to be intalled in the ${major}.${minor} format
+# Installs cri-tools (crictl). When a base_version (${major}.${minor}) is
+# supplied the matching latest patch release is used; otherwise — and this is
+# the default in CI — the absolute latest stable release published on GitHub
+# is fetched. cri-tools is intentionally not pinned in versions.yaml so we
+# always exercise a crictl that speaks current CRI protocol revisions.
 function install_cri_tools() {
-	base_version="${1}"
+	base_version="${1:-}"
 
 	project="kubernetes-sigs/cri-tools"
-	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+	if [[ -n "${base_version}" ]]; then
+		version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+	else
+		version=$(curl \
+			${GH_TOKEN:+--header "Authorization: Bearer ${GH_TOKEN}"} \
+			--fail-with-body \
+			--show-error \
+			--silent \
+			"https://api.github.com/repos/${project}/releases/latest" \
+			| jq -r .tag_name)
+	fi
 
 	tarball_name="crictl-${version}-linux-$("${repo_root_dir}"/tests/kata-arch.sh -g).tar.gz"
 

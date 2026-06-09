@@ -376,6 +376,22 @@ When reference already contains "@" (digest) or tag is empty, use reference as-i
 {{- end -}}
 
 {{/*
+kata-monitor image reference for optional monitor DaemonSet.
+Supports tag (reference:tag) and digest (reference@sha256:...) formats.
+When reference contains "@" (digest), use reference as-is; otherwise use
+reference:tag (tag defaults to Chart.AppVersion).
+*/}}
+{{- define "kata-deploy.monitorImage" -}}
+{{- $ref := .Values.monitor.image.reference -}}
+{{- $tag := default .Chart.AppVersion .Values.monitor.image.tag | toString -}}
+{{- if contains "@" $ref -}}
+{{- $ref -}}
+{{- else -}}
+{{- printf "%s:%s" $ref $tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Get snapshotter setup list from structured config
 */}}
 {{- define "kata-deploy.getSnapshotterSetup" -}}

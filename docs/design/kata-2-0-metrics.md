@@ -46,6 +46,13 @@ For a quick evaluation, you can check out [this how to](../how-to/how-to-set-pro
 
 ### Kata monitor
 
+Starting with Kata Containers 3.32.0, the `kata-monitor` binary is also published as a standalone, multi-arch container image alongside every release:
+
+- Released image: `quay.io/kata-containers/kata-monitor:<release-version>` (mirrored to `ghcr.io/kata-containers/kata-monitor`). The `latest` tag always points at the most recent release.
+- Testing image (tracking `main`): `quay.io/kata-containers/kata-monitor-ci:latest` (mirrored to `ghcr.io/kata-containers/kata-monitor-ci`).
+
+See the [how-to on running `kata-monitor` in a Kubernetes cluster](../how-to/how-to-set-prometheus-in-k8s.md) for a complete deployment example.
+
 The `kata-monitor` management agent should be started on each node where the Kata containers runtime is installed. `kata-monitor` will:
 
 > **Note**: a *node* running Kata containers will be either a single host system or a worker node belonging to a K8s cluster capable of running Kata pods.
