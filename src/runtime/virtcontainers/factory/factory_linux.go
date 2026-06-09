@@ -80,6 +80,9 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.SharedPath = ""
 	config.HypervisorConfig.VMStorePath = ""
 	config.HypervisorConfig.RunStorePath = ""
+	config.HypervisorConfig.SandboxName = ""
+	config.HypervisorConfig.SandboxNamespace = ""
+	config.HypervisorConfig.DefaultMaxVCPUs = 0
 }
 
 // It's important that baseConfig and newConfig are passed by value!
