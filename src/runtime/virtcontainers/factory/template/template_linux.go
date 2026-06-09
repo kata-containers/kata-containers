@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -115,6 +116,15 @@ func (t *template) prepareTemplateFiles() error {
 	}
 	f.Close()
 
+	// truncate the memory file to the exact size of the VM memory
+	memoryInBytes := int64(t.config.HypervisorConfig.MemorySize) * 1024 * 1024
+	t.Logger().Infof("truncating memory file %s to %d bytes", t.statePath+"/memory", memoryInBytes)
+	err = os.Truncate(t.statePath+"/memory", memoryInBytes)
+	if err != nil {
+		t.close()
+		return err
+	}
+
 	return nil
 }
 
@@ -124,7 +134,8 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	config.HypervisorConfig.BootToBeTemplate = true
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.DevicesStatePath = t.deviceStatePath()
+	config.HypervisorConfig.VMStorePath = t.statePath
 
 	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
@@ -161,7 +172,7 @@ func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc
 	config.HypervisorConfig.BootToBeTemplate = false
 	config.HypervisorConfig.BootFromTemplate = true
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.DevicesStatePath = t.deviceStatePath()
 	config.HypervisorConfig.SharedPath = c.HypervisorConfig.SharedPath
 	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
 	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
@@ -175,6 +186,15 @@ func (t *template) checkTemplateVM() error {
 		return err
 	}
 
-	_, err = os.Stat(t.statePath + "/state")
+	_, err = os.Stat(t.deviceStatePath())
 	return err
+}
+
+func (t *template) deviceStatePath() string {
+	stateFileName := "state"
+	if t.config.HypervisorType == vc.ClhHypervisor {
+		stateFileName = "state.json"
+	}
+
+	return filepath.Join(t.statePath, stateFileName)
 }
