@@ -45,6 +45,7 @@ jobs:
           - qemu
           - qemu-runtime-rs
           - qemu-coco-dev
+          - qemu-coco-dev-runtime-rs
         k8s:
           - kubeadm
         include:
@@ -58,10 +59,14 @@ jobs:
             vmm: qemu
           - snapshotter: overlayfs
             vmm: qemu-coco-dev
+          - snapshotter: overlayfs
+            vmm: qemu-coco-dev-runtime-rs
           - snapshotter: devmapper
             vmm: qemu-runtime-rs
           - snapshotter: devmapper
             vmm: qemu-coco-dev
+          - snapshotter: devmapper
+            vmm: qemu-coco-dev-runtime-rs
           - snapshotter: nydus
             vmm: qemu
           - snapshotter: nydus
@@ -104,7 +109,7 @@ jobs:
         run: |
           echo "KBS=true" >> "$GITHUB_ENV"
           echo "KBS_INGRESS=nodeport" >> "$GITHUB_ENV"
-        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
@@ -121,17 +126,17 @@ jobs:
       - name: Uninstall previous `kbs-client`
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Deploy CoCo KBS
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
-        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Install `kbs-client`
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
-        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+        if: ${{ matrix.vmm == 'qemu-coco-dev' || matrix.vmm == 'qemu-coco-dev-runtime-rs' }}
 
       - name: Run tests
         timeout-minutes: 60
