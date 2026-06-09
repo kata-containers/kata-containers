@@ -94,6 +94,23 @@ function ci_cleanup() {
 	fi
 }
 
+function generate_runtime_options_block() {
+	local runtime="${1:?}"
+	local pluginid="${2:?}"
+	local runtime_config_path="${3:-}"
+	local runtime_binary_path="${4:-}"
+
+	if [[ "${runtime}" == "runc" ]]; then
+		return 0
+	fi
+
+	cat << EOF
+        [plugins.${pluginid}.containerd.runtimes.${runtime}.options]
+          ConfigPath = "${runtime_config_path}"
+          BinaryName = "${runtime_binary_path}"
+EOF
+}
+
 function create_containerd_config() {
 	local runtime="$1"
 	# kata_annotations is set to 1 if caller want containerd setup with
@@ -125,6 +142,9 @@ function create_containerd_config() {
 		# containerd v2.x (schema v3+): base config (imports conf.d) plus drop-in
 		# fragments for sockets, debug, runtime and the linux shim.
 		local pluginid=\"io.containerd.cri.v1.runtime\"
+		local runtime_options_block=""
+		runtime_options_block="$(generate_runtime_options_block \
+			"${runtime}" "${pluginid}" "${runtime_config_path}" "${runtime_binary_path}")"
 
 		mkdir -p "${CONTAINERD_CONF_D}"
 		containerd_render_config_default_with_imports "${CONTAINERD_CONFIG_FILE}" "${CONTAINERD_CONF_D}"
@@ -147,9 +167,7 @@ EOF
         echo 'pod_annotations = ["io.katacontainers.*"]' && \
         echo '        container_annotations = ["io.katacontainers.*"]'
         )
-        [plugins.${pluginid}.containerd.runtimes.${runtime}.options]
-          ConfigPath = "${runtime_config_path}"
-          BinaryName = "${runtime_binary_path}"
+${runtime_options_block}
 EOF
 
 		if [[ -n "${containerd_shim_path}" ]]; then
@@ -165,10 +183,9 @@ EOF
 		# write a single complete, self-contained config file.  The v1.x default
 		# API sockets are already root-owned, so no socket override is needed.
 		local pluginid=\"io.containerd.grpc.v1.cri\"
-		local linux_shim_block=""
-		if [[ -n "${containerd_shim_path}" ]]; then
-			linux_shim_block="$(printf '\n[plugins.linux]\n  shim = "%s"\n' "${containerd_shim_path}")"
-		fi
+		local runtime_options_block=""
+		runtime_options_block="$(generate_runtime_options_block \
+			"${runtime}" "${pluginid}" "${runtime_config_path}" "${runtime_binary_path}")"
 
 		mkdir -p "${CONTAINERD_CONF_D}"
 		cat << EOF > "${CONTAINERD_CONFIG_FILE}"
@@ -187,10 +204,7 @@ version = 2
         echo 'pod_annotations = ["io.katacontainers.*"]' && \
         echo '        container_annotations = ["io.katacontainers.*"]'
         )
-        [plugins.${pluginid}.containerd.runtimes.${runtime}.options]
-          ConfigPath = "${runtime_config_path}"
-          BinaryName = "${runtime_binary_path}"
-${linux_shim_block}
+${runtime_options_block}
 EOF
 	fi
 }
@@ -269,12 +283,21 @@ function check_daemon_setup() {
 	cp "${CONTAINERD_CONFIG_FILE}" "${CONTAINERD_CONFIG_FILE_TEMP}"
 	# in some distros(AlibabaCloud), there is no btrfs-devel package available,
 	# so pass GO_BUILDTAGS="no_btrfs" to make to not use btrfs.
-	sudo -E PATH="${PATH}:/usr/local/bin" \
+	if ! sudo -E PATH="${PATH}:/usr/local/bin" \
 		REPORT_DIR="${REPORT_DIR}" \
 		FOCUS="TestImageLoad" \
 		RUNTIME="" \
 		CONTAINERD_CONFIG_FILE="${CONTAINERD_CONFIG_FILE_TEMP}" \
 		make GO_BUILDTAGS="no_btrfs" -e cri-integration
+	then
+		echo "::group::ERROR: cri-integration sanity-check config"
+		echo "-------------------------------------"
+		cat "${CONTAINERD_CONFIG_FILE_TEMP}" || true
+		echo "-------------------------------------"
+		echo "::endgroup::"
+		err_report
+		return 1
+	fi
 }
 
 function testContainerStart() {
