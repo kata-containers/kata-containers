@@ -37,6 +37,8 @@ const CONTAINERD_LEGACY_CRI_PLUGIN_ID: &str = "cri";
 const CONTAINERD_CRI_IMAGES_PLUGIN_ID: &str = "\"io.containerd.cri.v1.images\"";
 /// Plugin table for CRI containerd in v2 (disable_snapshot_annotations lives here).
 const CONTAINERD_CRI_CONTAINERD_TABLE_V2: &str = "\"io.containerd.grpc.v1.cri\".containerd";
+/// Runtime-level pod annotations forwarded by containerd to kata-shim.
+const KATA_POD_ANNOTATIONS: &str = "[\"io.katacontainers.*\", \"io.kubernetes.cri.sandbox-cpu-period\", \"io.kubernetes.cri.sandbox-cpu-quota\", \"io.kubernetes.cri.sandbox-cpu-shares\", \"io.kubernetes.cri.sandbox-memory\"]";
 
 fn is_k3s_or_rke2(runtime: &str) -> bool {
     matches!(runtime, "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server")
@@ -320,7 +322,7 @@ pub async fn configure_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
+    let pod_annotations = KATA_POD_ANNOTATIONS;
     let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
 
     // Determine snapshotter if configured
@@ -400,7 +402,7 @@ pub async fn configure_custom_containerd_runtime(
         pluginid
     );
 
-    let pod_annotations = "[\"io.katacontainers.*\"]";
+    let pod_annotations = KATA_POD_ANNOTATIONS;
     let container_annotations = "[\"io.kubernetes.container.terminationMessage*\"]";
 
     // Determine snapshotter if specified
@@ -854,7 +856,7 @@ mod tests {
             runtime_path: "\"/opt/kata/bin/kata-runtime\"".to_string(),
             config_path: "\"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml\""
                 .to_string(),
-            pod_annotations: "[\"io.katacontainers.*\"]",
+            pod_annotations: KATA_POD_ANNOTATIONS,
             container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
