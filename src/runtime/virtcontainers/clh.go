@@ -822,7 +822,7 @@ func (clh *cloudHypervisor) shouldRestoreFromTemplate() bool {
 	return true
 }
 
-// copyFile copies a file from src to dst
+// copyFile copies a file from src to dst, preserving the source file's permissions.
 func (clh *cloudHypervisor) copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -830,7 +830,12 @@ func (clh *cloudHypervisor) copyFile(src, dst string) error {
 	}
 	defer srcFile.Close()
 
-	dstFile, err := os.Create(dst)
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
@@ -880,7 +885,7 @@ func (clh *cloudHypervisor) updateVsockSocketPath(configPath, vmID string) error
 		return err
 	}
 
-	return os.WriteFile(configPath, updatedConfig, 0644)
+	return os.WriteFile(configPath, updatedConfig, 0600)
 }
 
 // setupInitdata prepares and attaches the initdata disk if present.
@@ -1578,7 +1583,7 @@ func (clh *cloudHypervisor) SaveVM() error {
 			return err
 		}
 
-		if err := os.WriteFile(snapshotConfigPath, modifiedConfig, 0644); err != nil {
+		if err := os.WriteFile(snapshotConfigPath, modifiedConfig, 0600); err != nil {
 			clh.Logger().WithError(err).Error("Failed to write modified snapshot config")
 			return err
 		}

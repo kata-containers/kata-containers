@@ -414,6 +414,13 @@ Get snapshotter setup list from structured config
 {{- end -}}
 
 {{/*
+Get EROFS merge mode from structured config ("merged" or "unmerged")
+*/}}
+{{- define "kata-deploy.getErofsMergeMode" -}}
+{{- .Values.snapshotter.erofsMergeMode | default "" -}}
+{{- end -}}
+
+{{/*
 Get debug value from structured config
 */}}
 {{- define "kata-deploy.getDebug" -}}
@@ -568,6 +575,11 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if $snapshotterSetup }}
 - name: EXPERIMENTAL_SETUP_SNAPSHOTTER
   value: {{ $snapshotterSetup | quote }}
+{{- end }}
+{{- $erofsMergeMode := include "kata-deploy.getErofsMergeMode" . | trim -}}
+{{- if $erofsMergeMode }}
+- name: EROFS_MERGE_MODE
+  value: {{ $erofsMergeMode | quote }}
 {{- end }}
 {{- $forceGuestPullAmd64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $forceGuestPullAmd64 }}
