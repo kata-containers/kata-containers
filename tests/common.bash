@@ -1084,7 +1084,9 @@ function install_cri_containerd() {
 	rm -f "${tarball_name}"
 
 	sudo mkdir -p /etc/containerd
-	sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+	sudo containerd config default \
+		| sed -E 's/^([[:space:]]*SystemdCgroup[[:space:]]*=[[:space:]]*)false/\1true/' \
+		| sudo tee /etc/containerd/config.toml > /dev/null
 	ensure_containerd_conf_d_rootful_api_sockets
 
 	# Always write the service file pointing at the just-installed binary and
