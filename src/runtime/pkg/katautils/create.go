@@ -82,12 +82,8 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	kataUtilsLogger.WithField("factory", factoryConfig).Info("load vm factory")
 
 	f, err := vf.NewFactory(ctx, factoryConfig, true)
-	if err != nil && !factoryConfig.VMCache {
-		kataUtilsLogger.WithError(err).Warn("load vm factory failed, about to create new one")
-		f, err = vf.NewFactory(ctx, factoryConfig, false)
-	}
 	if err != nil {
-		kataUtilsLogger.WithError(err).Warn("create vm factory failed")
+		kataUtilsLogger.WithError(err).Warn("load vm factory failed, will use direct boot")
 		return
 	}
 
