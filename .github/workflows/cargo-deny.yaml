@@ -1,13 +1,7 @@
 name: Cargo Deny Check
 
 on:
-  workflow_dispatch:
   pull_request:
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
 
 permissions: {}
 

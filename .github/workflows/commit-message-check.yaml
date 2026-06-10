@@ -1,10 +1,6 @@
 name: Commit Message Check
 on:
   pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
 
 permissions: {}
 

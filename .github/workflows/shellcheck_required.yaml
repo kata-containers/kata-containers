@@ -3,13 +3,7 @@
 name: Shellcheck required
 
 on:
-  workflow_dispatch:
   pull_request:
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
 
 permissions: {}
 
