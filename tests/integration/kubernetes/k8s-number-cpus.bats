@@ -31,7 +31,7 @@ setup() {
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
 	local -r retries="10"
-	local -r max_number_cpus="3"
+	local -r max_number_cpus="2"
 	local number_cpus=""
 
 	# Create pod
@@ -50,6 +50,8 @@ setup() {
 		fi
 		sleep 1
 	done
+
+	[ "$number_cpus" -eq "$max_number_cpus" ]
 }
 
 teardown() {
