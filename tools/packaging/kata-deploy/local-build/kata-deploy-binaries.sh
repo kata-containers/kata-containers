@@ -625,6 +625,73 @@ install_image_coco_extension() {
 	info "Unpacking pause image into extension rootfs"
 	tar --zstd -xvf "${PAUSE_IMAGE_TARBALL}" -C "${extension_rootfs}"
 
+	# Data-driven extension manifest consumed by kata-agent. It describes the
+	# components shipped in this extension so the agent needs no per-bundle code
+	# changes. All paths are relative to the extension mount point
+	# (/run/kata-extensions/coco). The "${var}" tokens in the [[process]] entries are
+	# substituted by kata-agent from its runtime context.
+	info "Writing CoCo extension component manifest"
+	local manifest_dir="${extension_rootfs}/etc/kata-extensions"
+	mkdir -p "${manifest_dir}"
+	cat > "${manifest_dir}/components.toml" <<'EOF'
+schema_version = 1
+
+[paths]
+"ocicrypt-config" = "etc/ocicrypt_config.json"
+"pause-bundle"    = "pause_bundle"
+
+[[process]]
+id            = "attestation-agent"
+level         = 1
+args          = ["--attestation_sock", "${aa_attestation_uri}"]
+optional_args = [{ when = "initdata_toml_path", args = ["--initdata-toml", "${initdata_toml_path}"] }]
+config        = "${aa_config_path}"
+wait_socket   = "${aa_attestation_socket}"
+timeout_secs  = "${launch_process_timeout}"
+# The extension ships both the stock attestation-agent and the NVIDIA-attester
+# build; the consumer selects one via the "attester_variant" context value
+# (kata-agent uses "default", NVRC uses "nvidia").
+select        = "${attester_variant}"
+
+  [process.variants.default]
+  path = "usr/local/bin/attestation-agent"
+
+  [process.variants.nvidia]
+  path = "usr/local/bin/attestation-agent-nv"
+  # attestation-agent-nv links libnvat.so (bundled in this CoCo extension under
+  # usr/local/lib), which dlopens libnvidia-ml.so.1 at runtime to collect GPU
+  # attestation evidence. NVML ships in the GPU extension, mounted by NVRC at the
+  # well-known /run/kata-extensions/gpu with its driver libraries under usr/lib, so
+  # both dirs must be on the loader path. The nvidia variant only runs when the
+  # GPU extension is present, so referencing its mount path here is safe; without
+  # the GPU lib dir NVML init fails ("NVAT Error 500: NVML Initialization
+  # Failed") and the RCAR handshake never produces GPU evidence.
+  env  = { LD_LIBRARY_PATH = "${extension_root}/usr/local/lib:/run/kata-extensions/gpu/usr/lib" }
+
+[[process]]
+id           = "confidential-data-hub"
+level        = 2
+path         = "usr/local/bin/confidential-data-hub"
+config       = "${cdh_config_path}"
+# CDH's secure_mount shells out (by PATH lookup) to cryptsetup for encrypted
+# storage and to mke2fs/mkfs.ext4/dd for the filesystem. cryptsetup is CoCo-only
+# and ships in this extension under usr/sbin (see
+# build-static-coco-guest-components.sh); the plain mkfs/dd tooling lives in the
+# base-nvidia image's /sbin and /bin. The agent launches CDH with
+# PATH=/bin:/sbin:/usr/bin:/usr/sbin, but setting any env here overrides it
+# wholesale, so prepend the extension's usr/sbin and restore the base dirs.
+env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
+wait_socket  = "${cdh_socket}"
+timeout_secs = "${launch_process_timeout}"
+
+[[process]]
+id           = "api-server-rest"
+level        = 3
+path         = "usr/local/bin/api-server-rest"
+args         = ["--features", "${rest_api_features}"]
+timeout_secs = "0"
+EOF
+
 	local install_dir="${destdir}/${prefix}/share/kata-containers/"
 	mkdir -p "${install_dir}"
 
