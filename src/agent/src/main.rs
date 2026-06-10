@@ -38,6 +38,7 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+mod addon;
 mod confidential_data_hub;
 mod config;
 mod console;
@@ -96,34 +97,21 @@ const NAME: &str = "kata-agent";
 
 const UNIX_SOCKET_PREFIX: &str = "unix://";
 
-const COCO_ADDON_DIR: &str = "/run/kata-addons/coco";
-
+// Legacy (non-addon) rootfs locations for the CoCo guest components. They are
+// used to build the built-in launch plan when no CoCo addon image is mounted,
+// keeping monolithic / non-confidential images working unchanged.
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
-const AA_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/attestation-agent");
 const AA_ATTESTATION_SOCKET: &str =
     "/run/confidential-containers/attestation-agent/attestation-agent.sock";
 const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
-const CDH_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/confidential-data-hub");
 const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
 const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
-const API_SERVER_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/usr/local/bin/api-server-rest");
 
 const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
-const OCICRYPT_CONFIG_ADDON_PATH: &str = concatcp!(COCO_ADDON_DIR, "/etc/ocicrypt_config.json");
-
-/// Resolve a binary path: prefer the CoCo addon location, fall back to the
-/// legacy rootfs path.
-fn resolve_path<'a>(addon_path: &'a str, legacy_path: &'a str) -> &'a str {
-    if Path::new(addon_path).exists() {
-        addon_path
-    } else {
-        legacy_path
-    }
-}
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -422,13 +410,14 @@ async fn start_sandbox(
     let initdata_return_value = initdata::initialize_initdata(logger).await?;
 
     let gc_procs = config.guest_components_procs;
-    if !attestation_binaries_available(logger, &gc_procs) {
+    let launch_plan = build_coco_launch_plan(config, &initdata_return_value, gc_procs)?;
+    if !attestation_components_available(logger, &launch_plan) {
         warn!(
             logger,
             "attestation binaries requested for launch not available"
         );
     } else {
-        init_attestation_components(logger, config, &initdata_return_value).await?;
+        init_attestation_components(logger, &launch_plan).await?;
     }
 
     // if policy is given via initdata, use it
@@ -471,113 +460,211 @@ async fn start_sandbox(
     Ok(())
 }
 
-// Check if required attestation binaries are available, looking in the CoCo
-// addon mount first, then in the legacy rootfs paths.
-fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs) -> bool {
-    let binaries: Vec<(&str, &str)> = match procs {
-        GuestComponentsProcs::AttestationAgent => vec![(AA_ADDON_PATH, AA_PATH)],
-        GuestComponentsProcs::ConfidentialDataHub => {
-            vec![(AA_ADDON_PATH, AA_PATH), (CDH_ADDON_PATH, CDH_PATH)]
-        }
-        GuestComponentsProcs::ApiServerRest => vec![
-            (AA_ADDON_PATH, AA_PATH),
-            (CDH_ADDON_PATH, CDH_PATH),
-            (API_SERVER_ADDON_PATH, API_SERVER_PATH),
-        ],
-        _ => vec![],
+// Map the requested guest-components level to the numeric gating level used by
+// addon manifests. A process is launched only when its declared `level` is
+// <= this value. The ordering mirrors the implications documented on
+// `GuestComponentsProcs` (ApiServerRest implies CDH implies AttestationAgent).
+fn guest_components_max_level(procs: GuestComponentsProcs) -> u32 {
+    match procs {
+        GuestComponentsProcs::None => 0,
+        GuestComponentsProcs::AttestationAgent => 1,
+        GuestComponentsProcs::ConfidentialDataHub => 2,
+        GuestComponentsProcs::ApiServerRest => 3,
+    }
+}
+
+// Build the substitution context exposed to addon manifests. New addon bundles
+// can rely on these variables without requiring agent code changes; introducing
+// a brand new variable is the only case that needs touching the agent.
+fn build_substitution_ctx(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+) -> Result<std::collections::HashMap<String, String>> {
+    let ocicrypt_config_path = addon::resolve_component_path(
+        addon::COCO_ADDON_NAME,
+        addon::COCO_COMPONENT_OCICRYPT_CONFIG,
+        OCICRYPT_CONFIG_PATH,
+    )?;
+
+    let initdata_toml_path = if initdata_return_value.is_some() {
+        initdata::INITDATA_TOML_PATH.to_string()
+    } else {
+        String::new()
     };
-    for (addon, legacy) in binaries.iter() {
-        let resolved = resolve_path(addon, legacy);
-        let exists = Path::new(resolved)
+
+    let addon_root = addon::addon_mount_root(addon::COCO_ADDON_NAME)?;
+
+    let mut ctx = std::collections::HashMap::new();
+    ctx.insert(
+        "aa_attestation_uri".to_string(),
+        AA_ATTESTATION_URI.to_string(),
+    );
+    ctx.insert(
+        "aa_attestation_socket".to_string(),
+        AA_ATTESTATION_SOCKET.to_string(),
+    );
+    ctx.insert("aa_config_path".to_string(), AA_CONFIG_PATH.to_string());
+    ctx.insert("cdh_config_path".to_string(), CDH_CONFIG_PATH.to_string());
+    ctx.insert("cdh_socket".to_string(), CDH_SOCKET.to_string());
+    ctx.insert(
+        "ocicrypt_config_path".to_string(),
+        ocicrypt_config_path.to_string_lossy().into_owned(),
+    );
+    ctx.insert(
+        "rest_api_features".to_string(),
+        config.guest_components_rest_api.to_string(),
+    );
+    ctx.insert(
+        "launch_process_timeout".to_string(),
+        config.launch_process_timeout.as_secs().to_string(),
+    );
+    ctx.insert("initdata_toml_path".to_string(), initdata_toml_path);
+    ctx.insert(
+        "addon_root".to_string(),
+        addon_root.to_string_lossy().into_owned(),
+    );
+    // kata-agent always runs the stock attestation-agent; NVRC selects the
+    // nvidia variant by injecting a different value here.
+    ctx.insert("attester_variant".to_string(), "default".to_string());
+
+    Ok(ctx)
+}
+
+// Built-in launch plan used when no CoCo addon image is mounted. It reproduces
+// the legacy behaviour of launching the guest components from the rootfs
+// (`/usr/local/bin/...`), so monolithic and non-confidential images are
+// unaffected by the addon machinery.
+fn builtin_coco_plan(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+    max_level: u32,
+) -> Vec<addon::LaunchSpec> {
+    let mut plan = Vec::new();
+
+    if max_level >= 1 {
+        let mut args = vec![
+            "--attestation_sock".to_string(),
+            AA_ATTESTATION_URI.to_string(),
+        ];
+        if initdata_return_value.is_some() {
+            args.push("--initdata-toml".to_string());
+            args.push(initdata::INITDATA_TOML_PATH.to_string());
+        }
+        plan.push(addon::LaunchSpec {
+            id: "attestation-agent".to_string(),
+            path: Path::new(AA_PATH).to_path_buf(),
+            args,
+            config: Some(AA_CONFIG_PATH.to_string()),
+            env: vec![],
+            wait_socket: Some(AA_ATTESTATION_SOCKET.to_string()),
+            timeout_secs: config.launch_process_timeout.as_secs(),
+        });
+    }
+
+    if max_level >= 2 {
+        plan.push(addon::LaunchSpec {
+            id: "confidential-data-hub".to_string(),
+            path: Path::new(CDH_PATH).to_path_buf(),
+            args: vec![],
+            config: Some(CDH_CONFIG_PATH.to_string()),
+            env: vec![(
+                "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
+                OCICRYPT_CONFIG_PATH.to_string(),
+            )],
+            wait_socket: Some(CDH_SOCKET.to_string()),
+            timeout_secs: config.launch_process_timeout.as_secs(),
+        });
+    }
+
+    if max_level >= 3 {
+        plan.push(addon::LaunchSpec {
+            id: "api-server-rest".to_string(),
+            path: Path::new(API_SERVER_PATH).to_path_buf(),
+            args: vec![
+                "--features".to_string(),
+                config.guest_components_rest_api.to_string(),
+            ],
+            config: None,
+            env: vec![],
+            wait_socket: None,
+            timeout_secs: 0,
+        });
+    }
+
+    plan
+}
+
+// Build the ordered launch plan for the guest components. When a CoCo addon
+// image is mounted its manifest drives the plan (so new bundles need no agent
+// changes); otherwise the built-in legacy plan is used.
+fn build_coco_launch_plan(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+    procs: GuestComponentsProcs,
+) -> Result<Vec<addon::LaunchSpec>> {
+    let max_level = guest_components_max_level(procs);
+    let ctx = build_substitution_ctx(config, initdata_return_value)?;
+    match addon::launch_plan(addon::COCO_ADDON_NAME, max_level, &ctx)? {
+        Some(plan) => Ok(plan),
+        None => Ok(builtin_coco_plan(config, initdata_return_value, max_level)),
+    }
+}
+
+// Check that every process in the launch plan is present on disk. A missing
+// binary means the components were not provisioned (e.g. a non-confidential
+// rootfs), in which case launching is skipped.
+fn attestation_components_available(logger: &Logger, plan: &[addon::LaunchSpec]) -> bool {
+    for spec in plan {
+        let exists = spec
+            .path
             .try_exists()
             .unwrap_or_else(|error| match error.kind() {
                 ErrorKind::NotFound => {
-                    warn!(logger, "{} not found", resolved);
+                    warn!(logger, "{} not found", spec.path.display());
                     false
                 }
-                _ => panic!("Path existence check failed for '{}': {}", resolved, error),
+                _ => panic!(
+                    "Path existence check failed for '{}': {}",
+                    spec.path.display(),
+                    error
+                ),
             });
 
         if !exists {
+            warn!(logger, "{} not found", spec.path.display());
             return false;
         }
     }
     true
 }
 
-async fn launch_guest_component_procs(
-    logger: &Logger,
-    config: &AgentConfig,
-    initdata_return_value: &Option<InitdataReturnValue>,
-) -> Result<()> {
-    if config.guest_components_procs == GuestComponentsProcs::None {
-        return Ok(());
+async fn launch_guest_component_procs(logger: &Logger, plan: &[addon::LaunchSpec]) -> Result<()> {
+    for spec in plan {
+        let path = spec
+            .path
+            .to_str()
+            .ok_or_else(|| anyhow!("non-utf8 component path {}", spec.path.display()))?;
+        debug!(logger, "spawning addon component process {}", spec.id);
+
+        let args: Vec<&str> = spec.args.iter().map(String::as_str).collect();
+        let envs: Vec<(&str, &str)> = spec
+            .env
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+
+        launch_process(
+            logger,
+            path,
+            args,
+            spec.config.as_deref(),
+            spec.wait_socket.as_deref().unwrap_or(""),
+            spec.timeout_secs,
+            &envs,
+        )
+        .await
+        .map_err(|e| anyhow!("launch_process {} failed: {:?}", path, e))?;
     }
-
-    let aa_path = resolve_path(AA_ADDON_PATH, AA_PATH);
-    debug!(logger, "spawning attestation-agent process {}", aa_path);
-    let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
-    if initdata_return_value.is_some() {
-        aa_args.push("--initdata-toml");
-        aa_args.push(initdata::INITDATA_TOML_PATH);
-    }
-
-    launch_process(
-        logger,
-        aa_path,
-        aa_args,
-        Some(AA_CONFIG_PATH),
-        AA_ATTESTATION_SOCKET,
-        config.launch_process_timeout.as_secs(),
-        &[],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", aa_path, e))?;
-
-    if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
-        return Ok(());
-    }
-
-    let cdh_path = resolve_path(CDH_ADDON_PATH, CDH_PATH);
-    let ocicrypt_path = resolve_path(OCICRYPT_CONFIG_ADDON_PATH, OCICRYPT_CONFIG_PATH);
-    debug!(
-        logger,
-        "spawning confidential-data-hub process {}", cdh_path
-    );
-
-    launch_process(
-        logger,
-        cdh_path,
-        vec![],
-        Some(CDH_CONFIG_PATH),
-        CDH_SOCKET,
-        config.launch_process_timeout.as_secs(),
-        &[("OCICRYPT_KEYPROVIDER_CONFIG", ocicrypt_path)],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", cdh_path, e))?;
-
-    if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
-        return Ok(());
-    }
-
-    let api_path = resolve_path(API_SERVER_ADDON_PATH, API_SERVER_PATH);
-    let features = config.guest_components_rest_api;
-    debug!(
-        logger,
-        "spawning api-server-rest process {} --features {}", api_path, features
-    );
-    launch_process(
-        logger,
-        api_path,
-        vec!["--features", &features.to_string()],
-        None,
-        "",
-        0,
-        &[],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", api_path, e))?;
 
     Ok(())
 }
@@ -586,12 +673,8 @@ async fn launch_guest_component_procs(
 // and the corresponding procs are enabled in the agent configuration. the process will be
 // launched in the background and the function will return immediately.
 // If the CDH is started, a CDH client will be instantiated and returned.
-async fn init_attestation_components(
-    logger: &Logger,
-    config: &AgentConfig,
-    initdata_return_value: &Option<InitdataReturnValue>,
-) -> Result<()> {
-    launch_guest_component_procs(logger, config, initdata_return_value).await?;
+async fn init_attestation_components(logger: &Logger, plan: &[addon::LaunchSpec]) -> Result<()> {
+    launch_guest_component_procs(logger, plan).await?;
 
     // If a CDH socket exists, initialize the CDH client and enable ocicrypt
     match tokio::fs::metadata(CDH_SOCKET).await {

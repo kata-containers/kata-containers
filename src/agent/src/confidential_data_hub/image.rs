@@ -8,12 +8,13 @@
 use safe_path::scoped_join;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use kata_sys_util::validate::verify_id;
 use oci_spec::runtime as oci;
 
+use crate::addon;
 use crate::rpc::CONTAINER_BASE;
 
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
@@ -22,14 +23,15 @@ use protocols::agent::Storage;
 pub const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
 const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
-const KATA_PAUSE_BUNDLE_ADDON: &str = "/run/kata-addons/coco/pause_bundle";
 
-fn resolve_pause_bundle() -> &'static str {
-    if Path::new(KATA_PAUSE_BUNDLE_ADDON).exists() {
-        KATA_PAUSE_BUNDLE_ADDON
-    } else {
-        KATA_PAUSE_BUNDLE
-    }
+// Resolve the pause bundle directory: when the CoCo addon image is mounted its
+// manifest decides the location, otherwise the legacy rootfs path is used.
+fn resolve_pause_bundle() -> Result<PathBuf> {
+    addon::resolve_component_path(
+        addon::COCO_ADDON_NAME,
+        addon::COCO_COMPONENT_PAUSE_BUNDLE,
+        KATA_PAUSE_BUNDLE,
+    )
 }
 
 const K8S_CONTAINER_TYPE_KEYS: [&str; 2] = [
@@ -55,11 +57,11 @@ fn copy_if_not_exists(src: &Path, dst: &Path) -> Result<()> {
 
 /// get guest pause image process specification
 fn get_pause_image_process() -> Result<oci::Process> {
-    let guest_pause_bundle = Path::new(resolve_pause_bundle());
+    let guest_pause_bundle = resolve_pause_bundle()?;
     if !guest_pause_bundle.exists() {
         bail!("Pause image not present in rootfs");
     }
-    let guest_pause_config = scoped_join(guest_pause_bundle, CONFIG_JSON)?;
+    let guest_pause_config = scoped_join(&guest_pause_bundle, CONFIG_JSON)?;
 
     let image_oci = oci::Spec::load(guest_pause_config.to_str().ok_or_else(|| {
         anyhow!(
@@ -79,11 +81,11 @@ fn get_pause_image_process() -> Result<oci::Process> {
 pub fn unpack_pause_image(cid: &str) -> Result<String> {
     verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
 
-    let guest_pause_bundle = Path::new(resolve_pause_bundle());
+    let guest_pause_bundle = resolve_pause_bundle()?;
     if !guest_pause_bundle.exists() {
         bail!("Pause image not present in rootfs");
     }
-    let guest_pause_config = scoped_join(guest_pause_bundle, CONFIG_JSON)?;
+    let guest_pause_config = scoped_join(&guest_pause_bundle, CONFIG_JSON)?;
     info!(sl(), "use guest pause image cid {:?}", cid);
 
     let image_oci = oci::Spec::load(guest_pause_config.to_str().ok_or_else(|| {
