@@ -257,3 +257,8 @@ get_pause_image_name() {
 	pause_image_script_dir="${repo_root_dir}/tools/packaging/static-build/pause-image"
 	echo "${BUILDER_REGISTRY}:pause-image-$(get_last_modification "${pause_image_script_dir}")-$(uname -m)"
 }
+
+get_nvrc_image_name() {
+	nvrc_script_dir="${repo_root_dir}/tools/packaging/static-build/nvrc"
+	echo "${BUILDER_REGISTRY}:nvrc-$(get_from_kata_deps ".externals.nvrc.toolchain")-$(get_last_modification "${nvrc_script_dir}")-$(uname -m)"
+}

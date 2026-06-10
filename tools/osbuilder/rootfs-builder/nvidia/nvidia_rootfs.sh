@@ -40,27 +40,14 @@ fi
 readonly stage_one="${BUILD_DIR:?}/rootfs-${BUILD_VARIANT:?}-stage-one"
 
 setup_nvidia-nvrc() {
-	local url ver
-	local nvrc=NVRC-${machine_arch}-unknown-linux-musl
-	url=$(get_package_version_from_kata_yaml "externals.nvrc.url")
-	ver=$(get_package_version_from_kata_yaml "externals.nvrc.version")
-
-	local dl="${url}/${ver}"
-	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz" "${dl}/${nvrc}.tar.xz"
-	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz.sig" "${dl}/${nvrc}.tar.xz.sig"
-	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz.cert" "${dl}/${nvrc}.tar.xz.cert"
-
-	local id="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
-	local oidc="https://token.actions.githubusercontent.com"
-
-	# Only allow releases from the NVIDIA/nvrc main branch and build by github actions
-	cosign verify-blob                                 \
-	  --rekor-url https://rekor.sigstore.dev           \
-	  --certificate "${BUILD_DIR}/${nvrc}.tar.xz.cert" \
-	  --signature   "${BUILD_DIR}/${nvrc}.tar.xz.sig"  \
-	  --certificate-identity-regexp "${id}"            \
-	  --certificate-oidc-issuer "${oidc}"              \
-	  "${BUILD_DIR}/${nvrc}.tar.xz"
+	# NVRC is built from a pinned git ref by the Kata "nvrc" static-build
+	# target (tools/packaging/static-build/nvrc), which produces
+	# kata-static-nvrc.tar.zst with the init binary under bin/. Unpack it
+	# verbatim into the rootfs (./bin/NVRC-<arch>-unknown-linux-musl).
+	local nvrc_tarball="${BUILD_DIR}/kata-static-nvrc.tar.zst"
+	[[ -e "${nvrc_tarball}" ]] || \
+		die "NVRC tarball not found: ${nvrc_tarball} (build the 'nvrc' target first)"
+	tar --zstd -xvf "${nvrc_tarball}" -C .
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
@@ -78,11 +65,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	chmod +x ./nvidia_chroot.sh
 
-	local nvrc=NVRC-${machine_arch}-unknown-linux-musl
-	if [[ ! -e  "${BUILD_DIR}/${nvrc}.tar.xz" ]]; then
-		setup_nvidia-nvrc
-	fi
-	tar -xvf "${BUILD_DIR}/${nvrc}.tar.xz" -C ./bin/
+	setup_nvidia-nvrc
 
 	local appendix=""
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
@@ -269,9 +252,12 @@ chisseled_init() {
 
 	local nvrc="NVRC-${machine_arch}-unknown-linux-musl"
 
-	cp -a "${stage_one}/bin/${nvrc}"      bin/.
-	cp -a "${stage_one}/bin/${nvrc}".cert bin/.
-	cp -a "${stage_one}/bin/${nvrc}".sig  bin/.
+	cp -a "${stage_one}/bin/${nvrc}" bin/.
+	# Sigstore signature/certificate only exist when NVRC is pulled from the
+	# official signed release; a source build (the composable-image path)
+	# produces just the binary.
+	[[ -e "${stage_one}/bin/${nvrc}.cert" ]] && cp -a "${stage_one}/bin/${nvrc}".cert bin/.
+	[[ -e "${stage_one}/bin/${nvrc}.sig" ]] && cp -a "${stage_one}/bin/${nvrc}".sig bin/.
 
 	setup_nvrc_init_symlinks
 
