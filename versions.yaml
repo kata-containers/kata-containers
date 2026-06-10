@@ -234,8 +234,15 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.1.4"
+    version: "v0.1.5"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
+    # While the composable-image work is in flight NVRC is built from source at
+    # a pinned git reference (tools/packaging/static-build/nvrc) instead of
+    # downloading the signed release from `url` above. `ref` may be a commit,
+    # tag or branch; pin to a commit for reproducible builds.
+    repo: "https://github.com/fidencio/nvrc.git"
+    ref: "a1a47dea4eb94a0b9e7a59f5ecae233344b55ba2"
+    toolchain: "1.90.0"
 
   nvidia:
     desc: "NVIDIA compute stack"
