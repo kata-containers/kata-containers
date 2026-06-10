@@ -612,6 +612,58 @@ install_image_coco_addon() {
 	info "Unpacking pause image into addon rootfs"
 	tar --zstd -xvf "${PAUSE_IMAGE_TARBALL}" -C "${addon_rootfs}"
 
+	# Data-driven addon manifest consumed by kata-agent. It describes the
+	# components shipped in this addon so the agent needs no per-bundle code
+	# changes. All paths are relative to the addon mount point
+	# (/run/kata-addons/coco). The "${var}" tokens in the [[process]] entries are
+	# substituted by kata-agent from its runtime context.
+	info "Writing CoCo addon component manifest"
+	local manifest_dir="${addon_rootfs}/etc/kata-addons"
+	mkdir -p "${manifest_dir}"
+	cat > "${manifest_dir}/components.toml" <<'EOF'
+schema_version = 1
+
+[paths]
+"ocicrypt-config" = "etc/ocicrypt_config.json"
+"pause-bundle"    = "pause_bundle"
+
+[[process]]
+id            = "attestation-agent"
+level         = 1
+args          = ["--attestation_sock", "${aa_attestation_uri}"]
+optional_args = [{ when = "initdata_toml_path", args = ["--initdata-toml", "${initdata_toml_path}"] }]
+config        = "${aa_config_path}"
+wait_socket   = "${aa_attestation_socket}"
+timeout_secs  = "${launch_process_timeout}"
+# The addon ships both the stock attestation-agent and the NVIDIA-attester
+# build; the consumer selects one via the "attester_variant" context value
+# (kata-agent uses "default", NVRC uses "nvidia").
+select        = "${attester_variant}"
+
+  [process.variants.default]
+  path = "usr/local/bin/attestation-agent"
+
+  [process.variants.nvidia]
+  path = "usr/local/bin/attestation-agent-nv"
+  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib" }
+
+[[process]]
+id           = "confidential-data-hub"
+level        = 2
+path         = "usr/local/bin/confidential-data-hub"
+config       = "${cdh_config_path}"
+env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}" }
+wait_socket  = "${cdh_socket}"
+timeout_secs = "${launch_process_timeout}"
+
+[[process]]
+id           = "api-server-rest"
+level        = 3
+path         = "usr/local/bin/api-server-rest"
+args         = ["--features", "${rest_api_features}"]
+timeout_secs = "0"
+EOF
+
 	local install_dir="${destdir}/${prefix}/share/kata-containers/"
 	mkdir -p "${install_dir}"
 
