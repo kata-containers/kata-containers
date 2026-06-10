@@ -38,7 +38,7 @@ jobs:
         container_engine:
           - containerd
         containerd_version:
-          - active
+          - latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
