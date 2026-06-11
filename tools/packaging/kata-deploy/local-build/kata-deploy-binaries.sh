@@ -189,7 +189,7 @@ cleanup_and_fail_shim_v2_specifics() {
 	local extra_tarballs="${3:-}"
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 		local root_hash_file="${tarball_dir}/${component}-root_hash_${variant}.txt"
 		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
@@ -219,7 +219,7 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
 
-	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 		# The measured base image ships as kata-static-rootfs-image.tar.zst
 		# (no variant suffix), but carries its root hash under the "base" label.
 		local image_conf_tarball
@@ -247,7 +247,7 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 		local image_root_hash="${tarball_dir}/root_hash_${variant}.txt"
 		local cached_root_hash="${component}-root_hash_${variant}.txt"
 
@@ -483,11 +483,23 @@ install_image() {
 		fi
 	fi
 
-	if [[ "${variant}" == "nvidia-gpu" ]]; then
-		# If we bump the kernel we need to rebuild the image
+	if [[ "${variant}" == "nvidia-gpu" || "${variant}" == "nvidia-gpu-addon" ]]; then
+		# If we bump the kernel we need to rebuild the image.  The gpu addon
+		# carries the driver userspace carved out of the same chiseled tree,
+		# so it is driver-versioned just like the monolith.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+	fi
+
+	if [[ "${variant}" == "nvidia-gpu-base" ]]; then
+		# The base-nvidia image strips all driver userspace and resets the
+		# kernel modules to in-tree only, so it is driver-agnostic: it depends
+		# on the NVIDIA kernel build and NVRC (its init), but not on the driver
+		# or container-toolkit versions.  That lets a single base image back
+		# multiple driver-specific gpu addons.
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 	fi
 
@@ -874,6 +886,45 @@ install_image_nvidia_gpu_confidential() {
 	install_image "nvidia-gpu-confidential"
 }
 
+# Install the driver-agnostic base-nvidia image.
+#
+# This is the NVRC-init half of the chiseled NVIDIA tree: NVRC, the kata-agent,
+# busybox, the base libc/loader and the in-tree kernel modules.  The driver
+# userspace is stripped out and shipped separately in the gpu addon, so this
+# image is reused across driver versions.  The driver still has to be installed
+# to build the shared stage-one (the GPU files are carved out afterwards), so we
+# keep the same NVIDIA_GPU_STACK as the monolith.
+install_image_nvidia_gpu_base() {
+	export AGENT_POLICY
+	export MEASURED_ROOTFS="yes"
+	export FS_TYPE="erofs"
+	export SKIP_DAX_HEADER="yes"
+	local version
+	version=$(get_latest_nvidia_driver_version)
+	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
+	install_image "nvidia-gpu-base"
+}
+
+# Install the gpu addon image.
+#
+# This is the driver half of the chiseled NVIDIA tree, laid out for
+# /run/kata-addons/gpu: the GPU binaries, libraries, configs, firmware and the
+# NVIDIA kernel modules.  It is an erofs+verity image (MEASURED_ROOTFS) and is
+# driver-versioned, so multiple driver addons can coexist against a single
+# base-nvidia image.
+install_image_nvidia_gpu_addon() {
+	export AGENT_POLICY
+	export MEASURED_ROOTFS="yes"
+	export FS_TYPE="erofs"
+	export SKIP_DAX_HEADER="yes"
+	local version
+	version=$(get_latest_nvidia_driver_version)
+	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
+	install_image "nvidia-gpu-addon"
+}
+
 install_se_image() {
 	# shellcheck disable=SC2154
 	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
@@ -1225,7 +1276,7 @@ install_nydus() {
 # Shared helper: extract measured-rootfs root hashes from confidential image tarballs.
 # These are needed by the Rust runtime (runtime-rs) at build time for dm-verity.
 _collect_root_hashes() {
-	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+	for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 		# The measured base image ships as kata-static-rootfs-image.tar.zst
 		# (no variant suffix), but carries its root hash under the "base" label.
 		local tarball_glob="kata-static-rootfs-image-${variant}.tar.zst"
@@ -1708,6 +1759,10 @@ handle_build() {
 
 	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
 
+	rootfs-image-nvidia-gpu-base) install_image_nvidia_gpu_base ;;
+
+	rootfs-image-nvidia-gpu-addon) install_image_nvidia_gpu_addon ;;
+
 	rootfs-cca-confidential-image) install_image_confidential ;;
 
 	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
@@ -1767,7 +1822,7 @@ handle_build() {
 			;;
 		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-				for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+				for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/${build_target}-root_hash_${variant}.txt"
 				done
 			fi
@@ -1836,7 +1891,7 @@ handle_build() {
 		shim-v2-go|shim-v2-rust)
 			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 				local found_any=""
-				for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential; do
+				for variant in base confidential coco-addon nvidia-gpu nvidia-gpu-confidential nvidia-gpu-base nvidia-gpu-addon; do
 					# The variants could be built independently we need to check if
 					# they exist and then push them to the registry
 					[[ -f "${workdir}/${build_target}-root_hash_${variant}.txt" ]] && files_to_push+=("${build_target}-root_hash_${variant}.txt") && found_any="yes"

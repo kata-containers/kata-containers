@@ -37,7 +37,29 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
-readonly stage_one="${BUILD_DIR:?}/rootfs-${BUILD_VARIANT:?}-stage-one"
+# The base-nvidia and gpu-addon images are carved out of the very same chiseled
+# tree as the monolith, so they share the (expensive) driver stage-one with the
+# monolithic "nvidia-gpu" build instead of rebuilding it per layout.
+nvidia_stage_one_variant() {
+	case "${BUILD_VARIANT}" in
+		nvidia-gpu-base|nvidia-gpu-addon) echo "nvidia-gpu" ;;
+		*) echo "${BUILD_VARIANT}" ;;
+	esac
+}
+
+readonly stage_one="${BUILD_DIR:?}/rootfs-$(nvidia_stage_one_variant)-stage-one"
+
+# Image layout produced from the chiseled tree:
+#   monolith    - the full GPU image (default; unchanged behaviour)
+#   base        - driver-agnostic base-nvidia (NVRC init + agent + base libs)
+#   gpu-addon   - GPU userspace only, laid out for /run/kata-addons/gpu
+nvidia_image_layout() {
+	case "${BUILD_VARIANT}" in
+		nvidia-gpu-base) echo "base" ;;
+		nvidia-gpu-addon) echo "gpu-addon" ;;
+		*) echo "monolith" ;;
+	esac
+}
 
 setup_nvidia-nvrc() {
 	# NVRC is built from a pinned git ref by the Kata "nvrc" static-build
@@ -380,10 +402,122 @@ coco_guest_components() {
 	copy_cdh_runtime_deps
 }
 
+# GPU userspace owned by the gpu addon. Anything not listed here stays in the
+# driver-agnostic base-nvidia image. Paths are relative to the chiseled rootfs.
+readonly nvidia_gpu_addon_bins=(
+	bin/nvidia-smi
+	bin/nvidia-ctk
+	bin/nvidia-cdi-hook
+	bin/nvidia-persistenced
+	bin/nv-hostengine
+	bin/nv-fabricmanager
+	sbin/nvlsm
+)
+
+# GPU shared-library globs (inside the multiarch lib dir, plus libgrpc_mgr in
+# /lib) owned by the gpu addon.
+readonly nvidia_gpu_addon_lib_globs=(
+	'libnv*'
+	'libcuda.so*'
+	'libdcgm.*'
+	'libnvidia-nscq.so*'
+)
+
+# Lay the GPU userspace out for the addon mount (/run/kata-addons/gpu) and drop
+# everything else. Matches how NVRC consumes the addon: bins from <root>/bin and
+# <root>/sbin, libraries via LD_LIBRARY_PATH=<root>/lib:<root>/usr/lib, kernel
+# modules via `modprobe --dirname <root>`, configs from <root>/usr/share/nvidia,
+# and <root>/lib/firmware/nvidia bind-mounted onto /lib/firmware/nvidia. Runs
+# inside the (full, chiseled) ${stage_two}/${ROOTFS_DIR}.
+partition_gpu_addon() {
+	echo "nvidia: building gpu addon layout"
+
+	local addon
+	addon="$(mktemp -d "${BUILD_DIR}/.nvidia-gpu-addon.XXXX")"
+	mkdir -p "${addon}/bin" "${addon}/sbin" "${addon}/lib" \
+		 "${addon}/usr/share/nvidia" "${addon}/lib/firmware" "${addon}/lib/modules"
+
+	local f
+	for f in "${nvidia_gpu_addon_bins[@]}"; do
+		[[ -e "${f}" ]] && install -D -m0755 "${f}" "${addon}/${f}"
+	done
+
+	# Flatten the GPU shared libraries into <root>/lib so NVRC's LD_LIBRARY_PATH
+	# (<root>/lib:<root>/usr/lib) resolves them; libc/loader stay in the base.
+	local md="lib/${machine_arch}-linux-gnu"
+	local g
+	for g in "${nvidia_gpu_addon_lib_globs[@]}"; do
+		find "${md}" -maxdepth 1 -name "${g}" -exec cp -a {} "${addon}/lib/" \;
+	done
+	[[ -e lib/libgrpc_mgr.so ]] && cp -a lib/libgrpc_mgr.so "${addon}/lib/"
+
+	# GPU configs (fabricmanager.cfg, nvlsm.conf, ...).
+	[[ -d usr/share/nvidia ]] && cp -a usr/share/nvidia/. "${addon}/usr/share/nvidia/"
+
+	# GPU firmware (GSP, ...); NVRC binds this onto /lib/firmware/nvidia.
+	[[ -d lib/firmware/nvidia ]] && cp -a lib/firmware/nvidia "${addon}/lib/firmware/"
+
+	# Ship a self-contained module tree so `modprobe --dirname <root>` resolves
+	# the NVIDIA modules and their dependencies.
+	cp -a lib/modules/. "${addon}/lib/modules/"
+	if command -v depmod >/dev/null 2>&1; then
+		local kdir kver
+		for kdir in "${addon}"/lib/modules/*/; do
+			[[ -d "${kdir}" ]] || continue
+			kver="$(basename "${kdir}")"
+			depmod -b "${addon}" "${kver}" || true
+		done
+	fi
+
+	# Replace the rootfs with the addon-only content.
+	find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+	cp -a "${addon}/." .
+	rm -rf "${addon}"
+}
+
+# Strip the GPU userspace from the chiseled tree, leaving a driver-agnostic
+# base-nvidia: NVRC init + kata-agent + busybox + loader/libc + in-tree kernel
+# modules. The empty /lib/firmware/nvidia directory is kept as the bind
+# mountpoint NVRC uses for the addon firmware. Runs inside ${ROOTFS_DIR}.
+partition_base() {
+	echo "nvidia: building driver-agnostic base layout"
+
+	local f
+	for f in "${nvidia_gpu_addon_bins[@]}"; do
+		rm -f "${f}"
+	done
+
+	local md="lib/${machine_arch}-linux-gnu"
+	local g
+	for g in "${nvidia_gpu_addon_lib_globs[@]}"; do
+		find "${md}" -maxdepth 1 -name "${g}" -delete
+	done
+	rm -f lib/libgrpc_mgr.so
+
+	# GPU configs live in the addon; keep usr/share/nvidia as an empty stub.
+	rm -rf usr/share/nvidia
+	mkdir -p usr/share/nvidia
+
+	# Keep /lib/firmware/nvidia as an empty mountpoint for NVRC's firmware bind.
+	rm -rf lib/firmware/nvidia
+	mkdir -p lib/firmware/nvidia
+
+	# Reset kernel modules to the in-tree set (no NVIDIA driver modules) so the
+	# base stays driver-agnostic; the gpu addon ships the driver modules.
+	rm -rf lib/modules
+	mkdir -p lib/modules
+	local appendix=""
+	echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>' && appendix="-dragonball-experimental"
+	tar --zstd -xf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-modules.tar.zst \
+		-C ./lib/modules/
+}
+
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
 	readonly type=${1:-""}
+	local layout
+	layout="$(nvidia_image_layout)"
 
 	# If devkit flag is set, skip chisseling, use stage_one
 	if echo "${stack}" | grep -q '\<devkit\>'; then
@@ -428,10 +562,19 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 		coco_guest_components
 		chisseled_nvat
+
+		# Carve the freshly chiseled (monolith) tree into the requested layout.
+		# The monolith path is left untouched.
+		case "${layout}" in
+			base) partition_base ;;
+			gpu-addon) partition_gpu_addon ;;
+		esac
 	fi
 
 	compress_rootfs
-	chroot . ldconfig
+	# The gpu addon has no loader/ldconfig of its own; its libraries are found
+	# via NVRC's LD_LIBRARY_PATH, so skip the ld.so cache rebuild there.
+	[[ "${layout}" != "gpu-addon" ]] && chroot . ldconfig
 
 	popd >> /dev/null
 }

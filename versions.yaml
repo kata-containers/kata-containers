@@ -137,6 +137,12 @@ assets:
         nvidia-gpu-confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
+        nvidia-gpu-base:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia-gpu-addon:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
       ppc64le:
         name: "ubuntu"
         version: "noble"  # 24.04 LTS
@@ -159,6 +165,12 @@ assets:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia-gpu-base:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia-gpu-addon:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
 
