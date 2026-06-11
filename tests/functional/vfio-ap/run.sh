@@ -30,7 +30,9 @@ trap cleanup EXIT
 
 # Prevent the program from exiting on error
 trap - ERR
-registry_image="registry:2.8.3"
+# Pull from the kata-containers ghcr.io mirror by default instead of Docker Hub.
+REGISTRY="${REGISTRY:-ghcr.io/kata-containers}"
+registry_image="${REGISTRY}/registry:2.8.3"
 
 setup_config_file() {
     local target_item=$1

@@ -32,6 +32,11 @@ FACTORY_TEST=${FACTORY_TEST:-""}
 ARCH=$(uname -m)
 SANDBOXER=${SANDBOXER:-"podsandbox"}
 
+# Pull test images from the kata-containers ghcr.io mirror by default instead
+# of Docker Hub. Override REGISTRY/BUSYBOX_IMAGE to use a different source.
+REGISTRY="${REGISTRY:-ghcr.io/kata-containers}"
+BUSYBOX_IMAGE="${BUSYBOX_IMAGE:-${REGISTRY}/busybox:1.37.0}"
+
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
 containerd_shim_path="$(command -v containerd-shim || true)"
@@ -307,7 +312,7 @@ function testContainerStart() {
 
 	local pod_yaml=${REPORT_DIR}/pod.yaml
 	local container_yaml=${REPORT_DIR}/container.yaml
-	local image="busybox:latest"
+	local image="${BUSYBOX_IMAGE}"
 
 	cat << EOF > "${pod_yaml}"
 metadata:
@@ -470,7 +475,7 @@ function TestContainerSwap() {
 	fi
 
 	local container_yaml=${REPORT_DIR}/container.yaml
-	local image="busybox:latest"
+	local image="${BUSYBOX_IMAGE}"
 
 	info "Test container with guest swap"
 
@@ -622,7 +627,7 @@ function startDeviceCgroupContainers() {
 	local pod_yaml=${REPORT_DIR}/device-cgroup-pod.yaml
 	local container1_yaml=${REPORT_DIR}/device-cgroup-container1.yaml
 	local container2_yaml=${REPORT_DIR}/device-cgroup-container2.yaml
-	local image="busybox:latest"
+	local image="${BUSYBOX_IMAGE}"
 
     cat > "${pod_yaml}" <<EOF
 metadata:

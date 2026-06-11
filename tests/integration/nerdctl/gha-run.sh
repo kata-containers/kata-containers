@@ -15,6 +15,12 @@ nerdctl_dir="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=/dev/null
 source "${nerdctl_dir}/../../common.bash"
 
+# Pull test images from the kata-containers ghcr.io mirror by default instead
+# of Docker Hub. Override REGISTRY/NMAP_IMAGE/ALPINE_IMAGE to use another source.
+REGISTRY="${REGISTRY:-ghcr.io/kata-containers}"
+NMAP_IMAGE="${NMAP_IMAGE:-${REGISTRY}/nmap:latest}"
+ALPINE_IMAGE="${ALPINE_IMAGE:-${REGISTRY}/alpine:3.22}"
+
 function install_dependencies() {
 	info "Installing the dependencies for running the nerdctl tests"
 
@@ -80,7 +86,7 @@ function run() {
 	info "Running nerdctl smoke test tests using RunC"
 
 	info "Running nerdctl with runc"
-	sudo nerdctl run --rm --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+	sudo nerdctl run --rm --entrypoint nping "${NMAP_IMAGE}" --tcp-connect -c 2 -p 80 www.github.com
 
 	local parent_interface="eth0"
 	# The following creates an ipvlan network with eth0 on host as parent. The test assumes
@@ -111,16 +117,16 @@ function run() {
 	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
-	sudo nerdctl run --rm --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+	sudo nerdctl run --rm --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" --entrypoint nping "${NMAP_IMAGE}" --tcp-connect -c 2 -p 80 www.github.com
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and multiple bridge nwtorks"
-	sudo nerdctl run --rm --net "${net1}" --net "${net2}" --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a
+	sudo nerdctl run --rm --net "${net1}" --net "${net2}" --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" "${ALPINE_IMAGE}" ip a
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
-	sudo nerdctl run  --rm --net "${ipvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a | grep "eth0"
+	sudo nerdctl run  --rm --net "${ipvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" "${ALPINE_IMAGE}" ip a | grep "eth0"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and macvlan network"
-	sudo nerdctl run  --rm --net "${macvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" alpine ip a | grep "eth0"
+	sudo nerdctl run  --rm --net "${macvlan_net_name}"  --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" "${ALPINE_IMAGE}" ip a | grep "eth0"
 
 	info "Removing networks"
 	sudo nerdctl network rm "${macvlan_net_name}" "${ipvlan_net_name}"

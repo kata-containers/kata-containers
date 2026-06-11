@@ -14,7 +14,9 @@ kata_tarball_dir="${2:-kata-artifacts}"
 docker_dir="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=/dev/null
 source "${docker_dir}/../../common.bash"
-image="${image:-instrumentisto/nmap:latest}"
+# Pull from the kata-containers ghcr.io mirror by default instead of Docker Hub.
+REGISTRY="${REGISTRY:-ghcr.io/kata-containers}"
+image="${image:-${REGISTRY}/nmap:latest}"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the docker smoke test"
