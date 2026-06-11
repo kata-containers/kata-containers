@@ -126,16 +126,51 @@ Enable full debug as follows:
 
 ```bash
 $ sudo sed -i -E 's/^(\s*enable_debug\s*=\s*)false/\1true/' /etc/kata-containers/configuration.toml
-$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /etc/kata-containers/configuration.toml
+$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 initcall_debug"/g' /etc/kata-containers/configuration.toml
+```
+
+For both the Go runtime and runtime-rs, setting `enable_debug = true` in the
+relevant Kata configuration sections is the baseline for enabling debug
+behavior. Setting `enable_debug = true` in the `[agent.kata]` section adds the
+agent debug kernel parameter automatically, so `agent.log=debug` does not need
+to be added to `kernel_params` manually.
+
+The runtime-rs shim also supports component-level log filtering through
+`log_level`. For runtime-rs, `enable_debug = true` in the `[runtime]`,
+`[agent.kata]`, and selected `[hypervisor.*]` sections promotes the component
+log filter from the default `info` level to `debug`. If `log_level` is
+explicitly set to another level, such as `trace` or `warn`, the explicit value
+is honored.
+
+For example, with runtime-rs:
+
+```toml
+[runtime]
+log_level = "debug" # show runtime-rs shim messages in the kata journal
+
+[hypervisor.qemu]
+enable_debug = true # modify kernel parameters and QEMU invocation
+log_level = "debug" # show hypervisor component messages in the kata journal
+
+[agent.kata]
+enable_debug = true # add guest agent debug to kernel parameters
+log_level = "debug" # show forwarded agent messages in the kata journal
 ```
 
 ### debug logs and shimv2
 
-If you are using `containerd` and the Kata `containerd-shimv2` to launch Kata Containers, and wish
-to enable Kata debug logging, there are two ways this can be enabled via the `containerd` configuration file,
-detailed below.
+If you are using `containerd` and the Kata `containerd-shimv2` to launch Kata
+Containers, `containerd` debug logging can also be useful when debugging
+containerd, CRI, or shim launch behavior.
 
-The Kata logs appear in the `containerd` log files, along with logs from `containerd` itself.
+For the Go runtime, Kata logs appear in the `containerd` log files, along with
+logs from `containerd` itself, so `containerd` debug settings are commonly used
+for Kata debug output.
+
+For runtime-rs, the shim writes Kata logs to `journald` directly using the
+`kata` identifier. Enabling `containerd` debug is not required to see runtime-rs
+Kata debug logs; the runtime-rs `enable_debug` and `log_level` settings above
+are enough for those component logs.
 
 For more information about `containerd` debug, please see the
 [`containerd` documentation](https://github.com/containerd/containerd/blob/main/docs/getting-started.md).
