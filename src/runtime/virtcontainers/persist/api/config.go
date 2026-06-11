@@ -70,6 +70,9 @@ type HypervisorConfig struct {
 	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
+	// VirtioFSInodeFileHandles is the inode file handles mode for virtiofsd
+	VirtioFSInodeFileHandles string
+
 	// File based memory backend root directory
 	FileBackedMemRootDir string
 

@@ -988,11 +988,12 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 
 	// default use virtiofsd
 	return &virtiofsd{
-		path:       q.config.VirtioFSDaemon,
-		sourcePath: sharedPath,
-		socketPath: virtiofsdSocketPath,
-		extraArgs:  q.config.VirtioFSExtraArgs,
-		cache:      q.config.VirtioFSCache,
+		path:             q.config.VirtioFSDaemon,
+		sourcePath:       sharedPath,
+		socketPath:       virtiofsdSocketPath,
+		extraArgs:        q.config.VirtioFSExtraArgs,
+		cache:            q.config.VirtioFSCache,
+		inodeFileHandles: q.config.VirtioFSInodeFileHandles,
 	}, nil
 }
 

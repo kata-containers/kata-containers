@@ -73,21 +73,73 @@ func TestVirtiofsdStart(t *testing.T) {
 func TestVirtiofsdArgs(t *testing.T) {
 	assert := assert.New(t)
 
-	v := &virtiofsd{
-		path:       "/usr/bin/virtiofsd",
-		sourcePath: "/run/kata-shared/foo",
-		cache:      "never",
+	sourceDir := t.TempDir()
+
+	type testCase struct {
+		name             string
+		cache            string
+		inodeFileHandles string
+		fd               uint
+		expected         string
 	}
 
-	expected := "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=123"
-	args, err := v.args(123)
-	assert.NoError(err)
-	assert.Equal(expected, strings.Join(args, " "))
+	tests := []testCase{
+		{
+			"prefer mode",
+			"never",
+			"prefer",
+			123,
+			"--syslog --cache=never --shared-dir=" + sourceDir + " --fd=123 --inode-file-handles=prefer",
+		},
+		{
+			"mandatory mode",
+			"never",
+			VirtioFSInodeFileHandlesMandatory,
+			101,
+			"--syslog --cache=never --shared-dir=" + sourceDir + " --fd=101 --inode-file-handles=mandatory",
+		},
+		{
+			"never mode",
+			"never",
+			VirtioFSInodeFileHandlesNever,
+			202,
+			"--syslog --cache=never --shared-dir=" + sourceDir + " --fd=202 --inode-file-handles=never",
+		},
+		{
+			"default mode (empty string)",
+			"never",
+			"",
+			789,
+			"--syslog --cache=never --shared-dir=" + sourceDir + " --fd=789 --inode-file-handles=prefer",
+		},
+		{
+			"default cache mode (empty string)",
+			"",
+			"never",
+			303,
+			"--syslog --cache=auto --shared-dir=" + sourceDir + " --fd=303 --inode-file-handles=never",
+		},
+	}
 
-	expected = "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=456"
-	args, err = v.args(456)
-	assert.NoError(err)
-	assert.Equal(expected, strings.Join(args, " "))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			socketDir := t.TempDir()
+			v := &virtiofsd{
+				path:             "/usr/bin/virtiofsd",
+				sourcePath:       sourceDir,
+				socketPath:       socketDir + "/socket.sock",
+				cache:            tt.cache,
+				inodeFileHandles: tt.inodeFileHandles,
+			}
+
+			err := v.valid()
+			assert.NoError(err)
+
+			args, err := v.args(tt.fd)
+			assert.NoError(err)
+			assert.Equal(tt.expected, strings.Join(args, " "), tt.name)
+		})
+	}
 }
 
 func TestValid(t *testing.T) {
@@ -134,7 +186,13 @@ func TestValid(t *testing.T) {
 			v.cache = "foo"
 		}, errVirtiofsdInvalidVirtiofsCacheMode("foo"), nil},
 		{"valid metadata cache mode", func(v *virtiofsd) {
-			v.cache = typeVirtioFSCacheModeMetadata
+			v.cache = VirtioFSCacheModeMetadata
+		}, nil, nil},
+		{"invalid inode file handles mode", func(v *virtiofsd) {
+			v.inodeFileHandles = "foo"
+		}, errVirtiofsdInvalidVirtiofsInodeFileHandles("foo"), nil},
+		{"valid inode file handles mode", func(v *virtiofsd) {
+			v.inodeFileHandles = VirtioFSInodeFileHandlesMandatory
 		}, nil, nil},
 	}
 

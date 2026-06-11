@@ -227,6 +227,20 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
+# Inode file handles mode:
+#
+#  - never
+#    Do not use file handles.
+#
+#  - prefer
+#    Try to use file handles, but fall back to O_PATH if not supported.
+#
+#  - mandatory
+#    Use file handles, fail if not supported.
+#
+# Default is "prefer"
+# virtio_fs_inode_file_handles = "prefer"
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.

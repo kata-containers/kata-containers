@@ -585,6 +585,9 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
+	// VirtioFSInodeFileHandles specifies the inode file handles mode for virtiofsd
+	VirtioFSInodeFileHandles string
+
 	// Enable annotations by name
 	EnableAnnotations []string
 
