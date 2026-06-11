@@ -521,6 +521,38 @@ partition_base() {
 	mkdir -p lib/modules
 }
 
+# NVRC opens every cold-plugged addon (the gpu addon always, and the coco addon
+# on confidential guests) as a dm-verity device by exec'ing /usr/sbin/veritysetup
+# before mounting it. The base-nvidia image is the one that boots and runs NVRC,
+# so it must carry veritysetup and its shared-library closure unconditionally -
+# regardless of whether the guest is confidential (copy_cdh_runtime_deps only
+# ships cryptsetup, and only on confidential builds). Runs inside ${ROOTFS_DIR}.
+chisseled_veritysetup() {
+	echo "nvidia: chisseling veritysetup"
+
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	# NVRC execs the absolute path /usr/sbin/veritysetup; cryptsetup-bin is
+	# installed in the (usr-merged) stage-one, so /sbin/veritysetup resolves to
+	# the real binary there.
+	mkdir -p usr/sbin
+	cp -a "${stage_one}/sbin/veritysetup" usr/sbin/.
+
+	# veritysetup -> libcryptsetup runtime closure (same set cryptsetup links).
+	cp -a "${stage_one}/${libdir}"/libcryptsetup.so.12*    "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libpopt.so.0*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libuuid.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libblkid.so.1*          "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libdevmapper.so.1.02.1* "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcrypto.so.3*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libargon2.so.1*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libjson-c.so.5*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libselinux.so.1*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libudev.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libpcre2-8.so.0*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcap.so.2*            "${libdir}/."
+}
+
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
@@ -585,7 +617,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		# Carve the freshly chiseled (monolith) tree into the requested layout.
 		# The monolith path is left untouched.
 		case "${layout}" in
-			base) partition_base ;;
+			base) partition_base; chisseled_veritysetup ;;
 			gpu-addon) partition_gpu_addon ;;
 		esac
 	fi
