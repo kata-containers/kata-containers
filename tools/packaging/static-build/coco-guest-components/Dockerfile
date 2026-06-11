@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:24.04
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/ubuntu:24.04
 ARG RUST_TOOLCHAIN
 
 ENV DEBIAN_FRONTEND=noninteractive

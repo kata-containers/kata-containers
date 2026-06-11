@@ -77,7 +77,7 @@ Extra environment variables:
 	AGENT_BIN:      Use it to change the expected agent binary name
 	AGENT_INIT:     Use kata agent as init process
 	BLOCK_SIZE:     Use to specify the size of blocks in bytes. DEFAULT: 4096
-	IMAGE_REGISTRY: Hostname for the image registry used to pull down the rootfs build image.
+	IMAGE_BUILDER_REGISTRY: Hostname for the image registry used to pull down the image-builder base image (fedora).
 	NSDAX_BIN:      Use to specify path to pre-compiled 'nsdax' tool.
 	SKIP_DAX_HEADER: If set to "yes", skip the DAX/NVDIMM header. Use for
 	                virtio-blk-pci images that never use NVDIMM.
@@ -136,8 +136,11 @@ build_with_container() {
 	image_name=$(basename "${image}")
 
 	engine_build_args=""
-	if [[ -n "${IMAGE_REGISTRY}" ]]; then
-		engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+	# The image-builder uses its own registry knob (IMAGE_BUILDER_REGISTRY,
+	# default registry.fedoraproject.org) so it is not affected by the
+	# IMAGE_REGISTRY used to mirror the rootfs base images (ubuntu/alpine/...).
+	if [[ -n "${IMAGE_BUILDER_REGISTRY:-}" ]]; then
+		engine_build_args+=" --build-arg IMAGE_BUILDER_REGISTRY=${IMAGE_BUILDER_REGISTRY}"
 	fi
 	if [[ -n "${USE_PODMAN}" ]]; then
 		engine_build_args+=" --runtime ${DOCKER_RUNTIME}"

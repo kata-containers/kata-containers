@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM alpine:3.20.0
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/alpine:3.20.0
 
 # Install build dependencies and ORAS for cache support
 RUN apk update && apk --no-cache add gpg gpg-agent coreutils bash curl make \

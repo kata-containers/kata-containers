@@ -67,9 +67,10 @@ for entry in "${verity_variants[@]}"; do
 	EXTRA_OPTS+=" ${param_var}=${root_measure_config}"
 done
 
-# shellcheck disable=SC2154,SC2086
+# shellcheck disable=SC2046,SC2154,SC2086
 docker pull "${container_image}" || \
 	(docker ${BUILDX} build ${PLATFORM}  \
+		$(get_image_registry_build_arg) \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
 		-t "${container_image}" \

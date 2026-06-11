@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG GO_VERSION=
+ARG IMAGE_REGISTRY=docker.io
 
-FROM busybox:1.37.0 AS resources
+FROM ${IMAGE_REGISTRY}/busybox:1.37.0 AS resources
 
 WORKDIR /usr/local
 
@@ -12,7 +13,7 @@ ARG PROTOC_VERSION=
 RUN wget -O /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip && \
     unzip /tmp/protoc.zip
 
-FROM golang:${GO_VERSION}
+FROM ${IMAGE_REGISTRY}/golang:${GO_VERSION}
 
 COPY --from=resources /usr/local /usr
 

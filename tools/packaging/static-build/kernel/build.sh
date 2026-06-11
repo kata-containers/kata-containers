@@ -60,6 +60,10 @@ fi
 
 container_build+=" --build-arg ARCH=${ARCH:-}"
 
+if [[ -n "${IMAGE_REGISTRY:-}" ]]; then
+	container_build+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+fi
+
 "${container_engine}" pull "${container_image}" || \
 	{
 		${container_build} -t "${container_image}" "${script_dir}" && \

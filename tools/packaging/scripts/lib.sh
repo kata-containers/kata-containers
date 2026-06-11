@@ -126,6 +126,16 @@ get_last_modification() {
 	popd &> /dev/null || return
 }
 
+# Echo the "--build-arg IMAGE_REGISTRY=..." fragment used to redirect a
+# Dockerfile's base image to a mirror, but only when IMAGE_REGISTRY is set.
+# When unset, nothing is emitted and the Dockerfile's own ARG default (e.g.
+# docker.io) is used. The mirror value contains no spaces, so callers can use
+# the unquoted expansion to word-split it into two arguments.
+get_image_registry_build_arg() {
+	[[ -n "${IMAGE_REGISTRY:-}" ]] || return 0
+	echo "--build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
+}
+
 # $1 - The tag to be pushed to the registry
 # $2 - "yes" to use sudo, "no" otherwise
 push_to_registry() {

@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM alpine:3.23.0
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/alpine:3.23.0
 ARG RUST_TOOLCHAIN
 
 ENV RUSTUP_HOME="/opt/rustup"

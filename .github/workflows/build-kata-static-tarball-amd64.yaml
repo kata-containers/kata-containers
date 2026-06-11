@@ -101,6 +101,10 @@ jobs:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          # Pull builder-image base layers (ubuntu/alpine) from the ghcr.io
+          # mirror instead of Docker Hub. rootfs (fedora/cbl-mariner) keeps its
+          # own defaults, so it is deliberately left untouched.
+          IMAGE_REGISTRY: ghcr.io/kata-containers
           ARTEFACT_REGISTRY: ghcr.io
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -261,6 +265,10 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
+          # Mirror the ubuntu/alpine/debian rootfs base via ghcr.io. cbl-mariner
+          # (mcr.microsoft.com) is excluded; the fedora image-builder uses its
+          # own IMAGE_BUILDER_REGISTRY and is unaffected.
+          IMAGE_REGISTRY: ${{ contains(matrix.asset, 'mariner') && '' || 'ghcr.io/kata-containers' }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -369,6 +377,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           MEASURED_ROOTFS: yes
+          IMAGE_REGISTRY: ghcr.io/kata-containers
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -478,6 +487,7 @@ jobs:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          IMAGE_REGISTRY: ghcr.io/kata-containers
           ARTEFACT_REGISTRY: ghcr.io
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

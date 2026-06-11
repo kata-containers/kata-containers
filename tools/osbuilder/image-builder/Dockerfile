@@ -2,8 +2,8 @@
 # Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-ARG IMAGE_REGISTRY=registry.fedoraproject.org
-FROM ${IMAGE_REGISTRY}/fedora:44
+ARG IMAGE_BUILDER_REGISTRY=registry.fedoraproject.org
+FROM ${IMAGE_BUILDER_REGISTRY}/fedora:44
 
 RUN ([ -n "$http_proxy" ] && \
     sed -i '$ a proxy='$http_proxy /etc/dnf/dnf.conf ; true) && \

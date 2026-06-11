@@ -213,6 +213,7 @@ codecov-html: check_tarpaulin
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
 	image=$$(docker build -q \
+	  $${IMAGE_REGISTRY:+--build-arg IMAGE_REGISTRY=$$IMAGE_REGISTRY} \
 	  --build-arg GO_VERSION=$$(yq '.languages.golang.version' $(CURDIR)/../../versions.yaml) \
 	  --build-arg PROTOC_VERSION=$$(yq '.externals.protoc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
 	  --build-arg PROTOC_GEN_GO_VERSION=$$(yq '.externals.protoc-gen-go.version' $(CURDIR)/../../versions.yaml) \
