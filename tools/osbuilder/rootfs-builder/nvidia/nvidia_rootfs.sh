@@ -69,7 +69,11 @@ setup_nvidia-nvrc() {
 	local nvrc_tarball="${BUILD_DIR}/kata-static-nvrc.tar.zst"
 	[[ -e "${nvrc_tarball}" ]] || \
 		die "NVRC tarball not found: ${nvrc_tarball} (build the 'nvrc' target first)"
-	tar --zstd -xvf "${nvrc_tarball}" -C .
+	# The tarball carries a ./bin/ entry; on a usr-merged rootfs /bin is a
+	# symlink to usr/bin, so extract with --keep-directory-symlink to follow it
+	# instead of clobbering the symlink with a real (near-empty) directory,
+	# which would hide /bin/bash and break the driver chroot below.
+	tar --keep-directory-symlink --zstd -xvf "${nvrc_tarball}" -C .
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
@@ -333,7 +337,11 @@ compress_rootfs() {
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
-	chmod +x "${libdir}"/ld-linux-*
+	# The gpu-addon layout ships no program interpreter (it lives in the
+	# base-nvidia image), so only fix up the loader when it is actually present.
+	if compgen -G "${libdir}/ld-linux-*" > /dev/null; then
+		chmod +x "${libdir}"/ld-linux-*
+	fi
 }
 
 copy_cdh_runtime_deps() {
@@ -476,9 +484,10 @@ partition_gpu_addon() {
 }
 
 # Strip the GPU userspace from the chiseled tree, leaving a driver-agnostic
-# base-nvidia: NVRC init + kata-agent + busybox + loader/libc + in-tree kernel
-# modules. The empty /lib/firmware/nvidia directory is kept as the bind
-# mountpoint NVRC uses for the addon firmware. Runs inside ${ROOTFS_DIR}.
+# base-nvidia: NVRC init + kata-agent + busybox + loader/libc. No kernel
+# modules are shipped (see below). The empty /lib/firmware/nvidia directory is
+# kept as the bind mountpoint NVRC uses for the addon firmware. Runs inside
+# ${ROOTFS_DIR}.
 partition_base() {
 	echo "nvidia: building driver-agnostic base layout"
 
@@ -502,14 +511,14 @@ partition_base() {
 	rm -rf lib/firmware/nvidia
 	mkdir -p lib/firmware/nvidia
 
-	# Reset kernel modules to the in-tree set (no NVIDIA driver modules) so the
-	# base stays driver-agnostic; the gpu addon ships the driver modules.
+	# Ship no kernel modules in the base: the NVIDIA driver modules are
+	# GPU-specific and live in the gpu addon (NVRC loads them via
+	# `modprobe --dirname <addon>`), and the remaining in-tree dependencies
+	# (mlx5, infiniband, ...) are built into the NVIDIA kernel. Keeping
+	# /lib/modules empty is what makes the base driver-agnostic and reusable
+	# across driver versions.
 	rm -rf lib/modules
 	mkdir -p lib/modules
-	local appendix=""
-	echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>' && appendix="-dragonball-experimental"
-	tar --zstd -xf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-modules.tar.zst \
-		-C ./lib/modules/
 }
 
 setup_nvidia_gpu_rootfs_stage_two() {
@@ -538,6 +547,16 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		tar -C "${stage_one}" -xf "${stage_one}".tar.zst
 
 		pushd "${stage_two}" >> /dev/null
+
+		# stage-one archives the full base+driver tree with `tar
+		# --remove-files`, emptying ${stage_two} on its first run. When
+		# stage-one is served from cache that emptying never happens, so the
+		# freshly-built distro rootfs is still here. The chisel assembles a
+		# minimal tree purely from ${stage_one}, so wipe any leftover distro
+		# content first to keep the result deterministic regardless of whether
+		# stage-one was cached (otherwise base/monolith layouts bloat with the
+		# full Ubuntu rootfs).
+		find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 		chisseled_init
 		chisseled_iptables

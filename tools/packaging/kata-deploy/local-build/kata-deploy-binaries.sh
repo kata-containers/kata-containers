@@ -918,6 +918,9 @@ install_image_nvidia_gpu_addon() {
 	export MEASURED_ROOTFS="yes"
 	export FS_TYPE="erofs"
 	export SKIP_DAX_HEADER="yes"
+	# The gpu addon is GPU-userspace-only content mounted into base-nvidia; it
+	# ships no /sbin/init, so skip the rootfs init/agent sanity check.
+	export SKIP_ROOTFS_CHECK="yes"
 	local version
 	version=$(get_latest_nvidia_driver_version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
