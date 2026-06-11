@@ -213,6 +213,8 @@ jobs:
           - rootfs-image-mariner
           - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia-gpu-confidential
+          - rootfs-image-nvidia
+          - rootfs-image-nvidia-gpu-extension
           - rootfs-initrd
           - rootfs-initrd-confidential
     concurrency:
