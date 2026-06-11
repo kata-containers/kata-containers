@@ -44,20 +44,25 @@ esac
 # Variants (targets) that build a measured rootfs as of now are:
 # - rootfs-image (the base image, measured; root hash labelled "base")
 # - rootfs-image-coco-addon
-# - rootfs-image-nvidia-gpu
-# - rootfs-image-nvidia-gpu-confidential
+# - rootfs-image-nvidia-gpu-base (the driver-agnostic NVIDIA boot image)
+# - rootfs-image-nvidia-gpu-addon (the driver-versioned gpu addon)
 #
-# The base image is shared between non-confidential and confidential guests.
-# Only confidential configurations enforce its dm-verity hash via
-# @KERNELVERITYPARAMS@; non-confidential guests boot the data partition directly.
+# The base images (generic + base-nvidia) are shared between non-confidential
+# and confidential guests.  Only confidential configurations enforce the generic
+# base dm-verity hash via @KERNELVERITYPARAMS@; the NVIDIA stack always boots
+# measured, so both the non-confidential and confidential NVIDIA configs enforce
+# @KERNELVERITYPARAMS_NV@ (base-nvidia) and @NVIDIAGPUADDONVERITYPARAMS@ (gpu addon).
+#
+# The monolithic nvidia-gpu / nvidia-gpu-confidential images are still built and
+# shipped during the transition, but no generated config references their hashes.
 #
 # shellcheck disable=SC2154
 root_hash_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 verity_variants=(
 	"base:KERNELVERITYPARAMS"
 	"coco-addon:COCOVERITYPARAMS"
-	"nvidia-gpu:KERNELVERITYPARAMS_NV"
-	"nvidia-gpu-confidential:KERNELVERITYPARAMS_CONFIDENTIAL_NV"
+	"nvidia-gpu-base:KERNELVERITYPARAMS_NV"
+	"nvidia-gpu-addon:NVIDIAGPUADDONVERITYPARAMS"
 )
 for entry in "${verity_variants[@]}"; do
 	variant="${entry%%:*}"
