@@ -50,6 +50,7 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
           { vmm: clh-runtime-rs, containerd_version: minimum },
+          { vmm: fc, containerd_version: latest, snapshotter: blockfile, blockfile_scratch_size: 512M },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
@@ -68,6 +69,8 @@ jobs:
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter || '' }}
+      BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE: ${{ matrix.environment.blockfile_scratch_size || '512M' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -114,6 +117,10 @@ jobs:
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Configure ${{ matrix.environment.snapshotter }} snapshotter
+        if: ${{ matrix.environment.snapshotter != '' }}
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
         timeout-minutes: 20
