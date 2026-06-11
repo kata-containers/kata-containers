@@ -464,12 +464,22 @@ endif
     KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
     IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
     IMAGEPATH_NV = $(PKGDATADIR)/$(IMAGENAME_NV)
+    # Composable NVIDIA stack: driver-agnostic base-nvidia boot image plus the
+    # driver-versioned gpu extension (cold-plugged and mounted at /run/kata-extensions/gpu).
+    IMAGENAME_NV_BASE = $(PROJECT_TAG)-nvidia-gpu-base.img
+    IMAGEPATH_NV_BASE = $(PKGDATADIR)/$(IMAGENAME_NV_BASE)
+    IMAGENAME_NV_EXTENSION = $(PROJECT_TAG)-nvidia-gpu-extension.img
+    IMAGEPATH_NV_EXTENSION = $(PKGDATADIR)/$(IMAGENAME_NV_EXTENSION)
     KERNELPARAMS_NV := cgroup_no_v1=all pci=realloc pci=nocrs pci=assign-busses
 
     KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV)
     KERNELPARAMS_CONFIDENTIAL_NV += "nvrc.smi.srs=1"
 
+    # Verity params for the base-nvidia boot image (root_hash_nvidia-gpu-base.txt)
+    # and for the gpu extension (root_hash_nvidia-gpu-extension.txt); filled in by the
+    # shim-v2 build from the emitted root-hash files.
     KERNELVERITYPARAMS_NV ?=
+    NVIDIAGPUEXTENSIONVERITYPARAMS ?=
     DEFAULTVCPUS_NV := 1
     DEFAULTMEMORY_NV := 8192
     DEFOVERHEADVCPUS_NV := 0.5
@@ -647,6 +657,11 @@ USER_VARS += IMAGECONFIDENTIALNAME
 USER_VARS += IMAGEPATH
 USER_VARS += IMAGEPATH_CLH_AZURE
 USER_VARS += IMAGEPATH_NV
+USER_VARS += IMAGENAME_NV_BASE
+USER_VARS += IMAGEPATH_NV_BASE
+USER_VARS += IMAGENAME_NV_EXTENSION
+USER_VARS += IMAGEPATH_NV_EXTENSION
+USER_VARS += NVIDIAGPUEXTENSIONVERITYPARAMS
 USER_VARS += IMAGECONFIDENTIALPATH
 USER_VARS += COCOIMAGENAME
 USER_VARS += COCOIMAGEPATH

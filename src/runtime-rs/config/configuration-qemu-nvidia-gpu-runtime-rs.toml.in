@@ -16,7 +16,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_NV@"
-image = "@IMAGEPATH_NV@"
+image = "@IMAGEPATH_NV_BASE@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -850,3 +850,12 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 # When set (together with a non-"no-port" cold_plug_vfio), the runtime can cold-plug
 # devices discovered via the Pod Resources API. Path is typically under kubelet root-dir.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK_NV@"
+
+# The GPU userspace (driver binaries, libraries, configs, firmware and the
+# NVIDIA kernel modules) ships in a separate, driver-versioned extension image that
+# is cold-plugged alongside the base-nvidia boot image.  NVRC mounts it at
+# /run/kata-extensions/gpu and resolves the GPU stack from there.
+[[hypervisor.qemu.guest_extension_images]]
+name = "gpu"
+path = "@IMAGEPATH_NV_EXTENSION@"
+verity_params = "@NVIDIAGPUEXTENSIONVERITYPARAMS@"
