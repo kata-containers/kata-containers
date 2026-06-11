@@ -14,12 +14,13 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
-        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
-        KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CFG_HYPERVISOR_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
-        KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
+        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS,
+        KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH, KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
+        KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -123,6 +124,10 @@ mod tests {
             "false".to_string(),
         );
         anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS.to_string(),
+            "3".to_string(),
+        );
+        anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
             "false".to_string(),
         );
@@ -192,7 +197,7 @@ mod tests {
             assert!(!hv.memory_info.enable_guest_swap);
             assert_eq!(hv.memory_info.default_memory, 100);
             assert!(!hv.enable_iothreads);
-            assert!(!hv.enable_iothreads);
+            assert_eq!(hv.indep_iothreads, 3);
             assert_eq!(
                 hv.memory_info.file_mem_backend,
                 "./test_file_backend_mem_root"

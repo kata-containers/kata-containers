@@ -99,9 +99,14 @@ pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_HASH: &str =
     "io.katacontainers.config.hypervisor.jailer_hash";
 /// A sandbox annotation to enable IO to be processed in a separate thread.
-/// Supported currently for virtio-scsi driver.
+/// Supported for the virtio-scsi driver, and also used for virtio-blk-pci when
+/// combined with `KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS`.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS: &str =
     "io.katacontainers.config.hypervisor.enable_iothreads";
+/// A sandbox annotation to specify the number of independent IO threads.
+/// Used for virtio-blk-pci devices during hotplug.
+pub const KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS: &str =
+    "io.katacontainers.config.hypervisor.indep_iothreads";
 /// The hash type used for assets verification
 pub const KATA_ANNO_CFG_HYPERVISOR_ASSET_HASH_TYPE: &str =
     "io.katacontainers.config.hypervisor.asset_hash_type";
@@ -568,6 +573,15 @@ impl Annotation {
                         }
                         Err(_e) => {
                             return Err(bool_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            let indep_iothreads = r.unwrap_or_default();
+                            hv.indep_iothreads = indep_iothreads;
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
                         }
                     },
                     // Hypervisor Block Device related annotations

@@ -15,7 +15,7 @@ use std::borrow::Cow;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::config::hypervisor::VIRTIO_SCSI;
+use kata_types::config::hypervisor::{VIRTIO_BLK_PCI, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -2631,6 +2631,11 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_scsi_controller();
         }
 
+        // Add independent IO threads only when hotplug uses virtio-blk-pci.
+        if config.blockdev_info.block_device_driver == VIRTIO_BLK_PCI {
+            qemu_cmd_line.add_indep_iothreads();
+        }
+
         if config.device_info.reclaim_guest_freed_memory {
             qemu_cmd_line.add_virtio_balloon();
         }
@@ -2736,6 +2741,19 @@ impl<'a> QemuCmdLine<'a> {
             self.devices.push(Box::new(iothread));
         }
         self.devices.push(Box::new(virtio_scsi));
+    }
+
+    /// Add independent IO threads for virtio-blk-pci devices.
+    /// These threads can be attached to virtio-blk-pci devices during hotplug.
+    fn add_indep_iothreads(&mut self) {
+        // Only create independent IO threads if enable_iothreads is true and indep_iothreads > 0
+        if self.config.enable_iothreads && self.config.indep_iothreads > 0 {
+            for i in 0..self.config.indep_iothreads {
+                let iothread_id = format!("indep_iothread_{}", i);
+                let iothread = ObjectIoThread::new(&iothread_id);
+                self.devices.push(Box::new(iothread));
+            }
+        }
     }
 
     pub fn add_virtiofs_share(

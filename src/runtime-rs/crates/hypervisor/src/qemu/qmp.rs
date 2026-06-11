@@ -688,6 +688,7 @@ impl Qmp {
         logical_block_size: u32,
         physical_block_size: u32,
         format: &BlockDeviceFormat,
+        iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = format!("drive-{index}");
@@ -891,6 +892,15 @@ impl Qmp {
             blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
             if !is_readonly {
                 blkdev_add_args.insert("share-rw".to_string(), true.into());
+            }
+
+            // Add iothread parameter for virtio-blk devices if specified
+            if let Some(iothread_id) = iothread {
+                info!(
+                    sl!(),
+                    "hotplug_block_device(): attaching to iothread: {}", iothread_id
+                );
+                blkdev_add_args.insert("iothread".to_owned(), iothread_id.to_string().into());
             }
 
             info!(
