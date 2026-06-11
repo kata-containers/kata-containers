@@ -457,6 +457,12 @@ setup_selinux() {
 }
 
 setup_systemd() {
+		# Addon content images (e.g. the gpu addon) carry no /etc and are not
+		# bootable systemd rootfses, so there is nothing to set up here.
+		if [[ ! -d "${mount_dir}/etc" ]]; then
+			info "No /etc in rootfs; skipping systemd machine-id setup"
+			return 0
+		fi
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
 }
