@@ -17,6 +17,15 @@ source "${script_dir}/../../scripts/lib.sh"
 [[ -n "${nvrc_repo}" ]] || die "failed to get nvrc repo"
 # shellcheck disable=SC2154
 [[ -n "${nvrc_ref}" ]] || die "failed to get nvrc git ref"
+# shellcheck disable=SC2154
+[[ -n "${nvrc_toolchain}" ]] || die "failed to get nvrc rust toolchain"
+
+# The NVRC checkout lives inside the kata-containers tree, whose root carries a
+# rust-toolchain.toml. rustup walks parent directories and would honour that pin
+# (a different channel than the one baked into this builder image, which is the
+# only toolchain with the musl target installed). Force our toolchain so the
+# build is decoupled from kata's root pin and the musl std is always found.
+export RUSTUP_TOOLCHAIN="${nvrc_toolchain}"
 
 [[ -d "nvrc" ]] && rm -rf nvrc
 

@@ -21,6 +21,7 @@ RUN apt-get update && \
 	curl \
 	binutils \
 	gcc \
+	libc6-dev \
 	git \
 	make \
 	musl-tools && \

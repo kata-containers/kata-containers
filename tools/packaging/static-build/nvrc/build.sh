@@ -46,6 +46,7 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env nvrc_repo="${nvrc_repo}" \
 	--env nvrc_ref="${nvrc_ref}" \
+	--env nvrc_toolchain="${nvrc_toolchain}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${nvrc_builder}"
