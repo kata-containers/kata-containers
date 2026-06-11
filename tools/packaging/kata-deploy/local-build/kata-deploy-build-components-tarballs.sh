@@ -37,9 +37,13 @@ if [[ -z "${rust_toolchain}" ]]; then
 	exit 1
 fi
 
+image_registry_build_args=()
+[[ -n "${IMAGE_REGISTRY:-}" ]] && image_registry_build_args=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
+
 build_kata_deploy_binary() {
 	docker buildx build \
 		--target rust-builder \
+		"${image_registry_build_args[@]}" \
 		--build-arg "RUST_TOOLCHAIN=${rust_toolchain}" \
 		--output "type=local,dest=${build_dir}/kata-deploy-binary-out" \
 		-f "${repo_root_dir}/tools/packaging/kata-deploy/Dockerfile.components" \
@@ -55,6 +59,7 @@ build_kata_deploy_binary() {
 build_nydus_snapshotter_for_coco_guest_pull() {
 	docker buildx build \
 		--target nydus-binary-downloader \
+		"${image_registry_build_args[@]}" \
 		--output "type=local,dest=${build_dir}/nydus-snapshotter-out" \
 		-f "${repo_root_dir}/tools/packaging/kata-deploy/Dockerfile.components" \
 		"${repo_root_dir}"

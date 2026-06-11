@@ -5,7 +5,8 @@
 
 #### Nydus snapshotter & nydus image
 
-FROM alpine:3.22 AS nydus-binary-downloader
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/alpine:3.22 AS nydus-binary-downloader
 
 COPY versions.yaml /tmp/versions.yaml
 
@@ -23,7 +24,7 @@ RUN \
 	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
 
 #### Build binary package
-FROM ubuntu:22.04 AS rust-builder
+FROM ${IMAGE_REGISTRY}/ubuntu:22.04 AS rust-builder
 
 # Default to Rust 1.93
 ARG RUST_TOOLCHAIN=1.93

@@ -5,7 +5,8 @@
 
 # openSUSE Tumbleweed image has only 'latest' tag so ignore DL3006 rule.
 # hadolint ignore=DL3006
-FROM opensuse/tumbleweed
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/opensuse/tumbleweed
 
 # zypper -y or --non-interactive can be used interchangeably here so ignore
 # DL3034 rule.

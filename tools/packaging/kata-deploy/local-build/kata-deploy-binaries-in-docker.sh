@@ -75,7 +75,10 @@ if [[ ! -d "${HOME}/.docker" ]]; then
 fi
 
 "${script_dir}"/kata-deploy-copy-yq-installer.sh
+build_kata_deploy_args=()
+[[ -n "${IMAGE_REGISTRY:-}" ]] && build_kata_deploy_args=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 docker build -q -t build-kata-deploy \
+	"${build_kata_deploy_args[@]}" \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID="${uid}" \
 	--build-arg GID="${gid}" \

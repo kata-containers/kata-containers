@@ -190,6 +190,8 @@ jobs:
           cp "tools/packaging/kata-deploy/local-build/build/kata-deploy-static-${KATA_DEPLOY_COMPONENT}.tar.zst" kata-deploy-build/
         env:
           KATA_DEPLOY_COMPONENT: ${{ matrix.component }}
+          # Mirror the kata-deploy components builder base (ubuntu/alpine) via ghcr.io.
+          IMAGE_REGISTRY: ghcr.io/kata-containers
 
       - name: store-artifact ${{ matrix.component }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

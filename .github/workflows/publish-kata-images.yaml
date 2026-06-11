@@ -162,6 +162,9 @@ jobs:
           TAG_SUFFIX: ${{ inputs.tag-suffix }}
           IMAGE_KIND: ${{ matrix.image-kind }}
           PUSH_IMAGE: ${{ inputs.push }}
+          # Pull the kata-deploy/kata-monitor builder base images (ubuntu/alpine/
+          # debian) from the ghcr.io mirror instead of Docker Hub.
+          IMAGE_REGISTRY: ghcr.io/kata-containers
         run: |
           if [ "${TAGS}" != "" ]; then
             tags="${TAGS}"

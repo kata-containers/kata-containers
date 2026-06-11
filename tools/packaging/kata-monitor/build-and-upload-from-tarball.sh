@@ -62,9 +62,13 @@ if [[ "${push_image}" == "true" ]]; then
 	push_flag+=(--push)
 fi
 
+image_registry_build_args=()
+[[ -n "${IMAGE_REGISTRY:-}" ]] && image_registry_build_args=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
+
 docker buildx build \
 	--platform "linux/${platform_arch}" \
 	--provenance false --sbom false \
+	"${image_registry_build_args[@]}" \
 	-f "${repo_root_dir}/tools/packaging/kata-monitor/Dockerfile" \
 	--tag "${image_ref}" \
 	"${push_flag[@]}" \

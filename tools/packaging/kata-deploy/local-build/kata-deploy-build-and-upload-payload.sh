@@ -44,8 +44,12 @@ IMAGE_TAG="${REGISTRY}:kata-containers-$(git -C "${REPO_ROOT}" rev-parse HEAD)-$
 
 DOCKERFILE="${REPO_ROOT}/tools/packaging/kata-deploy/Dockerfile"
 
+image_registry_build_args=()
+[[ -n "${IMAGE_REGISTRY:-}" ]] && image_registry_build_args=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
+
 echo "Building the image"
 docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
+	"${image_registry_build_args[@]}" \
 	-f "${DOCKERFILE}" \
 	--tag "${IMAGE_TAG}" --push .
 
@@ -54,6 +58,7 @@ if [[ -n "${TAG}" ]]; then
 
 	echo "Building the ${ADDITIONAL_TAG} image"
 	docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
+		"${image_registry_build_args[@]}" \
 		-f "${DOCKERFILE}" \
 		--tag "${ADDITIONAL_TAG}" --push .
 fi

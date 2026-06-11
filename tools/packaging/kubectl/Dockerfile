@@ -5,8 +5,9 @@
 # Alpine-based image with kubectl for multi-arch support
 # Used for kata-deploy verification jobs and other kubectl operations
 
+ARG IMAGE_REGISTRY=docker.io
 ARG ALPINE_VERSION=3.23
-FROM alpine:${ALPINE_VERSION}
+FROM ${IMAGE_REGISTRY}/alpine:${ALPINE_VERSION}
 
 # Install bash, curl, and download kubectl
 # hadolint ignore=DL3018

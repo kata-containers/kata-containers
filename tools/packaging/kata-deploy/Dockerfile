@@ -6,7 +6,8 @@
 #### Prepare kata artifact tarballs
 # Individual component tarballs are stored compressed in the image.
 # The installer extracts only those required for the enabled runtime classes.
-FROM alpine:3.22 AS artifact-stage
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/alpine:3.22 AS artifact-stage
 
 ARG KATA_ARTIFACTS_DIR=tools/packaging/kata-deploy/kata-artifacts
 ARG DESTINATION=/opt/kata-artifacts
@@ -27,7 +28,7 @@ RUN \
 #### Prepare runtime dependencies (nsenter and required libraries)
 # This stage assembles all runtime dependencies based on architecture
 # using ldd to find exact library dependencies
-FROM debian:trixie-slim AS runtime-assembler
+FROM ${IMAGE_REGISTRY}/debian:trixie-slim AS runtime-assembler
 
 ARG DESTINATION=/opt/kata-artifacts
 

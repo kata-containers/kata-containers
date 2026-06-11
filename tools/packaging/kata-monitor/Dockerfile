@@ -16,7 +16,8 @@
 
 # Stage 1: discover and copy the glibc libraries the binary needs.
 # hadolint ignore=DL3007
-FROM debian:trixie-slim AS runtime-assembler
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/debian:trixie-slim AS runtime-assembler
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-FROM ubuntu:22.04
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/ubuntu:22.04
 
 COPY debug.sh /usr/bin/debug.sh
 
