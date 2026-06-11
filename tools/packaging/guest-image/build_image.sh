@@ -97,6 +97,11 @@ build_image() {
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}" \
 		GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL}"
 
+	# The driver-versioned NVIDIA artefacts (the monolith, the confidential
+	# monolith and the gpu extension) carry the driver version in their filename so
+	# multiple driver builds can coexist.  The nvidia base image is
+	# driver-agnostic, so it does not carry the "nvidia-gpu" prefix and is
+	# naturally excluded from the driver-version suffix here.
 	if [[ "${image_initrd_suffix}" == "nvidia-gpu"* ]]; then
 		nvidia_driver_version=$(get_from_kata_deps .externals.nvidia.driver.version)
 		artifact_name=${artifact_name/.image/"-${nvidia_driver_version}".image}
