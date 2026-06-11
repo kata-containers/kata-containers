@@ -710,6 +710,14 @@ function helm_helper() {
 	# Enable node-feature-discovery deployment
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
+	# Pull the NFD image from the kata-containers ghcr.io mirror rather than the
+	# upstream registry.k8s.io/nfd/node-feature-discovery, which has been a
+	# recurring source of CI image-pull failures. We override only the registry
+	# here (in CI) and leave the chart default untouched. The tag is left unset
+	# on purpose so the NFD subchart keeps using its appVersion, which must be
+	# present in the mirror.
+	yq -i ".node-feature-discovery.image.repository = \"${NFD_IMAGE_REPOSITORY:-ghcr.io/kata-containers/node-feature-discovery}\"" "${values_yaml}"
+
 	# Do not enable on nvidia-gpu-* tests, as it'll be deployed by the GPU operator
 	if [[ "${KATA_HYPERVISOR}" == *"nvidia-gpu"* ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
