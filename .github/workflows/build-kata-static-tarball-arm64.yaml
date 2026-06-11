@@ -54,6 +54,7 @@ jobs:
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
           - kernel-cca-confidential
+          - nvrc
           - nydus
           - ovmf
           - pause-image
@@ -203,6 +204,8 @@ jobs:
           - rootfs-image
           - rootfs-image-coco-addon
           - rootfs-image-nvidia-gpu
+          - rootfs-image-nvidia-gpu-base
+          - rootfs-image-nvidia-gpu-addon
           - rootfs-initrd
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
@@ -272,6 +275,7 @@ jobs:
           - busybox
           - coco-guest-components
           - kernel-nvidia-gpu-modules
+          - nvrc
           - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
