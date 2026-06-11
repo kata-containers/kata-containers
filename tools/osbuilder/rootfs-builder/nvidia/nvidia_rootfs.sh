@@ -553,6 +553,38 @@ chisseled_veritysetup() {
 	cp -a "${stage_one}/${libdir}"/libcap.so.2*            "${libdir}/."
 }
 
+# NVRC loads each addon's NVIDIA kernel modules from that addon's self-contained
+# module tree via `modprobe --dirname <addon>` (a kmod feature). The base ships
+# busybox, whose modprobe is built without long options and has no --dirname, so
+# the base must carry the real kmod. This keeps modules composable: every
+# module-bearing addon stays independent (its own modules.dep from depmod -b) and
+# nothing has to shadow the read-only /lib/modules. kmod is a single multi-call
+# binary that embeds libkmod (no libkmod2 to ship); modprobe/insmod/... are
+# argv[0] symlinks to it. Runs inside ${ROOTFS_DIR}.
+chisseled_kmod() {
+	echo "nvidia: chisseling kmod"
+
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	cp -a "${stage_one}/usr/bin/kmod" usr/bin/.
+
+	# kmod picks its applet from argv[0]. Expose the module tools as symlinks;
+	# /sbin/modprobe (NVRC's absolute path) shadows the busybox modprobe applet.
+	# Absolute targets so they resolve regardless of whether /sbin is a real dir
+	# or a usr-merge symlink.
+	local tool
+	for tool in modprobe insmod rmmod depmod lsmod; do
+		ln -sf /usr/bin/kmod "sbin/${tool}"
+	done
+
+	# kmod links libzstd/liblzma unconditionally (compressed-module support);
+	# our modules are uncompressed but the NEEDED entries must still resolve.
+	# libcrypto/libc are already present (libc from chisseled_compute, libcrypto
+	# from chisseled_veritysetup).
+	cp -a "${stage_one}/${libdir}"/libzstd.so.1*  "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/liblzma.so.5*  "${libdir}/."
+}
+
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
@@ -617,7 +649,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		# Carve the freshly chiseled (monolith) tree into the requested layout.
 		# The monolith path is left untouched.
 		case "${layout}" in
-			base) partition_base; chisseled_veritysetup ;;
+			base) partition_base; chisseled_veritysetup; chisseled_kmod ;;
 			gpu-addon) partition_gpu_addon ;;
 		esac
 	fi
