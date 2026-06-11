@@ -89,20 +89,6 @@ fn effective_log_level(enable_debug: bool, log_level: &str) -> &str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::effective_log_level;
-
-    #[test]
-    fn test_effective_log_level() {
-        assert_eq!(effective_log_level(false, "info"), "info");
-        assert_eq!(effective_log_level(false, "debug"), "debug");
-        assert_eq!(effective_log_level(true, "info"), "debug");
-        assert_eq!(effective_log_level(true, "trace"), "trace");
-        assert_eq!(effective_log_level(true, "warn"), "warn");
-    }
-}
-
 struct RuntimeHandlerManagerInner {
     id: String,
     msg_sender: Sender<Message>,
@@ -1011,6 +997,7 @@ mod tests {
     use super::*;
     use common::types::ShutdownRequest;
     use tokio::sync::mpsc::channel;
+    use super::effective_log_level;
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
     // created (e.g. after a failed CreateContainer) must still drive the shim
@@ -1035,5 +1022,14 @@ mod tests {
             .try_recv()
             .expect("an Action::Shutdown message must be sent to stop the daemon");
         assert!(matches!(msg.action, Action::Shutdown));
+    }
+
+    #[test]
+    fn test_effective_log_level() {
+        assert_eq!(effective_log_level(false, "info"), "info");
+        assert_eq!(effective_log_level(false, "debug"), "debug");
+        assert_eq!(effective_log_level(true, "info"), "debug");
+        assert_eq!(effective_log_level(true, "trace"), "trace");
+        assert_eq!(effective_log_level(true, "warn"), "warn");
     }
 }
