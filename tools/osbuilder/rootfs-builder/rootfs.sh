@@ -932,7 +932,13 @@ main()
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
 
-	if [[ "${BUILD_VARIANT}" = "nvidia-gpu" ]]; then
+	# The base-nvidia and gpu-extension layouts are carved from the same chiseled
+	# tree as the monolith (which they share the driver stage-one with), so they
+	# drive the non-confidential stage-one/two and only differ in the final
+	# partition step (see nvidia_image_layout in nvidia_rootfs.sh).
+	if [[ "${BUILD_VARIANT}" = "nvidia-gpu" || \
+	      "${BUILD_VARIANT}" = "nvidia-gpu-base" || \
+	      "${BUILD_VARIANT}" = "nvidia-gpu-extension" ]]; then
 		setup_nvidia_gpu_rootfs_stage_one
 		setup_nvidia_gpu_rootfs_stage_two
 		return $?
