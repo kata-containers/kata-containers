@@ -19,9 +19,12 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
+# Prefer the kata-containers ghcr.io mirror over Docker Hub; the remaining
+# entries are kept as fallbacks. Override REGISTRY to change the primary source.
 declare -A registries
 registries[ubuntu]=\
-"docker.io/library
+"${REGISTRY:-ghcr.io/kata-containers}
+docker.io/library
 public.ecr.aws/lts
 mirror.gcr.io/library
 quay.io/libpod"

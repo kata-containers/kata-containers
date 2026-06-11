@@ -11,9 +11,14 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 # shellcheck source=/dev/null
 source "${SCRIPT_PATH}/common_stability.bash"
 
-IMAGE="docker.io/library/cassandra:latest"
+# Pull from the kata-containers ghcr.io mirror by default instead of Docker
+# Hub. Override REGISTRY to use a different source.
+REGISTRY="${REGISTRY:-ghcr.io/kata-containers}"
+IMAGE="${REGISTRY}/cassandra:latest"
 CONTAINER_NAME="${CONTAINER_NAME:-cassandra_test}"
-DOCKER_IMAGE="cassandra:latest"
+DOCKER_IMAGE="${IMAGE}"
+# Local archive name; must be slash-free as it is used as a filename.
+IMAGE_TAR="cassandra.tar"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 CMD="cassandra -R"
 
@@ -25,9 +30,9 @@ function main() {
 	# DOCKER_EXE, CTR_EXE, and CTR_RUNTIME are set by common.bash's init_env
 	# shellcheck disable=SC2154
 	sudo -E "${DOCKER_EXE}" pull "${DOCKER_IMAGE}"
-	sudo -E "${DOCKER_EXE}" save -o "${DOCKER_IMAGE}.tar" "${DOCKER_IMAGE}"
+	sudo -E "${DOCKER_EXE}" save -o "${IMAGE_TAR}" "${DOCKER_IMAGE}"
 	# shellcheck disable=SC2154
-	sudo -E "${CTR_EXE}" i import "${DOCKER_IMAGE}.tar"
+	sudo -E "${CTR_EXE}" i import "${IMAGE_TAR}"
 
 	# shellcheck disable=SC2154
 	sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"

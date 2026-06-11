@@ -1,0 +1,3 @@
+# Generated at test time from Dockerfile.in by common_stability.bash
+# (@UBUNTU_REGISTRY@ is substituted with the first working registry).
+/Dockerfile
