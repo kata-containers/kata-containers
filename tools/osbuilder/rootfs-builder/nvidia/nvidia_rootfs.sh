@@ -264,9 +264,14 @@ chisseled_init() {
 	echo "nvidia: chisseling init"
 	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
 
+	# Create bin/ and sbin/ explicitly rather than relying on busybox's
+	# `make install` to emit them: busybox only creates a directory when it has
+	# an applet living there, and once the nvidia busybox dropped modprobe (its
+	# only /sbin applet, now provided by kmod) it stopped emitting sbin/, which
+	# broke the `sbin/init` symlink below.
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
 		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
-		 usr/bin etc/modprobe.d etc/ssl/certs
+		 bin sbin usr/bin etc/modprobe.d etc/ssl/certs
 
 	ln -sf ../run var/run
 	ln -sf ../run var/log
