@@ -53,6 +53,7 @@ jobs:
           - kernel-debug
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
+          - nvrc
           - nydus
           - ovmf
           - ovmf-sev
@@ -213,6 +214,8 @@ jobs:
           - rootfs-image-mariner
           - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia-gpu-confidential
+          - rootfs-image-nvidia-gpu-base
+          - rootfs-image-nvidia-gpu-extension
           - rootfs-initrd
           - rootfs-initrd-confidential
     concurrency:
@@ -284,6 +287,7 @@ jobs:
           - busybox
           - coco-guest-components
           - kernel-nvidia-gpu-modules
+          - nvrc
           - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ toJSON(matrix) }}

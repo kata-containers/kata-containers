@@ -84,6 +84,7 @@ NVGPU_BASE_TARBALLS = \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
+	nvrc-tarball \
 	ovmf-sev-tarball \
 	ovmf-tdx-tarball \
 	ovmf-tarball \
@@ -100,6 +101,7 @@ NVGPU_BASE_TARBALLS = \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
+	nvrc-tarball \
 	ovmf-tarball \
 	pause-image-tarball \
 	qemu-tarball \
@@ -123,6 +125,8 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-virtiofsd.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu-confidential.tar.zst \
+	kata-static-rootfs-image-nvidia-gpu-base.tar.zst \
+	kata-static-rootfs-image-nvidia-gpu-extension.tar.zst \
 	kata-static-shim-v2-go.tar.zst \
 	kata-static-shim-v2-rust.tar.zst
 
@@ -131,7 +135,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-gpu-base-tarball rootfs-image-nvidia-gpu-extension-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
@@ -230,6 +234,9 @@ kernel-cca-confidential-tarball:
 nydus-tarball:
 	${MAKE} $@-build
 
+nvrc-tarball:
+	${MAKE} $@-build
+
 ovmf-sev-tarball:
 	${MAKE} $@-build
 
@@ -291,12 +298,23 @@ DEPS := agent-tarball
 rootfs-initrd-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball nvrc-tarball
 rootfs-image-nvidia-gpu-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball nvrc-tarball
 rootfs-image-nvidia-gpu-confidential-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# Composable NVIDIA stack: the driver-agnostic base-nvidia boot image and the
+# driver-versioned gpu extension are both carved out of the same chiseled tree, so
+# they share the monolith's (non-confidential) build dependencies.
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball nvrc-tarball
+rootfs-image-nvidia-gpu-base-tarball: $(DEPS)
+	${MAKE} $@-build
+
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball nvrc-tarball
+rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
