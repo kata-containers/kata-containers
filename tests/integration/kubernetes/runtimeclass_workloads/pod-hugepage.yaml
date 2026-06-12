@@ -21,9 +21,6 @@ spec:
       limits:
         hugepages-${hugepages_size}: 512Mi
         memory: 512Mi
-      requests:
-        hugepages-${hugepages_size}: 512Mi
-        memory: 512Mi
   volumes:
   - name: hugepage
     emptyDir:
