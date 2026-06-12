@@ -37,19 +37,47 @@ if [[ -z "${rust_toolchain}" ]]; then
 	exit 1
 fi
 
-build_kata_deploy_binary() {
+rust_builder_out="${build_dir}/kata-deploy-binary-out"
+
+# kata-deploy and kata-deploy-job-dispatcher are produced by the same rust-builder
+# stage. Build it once *per process* and let each component package its own
+# binary, so running both components in a single invocation does not compile the
+# workspace twice. The guard is process-local (not a directory check) on purpose:
+# a fresh invocation must always rebuild, otherwise a stale output dir from an
+# earlier run/commit would be silently reused.
+rust_binaries_built="false"
+build_rust_binaries() {
+	if [[ "${rust_binaries_built}" == "true" ]]; then
+		return
+	fi
+	rm -rf "${rust_builder_out}"
 	docker buildx build \
 		--target rust-builder \
 		--build-arg "RUST_TOOLCHAIN=${rust_toolchain}" \
-		--output "type=local,dest=${build_dir}/kata-deploy-binary-out" \
+		--output "type=local,dest=${rust_builder_out}" \
 		-f "${repo_root_dir}/tools/packaging/kata-deploy/Dockerfile.components" \
 		"${repo_root_dir}"
+	rust_binaries_built="true"
+}
+
+build_kata_deploy_binary() {
+	build_rust_binaries
 
 	mkdir -p "${build_dir}/kata-deploy-binary/usr/bin"
-	cp "${build_dir}/kata-deploy-binary-out/kata-deploy/bin/kata-deploy" \
+	cp "${rust_builder_out}/kata-deploy/bin/kata-deploy" \
 		"${build_dir}/kata-deploy-binary/usr/bin/kata-deploy"
 	tar --zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-binary.tar.zst" \
 		-C "${build_dir}/kata-deploy-binary" .
+}
+
+build_kata_deploy_job_dispatcher() {
+	build_rust_binaries
+
+	mkdir -p "${build_dir}/kata-deploy-job-dispatcher/usr/bin"
+	cp "${rust_builder_out}/kata-deploy/bin/kata-deploy-job-dispatcher" \
+		"${build_dir}/kata-deploy-job-dispatcher/usr/bin/kata-deploy-job-dispatcher"
+	tar --zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-job-dispatcher.tar.zst" \
+		-C "${build_dir}/kata-deploy-job-dispatcher" .
 }
 
 build_nydus_snapshotter_for_coco_guest_pull() {
@@ -70,13 +98,15 @@ build_nydus_snapshotter_for_coco_guest_pull() {
 
 case "${component}" in
 	kata-deploy-binary) build_kata_deploy_binary ;;
+	kata-deploy-job-dispatcher) build_kata_deploy_job_dispatcher ;;
 	nydus-snapshotter-for-coco-guest-pull) build_nydus_snapshotter_for_coco_guest_pull ;;
 	all)
 		build_kata_deploy_binary
+		build_kata_deploy_job_dispatcher
 		build_nydus_snapshotter_for_coco_guest_pull
 		;;
 	*)
-		echo "Unknown component '${component}'. Expected: kata-deploy-binary, nydus-snapshotter-for-coco-guest-pull, all" >&2
+		echo "Unknown component '${component}'. Expected: kata-deploy-binary, kata-deploy-job-dispatcher, nydus-snapshotter-for-coco-guest-pull, all" >&2
 		exit 1
 		;;
 esac

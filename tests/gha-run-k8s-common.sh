@@ -732,6 +732,19 @@ function helm_helper() {
 	fi
 	yq -i ".image.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
 
+	# Derive the dispatcher image name from the main kata-deploy image,
+	# mirroring the -ci/non-ci logic used by the build/release scripts: the
+	# dispatcher lives at "<base>-job-dispatcher", with the "-ci" suffix (if
+	# any) kept at the very end (e.g. kata-deploy-ci -> kata-deploy-job-dispatcher-ci).
+	local dispatcher_reference
+	if [[ "${HELM_IMAGE_REFERENCE}" == *-ci ]]; then
+		dispatcher_reference="${HELM_IMAGE_REFERENCE%-ci}-job-dispatcher-ci"
+	else
+		dispatcher_reference="${HELM_IMAGE_REFERENCE}-job-dispatcher"
+	fi
+	yq -i ".job.dispatcherImage.reference = \"${dispatcher_reference}\"" "${values_yaml}"
+	yq -i ".job.dispatcherImage.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
+
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then

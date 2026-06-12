@@ -6,6 +6,10 @@ Verification Job - runs after kata-deploy installation to validate Kata is worki
 Only created when verification.pod is provided.
 */ -}}
 {{- if .Values.verification.pod }}
+{{- $isJob := eq (.Values.deploymentMode | default "daemonset") "job" }}
+{{- $base := .Chart.Name }}
+{{- if .Values.env.multiInstallSuffix }}{{- $base = printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix }}{{- end }}
+{{- $installDispatcher := printf "%s-install-dispatcher" $base | trunc 63 | trimSuffix "-" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -27,7 +31,10 @@ metadata:
     app.kubernetes.io/component: verification
   annotations:
     "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "0"
+    # In job mode the per-node install Jobs are post-install hooks at weight 5;
+    # verification must run after them, so use a higher weight. In daemonset
+    # mode the DaemonSet is a normal resource (created before any hook), so 0 is fine.
+    "helm.sh/hook-weight": {{ if $isJob }}"10"{{ else }}"0"{{ end }}
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
@@ -57,6 +64,33 @@ spec:
               echo "Timeout: ${TIMEOUT}s"
               echo ""
 
+              {{- if $isJob }}
+              # job mode: there is no DaemonSet. Helm has already waited for the
+              # install dispatcher hook (this verification hook runs at a higher
+              # weight); re-check it defensively here. The dispatcher only reports
+              # success once every per-node install Job has succeeded.
+              DISPATCHER="{{ $installDispatcher }}"
+              INSTALL_TIMEOUT="{{ .Values.verification.daemonsetTimeout }}"
+              echo "Waiting for install dispatcher Job ${DISPATCHER} to complete (timeout ${INSTALL_TIMEOUT}s)..."
+              # kata-deploy restarts the CRI runtime during the cri stage, which can
+              # cause transient API server unavailability. Retry the wait to handle this.
+              wait_retries=5
+              wait_retry_delay=15
+              for wait_attempt in $(seq 1 ${wait_retries}); do
+                if kubectl wait --for=condition=complete "job/${DISPATCHER}" -n {{ .Release.Namespace }} --timeout="${INSTALL_TIMEOUT}s" 2>&1; then
+                  break
+                fi
+                if [[ ${wait_attempt} -eq ${wait_retries} ]]; then
+                  echo "ERROR: install dispatcher ${DISPATCHER} did not complete after ${wait_retries} attempts"
+                  kubectl get job "${DISPATCHER}" -n {{ .Release.Namespace }} || true
+                  kubectl logs -n {{ .Release.Namespace }} "job/${DISPATCHER}" --tail=50 || true
+                  kubectl get jobs -n {{ .Release.Namespace }} -l kata-deploy/stage=install || true
+                  exit 1
+                fi
+                echo "API server may be restarting (attempt ${wait_attempt}/${wait_retries}), retrying in ${wait_retry_delay}s..."
+                sleep ${wait_retry_delay}
+              done
+              {{- else }}
               # First, wait for kata-deploy DaemonSet to exist (it's created by Helm, not a hook)
               echo "Waiting for kata-deploy DaemonSet to be created..."
               {{- if .Values.env.multiInstallSuffix }}
@@ -128,6 +162,7 @@ spec:
                 echo "API server may be restarting (attempt ${rollout_attempt}/${rollout_retries}), retrying in ${rollout_retry_delay}s..."
                 sleep ${rollout_retry_delay}
               done
+              {{- end }}
 
               # Wait for nodes to be labeled with katacontainers.io/kata-runtime=true
               # This label is set by kata-deploy when installation is complete
@@ -137,6 +172,35 @@ spec:
               max_wait=60
               echo "Node label timeout: ${max_wait}s"
               elapsed=0
+              {{- if $isJob }}
+              # job mode: only the targeted nodes get labeled. The dispatcher
+              # created one per-node install Job per targeted node (label
+              # kata-deploy/stage=install); use that count as the expected
+              # coverage rather than comparing against all nodes.
+              expected_count=$(kubectl get jobs -n {{ .Release.Namespace }} -l kata-deploy/stage=install --no-headers 2>/dev/null | wc -l)
+              echo "Expected ${expected_count} node(s) to be labeled (one per per-node install Job)"
+              while true; do
+                labeled_nodes=$(kubectl get nodes -l katacontainers.io/kata-runtime=true --no-headers 2>/dev/null | wc -l)
+
+                if [[ ${expected_count} -gt 0 ]] && [[ ${labeled_nodes} -ge ${expected_count} ]]; then
+                  echo "All ${expected_count} targeted node(s) labeled with kata-runtime=true"
+                  kubectl get nodes -L katacontainers.io/kata-runtime || true
+                  break
+                fi
+
+                if [[ ${elapsed} -ge ${max_wait} ]]; then
+                  echo "ERROR: Timeout waiting for nodes to be labeled after ${max_wait}s"
+                  echo "Labeled nodes: ${labeled_nodes}/${expected_count}"
+                  echo "Node labels:"
+                  kubectl get nodes -L katacontainers.io/kata-runtime || true
+                  exit 1
+                fi
+
+                echo "Labeled nodes: ${labeled_nodes}/${expected_count} (${elapsed}s/${max_wait}s)"
+                sleep 5
+                elapsed=$((elapsed + 5))
+              done
+              {{- else }}
               while true; do
                 labeled_nodes=$(kubectl get nodes -l katacontainers.io/kata-runtime=true --no-headers 2>/dev/null | wc -l)
                 total_nodes=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
@@ -159,6 +223,7 @@ spec:
                 sleep 5
                 elapsed=$((elapsed + 5))
               done
+              {{- end }}
 
               # Give kubelet time to pick up the new runtime configuration after containerd restart
               echo ""
@@ -314,6 +379,9 @@ rules:
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources: ["daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

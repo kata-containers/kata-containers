@@ -1,0 +1,39 @@
+[package]
+name = "kata-deploy-job-dispatcher"
+version = "0.1.0"
+authors.workspace = true
+edition = "2021"
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "kata-deploy-job-dispatcher"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+env_logger = "0.10"
+k8s-openapi = { version = "0.26", default-features = false, features = [
+    "v1_33",
+] }
+# Only the bare client is needed: this tool drives Jobs by polling with
+# Api::list, so kube::runtime (watchers/reflectors) and kube::derive are not
+# pulled in. `ring` matches kube's default rustls CryptoProvider and must stay
+# enabled, otherwise rustls panics at startup.
+kube = { version = "2.0", default-features = false, features = [
+    "client",
+    "rustls-tls",
+    "ring",
+] }
+log.workspace = true
+serde_yaml = "0.9"
+tokio = { workspace = true, features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "time",
+] }
+
+[dev-dependencies]
+rstest.workspace = true
