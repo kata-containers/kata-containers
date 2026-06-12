@@ -285,7 +285,7 @@ main() {
 	title "create workloads"
 
 	CURRENT_TASK="start workload (runc)"
-	start_workload
+	start_workload runc
 	RUNC_POD_ID="${POD_ID}"
 	RUNC_CID="${CID}"
 	echo_ok "${CURRENT_TASK} - POD ID:${POD_ID}, CID:${CID}"
