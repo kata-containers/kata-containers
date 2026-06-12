@@ -70,6 +70,16 @@ exclude = [
   # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
   # those packages to think they are part of the kata root workspace
   "tools/packaging/kata-deploy/local-build/build",
+
+  # Exclude vendor directories created by cargo vendor
+  "vendor",
+  "src/agent/vendor",
+  "src/runtime-rs/vendor",
+  "src/tools/agent-ctl/vendor",
+  "src/tools/genpolicy/vendor",
+  "src/tools/kata-ctl/vendor",
+  "src/tools/trace-forwarder/vendor",
+  "tools/packaging/kata-deploy/binary/vendor",
 ]
 
 [workspace.dependencies]
