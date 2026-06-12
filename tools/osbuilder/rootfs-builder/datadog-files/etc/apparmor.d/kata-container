@@ -1,0 +1,28 @@
+# Applied to the kata-agent init helper and all container processes. Denies auth token
+# access and container-initiated virtiofs mounts.
+
+#include <tunables/global>
+
+profile kata-container flags=(attach_disconnected,mediate_deleted) {
+  capability,
+  network,
+  mount,
+  remount,
+  umount,
+  pivot_root,
+  ptrace,
+  signal,
+  dbus,
+
+  # Containers must not mount the host-shared virtiofs device themselves (a sandbox-escape
+  # vector to other containers' rootfs and the sandbox shared tree). The agent mounts pod
+  # volumes (serviceaccount, configmaps, hostPaths, rootfs) under usr.bin.kata-agent, which
+  # this profile does not confine, so legitimate volume mounts are unaffected.
+  deny mount fstype=virtiofs,
+
+  # "/{,**}" covers the root dir itself and all paths; "ix" keeps children in this profile.
+  /{,**} rwklmix,
+
+  deny /run/kata-containers/shared/containers/*/datadog-agent/auth/**  rwklmx,
+  deny /proc/*/root/run/kata-containers/shared/containers/*/datadog-agent/auth/** rwklmx,
+}

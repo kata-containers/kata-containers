@@ -48,7 +48,7 @@ jobs:
       - name: Build Kernel ${{ matrix.kernel_version }}
         run: |
           cd tools/packaging/kernel
-          sudo KERNEL_DEBUG_ENABLED=yes ./build-kernel.sh -v ${{ matrix.kernel_version }} setup
+          sudo KERNEL_DEBUG_ENABLED=yes KERNEL_DATADOG_ENABLED=yes ./build-kernel.sh -v ${{ matrix.kernel_version }} setup
           sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} build
       - name: Bundle artifacts
         run: |

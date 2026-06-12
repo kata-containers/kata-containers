@@ -34,6 +34,8 @@ REPO_URL=${REPO_URL:-http://ports.ubuntu.com}
 # [DATADOG] Packages installed from the Datadog APT repo. Repo + keyring are
 # wired into mmdebstrap in rootfs_lib.sh. Append more packages here as needed.
 EXTRA_PKGS="${EXTRA_PKGS:+${EXTRA_PKGS} }datadog-agent"
+# [DATADOG] apparmor: provides apparmor_parser, needed by datadog-apparmor.service.
+PACKAGES+=" apparmor"
 
 if [[ "$(uname -m)" != "${ARCH}" ]]; then
 	case "${ARCH}" in

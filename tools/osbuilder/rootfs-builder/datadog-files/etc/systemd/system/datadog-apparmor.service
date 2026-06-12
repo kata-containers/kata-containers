@@ -1,0 +1,12 @@
+[Unit]
+Description=Load Datadog AppArmor profiles
+DefaultDependencies=no
+Before=kata-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/apparmor_parser -r /etc/apparmor.d/
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
