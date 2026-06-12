@@ -17,6 +17,6 @@ spec:
       limits:
         memory: "${memory_size}"
       requests:
-        memory: "500Mi"
+        memory: "700Mi"
     command: ["stress"]
     args: ["--vm", "1", "--vm-bytes", "${memory_allocated}", "--vm-hang", "1"]
