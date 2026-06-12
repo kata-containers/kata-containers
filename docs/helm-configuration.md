@@ -346,6 +346,8 @@ $ helm install kata-deploy -f values.yaml "${CHART}" --version "${VERSION}"
 
 You can add extra labels to the kata-deploy DaemonSet pods. These are applied
 in addition to the `name: kata-deploy` label that the chart uses internally.
+The chart ignores a `name` key in `podLabels` and always sets the required
+selector label itself.
 
 ```sh
 $ helm install kata-deploy \
@@ -358,6 +360,28 @@ Or via a values file:
 ```yaml
 podLabels:
   team: platform
+```
+
+### `podAnnotations`
+
+You can add annotations to the kata-deploy DaemonSet pods for whatever your
+environment needs: Prometheus scrape hints, policy markers, revision metadata,
+and so on. The chart does not set any annotations on the kata-deploy DaemonSet
+pod template by default, so nothing is reserved or overwritten unless you set
+`podAnnotations` yourself.
+
+```sh
+$ helm install kata-deploy \
+  --set-string podAnnotations.prometheus\.io/scrape=false \
+  "${CHART}" --version "${VERSION}"
+```
+
+Or via a values file:
+
+```yaml
+podAnnotations:
+  prometheus.io/scrape: "false"
+  example.com/owner: platform-team
 ```
 
 ### `affinity`
