@@ -76,6 +76,16 @@ Sharedfs
 Initdata
 fsmerge
 fsmerged
+Rafs
+virtiofs
+virtiofsd
+Virtiofs
+nydusd
+Lowerdir
+lowerdir
+Upperdir
+upperdir
+
 
 # Networking & Communication
 netns
@@ -93,6 +103,7 @@ coredump
 CPUSET
 crio
 nerdctl
+crictl
 dockershim
 dentries
 hypercalls

@@ -5,6 +5,7 @@
 //
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -17,6 +18,27 @@ use tracing::instrument;
 
 #[derive(Debug)]
 pub struct OverlayfsHandler {}
+
+fn ensure_directory_exists(path: &Path) -> Result<()> {
+    match fs::create_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == ErrorKind::AlreadyExists && path.is_dir() => Ok(()),
+        Err(err) if err.raw_os_error() == Some(libc::ENOSYS) => {
+            if path.is_dir() {
+                Ok(())
+            } else {
+                Err(err).context(format!(
+                    "failed to create overlay directory {}: filesystem does not support mkdir",
+                    path.display()
+                ))
+            }
+        }
+        Err(err) => Err(err).context(format!(
+            "failed to create overlay directory {}",
+            path.display()
+        )),
+    }
+}
 
 #[async_trait::async_trait]
 impl StorageHandler for OverlayfsHandler {
@@ -61,7 +83,7 @@ impl StorageHandler for OverlayfsHandler {
                 .as_str()
                 .strip_prefix(overlay_create_dir_prefix)
             {
-                fs::create_dir_all(dir).context("Failed to create directory")?;
+                ensure_directory_exists(Path::new(dir))?;
             }
         }
         let path = common_storage_handler(ctx.logger, &storage)?;

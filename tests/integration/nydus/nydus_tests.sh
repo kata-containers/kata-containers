@@ -23,6 +23,8 @@ SYSCONFIG_FILE="/etc/kata-containers/configuration.toml"
 DEFAULT_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
 CLH_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
 DB_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-dragonball.toml"
+QEMU_RS_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-qemu-runtime-rs.toml"
+CLH_RS_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-clh-runtime-rs.toml"
 need_restore_containerd_config=false
 need_restore_containerd_fragment=false
 containerd_config="/etc/containerd/config.toml"
@@ -33,13 +35,15 @@ containerd_fragment_backup="/tmp/50-nydus.toml.bak"
 # test image for container
 IMAGE="${IMAGE:-ghcr.io/dragonflyoss/image-service/alpine:nydus-latest}"
 
-if [[ "${KATA_HYPERVISOR}" != "qemu" ]] && [[ "${KATA_HYPERVISOR}" != "clh" ]] && [[ "${KATA_HYPERVISOR}" != "dragonball" ]]; then
-	echo "Skip nydus test for ${KATA_HYPERVISOR}, it only works for QEMU/CLH/DB now."
+if [[ "${KATA_HYPERVISOR}" != "qemu" ]] && [[ "${KATA_HYPERVISOR}" != "clh" ]] && \
+   [[ "${KATA_HYPERVISOR}" != "dragonball" ]] && [[ "${KATA_HYPERVISOR}" != "qemu-runtime-rs" ]] && \
+   [[ "${KATA_HYPERVISOR}" != "clh-runtime-rs" ]]; then
+	echo "Skip nydus test for ${KATA_HYPERVISOR}, it only works for QEMU/CLH/DB/QEMU-runtime-rs/CLH-runtime-rs now."
 	exit 0
 fi
 
 case "${KATA_HYPERVISOR}" in
-	dragonball)
+	dragonball|qemu-runtime-rs|clh-runtime-rs)
 		SYSCONFIG_FILE="/etc/kata-containers/runtime-rs/configuration.toml"
 		;;
 	*)
@@ -66,6 +70,10 @@ function config_kata() {
 		sudo cp -a "${DEFAULT_CONFIG_FILE}" "${SYSCONFIG_FILE}"
 	elif [[ "${KATA_HYPERVISOR}" == "dragonball" ]]; then
 		sudo cp -a "${DB_CONFIG_FILE}" "${SYSCONFIG_FILE}"
+	elif [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ]]; then
+		sudo cp -a "${QEMU_RS_CONFIG_FILE}" "${SYSCONFIG_FILE}"
+	elif [[ "${KATA_HYPERVISOR}" == "clh-runtime-rs" ]]; then
+		sudo cp -a "${CLH_RS_CONFIG_FILE}" "${SYSCONFIG_FILE}"
 	else
 		sudo cp -a "${CLH_CONFIG_FILE}" "${SYSCONFIG_FILE}"
 	fi
