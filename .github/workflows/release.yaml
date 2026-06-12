@@ -317,6 +317,11 @@ jobs:
 
       - name: Publish a release
         run: |
-          ./tools/packaging/release/release.sh publish-release
+          # TESTING: intentionally NOT publishing the release so the draft is
+          # never marked as completed. This lets us exercise all the other
+          # release steps without actually cutting a release.
+          echo "Skipping 'release.sh publish-release' on purpose (testing mode)."
+          echo "The release will remain a draft and will NOT be marked as completed."
+          # ./tools/packaging/release/release.sh publish-release
         env:
           GH_TOKEN: ${{ github.token }}
