@@ -199,7 +199,8 @@ tolerations: []
 startupTaints: []
 
 # Extra labels for the kata-deploy DaemonSet pods (in addition to the
-# required "name: kata-deploy" label used by the chart).
+# required "name: kata-deploy" label used by the chart). A "name" key here
+# is ignored.
 # Examples:
 # podLabels:
 #   team: platform

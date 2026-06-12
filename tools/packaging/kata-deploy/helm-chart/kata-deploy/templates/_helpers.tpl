@@ -1013,9 +1013,10 @@ merged with the NFD terms (each NFD term is AND-ed with each user term).
 {{- if $userTerms -}}
 {{- range $nfdTerm := $nfdTerms -}}
 {{- range $userTerm := $userTerms -}}
-{{- $nfdExprs := $nfdTerm.matchExpressions | default list -}}
-{{- $userExprs := $userTerm.matchExpressions | default list -}}
-{{- $mergedTerms = append $mergedTerms (dict "matchExpressions" (concat $nfdExprs $userExprs)) -}}
+{{- $mergedTerm := merge (deepCopy $nfdTerm) (deepCopy $userTerm) -}}
+{{- $_ := set $mergedTerm "matchExpressions" (concat ($nfdTerm.matchExpressions | default list) ($userTerm.matchExpressions | default list)) -}}
+{{- $_ := set $mergedTerm "matchFields" (concat ($nfdTerm.matchFields | default list) ($userTerm.matchFields | default list)) -}}
+{{- $mergedTerms = append $mergedTerms $mergedTerm -}}
 {{- end -}}
 {{- end -}}
 {{- else -}}

@@ -39,13 +39,16 @@ spec:
   template:
     metadata:
       labels:
+{{- with .Values.podLabels }}
+{{- $podLabels := omit . "name" }}
+{{- with $podLabels }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- end }}
 {{- if .Values.env.multiInstallSuffix }}
         name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
         name: {{ .Chart.Name }}
-{{- end }}
-{{- with .Values.podLabels }}
-{{- toYaml . | nindent 8 }}
 {{- end }}
 {{- with .Values.podAnnotations }}
       annotations:

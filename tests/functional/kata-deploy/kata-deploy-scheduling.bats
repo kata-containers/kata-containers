@@ -64,6 +64,37 @@ extract_kata_deploy_ds() {
 	echo "${ds}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
 }
 
+@test "Helm template: podLabels cannot override required name selector label" {
+	render_chart --set podLabels.name=wrong
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep -q "name: wrong"
+	echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep -q "name: kata-deploy"
+	! echo "${ds}" | grep -A8 "template:" | grep -A6 "labels:" | grep "name:" | grep -qv "name: kata-deploy"
+}
+
+@test "Helm template: podAnnotations are applied to pod template" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+podAnnotations:
+  example.com/owner: platform-team
+  prometheus.io/scrape: "false"
+EOF
+
+	render_chart -f "${values_file}"
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	echo "${ds}" | grep -A10 "template:" | grep -A5 "metadata:" | grep -q "annotations:"
+	echo "${ds}" | grep -q "example.com/owner: platform-team"
+	echo "${ds}" | grep -q 'prometheus.io/scrape: "false"'
+}
+
 @test "Helm template: user affinity is applied to pod spec" {
 	local values_file
 	values_file=$(mktemp)
@@ -126,4 +157,31 @@ EOF
 	echo "${ds}" | grep -q "platform-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM"
+}
+
+@test "Helm template: NFD merge preserves matchFields in nodeSelectorTerms" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchFields:
+            - key: metadata.name
+              operator: In
+              values:
+                - worker-node-1
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	echo "${ds}" | grep -q "matchFields:"
+	echo "${ds}" | grep -q "metadata.name"
+	echo "${ds}" | grep -q "worker-node-1"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 }
