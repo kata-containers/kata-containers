@@ -1,5 +1,20 @@
 # Migrating configuration from the Go runtime to `runtime-rs`
 
+> **Default runtime change (Kata Containers 4.0.0 and onwards)**
+> Starting with the **4.0.0 release**, the **Rust runtime (`runtime-rs`)** is the
+> **default** runtime shipped by `kata-deploy` on every architecture that has a
+> `runtime-rs` build (x86_64, aarch64 and s390x). The default RuntimeClass
+> therefore resolves to `qemu-runtime-rs` rather than the Go runtime's
+> `kata-qemu`. ppc64le has no `runtime-rs` build yet and stays on the Go
+> runtime.
+>
+> **The Go runtime is now deprecated, but it is not removed.** It remains
+> supported (no new features are being added) and selectable — for example via
+> the `kata-qemu` RuntimeClass — for **18 months** following the 4.0 release,
+> after which it is scheduled for removal. Use this window to migrate any
+> configuration that depends on Go-runtime-only options (catalogued below) to
+> `runtime-rs`.
+
 ## Scope
 
 Kata Containers currently ships two runtime implementations:
