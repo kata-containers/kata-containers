@@ -299,7 +299,9 @@ Includes:
 
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
-This file enables only the NVIDIA GPU-enabled shims:
+This file enables only the NVIDIA GPU-enabled shims and installs them using the
+[`job` deployment mode](#deployment-modes-daemonset-vs-job) (no always-on
+DaemonSet on the node):
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
