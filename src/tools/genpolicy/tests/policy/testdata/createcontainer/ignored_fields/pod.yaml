@@ -7,6 +7,24 @@ spec:
   containers:
   - name: redis
     image: registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db
+    readinessProbe:
+      grpc:
+        port: 2379
+        service: BarService
+      initialDelaySeconds: 10
+      successThreshold: 3
+    livenessProbe:
+      tcpSocket:
+        host: foo.bar
+        port: 8080
+      periodSeconds: 10
+      failureThreshold: 2
+    startupProbe:
+      httpGet:
+        path: /healthz
+        port: liveness-port
+      terminationGracePeriodSeconds: 60
+      timeoutSeconds: 10
   priority: 1
   schedulerName: test-scheduler-name
   affinity:
