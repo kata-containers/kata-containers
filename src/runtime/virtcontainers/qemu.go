@@ -629,14 +629,9 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	if q.config.HugePages {
 		backendType = "memory-backend-file"
 		backendPath = "/dev/hugepages"
-	} else if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
-		q.config.FileBackedMemRootDir != "" {
+	} else if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		backendType = "memory-backend-file"
-		if q.config.FileBackedMemRootDir != "" {
-			backendPath = q.config.FileBackedMemRootDir
-		} else {
-			backendPath = fallbackFileBackedMemDir
-		}
+		backendPath = fallbackFileBackedMemDir
 	}
 	if backendPath != "" {
 		if _, err := os.Stat(backendPath); err != nil {
@@ -913,12 +908,7 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 }
 
 func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) {
-	var target string
-	if q.config.FileBackedMemRootDir != "" {
-		target = q.config.FileBackedMemRootDir
-	} else {
-		target = fallbackFileBackedMemDir
-	}
+	target := fallbackFileBackedMemDir
 	if _, err := os.Stat(target); err != nil {
 		q.Logger().WithError(err).Error("File backed memory location does not exist")
 		return
@@ -1050,12 +1040,11 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	// builds the first VM with file-backed memory and shared=on and the
 	// subsequent ones with shared=off. virtio-fs always requires shared=on for
 	// memory.
-	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
-		q.config.FileBackedMemRootDir != "" {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		if !q.config.BootToBeTemplate && !q.config.BootFromTemplate {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
-			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+			return errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
 		}
 		if q.config.HugePages {
 			knobs.MemPrealloc = true
@@ -1394,8 +1383,7 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
 		}
 
-		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
-			q.config.FileBackedMemRootDir != "" {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 			target = q.qemuConfig.Memory.Path
 			memoryBack = "memory-backend-file"
 		}

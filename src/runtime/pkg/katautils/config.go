@@ -102,7 +102,6 @@ type hypervisor struct {
 	VirtioFSDaemon                 string                    `toml:"virtio_fs_daemon"`
 	VirtioFSCache                  string                    `toml:"virtio_fs_cache"`
 	VhostUserStorePath             string                    `toml:"vhost_user_store_path"`
-	FileBackedMemRootDir           string                    `toml:"file_mem_backend"`
 	GuestHookPath                  string                    `toml:"guest_hook_path"`
 	GuestMemoryDumpPath            string                    `toml:"guest_memory_dump_path"`
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
@@ -118,7 +117,6 @@ type hypervisor struct {
 	VirtioFSExtraArgs              []string                  `toml:"virtio_fs_extra_args"`
 	PFlashList                     []string                  `toml:"pflashes"`
 	VhostUserStorePathList         []string                  `toml:"valid_vhost_user_store_paths"`
-	FileBackedMemRootList          []string                  `toml:"valid_file_mem_backends"`
 	EntropySourceList              []string                  `toml:"valid_entropy_sources"`
 	EnableAnnotations              []string                  `toml:"enable_annotations"`
 	RxRateLimiterMaxRate           uint64                    `toml:"rx_rate_limiter_max_rate"`
@@ -1072,8 +1070,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		IOMMUPlatform:                 h.getIOMMUPlatform(),
 		GuestNUMANodes:                h.defaultGuestNUMANodes(),
 		NUMAMapping:                   append([]string(nil), h.NUMAMapping...),
-		FileBackedMemRootDir:          h.FileBackedMemRootDir,
-		FileBackedMemRootList:         h.FileBackedMemRootList,
 		Debug:                         h.Debug,
 		DisableNestingChecks:          h.DisableNestingChecks,
 		BlockDeviceDriver:             blockDriver,
@@ -1210,8 +1206,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemPrealloc:                    h.MemPrealloc,
 		ReclaimGuestFreedMemory:        h.ReclaimGuestFreedMemory,
 		HugePages:                      h.HugePages,
-		FileBackedMemRootDir:           h.FileBackedMemRootDir,
-		FileBackedMemRootList:          h.FileBackedMemRootList,
 		Debug:                          h.Debug,
 		DisableNestingChecks:           h.DisableNestingChecks,
 		BlockDeviceDriver:              blockDriver,
@@ -1601,7 +1595,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HugePages:                defaultEnableHugePages,
 		IOMMU:                    defaultEnableIOMMU,
 		IOMMUPlatform:            defaultEnableIOMMUPlatform,
-		FileBackedMemRootDir:     defaultFileBackedMemRootDir,
 		Debug:                    defaultEnableDebug,
 		ExtraMonitorSocket:       defaultExtraMonitorSocket,
 		DisableNestingChecks:     defaultDisableNestingChecks,

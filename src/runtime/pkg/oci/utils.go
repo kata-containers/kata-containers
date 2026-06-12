@@ -750,13 +750,6 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
-			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
-		}
-		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
-	}
-
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ReclaimGuestFreedMemory).setBool(func(reclaimGuestFreedMemory bool) {
 		sbConfig.HypervisorConfig.ReclaimGuestFreedMemory = reclaimGuestFreedMemory
 	}); err != nil {

@@ -1182,8 +1182,6 @@ kernel_params = "console=hvc0"
                     .replace("@DEFENABLEIOTHREADS@", "false")
                     .replace("@DEFENABLEVHOSTUSERSTORE@", "false")
                     .replace("@DEFENTROPYSOURCE@", "/dev/urandom")
-                    .replace("@DEFFILEMEMBACKEND@", "")
-                    .replace("@DEFVALIDFILEMEMBACKENDS@", "[]")
                     .replace("@DEFBLOCKSTORAGEDRIVER_QEMU@", "virtio-blk")
                     .replace("@DEFBLOCKDEVICEAIO_QEMU@", "io_uring")
                     .replace("@DEFAULTEXPFEATURES@", "[]")

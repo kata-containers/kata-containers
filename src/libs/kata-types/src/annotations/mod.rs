@@ -235,9 +235,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES: &str =
 /// A sandbox annotation to specify huge page mode of memory backend.
 pub const KATA_ANNO_CFG_HYPERVISOR_HUGEPAGE_TYPE: &str =
     "io.katacontainers.config.hypervisor.hugepage_type";
-/// A sandbox annotation to soecify file based memory backend root directory.
-pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
-    "io.katacontainers.config.hypervisor.file_mem_backend";
 /// A sandbox annotation that is used to enable/disable virtio-mem.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM: &str =
     "io.katacontainers.config.hypervisor.enable_virtio_mem";
@@ -888,10 +885,6 @@ impl Annotation {
                                 ));
                             }
                         }
-                    }
-                    KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => {
-                        hv.memory_info.validate_memory_backend_path(value)?;
-                        hv.memory_info.file_mem_backend = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM => match self.get_value::<bool>(key) {
                         Ok(r) => {

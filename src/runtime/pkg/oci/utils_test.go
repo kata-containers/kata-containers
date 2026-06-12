@@ -620,7 +620,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 		HypervisorType: vc.QemuHypervisor,
 	}
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
-	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
@@ -634,7 +633,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.MemOffset] = "512"
 	ocispec.Annotations[vcAnnotations.VirtioMem] = "true"
 	ocispec.Annotations[vcAnnotations.MemPrealloc] = "true"
-	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.HugePages] = "true"
 	ocispec.Annotations[vcAnnotations.IOMMU] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceDriver] = "virtio-scsi"
@@ -678,7 +676,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.MemOffset, uint64(512))
 	assert.Equal(sbConfig.HypervisorConfig.VirtioMem, true)
 	assert.Equal(sbConfig.HypervisorConfig.MemPrealloc, true)
-	assert.Equal(sbConfig.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(sbConfig.HypervisorConfig.HugePages, true)
 	assert.Equal(sbConfig.HypervisorConfig.IOMMU, true)
 	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
@@ -907,27 +904,22 @@ func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 	// Enable annotations
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
 
-	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
-	config.HypervisorConfig.FileBackedMemRootDir = "do-not-touch"
 	config.HypervisorConfig.VirtioFSDaemon = "dangerous-daemon"
 	config.HypervisorConfig.EntropySource = "truly-random"
 
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "do-not-touch")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "dangerous-daemon")
 	assert.Equal(config.HypervisorConfig.EntropySource, "truly-random")
 
 	// Now enable them and check again
-	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/*m"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 	runtimeConfig.HypervisorConfig.EntropySourceList = []string{"/dev/*random*"}
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.NoError(err)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 
