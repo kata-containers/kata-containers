@@ -151,13 +151,18 @@ function _publish_multiarch_manifest()
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
 	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
 
-	# The dispatcher is shipped as a separate, minimal image alongside kata-deploy
-	# with the same tags. When no dedicated registries are given, derive them from
-	# each kata-deploy registry by inserting "-job-dispatcher" before any "-ci"
+	# The dispatcher is a kata-deploy-specific sidecar image, shipped alongside
+	# kata-deploy with the same tags. It does not exist for other images (e.g.
+	# kata-monitor), so callers publishing a non-kata-deploy manifest must opt
+	# out by setting KATA_DEPLOY_PUBLISH_JOB_DISPATCHER=false.
+	#
+	# When enabled and no dedicated registries are given, derive them from each
+	# kata-deploy registry by inserting "-job-dispatcher" before any "-ci"
 	# suffix, so the "-ci" stays last:
 	#   .../kata-deploy     -> .../kata-deploy-job-dispatcher
 	#   .../kata-deploy-ci  -> .../kata-deploy-job-dispatcher-ci
-	if [[ ${#JOB_DISPATCHER_REGISTRIES[@]} -eq 0 ]]; then
+	if [[ "${KATA_DEPLOY_PUBLISH_JOB_DISPATCHER:-true}" == "true" \
+		&& ${#JOB_DISPATCHER_REGISTRIES[@]} -eq 0 ]]; then
 		JOB_DISPATCHER_REGISTRIES=()
 		for registry in "${REGISTRIES[@]}"; do
 			if [[ "${registry}" == *-ci ]]; then
