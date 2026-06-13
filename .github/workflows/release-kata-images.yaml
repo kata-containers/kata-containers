@@ -35,10 +35,10 @@ jobs:
           tag=$(echo "${GITHUB_REF}" | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
             tag=$(./tools/packaging/release/release.sh release-version)
-            echo "tags=${tag} latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "tags=${tag}" >> "$GITHUB_OUTPUT"
           fi
+          # TESTING: never include the "latest" tag so a run from this branch
+          # can never move the "latest" image tag.
+          echo "tags=${tag}" >> "$GITHUB_OUTPUT"
 
   publish-monitor:
     needs: resolve-tags
@@ -65,7 +65,9 @@ jobs:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-monitor
-      tag: latest
+      # TESTING: fallback tag must not be "latest" so a run from this branch
+      # can never move the "latest" image tag (tags below overrides this anyway).
+      tag: ${{ needs.resolve-tags.outputs.tags }}
       tags: ${{ needs.resolve-tags.outputs.tags }}
       tag-suffix: ${{ matrix.tag_suffix }}
       runner: ${{ matrix.runner }}

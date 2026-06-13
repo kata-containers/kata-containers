@@ -72,7 +72,8 @@ jobs:
           tag=$(echo "$GITHUB_REF" | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
               tag=$(./tools/packaging/release/release.sh release-version)
-              tags=("${tag}" "latest")
+              # TESTING: drop "latest" so a run from this branch never moves it.
+              tags=("${tag}")
           else
               tags=("${tag}")
           fi

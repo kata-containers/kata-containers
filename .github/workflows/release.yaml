@@ -121,7 +121,9 @@ jobs:
       - name: Get the image tags
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
-          echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
+          # TESTING: do NOT include the "latest" tag so a run from this branch
+          # can never move the "latest" image tag.
+          echo "KATA_DEPLOY_IMAGE_TAGS=$release_version" >> "$GITHUB_ENV"
 
       - name: Publish multi-arch manifest on quay.io & ghcr.io
         run: |
