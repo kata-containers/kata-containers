@@ -39,6 +39,8 @@ const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
 const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
+const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
+
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
 
@@ -667,6 +669,64 @@ impl Qmp {
         Ok(())
     }
 
+    fn wait_for_device_deleted(&mut self, device_id: &str, timeout: Duration) -> Result<()> {
+        const POLL_INTERVAL: Duration = Duration::from_millis(100);
+        let deadline = Instant::now() + timeout;
+
+        self.qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(timeout))?;
+
+        let result = loop {
+            if let Err(e) = self.qmp.nop() {
+                warn!(
+                    sl!(),
+                    "The QMP nop() failed for {}: {:?}",
+                    device_id,
+                    e
+                );
+            }
+
+            let found = self.qmp.events().any(|event| {
+                matches!(event, qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
+                    if data.device.as_deref() == Some(device_id))
+            });
+            if found {
+                info!(
+                    sl!(),
+                    "The QMP received DEVICE_DELETED event for {}",
+                    device_id
+                );
+                break Ok(());
+            }
+
+            let now = Instant::now();
+            if now >= deadline {
+                break Err(anyhow!(
+                    "timed out ({:?}) waiting for DEVICE_DELETED event for {}",
+                    timeout,
+                    device_id
+                ));
+            }
+            thread::sleep(POLL_INTERVAL.min(deadline - now));
+        };
+
+        // Reset the default read timeout for subsequent QMP operations.
+        // Failure here is non-fatal — a stale timeout only affects the next
+        // QMP read, not the already-completed device removal.
+        if let Err(e) = self.qmp.inner_mut().get_mut_write().set_read_timeout(Some(
+            Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT),
+        )) {
+            warn!(
+                sl!(),
+                "Failed to reset read timeout: {:?}", e
+            );
+        }
+
+        result
+    }
+
     /// Hotplug block device:
     /// {
     ///     "execute": "blockdev-add",
@@ -973,6 +1033,67 @@ impl Qmp {
 
             Ok((Some(pci_path), None))
         }
+    }
+
+    /// Hotunplug block device.
+    #[allow(dead_code)]
+    pub fn hotunplug_block_device(
+        &mut self,
+        block_driver: &str,
+        index: u64,
+    ) -> Result<()> {
+        let node_name = block_node_name(index);
+
+        let result = (|| -> Result<()> {
+            // Remove the frontend device (virtio-blk-pci / scsi-hd / virtio-blk-ccw).
+            self.qmp
+                .execute(&qmp::device_del {
+                    id: node_name.clone(),
+                })
+                .map_err(|e| anyhow!("device_del for block device {}: {:?}", node_name, e))?;
+
+            // device_del is asynchronous — wait for the guest to acknowledge removal
+            // before tearing down the backend, otherwise blockdev_del may fail with
+            // "Node is still in use".
+            self.wait_for_device_deleted(&node_name, DEVICE_DELETED_TIMEOUT)
+                .context("hotunplug_block_device(): waiting for DEVICE_DELETED")?;
+
+            // Remove the blockdev backend node.
+            self.qmp
+                .execute(&qapi_qmp::blockdev_del {
+                    node_name: node_name.clone(),
+                })
+                .map_err(|e| {
+                    anyhow!("blockdev_del for block device {}: {:?}", node_name, e)
+                })?;
+
+            Ok(())
+        })();
+
+        if let Err(ref e) = result {
+            warn!(
+                sl!(),
+                "hotunplug_block_device(): failed for {}, cleaning up CCW state: {:?}",
+                node_name,
+                e
+            );
+        }
+
+        // Clean up CCW subchannel state (s390x) on all paths.
+        if block_driver == VIRTIO_BLK_CCW {
+            if let Some(ref mut subchannel) = self.ccw_subchannel {
+                let _ = subchannel.remove_device(&node_name);
+            }
+        }
+
+        result?;
+
+        info!(
+            sl!(),
+            "hotunplug_block_device(): successfully removed {}", node_name
+        );
+
+        Ok(())
     }
 
     pub fn hotplug_vfio_device(
