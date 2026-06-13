@@ -1036,7 +1036,6 @@ impl Qmp {
     }
 
     /// Hotunplug block device.
-    #[allow(dead_code)]
     pub fn hotunplug_block_device(
         &mut self,
         block_driver: &str,

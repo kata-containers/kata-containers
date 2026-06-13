@@ -931,6 +931,49 @@ impl QemuInner {
         ))
     }
 
+    #[allow(dead_code)]
+    async fn hotunplug_device(&mut self, device: &DeviceType) -> Result<()> {
+        let qmp = match self.qmp {
+            Some(ref mut qmp) => qmp,
+            None => return Err(anyhow!("QMP not initialized")),
+        };
+
+        match device {
+            DeviceType::Block(ref block_device) => {
+                let block_driver = &self.config.blockdev_info.block_device_driver;
+                qmp.hotunplug_block_device(block_driver, block_device.config.index)
+                    .context("hotunplug block device")?;
+            }
+            DeviceType::BlockModern(ref block_device) => {
+                let (index, driver) = {
+                    let cfg = &block_device.lock().await.config;
+                    (
+                        cfg.index,
+                        self.config.blockdev_info.block_device_driver.clone(),
+                    )
+                };
+                qmp.hotunplug_block_device(&driver, index)
+                    .context("hotunplug block device")?;
+            }
+            DeviceType::Network(_)
+            | DeviceType::Vfio(_)
+            | DeviceType::VfioModern(_)
+            | DeviceType::VhostUserBlk(_)
+            | DeviceType::VhostUserNetwork(_)
+            | DeviceType::ShareFs(_)
+            | DeviceType::HybridVsock(_)
+            | DeviceType::Vsock(_)
+            | DeviceType::Protection(_)
+            | DeviceType::PortDevice(_) => {
+                return Err(anyhow!(
+                    "hotunplug for {} is currently unsupported",
+                    device
+                ));
+            }
+        }
+        Ok(())
+    }
+
     async fn hotplug_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,
