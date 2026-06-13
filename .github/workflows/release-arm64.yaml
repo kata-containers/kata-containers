@@ -69,16 +69,14 @@ jobs:
         env:
           TARGET_ARCH: ${{ inputs.target-arch }}
         run: |
-          # We need to do such trick here as the format of the $GITHUB_REF
-          # is "refs/tags/<tag>"
-          tag=$(echo "$GITHUB_REF" | cut -d/ -f3-)
-          if [ "${tag}" = "main" ]; then
-              tag=$(./tools/packaging/release/release.sh release-version)
-              # TESTING: drop "latest" so a run from this branch never moves it.
-              tags=("${tag}")
-          else
-              tags=("${tag}")
-          fi
+          # The multi-arch manifest is always published using the release
+          # version (see the publish-multiarch-manifest step), so the per-arch
+          # images must be tagged with the release version too -- regardless of
+          # the branch the release workflow was dispatched from. Otherwise a run
+          # from a testing branch would tag the images with the branch name and
+          # the manifest step would not be able to find them.
+          tag=$(./tools/packaging/release/release.sh release-version)
+          tags=("${tag}")
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
                   "ghcr.io/kata-containers/kata-deploy" \

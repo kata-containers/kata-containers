@@ -32,10 +32,12 @@ jobs:
       - name: Resolve tags
         id: tags
         run: |
-          tag=$(echo "${GITHUB_REF}" | cut -d/ -f3-)
-          if [ "${tag}" = "main" ]; then
-            tag=$(./tools/packaging/release/release.sh release-version)
-          fi
+          # The kata-monitor images are part of the release, so tag them with
+          # the release version regardless of the branch the release workflow
+          # was dispatched from. This keeps them in sync with the kata-deploy
+          # images and avoids a branch-name vs release-version mismatch between
+          # the per-arch images and the multi-arch manifest.
+          tag=$(./tools/packaging/release/release.sh release-version)
           # TESTING: never include the "latest" tag so a run from this branch
           # can never move the "latest" image tag.
           echo "tags=${tag}" >> "$GITHUB_OUTPUT"
