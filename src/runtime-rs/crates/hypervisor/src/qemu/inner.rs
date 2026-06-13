@@ -925,13 +925,17 @@ impl QemuInner {
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "QemuInner::remove_device() {} ", device);
-        Err(anyhow!(
-            "QemuInner::remove_device({}): Not yet implemented",
-            device
-        ))
+        self.hotunplug_device(&device).await?;
+
+        self.devices.retain(|d| match (d, &device) {
+            (DeviceType::Block(a), DeviceType::Block(b)) => a.config.index != b.config.index,
+            (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => !std::sync::Arc::ptr_eq(a, b),
+            _ => true,
+        });
+
+        Ok(())
     }
 
-    #[allow(dead_code)]
     async fn hotunplug_device(&mut self, device: &DeviceType) -> Result<()> {
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,
