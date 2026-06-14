@@ -464,6 +464,17 @@ partition_gpu_addon() {
 	done
 	[[ -e lib/libgrpc_mgr.so ]] && cp -a lib/libgrpc_mgr.so "${addon}/lib/"
 
+	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.595.58.03)
+	# inside the flattened lib dir. The addon ships only the versioned files, so
+	# without this `nvidia-ctk cdi generate` has no symlink to replicate into the
+	# container (it reproduces existing links, it does not synthesize SONAMEs) and
+	# the container can't resolve libcuda.so.1 -> it then falls back to the image's
+	# older cuda-compat libcuda and CUDA fails with "driver version is insufficient
+	# for CUDA runtime version". `ldconfig -n` only creates the versioned symlinks
+	# in the given dir (no cache, no chroot), which is all the loader-less addon
+	# needs. The monolith gets the same links via the `chroot . ldconfig` below.
+	ldconfig -n "${addon}/lib"
+
 	# GPU configs (fabricmanager.cfg, nvlsm.conf, ...).
 	[[ -d usr/share/nvidia ]] && cp -a usr/share/nvidia/. "${addon}/usr/share/nvidia/"
 
@@ -661,7 +672,8 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 	compress_rootfs
 	# The gpu addon has no loader/ldconfig of its own; its libraries are found
-	# via NVRC's LD_LIBRARY_PATH, so skip the ld.so cache rebuild there.
+	# via NVRC's LD_LIBRARY_PATH, so skip the ld.so cache rebuild there. Its
+	# SONAME symlinks are created with `ldconfig -n` in partition_gpu_addon().
 	[[ "${layout}" != "gpu-addon" ]] && chroot . ldconfig
 
 	popd >> /dev/null
