@@ -523,9 +523,18 @@ fn build_substitution_ctx(
         "addon_root".to_string(),
         addon_root.to_string_lossy().into_owned(),
     );
-    // kata-agent always runs the stock attestation-agent; NVRC selects the
-    // nvidia variant by injecting a different value here.
-    ctx.insert("attester_variant".to_string(), "default".to_string());
+    // The CoCo addon ships several attestation-agent flavours and selects one
+    // via the manifest's "attester_variant". The guest init (NVRC) owns that
+    // decision: with a GPU present it sets KATA_ATTESTER_VARIANT=nvidia so the
+    // NVIDIA-attester build launches (it emits the GPU evidence a KBS GPU
+    // policy requires). Absent that signal we fall back to the stock attester.
+    // Cross-component contract: the env var name and "nvidia" value are set by
+    // NVRC (src/kata_agent.rs, src/gpu.rs); keep them in sync.
+    let attester_variant = env::var("KATA_ATTESTER_VARIANT")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "default".to_string());
+    ctx.insert("attester_variant".to_string(), attester_variant);
 
     Ok(ctx)
 }
