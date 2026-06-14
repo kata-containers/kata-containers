@@ -438,16 +438,24 @@ readonly nvidia_gpu_addon_lib_globs=(
 
 # Lay the GPU userspace out for the addon mount (/run/kata-addons/gpu) and drop
 # everything else. Matches how NVRC consumes the addon: bins from <root>/bin and
-# <root>/sbin, libraries via LD_LIBRARY_PATH=<root>/lib:<root>/usr/lib, kernel
-# modules via `modprobe --dirname <root>`, configs from <root>/usr/share/nvidia,
-# and <root>/lib/firmware/nvidia bind-mounted onto /lib/firmware/nvidia. Runs
-# inside the (full, chiseled) ${stage_two}/${ROOTFS_DIR}.
+# <root>/sbin, libraries via LD_LIBRARY_PATH=<root>/usr/lib, kernel modules via
+# `modprobe --dirname <root>`, configs from <root>/usr/share/nvidia, and
+# <root>/lib/firmware/nvidia bind-mounted onto /lib/firmware/nvidia. Runs inside
+# the (full, chiseled) ${stage_two}/${ROOTFS_DIR}.
+#
+# The GPU shared libraries go under <root>/usr/lib (not a flat <root>/lib) so
+# that NVRC can run `nvidia-ctk cdi generate --driver-root=<root>`: nvidia-ctk
+# records the in-container mount path as the host path with the driver root
+# stripped, so libraries at <root>/usr/lib land at the canonical /usr/lib inside
+# the container. Apps that scan /usr for the driver (e.g. NVIDIA NIM, which
+# bails with "libnvidia-ml.so.1 not found under /usr") then find it; a flat
+# <root>/lib would strip to /lib and hide the driver from those checks.
 partition_gpu_addon() {
 	echo "nvidia: building gpu addon layout"
 
 	local addon
 	addon="$(mktemp -d "${BUILD_DIR}/.nvidia-gpu-addon.XXXX")"
-	mkdir -p "${addon}/bin" "${addon}/sbin" "${addon}/lib" \
+	mkdir -p "${addon}/bin" "${addon}/sbin" "${addon}/usr/lib" \
 		 "${addon}/usr/share/nvidia" "${addon}/lib/firmware" "${addon}/lib/modules"
 
 	local f
@@ -455,25 +463,26 @@ partition_gpu_addon() {
 		[[ -e "${f}" ]] && install -D -m0755 "${f}" "${addon}/${f}"
 	done
 
-	# Flatten the GPU shared libraries into <root>/lib so NVRC's LD_LIBRARY_PATH
-	# (<root>/lib:<root>/usr/lib) resolves them; libc/loader stay in the base.
+	# Collect the GPU shared libraries under <root>/usr/lib so both NVRC's
+	# LD_LIBRARY_PATH and `nvidia-ctk --driver-root=<root>` resolve them and the
+	# container sees them at /usr/lib (see header); libc/loader stay in the base.
 	local md="lib/${machine_arch}-linux-gnu"
 	local g
 	for g in "${nvidia_gpu_addon_lib_globs[@]}"; do
-		find "${md}" -maxdepth 1 -name "${g}" -exec cp -a {} "${addon}/lib/" \;
+		find "${md}" -maxdepth 1 -name "${g}" -exec cp -a {} "${addon}/usr/lib/" \;
 	done
-	[[ -e lib/libgrpc_mgr.so ]] && cp -a lib/libgrpc_mgr.so "${addon}/lib/"
+	[[ -e lib/libgrpc_mgr.so ]] && cp -a lib/libgrpc_mgr.so "${addon}/usr/lib/"
 
 	# Materialize the SONAME symlinks (e.g. libcuda.so.1 -> libcuda.so.595.58.03)
-	# inside the flattened lib dir. The addon ships only the versioned files, so
-	# without this `nvidia-ctk cdi generate` has no symlink to replicate into the
+	# inside the lib dir. The addon ships only the versioned files, so without
+	# this `nvidia-ctk cdi generate` has no symlink to replicate into the
 	# container (it reproduces existing links, it does not synthesize SONAMEs) and
 	# the container can't resolve libcuda.so.1 -> it then falls back to the image's
 	# older cuda-compat libcuda and CUDA fails with "driver version is insufficient
 	# for CUDA runtime version". `ldconfig -n` only creates the versioned symlinks
 	# in the given dir (no cache, no chroot), which is all the loader-less addon
 	# needs. The monolith gets the same links via the `chroot . ldconfig` below.
-	ldconfig -n "${addon}/lib"
+	ldconfig -n "${addon}/usr/lib"
 
 	# GPU configs (fabricmanager.cfg, nvlsm.conf, ...).
 	[[ -d usr/share/nvidia ]] && cp -a usr/share/nvidia/. "${addon}/usr/share/nvidia/"
