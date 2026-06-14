@@ -253,7 +253,7 @@ externals:
     # downloading the signed release from `url` above. `ref` may be a commit,
     # tag or branch; pin to a commit for reproducible builds.
     repo: "https://github.com/fidencio/nvrc.git"
-    ref: "c0d2365666ff212265790e24ac6827e1585c7ed2"
+    ref: "1b21dbe109aa15422d0515f72c2c3217b6cad444"
     toolchain: "1.90.0"
 
   nvidia:
