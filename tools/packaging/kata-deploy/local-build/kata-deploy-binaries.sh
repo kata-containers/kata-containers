@@ -687,7 +687,14 @@ id           = "confidential-data-hub"
 level        = 2
 path         = "usr/local/bin/confidential-data-hub"
 config       = "${cdh_config_path}"
-env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}" }
+# CDH's secure_mount shells out (by PATH lookup) to cryptsetup for encrypted
+# storage and to mke2fs/mkfs.ext4/dd for the filesystem. cryptsetup is CoCo-only
+# and ships in this addon under usr/sbin (see
+# build-static-coco-guest-components.sh); the plain mkfs/dd tooling lives in the
+# base-nvidia image's /sbin and /bin. The agent launches CDH with
+# PATH=/bin:/sbin:/usr/bin:/usr/sbin, but setting any env here overrides it
+# wholesale, so prepend the addon's usr/sbin and restore the base dirs.
+env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${addon_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket  = "${cdh_socket}"
 timeout_secs = "${launch_process_timeout}"
 
