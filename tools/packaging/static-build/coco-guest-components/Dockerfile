@@ -22,6 +22,7 @@ RUN apt-get update && \
 	curl \
 	binutils \
 	clang \
+	cryptsetup-bin \
 	g++ \
 	gcc \
 	git \

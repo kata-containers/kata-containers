@@ -42,6 +42,16 @@ build_coco_guest_components_from_source() {
 
 	install -D -m0644 "confidential-data-hub/hub/src/image/ocicrypt_config.json" "${DESTDIR}/etc/ocicrypt_config.json"
 
+	# CDH's secure_mount LUKS-formats encrypted scratch volumes by exec'ing
+	# cryptsetup. Encrypted storage is a CoCo-only feature, so cryptsetup ships
+	# in this addon rather than the guest rootfs (the base-nvidia image carries
+	# only veritysetup plus the plain mke2fs/mkfs.ext4/dd storage tooling).
+	# cryptsetup's shared-library closure is identical to veritysetup's, which
+	# the base already ships unconditionally, so bundle just the binary; the
+	# coco-addon manifest puts ${addon_root}/usr/sbin on CDH's PATH so the
+	# runtime lookup resolves (see kata-deploy-binaries.sh).
+	install -D -m0755 /usr/sbin/cryptsetup "${DESTDIR}/usr/sbin/cryptsetup"
+
 	if [[ -n "${NV_ATTESTER:-}" ]]; then
 		echo "build attestation-agent-nv with nvidia-attester support"
 
