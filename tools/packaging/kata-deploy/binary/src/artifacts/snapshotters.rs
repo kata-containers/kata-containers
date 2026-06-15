@@ -127,6 +127,11 @@ pub async fn configure_nydus_snapshotter(
         &format!(".proxy_plugins.\"{nydus}\".address"),
         &format!("\"/run/{containerd_nydus}/containerd-nydus-grpc.sock\""),
     )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        &format!(".proxy_plugins.\"{nydus}\".exports.root"),
+        &format!("\"/var/lib/{nydus}\""),
+    )?;
 
     Ok(())
 }
