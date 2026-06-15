@@ -55,6 +55,18 @@ build_coco_guest_components_from_source() {
 
 		mkdir -p "${DESTDIR}/usr/local/lib"
 		cp -a /usr/local/lib/libnvat.so* "${DESTDIR}/usr/local/lib/"
+
+		# attestation-agent-nv links libnvat.so, which in turn pulls in
+		# libxml2/zlib/lzma and the C++ runtime. None of those ship in the
+		# guest rootfs, so bundle every non-glibc dependency next to
+		# libnvat.so. The coco-addon manifest points the nvidia attester's
+		# LD_LIBRARY_PATH here, so the dynamic linker resolves them at runtime.
+		ldd /usr/local/lib/libnvat.so | awk '/=> \// { print $3 }' | while read -r dep; do
+			case "$(basename "${dep}")" in
+				libc.so.*|libm.so.*|libdl.so.*|libpthread.so.*|librt.so.*|ld-linux*|linux-vdso*) continue ;;
+			esac
+			install -D -m0755 "${dep}" "${DESTDIR}/usr/local/lib/$(basename "${dep}")"
+		done
 	fi
 
 	popd
