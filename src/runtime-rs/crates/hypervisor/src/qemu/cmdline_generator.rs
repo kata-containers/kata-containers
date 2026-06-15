@@ -263,13 +263,24 @@ struct Memory {
 impl Memory {
     fn new(config: &HypervisorConfig) -> Memory {
         let mem_size = config.memory_info.default_memory as u64;
-        let max_mem_size = config.memory_info.default_maxmemory as u64;
+
+        // Don't reserve a memory-hotplug region (slots/maxmem) for confidential
+        // guests, which don't support memory hotplug, mirroring how Smp::new
+        // omits maxcpus and what the Go runtime does in memoryTopology().
+        let (num_slots, max_mem_size) = if config.security_info.confidential_guest {
+            (0, 0)
+        } else {
+            (
+                config.memory_info.memory_slots,
+                config.memory_info.default_maxmemory as u64,
+            )
+        };
 
         // Memory sizes are given in megabytes in configuration.toml so we
         // need to convert them to bytes for storage.
         Memory {
             size: mem_size * MI_B,
-            num_slots: config.memory_info.memory_slots,
+            num_slots,
             max_size: max_mem_size * MI_B,
             memory_backend_file: None,
         }
