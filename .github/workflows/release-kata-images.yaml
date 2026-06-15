@@ -106,6 +106,9 @@ jobs:
           TAGS: ${{ needs.resolve-tags.outputs.tags }}
           REGISTRIES: ${{ inputs.registries }}
         run: |
+          # kata-monitor has no job-dispatcher sidecar image, so opt out of the
+          # kata-deploy-specific dispatcher manifest derivation.
           KATA_DEPLOY_IMAGE_TAGS="${TAGS}" \
           KATA_DEPLOY_REGISTRIES="${REGISTRIES}" \
+          KATA_DEPLOY_PUBLISH_JOB_DISPATCHER="false" \
           ./tools/packaging/release/release.sh publish-multiarch-manifest
