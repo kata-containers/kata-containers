@@ -510,7 +510,7 @@ select        = "${attester_variant}"
 
   [process.variants.nvidia]
   path = "usr/local/bin/attestation-agent-nv"
-  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib" }
+  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib:/run/kata-addons/gpu/usr/lib" }
 
 [[process]]
 id           = "confidential-data-hub"
@@ -763,7 +763,7 @@ schema_version = 2
             aa.env,
             vec![(
                 "LD_LIBRARY_PATH".to_string(),
-                "/run/kata-addons/coco/usr/local/lib".to_string()
+                "/run/kata-addons/coco/usr/local/lib:/run/kata-addons/gpu/usr/lib".to_string()
             )]
         );
         // Base args are preserved for the selected variant.
