@@ -303,6 +303,7 @@ type KataAgentConfig struct {
 	Debug                bool
 	Trace                bool
 	EnableDebugConsole   bool
+	VisibleCdiDevices    bool
 	Policy               string
 }
 
@@ -372,6 +373,10 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.LaunchProcessTimeout > 0 {
 		launchProcessTimeout := strconv.FormatUint(uint64(config.LaunchProcessTimeout), 10)
 		params = append(params, Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: launchProcessTimeout})
+	}
+
+	if config.VisibleCdiDevices {
+		params = append(params, Param{Key: vcAnnotations.VisibleCdiDevicesKernelParam, Value: "true"})
 	}
 
 	return params

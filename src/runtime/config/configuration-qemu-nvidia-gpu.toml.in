@@ -591,6 +591,29 @@ dial_timeout = @DEFAULTTIMEOUT_NV@
 # (agent default when unset: 6)
 launch_process_timeout = @DEFAULTLAUNCHPROCESSTIMEOUT_NV@
 
+# If enabled, the agent translates a container's VISIBLE_CDI_DEVICES
+# environment variable into CDI GPU device requests (nvidia.com/gpu), resolved
+# against the GPUs present in the VM via the CDI spec generated in the guest at
+# /var/run/cdi/. The format of VISIBLE_CDI_DEVICES is:
+#
+#   <cdi-kind>=<devices>[:<cdi-kind>=<devices>[...]]
+#
+# For example, you may set something like:
+#
+#   VISIBLE_CDI_DEVICES="nvidia.com/gpu=all:nvidia.com/ib=0,1"
+#
+# The devices can be referenced by explicit CDI index or through the "all"
+# keyword.
+#
+# This parameter is useful in the case where multiple containers in a pod need
+# access to the same GPU and do not want to request additional GPUs from the
+# outer runtime. This is especially useful with GPU observability where one
+# workload container performs the CDI request to the outer runtime, and the
+# sidecar observability containers would get access to the same resources by
+# setting VISIBLE_CDI_DEVICES="nvidia.com/gpu=all".
+# (default: false)
+visible_cdi_devices = false
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
