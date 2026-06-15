@@ -25,6 +25,7 @@ chiplet
 cpuid
 DCAP
 DGPU
+ioctls
 IOMMU
 IOVA
 MDEV
@@ -106,9 +107,11 @@ nerdctl
 crictl
 dockershim
 dentries
+hexdump
 hypercalls
 inodes
 libelf-dev
+loopless
 memcg
 nydus
 patchset
