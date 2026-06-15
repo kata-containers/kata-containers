@@ -93,6 +93,12 @@ pub struct Agent {
     #[serde(default)]
     pub debug_console_enabled: bool,
 
+    /// When enabled, the agent translates a container's VISIBLE_CDI_DEVICES
+    /// environment variable into CDI GPU device requests (nvidia.com/gpu) so
+    /// that the container sees the matching GPUs present in the VM.
+    #[serde(default)]
+    pub visible_cdi_devices: bool,
+
     /// Agent server port
     #[serde(default = "default_server_port")]
     pub server_port: u32,
@@ -180,6 +186,7 @@ impl std::default::Default for Agent {
             log_level: "info".to_string(),
             enable_tracing: false,
             debug_console_enabled: false,
+            visible_cdi_devices: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,
             log_port: DEFAULT_AGENT_LOG_PORT,
             passfd_listener_port: DEFAULT_PASSFD_LISTENER_PORT,
