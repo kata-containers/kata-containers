@@ -23,7 +23,7 @@ use oci::{LinuxDeviceCgroup, Spec};
 use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use slog::Logger;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::FileTypeExt;
@@ -300,12 +300,140 @@ pub fn dump_nvidia_cdi_yaml(logger: &Logger) -> Result<()> {
     Ok(())
 }
 
+const VISIBLE_CDI_DEVICES_ENV: &str = "VISIBLE_CDI_DEVICES";
+
+/// Translate a container's VISIBLE_CDI_DEVICES environment variable into a
+/// list of fully-qualified CDI device names (e.g. "nvidia.com/gpu=all" or
+/// "nvidia.com/ib=0"). The variable is a ':'-separated list of
+/// "<cdi-kind>=<devices>" entries.
+/// Returns an empty vector when the variable is unset, empty, or set to one of
+/// the sentinel values "none"/"void" (following the NVIDIA *_VISIBLE_DEVICES
+/// convention) that explicitly request no CDI devices.
+pub fn cdi_devices_from_visible_devices(spec: &Spec) -> Result<Vec<String>> {
+    let prefix = format!("{VISIBLE_CDI_DEVICES_ENV}=");
+    let value = spec
+        .process()
+        .as_ref()
+        .and_then(|p| p.env().as_ref())
+        .and_then(|env| env.iter().find_map(|e| e.strip_prefix(prefix.as_str())));
+
+    let value = match value {
+        Some(v) => v.trim(),
+        None => return Ok(Vec::new()),
+    };
+
+    match value {
+        "" | "none" | "void" => Ok(Vec::new()),
+        list => {
+            let mut devices = Vec::new();
+            for entry in list.split(':').map(str::trim) {
+                devices.extend(cdi_devices_from_entry(entry)?);
+            }
+            Ok(devices)
+        }
+    }
+}
+
+// Translate a single "<cdi-kind>=<devices>" entry (e.g. "nvidia.com/ib=0,1")
+// into a list of fully-qualified CDI device names (e.g.
+// ["nvidia.com/ib=0", "nvidia.com/ib=1"]). <devices> is a comma-separated list
+// of "all" or non-negative device indices. The CDI kind must be specified
+// explicitly, there is no default.
+fn cdi_devices_from_entry(entry: &str) -> Result<Vec<String>> {
+    let (kind, devices) = entry.split_once('=').ok_or_else(|| {
+        anyhow!(
+            "invalid {}: entry {:?} is missing a CDI kind (expected \"<kind>=<devices>\")",
+            VISIBLE_CDI_DEVICES_ENV,
+            entry
+        )
+    })?;
+
+    let kind = kind.trim();
+    if kind.is_empty() {
+        return Err(anyhow!(
+            "invalid {}: entry {:?} has an empty CDI kind",
+            VISIBLE_CDI_DEVICES_ENV,
+            entry
+        ));
+    }
+
+    let devices = devices.trim();
+    if devices.is_empty() {
+        return Err(anyhow!(
+            "invalid {}: CDI kind {:?} has no devices",
+            VISIBLE_CDI_DEVICES_ENV,
+            kind
+        ));
+    }
+
+    let tokens: Vec<&str> = devices.split(',').map(str::trim).collect();
+
+    if tokens.len() > 1 && tokens.contains(&"all") {
+        return Err(anyhow!(
+            "invalid {}: CDI kind {:?} mixes \"all\" with explicit device indices",
+            VISIBLE_CDI_DEVICES_ENV,
+            kind
+        ));
+    }
+
+    tokens
+        .into_iter()
+        .map(|token| token_to_kind_and_device(kind, token))
+        .collect()
+}
+
+// Translate a single device token into a fully-qualified CDI device name. The token must be either
+// "all" or a non-negative integer device index.
+fn token_to_kind_and_device(kind: &str, token: &str) -> Result<String> {
+    if token == "all" {
+        return Ok(format!("{kind}=all"));
+    }
+
+    token
+        .parse::<u32>()
+        .map(|n| format!("{kind}={n}"))
+        .map_err(|_| {
+            anyhow!(
+                "invalid {}: {:?} is not \"all\" or a non-negative device index for CDI kind {:?}",
+                VISIBLE_CDI_DEVICES_ENV,
+                token,
+                kind
+            )
+        })
+}
+
+fn cdi_kind(device: &str) -> Option<&str> {
+    device.split_once('=').map(|(kind, _)| kind)
+}
+
+/// Return the requested devices that can never be injected: those whose CDI
+/// kind is already present in `available` but which name a device the kind does
+/// not provide (e.g. "nvidia.com/gpu=5" when only GPUs 0-3 exist).
+///
+/// A requested device whose kind is entirely absent from `available` is
+/// deliberately omitted: its CDI spec may simply not have been generated yet,
+/// and the caller should keep waiting for it rather than fail.
+fn unsatisfiable_cdi_devices(available: &[String], requested: &[String]) -> Vec<String> {
+    let known_kinds: HashSet<&str> = available.iter().filter_map(|d| cdi_kind(d)).collect();
+    let available: HashSet<&str> = available.iter().map(String::as_str).collect();
+
+    requested
+        .iter()
+        .filter(|d| match cdi_kind(d) {
+            Some(kind) => known_kinds.contains(kind) && !available.contains(d.as_str()),
+            None => false,
+        })
+        .cloned()
+        .collect()
+}
+
 #[instrument]
 pub async fn handle_cdi_devices(
     logger: &Logger,
     spec: &mut Spec,
     spec_dir: &str,
     cdi_timeout: time::Duration,
+    extra_devices: &[String],
 ) -> Result<()> {
     if let Some(container_type) = spec
         .annotations()
@@ -317,7 +445,19 @@ pub async fn handle_cdi_devices(
         }
     }
 
-    let (_, devices) = parse_annotations(spec.annotations().as_ref().unwrap())?;
+    let mut devices = match spec.annotations().as_ref() {
+        Some(annotations) => parse_annotations(annotations)?.1,
+        None => Vec::new(),
+    };
+
+    // Devices requested via the container's VISIBLE_CDI_DEVICES environment
+    // variable are merged with any devices the host injected through
+    // cdi.k8s.io/* annotations.
+    for dev in extra_devices {
+        if !devices.contains(dev) {
+            devices.push(dev.clone());
+        }
+    }
 
     if devices.is_empty() {
         info!(logger, "no CDI annotations, no devices to inject");
@@ -329,7 +469,7 @@ pub async fn handle_cdi_devices(
     let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
 
     for i in 0..=cdi_timeout.as_secs() {
-        let inject_result = {
+        let (unsatisfiable, inject_result) = {
             // Lock cache within this scope, std::sync::Mutex has no Send
             // and await will not work with time::sleep
             let mut cache = cache.lock().unwrap();
@@ -339,7 +479,9 @@ pub async fn handle_cdi_devices(
                     return Err(anyhow!("error refreshing cache: {:?}", e));
                 }
             }
-            cache.inject_devices(Some(spec), devices.clone())
+            let unsatisfiable = unsatisfiable_cdi_devices(&cache.list_devices(), &devices);
+            let inject_result = cache.inject_devices(Some(spec), devices.clone());
+            (unsatisfiable, inject_result)
         };
 
         match inject_result {
@@ -351,6 +493,15 @@ pub async fn handle_cdi_devices(
                 return Ok(());
             }
             Err(e) => {
+                if !unsatisfiable.is_empty() {
+                    return Err(anyhow!(
+                        "CDI device(s) {:?} do not exist; their CDI kind(s) are present \
+                         in {} but do not provide them: {:?}",
+                        unsatisfiable,
+                        spec_dir,
+                        e
+                    ));
+                }
                 info!(
                     logger,
                     "waiting for CDI spec(s) to be generated ({} of {} max tries) {:?}",
@@ -947,6 +1098,78 @@ mod tests {
     use tempfile::tempdir;
 
     const VM_ROOTFS: &str = "/";
+
+    #[test]
+    fn test_cdi_devices_from_visible_devices() {
+        let make_spec = |val: Option<&str>| {
+            let mut spec = Spec::default();
+            if let Some(v) = val {
+                let mut process = oci::Process::default();
+                *process.env_mut() = Some(vec![format!("VISIBLE_CDI_DEVICES={v}")]);
+                spec.set_process(Some(process));
+            }
+            spec
+        };
+
+        assert!(cdi_devices_from_visible_devices(&make_spec(None))
+            .expect("Failed to get CDI devices")
+            .is_empty());
+        for v in ["", "none", "void"] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v)))
+                    .expect("Failed to get CDI devices")
+                    .is_empty(),
+                "expected no devices for VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+
+        assert_eq!(
+            cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu=all")))
+                .expect("Failed to get CDI devices"),
+            vec!["nvidia.com/gpu=all".to_string()]
+        );
+
+        assert_eq!(
+            cdi_devices_from_visible_devices(&make_spec(Some(
+                "nvidia.com/gpu=all : nvidia.com/ib=0, 1 ,2"
+            )))
+            .expect("Failed to get CDI devices"),
+            vec![
+                "nvidia.com/gpu=all".to_string(),
+                "nvidia.com/ib=0".to_string(),
+                "nvidia.com/ib=1".to_string(),
+                "nvidia.com/ib=2".to_string(),
+            ]
+        );
+
+        assert!(
+            cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu=0, 1 ,,2"))).is_err()
+        );
+
+        for v in ["all", "0,1"] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v))).is_err(),
+                "expected an error for kind-less VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+
+        assert!(cdi_devices_from_visible_devices(&make_spec(Some("=all"))).is_err());
+        assert!(cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu="))).is_err());
+
+        for v in [
+            "nvidia.com/gpu=all,0",
+            "nvidia.com/gpu=0,all",
+            "nvidia.com/gpu=all : nvidia.com/ib=0,all",
+        ] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v))).is_err(),
+                "expected an error for mixed all/index VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+    }
 
     #[test]
     fn test_update_device_cgroup() {
@@ -1701,6 +1924,7 @@ mod tests {
             &mut spec,
             temp_dir.path().to_str().unwrap(),
             cdi_timeout,
+            &[],
         )
         .await;
         println!("modfied spec {spec:?}");
@@ -1725,5 +1949,115 @@ mod tests {
         // find TEST_INNER_ENV in env
         let inner_env = env.iter().find(|e| e.starts_with("TEST_INNER_ENV"));
         assert!(inner_env.is_some(), "TEST_INNER_ENV not found in env");
+    }
+
+    #[test]
+    fn test_unsatisfiable_cdi_devices() {
+        let available = vec![
+            "kata.com/gpu=0".to_string(),
+            "kata.com/gpu=1".to_string(),
+            "kata.com/gpu=all".to_string(),
+        ];
+
+        // Devices the kind provides are satisfiable.
+        for d in ["kata.com/gpu=0", "kata.com/gpu=1", "kata.com/gpu=all"] {
+            assert!(
+                unsatisfiable_cdi_devices(&available, &[d.to_string()]).is_empty(),
+                "{} should be satisfiable",
+                d
+            );
+        }
+
+        // A device the (present) kind does not provide is unsatisfiable.
+        assert_eq!(
+            unsatisfiable_cdi_devices(&available, &["kata.com/gpu=5".to_string()]),
+            vec!["kata.com/gpu=5".to_string()]
+        );
+
+        // A kind that is entirely absent is left for the caller to wait on.
+        assert!(
+            unsatisfiable_cdi_devices(&available, &["other.com/gpu=0".to_string()]).is_empty(),
+            "an absent kind must not be reported as unsatisfiable"
+        );
+
+        // Only the offending device of a mixed request is reported.
+        assert_eq!(
+            unsatisfiable_cdi_devices(
+                &available,
+                &[
+                    "kata.com/gpu=0".to_string(),
+                    "kata.com/gpu=5".to_string(),
+                    "other.com/gpu=0".to_string(),
+                ]
+            ),
+            vec!["kata.com/gpu=5".to_string()]
+        );
+    }
+
+    async fn run_handle_cdi_devices(
+        spec_dir: &str,
+        cdi_timeout: Duration,
+        extra_devices: &[String],
+    ) -> Result<()> {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut spec = Spec::default();
+        handle_cdi_devices(&logger, &mut spec, spec_dir, cdi_timeout, extra_devices).await
+    }
+
+    #[tokio::test]
+    async fn test_handle_cdi_devices_missing_device_of_known_kind() {
+        // A CDI spec providing kind "kata.com/gpu" with only devices "0" and "1".
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let spec_dir = temp_dir.path().to_str().unwrap();
+        let cdi_content = r#"{
+            "cdiVersion": "0.6.0",
+            "kind": "kata.com/gpu",
+            "devices": [
+                { "name": "0", "containerEdits": { "deviceNodes": [{ "path": "/dev/null" }] } },
+                { "name": "1", "containerEdits": { "deviceNodes": [{ "path": "/dev/null" }] } }
+            ]
+        }"#;
+        fs::write(temp_dir.path().join("kata.json"), cdi_content)
+            .expect("Failed to write CDI file");
+
+        // The kind is present but device "5" is not. Use a generous timeout: if
+        // the fail-fast path is broken the test would otherwise hang for the
+        // full duration before reporting a timeout instead.
+        let res = run_handle_cdi_devices(
+            spec_dir,
+            Duration::from_secs(30),
+            &["kata.com/gpu=5".to_string()],
+        )
+        .await;
+        let msg = res
+            .expect_err("missing device of a known kind must be rejected")
+            .to_string();
+        assert!(
+            msg.contains("kata.com/gpu=5"),
+            "error should name the missing device, got: {}",
+            msg
+        );
+        assert!(
+            !msg.contains("CDI timeout"),
+            "should fail fast, not via the wait/timeout path, got: {}",
+            msg
+        );
+
+        // An entirely absent kind goes through the wait path and ultimately
+        // times out (cdi_timeout = 0 means a single attempt).
+        let res = run_handle_cdi_devices(
+            spec_dir,
+            Duration::from_secs(0),
+            &["absent.com/gpu=0".to_string()],
+        )
+        .await;
+        let msg = res
+            .expect_err("an unsatisfied absent kind must eventually time out")
+            .to_string();
+        assert!(
+            msg.contains("CDI timeout"),
+            "an absent kind should take the wait/timeout path, got: {}",
+            msg
+        );
     }
 }

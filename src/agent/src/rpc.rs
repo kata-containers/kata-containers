@@ -71,7 +71,10 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::network_device_handler::wait_for_pci_net_interface;
-use crate::device::{add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, update_env_pci};
+use crate::device::{
+    add_devices, cdi_devices_from_visible_devices, dump_nvidia_cdi_yaml, handle_cdi_devices,
+    update_env_pci,
+};
 use crate::features::get_build_features;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -251,7 +254,22 @@ impl AgentService {
         // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
         // readonly
         dump_nvidia_cdi_yaml(&sl())?;
-        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
+        // When enabled, translate the container's VISIBLE_CDI_DEVICES
+        // environment variable into CDI GPU device requests, so that a
+        // container can select which of the VM's GPUs it sees at runtime.
+        let visible_cdi_devices = if AGENT_CONFIG.visible_cdi_devices {
+            cdi_devices_from_visible_devices(&oci)?
+        } else {
+            Vec::new()
+        };
+        handle_cdi_devices(
+            &sl(),
+            &mut oci,
+            "/var/run/cdi",
+            AGENT_CONFIG.cdi_timeout,
+            &visible_cdi_devices,
+        )
+        .await?;
 
         // Handle trusted storage configuration before mounting any storage
         cdh_handler_trusted_storage(&mut oci)
