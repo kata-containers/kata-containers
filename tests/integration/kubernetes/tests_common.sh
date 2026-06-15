@@ -127,6 +127,101 @@ get_kubelet_data_dir() {
 	esac
 }
 
+# Return the per-shim Kata runtime config directory on a k8s node.
+#
+# This is the directory that holds configuration-<shim>.toml and config.d/.
+# Probe the filesystem instead of parsing the shim name, since some runtime-rs
+# shims like dragonball do not use the -runtime-rs suffix.
+get_kata_runtime_config_dir() {
+	local node_name="$1"
+	local base="/opt/kata/share/defaults/kata-containers"
+	local rs_dir="${base}/runtime-rs/runtimes/${KATA_HYPERVISOR}"
+	local go_dir="${base}/runtimes/${KATA_HYPERVISOR}"
+	local legacy_dir="${base}"
+
+	if exec_host "${node_name}" "test -d '${rs_dir}'" >/dev/null 2>&1; then
+		echo "${rs_dir}"
+	elif exec_host "${node_name}" "test -d '${go_dir}'" >/dev/null 2>&1; then
+		echo "${go_dir}"
+	elif exec_host "${node_name}" "test -f '${legacy_dir}/configuration-${KATA_HYPERVISOR}.toml'" >/dev/null 2>&1; then
+		echo "${legacy_dir}"
+	else
+		return 1
+	fi
+}
+
+get_kata_runtime_config_file() {
+	local node_name="$1"
+	local config_dir
+
+	config_dir="$(get_kata_runtime_config_dir "${node_name}")" || return 1
+	echo "${config_dir}/configuration-${KATA_HYPERVISOR}.toml"
+}
+
+get_kata_runtime_config_dropin_dir() {
+	local node_name="$1"
+	local config_dir
+
+	config_dir="$(get_kata_runtime_config_dir "${node_name}")" || return 1
+	echo "${config_dir}/config.d"
+}
+
+# Copy a local TOML fragment under the active Kata runtime config.d directory
+# on a k8s node. Echoes the full drop-in path.
+#
+# Callers must pair this with remove_kata_runtime_config_dropin_file during
+# teardown. A leaked drop-in would silently affect every subsequent pod on the
+# same node.
+set_kata_runtime_config_dropin_file() {
+	local node_name="$1"
+	local local_dropin="$2"
+	local dropin_file
+	local dropin_dir
+	local dropin_path
+	local quoted_dropin_dir
+
+	[[ -f "${local_dropin}" ]] || die "Kata runtime config drop-in file does not exist: ${local_dropin}"
+	dropin_file="$(basename "${local_dropin}")"
+
+	case "${dropin_file}" in
+		""|*/*|*[^A-Za-z0-9._-]*)
+			die "Invalid Kata runtime config drop-in file name: ${dropin_file}"
+			;;
+	esac
+	case "${dropin_file}" in
+		*.toml) ;;
+		*) die "Kata runtime config drop-in file must end in .toml: ${dropin_file}" ;;
+	esac
+
+	dropin_dir="$(get_kata_runtime_config_dropin_dir "${node_name}")" || return 1
+	dropin_path="${dropin_dir}/${dropin_file}"
+	printf -v quoted_dropin_dir "%q" "${dropin_dir}"
+	exec_host "${node_name}" "mkdir -p ${quoted_dropin_dir}" || return 1
+	copy_file_to_host "${local_dropin}" "${node_name}" "${dropin_path}" || return 1
+	echo "${dropin_path}"
+}
+
+# Remove a TOML fragment created under the active Kata runtime config.d
+# directory. Empty paths are accepted as a no-op for teardown convenience.
+remove_kata_runtime_config_dropin_file() {
+	local node_name="$1"
+	local dropin_path="${2:-}"
+	local dropin_dir
+	local quoted_dropin_path
+
+	[[ -n "${dropin_path}" ]] || return 0
+
+	dropin_dir="$(get_kata_runtime_config_dropin_dir "${node_name}")" || return 1
+	case "${dropin_path}" in
+		"${dropin_dir}"/*.toml) ;;
+		*) die "Refusing to remove path outside Kata runtime config.d: ${dropin_path}" ;;
+	esac
+
+	printf -v quoted_dropin_path "%q" "${dropin_path}"
+	exec_host "${node_name}" "rm -f ${quoted_dropin_path}"
+	echo "# Removed drop-in ${dropin_path}"
+}
+
 is_runtime_rs() {
 	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
 }
