@@ -1667,10 +1667,11 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::GetOOMEventRequest,
     ) -> ttrpc::Result<OOMEvent> {
         is_allowed(&req).await?;
-        let s = self.sandbox.lock().await;
-        let event_rx = &s.event_rx.clone();
+        let event_rx = {
+            let s = self.sandbox.lock().await;
+            s.event_rx.clone()
+        };
         let mut event_rx = event_rx.lock().await;
-        drop(s);
 
         let container_id = event_rx
             .recv()
@@ -3605,5 +3606,76 @@ COMMIT
             let result = is_sealed_secret_path(d.source_path);
             assert_eq!(d.result, result, "{msg}");
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_oom_event_no_deadlock() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Arc::new(AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        });
+
+        let svc1 = agent_service.clone();
+        let handle1 = tokio::spawn(async move {
+            let ctx = mk_ttrpc_context();
+            let req = protocols::agent::GetOOMEventRequest::default();
+            svc1.get_oom_event(&ctx, req).await
+        });
+
+        // Yield until handler #1 has released the sandbox lock (entered recv()).
+        // Each yield_now() gives the spawned task a chance to make progress.
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                tokio::task::yield_now().await;
+                if agent_service.sandbox.try_lock().is_ok() {
+                    return;
+                }
+            }
+        })
+        .await
+        .expect("sandbox lock should be free while get_oom_event waits");
+
+        let svc2 = agent_service.clone();
+        let handle2 = tokio::spawn(async move {
+            let ctx = mk_ttrpc_context();
+            let req = protocols::agent::GetOOMEventRequest::default();
+            svc2.get_oom_event(&ctx, req).await
+        });
+
+        // Yield until handler #2 has also released the sandbox lock (entered recv()).
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                tokio::task::yield_now().await;
+                if agent_service.sandbox.try_lock().is_ok() {
+                    return;
+                }
+            }
+        })
+        .await
+        .expect("sandbox lock should be free with two concurrent get_oom_event handlers");
+
+        let tx = {
+            let s = agent_service.sandbox.lock().await;
+            s.event_tx.as_ref().unwrap().clone()
+        };
+        tx.send("container-1".to_string()).await.unwrap();
+        tx.send("container-2".to_string()).await.unwrap();
+
+        let result1 = tokio::time::timeout(std::time::Duration::from_secs(5), handle1).await;
+        let result2 = tokio::time::timeout(std::time::Duration::from_secs(5), handle2).await;
+
+        assert!(result1.is_ok(), "handler #1 timed out — possible deadlock");
+        assert!(result2.is_ok(), "handler #2 timed out — possible deadlock");
+
+        let resp1 = result1.unwrap().unwrap().unwrap();
+        let resp2 = result2.unwrap().unwrap().unwrap();
+
+        let mut ids: Vec<String> = vec![resp1.container_id, resp2.container_id];
+        ids.sort();
+        assert_eq!(ids, vec!["container-1", "container-2"]);
     }
 }
