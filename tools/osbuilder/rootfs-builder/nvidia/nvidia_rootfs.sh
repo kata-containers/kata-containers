@@ -550,8 +550,11 @@ partition_base() {
 # on confidential guests) as a dm-verity device by exec'ing /usr/sbin/veritysetup
 # before mounting it. The base-nvidia image is the one that boots and runs NVRC,
 # so it must carry veritysetup and its shared-library closure unconditionally -
-# regardless of whether the guest is confidential (copy_cdh_runtime_deps only
-# ships cryptsetup, and only on confidential builds). Runs inside ${ROOTFS_DIR}.
+# regardless of whether the guest is confidential. This closure is also exactly
+# what cryptsetup links, so the cryptsetup binary shipped in the coco addon
+# (encrypted storage, see build-static-coco-guest-components.sh) resolves its
+# libraries against the base without bundling any of its own. Runs inside
+# ${ROOTFS_DIR}.
 chisseled_veritysetup() {
 	echo "nvidia: chisseling veritysetup"
 
@@ -608,6 +611,33 @@ chisseled_kmod() {
 	# from chisseled_veritysetup).
 	cp -a "${stage_one}/${libdir}"/libzstd.so.1*  "${libdir}/."
 	cp -a "${stage_one}/${libdir}"/liblzma.so.5*  "${libdir}/."
+}
+
+# CDH's secure_mount and the agent's plain ephemeral-storage handlers format
+# scratch volumes with mke2fs/mkfs.ext4 (and zero/size their backing with dd)
+# before mounting them. This tooling backs *unencrypted* storage too, so unlike
+# cryptsetup (encrypted storage, which is CoCo-only and therefore lives in the
+# coco addon) the base-nvidia image must carry it unconditionally - just like
+# veritysetup. libblkid/libuuid/libc are already provided by
+# chisseled_veritysetup/chisseled_compute; only the e2fsprogs libs are new here.
+# Runs inside ${ROOTFS_DIR}.
+chisseled_storage() {
+	echo "nvidia: chisseling storage tooling (mke2fs/mkfs.ext4/dd)"
+
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	# e2fsprogs (mke2fs/mkfs.ext4) runtime libs not already shipped by
+	# chisseled_veritysetup.
+	cp -a "${stage_one}/${libdir}"/libext2fs.so.2*  "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcom_err.so.2* "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libe2p.so.2*     "${libdir}/."
+
+	# mkfs.ext4 is a symlink to mke2fs in e2fsprogs; cp -a preserves it.
+	mkdir -p sbin etc bin
+	cp -a "${stage_one}/sbin/mke2fs"     sbin/.
+	cp -a "${stage_one}/sbin/mkfs.ext4"  sbin/.
+	cp -a "${stage_one}/etc/mke2fs.conf" etc/.
+	cp -a "${stage_one}/usr/bin/dd"      bin/.
 }
 
 setup_nvidia_gpu_rootfs_stage_two() {
@@ -674,7 +704,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		# Carve the freshly chiseled (monolith) tree into the requested layout.
 		# The monolith path is left untouched.
 		case "${layout}" in
-			base) partition_base; chisseled_veritysetup; chisseled_kmod ;;
+			base) partition_base; chisseled_veritysetup; chisseled_storage; chisseled_kmod ;;
 			gpu-addon) partition_gpu_addon ;;
 		esac
 	fi
