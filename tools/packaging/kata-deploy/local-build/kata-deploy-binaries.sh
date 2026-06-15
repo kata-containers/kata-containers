@@ -672,7 +672,15 @@ select        = "${attester_variant}"
 
   [process.variants.nvidia]
   path = "usr/local/bin/attestation-agent-nv"
-  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib" }
+  # attestation-agent-nv links libnvat.so (bundled in this CoCo addon under
+  # usr/local/lib), which dlopens libnvidia-ml.so.1 at runtime to collect GPU
+  # attestation evidence. NVML ships in the GPU addon, mounted by NVRC at the
+  # well-known /run/kata-addons/gpu with its driver libraries under usr/lib, so
+  # both dirs must be on the loader path. The nvidia variant only runs when the
+  # GPU addon is present, so referencing its mount path here is safe; without
+  # the GPU lib dir NVML init fails ("NVAT Error 500: NVML Initialization
+  # Failed") and the RCAR handshake never produces GPU evidence.
+  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib:/run/kata-addons/gpu/usr/lib" }
 
 [[process]]
 id           = "confidential-data-hub"
