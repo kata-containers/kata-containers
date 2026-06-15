@@ -18,7 +18,11 @@ use nix::sys::{stat, stat::SFlag};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
-use crate::volume::{direct_volumes::KATA_DIRECT_VOLUME_TYPE, utils::handle_block_volume, Volume};
+use crate::volume::{
+    direct_volumes::KATA_DIRECT_VOLUME_TYPE,
+    utils::{handle_block_volume, is_block_device_readonly},
+    Volume,
+};
 
 #[derive(Clone)]
 pub(crate) struct RawblockVolume {
@@ -58,8 +62,25 @@ impl RawblockVolume {
             ));
         }
 
+        // For a real block device, honor its host read-only flag (BLKROGET) in
+        // addition to the mount-derived intent, so a device marked read-only on
+        // the host is exposed read-only to the guest. (Not applicable to
+        // regular-file backed images.)
+        let read_only = read_only
+            || (SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFBLK
+                && is_block_device_readonly(mount_info.device.as_str()).unwrap_or_else(|e| {
+                    warn!(
+                        sl!(),
+                        "could not query block device read-only flag for {}: {:?}",
+                        mount_info.device,
+                        e
+                    );
+                    false
+                }));
+
         let block_config = BlockConfigModern {
             path_on_host: mount_info.device.clone(),
+            is_readonly: read_only,
             driver_option: blkdev_info.block_device_driver,
             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             num_queues: blkdev_info.num_queues,
