@@ -517,7 +517,7 @@ id           = "confidential-data-hub"
 level        = 2
 path         = "usr/local/bin/confidential-data-hub"
 config       = "${cdh_config_path}"
-env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}" }
+env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${addon_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
 wait_socket  = "${cdh_socket}"
 timeout_secs = "${launch_process_timeout}"
 
@@ -638,12 +638,21 @@ schema_version = 1
 
         let cdh = &specs[1];
         assert_eq!(cdh.id, "confidential-data-hub");
+        // env is sorted by key, so OCICRYPT_KEYPROVIDER_CONFIG precedes PATH.
+        // PATH puts the addon's cryptsetup (usr/sbin) ahead of the base dirs
+        // that carry mke2fs/mkfs.ext4/dd, which CDH's secure_mount shells out to.
         assert_eq!(
             cdh.env,
-            vec![(
-                "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
-                "/run/kata-addons/coco/etc/ocicrypt_config.json".to_string()
-            )]
+            vec![
+                (
+                    "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
+                    "/run/kata-addons/coco/etc/ocicrypt_config.json".to_string()
+                ),
+                (
+                    "PATH".to_string(),
+                    "/run/kata-addons/coco/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin".to_string()
+                )
+            ]
         );
 
         let api = &specs[2];
