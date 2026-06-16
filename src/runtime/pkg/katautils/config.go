@@ -180,29 +180,31 @@ type hypervisor struct {
 }
 
 type runtime struct {
-	InterNetworkModel         string   `toml:"internetworking_model"`
-	JaegerEndpoint            string   `toml:"jaeger_endpoint"`
-	JaegerUser                string   `toml:"jaeger_user"`
-	JaegerPassword            string   `toml:"jaeger_password"`
-	VfioMode                  string   `toml:"vfio_mode"`
-	GuestSeLinuxLabel         string   `toml:"guest_selinux_label"`
-	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
-	Experimental              []string `toml:"experimental"`
-	Tracing                   bool     `toml:"enable_tracing"`
-	DisableNewNetNs           bool     `toml:"disable_new_netns"`
-	DisableGuestSeccomp       bool     `toml:"disable_guest_seccomp"`
-	EnableVCPUsPinning        bool     `toml:"enable_vcpus_pinning"`
-	Debug                     bool     `toml:"enable_debug"`
-	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
-	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
-	EnablePprof               bool     `toml:"enable_pprof"`
-	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
-	EmptyDirMode              string   `toml:"emptydir_mode"`
-	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
-	DanConf                   string   `toml:"dan_conf"`
-	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
-	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
-	KubeletRootDir            string   `toml:"kubelet_root_dir"`
+	InterNetworkModel          string   `toml:"internetworking_model"`
+	JaegerEndpoint             string   `toml:"jaeger_endpoint"`
+	JaegerUser                 string   `toml:"jaeger_user"`
+	JaegerPassword             string   `toml:"jaeger_password"`
+	VfioMode                   string   `toml:"vfio_mode"`
+	GuestSeLinuxLabel          string   `toml:"guest_selinux_label"`
+	SandboxBindMounts          []string `toml:"sandbox_bind_mounts"`
+	Experimental               []string `toml:"experimental"`
+	Tracing                    bool     `toml:"enable_tracing"`
+	DisableNewNetNs            bool     `toml:"disable_new_netns"`
+	DisableGuestSeccomp        bool     `toml:"disable_guest_seccomp"`
+	EnableVCPUsPinning         bool     `toml:"enable_vcpus_pinning"`
+	Debug                      bool     `toml:"enable_debug"`
+	SandboxCgroupOnly          bool     `toml:"sandbox_cgroup_only"`
+	StaticSandboxResourceMgmt  bool     `toml:"static_sandbox_resource_mgmt"`
+	EnablePprof                bool     `toml:"enable_pprof"`
+	DisableGuestEmptyDir       bool     `toml:"disable_guest_empty_dir"`
+	EmptyDirMode               string   `toml:"emptydir_mode"`
+	CreateContainerTimeout     uint64   `toml:"create_container_timeout"`
+	MonitorCheckInterval       uint64   `toml:"monitor_check_interval"`
+	AgentCheckFailureThreshold uint32   `toml:"agent_check_failure_threshold"`
+	DanConf                    string   `toml:"dan_conf"`
+	ForceGuestPull             bool     `toml:"experimental_force_guest_pull"`
+	PodResourceAPISock         string   `toml:"pod_resource_api_sock"`
+	KubeletRootDir             string   `toml:"kubelet_root_dir"`
 }
 
 // emptyDirMode returns a valid emptydir_mode value, defaulting to shared-fs
@@ -1722,6 +1724,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
 	config.CreateContainerTimeout = tomlConf.Runtime.CreateContainerTimeout
+	config.MonitorCheckInterval = tomlConf.Runtime.MonitorCheckInterval
+	config.AgentCheckFailureThreshold = tomlConf.Runtime.AgentCheckFailureThreshold
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {

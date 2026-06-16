@@ -526,6 +526,10 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	[agent.kata]
 	debug_console_enabled=true
 	kernel_modules=["a", "b", "c"]
+
+	[runtime]
+	monitor_check_interval=7
+	agent_check_failure_threshold=3
 `
 
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
@@ -599,8 +603,10 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 		AgentConfig: expectedAgentConfig,
 
-		FactoryConfig: expectedFactoryConfig,
-		EmptyDirMode:  vc.EmptyDirModeSharedFs,
+		FactoryConfig:              expectedFactoryConfig,
+		EmptyDirMode:               vc.EmptyDirModeSharedFs,
+		MonitorCheckInterval:       7,
+		AgentCheckFailureThreshold: 3,
 	}
 	err = SetKernelParams(&expectedConfig)
 	if err != nil {

@@ -173,6 +173,13 @@ type RuntimeConfig struct {
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
 
+	// MonitorCheckInterval is the sandbox monitor check interval in seconds.
+	MonitorCheckInterval uint64
+
+	// AgentCheckFailureThreshold is the number of consecutive failed agent checks
+	// before the monitor marks the agent dead.
+	AgentCheckFailureThreshold uint32
+
 	// Base directory of directly attachable network config
 	DanConfig string
 
@@ -1251,6 +1258,10 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		Experimental: runtime.Experimental,
 
 		CreateContainerTimeout: runtime.CreateContainerTimeout,
+
+		MonitorCheckInterval: runtime.MonitorCheckInterval,
+
+		AgentCheckFailureThreshold: runtime.AgentCheckFailureThreshold,
 
 		ForceGuestPull: runtime.ForceGuestPull,
 

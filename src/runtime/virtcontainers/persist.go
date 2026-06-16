@@ -185,13 +185,15 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 			InterworkingModel: int(sconfig.NetworkConfig.InterworkingModel),
 		},
 
-		ShmSize:             sconfig.ShmSize,
-		SharePidNs:          sconfig.SharePidNs,
-		SystemdCgroup:       sconfig.SystemdCgroup,
-		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
-		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
-		EnableVCPUsPinning:  sconfig.EnableVCPUsPinning,
-		GuestSeLinuxLabel:   sconfig.GuestSeLinuxLabel,
+		ShmSize:                    sconfig.ShmSize,
+		SharePidNs:                 sconfig.SharePidNs,
+		SystemdCgroup:              sconfig.SystemdCgroup,
+		SandboxCgroupOnly:          sconfig.SandboxCgroupOnly,
+		DisableGuestSeccomp:        sconfig.DisableGuestSeccomp,
+		EnableVCPUsPinning:         sconfig.EnableVCPUsPinning,
+		GuestSeLinuxLabel:          sconfig.GuestSeLinuxLabel,
+		MonitorCheckInterval:       sconfig.MonitorCheckInterval,
+		AgentCheckFailureThreshold: sconfig.AgentCheckFailureThreshold,
 	}
 
 	ss.Config.SandboxBindMounts = append(ss.Config.SandboxBindMounts, sconfig.SandboxBindMounts...)
@@ -425,13 +427,15 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 			InterworkingModel: NetInterworkingModel(savedConf.NetworkConfig.InterworkingModel),
 		},
 
-		ShmSize:             savedConf.ShmSize,
-		SharePidNs:          savedConf.SharePidNs,
-		SystemdCgroup:       savedConf.SystemdCgroup,
-		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
-		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
-		EnableVCPUsPinning:  savedConf.EnableVCPUsPinning,
-		GuestSeLinuxLabel:   savedConf.GuestSeLinuxLabel,
+		ShmSize:                    savedConf.ShmSize,
+		SharePidNs:                 savedConf.SharePidNs,
+		SystemdCgroup:              savedConf.SystemdCgroup,
+		SandboxCgroupOnly:          savedConf.SandboxCgroupOnly,
+		DisableGuestSeccomp:        savedConf.DisableGuestSeccomp,
+		EnableVCPUsPinning:         savedConf.EnableVCPUsPinning,
+		GuestSeLinuxLabel:          savedConf.GuestSeLinuxLabel,
+		MonitorCheckInterval:       savedConf.MonitorCheckInterval,
+		AgentCheckFailureThreshold: savedConf.AgentCheckFailureThreshold,
 	}
 	sconfig.SandboxBindMounts = append(sconfig.SandboxBindMounts, savedConf.SandboxBindMounts...)
 

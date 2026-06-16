@@ -207,42 +207,44 @@ const (
 )
 
 type RuntimeConfigOptions struct {
-	Hypervisor            string
-	HypervisorPath        string
-	DefaultGuestHookPath  string
-	KernelPath            string
-	ImagePath             string
-	RootfsType            string
-	KernelParams          string
-	MachineType           string
-	LogPath               string
-	BlockDeviceDriver     string
-	BlockDeviceAIO        string
-	SharedFS              string
-	VirtioFSDaemon        string
-	JaegerEndpoint        string
-	JaegerUser            string
-	JaegerPassword        string
-	PFlash                []string
-	HotPlugVFIO           config.PCIePort
-	ColdPlugVFIO          config.PCIePort
-	PCIeRootPort          uint32
-	PCIeSwitchPort        uint32
-	DefaultVCPUCount      uint32
-	DefaultMaxVCPUCount   uint32
-	DefaultMemSize        uint32
-	DefaultMaxMemorySize  uint64
-	DefaultMsize9p        uint32
-	DefaultIndepIOThreads uint32
-	DisableBlock          bool
-	EnableIOThreads       bool
-	DisableNewNetNs       bool
-	HypervisorDebug       bool
-	RuntimeDebug          bool
-	RuntimeTrace          bool
-	AgentDebug            bool
-	AgentTrace            bool
-	EnablePprof           bool
+	Hypervisor                 string
+	HypervisorPath             string
+	DefaultGuestHookPath       string
+	KernelPath                 string
+	ImagePath                  string
+	RootfsType                 string
+	KernelParams               string
+	MachineType                string
+	LogPath                    string
+	BlockDeviceDriver          string
+	BlockDeviceAIO             string
+	SharedFS                   string
+	VirtioFSDaemon             string
+	JaegerEndpoint             string
+	JaegerUser                 string
+	JaegerPassword             string
+	PFlash                     []string
+	HotPlugVFIO                config.PCIePort
+	ColdPlugVFIO               config.PCIePort
+	PCIeRootPort               uint32
+	PCIeSwitchPort             uint32
+	DefaultVCPUCount           uint32
+	DefaultMaxVCPUCount        uint32
+	DefaultMemSize             uint32
+	DefaultMaxMemorySize       uint64
+	DefaultMsize9p             uint32
+	DefaultIndepIOThreads      uint32
+	DisableBlock               bool
+	EnableIOThreads            bool
+	DisableNewNetNs            bool
+	HypervisorDebug            bool
+	RuntimeDebug               bool
+	RuntimeTrace               bool
+	AgentDebug                 bool
+	AgentTrace                 bool
+	EnablePprof                bool
+	MonitorCheckInterval       uint64
+	AgentCheckFailureThreshold uint32
 }
 
 // ContainerIDTestDataType is a type used to test Container and Sandbox ID's.
@@ -339,6 +341,8 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	enable_tracing = ` + strconv.FormatBool(config.RuntimeTrace) + `
 	disable_new_netns= ` + strconv.FormatBool(config.DisableNewNetNs) + `
 	enable_pprof= ` + strconv.FormatBool(config.EnablePprof) + `
+	monitor_check_interval= ` + strconv.FormatUint(config.MonitorCheckInterval, 10) + `
+	agent_check_failure_threshold= ` + strconv.FormatUint(uint64(config.AgentCheckFailureThreshold), 10) + `
 	jaeger_endpoint= "` + config.JaegerEndpoint + `"
 	jaeger_user= "` + config.JaegerUser + `"
 	jaeger_password= "` + config.JaegerPassword + `"`
