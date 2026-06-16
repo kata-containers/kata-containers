@@ -75,6 +75,7 @@ else
 		"k8s-custom-dns.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
+		"k8s-erofs-dmverity.bats" \
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-hostname.bats" \
