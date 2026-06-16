@@ -13,7 +13,6 @@
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
 //! - Supports GPT-partitioned disks with dm-verity integrity verification for each partition
 
-use nix::sys::stat::{self, Mode, SFlag};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,15 +30,13 @@ use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, Mounter};
 use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
+#[cfg(feature = "devicemapper")]
+use kata_types::dmverity::{cleanup_dmverity_devices, create_dmverity_device, DmVerityInfo};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use safe_path::scoped_join;
 use slog::Logger;
 use tokio::sync::Mutex;
-
-// dm-verity support imports
-use devicemapper::{DevId, DmFlags, DmName, DmOptions, DmUdevFlags, DM};
-use kata_types::mount::DmVerityInfo;
 
 /// EROFS Type
 const EROFS_TYPE: &str = "erofs";
@@ -62,93 +59,22 @@ const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 /// dm-verity related storage options
 #[allow(dead_code)]
 const OPT_DMVERITY_ENABLED: &str = "X-kata.dmverity-enabled=true";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_ROOT_HASH: &str = "X-kata.dmverity.roothash=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_HASH_OFFSET: &str = "X-kata.dmverity.hashoffset=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_BLOCK_SIZE: &str = "X-kata.dmverity.blocksize=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_HASH_SIZE: &str = "X-kata.dmverity.hashsize=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_HASH_ALGORITHM: &str = "X-kata.dmverity.algorithm=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_SALT: &str = "X-kata.dmverity.salt=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_HASH_TYPE: &str = "X-kata.dmverity.hashtype=";
+#[cfg(feature = "devicemapper")]
 const OPT_DMVERITY_NO_SUPERBLOCK: &str = "X-kata.dmverity.no-superblock=";
-
-/// Build DmOptions that fully disable udev synchronization.
-fn no_udev_dm_options() -> DmOptions {
-    DmOptions::default().set_udev_flags(
-        DmUdevFlags::DM_UDEV_DISABLE_LIBRARY_FALLBACK
-            | DmUdevFlags::DM_UDEV_DISABLE_SUBSYSTEM_RULES_FLAG
-            | DmUdevFlags::DM_UDEV_DISABLE_DISK_RULES_FLAG
-            | DmUdevFlags::DM_UDEV_DISABLE_OTHER_RULES_FLAG
-            | DmUdevFlags::DM_UDEV_DISABLE_DM_RULES_FLAG,
-    )
-}
-
-/// Build DmOptions for read-only device removal in a no-udev environment.
-fn dm_opts_readonly() -> DmOptions {
-    no_udev_dm_options().set_flags(DmFlags::DM_READONLY)
-}
-
-/// Build DmOptions for deferred device removal in a no-udev environment.
-fn dm_opts_deferred_remove() -> DmOptions {
-    no_udev_dm_options().set_flags(DmFlags::DM_DEFERRED_REMOVE)
-}
-
-/// Create a block device node for a dm-verity device using mknod(2).
-fn create_dm_dev_node(name: &str, dev: devicemapper::Device) -> Result<String> {
-    // Ensure /dev/mapper exists.
-    let mapper_dir = Path::new("/dev/mapper");
-    if !mapper_dir.exists() {
-        std::fs::create_dir_all(mapper_dir)
-            .with_context(|| format!("failed to create directory {}", mapper_dir.display()))?;
-    }
-
-    let dev_path = format!("/dev/mapper/{}", name);
-    // Remove stale node from a previous failed run, if any
-    if Path::new(&dev_path).exists() {
-        std::fs::remove_file(&dev_path)
-            .with_context(|| format!("failed to remove stale device node {}", dev_path))?;
-    }
-
-    // Use Device -> dev_t conversion from the crate instead of raw makedev.
-    let dev_t: nix::libc::dev_t = dev.into();
-    stat::mknod(
-        dev_path.as_str(),
-        SFlag::S_IFBLK,
-        Mode::from_bits_truncate(0o600),
-        dev_t,
-    )
-    .with_context(|| format!("failed to mknod block device {}", dev_path))?;
-
-    Ok(dev_path)
-}
-
-/// Remove a device node that was created by create_dm_dev_node.
-fn remove_dm_dev_node(dev_path: &str) {
-    if dev_path.starts_with("/dev/mapper/") && Path::new(dev_path).exists() {
-        if let Err(e) = std::fs::remove_file(dev_path) {
-            slog::warn!(
-                slog_scope::logger(),
-                "failed to remove dm device node";
-                "path" => dev_path,
-                "error" => %e,
-            );
-        }
-    }
-}
-
-/// Generate a unique dm-verity device name based on the source device path and verity hash.
-fn build_dmverity_device_name(source_device_path: &Path, verity_info: &DmVerityInfo) -> String {
-    let source_short = source_device_path
-        .file_name()
-        .map(|f| f.to_string_lossy())
-        .unwrap_or_default();
-    let hash_prefix = &verity_info.hash[..verity_info.hash.len().min(32)];
-    let mut name = format!(
-        "kata-verity-{}-off{}-{}",
-        source_short, verity_info.offset, hash_prefix
-    );
-    name.truncate(128);
-    name
-}
 
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
@@ -387,8 +313,8 @@ pub async fn handle_multi_layer_erofs_group(
     }
 
     // Concurrently create dm-verity devices and mount layers.
-    // Each layer has independent device nodes and mount points, so there is no
-    // ordering dependency during creation — only the final lowerdir list must
+    // No worry about that because each layer has independent device nodes and mount points,
+    // so there is no ordering dependency during creation — only the final lowerdir list must
     // preserve the original sort order.
     let futures: Vec<_> = erofs_storages
         .iter()
@@ -451,6 +377,7 @@ pub async fn handle_multi_layer_erofs_group(
             }
         }
 
+        #[cfg(feature = "devicemapper")]
         if !failed_verity_devices.is_empty() {
             cleanup_dmverity_devices(&failed_verity_devices, &logger);
         }
@@ -622,7 +549,8 @@ fn is_dmverity_enabled(storage: &Storage) -> bool {
 }
 
 /// Parse dm-verity configuration from storage options
-fn parse_dmverity_options(storage: &Storage) -> Result<DmVerityInfo> {
+#[cfg(feature = "devicemapper")]
+pub fn parse_dmverity_options(storage: &Storage) -> Result<DmVerityInfo> {
     let mut hashtype = String::from("sha256");
     let mut hash = String::new();
     let mut blocknum: u64 = 0;
@@ -702,8 +630,8 @@ fn parse_dmverity_options(storage: &Storage) -> Result<DmVerityInfo> {
 }
 
 /// Create dm-verity device for a partition and return the verity device path
-#[allow(dead_code)]
-fn create_partition_dmverity_device(
+#[cfg(feature = "devicemapper")]
+async fn create_partition_dmverity_device(
     partition_path: &str,
     storage: &Storage,
     logger: &Logger,
@@ -721,6 +649,7 @@ fn create_partition_dmverity_device(
 
     // Create dm-verity device
     let verity_device_path = create_dmverity_device(&verity_info, Path::new(partition_path))
+        .await
         .context("failed to create dm-verity device")?;
 
     info!(
@@ -733,157 +662,15 @@ fn create_partition_dmverity_device(
     Ok(verity_device_path)
 }
 
-/// Create a dm-verity device using devicemapper
-fn create_dmverity_device(verity_info: &DmVerityInfo, source_device_path: &Path) -> Result<String> {
-    let dm = DM::new()?;
-    let verity_name_string = build_dmverity_device_name(source_device_path, verity_info);
-    let verity_name = DmName::new(&verity_name_string)?;
-    let id = DevId::Name(verity_name);
-
-    let opts = no_udev_dm_options();
-    let ro_opts = dm_opts_readonly();
-
-    // Step 0: Remove stale device if it already exists
-    if dm.device_remove(&id, dm_opts_deferred_remove()).is_ok() {
-        // Stale device removed; continue with creation.
-    }
-
-    // Step 1: Create device as read-only with no-udev flags
-    dm.device_create(verity_name, None, ro_opts)?;
-
-    // Calculate hash start block.
-    //
-    // The `offset` field (from X-kata.dmverity.hashoffset) is the byte offset
-    // of the dm-verity superblock from the start of the device, as stored in
-    // the containerd .erofs.dmverity JSON. It equals data_blocks * data_block_size.
-    //
-    // In the dm-verity table, `hash_start_block` is the block number (in
-    // hash_block_size units) where the hash TREE DATA begins — NOT where the
-    // superblock begins. When version=1 (with superblock), the superblock
-    // occupies one hash-block-aligned region at `offset`, and the actual hash
-    // tree starts after it. The kernel never reads the superblock; it relies
-    // entirely on the table parameters.
-    //
-    // Therefore, when no_superblock=false:
-    //   hash_start_block = (offset / hashsize) + superblock_blocks
-    //   where superblock_blocks = ceil(512 / hashsize) = 1 (for hashsize >= 512)
-    //
-    // When no_superblock=true (version=0, no superblock):
-    //   hash_start_block = offset / hashsize
-    let hash_start_block: u64 = if verity_info.no_superblock {
-        verity_info.offset / verity_info.hashsize
-    } else {
-        // dm-verity v1 superblock is 512 bytes, aligned up to hash block size
-        let superblock_blocks = 512_u64.div_ceil(verity_info.hashsize);
-        (verity_info.offset / verity_info.hashsize) + superblock_blocks
-    };
-
-    // Use provided salt or default to "-" (no salt)
-    let salt = verity_info.salt.as_deref().unwrap_or("-");
-    let verity_params = format!(
-        "{} {} {} {} {} {} {} {} {} {}", // 10 parameters
-        verity_info.hash_type,           // version: "1" for verity v1.0
-        source_device_path.display(),    // data device
-        source_device_path.display(),    // hash device (usually same as data)
-        verity_info.blocksize,           // data block size
-        verity_info.hashsize,            // hash block size
-        verity_info.blocknum,            // number of data blocks
-        hash_start_block,                // hash start block
-        verity_info.hashtype,            // hash algorithm ("sha256", "sha1", etc.)
-        verity_info.hash,                // root hash (hex encoded)
-        salt                             // salt (hex encoded or "-" for none)
-    );
-
-    let verity_table = vec![(
-        0,
-        verity_info.blocknum * verity_info.blocksize / 512,
-        "verity".into(),
-        verity_params.clone(),
-    )];
-
-    info!(
-        slog_scope::logger(),
-        "dm-verity table parameters";
-        "device" => source_device_path.display(),
-        "data_blocks" => verity_info.blocknum,
-        "data_block_size" => verity_info.blocksize,
-        "hash_block_size" => verity_info.hashsize,
-        "hash_start_block" => hash_start_block,
-        "hash_algorithm" => &verity_info.hashtype,
-        "hash_type" => verity_info.hash_type,
-        "no_superblock" => verity_info.no_superblock,
-        "salt" => salt,
-        "table_params" => &verity_params,
-    );
-
-    // Step 2: Load table and resume (activate) with read-only + no-udev flags
-    dm.table_load(&id, verity_table.as_slice(), ro_opts)?;
-    dm.device_suspend(&id, opts)?;
-
-    // Step 3: Get device info and create the device node via mknod.
-    // In a udev-less guest VM, /dev/block/M:N and /dev/mapper/<name> are
-    // never created by udev. We must create the node ourselves using the
-    // major:minor numbers returned by the device-mapper ioctl.
-    let device_info = dm.device_info(&id)?;
-    let dev_path = create_dm_dev_node(&verity_name_string, device_info.device())?;
-
-    Ok(dev_path)
-}
-
-/// Destroy a dm-verity device
-fn destroy_dmverity_device(verity_device_name: &str) -> Result<()> {
-    let dm = devicemapper::DM::new()?;
-    let name = devicemapper::DmName::new(verity_device_name)?;
-
-    dm.device_remove(&devicemapper::DevId::Name(name), dm_opts_deferred_remove())
-        .context(format!("remove DmverityDevice {}", verity_device_name))?;
-
-    Ok(())
-}
-
-/// Destroy dm-verity device by path
-fn destroy_partition_dmverity_device(verity_device_path: &str, logger: &Logger) -> Result<()> {
-    // The verity device path is /dev/mapper/<name> (as created by create_dm_dev_node).
-    // Extract the DM device name for removal. Also remove the mknod-created device node.
-    let device_name = verity_device_path
-        .strip_prefix("/dev/mapper/")
-        .unwrap_or(verity_device_path)
-        .to_string();
-
-    destroy_dmverity_device(&device_name).context("Failed to destroy dm-verity device")?;
-    info!(
-        logger,
-        "Destroying dm-verity device";
-        "device-name" => &device_name,
-    );
-
-    // Remove the device node we created with mknod.
-    remove_dm_dev_node(verity_device_path);
-
-    Ok(())
-}
-
-/// Cleanup all dm-verity devices for a multi-layer EROFS mount
-pub fn cleanup_dmverity_devices(verity_devices: &[String], logger: &Logger) {
-    info!(
-        logger,
-        "Cleaning up {} dm-verity devices",
-        verity_devices.len()
-    );
-
-    // Destroy in reverse order
-    for verity_device in verity_devices.iter().rev() {
-        if let Err(e) = destroy_partition_dmverity_device(verity_device, logger) {
-            warn!(
-                logger,
-                "Failed to destroy dm-verity device";
-                "device-path" => verity_device,
-                "error" => format!("{:#}", e),
-            );
-        }
-    }
-
-    info!(logger, "dm-verity device cleanup completed");
+#[cfg(not(feature = "devicemapper"))]
+async fn create_partition_dmverity_device(
+    _partition_path: &str,
+    _storage: &Storage,
+    _logger: &Logger,
+) -> Result<String> {
+    Err(anyhow!(
+        "dm-verity support not compiled in: build with `--features devicemapper` to enable",
+    ))
 }
 
 /// Validate that a container ID does not contain path traversal sequences.
@@ -1054,7 +841,7 @@ async fn wait_and_mount_layer(
         })?;
 
         // Create dm-verity device
-        let verity_device = create_partition_dmverity_device(partition, layer, logger)?;
+        let verity_device = create_partition_dmverity_device(partition, layer, logger).await?;
         info!(
             logger,
             "Using dm-verity device for mount";
@@ -1420,6 +1207,7 @@ mod tests {
 
     // --- parse_dmverity_options ---
 
+    #[cfg(feature = "devicemapper")]
     #[test]
     fn test_parse_dmverity_options_required_fields_and_blocknum() {
         // Test required fields and blocknum calculation.

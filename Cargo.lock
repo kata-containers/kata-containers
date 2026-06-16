@@ -3591,7 +3591,6 @@ dependencies = [
  "const_format",
  "container-device-interface",
  "derivative",
- "devicemapper",
  "futures",
  "ipnetwork",
  "kata-agent-policy",

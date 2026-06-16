@@ -49,6 +49,15 @@ ifeq ($(INIT_DATA),yes)
     override EXTRA_RUSTFEATURES += init-data
 endif
 
+##VAR USE_DEVMAPPER=yes|no define if agent enables dm-verity (devicemapper) support
+USE_DEVMAPPER ?= no
+
+# Enable the devicemapper feature (links libdevmapper for dm-verity) with GNU libc
+ifeq ($(USE_DEVMAPPER),yes)
+    override EXTRA_RUSTFEATURES += devicemapper
+    override LIBC = gnu
+endif
+
 include ../../utils.mk
 
 ifneq ($(EXTRA_RUSTFEATURES),)
