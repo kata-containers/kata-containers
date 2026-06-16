@@ -31,12 +31,14 @@ RUN apt-get update && \
 		g++ \
 		gcc \
 		gnupg \
+		libdevmapper-dev \
 		libprotobuf-dev \
 		libssl-dev \
 		make \
 		musl-tools \
 		openssl \
 		perl \
+		pkg-config \
 		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
@@ -66,4 +68,7 @@ RUN ARCH=$(uname -m); \
 	        "s390x") rust_arch="${ARCH}"; libc="gnu" ;; \
 	        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     	esac; \
-	rustup target add "${rust_arch}-unknown-linux-${libc}"
+	rustup target add "${rust_arch}-unknown-linux-${libc}"; \
+	if [ "${libc}" != "gnu" ]; then \
+		rustup target add "${rust_arch}-unknown-linux-gnu"; \
+	fi
