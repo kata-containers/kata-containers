@@ -1083,14 +1083,14 @@ func TestKataCleanupSandbox(t *testing.T) {
 }
 
 func TestKataAgentKernelParams(t *testing.T) {
-	assert := assert.New(t)
-
 	// nolint: govet
 	type testData struct {
+		name                 string
 		debug                bool
 		trace                bool
 		containerPipeSize    uint32
 		launchProcessTimeout uint32
+		visibleCdiDevices    bool
 		expectedParams       []Param
 	}
 
@@ -1099,60 +1099,57 @@ func TestKataAgentKernelParams(t *testing.T) {
 
 	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
 	launchProcessTimeoutParam := Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: "60"}
+	visibleCdiDevicesParam := Param{Key: "agent.visible_cdi_devices", Value: "true"}
 
 	data := []testData{
-		{false, false, 0, 0, []Param{}},
+		{name: "no options", expectedParams: []Param{}},
 
-		// Debug
-		{true, false, 0, 0, []Param{debugParam}},
+		{name: "debug", debug: true, expectedParams: []Param{debugParam}},
 
-		// Tracing
-		{false, true, 0, 0, []Param{traceParam}},
+		{name: "tracing", trace: true, expectedParams: []Param{traceParam}},
 
-		// Debug + Tracing
-		{true, true, 0, 0, []Param{debugParam, traceParam}},
+		{name: "debug and tracing", debug: true, trace: true, expectedParams: []Param{debugParam, traceParam}},
 
-		// pipesize
-		{false, false, 2097152, 0, []Param{containerPipeSizeParam}},
+		{name: "pipesize", containerPipeSize: 2097152, expectedParams: []Param{containerPipeSizeParam}},
 
-		// Debug + pipesize
-		{true, false, 2097152, 0, []Param{debugParam, containerPipeSizeParam}},
+		{name: "debug and pipesize", debug: true, containerPipeSize: 2097152, expectedParams: []Param{debugParam, containerPipeSizeParam}},
 
-		// Tracing + pipesize
-		{false, true, 2097152, 0, []Param{traceParam, containerPipeSizeParam}},
+		{name: "tracing and pipesize", trace: true, containerPipeSize: 2097152, expectedParams: []Param{traceParam, containerPipeSizeParam}},
 
-		// Debug + Tracing + pipesize
-		{true, true, 2097152, 0, []Param{debugParam, traceParam, containerPipeSizeParam}},
+		{name: "debug, tracing and pipesize", debug: true, trace: true, containerPipeSize: 2097152, expectedParams: []Param{debugParam, traceParam, containerPipeSizeParam}},
 
-		// LaunchProcessTimeout
-		{false, false, 0, 60, []Param{launchProcessTimeoutParam}},
+		{name: "launch process timeout", launchProcessTimeout: 60, expectedParams: []Param{launchProcessTimeoutParam}},
 
-		// Debug + LaunchProcessTimeout
-		{true, false, 0, 60, []Param{debugParam, launchProcessTimeoutParam}},
+		{name: "debug and launch process timeout", debug: true, launchProcessTimeout: 60, expectedParams: []Param{debugParam, launchProcessTimeoutParam}},
+
+		{name: "visible cdi devices", visibleCdiDevices: true, expectedParams: []Param{visibleCdiDevicesParam}},
 	}
 
-	for i, d := range data {
-		config := KataAgentConfig{
-			Debug:                d.debug,
-			Trace:                d.trace,
-			ContainerPipeSize:    d.containerPipeSize,
-			LaunchProcessTimeout: d.launchProcessTimeout,
-		}
+	for _, d := range data {
+		t.Run(d.name, func(t *testing.T) {
+			assert := assert.New(t)
 
-		count := len(d.expectedParams)
+			config := KataAgentConfig{
+				Debug:                d.debug,
+				Trace:                d.trace,
+				ContainerPipeSize:    d.containerPipeSize,
+				LaunchProcessTimeout: d.launchProcessTimeout,
+				VisibleCdiDevices:    d.visibleCdiDevices,
+			}
 
-		params := KataAgentKernelParams(config)
+			params := KataAgentKernelParams(config)
 
-		if count == 0 {
-			assert.Emptyf(params, "test %d (%+v)", i, d)
-			continue
-		}
+			if len(d.expectedParams) == 0 {
+				assert.Empty(params)
+				return
+			}
 
-		assert.Len(params, count)
+			assert.Len(params, len(d.expectedParams))
 
-		for _, p := range d.expectedParams {
-			assert.Containsf(params, p, "test %d (%+v)", i, d)
-		}
+			for _, p := range d.expectedParams {
+				assert.Contains(params, p)
+			}
+		})
 	}
 }
 

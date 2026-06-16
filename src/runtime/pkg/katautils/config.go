@@ -229,6 +229,7 @@ type agent struct {
 	DialTimeout          uint32   `toml:"dial_timeout"`
 	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
 	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
+	VisibleCdiDevices    bool     `toml:"visible_cdi_devices"`
 }
 
 func (orig *tomlConfig) Clone() tomlConfig {
@@ -799,6 +800,10 @@ func (a agent) cdhApiTimout() uint32 {
 
 func (a agent) launchProcessTimeout() uint32 {
 	return a.LaunchProcessTimeout
+}
+
+func (a agent) visibleCdiDevices() bool {
+	return a.VisibleCdiDevices
 }
 
 func (a agent) debug() bool {
@@ -1472,6 +1477,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			DialTimeout:          agent.dialTimout(),
 			CdhApiTimeout:        agent.cdhApiTimout(),
 			LaunchProcessTimeout: agent.launchProcessTimeout(),
+			VisibleCdiDevices:    agent.visibleCdiDevices(),
 		}
 	}
 
