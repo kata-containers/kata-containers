@@ -813,37 +813,24 @@ impl Annotation {
                     }
                     // Hypervisor Memory related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
-                        match byte_unit::Byte::parse_str(value, true) {
-                            Ok(mem_bytes) => {
-                                let memory_size = mem_bytes
-                                    .get_adjusted_unit(byte_unit::Unit::MiB)
-                                    .get_value()
-                                    as u32;
-                                info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
-                                if memory_size
-                                    < get_hypervisor_plugin(hypervisor_name)
-                                        .unwrap()
-                                        .get_min_memory()
-                                {
-                                    return Err(io::Error::new(
-                                        io::ErrorKind::InvalidData,
-                                        format!(
-                                            "memory specified in annotation {} is less than minimum limitation {}",
-                                            memory_size,
-                                            get_hypervisor_plugin(hypervisor_name)
-                                                .unwrap()
-                                                .get_min_memory()
-                                        ),
-                                    ));
-                                }
-                                hv.memory_info.default_memory = memory_size;
+                        if let Some(memory_size) = convert_to_megabytes(value)? {
+                            if memory_size
+                                < get_hypervisor_plugin(hypervisor_name)
+                                    .unwrap()
+                                    .get_min_memory()
+                            {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "memory specified in annotation {} is less than minimum limitation {}",
+                                        memory_size,
+                                        get_hypervisor_plugin(hypervisor_name)
+                                            .unwrap()
+                                            .get_min_memory()
+                                    ),
+                                ));
                             }
-                            Err(error) => {
-                                error!(
-                                    sl!(),
-                                    "failed to parse byte from string {} error {:?}", value, error
-                                );
-                            }
+                            hv.memory_info.default_memory = memory_size;
                         }
                     }
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS => match self.get_value::<u32>(key) {
@@ -1223,5 +1210,64 @@ impl Annotation {
         config.adjust_config()?;
 
         Ok(())
+    }
+}
+
+fn convert_to_megabytes(mem_size_str: &str) -> Result<Option<u32>> {
+    match byte_unit::Byte::parse_str(mem_size_str, true) {
+        Ok(mut mem_size) => {
+            let no_suffix_given = mem_size_str
+                .trim()
+                .chars()
+                .all(|c: char| c.is_ascii_digit());
+            if no_suffix_given {
+                // NOTE the error is apparently unreachable at the moment:
+                // Byte::from_u64_with_unit() doesn't fail unless its argument
+                // is too big, however that same too big arg will fail to
+                // Byte::parse_str() in the first place.  (Obviously we still
+                // need to handle it anyway.)
+                mem_size =
+                    byte_unit::Byte::from_u64_with_unit(mem_size.as_u64(), byte_unit::Unit::MiB)
+                        .ok_or(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("failed to convert {} to MiB", mem_size.as_u64()),
+                        ))?;
+            }
+            let memory_size = mem_size.get_adjusted_unit(byte_unit::Unit::MiB).get_value() as u32;
+            Ok(Some(memory_size))
+        }
+        Err(error) => {
+            error!(
+                sl!(),
+                "failed to parse byte from string {} error {:?}", mem_size_str, error
+            );
+            Ok(None)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_memory_no_unit() {
+        let result = convert_to_megabytes("2048");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(2048));
+    }
+
+    #[test]
+    fn parse_memory_with_units() {
+        let result = convert_to_megabytes("2 GiB");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(2048));
+    }
+
+    #[test]
+    fn parse_memory_parse_error() {
+        let result = convert_to_megabytes("2048r");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
     }
 }
