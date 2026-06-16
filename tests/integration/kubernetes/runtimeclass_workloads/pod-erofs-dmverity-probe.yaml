@@ -1,0 +1,33 @@
+#
+# Copyright (c) 2026 Ant Group
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Probe pod used by k8s-erofs-dmverity.bats.
+# The container command verifies that every EROFS layer was mounted through
+# a dm-verity device by checking dmesg for both dm-verity and erofs mount
+# records, then exits 0 on success or 1 on failure.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: erofs-dmverity-probe
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - image: registry.k8s.io/e2e-test-images/agnhost:2.21
+    name: probe
+    command:
+      - sh
+      - -c
+      - |-
+        log=$(dmesg 2>&1 | tail -n 100)
+        verity_lines=$(printf "%s\n" "$log" | grep -c "device-mapper: verity")
+        erofs_lines=$(printf "%s\n" "$log" | grep -cE "erofs \(device dm-[0-9]+\): mounted")
+        echo "verity_lines=${verity_lines} erofs_lines=${erofs_lines}"
+        if [ "${verity_lines}" -lt 1 ] || [ "${erofs_lines}" -lt 1 ]; then
+          echo "--- last 100 lines of dmesg ---"
+          printf "%s\n" "$log"
+          exit 1
+        fi
