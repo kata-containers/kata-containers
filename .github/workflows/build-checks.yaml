@@ -58,6 +58,7 @@ jobs:
             path: src/libs
             needs:
               - rust
+              - libdevmapper
               - protobuf-compiler
           - name: agent-ctl
             path: src/tools/agent-ctl
