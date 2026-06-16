@@ -8679,6 +8679,7 @@ dependencies = [
  "slog-scope",
  "strum 0.24.1",
  "tokio",
+ "tokio-util",
  "tracing",
  "url",
  "uuid 1.23.1",

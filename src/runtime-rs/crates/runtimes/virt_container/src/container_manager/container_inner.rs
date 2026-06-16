@@ -7,7 +7,7 @@
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use common::{
-    error::Error,
+    error::{is_no_such_process_error, Error},
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
 use hypervisor::device::device_manager::DeviceManager;
@@ -241,16 +241,31 @@ impl ContainerInner {
             .await
             .context("check state")?;
 
-        // if use force mode to stop container, stop always successful
-        // send kill signal to container
-        // ignore the error of sending signal, since the process would
-        // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
+        // Send kill signal to the container's init process.
+        //
+        // We must never abort teardown when signaling fails: the process may
+        // already have exited (or the agent connection may already be gone
+        // during sandbox shutdown), and in all of these cases we still have to
+        // clean up the container's resources. Failing to do so leaves the
+        // container's mounts in place, which later makes the sandbox-level
+        // virtiofs cleanup fail with "Resource busy"/"Directory not empty".
+        //
+        // Errors indicating the process is already gone are logged at info
+        // level; any other failure is logged as a warning, but cleanup always
+        // proceeds.
+        if let Err(e) = self
+            .signal_process(process, Signal::SIGKILL as u32, false)
             .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        {
+            if is_no_such_process_error(&e) {
+                info!(
+                    logger,
+                    "signal_process: init process is already gone, treat it as stopped"
+                );
+            } else {
+                warn!(logger, "failed to send kill signal to process: {:?}", e);
+            }
+        }
 
         match process.process_type {
             ProcessType::Container => self
