@@ -74,16 +74,27 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         "[\"erofs\",\"walking\"]",
     )?;
 
+    // In integrity mode, fsverity and immutable are disabled in favor of dm-verity.
+    let is_integrity = config.erofs_snapshotter_mode.as_deref() == Some("integrity");
+
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
-        "true",
+        if is_integrity { "false" } else { "true" },
     )?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
-        "true",
+        if is_integrity { "false" } else { "true" },
     )?;
+
+    if is_integrity {
+        toml_utils::set_toml_value(
+            configuration_file,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".dmverity_mode",
+            "\"auto\"",
+        )?;
+    }
 
     // Erofs differ plugin options (requires erofs-utils >= 1.8.2 on the host).
     toml_utils::set_toml_value(
@@ -96,6 +107,14 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
         "false",
     )?;
+
+    if is_integrity {
+        toml_utils::set_toml_value(
+            configuration_file,
+            ".plugins.\"io.containerd.differ.v1.erofs\".enable_dmverity",
+            "true",
+        )?;
+    }
 
     toml_utils::set_toml_value(
         configuration_file,

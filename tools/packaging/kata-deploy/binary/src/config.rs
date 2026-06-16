@@ -199,6 +199,9 @@ pub struct Config {
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
+    /// EROFS snapshotter mode (e.g., "integrity").
+    /// When set to "integrity", dm-verity is enabled and fsverity/immutable are disabled.
+    pub erofs_snapshotter_mode: Option<String>,
 }
 
 impl Config {
@@ -337,6 +340,12 @@ impl Config {
             Vec::new()
         };
 
+        // EROFS snapshotter mode (e.g. "integrity" for dm-verity support)
+        let erofs_snapshotter_mode = env::var("EROFS_SNAPSHOTTER_MODE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -365,6 +374,7 @@ impl Config {
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
+            erofs_snapshotter_mode,
         };
 
         // Validate the configuration
@@ -543,6 +553,19 @@ impl Config {
                     shim,
                     self.shims_for_arch.join(", ")
                 ));
+            }
+        }
+
+        // Validate EROFS_SNAPSHOTTER_MODE
+        if let Some(mode) = self.erofs_snapshotter_mode.as_ref() {
+            match mode.as_str() {
+                "disk" | "memory" | "integrity" => {}
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Unsupported EROFS_SNAPSHOTTER_MODE: '{}'. Supported values: disk, memory, integrity",
+                        mode
+                    ));
+                }
             }
         }
 
