@@ -2946,7 +2946,7 @@ dependencies = [
  "rand 0.10.1",
  "regex",
  "rust-ini",
- "safe-path 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-path",
  "seccompiler",
  "serde",
  "serde_json",
@@ -3504,7 +3504,7 @@ dependencies = [
  "runtime-spec",
  "rustjail",
  "s390_pv_core",
- "safe-path 0.1.0",
+ "safe-path",
  "scan_fmt",
  "scopeguard",
  "serde",
@@ -3552,7 +3552,7 @@ dependencies = [
  "protobuf",
  "protocols",
  "rand 0.10.1",
- "safe-path 0.1.0",
+ "safe-path",
  "serde",
  "serde_json",
  "slog",
@@ -3731,7 +3731,7 @@ dependencies = [
  "oci-spec 0.8.4",
  "regex",
  "rstest 0.18.2",
- "safe-path 0.1.0",
+ "safe-path",
  "scopeguard",
  "serde",
  "serde-enum-str",
@@ -5180,7 +5180,7 @@ dependencies = [
  "async-trait",
  "kata-sys-util",
  "kata-types",
- "safe-path 0.1.0",
+ "safe-path",
  "serde",
  "serde_json",
 ]
@@ -6699,7 +6699,7 @@ dependencies = [
  "regex",
  "rlimit 0.5.4",
  "runtime-spec",
- "safe-path 0.1.0",
+ "safe-path",
  "scan_fmt",
  "scopeguard",
  "serde",
@@ -6824,15 +6824,6 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "tempfile",
-]
-
-[[package]]
-name = "safe-path"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "980abdd3220aa19b67ca3ea07b173ca36383f18ae48cde696d90c8af39447ffb"
-dependencies = [
- "libc",
 ]
 
 [[package]]
