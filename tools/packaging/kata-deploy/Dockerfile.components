@@ -7,6 +7,13 @@
 
 FROM alpine:3.22 AS nydus-binary-downloader
 
+# When STATIC_NYDUS_SNAPSHOTTER is set to a non-empty value, download the
+# statically linked release asset (nydus-snapshotter-<ver>-linux-static.tar.gz)
+# instead of the per-arch (dynamically, glibc-linked) one. The static binaries
+# run on musl-only hosts that have no glibc dynamic loader. The static asset is
+# currently published for x86_64/amd64 only.
+ARG STATIC_NYDUS_SNAPSHOTTER=""
+
 COPY versions.yaml /tmp/versions.yaml
 
 RUN \
@@ -18,9 +25,18 @@ RUN \
 	ARCH="$(uname -m)" && \
 	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64 ; fi && \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" && \
-	tar xvzpf "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" -C /opt/nydus-snapshotter && \
-	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
+	if [ -n "${STATIC_NYDUS_SNAPSHOTTER}" ]; then \
+		if [ "${ARCH}" != "amd64" ]; then \
+			echo "STATIC_NYDUS_SNAPSHOTTER is only supported on amd64 (no static asset is published for ${ARCH})" >&2; \
+			exit 1; \
+		fi; \
+		NYDUS_SNAPSHOTTER_TARBALL="nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-static.tar.gz"; \
+	else \
+		NYDUS_SNAPSHOTTER_TARBALL="nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"; \
+	fi && \
+	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/${NYDUS_SNAPSHOTTER_TARBALL}" && \
+	tar xvzpf "${NYDUS_SNAPSHOTTER_TARBALL}" -C /opt/nydus-snapshotter && \
+	rm "${NYDUS_SNAPSHOTTER_TARBALL}"
 
 #### Build binary package
 FROM ubuntu:22.04 AS rust-builder
