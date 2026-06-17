@@ -5,6 +5,7 @@
 
 use nix::unistd;
 use std::mem;
+use std::os::fd::BorrowedFd;
 use std::os::unix::io::RawFd;
 
 use anyhow::{anyhow, Result};
@@ -31,7 +32,8 @@ pub fn write_count(fd: RawFd, buf: &[u8], count: usize) -> Result<usize> {
     let mut len = 0;
 
     loop {
-        match unistd::write(fd, &buf[len..]) {
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
+        match unistd::write(borrowed_fd, &buf[len..]) {
             Ok(l) => {
                 len += l;
                 if len == count {
@@ -55,7 +57,8 @@ fn read_count(fd: RawFd, count: usize) -> Result<Vec<u8>> {
     let mut len = 0;
 
     loop {
-        match unistd::read(fd, &mut v[len..]) {
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
+        match unistd::read(borrowed_fd, &mut v[len..]) {
             Ok(l) => {
                 len += l;
                 if len == count || l == 0 {

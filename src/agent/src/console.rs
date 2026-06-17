@@ -16,7 +16,7 @@ use nix::unistd::{self, close, dup2, fork, setsid, ForkResult, Pid};
 use rustjail::pipestream::PipeStream;
 use slog::Logger;
 use std::ffi::CString;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -68,10 +68,10 @@ pub async fn debug_console_handler(
             None,
         )?;
         let addr = VsockAddr::new(libc::VMADDR_CID_ANY, port);
-        socket::bind(listenfd, &addr)?;
-        socket::listen(listenfd, 1)?;
+        socket::bind(listenfd.as_raw_fd(), &addr)?;
+        socket::listen(&listenfd, nix::sys::socket::Backlog::new(1).unwrap())?;
 
-        let mut incoming = util::get_vsock_incoming(listenfd);
+        let mut incoming = util::get_vsock_incoming(listenfd.into_raw_fd());
 
         loop {
             select! {
@@ -114,7 +114,7 @@ pub async fn debug_console_handler(
                 info!(logger, "debug console got shutdown request");
             }
 
-            result = run_debug_console_serial(shell.clone(), fd) => {
+            result = run_debug_console_serial(shell.clone(), fd.into_raw_fd()) => {
                match result {
                    Ok(_) => {
                        info!(logger, "run_debug_console_shell session finished");
@@ -135,9 +135,17 @@ fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
     setsid()?;
 
     // dup stdin, stdout, stderr to let child act as a terminal
-    dup2(slave_fd, STDIN_FILENO)?;
-    dup2(slave_fd, STDOUT_FILENO)?;
-    dup2(slave_fd, STDERR_FILENO)?;
+    let borrowed_fd = unsafe { BorrowedFd::borrow_raw(slave_fd) };
+    let mut stdin_fd = unsafe { OwnedFd::from_raw_fd(STDIN_FILENO) };
+    let mut stdout_fd = unsafe { OwnedFd::from_raw_fd(STDOUT_FILENO) };
+    let mut stderr_fd = unsafe { OwnedFd::from_raw_fd(STDERR_FILENO) };
+    dup2(borrowed_fd, &mut stdin_fd)?;
+    dup2(borrowed_fd, &mut stdout_fd)?;
+    dup2(borrowed_fd, &mut stderr_fd)?;
+    // Prevent closing of stdio fds
+    let _ = stdin_fd.into_raw_fd();
+    let _ = stdout_fd.into_raw_fd();
+    let _ = stderr_fd.into_raw_fd();
 
     // set tty
     unsafe {
@@ -165,10 +173,11 @@ async fn run_in_parent<T: AsyncRead + AsyncWrite>(
     info!(logger, "get debug shell pid {:?}", child_pid);
 
     let master_fd = pseudo.master;
-    let _ = close(pseudo.slave);
+    let _ = close(pseudo.slave.into_raw_fd());
 
     let (mut socket_reader, mut socket_writer) = tokio::io::split(stream);
-    let (mut master_reader, mut master_writer) = tokio::io::split(PipeStream::from_fd(master_fd));
+    let (mut master_reader, mut master_writer) =
+        tokio::io::split(PipeStream::from_fd(master_fd.into_raw_fd()));
 
     select! {
         res = tokio::io::copy(&mut master_reader, &mut socket_writer) => {
@@ -206,10 +215,10 @@ async fn run_debug_console_vsock<T: AsyncRead + AsyncWrite>(
     let logger = logger.new(o!("subsystem" => "debug-console-shell"));
 
     let pseudo = openpty(None, None)?;
-    let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
-    let _ = fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+    let slave_fd = pseudo.slave.as_fd().as_raw_fd();
 
-    let slave_fd = pseudo.slave;
+    let _ = fcntl::fcntl(pseudo.master.as_fd(), FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
+    let _ = fcntl::fcntl(pseudo.slave.as_fd(), FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC));
 
     match unsafe { fork() } {
         Ok(ForkResult::Child) => run_in_child(slave_fd, shell),

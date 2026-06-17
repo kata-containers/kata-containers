@@ -10,7 +10,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{mpsc, Arc};
@@ -577,11 +576,11 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let file_offset = {
             let fd = memfd::memfd_create(
                 // safe to unwrap, no nul byte in file name
-                &CString::new("virtio_fs_mem").unwrap(),
-                memfd::MemFdCreateFlag::empty(),
+                CString::new("virtio_fs_mem").unwrap().as_c_str(),
+                memfd::MFdFlags::empty(),
             )
             .map_err(|e| Error::VirtioFs(FsError::MemFdCreate(e)))?;
-            let file: File = unsafe { File::from_raw_fd(fd) };
+            let file: File = File::from(fd);
             file.set_len(len)
                 .map_err(|e| Error::VirtioFs(FsError::SetFileSize(e)))?;
             Some(FileOffset::new(file, 0))

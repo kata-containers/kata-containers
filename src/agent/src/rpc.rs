@@ -62,6 +62,9 @@ use nix::mount::MsFlags;
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
+#[cfg(all(test, not(target_arch = "powerpc64")))]
+use std::os::fd::AsRawFd;
+use std::os::fd::BorrowedFd;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
@@ -2269,7 +2272,9 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 
         // Create new symbolic link
         let symlink_target = PathBuf::from(OsStr::from_bytes(&req.data));
-        unistd::symlinkat(&symlink_target, None, &path)?;
+        // Use BorrowedFd to wrap AT_FDCWD for symlinkat
+        let cwd_fd = unsafe { BorrowedFd::borrow_raw(libc::AT_FDCWD) };
+        unistd::symlinkat(&symlink_target, cwd_fd, &path)?;
 
         // Set symlink ownership (permissions not supported for symlinks)
         let path_str = CString::new(path.as_os_str().as_bytes())?;
@@ -2889,9 +2894,12 @@ mod tests {
             let mut sandbox = Sandbox::new(&logger).unwrap();
 
             let (rfd, wfd) = unistd::pipe().unwrap();
-            if d.break_pipe {
-                unistd::close(rfd).unwrap();
-            }
+            let rfd = if d.break_pipe {
+                drop(rfd); // OwnedFd closes automatically on drop
+                None
+            } else {
+                Some(rfd)
+            };
 
             if d.create_container {
                 let (mut linux_container, _root) = create_linuxcontainer();
@@ -2909,13 +2917,14 @@ mod tests {
                 )
                 .unwrap();
 
-                let fd = {
-                    if d.has_fd {
-                        Some(wfd)
-                    } else {
-                        unistd::close(wfd).unwrap();
-                        None
-                    }
+                let fd = if d.has_fd {
+                    let raw_fd = wfd.as_raw_fd();
+                    std::mem::forget(wfd); // Prevent OwnedFd from closing the fd
+                    Some(raw_fd)
+                } else {
+                    // Let wfd drop naturally to close the fd
+                    drop(wfd);
+                    None
                 };
 
                 if d.has_tty {
@@ -2947,9 +2956,7 @@ mod tests {
                 })
                 .await;
 
-            if !d.break_pipe {
-                unistd::close(rfd).unwrap();
-            }
+            drop(rfd);
             // XXX: Do not close wfd.
             // the fd will be closed on Process's dropping.
             // unistd::close(wfd).unwrap();

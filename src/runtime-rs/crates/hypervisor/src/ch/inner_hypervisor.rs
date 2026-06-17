@@ -44,7 +44,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
-use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
@@ -395,8 +394,7 @@ impl CloudHypervisorInner {
             let _pre = cmd.pre_exec(move || {
                 if let Some(netns_path) = &netns {
                     let netns_fd = std::fs::File::open(netns_path);
-                    let _ = setns(netns_fd?.as_raw_fd(), CloneFlags::CLONE_NEWNET)
-                        .context("set netns failed");
+                    let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
                 }
                 if let Some(label) = selinux_label.as_ref() {
                     if let Err(e) = selinux::set_exec_label(label) {

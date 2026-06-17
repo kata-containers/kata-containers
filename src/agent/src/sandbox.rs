@@ -7,7 +7,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs;
-use std::os::fd::FromRawFd;
+use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -480,23 +480,28 @@ impl Sandbox {
         }
 
         let mounts = mounts.clone();
-        let init_mntns = fcntl::open(
+        // Open mount namespace file descriptors
+        let init_mntns_owned = fcntl::open(
             "/proc/self/ns/mnt",
             OFlag::O_RDONLY | OFlag::O_CLOEXEC,
             Mode::empty(),
         )
-        .map_err(|e| anyhow!("failed to open /proc/self/ns/mnt: {}", e))?;
-        // safe because the fd are opened by fcntl::open and used directly.
-        let _init_mntns_f = unsafe { fs::File::from_raw_fd(init_mntns) };
+        .context("failed to open /proc/self/ns/mnt")?;
+        let init_mntns = init_mntns_owned.as_raw_fd();
+
         let dst_mntns_path = format!("/proc/{}/ns/mnt", c.init_process_pid);
-        let dst_mntns = fcntl::open(
+        let dst_mntns_owned = fcntl::open(
             dst_mntns_path.as_str(),
             OFlag::O_RDONLY | OFlag::O_CLOEXEC,
             Mode::empty(),
         )
-        .map_err(|e| anyhow!("failed to open {}: {}", dst_mntns_path.as_str(), e))?;
-        // safe because the fd are opened by fcntl::open and used directly.
-        let _dst_mntns_f = unsafe { fs::File::from_raw_fd(dst_mntns) };
+        .with_context(|| format!("failed to open {}", dst_mntns_path))?;
+        let dst_mntns = dst_mntns_owned.as_raw_fd();
+
+        // Convert OwnedFd to File to ensure proper cleanup
+        // Safe because we just opened these fds
+        let _init_mntns_f = unsafe { fs::File::from_raw_fd(init_mntns_owned.into_raw_fd()) };
+        let _dst_mntns_f = unsafe { fs::File::from_raw_fd(dst_mntns_owned.into_raw_fd()) };
         let new_thread = std::thread::spawn(move || {
             || -> Result<()> {
                 // A process can't join a new mount namespace if it is sharing
@@ -513,7 +518,8 @@ impl Sandbox {
                     if let Some(src_init_pid) = src_ctrs.get(m.src_ctr()) {
                         // Shared mount points are created by application process within the source container,
                         // so we need to ensure they are already prepared.
-                        setns(init_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(init_mntns) };
+                        setns(borrowed_fd, CloneFlags::CLONE_NEWNS).map_err(|e| {
                             anyhow!("switch to initial mount namespace failed: {}", e)
                         })?;
                         let mut is_ready = false;
@@ -556,8 +562,9 @@ impl Sandbox {
                             anyhow!("failed to open {}: {}", src_mntns_path.as_str(), e)
                         })?;
                         // safe because the fd are opened by fcntl::open and used directly.
-                        let _src_mntns_f = unsafe { fs::File::from_raw_fd(src_mntns) };
-                        setns(src_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                        let _src_mntns_f =
+                            unsafe { fs::File::from_raw_fd(src_mntns.into_raw_fd()) };
+                        setns(&_src_mntns_f, CloneFlags::CLONE_NEWNS).map_err(|e| {
                             anyhow!("switch to source mount namespace failed: {}", e)
                         })?;
                         let src = std::ffi::CString::new(m.src_path())?;
@@ -579,7 +586,8 @@ impl Sandbox {
                         let _mount_f = unsafe { fs::File::from_raw_fd(mount_fd) };
 
                         // Switch to the dst container and mount them.
-                        setns(dst_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(dst_mntns) };
+                        setns(borrowed_fd, CloneFlags::CLONE_NEWNS).map_err(|e| {
                             anyhow!("switch to destination mount namespace failed: {}", e)
                         })?;
                         fs::create_dir_all(m.dst_path())?;

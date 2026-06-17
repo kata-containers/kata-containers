@@ -10,6 +10,7 @@ use std::{
     fmt, io,
     io::{Read, Result, Write},
     mem,
+    os::fd::BorrowedFd,
     os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
     pin::Pin,
     task::{Context, Poll},
@@ -28,7 +29,8 @@ struct StreamFd(RawFd);
 
 impl io::Read for &StreamFd {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match unistd::read(self.0, buf) {
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.0) };
+        match unistd::read(borrowed_fd, buf) {
             Ok(l) => Ok(l),
             Err(e) => Err(e.into()),
         }
@@ -37,7 +39,8 @@ impl io::Read for &StreamFd {
 
 impl io::Write for &StreamFd {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match unistd::write(self.0, buf) {
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.0) };
+        match unistd::write(borrowed_fd, buf) {
             Ok(l) => Ok(l),
             Err(e) => Err(e.into()),
         }

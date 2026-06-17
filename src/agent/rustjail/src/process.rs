@@ -5,7 +5,7 @@
 
 use libc::pid_t;
 use std::fs::File;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{IntoRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
 use tokio_vsock::VsockStream;
 
@@ -171,8 +171,8 @@ impl Process {
             info!(logger, "created console socket!");
 
             let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-            p.parent_stdin = Some(pstdin);
-            p.stdin = Some(stdin);
+            p.parent_stdin = Some(pstdin.into_raw_fd());
+            p.stdin = Some(stdin.into_raw_fd());
 
             // Make sure the parent stdin writer be inserted into
             // p.writes hashmap, thus the cleanup_process_stream can
@@ -273,9 +273,9 @@ impl Process {
 fn create_extended_pipe(flags: OFlag, pipe_size: i32) -> Result<(RawFd, RawFd)> {
     let (r, w) = unistd::pipe2(flags)?;
     if pipe_size > 0 {
-        fcntl(w, FcntlArg::F_SETPIPE_SZ(pipe_size))?;
+        fcntl(&w, FcntlArg::F_SETPIPE_SZ(pipe_size))?;
     }
-    Ok((r, w))
+    Ok((r.into_raw_fd(), w.into_raw_fd()))
 }
 
 #[cfg(test)]

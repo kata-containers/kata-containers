@@ -44,7 +44,6 @@ use std::fmt::Debug;
 use std::fs;
 use std::io::{self, BufRead};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
-use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -568,7 +567,7 @@ fn mount_at<P: AsRef<Path>>(
     let child = std::thread::Builder::new()
         .name("async_mount".to_string())
         .spawn(move || {
-            match unistd::fchdir(file.as_raw_fd()) {
+            match unistd::fchdir(&file) {
                 Ok(_) => info!(sl!(), "chdir from {} to {}", cwd.display(), chdir.display()),
                 Err(e) => {
                     error!(

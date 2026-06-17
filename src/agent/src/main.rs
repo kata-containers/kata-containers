@@ -32,7 +32,7 @@ use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::ErrorKind;
 use std::os::unix::fs::{self as unixfs, FileTypeExt};
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::path::Path;
 use std::process::exit;
 use std::sync::Arc;
@@ -169,10 +169,10 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
         )?;
 
         let addr = VsockAddr::new(libc::VMADDR_CID_ANY, vsock_port);
-        socket::bind(listenfd, &addr)?;
-        socket::listen(listenfd, 1)?;
+        socket::bind(listenfd.as_raw_fd(), &addr)?;
+        socket::listen(&listenfd, nix::sys::socket::Backlog::new(1).unwrap())?;
 
-        Box::new(util::get_vsock_stream(listenfd).await?)
+        Box::new(util::get_vsock_stream(listenfd.into_raw_fd()).await?)
     } else {
         Box::new(tokio::io::stdout())
     };
@@ -199,8 +199,8 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         // dup a new file descriptor for this temporary logger writer,
         // since this logger would be dropped and it's writer would
         // be closed out of this code block.
-        let newwfd = dup(wfd)?;
-        let writer = unsafe { File::from_raw_fd(newwfd) };
+        let newwfd = dup(&wfd)?;
+        let writer = unsafe { File::from_raw_fd(newwfd.into_raw_fd()) };
 
         // Init a temporary logger used by init agent as init process
         // since before do the base mount, it wouldn't access "/proc/cmdline"
@@ -226,11 +226,15 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
     let config = &AGENT_CONFIG;
     let log_vport = config.log_vport as u32;
 
-    let log_handle = tokio::spawn(create_logger_task(rfd, log_vport, shutdown_rx.clone()));
+    let log_handle = tokio::spawn(create_logger_task(
+        rfd.into_raw_fd(),
+        log_vport,
+        shutdown_rx.clone(),
+    ));
 
     tasks.push(log_handle);
 
-    let writer = unsafe { File::from_raw_fd(wfd) };
+    let writer = unsafe { File::from_raw_fd(wfd.into_raw_fd()) };
 
     // Recreate a logger with the log level get from "/proc/cmdline".
     let (logger, logger_async_guard) =
@@ -704,7 +708,7 @@ fn reset_sigpipe() {
 }
 
 use crate::config::AgentConfig;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::RawFd;
 
 #[cfg(feature = "agent-policy")]
 use kata_agent_policy::policy::AgentPolicy;
@@ -729,7 +733,7 @@ mod tests {
                 // non-root user cannot use privileged vsock port
                 vsock_port: 1,
                 test_user: TestUserType::NonRootOnly,
-                result: Err(anyhow!(nix::errno::Errno::from_i32(libc::EACCES))),
+                result: Err(anyhow!(nix::errno::Errno::from_raw(libc::EACCES))),
             },
             TestData {
                 // passing vsock_port 0 causes logger task to write to stdout
@@ -748,16 +752,21 @@ mod tests {
 
             let msg = format!("test[{i}]: {d:?}");
             let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+            let rfd_raw = rfd.as_raw_fd();
+            let wfd_raw = wfd.as_raw_fd();
+            // Prevent OwnedFd from closing the fds when dropped
+            std::mem::forget(rfd);
+            std::mem::forget(wfd);
             defer!({
                 // XXX: Never try to close rfd, because it will be closed by PipeStream in
                 // create_logger_task() and it's not safe to close the same fd twice time.
-                unistd::close(wfd).unwrap();
+                unistd::close(wfd_raw).unwrap();
             });
 
             let (shutdown_tx, shutdown_rx) = channel(true);
 
             shutdown_tx.send(true).unwrap();
-            let result = create_logger_task(rfd, d.vsock_port, shutdown_rx).await;
+            let result = create_logger_task(rfd_raw, d.vsock_port, shutdown_rx).await;
 
             let msg = format!("{msg}, result: {result:?}");
             assert_result!(d.result, result, msg);

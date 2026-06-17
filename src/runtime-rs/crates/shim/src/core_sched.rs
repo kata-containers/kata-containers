@@ -38,7 +38,7 @@ pub const PR_SCHED_CORE_SHARE_FROM: usize = 3;
 pub fn core_sched_create(pidtype: usize) -> Result<(), Errno> {
     let errno = unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_CREATE, 0, pidtype, 0) };
     if errno != 0 {
-        Err(nix::errno::Errno::from_i32(-errno))
+        Err(nix::errno::Errno::from_raw(-errno))
     } else {
         Ok(())
     }
@@ -50,7 +50,7 @@ pub fn core_sched_share_from(pid: usize, pidtype: usize) -> Result<(), Errno> {
     let errno =
         unsafe { nix::libc::prctl(PR_SCHED_CORE, PR_SCHED_CORE_SHARE_FROM, pid, pidtype, 0) };
     if errno != 0 {
-        Err(nix::errno::Errno::from_i32(-errno))
+        Err(nix::errno::Errno::from_raw(-errno))
     } else {
         Ok(())
     }
