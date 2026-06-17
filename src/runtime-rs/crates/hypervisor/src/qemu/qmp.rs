@@ -637,6 +637,36 @@ impl Qmp {
         Err(anyhow!("no target device found"))
     }
 
+    /// Execute device_add for a block device. On failure, automatically
+    /// rolls back the blockdev node added earlier to avoid orphaned resources.
+    fn device_add_with_rollback(
+        &mut self,
+        node_name: &str,
+        bus: Option<String>,
+        driver: &str,
+        arguments: Dictionary,
+    ) -> Result<()> {
+        if let Err(e) = self.qmp.execute(&qmp::device_add {
+            bus,
+            id: Some(node_name.to_owned()),
+            driver: driver.to_owned(),
+            arguments,
+        }) {
+            if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_del {
+                node_name: node_name.to_owned(),
+            }) {
+                warn!(
+                    sl!(),
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
+                    node_name,
+                    e
+                );
+            }
+            return Err(anyhow!("device_add {:?}", e));
+        }
+        Ok(())
+    }
+
     /// Hotplug block device:
     /// {
     ///     "execute": "blockdev-add",
@@ -691,7 +721,7 @@ impl Qmp {
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
-        let node_name = format!("drive-{index}");
+        let node_name = block_node_name(index);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
             auto_read_only: None,
@@ -829,15 +859,12 @@ impl Qmp {
                 "scsi-hd",
                 blkdev_add_args
             );
-            self.qmp
-                .execute(&qmp::device_add {
-                    bus: Some("scsi0.0".to_string()),
-                    id: Some(node_name.clone()),
-                    driver: "scsi-hd".to_string(),
-                    arguments: blkdev_add_args,
-                })
-                .map_err(|e| anyhow!("device_add {:?}", e))
-                .map(|_| ())?;
+            self.device_add_with_rollback(
+                &node_name,
+                Some("scsi0.0".to_string()),
+                "scsi-hd",
+                blkdev_add_args,
+            )?;
 
             info!(
                 sl!(),
@@ -846,13 +873,29 @@ impl Qmp {
 
             Ok((None, Some(scsi_addr)))
         } else if block_driver == VIRTIO_BLK_CCW {
-            let subchannel = self.ccw_subchannel.as_mut().ok_or_else(|| {
-                anyhow!("CCW subchannel not available for virtio-blk-ccw hotplug")
-            })?;
+            let subchannel = match self.ccw_subchannel.as_mut() {
+                Some(sub) => sub,
+                None => {
+                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                        node_name: node_name.to_owned(),
+                    })?;
 
-            let slot = subchannel
-                .add_device(&node_name)
-                .map_err(|e| anyhow!("CCW subchannel add_device failed: {:?}", e))?;
+                    return Err(anyhow!(
+                        "CCW subchannel not available for virtio-blk-ccw hotplug"
+                    ));
+                }
+            };
+
+            let slot = match subchannel.add_device(&node_name) {
+                Ok(s) => s,
+                Err(e) => {
+                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                        node_name: node_name.to_owned(),
+                    })?;
+
+                    return Err(anyhow!("CCW subchannel add_device failed: {:?}", e));
+                }
+            };
             let devno = subchannel.address_format_ccw(slot);
             let ccw_addr = subchannel.address_format_ccw_for_virt_server(slot);
 
@@ -869,16 +912,17 @@ impl Qmp {
                 blkdev_add_args,
                 ccw_addr
             );
-            let device_add_result = self.qmp.execute(&qmp::device_add {
-                bus: None,
-                id: Some(node_name.clone()),
-                driver: block_driver.to_string(),
-                arguments: blkdev_add_args,
-            });
-            if let Err(e) = device_add_result {
-                // Roll back CCW subchannel state if QMP device_add fails
-                let _ = subchannel.remove_device(&node_name);
-                return Err(anyhow!("device_add {:?}", e));
+            if let Err(e) = self.device_add_with_rollback(
+                &node_name,
+                None,
+                block_driver,
+                blkdev_add_args,
+            ) {
+                if let Some(ref mut sub) = self.ccw_subchannel {
+                    // Roll back CCW subchannel state if QMP device_add fails
+                    let _ = sub.remove_device(&node_name);
+                }
+                return Err(e);
             }
 
             info!(
@@ -911,15 +955,13 @@ impl Qmp {
                 block_driver,
                 blkdev_add_args
             );
-            self.qmp
-                .execute(&qmp::device_add {
-                    bus: Some(bus),
-                    id: Some(node_name.clone()),
-                    driver: block_driver.to_string(),
-                    arguments: blkdev_add_args,
-                })
-                .map_err(|e| anyhow!("device_add {:?}", e))
-                .map(|_| ())?;
+
+            self.device_add_with_rollback(
+                &node_name,
+                Some(bus),
+                block_driver,
+                blkdev_add_args,
+            )?;
 
             let pci_path = self
                 .get_device_by_qdev_id(&node_name)
@@ -1127,4 +1169,9 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
     } else {
         QMP_SOCKET_FILE.to_string()
     }
+}
+
+/// Generate a blockdev node name based on the given index.
+fn block_node_name(index: u64) -> String {
+    format!("drive-{index}")
 }
