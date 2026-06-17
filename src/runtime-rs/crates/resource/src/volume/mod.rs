@@ -85,6 +85,13 @@ impl VolumeResource {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts().clone().unwrap_or_default();
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
+
+        // Extract OCI process user for K8s special volumes
+        let process_user = spec
+            .process()
+            .as_ref()
+            .map(|p| (p.user().uid() as i32, p.user().gid() as i32));
+
         // handle mounts
         for m in oci_mounts {
             let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
@@ -148,6 +155,7 @@ impl VolumeResource {
                         read_only,
                         ctx.agent.clone(),
                         self.volume_manager.clone(),
+                        process_user,
                     )
                     .await
                     .with_context(|| format!("new share fs volume {m:?}"))?,

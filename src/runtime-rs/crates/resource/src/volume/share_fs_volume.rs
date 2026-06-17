@@ -166,6 +166,7 @@ impl FsWatcher {
         agent: Arc<dyn Agent>,
         src: PathBuf,
         dst: PathBuf,
+        user_override: Option<(i32, i32)>,
     ) -> JoinHandle<()> {
         let need_sync = self.need_sync.clone();
         let pending_events = self.pending_events.clone();
@@ -188,7 +189,7 @@ impl FsWatcher {
                     "Initial sync from {:?} to {:?}", &src_sync, &dst_sync
                 );
                 if let Err(e) =
-                    copy_dir_recursively(&src_sync, &dst_sync.to_string_lossy(), &agent_sync).await
+                    copy_dir_recursively(&src_sync, &dst_sync.to_string_lossy(), &agent_sync, user_override).await
                 {
                     error!(sl!(), "Initial sync failed: {:?}", e);
                 }
@@ -257,7 +258,7 @@ impl FsWatcher {
                     if Instant::now().duration_since(t) > DEBOUNCE_TIME && *need_sync.lock().await {
                         info!(sl!(), "debounce handle copyfile {:?} -> {:?}", &src, &dst);
                         if let Err(e) =
-                            copy_dir_recursively(&src, &dst.to_string_lossy(), &agent).await
+                            copy_dir_recursively(&src, &dst.to_string_lossy(), &agent, user_override).await
                         {
                             error!(
                                 sl!(),
@@ -419,6 +420,7 @@ impl ShareFsVolume {
         readonly: bool,
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeManager>,
+        process_user: Option<(i32, i32)>,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
@@ -458,11 +460,16 @@ impl ShareFsVolume {
 
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
+                    let user_override = if is_watchable_volume(&src.parent().unwrap_or(&src).to_path_buf()) {
+                        process_user
+                    } else {
+                        None
+                    };
                     // Generate guest path
                     let guest_path = generate_guest_path(cid, m.destination())
                         .context("generate path failed")?;
                     // Copy a single file
-                    Self::copy_file_to_guest(&src, &guest_path, &agent)
+                    Self::copy_file_to_guest(&src, &guest_path, &agent, user_override)
                         .await
                         .context("copy file to guest")?;
 
@@ -473,6 +480,12 @@ impl ShareFsVolume {
                     // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &src);
 
+                    let user_override = if is_watchable_volume(&src) {
+                        process_user
+                    } else {
+                        None
+                    };
+
                     // Get or create the guest path
                     let guest_path = volume_manager
                         .get_or_create_volume(&src.to_string_lossy(), cid, m.destination())
@@ -480,7 +493,7 @@ impl ShareFsVolume {
                         .context("get or create volume")?;
 
                     // Create directory
-                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
+                    Self::copy_directory_to_guest(&src, &guest_path, &agent, user_override)
                         .await
                         .context("copy directory to guest")?;
 
@@ -492,7 +505,7 @@ impl ShareFsVolume {
                     if is_watchable_volume(&src) {
                         let watcher = FsWatcher::new(&src).await?;
                         let handle = watcher
-                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path))
+                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path), user_override)
                             .await;
                         monitor_task = Some(handle);
                     }
@@ -593,6 +606,7 @@ impl ShareFsVolume {
         src: &Path,
         guest_path: &str,
         agent: &Arc<dyn Agent>,
+        user_override: Option<(i32, i32)>,
     ) -> Result<()> {
         // Read file metadata
         let file_metadata = std::fs::metadata(src)
@@ -606,12 +620,16 @@ impl ShareFsVolume {
         file.read_to_end(&mut buffer)
             .with_context(|| format!("Failed to read file: {src:?}"))?;
 
+        // Use OCI process user if available, otherwise use host file ownership
+        let (uid, gid) = user_override
+            .unwrap_or((file_metadata.uid() as i32, file_metadata.gid() as i32));
+
         // Create gRPC request
         let r = agent::CopyFileRequest {
             path: guest_path.to_owned(),
             file_size: file_metadata.len() as i64,
-            uid: file_metadata.uid() as i32,
-            gid: file_metadata.gid() as i32,
+            uid,
+            gid,
             file_mode: file_metadata.mode(),
             data: buffer,
             ..Default::default()
@@ -630,17 +648,21 @@ impl ShareFsVolume {
         src: &Path,
         guest_path: &str,
         agent: &Arc<dyn Agent>,
+        user_override: Option<(i32, i32)>,
     ) -> Result<()> {
         // create directory
         let dir_metadata =
             std::fs::metadata(src).context(format!("read metadata from directory: {src:?}"))?;
 
+        let (uid, gid) = user_override
+            .unwrap_or((dir_metadata.uid() as i32, dir_metadata.gid() as i32));
+
         // ttRPC request for creating directory
         let dir_request = agent::CopyFileRequest {
             path: guest_path.to_owned(),
             file_size: 0, // useless for dir
-            uid: dir_metadata.uid() as i32,
-            gid: dir_metadata.gid() as i32,
+            uid,
+            gid,
             dir_mode: DIR_MODE_PERMS,
             file_mode: dir_metadata.mode(),
             data: vec![], // no files
@@ -662,7 +684,7 @@ impl ShareFsVolume {
 
         // recursively copy files from this directory
         // similar to `scp -r $source_dir $target_dir`
-        copy_dir_recursively(src, guest_path, agent)
+        copy_dir_recursively(src, guest_path, agent, user_override)
             .await
             .context(format!("failed to copy directory contents: {src:?}"))?;
 
@@ -779,6 +801,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
     src_dir: P,
     dest_dir: &str,
     agent: &Arc<dyn Agent>,
+    user_override: Option<(i32, i32)>,
 ) -> Result<()> {
     let mut queue = VecDeque::new();
     queue.push_back((src_dir.as_ref().to_path_buf(), dest_dir.to_string()));
@@ -807,6 +830,9 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 .await
                 .context(format!("read metadata for {entry_path:?}"))?;
 
+            let (uid, gid) = user_override
+                .unwrap_or((metadata.uid() as i32, metadata.gid() as i32));
+
             if metadata.is_symlink() {
                 // handle symlinks
                 let entry_path_err = entry_path.clone();
@@ -822,8 +848,8 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 let symlink_request = agent::CopyFileRequest {
                     path: dest_path.clone(),
                     file_size: link_target_str.len() as i64,
-                    uid: metadata.uid() as i32,
-                    gid: metadata.gid() as i32,
+                    uid,
+                    gid,
                     file_mode: SFlag::S_IFLNK.bits(),
                     data: link_target_str.clone().into_bytes(),
                     ..Default::default()
@@ -843,10 +869,10 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 let dir_request = agent::CopyFileRequest {
                     path: dest_path.clone(),
                     file_size: 0,
-                    uid: metadata.uid() as i32,
-                    gid: metadata.gid() as i32,
+                    uid,
+                    gid,
                     dir_mode: metadata.mode(),
-                    file_mode: SFlag::S_IFDIR.bits(),
+                    file_mode: metadata.mode(),
                     data: vec![],
                     ..Default::default()
                 };
@@ -877,9 +903,9 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 let file_request = agent::CopyFileRequest {
                     path: dest_path.clone(),
                     file_size: metadata.len() as i64,
-                    uid: metadata.uid() as i32,
-                    gid: metadata.gid() as i32,
-                    file_mode: SFlag::S_IFREG.bits(),
+                    uid,
+                    gid,
+                    file_mode: metadata.mode(),
                     data: buffer,
                     ..Default::default()
                 };
