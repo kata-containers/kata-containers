@@ -4081,7 +4081,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "maplit",
- "nix 0.30.1",
+ "nix 0.31.3",
  "once_cell",
  "page_size",
  "slog",
