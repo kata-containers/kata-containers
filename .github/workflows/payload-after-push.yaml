@@ -115,7 +115,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-s390x
       target-branch: ${{ github.ref_name }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
       image-kind: deploy
     secrets:
@@ -187,7 +187,7 @@ jobs:
       repo: kata-containers/kata-monitor-ci
       tag: kata-monitor-latest-s390x
       target-branch: ${{ github.ref_name }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
       image-kind: monitor
     secrets:
