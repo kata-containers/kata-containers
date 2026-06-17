@@ -859,6 +859,19 @@ BUILDTAGS :=
 # go build common flags
 BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
 
+# Static build profile.
+#
+# When STATIC=yes the Go host binaries (kata-runtime, containerd-shim-kata-v2
+# and kata-monitor) are built with cgo disabled and without PIE, producing
+# fully static, libc-agnostic executables. This lets the kata-deploy payload
+# run on musl-only hosts that have no glibc dynamic loader. It relies on the
+# runtime being cgo-free; the default (non-static) build is left unchanged.
+ifeq ($(STATIC),yes)
+       export CGO_ENABLED := 0
+       # PIE requires a dynamic loader, so it cannot be used for static binaries.
+       BUILDFLAGS := ${BUILDTAGS}
+endif
+
 # whether stipping the binary
 ifeq ($(STRIP),yes)
        KATA_LDFLAGS = -w -s
