@@ -52,6 +52,11 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
           { vmm: clh-runtime-rs, containerd_version: minimum },
+          # TEMP: confirm runtime-rs works with the erofs snapshotter (both
+          # unmerged/GPT and merged/fsmeta layouts) to inform the Go-runtime
+          # handleLocalStorage() fix. Remove before merge.
+          { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
+          { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: merged },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
