@@ -200,6 +200,11 @@ get_ovmf_image_name() {
 	echo "${BUILDER_REGISTRY}:ovmf-$(get_last_modification "${ovmf_script_dir}")-$(uname -m)"
 }
 
+get_igvm_image_name() {
+	igvm_script_dir="${repo_root_dir}/tools/packaging/static-build/igvm"
+	echo "${BUILDER_REGISTRY}:igvm-$(get_last_modification "${igvm_script_dir}")-$(uname -m)"
+}
+
 get_busybox_image_name() {
 	busybox_script_dir="${repo_root_dir}/tools/packaging/static-build/busybox"
 	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-$(uname -m)"

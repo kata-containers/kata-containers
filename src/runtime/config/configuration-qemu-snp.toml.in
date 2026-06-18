@@ -106,6 +106,16 @@ firmware = "@FIRMWARESNPPATH@"
 # can be customized per each user while UEFI code is kept same.
 firmware_volume = "@FIRMWARETDVFVOLUMEPATH@"
 
+# Path to an IGVM (Independent Guest Virtual Machine) image.
+# When set, the guest boots from this single measured image, which bundles the
+# firmware, kernel and (measured) kernel command line. In this mode the
+# `kernel`, `firmware` and `firmware_volume` options above are not used for
+# boot, and the launch measurement is fully determined by the IGVM image (it can
+# be computed offline with `igvmmeasure`). The rootfs `image` is still attached
+# as a separate disk. Leave empty to boot from the discrete kernel/firmware
+# assets above.
+igvm = "@IGVMSNPPATH@"
+
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`

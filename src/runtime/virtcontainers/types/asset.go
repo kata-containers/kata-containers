@@ -43,6 +43,11 @@ const (
 
 	FirmwareVolumeAsset AssetType = "firmware_volume"
 
+	// IgvmAsset is an IGVM image asset. An IGVM image bundles the guest
+	// firmware, kernel, command line and measured initial state in a single
+	// file and is booted in place of the discrete kernel/firmware assets.
+	IgvmAsset AssetType = "igvm"
+
 	UnkownAsset AssetType = "unknown"
 )
 
@@ -54,6 +59,7 @@ func AssetTypes() []AssetType {
 		FirmwareAsset,
 		FirmwareVolumeAsset,
 		HypervisorAsset,
+		IgvmAsset,
 		ImageAsset,
 		InitrdAsset,
 		JailerAsset,
@@ -94,6 +100,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.FirmwarePath, annotations.FirmwareHash, nil
 	case FirmwareVolumeAsset:
 		return annotations.FirmwareVolumePath, annotations.FirmwareVolumeHash, nil
+	case IgvmAsset:
+		return annotations.IgvmPath, annotations.IgvmHash, nil
 	}
 
 	return "", "", fmt.Errorf("Wrong asset type %s", t)

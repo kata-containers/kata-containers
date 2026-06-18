@@ -65,6 +65,42 @@ func TestHypervisorConfigSecureExecution(t *testing.T) {
 	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
 
+func TestHypervisorConfigIgvmNoKernelPath(t *testing.T) {
+	// IGVM boot supplies the kernel inside the measured image, so an empty
+	// kernel path is valid as long as a rootfs (image) is attached.
+	hypervisorConfig := &HypervisorConfig{
+		KernelPath:     "",
+		IgvmPath:       fmt.Sprintf("%s/%s", testDir, "kata.igvm"),
+		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
+		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
+	}
+
+	testHypervisorConfigValid(t, hypervisorConfig, true)
+}
+
+func TestHypervisorConfigIgvmSelfContained(t *testing.T) {
+	// A fully self-contained IGVM (no separate rootfs) is also valid.
+	hypervisorConfig := &HypervisorConfig{
+		KernelPath:     "",
+		IgvmPath:       fmt.Sprintf("%s/%s", testDir, "kata.igvm"),
+		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
+	}
+
+	testHypervisorConfigValid(t, hypervisorConfig, true)
+}
+
+func TestHypervisorConfigIgvmBothInitrdAndImage(t *testing.T) {
+	// image and initrd remain mutually exclusive in IGVM mode.
+	hypervisorConfig := &HypervisorConfig{
+		IgvmPath:       fmt.Sprintf("%s/%s", testDir, "kata.igvm"),
+		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
+		InitrdPath:     fmt.Sprintf("%s/%s", testDir, testInitrd),
+		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
+	}
+
+	testHypervisorConfigValid(t, hypervisorConfig, false)
+}
+
 func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 	hypervisorConfig := &HypervisorConfig{
 		KernelPath:       fmt.Sprintf("%s/%s", testDir, testKernel),

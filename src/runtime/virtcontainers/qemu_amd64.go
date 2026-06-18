@@ -40,6 +40,12 @@ type qemuAmd64 struct {
 	snpIdAuth string
 
 	snpGuestPolicy *uint64
+
+	// igvm indicates the guest boots from an IGVM image. When set, the
+	// firmware, kernel and command line come from the measured IGVM image
+	// (linked via the machine "igvm-cfg=igvm0" option) instead of discrete
+	// -kernel/-bios assets.
+	igvm bool
 }
 
 const (
@@ -153,6 +159,18 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		// this is because there is only one annotation (sgx.intel.com/epc)
 		// to specify the size of the EPC.
 		q.qemuMachine.Options += "sgx-epc.0.memdev=epc0,sgx-epc.0.node=0"
+	}
+
+	// IGVM boot: link the igvm-cfg object into the machine. The image is
+	// processed by QEMU to set up firmware, kernel and initial guest state, so
+	// the discrete -kernel/-bios are dropped at CreateVM time. The object id
+	// must match the one used when the igvm-cfg object is appended.
+	if config.IgvmPath != "" {
+		q.igvm = true
+		if q.qemuMachine.Options != "" {
+			q.qemuMachine.Options += ","
+		}
+		q.qemuMachine.Options += "igvm-cfg=igvm0"
 	}
 
 	if err := q.handleImagePath(config); err != nil {
@@ -316,6 +334,14 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 			ReducedPhysBits: 1,
 			InitdataDigest:  initdataDigest,
 			SnpGuestPolicy:  q.snpGuestPolicy,
+		}
+		if q.igvm {
+			// The firmware and kernel ship inside the measured IGVM image, so
+			// the SNP object carries no discrete firmware and must not request
+			// kernel-hashes (there is no -kernel to hash). host-data, policy
+			// and the id-block/id-auth launch parameters still apply.
+			obj.Igvm = true
+			obj.File = ""
 		}
 		if q.snpIdBlock != "" && q.snpIdAuth != "" {
 			obj.SnpIdBlock = q.snpIdBlock

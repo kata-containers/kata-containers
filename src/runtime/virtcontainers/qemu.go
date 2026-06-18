@@ -1151,6 +1151,25 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	if hypervisorConfig.IgvmBoot() {
+		igvmPath, err := q.config.IgvmAssetPath()
+		if err != nil {
+			return err
+		}
+		// The IGVM image bundles and measures the firmware, kernel and command
+		// line, so QEMU loads everything from it via an igvm-cfg object (the
+		// machine links it through "igvm-cfg=igvm0", set in newQemuArch). No
+		// discrete -kernel/-initrd/-append or -bios is emitted; the rootfs is
+		// still attached as a separate disk by buildDevices.
+		qemuConfig.Devices = append(qemuConfig.Devices, govmmQemu.Object{
+			Type: govmmQemu.IgvmCfg,
+			ID:   "igvm0",
+			File: igvmPath,
+		})
+		qemuConfig.Kernel = govmmQemu.Kernel{}
+		qemuConfig.Bios = ""
+	}
+
 	// Setup iothread for devices.
 	qemuConfig.IOThreads = q.setupIoThread(ioThread)
 

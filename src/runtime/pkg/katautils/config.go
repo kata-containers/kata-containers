@@ -90,6 +90,7 @@ type hypervisor struct {
 	RootfsType                     string                    `toml:"rootfs_type"`
 	Firmware                       string                    `toml:"firmware"`
 	FirmwareVolume                 string                    `toml:"firmware_volume"`
+	Igvm                           string                    `toml:"igvm"`
 	MachineAccelerators            string                    `toml:"machine_accelerators"`
 	CPUFeatures                    string                    `toml:"cpu_features"`
 	KernelParams                   string                    `toml:"kernel_params"`
@@ -354,6 +355,16 @@ func (h hypervisor) firmwareVolume() (string, error) {
 			return "", nil
 		}
 		p = defaultFirmwareVolumePath
+	}
+
+	return ResolvePath(p)
+}
+
+func (h hypervisor) igvm() (string, error) {
+	p := h.Igvm
+
+	if p == "" {
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -964,6 +975,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	igvm, err := h.igvm()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	machineAccelerators := h.machineAccelerators()
 	cpuFeatures := h.cpuFeatures()
 	kernelParams := h.kernelParams()
@@ -1042,6 +1058,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:                    rootfsType,
 		FirmwarePath:                  firmware,
 		FirmwareVolumePath:            firmwareVolume,
+		IgvmPath:                      igvm,
 		PFlash:                        pflashes,
 		MachineAccelerators:           machineAccelerators,
 		CPUFeatures:                   cpuFeatures,

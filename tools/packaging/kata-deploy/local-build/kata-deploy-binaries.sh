@@ -128,6 +128,7 @@ options:
 	ovmf-sev
 	ovmf-tdx
 	ovmf-cca
+	igvm
 	qemu
 	qemu-cca-experimental
 	qemu-snp-experimental
@@ -1182,6 +1183,27 @@ install_ovmf_cca() {
 	install_ovmf "cca" "edk2-cca.tar.gz"
 }
 
+# Install the measured IGVM image (SEV-SNP). Consumes the confidential guest
+# kernel and the SEV-SNP firmware produced by the kernel and ovmf-sev steps, and
+# bundles them with the measured command line into a single kata.igvm image via
+# steep's igvm-tools. See tools/packaging/static-build/igvm.
+install_igvm() {
+	local igvm_builder="${repo_root_dir}/tools/packaging/static-build/igvm/build.sh"
+
+	latest_artefact="$(get_from_kata_deps ".externals.igvm.version")"
+	latest_builder_image="$(get_igvm_image_name)"
+
+	install_cached_tarball_component \
+		"igvm" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${igvm_builder}"
+}
+
 install_busybox() {
 	latest_artefact="$(get_from_kata_deps ".externals.busybox.version")"
 	latest_builder_image="$(get_busybox_image_name)"
@@ -1485,6 +1507,8 @@ handle_build() {
 	ovmf-tdx) install_ovmf_tdx ;;
 
 	ovmf-cca) install_ovmf_cca ;;
+
+	igvm) install_igvm ;;
 
 	pause-image) install_pause_image ;;
 

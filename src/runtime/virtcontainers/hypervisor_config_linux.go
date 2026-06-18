@@ -17,13 +17,20 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return nil
 	}
 
-	if conf.KernelPath == "" {
+	// IGVM boot supplies the firmware, kernel and measured command line from a
+	// single image, so the discrete kernel path is not required in that mode.
+	if conf.IgvmPath == "" && conf.KernelPath == "" {
 		return fmt.Errorf("Missing kernel path")
 	}
 
-	if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
+	if conf.IgvmPath != "" {
+		// The rootfs is still attached as a separate disk, so allow image or
+		// initrd (but not both); allow neither for a self-contained IGVM.
+		if conf.ImagePath != "" && conf.InitrdPath != "" {
+			return fmt.Errorf("Image and initrd path cannot be both set")
+		}
+	} else if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
 		if conf.ImagePath != "" || conf.InitrdPath != "" {
-			fmt.Println("yes, failing")
 			return fmt.Errorf("Neither the image or initrd path may be set for Secure Execution")
 		}
 	} else if conf.ImagePath == "" && conf.InitrdPath == "" {

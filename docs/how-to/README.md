@@ -43,6 +43,7 @@
 - [How to run Docker with Kata Containers](how-to-run-docker-with-kata.md)
 - [How to run Kata Containers with `nydus`](how-to-use-virtio-fs-nydus-with-kata.md)
 - [How to run Kata Containers with AMD SEV-SNP](how-to-run-kata-containers-with-SNP-VMs.md)
+- [How to boot Kata Containers from a measured IGVM image](how-to-run-kata-containers-with-IGVM.md)
 - [How to run Kata Containers with IBM Secure Execution](how-to-run-kata-containers-with-SE-VMs.md)
 - [How to use EROFS to build rootfs in Kata Containers](how-to-use-erofs-build-rootfs.md)
 - [How to run Kata Containers with kinds of Block Volumes](how-to-run-kata-containers-with-kinds-of-Block-Volumes.md)

@@ -189,6 +189,64 @@ func TestAppendEPCObject(t *testing.T) {
 	testAppend(object, objectEPCString, t)
 }
 
+var objectIgvmString = "-object igvm-cfg,id=igvm0,file=/opt/kata/share/kata-containers/kata.igvm"
+
+func TestAppendIgvmCfgObject(t *testing.T) {
+	object := Object{
+		Type: IgvmCfg,
+		ID:   "igvm0",
+		File: "/opt/kata/share/kata-containers/kata.igvm",
+	}
+
+	testAppend(object, objectIgvmString, t)
+}
+
+// In IGVM mode the SNP object must not request kernel-hashes (there is no
+// discrete -kernel to hash) and carries no firmware File.
+var objectSNPIgvmString = "-object sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1"
+
+func TestAppendSNPObjectIgvm(t *testing.T) {
+	object := Object{
+		Type:            SNPGuest,
+		ID:              "snp",
+		CBitPos:         51,
+		ReducedPhysBits: 1,
+		Igvm:            true,
+	}
+
+	testAppend(object, objectSNPIgvmString, t)
+}
+
+// The SNP object must not set config.Bios when booting from IGVM, but must
+// still do so on the discrete-firmware path.
+func TestSNPObjectIgvmBiosGating(t *testing.T) {
+	igvmConfig := &Config{}
+	igvmObject := Object{
+		Type:            SNPGuest,
+		ID:              "snp",
+		CBitPos:         51,
+		ReducedPhysBits: 1,
+		Igvm:            true,
+	}
+	_ = igvmObject.QemuParams(igvmConfig)
+	if igvmConfig.Bios != "" {
+		t.Fatalf("expected empty Bios in IGVM mode, got %q", igvmConfig.Bios)
+	}
+
+	discreteConfig := &Config{}
+	discreteObject := Object{
+		Type:            SNPGuest,
+		ID:              "snp",
+		File:            "/fw/OVMF.fd",
+		CBitPos:         51,
+		ReducedPhysBits: 1,
+	}
+	_ = discreteObject.QemuParams(discreteConfig)
+	if discreteConfig.Bios != "/fw/OVMF.fd" {
+		t.Fatalf("expected Bios=/fw/OVMF.fd on discrete-firmware path, got %q", discreteConfig.Bios)
+	}
+}
+
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
 		Driver:        Virtio9P,

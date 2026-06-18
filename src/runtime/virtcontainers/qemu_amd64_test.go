@@ -342,3 +342,47 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 
 	assert.Equal(expectedOut, devices)
 }
+
+func TestQemuAmd64IgvmMachineOption(t *testing.T) {
+	assert := assert.New(t)
+
+	config := qemuConfig(QemuQ35)
+	config.IgvmPath = "/opt/kata/share/kata-containers/kata.igvm"
+	arch, err := newQemuArch(config)
+	assert.NoError(err)
+
+	amd64 := arch.(*qemuAmd64)
+	assert.True(amd64.igvm)
+	// The machine must link the igvm-cfg object so QEMU boots from the image.
+	assert.Contains(amd64.machine().Options, "igvm-cfg=igvm0")
+}
+
+func TestQemuAmd64AppendProtectionDeviceIgvm(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+
+	amd64 := newTestQemu(assert, QemuQ35).(*qemuAmd64)
+	amd64.protection = snpProtection
+	amd64.igvm = true
+
+	// In IGVM mode the firmware ships inside the measured image, so the
+	// firmware argument is ignored and the SNP object carries no File.
+	firmware := "should-be-ignored.fd"
+	devices, bios, err := amd64.appendProtectionDevice(devices, firmware, "", []uint8(nil))
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Type:            govmmQemu.SNPGuest,
+			ID:              "snp",
+			Debug:           false,
+			File:            "",
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+			Igvm:            true,
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+}

@@ -494,6 +494,12 @@ type HypervisorConfig struct {
 	// FirmwareVolumePath is the configuration volume path for the firmware
 	FirmwareVolumePath string
 
+	// IgvmPath is the guest IGVM image host path. When set, the guest boots
+	// from this single measured image instead of the discrete kernel/firmware
+	// assets, and KernelPath/ImagePath/InitrdPath/FirmwarePath are not used for
+	// boot.
+	IgvmPath string
+
 	// MachineAccelerators are machine specific accelerators
 	MachineAccelerators string
 
@@ -1009,6 +1015,8 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 		return conf.FirmwarePath, nil
 	case types.FirmwareVolumeAsset:
 		return conf.FirmwareVolumePath, nil
+	case types.IgvmAsset:
+		return conf.IgvmPath, nil
 	default:
 		return "", fmt.Errorf("Unknown asset type %v", t)
 	}
@@ -1071,6 +1079,16 @@ func (conf *HypervisorConfig) FirmwareAssetPath() (string, error) {
 // FirmwareVolumeAssetPath returns the guest firmware volume path
 func (conf *HypervisorConfig) FirmwareVolumeAssetPath() (string, error) {
 	return conf.assetPath(types.FirmwareVolumeAsset)
+}
+
+// IgvmAssetPath returns the guest IGVM image path
+func (conf *HypervisorConfig) IgvmAssetPath() (string, error) {
+	return conf.assetPath(types.IgvmAsset)
+}
+
+// IgvmBoot returns true when the guest is configured to boot from an IGVM image.
+func (conf *HypervisorConfig) IgvmBoot() bool {
+	return conf.IgvmPath != ""
 }
 
 func RoundUpNumVCPUs(cpus float32) uint32 {

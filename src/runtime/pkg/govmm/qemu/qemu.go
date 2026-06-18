@@ -293,6 +293,12 @@ const (
 
 	// CCAGuest represent Arm64 CCA RME(Realm Management Extension) object.
 	CCAGuest ObjectType = "rme-guest"
+
+	// IgvmCfg represents an IGVM (Independent Guest Virtual Machine) image
+	// configuration object. The referenced file bundles the guest firmware,
+	// kernel, command line and measured initial state in a single, measurable
+	// blob; it is linked from the machine via "igvm-cfg=<id>".
+	IgvmCfg ObjectType = "igvm-cfg"
 )
 
 // Object is a qemu object representation.
@@ -362,6 +368,13 @@ type Object struct {
 	// MeasurementAlgo is the algorithm for measurement
 	// This is only relevant for cca-guest objects
 	MeasurementAlgo string
+
+	// Igvm indicates that the guest boots from an IGVM image (a separate
+	// igvm-cfg object) rather than from a discrete -kernel/-bios pair.
+	// When set on a confidential-guest object (e.g. sev-snp-guest), the
+	// firmware and kernel are supplied and measured by the IGVM file, so no
+	// -bios is emitted and kernel-hashes are not requested.
+	Igvm bool
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -376,6 +389,11 @@ func (object Object) Valid() bool {
 	case SEVGuest:
 		fallthrough
 	case SNPGuest:
+		// When booting from an IGVM image the firmware is supplied by the
+		// igvm-cfg object, so no discrete firmware File is required here.
+		if object.Igvm {
+			return object.ID != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
+		}
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	case SecExecGuest:
 		return object.ID != ""
@@ -383,6 +401,8 @@ func (object Object) Valid() bool {
 		return object.ID != "" && object.File != ""
 	case CCAGuest:
 		return object.ID != "" && object.MeasurementAlgo != ""
+	case IgvmCfg:
+		return object.ID != "" && object.File != ""
 
 	default:
 		return false
@@ -440,7 +460,13 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
-		objectParams = append(objectParams, "kernel-hashes=on")
+		if !object.Igvm {
+			// kernel-hashes measures the discrete -kernel/-initrd/-append into
+			// the launch digest. With IGVM the kernel and command line are part
+			// of the measured IGVM image instead, so this is neither needed nor
+			// valid (there is no -kernel to hash).
+			objectParams = append(objectParams, "kernel-hashes=on")
+		}
 		if object.SnpIdBlock != "" {
 			objectParams = append(objectParams, fmt.Sprintf("id-block=%s", object.SnpIdBlock))
 		}
@@ -457,7 +483,11 @@ func (object Object) QemuParams(config *Config) []string {
 			hostdata := base64.StdEncoding.EncodeToString(hostdataSlice)
 			objectParams = append(objectParams, fmt.Sprintf("host-data=%s", hostdata))
 		}
-		config.Bios = object.File
+		if !object.Igvm {
+			// With IGVM the firmware ships inside the measured image, so no
+			// discrete -bios is emitted.
+			config.Bios = object.File
+		}
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
@@ -479,6 +509,14 @@ func (object Object) QemuParams(config *Config) []string {
 			objectParams = append(objectParams, fmt.Sprintf("personalization-value=%s", personalizationValue))
 		}
 		config.Bios = object.File
+	case IgvmCfg:
+		// -object igvm-cfg,id=<id>,file=<igvm>
+		// The machine links this object via "igvm-cfg=<id>"; QEMU processes the
+		// IGVM directives to set up firmware, kernel and initial guest state, so
+		// no -kernel/-initrd/-append/-bios are emitted for this boot.
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("file=%s", object.File))
 	}
 
 	if len(deviceParams) > 0 {

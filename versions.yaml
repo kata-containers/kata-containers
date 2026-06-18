@@ -417,6 +417,19 @@ externals:
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
       package_output_dir: "ArmVirtQemu-AARCH64"
 
+  igvm:
+    description: |
+      IGVM (Independent Guest Virtual Machine) measured-boot tooling. Builds a
+      single measured image bundling the SEV-SNP firmware + guest kernel +
+      command line, and computes its launch measurement (igvmmeasure) so
+      attestation can be validated offline. Provided by the Lunal `steep`
+      igvm-tools crate.
+    url: "https://github.com/lunal-dev/steep"
+    # steep's igvm-tools CLI provides `build` (with --cmdline UKI wrapping) and
+    # `measure`. Pin to an immutable steep ref for reproducible images.
+    # See tools/packaging/static-build/igvm.
+    version: "main"
+
   protoc:
     description: "Protobuf compiler"
     url: "https://github.com/protocolbuffers/protobuf/releases"

@@ -53,6 +53,9 @@ const (
 	// that will be passed to the container VM.
 	FirmwareVolumePath = kataAnnotHypervisorPrefix + "firmware_volume"
 
+	// IgvmPath is a sandbox annotation for passing a per container path pointing at the IGVM image that will boot the container VM.
+	IgvmPath = kataAnnotHypervisorPrefix + "igvm"
+
 	// KernelHash is a sandbox annotation for passing a container kernel image SHA-512 hash value.
 	KernelHash = kataAnnotHypervisorPrefix + "kernel_hash"
 
@@ -73,6 +76,9 @@ const (
 
 	// FirmwareVolumeHash is an sandbox annotation for passing a container guest firmware volume SHA-512 hash value.
 	FirmwareVolumeHash = kataAnnotHypervisorPrefix + "firmware_volume_hash"
+
+	// IgvmHash is a sandbox annotation for passing a container guest IGVM image SHA-512 hash value.
+	IgvmHash = kataAnnotHypervisorPrefix + "igvm_hash"
 
 	// AssetHashType is the hash type used for assets verification
 	AssetHashType = kataAnnotationsPrefix + "asset_hash_type"
