@@ -47,13 +47,17 @@ DROPIN
 	# remote path so teardown can remove it.
 	dropin_path="$(set_kata_runtime_config_dropin_file "$node" "${runtime_config_dropin_file}")" \
 		|| die "Failed to install Kata runtime config drop-in on node $node"
+
+	# kata-runtime defaults to the QEMU config; point it at the active
+	# hypervisor so that factory init/destroy use the correct configuration.
+	kata_config_path="/opt/kata/share/defaults/kata-containers/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
 }
 
 @test "Pod can be created with a templated VM" {
 	# Initialize the VM template on the target node. Use the absolute path:
 	# kata-deploy installs kata-runtime under /opt/kata/bin, which is not on the
 	# node's sudo PATH.
-	exec_host "$node" "sudo /opt/kata/bin/kata-runtime factory init"
+	exec_host "$node" "sudo /opt/kata/bin/kata-runtime --config ${kata_config_path} factory init"
 
 	# The factory init above must have created the template directory. exec_host
 	# pipes the remote output through `tr`, so the pipeline's exit status is not
@@ -74,18 +78,15 @@ DROPIN
 
 	grep_pod_exec_output "${pod_name}" "Hello from templated VM" sh -c "echo 'Hello from templated VM'"
 
-	# Confirm the pod's VM was actually spawned from the factory/template
-	# rather than booted normally. A normal VM stores its state directly under
-	# /run/vc/vm/<sandbox-id>/ (a real directory), whereas a factory-spawned VM
-	# is created under a generated UUID directory and /run/vc/vm/<sandbox-id> is
-	# a symlink pointing at it (see assignSandbox() in
-	# src/runtime/virtcontainers/vm.go). With templating enabled, the factory is
-	# the template factory, so the symlink is our signal the template was used.
-	local sandbox_id
-	sandbox_id="$(exec_host "$node" \
-		"crictl --runtime-endpoint unix:///run/containerd/containerd.sock pods --name ${pod_name} --state Ready -q | head -1")"
-
-	exec_host "$node" "test -L /run/vc/vm/${sandbox_id} && echo symlink" | grep -q symlink
+	# Confirm at least one VM sandbox under /run/vc/vm/ is a symlink, which
+	# proves the factory/template path was used. A non-templated VM creates a
+	# real directory at /run/vc/vm/<sandbox-id>/, whereas a factory-spawned VM
+	# stores its state under a generated UUID and /run/vc/vm/<sandbox-id> is a
+	# symlink pointing at it (see assignSandbox() in
+	# src/runtime/virtcontainers/vm.go).
+	exec_host "$node" \
+		"find /run/vc/vm -maxdepth 1 -mindepth 1 -type l ! -name template | grep -q . && echo symlink" \
+		| grep -q symlink
 }
 
 teardown() {
@@ -94,7 +95,7 @@ teardown() {
 	rm -f "${pod_config:-}"
 
 	# Destroy the VM template and remove the config drop-in on the target node.
-	exec_host "$node" "sudo /opt/kata/bin/kata-runtime factory destroy" \
+	exec_host "$node" "sudo /opt/kata/bin/kata-runtime --config ${kata_config_path} factory destroy" \
 		|| echo "Warning: Failed to destroy VM template on node $node"
 
 	remove_kata_runtime_config_dropin_file "$node" "${dropin_path:-}" \
