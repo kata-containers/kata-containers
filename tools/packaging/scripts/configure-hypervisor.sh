@@ -450,6 +450,14 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-cap-ng)
 	qemu_options+=(functionality:--enable-seccomp)
 
+	# IGVM (x86_64): the `igvm-cfg` object that boots a guest from a single
+	# measured IGVM image (firmware+kernel+cmdline), used by the
+	# kata-qemu-snp-igvm runtime. Needs the libigvm pkg-config dependency
+	# installed in the build image (see static-build/qemu/Dockerfile).
+	if [[ "${arch}" == x86_64 ]]; then
+		qemu_options+=(functionality:--enable-igvm)
+	fi
+
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
 	if ! gt_eq "${qemu_version}" "10.1.0" ; then

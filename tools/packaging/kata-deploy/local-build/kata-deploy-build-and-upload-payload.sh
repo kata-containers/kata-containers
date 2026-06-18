@@ -14,7 +14,7 @@ set -o errtrace
 SCRIPT_DIR="$(cd "$(dirname "${0}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
-REGISTRY="${1:-"quay.io/kata-containers/kata-deploy"}"
+REGISTRY="${1:-"ghcr.io/confidential-dot-ai/kata-deploy"}"
 TAG="${2:-}"
 ARTIFACTS_BUILD_DIR="${3:-${REPO_ROOT}/tools/packaging/kata-deploy/local-build/build}"
 # Separate, minimal image for the job-mode dispatcher (kata-deploy-job-dispatcher).

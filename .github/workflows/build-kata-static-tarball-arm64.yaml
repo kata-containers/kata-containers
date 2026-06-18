@@ -65,13 +65,13 @@ jobs:
     env:
       PERFORM_ATTESTATION: ${{ inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -208,13 +208,13 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
       cancel-in-progress: true
     steps:
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -312,13 +312,13 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     steps:
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -378,13 +378,13 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

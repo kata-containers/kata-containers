@@ -104,3 +104,26 @@ RUN apt-get update && \
 # Remove the Noble repository to prevent accidental upgrades
 RUN rm /etc/apt/sources.list.d/noble.list && \
     apt-get update
+
+# libigvm: QEMU's `--enable-igvm` (the igvm-cfg object the kata-qemu-snp-igvm
+# runtime boots from) needs the IGVM C library exposed via pkg-config as `igvm`.
+# It is not packaged, so build it from the upstream igvm crate's C API with
+# cargo-c, pinned to the 0.4.x the runtime expects, and install libigvm.so +
+# igvm.pc under /usr/local where QEMU's configure looks.
+#
+# TODO(confidential-dot-ai): confirm this matches how libigvm 0.4.0 was built
+# for /opt/qemu-igvm (cargo-c vs the igvm_c Makefile, and the exact tag) — this
+# is a reconstruction. amd64-only; the kata-qemu-snp-igvm class is x86_64-only.
+ARG IGVM_VERSION=v0.4.0
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends curl gcc libc6-dev && \
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && \
+        . "$HOME/.cargo/env" && \
+        cargo install cargo-c --locked && \
+        git clone --depth 1 --branch "${IGVM_VERSION}" https://github.com/microsoft/igvm /tmp/igvm && \
+        cargo cinstall --release --manifest-path /tmp/igvm/igvm_c/Cargo.toml --prefix=/usr/local && \
+        ldconfig && \
+        pkg-config --exists igvm && echo "libigvm $(pkg-config --modversion igvm) installed" && \
+        rm -rf /tmp/igvm "$HOME/.rustup" "$HOME/.cargo" && \
+        apt-get clean && rm -rf /var/lib/apt/lists/* ; \
+    fi

@@ -6,7 +6,7 @@ on:
         description: "Space-separated list of registries to push to."
         required: false
         type: string
-        default: "quay.io/kata-containers/kata-monitor ghcr.io/kata-containers/kata-monitor"
+        default: "ghcr.io/confidential-dot-ai/kata-monitor ghcr.io/confidential-dot-ai/kata-monitor"
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
@@ -63,7 +63,7 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
+      registry: ghcr.io
       repo: kata-containers/kata-monitor
       tag: latest
       tags: ${{ needs.resolve-tags.outputs.tags }}
@@ -94,12 +94,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish multi-arch manifest
         env:

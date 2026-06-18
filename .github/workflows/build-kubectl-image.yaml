@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REGISTRY: quay.io
+  REGISTRY: ghcr.io
   IMAGE_NAME: kata-containers/kubectl
 
 jobs:
@@ -46,8 +46,8 @@ jobs:
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get kubectl version
         id: kubectl-version

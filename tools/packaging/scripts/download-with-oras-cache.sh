@@ -33,7 +33,7 @@ install_oras_script="${script_dir}/../kata-deploy/local-build/dockerbuild/instal
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 # Default to upstream kata-containers org to match cached-artefacts pattern
 # Result: ghcr.io/kata-containers/cached-tarballs/<component>:<version>
-ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
+ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-confidential-dot-ai}"
 # Reuse PUSH_TO_REGISTRY to control cache pushing
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-no}"
 

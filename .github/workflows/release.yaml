@@ -111,23 +111,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get the image tags
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
           echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
 
-      - name: Publish multi-arch manifest on quay.io & ghcr.io
+      - name: Publish multi-arch manifest on ghcr.io
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
-          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy ghcr.io/kata-containers/kata-deploy"
+          KATA_DEPLOY_REGISTRIES: "ghcr.io/confidential-dot-ai/kata-deploy"
 
   upload-multi-arch-static-tarball:
     name: upload-multi-arch-static-tarball
@@ -294,14 +294,13 @@ jobs:
           QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
           echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Push helm chart to the OCI registries
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
-          helm push "kata-deploy-${release_version}.tgz" oci://quay.io/kata-containers/kata-deploy-charts
-          helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
+          helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/confidential-dot-ai/kata-deploy-charts
+          helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/confidential-dot-ai/kata-deploy-charts
 
   publish-release:
     name: publish-release

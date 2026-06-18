@@ -164,6 +164,10 @@ FIRMWARESNPPATH_NV := $(FIRMWARESNPPATH)
 # set it to $(PKGDATADIR)/$(IGVMNAME) to boot SNP guests from the measured IGVM.
 IGVMNAME := kata.igvm
 IGVMSNPPATH :=
+# Path baked into the SEPARATE configuration-qemu-snp-igvm.toml (the qemu-snp-igvm
+# shim variant): unlike IGVMSNPPATH it is always set, so that runtime always boots
+# from the measured IGVM, while the plain kata-qemu-snp config stays discrete.
+IGVMSNPIGVMPATH := $(PKGDATADIR)/$(IGVMNAME)
 
 KERNELVERITYPARAMS ?= ""
 KERNELVERITYPARAMS_NV ?= ""
@@ -398,6 +402,22 @@ ifneq (,$(QEMUCMD))
     SYSCONFIG_PATHS_SNP += $(SYSCONFIG_QEMU_SNP)
 
     CONFIGS += $(CONFIG_QEMU_SNP)
+
+    # qemu-snp-igvm: same as qemu-snp but boots from the measured IGVM image.
+    # DERIVED from configuration-qemu-snp.toml (no .toml.in of its own) so the two
+    # never drift — only the `igvm =` line differs (see the rule near
+    # GENERATED_FILES). kata-deploy registers it as the kata-qemu-snp-igvm runtime
+    # when "qemu-snp-igvm" is in SHIMS.
+    CONFIG_FILE_QEMU_SNP_IGVM = configuration-qemu-snp-igvm.toml
+    CONFIG_QEMU_SNP_IGVM = config/$(CONFIG_FILE_QEMU_SNP_IGVM)
+
+    CONFIG_PATH_QEMU_SNP_IGVM = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_SNP_IGVM))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_SNP_IGVM)
+
+    SYSCONFIG_QEMU_SNP_IGVM = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_SNP_IGVM))
+    SYSCONFIG_PATHS_SNP_IGVM += $(SYSCONFIG_QEMU_SNP_IGVM)
+
+    CONFIGS += $(CONFIG_QEMU_SNP_IGVM)
 
     CONFIG_FILE_QEMU_CCA = configuration-qemu-cca.toml
     CONFIG_QEMU_CCA = config/$(CONFIG_FILE_QEMU_CCA)
@@ -968,13 +988,24 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
 
-GENERATED_FILES += $(CONFIGS)
+# configuration-qemu-snp-igvm.toml has no .toml.in — it is derived from the
+# generated qemu-snp config below — so exclude it from the .in-driven rule.
+GENERATED_FILES += $(filter-out $(CONFIG_QEMU_SNP_IGVM),$(CONFIGS))
 
 $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 	$(QUIET_GENERATE)$(SED) \
 		-e "s|@COMMIT@|$(shell git rev-parse HEAD)|g" \
 		$(foreach v,$(GENERATED_VARS),-e "s|@$v@|$($v)|g") \
 		$< > $@
+
+# Derive configuration-qemu-snp-igvm.toml from the qemu-snp config, setting the
+# (always-on) igvm path. Explicit rule, so it wins over the .in pattern rule and
+# stays byte-identical to qemu-snp except the measured-boot image. Guarded on the
+# var being set (only defined when qemu configs are built).
+ifneq ($(CONFIG_QEMU_SNP_IGVM),)
+$(CONFIG_QEMU_SNP_IGVM): $(CONFIG_QEMU_SNP)
+	$(QUIET_GENERATE)$(SED) 's|^igvm = .*|igvm = "$(IGVMSNPIGVMPATH)"|' $< > $@
+endif
 
 generate-config: $(CONFIGS)
 

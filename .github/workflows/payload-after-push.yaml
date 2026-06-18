@@ -75,8 +75,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-deploy-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-deploy-ci
       tag: kata-containers-latest-amd64
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04
@@ -93,8 +93,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-deploy-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-deploy-ci
       tag: kata-containers-latest-arm64
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-arm
@@ -111,8 +111,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-deploy-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-deploy-ci
       tag: kata-containers-latest-s390x
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-s390x
@@ -129,8 +129,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-deploy-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-deploy-ci
       tag: kata-containers-latest-ppc64le
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-ppc64le
@@ -147,8 +147,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-monitor-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-monitor-ci
       tag: kata-monitor-latest-amd64
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04
@@ -165,8 +165,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-monitor-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-monitor-ci
       tag: kata-monitor-latest-arm64
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-arm
@@ -183,8 +183,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-monitor-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-monitor-ci
       tag: kata-monitor-latest-s390x
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-s390x
@@ -201,8 +201,8 @@ jobs:
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
-      registry: quay.io
-      repo: kata-containers/kata-monitor-ci
+      registry: ghcr.io
+      repo: confidential-dot-ai/kata-monitor-ci
       tag: kata-monitor-latest-ppc64le
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-ppc64le
@@ -224,19 +224,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push multi-arch manifest
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
           KATA_DEPLOY_IMAGE_TAGS: "kata-containers-latest"
-          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy-ci"
+          KATA_DEPLOY_REGISTRIES: "ghcr.io/confidential-dot-ai/kata-deploy-ci"
 
   publish-kata-monitor-manifest:
     name: publish-kata-monitor-manifest
@@ -258,19 +258,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Kata Containers quay.io
+      - name: Login to GHCR (confidential-dot-ai fork)
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push multi-arch monitor manifest
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
           KATA_DEPLOY_IMAGE_TAGS: "kata-monitor-latest"
-          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-monitor-ci ghcr.io/${{ github.repository_owner }}/kata-monitor-ci"
+          KATA_DEPLOY_REGISTRIES: "ghcr.io/confidential-dot-ai/kata-monitor-ci"
 
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball
@@ -294,18 +294,17 @@ jobs:
           QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
           echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Push helm chart to the OCI registries
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
-            quay.io/kata-containers/kata-deploy-ci \
+            ghcr.io/confidential-dot-ai/kata-deploy-ci \
             kata-containers-latest \
-            quay.io/kata-containers/kata-deploy-charts \
+            ghcr.io/confidential-dot-ai/kata-deploy-charts \
             0.0.0-dev
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
-            quay.io/kata-containers/kata-deploy-ci \
+            ghcr.io/confidential-dot-ai/kata-deploy-ci \
             kata-containers-latest \
-            ghcr.io/kata-containers/kata-deploy-charts \
+            ghcr.io/confidential-dot-ai/kata-deploy-charts \
             0.0.0-dev

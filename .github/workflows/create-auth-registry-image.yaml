@@ -10,7 +10,7 @@ concurrency:
 permissions: {}
 
 env:
-  REGISTRY: quay.io
+  REGISTRY: ghcr.io
   IMAGE_NAME: kata-containers/confidential-containers-auth
 
 jobs:

@@ -8,6 +8,12 @@ coverage.html
 .git-commit.tmp
 /config/*.toml
 config-generated.go
+# Locally-built IGVM measured-boot image + manifests (dev/test artifacts; the
+# shipped one is built per-rootfs by the c8s kata-guest-base pipeline).
+/kata.igvm
+/kata.igvm.json
+/kata.igvm.manifest.json
+/kata.igvm.measurement
 /containerd-shim-kata-v2
 /pkg/containerd-shim-v2/monitor_address
 /data/kata-collect-data.sh

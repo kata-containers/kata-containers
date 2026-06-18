@@ -424,11 +424,13 @@ externals:
       command line, and computes its launch measurement (igvmmeasure) so
       attestation can be validated offline. Provided by the Lunal `steep`
       igvm-tools crate.
-    url: "https://github.com/lunal-dev/steep"
+    url: "https://github.com/confidential-dot-ai/steep"
     # steep's igvm-tools CLI provides `build` (with --cmdline UKI wrapping) and
     # `measure`. Pin to an immutable steep ref for reproducible images.
     # See tools/packaging/static-build/igvm.
-    version: "main"
+    # Pinned to steep main at the merge of PR #27 (feat/expose-igvm-tools), which
+    # added the `--cmdline`/`--initrd` flags this packaging target depends on.
+    version: "70c13c1e63f85fbe886e8a361c7be67268e3d0b7"
 
   protoc:
     description: "Protobuf compiler"
