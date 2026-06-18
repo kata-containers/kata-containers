@@ -16,7 +16,7 @@ event-manager = { workspace = true, features = [ "remote_endpoint" ] }
 libc = "0.2.39"
 log = "0.4.14"
 serde = { version = "1.0.27", features = ["derive", "rc"] }
-thiserror = "1.0"
+thiserror = { workspace = true }
 timerfd = "1.0"
 vmm-sys-util = {workspace = true}
 

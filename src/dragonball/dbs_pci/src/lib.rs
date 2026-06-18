@@ -93,7 +93,7 @@ pub enum Error {
     #[error("bar {0} already used")]
     BarInUse(usize),
     /// PCI BAR is invalid.
-    #[error("bar {0} invalid, max {}", NUM_BAR_REGS - 1)]
+    #[error("bar {0} invalid, max {max}", max = NUM_BAR_REGS - 1)]
     BarInvalid(usize),
     /// PCI BAR size is invalid.
     #[error("bar address {0} not a power of two")]
@@ -102,13 +102,16 @@ pub enum Error {
     #[error("address {0} size {1} too big")]
     BarAddressInvalid(u64, u64),
     /// 64 bits MMIO PCI BAR is invalid.
-    #[error("64 bit bar {0} invalid, requires two regs, max {}", NUM_BAR_REGS - 1)]
+    #[error(
+        "64 bit bar {0} invalid, requires two regs, max {max}",
+        max = NUM_BAR_REGS - 1
+    )]
     BarInvalid64(usize),
     /// 64 bits MMIO PCI BAR is in use.
     #[error("64bit bar {0} already used(requires two regs)")]
     BarInUse64(usize),
     /// PCI ROM BAR is invalid.
-    #[error("ROM bar {0} invalid, max {}", NUM_BAR_REGS - 1)]
+    #[error("ROM bar {0} invalid, max {max}", max = NUM_BAR_REGS - 1)]
     RomBarInvalid(usize),
     /// PCI ROM BAR is already in use.
     #[error("rom bar {0} already used")]

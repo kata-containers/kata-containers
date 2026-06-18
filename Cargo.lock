@@ -1158,7 +1158,7 @@ dependencies = [
  "resource",
  "runtime-spec",
  "strum 0.24.1",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -1564,7 +1564,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "nix 0.31.3",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-memory",
  "vmm-sys-util 0.15.0",
 ]
@@ -1573,7 +1573,7 @@ dependencies = [
 name = "dbs-allocator"
 version = "0.1.1"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1586,7 +1586,7 @@ dependencies = [
  "memoffset 0.6.5",
  "nix 0.31.3",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-memory",
  "vmm-sys-util 0.15.0",
 ]
@@ -1604,7 +1604,7 @@ dependencies = [
  "libc",
  "nix 0.31.3",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-fdt",
  "vm-memory",
 ]
@@ -1613,7 +1613,7 @@ dependencies = [
 name = "dbs-device"
 version = "0.2.0"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1664,7 +1664,7 @@ dependencies = [
  "nix 0.31.3",
  "serde",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vfio-bindings",
  "vfio-ioctls",
  "virtio-queue",
@@ -1678,7 +1678,7 @@ dependencies = [
  "dbs-utils",
  "dbs-virtio-devices",
  "log",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "timerfd",
 ]
 
@@ -1694,7 +1694,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "timerfd",
  "vmm-sys-util 0.15.0",
 ]
@@ -1727,7 +1727,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "threadpool",
  "timerfd",
  "vhost",
@@ -1948,7 +1948,7 @@ dependencies = [
  "slog-term",
  "tdx",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tracing",
  "vfio-bindings",
  "vfio-ioctls",
@@ -3045,7 +3045,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "tests_utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "ttrpc",
@@ -3632,7 +3632,7 @@ dependencies = [
  "strum_macros 0.26.4",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-vsock 0.3.4",
  "toml",
@@ -3731,7 +3731,7 @@ dependencies = [
  "sys-info",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "toml",
  "url",
@@ -3802,7 +3802,7 @@ dependencies = [
  "subprocess",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3857,7 +3857,7 @@ dependencies = [
  "sysinfo",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "toml",
 ]
@@ -7397,7 +7397,7 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "unix_socket2",
 ]
@@ -8932,7 +8932,7 @@ dependencies = [
  "opentelemetry 0.17.0",
  "serde_json",
  "slog",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-vsock 0.3.4",
 ]

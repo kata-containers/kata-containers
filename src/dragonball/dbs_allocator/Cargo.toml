@@ -11,4 +11,4 @@ keywords = ["dragonball"]
 readme = "README.md"
 
 [dependencies]
-thiserror = "1.0"
+thiserror = { workspace = true }
