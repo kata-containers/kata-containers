@@ -374,7 +374,7 @@ pub async fn wait_for_pci_device(
 }
 
 // Represents an IOMMU group
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct IommuGroup(u32);
 
 impl fmt::Display for IommuGroup {
@@ -469,37 +469,75 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tempfile::tempdir;
 
-    #[tokio::test]
-    #[allow(clippy::redundant_clone)]
-    async fn test_vfio_matcher() {
-        let grpa = IommuGroup(1);
-        let grpb = IommuGroup(22);
-
-        let mut uev_a = crate::uevent::Uevent::default();
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.devname = format!("vfio/{grpa}");
-        uev_a.devpath = format!("/devices/virtual/vfio/{grpa}");
-        let matcher_a = VfioMatcher::new(grpa);
-
-        let mut uev_b = uev_a.clone();
-        uev_b.devpath = format!("/devices/virtual/vfio/{grpb}");
-        let matcher_b = VfioMatcher::new(grpb);
-
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
+    // Helper to create a VFIO uevent for testing
+    fn create_vfio_uevent(group: IommuGroup) -> Uevent {
+        let mut uev = Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.devname = format!("vfio/{group}");
+        uev.devpath = format!("/devices/virtual/vfio/{group}");
+        uev
     }
-    #[test]
-    fn test_split_vfio_pci_option() {
+
+    #[rstest]
+    #[case::group_1_matches(IommuGroup(1), IommuGroup(1), true)]
+    #[case::group_22_matches(IommuGroup(22), IommuGroup(22), true)]
+    #[case::group_1_rejects_22(IommuGroup(1), IommuGroup(22), false)]
+    #[case::group_22_rejects_1(IommuGroup(22), IommuGroup(1), false)]
+    #[tokio::test]
+    async fn test_vfio_matcher_basic_matching(
+        #[case] matcher_group: IommuGroup,
+        #[case] uevent_group: IommuGroup,
+        #[case] should_match: bool,
+    ) {
+        let matcher = VfioMatcher::new(matcher_group);
+        let uev = create_vfio_uevent(uevent_group);
+
         assert_eq!(
-            split_vfio_pci_option("0000:01:00.0=02/01"),
-            Some(("0000:01:00.0", "02/01"))
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for group {} should {} uevent for group {}",
+            matcher_group,
+            if should_match { "match" } else { "reject" },
+            uevent_group
         );
-        assert_eq!(split_vfio_pci_option("0000:01:00.0=02/01=rubbish"), None);
-        assert_eq!(split_vfio_pci_option("0000:01:00.0"), None);
+    }
+
+    #[tokio::test]
+    async fn test_vfio_matcher_wrong_devpath() {
+        let group = IommuGroup(1);
+        let matcher = VfioMatcher::new(group);
+        let mut uev = create_vfio_uevent(group);
+        uev.devpath = "/devices/virtual/vfio/wrong".to_string();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject devpath with wrong IOMMU group"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vfio_matcher_partial_match() {
+        let group = IommuGroup(1);
+        let matcher = VfioMatcher::new(group);
+        let mut uev = create_vfio_uevent(group);
+        uev.devpath = "/devices/virtual/vfio/1extra".to_string();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject devpath with extra characters after group number"
+        );
+    }
+
+    #[rstest]
+    #[case::valid_option("0000:01:00.0=02/01", Some(("0000:01:00.0", "02/01")))]
+    #[case::too_many_equals("0000:01:00.0=02/01=rubbish", None)]
+    #[case::missing_equals("0000:01:00.0", None)]
+    #[test]
+    fn test_split_vfio_pci_option(#[case] input: &str, #[case] expected: Option<(&str, &str)>) {
+        assert_eq!(split_vfio_pci_option(input), expected);
     }
 
     #[test]
@@ -580,29 +618,124 @@ mod tests {
         assert!(pci_iommu_group(&syspci, dev2).is_err());
     }
 
+    // Helper to create a PCI uevent for testing
+    fn create_pci_uevent(relpath: &str, root_complex: &str) -> Uevent {
+        let root_bus = create_pci_root_bus_path(root_complex);
+        let mut uev = Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.devpath = format!("{root_bus}{relpath}");
+        uev
+    }
+
+    #[rstest]
+    #[case::relpath_a_matches("/0000:00:06.0", "/0000:00:06.0", "00", true)]
+    #[case::relpath_b_matches(
+        "/0000:00:06.0/0000:02:00.0",
+        "/0000:00:06.0/0000:02:00.0",
+        "00",
+        true
+    )]
+    #[case::relpath_a_rejects_b("/0000:00:06.0", "/0000:00:06.0/0000:02:00.0", "00", false)]
+    #[case::relpath_b_rejects_a("/0000:00:06.0/0000:02:00.0", "/0000:00:06.0", "00", false)]
+    #[test]
+    fn test_pci_matcher_basic_matching(
+        #[case] matcher_relpath: &str,
+        #[case] uevent_relpath: &str,
+        #[case] root_complex: &str,
+        #[case] should_match: bool,
+    ) {
+        let matcher = PciMatcher::new(matcher_relpath, root_complex).unwrap();
+        let uev = create_pci_uevent(uevent_relpath, root_complex);
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for '{}' should {} uevent for '{}'",
+            matcher_relpath,
+            if should_match { "match" } else { "reject" },
+            uevent_relpath
+        );
+    }
+
+    #[test]
+    fn test_pci_matcher_different_root_complex() {
+        let relpath = "/0000:00:06.0";
+        let matcher = PciMatcher::new(relpath, "00").unwrap();
+        let uev = create_pci_uevent(relpath, "01");
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent from different root complex"
+        );
+    }
+
+    #[test]
+    fn test_pci_matcher_partial_path() {
+        let root_bus = create_pci_root_bus_path("00");
+        let relpath = "/0000:00:06.0";
+        let matcher = PciMatcher::new(relpath, "00").unwrap();
+        let mut uev = create_pci_uevent(relpath, "00");
+        uev.devpath = format!("{root_bus}/0000:00:06");
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject partial PCI path match"
+        );
+    }
+
+    #[cfg(target_arch = "s390x")]
+    // Helper to create an AP uevent for testing
+    fn create_ap_uevent(card: &str, relpath: &str, action: &str) -> Uevent {
+        let mut uev = Uevent::default();
+        uev.action = action.to_string();
+        uev.subsystem = "ap".to_string();
+        uev.devpath = format!("{AP_ROOT_BUS_PATH}/card{card}/{relpath}");
+        uev
+    }
+
     #[cfg(target_arch = "s390x")]
     #[tokio::test]
-    async fn test_vfio_ap_matcher() {
-        let subsystem = "ap";
+    async fn test_vfio_ap_matcher_add_action() {
         let card = "0a";
         let relpath = format!("{card}.0001");
-
-        let mut uev = Uevent::default();
-        uev.action = U_EVENT_ACTION_ADD.to_string();
-        uev.subsystem = subsystem.to_string();
-        uev.devpath = format!("{AP_ROOT_BUS_PATH}/card{card}/{relpath}");
-
         let ap_address = ap::Address::from_str(&relpath).unwrap();
         let matcher = ApMatcher::new(ap_address);
+        let uev = create_ap_uevent(card, &relpath, U_EVENT_ACTION_ADD);
 
-        assert!(matcher.is_match(&uev));
+        assert!(
+            matcher.is_match(&uev),
+            "Matcher should match uevent with add action"
+        );
+    }
 
-        let mut uev_remove = uev.clone();
-        uev_remove.action = U_EVENT_ACTION_REMOVE.to_string();
-        assert!(!matcher.is_match(&uev_remove));
+    #[cfg(target_arch = "s390x")]
+    #[tokio::test]
+    async fn test_vfio_ap_matcher_remove_action() {
+        let card = "0a";
+        let relpath = format!("{card}.0001");
+        let ap_address = ap::Address::from_str(&relpath).unwrap();
+        let matcher = ApMatcher::new(ap_address);
+        let uev = create_ap_uevent(card, &relpath, U_EVENT_ACTION_REMOVE);
 
-        let mut uev_other_device = uev.clone();
-        uev_other_device.devpath = format!("{AP_ROOT_BUS_PATH}/card{card}/{card}.0002");
-        assert!(!matcher.is_match(&uev_other_device));
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with remove action"
+        );
+    }
+
+    #[cfg(target_arch = "s390x")]
+    #[tokio::test]
+    async fn test_vfio_ap_matcher_different_device() {
+        let card = "0a";
+        let relpath = format!("{card}.0001");
+        let ap_address = ap::Address::from_str(&relpath).unwrap();
+        let matcher = ApMatcher::new(ap_address);
+        let other_relpath = format!("{card}.0002");
+        let uev = create_ap_uevent(card, &other_relpath, U_EVENT_ACTION_ADD);
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent for different AP device"
+        );
     }
 }

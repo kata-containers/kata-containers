@@ -1084,6 +1084,16 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
     Ok(())
 }
 
+// Test helper constants for common edge case testing
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    #[cfg(not(target_arch = "s390x"))]
+    pub const SUBSYSTEM_BLOCK: &str = "block";
+    pub const SUBSYSTEM_NET: &str = "net";
+    #[cfg(not(target_arch = "s390x"))]
+    pub const ACTION_REMOVE: &str = "remove";
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1094,10 +1104,225 @@ mod tests {
         LinuxResources, LinuxResourcesBuilder, SpecBuilder,
     };
     use oci_spec::runtime as oci;
+    use rstest::rstest;
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
     const VM_ROOTFS: &str = "/";
+    const TEST_CONTAINER_PATH: &str = "/dev/null";
+    const TEST_VM_PATH: &str = "/dev/null";
+    const TEST_MAJOR: i64 = 7;
+    const TEST_MINOR: i64 = 2;
+
+    // Helper function to create a test logger
+    fn create_test_logger() -> slog::Logger {
+        slog::Logger::root(slog::Discard, o!())
+    }
+
+    // Helper function to create a device update map
+    fn create_device_update<'a>(
+        container_path: &'a str,
+        vm_path: &str,
+    ) -> HashMap<&'a str, DevUpdate> {
+        HashMap::from_iter(vec![(
+            container_path,
+            DevUpdate::new(container_path, vm_path).unwrap(),
+        )])
+    }
+
+    #[rstest]
+    #[case::valid_zeros("0000:00:00.0", true)]
+    #[case::valid_normal("0000:01:02.3", true)]
+    #[case::valid_max("ffff:ff:1f.7", true)]
+    #[case::invalid_text("invalid", false)]
+    #[case::empty_string("", false)]
+    #[case::invalid_format("not_a_pci_address", false)]
+    #[case::random_string("random_string", false)]
+    #[test]
+    fn test_parse_pci_bdf_name(#[case] input: &str, #[case] should_parse: bool) {
+        let result = parse_pci_bdf_name(input);
+        assert_eq!(
+            result.is_some(),
+            should_parse,
+            "parse_pci_bdf_name('{}') should {} parse",
+            input,
+            if should_parse {
+                "successfully"
+            } else {
+                "fail to"
+            }
+        );
+    }
+
+    #[rstest]
+    #[case::normal(0, 1, 2, 3, "0000:01")]
+    #[case::max_values(0xffff, 0xff, 0x1f, 7, "ffff:ff")]
+    #[case::all_zeros(0, 0, 0, 0, "0000:00")]
+    #[test]
+    fn test_bus_of_addr(
+        #[case] domain: u16,
+        #[case] bus: u8,
+        #[case] slot: u8,
+        #[case] func: u8,
+        #[case] expected: &str,
+    ) {
+        let addr = pci::Address::new(domain, bus, pci::SlotFn::new(slot, func).unwrap());
+        assert_eq!(bus_of_addr(&addr).unwrap(), expected);
+    }
+
+    #[rstest]
+    #[case::single_bus(
+        vec![(0, 1, 0, 0), (0, 1, 1, 0), (0, 1, 2, 0)],
+        Some("0000:01")
+    )]
+    #[case::multiple_buses(
+        vec![(0, 1, 0, 0), (0, 2, 0, 0)],
+        None
+    )]
+    #[case::empty_list(vec![], None)]
+    #[test]
+    fn test_unique_bus_from_pci_addresses(
+        #[case] addr_tuples: Vec<(u16, u8, u8, u8)>,
+        #[case] expected: Option<&str>,
+    ) {
+        let addrs: Vec<pci::Address> = addr_tuples
+            .into_iter()
+            .map(|(d, b, s, f)| pci::Address::new(d, b, pci::SlotFn::new(s, f).unwrap()))
+            .collect();
+
+        match expected {
+            Some(bus) => assert_eq!(unique_bus_from_pci_addresses(&addrs).unwrap(), bus),
+            None => assert!(unique_bus_from_pci_addresses(&addrs).is_err()),
+        }
+    }
+
+    #[test]
+    fn test_read_single_bus_from_pci_bus_dir() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let bridgebuspath = testdir.path().join("pci_bus");
+        fs::create_dir_all(&bridgebuspath).unwrap();
+
+        let bus_dir = bridgebuspath.join("0000:01");
+        fs::create_dir(&bus_dir).unwrap();
+        assert_eq!(
+            read_single_bus_from_pci_bus_dir(&bridgebuspath).unwrap(),
+            "0000:01"
+        );
+
+        let bus_dir2 = bridgebuspath.join("0000:02");
+        fs::create_dir(&bus_dir2).unwrap();
+        assert!(read_single_bus_from_pci_bus_dir(&bridgebuspath).is_err());
+
+        let empty_dir = testdir.path().join("empty_pci_bus");
+        fs::create_dir_all(&empty_dir).unwrap();
+        assert!(read_single_bus_from_pci_bus_dir(&empty_dir).is_err());
+    }
+
+    #[test]
+    fn test_infer_bus_from_child_devices() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let devpath = testdir.path();
+
+        let dev1 = devpath.join("0000:01:00.0");
+        let dev2 = devpath.join("0000:01:01.0");
+        let dev3 = devpath.join("0000:01:02.0");
+        fs::create_dir(&dev1).unwrap();
+        fs::create_dir(&dev2).unwrap();
+        fs::create_dir(&dev3).unwrap();
+
+        assert_eq!(
+            infer_bus_from_child_devices(&devpath.to_path_buf()).unwrap(),
+            "0000:01"
+        );
+
+        let dev4 = devpath.join("0000:02:00.0");
+        fs::create_dir(&dev4).unwrap();
+        assert!(infer_bus_from_child_devices(&devpath.to_path_buf()).is_err());
+
+        let empty_dir = testdir.path().join("no_devices");
+        fs::create_dir_all(&empty_dir).unwrap();
+        assert!(infer_bus_from_child_devices(&empty_dir).is_err());
+
+        let non_pci_dir = testdir.path().join("with_non_pci");
+        fs::create_dir_all(&non_pci_dir).unwrap();
+        let pci_dev = non_pci_dir.join("0000:03:00.0");
+        let non_pci = non_pci_dir.join("not_a_pci_device");
+        fs::create_dir(&pci_dev).unwrap();
+        fs::create_dir(&non_pci).unwrap();
+        assert_eq!(
+            infer_bus_from_child_devices(&non_pci_dir).unwrap(),
+            "0000:03"
+        );
+    }
+
+    #[test]
+    fn test_online_device() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let device_path = testdir.path().join("online");
+
+        online_device(device_path.to_str().unwrap()).unwrap();
+        assert_eq!(fs::read_to_string(&device_path).unwrap(), "1");
+
+        assert!(online_device("/nonexistent/path/to/device").is_err());
+    }
+
+    #[test]
+    fn test_dev_update_new() {
+        let result = DevUpdate::new("/dev/null", "/dev/null");
+        assert!(result.is_ok());
+
+        let update = result.unwrap();
+        assert_eq!(update.final_path, Some("/dev/null".to_string()));
+
+        let result2 = DevUpdate::new("/dev/null", "/dev/custom");
+        assert!(result2.is_ok());
+        let update2 = result2.unwrap();
+        assert_eq!(update2.final_path, Some("/dev/custom".to_string()));
+
+        let result_invalid = DevUpdate::new("/nonexistent/device", "/dev/null");
+        assert!(result_invalid.is_err());
+    }
+
+    #[rstest]
+    #[case::char_device("/dev/null", true, "c", true)]
+    #[case::block_device("/", false, "b", true)]
+    #[case::nonexistent("/nonexistent/path", true, "", false)]
+    #[case::empty_path("", true, "", false)]
+    #[test]
+    fn test_device_info_new(
+        #[case] path: &str,
+        #[case] is_char: bool,
+        #[case] expected_type: &str,
+        #[case] should_succeed: bool,
+    ) {
+        let result = DeviceInfo::new(path, is_char);
+
+        if should_succeed {
+            let info = result.unwrap();
+            assert_eq!(info.cgroup_type, expected_type);
+            assert!(info.guest_major >= 0);
+            assert!(info.guest_minor >= 0);
+        } else {
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_spec_update_conversions() {
+        let info = DeviceInfo::new("/dev/null", true).unwrap();
+        let spec_update: SpecUpdate = info.into();
+        assert!(spec_update.dev.is_some());
+        assert_eq!(spec_update.pci.len(), 0);
+
+        let dev_update = DevUpdate::new("/dev/null", "/dev/null").unwrap();
+        let spec_update2: SpecUpdate = dev_update.into();
+        assert!(spec_update2.dev.is_some());
+        assert_eq!(spec_update2.pci.len(), 0);
+
+        let spec_update3 = SpecUpdate::default();
+        assert!(spec_update3.dev.is_none());
+        assert_eq!(spec_update3.pci.len(), 0);
+    }
 
     #[test]
     fn test_cdi_devices_from_visible_devices() {
@@ -1173,7 +1398,7 @@ mod tests {
 
     #[test]
     fn test_update_device_cgroup() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let mut linux = Linux::default();
         linux.set_resources(Some(LinuxResources::default()));
         let mut spec = SpecBuilder::default().linux(linux).build().unwrap();
@@ -1204,8 +1429,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices() {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let (major, minor) = (7, 2);
+        let logger = create_test_logger();
         let mut spec = Spec::default();
 
         // vm_path empty
@@ -1213,15 +1437,10 @@ mod tests {
         assert!(update.is_err());
 
         // linux is empty
-        let container_path = "/dev/null";
-        let vm_path = "/dev/null";
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_err());
 
@@ -1231,10 +1450,7 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_err());
 
@@ -1243,8 +1459,8 @@ mod tests {
             .unwrap()
             .set_devices(Some(vec![LinuxDeviceBuilder::default()
                 .path(PathBuf::from("/dev/null2"))
-                .major(major)
-                .minor(minor)
+                .major(TEST_MAJOR)
+                .minor(TEST_MINOR)
                 .build()
                 .unwrap()]));
 
@@ -1252,16 +1468,13 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(
             res.is_err(),
             "container_path={:?} vm_path={:?} spec={:?}",
-            container_path,
-            vm_path,
+            TEST_CONTAINER_PATH,
+            TEST_VM_PATH,
             spec
         );
 
@@ -1271,16 +1484,13 @@ mod tests {
             .devices_mut()
             .as_mut()
             .unwrap()[0]
-            .set_path(PathBuf::from(container_path));
+            .set_path(PathBuf::from(TEST_CONTAINER_PATH));
 
         // spec.linux.resources is empty
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_ok());
 
@@ -1289,17 +1499,17 @@ mod tests {
             .as_mut()
             .unwrap()
             .set_devices(Some(vec![LinuxDeviceBuilder::default()
-                .path(PathBuf::from(container_path))
-                .major(major)
-                .minor(minor)
+                .path(PathBuf::from(TEST_CONTAINER_PATH))
+                .major(TEST_MAJOR)
+                .minor(TEST_MINOR)
                 .build()
                 .unwrap()]));
 
         spec.linux_mut().as_mut().unwrap().set_resources(Some(
             oci::LinuxResourcesBuilder::default()
                 .devices(vec![LinuxDeviceCgroupBuilder::default()
-                    .major(major)
-                    .minor(minor)
+                    .major(TEST_MAJOR)
+                    .minor(TEST_MINOR)
                     .build()
                     .unwrap()])
                 .build()
@@ -1309,17 +1519,14 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_ok());
     }
 
     #[test]
     fn test_update_spec_devices_guest_host_conflict() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
@@ -1444,7 +1651,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices_char_block_conflict() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
 
@@ -1544,7 +1751,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices_final_path() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let guest_major = stat::major(null_rdev) as i64;
@@ -1831,7 +2038,7 @@ mod tests {
         uev.devpath = devpath.clone();
         uev.devname = devname.to_string();
 
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
 
         let mut sb = sandbox.lock().await;
@@ -1855,7 +2062,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_cdi_devices() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let mut spec = Spec::default();
 
         let mut annotations = HashMap::new();
