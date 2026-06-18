@@ -308,7 +308,11 @@ impl AgentService {
         // read ocispec
         let olddir = setup_bundle(&cid, &mut oci)?;
         // restore the cwd for kata-agent process.
-        defer!(unistd::chdir(&olddir).unwrap());
+        defer! {
+            if let Err(e) = unistd::chdir(&olddir) {
+                error!(sl(), "Failed to restore original directory during cleanup: {:?}", e);
+            }
+        };
 
         // determine which cgroup driver to take and then assign to use_systemd_cgroup
         // systemd: "[slice]:[prefix]:[name]"
