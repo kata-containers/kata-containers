@@ -610,11 +610,17 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			memoryZoneConfig.SetShared(true)
 			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
 
-			// Set hotplug size on the zone so that VMs restored from this
-			// template can resize memory.
 			if !clh.config.ConfidentialGuest {
-				hotplugSize := int64((utils.MemUnit(clh.config.DefaultMaxMemorySize) * utils.MiB).ToBytes())
-				memoryZoneConfig.SetHotplugSize(hotplugSize)
+				// TODO: Remove this warning once memory hotplugging is supported
+				// for template VMs.
+				//
+				// Memory hotplug is intentionally not configured for template VMs.
+				// Resizing a memory zone requires the virtio-mem hotplug method
+				// (cloud-hypervisor rejects the default ACPI hotplug on a zone that
+				// carries a hotplug_size), which is not currently supported in the
+				// templating path. As a result, VMs restored from this template
+				// cannot grow their memory beyond the template's boot size.
+				clh.Logger().Warn("memory hotplugging is currently unsupported for template VMs")
 			}
 		} else {
 			// When BootFromTemplate is true, set shared=false to ensure Copy-On-Write is used for the memory file.
