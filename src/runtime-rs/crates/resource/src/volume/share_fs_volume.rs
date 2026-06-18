@@ -846,7 +846,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                     uid: metadata.uid() as i32,
                     gid: metadata.gid() as i32,
                     dir_mode: metadata.mode(),
-                    file_mode: SFlag::S_IFDIR.bits(),
+                    file_mode: metadata.mode(),
                     data: vec![],
                     ..Default::default()
                 };
@@ -879,7 +879,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                     file_size: metadata.len() as i64,
                     uid: metadata.uid() as i32,
                     gid: metadata.gid() as i32,
-                    file_mode: SFlag::S_IFREG.bits(),
+                    file_mode: metadata.mode(),
                     data: buffer,
                     ..Default::default()
                 };
