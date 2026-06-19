@@ -81,3 +81,106 @@ impl UeventMatcher for PmemBlockMatcher {
             && !uev.devname.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::test_helpers;
+    use rstest::rstest;
+
+    // Helper to create a PMEM uevent
+    fn create_pmem_uevent(devname: &str, region: u32) -> crate::uevent::Uevent {
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = BLOCK.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = format!(
+            "{}/LNXSYSTM:00/LNXSYBUS:00/ACPI0012:00/ndbus0/region{}/btt{}.0/block/{}",
+            ACPI_DEV_PATH, region, region, devname
+        );
+        uev
+    }
+
+    #[rstest]
+    #[case::pmem0_matches_pmem0("pmem0", "pmem0", 0, 0, true)]
+    #[case::pmem1_matches_pmem1("pmem1", "pmem1", 1, 1, true)]
+    #[case::pmem0_rejects_pmem1("pmem0", "pmem1", 0, 1, false)]
+    #[case::pmem1_rejects_pmem0("pmem1", "pmem0", 1, 0, false)]
+    #[tokio::test]
+    async fn test_pmem_block_matcher_basic_matching(
+        #[case] matcher_devname: &str,
+        #[case] uevent_devname: &str,
+        #[case] _matcher_region: u32,
+        #[case] uevent_region: u32,
+        #[case] should_match: bool,
+    ) {
+        let matcher = PmemBlockMatcher::new(matcher_devname);
+        let uev = create_pmem_uevent(uevent_devname, uevent_region);
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for '{}' should {} uevent for '{}'",
+            matcher_devname,
+            if should_match { "match" } else { "reject" },
+            uevent_devname
+        );
+    }
+
+    #[rstest]
+    #[case::wrong_subsystem(test_helpers::SUBSYSTEM_NET, "Wrong subsystem should be rejected")]
+    #[tokio::test]
+    async fn test_pmem_block_matcher_wrong_subsystem(
+        #[case] wrong_subsystem: &str,
+        #[case] description: &str,
+    ) {
+        let devname = "pmem0";
+        let matcher = PmemBlockMatcher::new(devname);
+        let mut uev = create_pmem_uevent(devname, 0);
+        uev.subsystem = wrong_subsystem.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
+
+    #[tokio::test]
+    async fn test_pmem_block_matcher_empty_devname() {
+        let devname = "pmem0";
+        let matcher = PmemBlockMatcher::new(devname);
+        let mut uev = create_pmem_uevent(devname, 0);
+        uev.devname = String::new();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with empty devname"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pmem_block_matcher_wrong_prefix() {
+        let devname = "pmem0";
+        let matcher = PmemBlockMatcher::new(devname);
+        let mut uev = create_pmem_uevent(devname, 0);
+        uev.devpath = format!("/devices/pci0000:00/block/{}", devname);
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject devpath not starting with ACPI_DEV_PATH"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pmem_block_matcher_wrong_suffix() {
+        let devname = "pmem0";
+        let matcher = PmemBlockMatcher::new(devname);
+        let mut uev = create_pmem_uevent(devname, 0);
+        uev.devpath = format!(
+            "{}/LNXSYSTM:00/LNXSYBUS:00/ACPI0012:00/ndbus0/region0/btt0.0/block/pmem2",
+            ACPI_DEV_PATH
+        );
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject devpath with wrong device suffix"
+        );
+    }
+}
