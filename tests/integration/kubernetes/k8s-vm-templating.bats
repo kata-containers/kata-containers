@@ -31,12 +31,19 @@ setup() {
 
 	# Build a Kata runtime config drop-in that enables VM templating and
 	# disables shared_fs (incompatible with templating).
+	# QEMU VM templating requires an initrd, CLH does not.
+	local rootfs_override=""
+	if [[ "${KATA_HYPERVISOR}" == "qemu" ]]; then
+		rootfs_override=$'image = ""\ninitrd = "/opt/kata/share/kata-containers/kata-containers-initrd.img"'
+	fi
+
 	local runtime_config_dropin_file="${BATS_TEST_TMPDIR}/99-k8s-vm-templating.toml"
 	cat > "${runtime_config_dropin_file}" <<DROPIN
 [hypervisor.${KATA_HYPERVISOR}]
 shared_fs = "none"
 default_vcpus = 1
 default_memory = 512
+${rootfs_override}
 
 [factory]
 enable_template = true
