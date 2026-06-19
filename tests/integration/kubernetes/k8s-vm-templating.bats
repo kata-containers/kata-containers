@@ -54,15 +54,14 @@ DROPIN
 }
 
 @test "Pod can be created with a templated VM" {
-	# Initialize the VM template on the target node. Use the absolute path:
-	# kata-deploy installs kata-runtime under /opt/kata/bin, which is not on the
-	# node's sudo PATH.
-	exec_host "$node" "sudo /opt/kata/bin/kata-runtime --config ${kata_config_path} factory init"
+	# Initialize the VM template on the target node.
+	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt /opt/kata/bin/kata-runtime --config ${kata_config_path} factory init"
 
 	# The factory init above must have created the template directory. exec_host
 	# pipes the remote output through `tr`, so the pipeline's exit status is not
-	# the remote command's; assert on the output instead.
-	exec_host "$node" "test -d /run/vc/vm/template && echo present" | grep -q present
+	# the remote command's; assert on the output instead. Check inside PID 1's
+	# mount namespace, where the template tmpfs was actually mounted.
+	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt test -f /run/vc/vm/template/memory && echo present" | grep -q present
 
 	pod_name="test-templated-pod"
 	ctr_name="test-container"
@@ -83,9 +82,10 @@ DROPIN
 	# real directory at /run/vc/vm/<sandbox-id>/, whereas a factory-spawned VM
 	# stores its state under a generated UUID and /run/vc/vm/<sandbox-id> is a
 	# symlink pointing at it (see assignSandbox() in
-	# src/runtime/virtcontainers/vm.go).
+	# src/runtime/virtcontainers/vm.go). Inspect PID 1's mount namespace, where
+	# the shim creates these entries alongside the template tmpfs.
 	exec_host "$node" \
-		"find /run/vc/vm -maxdepth 1 -mindepth 1 -type l ! -name template | grep -q . && echo symlink" \
+		"nsenter --mount=/proc/1/ns/mnt find /run/vc/vm -maxdepth 1 -mindepth 1 -type l ! -name template | grep -q . && echo symlink" \
 		| grep -q symlink
 }
 
@@ -95,7 +95,9 @@ teardown() {
 	rm -f "${pod_config:-}"
 
 	# Destroy the VM template and remove the config drop-in on the target node.
-	exec_host "$node" "sudo /opt/kata/bin/kata-runtime --config ${kata_config_path} factory destroy" \
+	# factory destroy must run in PID 1's mount namespace to unmount the template
+	# tmpfs that factory init created there (see the @test for details).
+	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt /opt/kata/bin/kata-runtime --config ${kata_config_path} factory destroy" \
 		|| echo "Warning: Failed to destroy VM template on node $node"
 
 	remove_kata_runtime_config_dropin_file "$node" "${dropin_path:-}" \
