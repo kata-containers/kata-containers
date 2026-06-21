@@ -686,6 +686,9 @@ EOF
 			echo "I am ubuntu or debian"
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
+
+			info "Create ${ROOTFS_DIR}/etc/chrony
+			mkdir -p "${ROOTFS_DIR}/etc/chrony"
 			;;
 		*)
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
