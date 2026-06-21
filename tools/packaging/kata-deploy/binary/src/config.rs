@@ -178,6 +178,14 @@ pub struct Config {
     pub multi_install_suffix: Option<String>,
     pub helm_post_delete_hook: bool,
     pub experimental_setup_snapshotter: Option<Vec<String>>,
+    /// EROFS snapshotter merge mode: "merged" (default) or "unmerged".
+    ///
+    /// In "unmerged" mode kata-deploy does not force containerd's erofs
+    /// snapshotter to merge layers (it leaves `max_unmerged_layers` at the
+    /// containerd default), so each image layer is exposed as its own
+    /// per-layer `layer.erofs`. This is the only layout the Go runtime can
+    /// consume; the merged (`fsmeta.erofs`) layout is runtime-rs only.
+    pub erofs_merge_mode: Option<String>,
     pub experimental_force_guest_pull_for_arch: Vec<String>,
     pub dest_dir: String,
     pub host_install_dir: String,
@@ -307,6 +315,11 @@ impl Config {
             .filter(|s| !s.is_empty())
             .map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
 
+        let erofs_merge_mode = env::var("EROFS_MERGE_MODE")
+            .ok()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty());
+
         // Only use arch-specific variable for experimental force guest pull
         let experimental_force_guest_pull_for_arch =
             get_arch_var("EXPERIMENTAL_FORCE_GUEST_PULL", "", &arch)
@@ -338,6 +351,7 @@ impl Config {
             multi_install_suffix,
             helm_post_delete_hook,
             experimental_setup_snapshotter,
+            erofs_merge_mode,
             experimental_force_guest_pull_for_arch,
             dest_dir,
             host_install_dir,
@@ -508,6 +522,17 @@ impl Config {
             _ => {}
         }
 
+        // Validate EROFS_MERGE_MODE
+        // Only "merged" (default) and "unmerged" are accepted.
+        if let Some(mode) = self.erofs_merge_mode.as_ref() {
+            if mode != "merged" && mode != "unmerged" {
+                return Err(anyhow::anyhow!(
+                    "EROFS_MERGE_MODE must be either 'merged' or 'unmerged', got '{}'",
+                    mode
+                ));
+            }
+        }
+
         // Validate EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH
         // This is a list of shim names
         for shim in &self.experimental_force_guest_pull_for_arch {
@@ -551,6 +576,7 @@ impl Config {
             "* EXPERIMENTAL_SETUP_SNAPSHOTTER: {:?}",
             self.experimental_setup_snapshotter
         );
+        info!("* EROFS_MERGE_MODE: {:?}", self.erofs_merge_mode);
         info!(
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
