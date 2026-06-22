@@ -16,5 +16,3 @@ spec:
     resources:
       limits:
         memory: "800Mi"
-      requests:
-        memory: "600Mi"

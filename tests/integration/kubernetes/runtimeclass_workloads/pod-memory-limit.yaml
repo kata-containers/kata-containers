@@ -16,6 +16,8 @@ spec:
     resources:
       limits:
         memory: "${memory_size}"
+      # k8s-memory.bats renders different limits against this fixed request:
+      # lower values must be rejected, valid higher values should be accepted.
       requests:
         memory: "700Mi"
     command: ["stress"]

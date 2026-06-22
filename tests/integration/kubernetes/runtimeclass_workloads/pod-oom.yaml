@@ -20,8 +20,6 @@ spec:
       resources:
         limits:
           memory: 400Mi
-        requests:
-          memory: 400Mi
     - image: quay.io/kata-containers/sysbench-kata:latest
       imagePullPolicy: IfNotPresent
       name: not-oom
@@ -29,6 +27,4 @@ spec:
       args: ["-c", "sleep inf"]
       resources:
         limits:
-          memory: 500Mi
-        requests:
           memory: 500Mi

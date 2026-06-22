@@ -28,7 +28,7 @@ spec:
       - name: master
         image: quay.io/libpod/redis
         resources:
-          requests:
+          limits:
             cpu: 100m
             memory: 100Mi
         ports:
