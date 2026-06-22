@@ -495,5 +495,11 @@ func (c *LinuxCgroup) ID() string {
 }
 
 func (c *LinuxCgroup) Parent() string {
+	if _, ok := c.cgroup.(*cgroupsv2.Manager); ok {
+		// In cgroupsv2 the no-internal-processes rule prevents writing to
+		// any non-root cgroup that has children (yields EBUSY).
+		// see cgroups(7) ¶ Cgroups v2 "no internal processes" rule
+		return "/"
+	}
 	return filepath.Dir(c.path)
 }
