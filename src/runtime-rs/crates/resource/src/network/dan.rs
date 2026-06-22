@@ -144,7 +144,12 @@ impl Network for Dan {
             _netns_guard = NetnsGuard::new(netns).context("New netns guard")?;
         }
         for e in inner.entity_list.iter() {
-            e.endpoint.attach().await.context("Attach")?;
+            if let Some(device_path) = e.endpoint.attach().await.context("Attach")? {
+                e.network_info
+                    .set_device_path(device_path)
+                    .await
+                    .context("set device path")?;
+            }
         }
         Ok(())
     }

@@ -117,7 +117,7 @@ impl Endpoint for PhysicalEndpoint {
         self.hard_addr.clone()
     }
 
-    async fn attach(&self) -> Result<()> {
+    async fn attach(&self) -> Result<Option<String>> {
         // Push the desired netdev MAC down to the VF as an "admin MAC" via the
         // PF before we rebind to vfio-pci. Without this the guest mlx5_core
         // inherits the VF firmware default MAC, which differs from the
@@ -181,7 +181,7 @@ impl Endpoint for PhysicalEndpoint {
             }
         }
 
-        Ok(())
+        Ok(None)
     }
 
     // detach for physical endpoint unbinds the physical network interface from vfio-pci

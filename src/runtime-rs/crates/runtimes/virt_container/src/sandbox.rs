@@ -74,6 +74,7 @@ use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -110,6 +111,11 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
+    // Whether sandbox resources (cgroup, network, mounts, ...) have already
+    // been released.  Teardown can be driven both by the sandbox container
+    // exiting and by an explicit shutdown RPC, so guard against running the
+    // cleanup twice.
+    cleaned: bool,
 }
 
 impl SandboxInner {
@@ -118,6 +124,7 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
+            cleaned: false,
         }
     }
 }
@@ -339,34 +346,55 @@ impl VirtSandbox {
         };
 
         let config = self.resource_manager.config().await;
+
+        // Collect the VFIO device nodes to cold-plug from two sources so that Kubernetes, docker,
+        // and nerdctl are handled by the same path:
+        //
+        //   1. Kubernetes: the kubelet PodResources API enumerates the CDI devices allocated to the
+        //      pod.
+        //   2. Docker/nerdctl: the CDI runtime applies the device's containerEdits directly to the
+        //      OCI spec, so the VFIO nodes show up in linux.devices (e.g. /dev/vfio/devices/vfio0).
+        let mut paths: Vec<String> = Vec::new();
+
         let pod_resource_socket = &config.runtime.pod_resource_api_sock;
         info!(
             sl!(),
             "sandbox pod_resource_socket: {:?}", pod_resource_socket
         );
-        if pod_resource_socket.is_empty() || !Path::new(pod_resource_socket).exists() {
-            return Ok(Vec::new());
+        if !pod_resource_socket.is_empty() && Path::new(pod_resource_socket).exists() {
+            let annotations = &sandbox_config.annotations;
+            debug!(
+                sl!(),
+                "cold-plug: sandbox-name={:?} sandbox-namespace={:?}",
+                annotations.get("io.kubernetes.cri.sandbox-name"),
+                annotations.get("io.kubernetes.cri.sandbox-namespace")
+            );
+
+            let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
+                pod_resource_socket,
+                annotations,
+            )
+            .await
+            .context("failed to query Pod Resources CDI devices")?;
+            info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
+
+            let device_nodes = handle_cdi_devices(&cdi_devices).await?;
+            paths.extend(
+                device_nodes
+                    .iter()
+                    .filter_map(pod_resources_rs::device_node_host_path),
+            );
         }
 
-        let annotations = &sandbox_config.annotations;
-        debug!(
-            sl!(),
-            "cold-plug: sandbox-name={:?} sandbox-namespace={:?}",
-            annotations.get("io.kubernetes.cri.sandbox-name"),
-            annotations.get("io.kubernetes.cri.sandbox-namespace")
-        );
+        paths.extend(oci_spec_vfio_device_paths());
 
-        let cdi_devices =
-            pod_resources_rs::pod_resources::get_pod_cdi_devices(pod_resource_socket, annotations)
-                .await
-                .context("failed to query Pod Resources CDI devices")?;
-        info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
+        // De-duplicate while preserving discovery order.
+        let mut seen = HashSet::new();
+        paths.retain(|path| seen.insert(path.clone()));
 
-        let device_nodes = handle_cdi_devices(&cdi_devices).await?;
-        let paths: Vec<String> = device_nodes
-            .iter()
-            .filter_map(pod_resources_rs::device_node_host_path)
-            .collect();
+        if paths.is_empty() {
+            return Ok(Vec::new());
+        }
 
         let mut vfio_configs = Vec::new();
         for path in paths.iter() {
@@ -729,6 +757,29 @@ impl VirtSandbox {
             network_created: false,
         })
     }
+}
+
+/// Collect VFIO character device nodes (e.g. /dev/vfio/devices/vfio0) that a CDI
+/// runtime injected directly into the OCI spec for the Docker/nerdctl/podman
+/// flow, where there is no kubelet PodResources API to query. The legacy
+/// `/dev/vfio/vfio` control node is skipped as it is not a pass-through device.
+fn oci_spec_vfio_device_paths() -> Vec<String> {
+    let Ok(spec) = load_oci_spec() else {
+        return Vec::new();
+    };
+    let Some(linux) = spec.linux() else {
+        return Vec::new();
+    };
+    let Some(devices) = linux.devices() else {
+        return Vec::new();
+    };
+
+    devices
+        .iter()
+        .filter(|dev| dev.typ() == oci::LinuxDeviceType::C)
+        .map(|dev| dev.path().display().to_string())
+        .filter(|path| path.starts_with("/dev/vfio") && path != "/dev/vfio/vfio")
+        .collect()
 }
 
 #[async_trait]
@@ -1101,6 +1152,16 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
+        // Teardown may be triggered both when the sandbox container exits and
+        // by a later shutdown RPC; only release the resources once.
+        {
+            let mut inner = self.inner.write().await;
+            if inner.cleaned {
+                return Ok(());
+            }
+            inner.cleaned = true;
+        }
+
         info!(sl!(), "delete hypervisor");
         self.hypervisor
             .cleanup()

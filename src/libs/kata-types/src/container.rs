@@ -81,6 +81,7 @@ impl FromStr for ContainerType {
         match value {
             POD_CONTAINER | CONTAINER => Ok(ContainerType::PodContainer),
             POD_SANDBOX | PODSANDBOX | SANDBOX => Ok(ContainerType::PodSandbox),
+            SINGLE_CONTAINER => Ok(ContainerType::SingleContainer),
             _ => Err(Error::InvalidContainerType(value.to_owned())),
         }
     }
@@ -229,6 +230,10 @@ mod tests {
         assert_eq!(
             ContainerType::from_str("sandbox").unwrap(),
             ContainerType::PodSandbox
+        );
+        assert_eq!(
+            ContainerType::from_str("single_container").unwrap(),
+            ContainerType::SingleContainer
         );
         ContainerType::from_str("test").unwrap_err();
     }

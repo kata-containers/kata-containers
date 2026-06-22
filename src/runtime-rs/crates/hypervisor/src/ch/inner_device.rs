@@ -571,6 +571,7 @@ mod tests {
             allow_duplicate_mac: false,
             use_generic_irq: None,
             use_shared_irq: None,
+            pci_path: None,
         };
 
         let net = NetConfig::try_from(cfg.clone());

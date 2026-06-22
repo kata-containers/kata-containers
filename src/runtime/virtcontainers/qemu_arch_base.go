@@ -121,7 +121,7 @@ type qemuArch interface {
 	appendBalloonDevice(ctx context.Context, devices []govmmQemu.Device, BalloonDevice config.BalloonDev) ([]govmmQemu.Device, error)
 
 	// setEndpointDevicePath sets the appropriate PCI or CCW device path for an endpoint
-	setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error
+	setEndpointDevicePath(endpoint Endpoint, bridge types.Bridge, devAddr string) error
 
 	// addDeviceToBridge adds devices to the bus
 	addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error)
@@ -778,21 +778,41 @@ func (q *qemuArchBase) appendBalloonDevice(_ context.Context, devices []govmmQem
 	return devices, nil
 }
 
-func (q *qemuArchBase) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
-	bridgeSlot, err := types.PciSlotFromInt(bridgeAddr)
-	if err != nil {
-		return err
-	}
-	devSlot, err := types.PciSlotFromString(devAddr)
-	if err != nil {
-		return err
-	}
-	pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
+func (q *qemuArchBase) setEndpointDevicePath(endpoint Endpoint, bridge types.Bridge, devAddr string) error {
+	pciPath, err := bridgePciPath(bridge, devAddr)
 	if err != nil {
 		return err
 	}
 	endpoint.SetPciPath(pciPath)
 	return nil
+}
+
+// bridgePciPath returns the guest PCI path for a device hot-plugged onto a
+// given bridge at slot devAddr. For a top-level bridge (directly on
+// pcie.0/pci.0) the path has two components (bridge_slot/dev_slot). For a
+// bridge nested behind a parent device on the root bus (e.g. a pcie-pci-bridge
+// sitting on a pcie-root-port) the path has three components
+// (parent_slot/bridge_slot/dev_slot), which the kata-agent walks via sysfs.
+func bridgePciPath(bridge types.Bridge, devAddr string) (types.PciPath, error) {
+	devSlot, err := types.PciSlotFromString(devAddr)
+	if err != nil {
+		return types.PciPath{}, err
+	}
+
+	bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
+	if err != nil {
+		return types.PciPath{}, err
+	}
+
+	if !bridge.HasParent() {
+		return types.PciPathFromSlots(bridgeSlot, devSlot)
+	}
+
+	parentSlot, err := types.PciSlotFromInt(bridge.ParentAddr)
+	if err != nil {
+		return types.PciPath{}, err
+	}
+	return types.PciPathFromSlots(parentSlot, bridgeSlot, devSlot)
 }
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {

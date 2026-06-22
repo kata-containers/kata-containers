@@ -206,6 +206,77 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	assert.Equal(expectedOut, devices)
 }
 
+// TestQemuAmd64BridgesWithFirmware verifies that on Q35 + OVMF the runtime
+// switches from the legacy conventional pci-bridge to a pcie-pci-bridge
+// cold-plugged onto a dedicated pcie-root-port (which carries the PCI Firmware
+// Spec resource-reservation hints OVMF actually honours).
+func TestQemuAmd64BridgesWithFirmware(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := qemuConfig(QemuQ35)
+	cfg.FirmwarePath = "/path/to/OVMF.fd"
+	arch, err := newQemuArch(cfg)
+	assert.NoError(err)
+
+	arch.bridges(2)
+	bridges := arch.getBridges()
+	assert.Len(bridges, 2)
+
+	for i, b := range bridges {
+		// The bridge's logical Type stays PCI because the secondary
+		// bus exposed by a pcie-pci-bridge is conventional PCI, which
+		// is what genericAddDeviceToBridge matches against. The fact
+		// that it is emitted as a pcie-pci-bridge is encoded by it
+		// having a parent (its pcie-root-port).
+		assert.Equal(types.PCI, b.Type, "bridge %d should be PCI", i)
+		assert.True(b.HasParent(), "bridge %d should be nested behind a parent", i)
+		assert.Equal(fmt.Sprintf("rp-%s", b.ID), b.ParentID)
+	}
+
+	devices := arch.appendBridges(nil)
+	// 2 bridges -> 2 root ports + 2 pcie-pci-bridges = 4 devices
+	assert.Len(devices, 4)
+
+	for i, b := range bridges {
+		rp, ok := devices[i*2].(govmmQemu.PCIeRootPortDevice)
+		assert.True(ok, "device %d should be a pcie-root-port", i*2)
+		assert.Equal(b.ParentID, rp.ID)
+		assert.Equal(defaultBridgeBus, rp.Bus)
+		assert.Equal(fmt.Sprintf("%d", b.ParentAddr), rp.Addr)
+		// Resource reservations OVMF needs to honour hot-plug.
+		assert.NotEmpty(rp.BusReserve)
+		assert.NotEmpty(rp.IOReserve)
+		assert.NotEmpty(rp.MemReserve)
+		assert.NotEmpty(rp.Pref64Reserve)
+
+		br, ok := devices[i*2+1].(govmmQemu.BridgeDevice)
+		assert.True(ok, "device %d should be a pcie-pci-bridge", i*2+1)
+		assert.Equal(govmmQemu.PCIEBridge, br.Type)
+		assert.Equal(b.ID, br.ID)
+		assert.Equal(rp.ID, br.Bus, "pcie-pci-bridge must sit on its root-port's bus")
+	}
+}
+
+// TestBridgePciPath verifies the 2-level (legacy) and 3-level (nested behind a
+// pcie-root-port) guest PCI path construction.
+func TestBridgePciPath(t *testing.T) {
+	assert := assert.New(t)
+
+	// 2-level: directly on pcie.0
+	flat := types.NewBridge(types.PCI, "pci-bridge-0", make(map[uint32]string), 2)
+	p, err := bridgePciPath(flat, "01")
+	assert.NoError(err)
+	assert.Equal("02/01", p.String())
+
+	// 3-level: pcie-pci-bridge on slot 0 of a pcie-root-port at slot 2.
+	// Type stays PCI because the secondary bus is conventional PCI; what
+	// makes it a pcie-pci-bridge at QEMU emission time is HasParent().
+	nested := types.NewNestedBridge(types.PCI, "pci-bridge-0", make(map[uint32]string), 0, "rp-pci-bridge-0", 2)
+	p, err = bridgePciPath(nested, "01")
+	assert.NoError(err)
+	assert.Equal("02/00/01", p.String())
+}
+
 func TestQemuAmd64WithInitrd(t *testing.T) {
 	assert := assert.New(t)
 
