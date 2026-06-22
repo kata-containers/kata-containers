@@ -1745,15 +1745,18 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	}
 	pid := pids[0]
 	if pid > 0 {
-		if waitOnly {
-			err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
-			if err != nil {
-				return err
-			}
-		} else {
+		if !waitOnly {
 			err = syscall.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
+				return err
+			}
+		}
+		// Wait for QEMU to actually exit regardless of whether we issued the kill syscall.
+		// Without this, the caller may proceeds to delete the sandbox cgroup while QEMU threads
+		// are still alive in it, making the cgroup undeletable.
+		if err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger()); err != nil {
+			if waitOnly {
 				return err
 			}
 		}
