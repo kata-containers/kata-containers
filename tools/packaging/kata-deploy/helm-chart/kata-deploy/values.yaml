@@ -122,6 +122,17 @@ monitor:
   runtimeEndpoint: "unix:///run/containerd/containerd.sock"
   logLevel: "info"
   port: 8090
+  tls:
+    # Name of a Secret containing cert.pem and key.pem. When set,
+    # kata-monitor serves HTTPS on the configured port instead of plain HTTP.
+    # The Secret must exist in the same namespace before the DaemonSet rolls out.
+    secretName: ""
+    # Minimum TLS version: VersionTLS12 or VersionTLS13. Defaults to VersionTLS12
+    # when TLS is enabled. Ignored when secretName is empty.
+    minVersion: ""
+    # Comma-separated list of IANA cipher suite names for TLS 1.2 and below.
+    # Must not be set when minVersion is VersionTLS13. Ignored when secretName is empty.
+    cipherSuites: ""
   securityContext:
     privileged: false
     runAsUser: 0

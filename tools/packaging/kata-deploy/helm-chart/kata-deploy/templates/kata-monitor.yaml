@@ -19,6 +19,8 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
       annotations:
         prometheus.io/scrape: "true"
+        prometheus.io/scheme: {{ if .Values.monitor.tls.secretName }}"https"{{ else }}"http"{{ end }}
+        prometheus.io/port: {{ .Values.monitor.port | quote }}
     spec:
 {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -45,6 +47,16 @@ spec:
           - -listen-address={{ .Values.monitor.listenAddress }}
           - -log-level={{ .Values.monitor.logLevel }}
           - -runtime-endpoint={{ .Values.monitor.runtimeEndpoint }}
+{{- if .Values.monitor.tls.secretName }}
+          - -tls-cert-file=/etc/kata-monitor/certs/cert.pem
+          - -tls-key-file=/etc/kata-monitor/certs/key.pem
+{{- if .Values.monitor.tls.minVersion }}
+          - -tls-min-version={{ .Values.monitor.tls.minVersion }}
+{{- end }}
+{{- if .Values.monitor.tls.cipherSuites }}
+          - -tls-cipher-suites={{ .Values.monitor.tls.cipherSuites }}
+{{- end }}
+{{- end }}
         ports:
           - containerPort: {{ .Values.monitor.port }}
         resources:
@@ -56,6 +68,11 @@ spec:
         - name: sbs
           mountPath: /run/vc/sbs/
           readOnly: true
+{{- if .Values.monitor.tls.secretName }}
+        - name: certs
+          mountPath: /etc/kata-monitor/certs
+          readOnly: true
+{{- end }}
       terminationGracePeriodSeconds: 30
       volumes:
       - name: containerd-sock
@@ -66,4 +83,9 @@ spec:
         hostPath:
           path: /run/vc/sbs/
           type: DirectoryOrCreate
+{{- if .Values.monitor.tls.secretName }}
+      - name: certs
+        secret:
+          secretName: {{ .Values.monitor.tls.secretName }}
+{{- end }}
 {{- end }}
