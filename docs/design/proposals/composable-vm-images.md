@@ -222,21 +222,96 @@ The mount script (`kata-addon-mount.sh`) performs the following steps:
 4. **EROFS mount** — mounts the verified device (or the raw partition if
    verity is not configured) read-only at `/run/kata-addons/<name>/`.
 
-### Agent-side: dynamic path resolution
+### Agent-side: data-driven component manifest
 
-The kata-agent resolves CoCo guest component paths at runtime rather than
-relying on hardcoded legacy paths. For each component, the agent checks the
-addon mount path first, then falls back to the legacy location:
+> **Implementation note.** An earlier revision of this proposal described the
+> agent as resolving a small, hardcoded list of component paths. While
+> implementing and testing the addon we found this too rigid: the addon
+> evolved to ship multiple attestation-agent flavours, per-process environment
+> requirements, and ordering constraints that the agent should not have to know
+> about. The design below — a **data-driven manifest** owned by the addon — is
+> what we converged on so that adding or reconfiguring a bundled component
+> requires **no** kata-agent code change.
 
-| Component              | Addon path                                              | Legacy path                     |
+Each addon ships a manifest at `etc/kata-addons/components.toml`. When the addon
+is mounted, the kata-agent reads it and builds its launch plan from it. The
+manifest declares the processes to launch and the resources they expose; all
+paths are **relative to the addon mount root** (`/run/kata-addons/<name>`).
+
+A process entry carries:
+
+- `id` and a `level` used to order and gate launches.
+- `args` (and `optional_args`, which are appended only when a named context
+  variable is non-empty).
+- `config`, `wait_socket` (the agent blocks until the socket appears), and
+  `timeout_secs`.
+- `env` — extra environment variables for the spawned process.
+- An optional `select` selector plus `[process.variants.<name>]` tables, so a
+  single logical component can ship multiple binaries and the consumer picks
+  one at runtime.
+
+`${...}` tokens in `args`, `config`, `env` values, and variant fields are
+substituted by the agent from a runtime context it assembles (socket and config
+paths, the addon mount root `${addon_root}`, the selected `${attester_variant}`,
+etc.). Introducing a brand-new variable is the only change that ever needs to
+touch the agent.
+
+Abridged manifest (see "Attester variant selection" and "Runtime dependencies"
+below for why the `nvidia` variant and the `PATH`/`LD_LIBRARY_PATH` entries are
+shaped the way they are):
+
+```toml
+schema_version = 1
+
+[paths]
+"ocicrypt-config" = "etc/ocicrypt_config.json"
+"pause-bundle"    = "pause_bundle"
+
+[[process]]
+id          = "attestation-agent"
+level       = 1
+args        = ["--attestation_sock", "${aa_attestation_uri}"]
+config      = "${aa_config_path}"
+wait_socket = "${aa_attestation_socket}"
+select      = "${attester_variant}"
+
+  [process.variants.default]
+  path = "usr/local/bin/attestation-agent"
+
+  [process.variants.nvidia]
+  path = "usr/local/bin/attestation-agent-nv"
+  env  = { LD_LIBRARY_PATH = "${addon_root}/usr/local/lib:/run/kata-addons/gpu/usr/lib" }
+
+[[process]]
+id          = "confidential-data-hub"
+level       = 2
+path        = "usr/local/bin/confidential-data-hub"
+config      = "${cdh_config_path}"
+env         = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${addon_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
+wait_socket = "${cdh_socket}"
+
+[[process]]
+id   = "api-server-rest"
+level = 3
+path = "usr/local/bin/api-server-rest"
+args = ["--features", "${rest_api_features}"]
+```
+
+When **no** addon is mounted, the agent falls back to a built-in launch plan
+that reproduces the legacy behaviour (components launched from
+`/usr/local/bin/...` in the rootfs). The same dual-path principle applies to
+the non-process resources declared under `[paths]`: the agent resolves them
+inside the addon first and falls back to the legacy location otherwise:
+
+| Resource               | Addon path                                              | Legacy path                     |
 |------------------------|---------------------------------------------------------|---------------------------------|
-| attestation-agent      | `/run/kata-addons/coco/usr/local/bin/attestation-agent` | `/usr/local/bin/attestation-agent` |
+| attestation-agent(-nv) | `/run/kata-addons/coco/usr/local/bin/attestation-agent[-nv]` | `/usr/local/bin/attestation-agent` |
 | confidential-data-hub  | `/run/kata-addons/coco/usr/local/bin/confidential-data-hub` | `/usr/local/bin/confidential-data-hub` |
 | api-server-rest        | `/run/kata-addons/coco/usr/local/bin/api-server-rest`   | `/usr/local/bin/api-server-rest` |
 | ocicrypt_config.json   | `/run/kata-addons/coco/etc/ocicrypt_config.json`        | `/etc/ocicrypt_config.json`     |
 | pause_bundle           | `/run/kata-addons/coco/pause_bundle`                    | `/pause_bundle`                 |
 
-This dual-path resolution approach:
+This approach:
 
 - Preserves **backward compatibility** with existing monolithic rootfs images
   where CoCo components are baked into the base image.
@@ -244,12 +319,164 @@ This dual-path resolution approach:
   stub files or directories for the addon components.
 - Works transparently on a **read-only rootfs** — no bind-mounting, no
   remounting, no writes to the root filesystem.
+- Keeps the agent **generic** — addon-specific names, env, and ordering live
+  in the manifest, not in agent code.
+
+### Attester variant selection and the NVRC contract
+
+The CoCo addon ships **two** attestation-agent builds: the stock
+`attestation-agent` and an NVIDIA-attester build, `attestation-agent-nv`, that
+collects GPU evidence in addition to the TEE evidence. Which one runs is chosen
+by the manifest's `select = "${attester_variant}"` selector, and the value of
+`${attester_variant}` is driven by the guest init:
+
+- On a plain confidential guest the kata-agent runs init itself and the variable
+  defaults to `default` → the stock attester launches.
+- On a GPU guest, **NVRC** (the NVIDIA runtime config that owns early boot)
+  detects the GPU addon and exports `KATA_ATTESTER_VARIANT=nvidia` before
+  exec'ing the kata-agent. The agent forwards that into the substitution context
+  as `${attester_variant}`, so the `nvidia` variant launches.
+
+This is a small **cross-component contract**: the environment variable name
+(`KATA_ATTESTER_VARIANT`) and the `nvidia` value are produced by NVRC and
+consumed by the kata-agent, which keeps the agent free of any GPU- or
+NVIDIA-specific knowledge — it only knows how to forward a selector into the
+manifest. We arrived at this split after first trying to special-case the
+attester inside the agent; pushing the decision out to NVRC + the manifest kept
+both the agent and the addon generic.
+
+#### Why one addon with two builds (and not two addons)
+
+Shipping **two** attestation-agent builds inside a **single** CoCo addon is a
+deliberate choice, and it is worth being explicit about it because addons are
+otherwise meant to *eliminate* duplication.
+
+- A single CoCo addon serves **both** plain confidential guests (TEE evidence
+  only) and confidential GPU guests (TEE + GPU evidence). The only thing that
+  differs between them is which attestation-agent binary runs; everything else
+  in the addon (confidential-data-hub, api-server-rest, ocicrypt config, pause
+  bundle, `cryptsetup`) is shared verbatim. Splitting the NVIDIA attester into
+  its own addon would duplicate that shared payload and force every confidential
+  GPU guest to compose two CoCo-flavoured addons instead of one.
+- The **cost** of keeping both builds together is precisely the manifest's
+  `select`/`variants` machinery: the manifest has to be aware that the
+  attestation-agent comes in two flavours and pick one at runtime. We consider
+  that a fair trade — the complexity is confined to data (the manifest), the
+  agent stays generic, and the addon stays a single, coherent "CoCo" unit.
+- A separate addon only pays off when its contents are **substantially**
+  different (e.g. the GPU addon, which carries the driver userspace), not for
+  two near-identical builds of the same component. No further attester variants
+  are planned today, but if one appeared it would be another `[process.variants.<name>]`
+  entry — not a new image.
+
+### Runtime dependencies: dynamic linking and secure-mount tooling
+
+Two classes of runtime dependency surfaced only once the components actually ran
+inside a composed VM. Both are resolved by the manifest `env` entries above
+rather than by agent code, and both informed where binaries and libraries must
+physically live.
+
+#### NVIDIA attester dynamic libraries
+
+`attestation-agent-nv` links `libnvat.so` (the NVIDIA Attestation SDK), which in
+turn:
+
+- `dlopen`s `libnvidia-ml.so.1` (NVML) at runtime to gather GPU evidence. NVML
+  is part of the **GPU addon**, mounted at `/run/kata-addons/gpu` with its driver
+  libraries under `usr/lib`.
+- pulls in a closure of non-glibc libraries (libxml2, zlib, lzma, the C++
+  runtime, ...) that the guest rootfs does not otherwise ship.
+
+Neither set is present in a stock guest, so:
+
+- The CoCo addon build bundles `libnvat.so` **and every non-glibc transitive
+  dependency** next to it under `usr/local/lib`.
+- The `nvidia` **manifest variant** (the `[process.variants.nvidia]` entry, not
+  a separate image) sets an `LD_LIBRARY_PATH` that lists **both** the CoCo
+  addon's `usr/local/lib` (for `libnvat` and its closure) **and** the GPU
+  addon's `usr/lib` (for NVML). Setting only the first was the cause of an
+  `NVAT Error 500: NVML Initialization Failed` we hit during bring-up; the
+  RCAR handshake then never produced GPU evidence and attestation failed.
+
+Because the agent applies manifest `env` on top of the inherited environment
+(without clearing it), and because the `nvidia` variant only ever runs when the
+GPU addon is present, referencing the GPU addon's well-known mount path here is
+safe.
+
+#### CDH secure-mount tooling (encrypted vs plain storage)
+
+The confidential-data-hub `secure_mount` feature shells out — by `PATH`
+lookup — to external tools, and these split cleanly into two buckets that belong
+in two different places:
+
+- **Plain storage setup** — `mke2fs`/`mkfs.ext4` (and `dd`, plus
+  `/etc/mke2fs.conf`) format the scratch volume. This is needed for *unencrypted*
+  ephemeral storage too, so it belongs in the **base image** and ships there
+  unconditionally.
+- **Encrypted storage** — `cryptsetup` LUKS-formats and opens the volume. This is
+  a CoCo-only capability, so it belongs with the CoCo guest components in the
+  **coco addon**.
+
+This is the same `veritysetup`-vs-`cryptsetup` reasoning already applied to addon
+mounting: the base must always carry `veritysetup` (it opens *every* addon as a
+dm-verity device before mounting), and `cryptsetup` shares an identical
+shared-library closure, so wherever `veritysetup` lives the libraries for
+`cryptsetup` are already present.
+
+Because CDH runs in the **base rootfs namespace** but `cryptsetup` lives in the
+addon (which is not on the default search path), the manifest sets CDH's `PATH`
+to `${addon_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin` — the addon's
+`cryptsetup` first, then the base directories that carry `mke2fs`/`mkfs.ext4`/`dd`.
+(The kata-agent launches components with `PATH=/bin:/sbin:/usr/bin:/usr/sbin`;
+since setting any `env` value replaces that variable wholesale, the base
+directories are restored explicitly.)
+
+How each tool is provisioned depends on the **base flavour** (see
+"Base image flavours" below), but the placement *contract* is identical:
+
+| Tool                         | Bucket             | Full-distro base (Ubuntu)                                | Distroless base (chiseled NVIDIA + NVRC)                |
+|------------------------------|--------------------|----------------------------------------------------------|---------------------------------------------------------|
+| `veritysetup`                | base, always       | `cryptsetup-bin` (unconditional in `ubuntu/config.sh`)   | copied into the base layout unconditionally             |
+| `cryptsetup`                 | coco addon         | also present in the full-distro base via `cryptsetup-bin`| binary bundled in the coco addon; libs come from base   |
+| `mke2fs`/`mkfs.ext4`/`dd`    | base, for CoCo     | `e2fsprogs` (on `CONFIDENTIAL_GUEST=yes`) + `coreutils`  | copied into the base layout                             |
+
+The distroless path needs explicit copying because nothing lands in a chiseled
+image unless placed there deliberately, and the NVIDIA base is never built with
+`CONFIDENTIAL_GUEST=yes`. The full-distro base is built with
+`CONFIDENTIAL_GUEST=yes`, so the same tools arrive as ordinary packages. In both
+cases the addon's `cryptsetup` resolves its libraries against the base, which
+requires the base and the coco-addon builder to stay on the **same distro/ABI**
+(Ubuntu 24.04 "noble" today).
 
 ### Image build pipeline
 
+#### Base image flavours
+
+Kata base images come in two flavours, distinguished by **who owns early boot**.
+This distinction — not "Ubuntu vs NVIDIA" — is what drives the differences in
+how tooling is provisioned and who mounts the addons:
+
+- **Full-distro base** — ships a complete distribution with **systemd** as init.
+  systemd discovers and mounts the addons (via `kata-addon-mount@.service`), and
+  the binaries/libraries the guest needs arrive as ordinary distribution
+  packages. The standard confidential `kata-containers.img` (Ubuntu) is today's
+  instance.
+- **Distroless base** — a minimal, chiseled image with no full init system. A
+  dedicated early-boot component takes over the responsibilities systemd would
+  otherwise have (addon discovery and mounting, attester selection,
+  orchestration), and any tooling must be placed into the image deliberately
+  rather than pulled in as packages. The chiseled `base-nvidia` driven by
+  **NVRC** is today's instance.
+
+These are the only two flavours today and no others are planned, but a new base
+would fall into one of these categories and follow the same mechanisms (systemd
+units for a full-distro base; an NVRC-like early-boot owner for a distroless
+one). The sections below describe the build for both; where they diverge it is
+because of the flavour, not because the NVIDIA image is a special case.
+
 #### Base image
 
-The standard `kata-containers.img` is built as before, but **without** CoCo
+The full-distro `kata-containers.img` is built as before, but **without** CoCo
 guest components (attestation-agent, confidential-data-hub, api-server-rest,
 ocicrypt config, pause bundle). It includes:
 
@@ -257,15 +484,36 @@ ocicrypt config, pause bundle). It includes:
 - systemd and the `kata-addon-mount@.service` template unit
 - `cryptsetup-bin` (provides `veritysetup`) — required unconditionally so
   that the base image can mount verity-protected addons regardless of whether
-  the base itself was built with `CONFIDENTIAL_GUEST=yes`.
+  the base itself was built with `CONFIDENTIAL_GUEST=yes`. On Ubuntu this same
+  package also provides `cryptsetup`, so the full-distro base happens to carry
+  the encrypted-storage binary too.
+- The plain-storage tooling for CDH `secure_mount` — `mke2fs`/`mkfs.ext4`,
+  `dd`, and `/etc/mke2fs.conf`. On the standard base these come from
+  `e2fsprogs` (added when `CONFIDENTIAL_GUEST=yes`) and `coreutils`. See
+  "Runtime dependencies" for why the encrypted-storage `cryptsetup` lives in
+  the addon instead.
+
+The **distroless base** (`base-nvidia`, driven by NVRC) is a chiseled,
+driver-agnostic image rather than a full distro, so the items above do not
+arrive as packages — they are copied into the base layout explicitly:
+`veritysetup` and its library closure unconditionally, and the
+`mke2fs`/`mkfs.ext4`/`dd`/`mke2fs.conf` plain-storage tooling alongside it.
 
 #### CoCo addon image
 
 The `kata-containers-coco-addon.img` is built by:
 
-1. Unpacking the CoCo guest components tarball into a temporary rootfs.
+1. Unpacking the CoCo guest components tarball into a temporary rootfs. Besides
+   the agent-launched binaries (attestation-agent, attestation-agent-nv,
+   confidential-data-hub, api-server-rest) this tarball also carries:
+   - `cryptsetup` under `usr/sbin` — the encrypted-storage binary for CDH
+     `secure_mount` (its shared libraries are resolved against the base; see
+     "Runtime dependencies").
+   - the NVIDIA attester libraries under `usr/local/lib` — `libnvat.so` plus its
+     non-glibc transitive closure (libxml2, zlib, lzma, the C++ runtime).
 2. Unpacking the pause image tarball into the same rootfs.
-3. Running the image builder with:
+3. Writing the component manifest to `etc/kata-addons/components.toml`.
+4. Running the image builder with:
    - `FS_TYPE=erofs` — EROFS filesystem for compact, read-only storage.
    - `MEASURED_ROOTFS=yes` — creates a dm-verity hash partition.
    - `SKIP_DAX_HEADER=yes` — no DAX header (virtio-blk, not NVDIMM).
@@ -378,12 +626,16 @@ layer, not at the VM assembly layer.
 
 ### Additional addon types
 
-The architecture is designed to support multiple addon images. Planned
-extensions include:
+The architecture is designed to support multiple addon images:
 
-- **GPU addon** — NVIDIA GPU support components (NVRC, vGPU drivers)
-  in a separate addon image, enabling GPU support without bloating
-  the base or CoCo images.
+- **GPU addon** — the NVIDIA GPU userspace (driver libraries, NVML, the
+  container-toolkit binaries, kernel modules) lives in a `gpu-addon` image
+  mounted at `/run/kata-addons/gpu`, carved out of the same build as the
+  driver-agnostic `base-nvidia` image. NVRC orchestrates early boot, loads the
+  modules from the addon, and composes the GPU addon with the CoCo addon on
+  confidential GPU guests. This addon is implemented; its interplay with the
+  CoCo addon (NVML resolution, attester selection) is covered in
+  "Runtime dependencies" and "Attester variant selection" above.
 
 - **Custom addons** — users can build their own addon images for
   workload-specific libraries, models, or configurations.
