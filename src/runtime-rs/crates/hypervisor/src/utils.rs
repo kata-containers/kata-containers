@@ -9,7 +9,7 @@ use std::{
     fs::{metadata, set_permissions, File, OpenOptions, Permissions},
     io,
     os::{
-        fd::{AsRawFd, RawFd},
+        fd::{BorrowedFd, RawFd},
         unix::fs::{MetadataExt, PermissionsExt},
     },
     path::{Path, PathBuf},
@@ -90,13 +90,14 @@ pub fn get_jailer_root(sid: &str) -> String {
 // called on descriptors to be passed to a child (hypervisor) process as
 // O_CLOEXEC would obviously prevent that.
 pub fn clear_cloexec(rawfd: RawFd) -> Result<()> {
-    let cur_flags = fcntl::fcntl(rawfd, fcntl::FcntlArg::F_GETFD)?;
+    let borrowed_fd = unsafe { BorrowedFd::borrow_raw(rawfd) };
+    let cur_flags = fcntl::fcntl(borrowed_fd, fcntl::FcntlArg::F_GETFD)?;
     let mut new_flags = fcntl::FdFlag::from_bits(cur_flags).ok_or(anyhow!(
         "couldn't construct FdFlag from flags value {:?}",
         cur_flags
     ))?;
     new_flags.remove(fcntl::FdFlag::FD_CLOEXEC);
-    if let Err(err) = fcntl::fcntl(rawfd, fcntl::FcntlArg::F_SETFD(new_flags)) {
+    if let Err(err) = fcntl::fcntl(borrowed_fd, fcntl::FcntlArg::F_SETFD(new_flags)) {
         info!(sl!(), "couldn't clear O_CLOEXEC on fd: {:?}", err);
         return Err(err.into());
     }
@@ -108,7 +109,7 @@ pub fn enter_netns(netns_path: &str) -> Result<()> {
     if !netns_path.is_empty() {
         let netns =
             File::open(netns_path).context(anyhow!("open netns path {:?} failed.", netns_path))?;
-        setns(netns.as_raw_fd(), CloneFlags::CLONE_NEWNET).context("set netns failed")?;
+        setns(&netns, CloneFlags::CLONE_NEWNET).context("set netns failed")?;
     }
 
     Ok(())

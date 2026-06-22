@@ -8,7 +8,7 @@ use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::fs;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use tracing::instrument;
 
 pub const RNGDEV: &str = "/dev/random";
@@ -38,7 +38,7 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
     let f = {
         let fd = fcntl::open(RNGDEV, OFlag::O_RDWR, Mode::from_bits_truncate(0o022))?;
         // Wrap fd with `File` to properly close descriptor on exit
-        unsafe { fs::File::from_raw_fd(fd) }
+        unsafe { fs::File::from_raw_fd(fd.into_raw_fd()) }
     };
 
     let ret = unsafe {

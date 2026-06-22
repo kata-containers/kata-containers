@@ -16,6 +16,7 @@ use dbs_arch::{DeviceType, MMIODeviceInfo};
 #[cfg(feature = "host-device")]
 use dbs_boot::layout::MMIO_LOW_END;
 use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerContext};
+#[cfg(feature = "host-device")]
 use dbs_device::resources::DeviceResources;
 use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;

@@ -175,7 +175,7 @@ netlink-packet-route = "0.19.0"
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
-nix = "0.26.4"
+nix = { version = "0.31.3", features = ["fs", "mount", "sched", "process", "ioctl", "signal", "socket", "feature", "user", "hostname", "term", "event", "mman", "reboot"] }
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 procfs = "0.12.0"

@@ -164,11 +164,9 @@ impl Nydusd {
             // `build_args()` uses relative socket file names in rootless mode; run
             // nydusd from the socket parent directory so the short names resolve and
             // the bound socket files still land at the configured absolute paths.
-            let work_dir = self
-                .config
-                .sock_path
-                .parent()
-                .ok_or_else(|| anyhow!("failed to get parent dir of {:?}", self.config.sock_path))?;
+            let work_dir = self.config.sock_path.parent().ok_or_else(|| {
+                anyhow!("failed to get parent dir of {:?}", self.config.sock_path)
+            })?;
             cmd.current_dir(work_dir);
         }
 

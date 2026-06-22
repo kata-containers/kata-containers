@@ -134,7 +134,10 @@ impl InitialSizeManager {
 
     // Merge sizing values from sandbox annotations when the current source
     // (typically the OCI spec) does not carry CRI sandbox sizing keys.
-    pub fn supplement_from_annotations(&mut self, annotation: &HashMap<String, String>) -> Result<()> {
+    pub fn supplement_from_annotations(
+        &mut self,
+        annotation: &HashMap<String, String>,
+    ) -> Result<()> {
         let from_annotation =
             InitialSize::try_from(annotation).context("failed to construct static resource")?;
 

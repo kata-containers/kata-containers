@@ -1370,11 +1370,11 @@ pub(crate) mod tests {
             let file_offset = {
                 let fd = memfd::memfd_create(
                     // safe to unwrap, no nul byte in file name
-                    &CString::new("virtio_fs_mem").unwrap(),
-                    memfd::MemFdCreateFlag::empty(),
+                    CString::new("virtio_fs_mem").unwrap().as_c_str(),
+                    memfd::MFdFlags::empty(),
                 )
                 .map_err(|_| Error::InvalidInput)?;
-                let file: File = unsafe { File::from_raw_fd(fd) };
+                let file: File = File::from(fd);
                 file.set_len(region_len).map_err(|_| Error::InvalidInput)?;
                 Some(FileOffset::new(file, 0))
             };

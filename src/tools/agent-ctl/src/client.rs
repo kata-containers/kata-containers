@@ -21,7 +21,7 @@ use std::fs;
 use std::io::Write; // XXX: for flush()
 use std::io::{self, Read, Seek, SeekFrom};
 use std::io::{BufRead, BufReader};
-use std::os::unix::io::{IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::thread::sleep;
 use std::time::Duration;
@@ -422,8 +422,8 @@ fn client_create_vsock_fd(cid: libc::c_uint, port: u32) -> Result<RawFd> {
         .map_err(|e| anyhow!(e))?;
 
         // Connect the socket to vsock server.
-        match connect(fd, &sock_addr) {
-            Ok(_) => return Ok(fd),
+        match connect(fd.as_raw_fd(), &sock_addr) {
+            Ok(_) => return Ok(fd.into_raw_fd()),
             Err(e) => {
                 debug!(
                     sl!(),
@@ -549,11 +549,11 @@ fn create_ttrpc_client(
                     }
                 };
 
-                connect(socket_fd, &unix_addr).map_err(|e| {
+                connect(socket_fd.as_raw_fd(), &unix_addr).map_err(|e| {
                     anyhow!(e).context("Failed to connect to Unix Domain abstract socket")
                 })?;
 
-                socket_fd
+                socket_fd.into_raw_fd()
             } else if hybrid_vsock {
                 let stream = setup_hybrid_vsock(&path, hybrid_vsock_port)?;
                 stream.into_raw_fd()

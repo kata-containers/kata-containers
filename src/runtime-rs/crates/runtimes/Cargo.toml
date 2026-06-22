@@ -28,7 +28,7 @@ opentelemetry-jaeger = { version = "0.17.0", features = [
 tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
 hyper = { workspace = true, features = ["stream", "server", "http1"] }
 serde_json = { workspace = true }
-nix = "0.25.0"
+nix = { workspace = true }
 url = { workspace = true }
 procfs = "0.12.0"
 prometheus = { version = "0.14.0", features = ["process"] }

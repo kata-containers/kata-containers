@@ -1231,7 +1231,11 @@ fn device_cgroup_access_is_readonly(
     major: i64,
     minor: i64,
 ) -> bool {
-    let devices = match linux.resources().as_ref().and_then(|r| r.devices().as_ref()) {
+    let devices = match linux
+        .resources()
+        .as_ref()
+        .and_then(|r| r.devices().as_ref())
+    {
         Some(devices) => devices,
         None => return false,
     };
