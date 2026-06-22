@@ -258,6 +258,33 @@ impl Container {
         }
     }
 
+    fn get_gid_from_group_name(&self, group: &str) -> Result<u32> {
+        if group.is_empty() {
+            return Err(anyhow!("Group is empty"));
+        }
+
+        if self.group.is_empty() {
+            return Err(anyhow!(
+                "No /etc/group file is available, unable to parse gid from group"
+            ));
+        }
+
+        match parse_group_file(&self.group) {
+            Ok(records) => {
+                if let Some(record) = records.iter().find(|&r| r.name == group) {
+                    debug!(
+                        "parse_group_file: found GID = {} for group = {group} in image layer",
+                        record.gid
+                    );
+                    Ok(record.gid)
+                } else {
+                    Err(anyhow!("Failed to find group {} in /etc/group", group))
+                }
+            }
+            Err(inner_e) => Err(anyhow!("Failed to parse /etc/group - error {inner_e}")),
+        }
+    }
+
     fn get_user_from_passwd_uid(&self, uid: u32) -> Result<String> {
         for record in parse_passwd_file(&self.passwd)? {
             if record.uid == uid {
@@ -328,6 +355,26 @@ impl Container {
         }
     }
 
+    // Unlike parse_user_string(), keep group parsing fallible. If an explicit
+    // image group cannot be resolved, callers can fall back to the historical
+    // UID-to-GID lookup through /etc/passwd instead of silently using GID 0.
+    fn parse_group_string(&self, group: &str) -> Result<u32> {
+        if group.is_empty() {
+            return Err(anyhow!("Group is empty"));
+        }
+
+        match group.parse::<u32>() {
+            Ok(gid) => Ok(gid),
+            Err(outer_e) => {
+                debug!(
+                    "parse_group_string: failed to parse {} as u32, using it as a group name - error {outer_e}",
+                    group
+                );
+                self.get_gid_from_group_name(group)
+            }
+        }
+    }
+
     // Convert Docker image config to policy data.
     pub fn get_process(
         &self,
@@ -353,6 +400,7 @@ impl Container {
          */
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
+                let mut explicit_gid = false;
                 if image_user.contains(':') {
                     debug!(
                         "Container::get_process: splitting Docker config user = {:?}",
@@ -372,9 +420,25 @@ impl Container {
                         );
                         process.User.UID = self.parse_user_string(user[0]);
 
-                        debug!(
-                            "Container::get_process: overriding OCI container GID with UID:GID mapping from /etc/passwd"
-                        );
+                        if !user[1].is_empty() {
+                            match self.parse_group_string(user[1]) {
+                                Ok(gid) => {
+                                    process.User.GID = gid;
+                                    process.User.AdditionalGids.insert(gid);
+                                    explicit_gid = true;
+                                    debug!(
+                                        "Container::get_process: set GID = {gid} from explicit image user group = {}",
+                                        user[1]
+                                    );
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Container::get_process: failed to parse explicit group from image user = {:?}, error {e}",
+                                        image_user
+                                    );
+                                }
+                            }
+                        }
                     }
                 } else {
                     debug!(
@@ -386,25 +450,30 @@ impl Container {
                     debug!("Container::get_process: Using UID:GID mapping from /etc/passwd");
                 }
 
-                match self.get_gid_from_passwd_uid(process.User.UID) {
-                    Ok(gid) => {
-                        process.User.GID = gid;
-                        debug!(
-                            "Container::get_process: set GID = {gid} from container image for UID = {}",
-                            process.User.UID
-                        );
+                if !explicit_gid {
+                    debug!(
+                        "Container::get_process: no explicit image group resolved, using UID:GID mapping from /etc/passwd"
+                    );
+                    match self.get_gid_from_passwd_uid(process.User.UID) {
+                        Ok(gid) => {
+                            process.User.GID = gid;
+                            debug!(
+                                "Container::get_process: set GID = {gid} from container image for UID = {}",
+                                process.User.UID
+                            );
 
-                        process.User.AdditionalGids.insert(gid);
-                        debug!(
-                            "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
-                            &process.User
-                        );
-                    }
-                    Err(e) => {
-                        debug!(
-                            "Container::get_process: no GID for UID = {} in container image, error {e}",
-                            process.User.UID
-                        );
+                            process.User.AdditionalGids.insert(gid);
+                            debug!(
+                                "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
+                                &process.User
+                            );
+                        }
+                        Err(e) => {
+                            debug!(
+                                "Container::get_process: no GID for UID = {} in container image, error {e}",
+                                process.User.UID
+                            );
+                        }
                     }
                 }
             }
@@ -765,4 +834,51 @@ fn parse_group_file(group: &str) -> Result<Vec<GroupRecord>> {
     }
 
     Ok(records)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn container_with_image_user(user: &str) -> Container {
+        // Container.passwd and Container.group hold raw /etc/passwd and
+        // /etc/group contents extracted from image layers. This fixture models
+        // an image where www-data is UID 33/GID 33 and wheel is GID 10.
+        Container {
+            image: "test-image".to_string(),
+            config_layer: DockerConfigLayer {
+                config: DockerImageConfig {
+                    User: Some(user.to_string()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            passwd: "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin\n".to_string(),
+            group: "www-data:x:33:\nwheel:x:10:\n".to_string(),
+        }
+    }
+
+    #[test]
+    fn image_user_with_numeric_group_uses_group_component() {
+        let container = container_with_image_user("33:10");
+        let mut process = policy::KataProcess::default();
+
+        container.get_process(&mut process, false, false);
+
+        assert_eq!(process.User.UID, 33);
+        assert_eq!(process.User.GID, 10);
+        assert!(process.User.AdditionalGids.contains(&10));
+    }
+
+    #[test]
+    fn image_user_with_named_group_uses_group_component() {
+        let container = container_with_image_user("www-data:wheel");
+        let mut process = policy::KataProcess::default();
+
+        container.get_process(&mut process, false, false);
+
+        assert_eq!(process.User.UID, 33);
+        assert_eq!(process.User.GID, 10);
+        assert!(process.User.AdditionalGids.contains(&10));
+    }
 }

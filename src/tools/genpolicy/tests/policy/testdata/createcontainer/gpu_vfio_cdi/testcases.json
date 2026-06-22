@@ -71,7 +71,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -177,7 +177,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -281,7 +281,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -387,7 +387,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -493,7 +493,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -598,7 +598,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -704,7 +704,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -810,7 +810,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -916,7 +916,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -1006,7 +1006,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
@@ -1095,7 +1095,7 @@
           "Rlimits": [],
           "SelinuxLabel": "",
           "Terminal": false,
-          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+          "User": {"AdditionalGids": [65535], "GID": 65535, "UID": 65535, "Username": ""}
         },
         "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,

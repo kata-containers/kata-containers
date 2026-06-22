@@ -303,10 +303,10 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0,
-              1000
+              1000,
+              65535
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }
