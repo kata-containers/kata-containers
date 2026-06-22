@@ -21,7 +21,8 @@ source "/etc/os-release" || source "/usr/lib/os-release"
 [[ -n "${BASH_VERSION:-}" ]] && set -o errtrace
 [[ -n "${DEBUG:-}" ]] && set -o xtrace
 
-readonly MONITOR_HTTP_ENDPOINT="127.0.0.1:8090"
+readonly MONITOR_HTTP_PORT="8090"
+readonly MONITOR_HTTPS_PORT="8443"
 # we should collect few hundred metrics, let's put a reasonable minimum
 readonly MONITOR_MIN_METRICS_NUM=200
 readonly TIMEOUT="20s"
@@ -38,6 +39,9 @@ KATA_MONITOR_PID=""
 TMPATH=$(mktemp -d -t kata-monitor-test-XXXXXXXXX)
 METRICS_FILE="${TMPATH}/metrics.txt"
 MONITOR_LOG_FILE="${TMPATH}/kata-monitor.log"
+MONITOR_TLS_DIR="${TMPATH}/tls"
+# Set by run_monitor_tests before each round.
+MONITOR_ENDPOINT=""
 CACHE_UPD_TIMEOUT_SEC=${CACHE_UPD_TIMEOUT_SEC:-20}
 POD_ID=""
 CID=""
@@ -61,7 +65,7 @@ echo_ok() {
 	echo "OK: ${msg}"
 }
 
-# quiet crictrl
+# quiet crictl
 qcrictl() {
 	sudo crictl "$@" > /dev/null
 }
@@ -94,15 +98,35 @@ cleanup() {
 	rm -rf "${TMPATH}"
 }
 
+generate_tls_certs() {
+	mkdir -p "${MONITOR_TLS_DIR}"
+
+	openssl genrsa -out "${MONITOR_TLS_DIR}/ca.key" 2048 2>/dev/null
+	openssl req -x509 -new -nodes -key "${MONITOR_TLS_DIR}/ca.key" \
+		-subj "/CN=kata-monitor-test-ca" -days 1 \
+		-out "${MONITOR_TLS_DIR}/ca.crt" 2>/dev/null
+	openssl genrsa -out "${MONITOR_TLS_DIR}/tls.key" 2048 2>/dev/null
+	openssl req -new -key "${MONITOR_TLS_DIR}/tls.key" \
+		-subj "/CN=kata-monitor-test" \
+		-out "${MONITOR_TLS_DIR}/tls.csr" 2>/dev/null
+	openssl x509 -req -in "${MONITOR_TLS_DIR}/tls.csr" \
+		-CA "${MONITOR_TLS_DIR}/ca.crt" \
+		-CAkey "${MONITOR_TLS_DIR}/ca.key" \
+		-CAcreateserial \
+		-out "${MONITOR_TLS_DIR}/tls.crt" -days 1 \
+		-extfile <(echo "subjectAltName=IP:127.0.0.1") 2>/dev/null
+}
+
 start_kata_monitor() {
 	local args="$1"
 
 	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
-		# `--network host` keeps the default 127.0.0.1:8090 bind
-		# reachable from the host-side test code without having to
-		# publish a port. Mount /run/containerd so the monitor can
-		# reach containerd's CRI socket, plus the kata sandbox base
-		# path for the per-sandbox shim-monitor sockets.
+		# `--network host` keeps the listen address reachable from the
+		# host-side test code without having to publish a port. Mount
+		# /run/containerd so the monitor can reach containerd's CRI
+		# socket, the kata sandbox base path for per-sandbox shim-monitor
+		# sockets, and the TLS cert dir (harmless when TLS flags are not
+		# in args).
 
 		# Ensure /run/vc/sbs/ exists on the host so the readonly mount
 		# does not fail before the first kata sandbox is created.
@@ -114,6 +138,7 @@ start_kata_monitor() {
 			--network host \
 			-v /run/containerd:/run/containerd:ro \
 			-v /run/vc/sbs:/run/vc/sbs:ro \
+			-v "${MONITOR_TLS_DIR}:${MONITOR_TLS_DIR}:ro" \
 			"${KATA_MONITOR_IMAGE}" \
 			${args} --log-level trace > /dev/null
 		# Stream container logs into the same file the binary path
@@ -141,7 +166,8 @@ stop_kata_monitor() {
 
 	[[ -n "${KATA_MONITOR_PID}" ]] \
 		&& [[ -d "/proc/${KATA_MONITOR_PID}" ]] \
-		&& kill -9 "${KATA_MONITOR_PID}"
+		&& kill -9 "${KATA_MONITOR_PID}" || true
+	KATA_MONITOR_PID=""
 }
 
 create_sandbox_json() {
@@ -228,7 +254,7 @@ is_sandbox_there() {
 	local podid=${1}
 	local sbs s
 
-	sbs=$(sudo curl -s "${MONITOR_HTTP_ENDPOINT}/sandboxes")
+	sbs=$(curl -sk "${MONITOR_ENDPOINT}/sandboxes")
 	if [[ -n "${sbs}" ]]; then
 		for s in ${sbs}; do
 			if [[ "${s}" = "${podid}" ]]; then
@@ -267,6 +293,39 @@ is_sandbox_missing_iterate() {
 	return "${FALSE}"
 }
 
+# run_monitor_tests <scheme> <port>
+#
+# Runs the cache and metrics assertions against a running kata-monitor
+# instance. Sets MONITOR_ENDPOINT from the given scheme and port so that
+# all helper functions use the correct URL for this round.
+run_monitor_tests() {
+	local scheme="$1"
+	local port="$2"
+	MONITOR_ENDPOINT="${scheme}://127.0.0.1:${port}"
+
+	title "kata-monitor cache update checks (${scheme})"
+
+	CURRENT_TASK="retrieve ${POD_ID} in kata-monitor cache"
+	is_sandbox_there_iterate "${POD_ID}" || error_with_msg
+	echo_ok "${CURRENT_TASK}"
+
+	CURRENT_TASK="look for runc pod ${RUNC_POD_ID} in kata-monitor cache"
+	is_sandbox_there_iterate "${RUNC_POD_ID}" && error_with_msg "cache: got runc pod ${RUNC_POD_ID}"
+	echo_ok "runc pod ${RUNC_POD_ID} skipped from kata-monitor cache"
+
+	title "kata-monitor metrics retrieval (${scheme})"
+
+	CURRENT_TASK="retrieve metrics from kata-monitor"
+	curl -sk "${MONITOR_ENDPOINT}/metrics" > "${METRICS_FILE}"
+	echo_ok "${CURRENT_TASK}"
+
+	CURRENT_TASK="retrieve metrics for pod ${POD_ID}"
+	METRICS_COUNT=$(grep -c "${POD_ID}" "${METRICS_FILE}" || true)
+	[[ "${METRICS_COUNT}" -lt "${MONITOR_MIN_METRICS_NUM}" ]] \
+		&& error_with_msg "got too few metrics (#${METRICS_COUNT})"
+	echo_ok "${CURRENT_TASK} - found #${METRICS_COUNT} metrics"
+}
+
 main() {
 	local args=""
 
@@ -295,39 +354,40 @@ main() {
 	echo_ok "${CURRENT_TASK} - POD ID:${POD_ID}, CID:${CID}"
 
 	###########################
-	title "start kata-monitor"
+	title "generate TLS certificates"
 
-	CURRENT_TASK="start kata-monitor"
-	start_kata_monitor "${args}"
+	CURRENT_TASK="generate TLS certificates"
+	generate_tls_certs
+	echo_ok "${CURRENT_TASK}"
+
+	###########################
+	title "start kata-monitor (plain HTTP)"
+
+	CURRENT_TASK="start kata-monitor (plain HTTP)"
+	start_kata_monitor "--listen-address=127.0.0.1:${MONITOR_HTTP_PORT}"
 	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
 		echo_ok "${CURRENT_TASK} (image ${KATA_MONITOR_IMAGE})"
 	else
 		echo_ok "${CURRENT_TASK} (pid ${KATA_MONITOR_PID})"
 	fi
 
-	###########################
-	title "kata-monitor cache update checks"
+	run_monitor_tests http "${MONITOR_HTTP_PORT}"
 
-	CURRENT_TASK="retrieve ${POD_ID} in kata-monitor cache"
-	is_sandbox_there_iterate "${POD_ID}" || error_with_msg
-	echo_ok "${CURRENT_TASK}"
-
-	CURRENT_TASK="look for runc pod ${RUNC_POD_ID} in kata-monitor cache"
-	is_sandbox_there_iterate "${RUNC_POD_ID}" && error_with_msg "cache: got runc pod ${RUNC_POD_ID}"
-	echo_ok "runc pod ${RUNC_POD_ID} skipped from kata-monitor cache"
+	stop_kata_monitor
 
 	###########################
-	title "kata-monitor metrics retrieval"
+	title "start kata-monitor (TLS HTTPS)"
 
-	CURRENT_TASK="retrieve metrics from kata-monitor"
-	curl -s "${MONITOR_HTTP_ENDPOINT}/metrics" > "${METRICS_FILE}"
-	echo_ok "${CURRENT_TASK}"
+	CURRENT_TASK="start kata-monitor (TLS HTTPS)"
+	start_kata_monitor \
+		"--listen-address=127.0.0.1:${MONITOR_HTTPS_PORT} --tls-cert-file=${MONITOR_TLS_DIR}/tls.crt --tls-key-file=${MONITOR_TLS_DIR}/tls.key"
+	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
+		echo_ok "${CURRENT_TASK} (image ${KATA_MONITOR_IMAGE})"
+	else
+		echo_ok "${CURRENT_TASK} (pid ${KATA_MONITOR_PID})"
+	fi
 
-	CURRENT_TASK="retrieve metrics for pod ${POD_ID}"
-	METRICS_COUNT=$(grep -c "${POD_ID}" "${METRICS_FILE}" || true)
-	[[ "${METRICS_COUNT}" -lt "${MONITOR_MIN_METRICS_NUM}" ]] \
-		&& error_with_msg "got too few metrics (#${METRICS_COUNT})"
-	echo_ok "${CURRENT_TASK} - found #${METRICS_COUNT} metrics"
+	run_monitor_tests https "${MONITOR_HTTPS_PORT}"
 
 	###########################
 	title "remove kata workload"
@@ -342,6 +402,8 @@ main() {
 	CURRENT_TASK="verify removal of ${POD_ID} from kata-monitor cache"
 	is_sandbox_missing_iterate "${POD_ID}" || error_with_msg "pod ${POD_ID} was not removed"
 	echo_ok "${CURRENT_TASK}"
+
+	stop_kata_monitor
 
 	###########################
 	CURRENT_TASK="cleanup"
