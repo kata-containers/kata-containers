@@ -1896,18 +1896,28 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		return errors.New("cannot determine QEMU PID")
 	}
 	pid := pids[0]
+	var waitErr error
 	if pid > 0 {
-		if waitOnly {
-			err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
-			if err != nil {
-				return err
-			}
-		} else {
+		if !waitOnly {
 			err = syscall.Kill(pid, syscall.SIGKILL)
 			if err != nil {
 				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
 				return err
 			}
+		}
+		// Wait for QEMU to actually exit regardless of whether we issued the kill syscall.
+		// Without this, the caller may proceed to delete the sandbox cgroup while QEMU threads
+		// are still alive in it, making the cgroup undeletable.
+		//
+		// A timeout on its own is not reported as an error here: WaitLocalProcess falls back to
+		// SIGKILL and only fails if that kill could not be delivered, which means QEMU may still
+		// be running. Report that so the sandbox is not recorded as cleanly stopped, but keep
+		// going first so the virtiofs daemon is still torn down.
+		if waitErr = utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger()); waitErr != nil {
+			if waitOnly {
+				return waitErr
+			}
+			q.Logger().WithError(waitErr).Error("qemu may still be running; could not confirm it exited")
 		}
 	}
 
@@ -1917,7 +1927,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		}
 	}
 
-	return nil
+	return waitErr
 }
 
 func (q *qemu) cleanupVM() error {
