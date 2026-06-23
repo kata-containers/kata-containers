@@ -41,7 +41,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
+      snapshotter: "blockfile"
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.

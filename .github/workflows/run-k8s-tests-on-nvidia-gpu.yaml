@@ -45,10 +45,10 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { name: nvidia-gpu,                  vmm: qemu-nvidia-gpu,                runner: amd64-nvidia-a100,     coco: false },
-          { name: nvidia-gpu-runtime-rs,       vmm: qemu-nvidia-gpu-runtime-rs,     runner: amd64-nvidia-a100,     coco: false },
-          { name: nvidia-gpu-snp,              vmm: qemu-nvidia-gpu-snp,            runner: amd64-nvidia-h100-snp, coco: true },
-          { name: nvidia-gpu-snp-runtime-rs,   vmm: qemu-nvidia-gpu-snp-runtime-rs, runner: amd64-nvidia-h100-snp, coco: true },
+          { name: nvidia-gpu,                  vmm: qemu-nvidia-gpu,                runner: amd64-nvidia-a100,     coco: false, snapshotter: "" },
+          { name: nvidia-gpu-runtime-rs,       vmm: qemu-nvidia-gpu-runtime-rs,     runner: amd64-nvidia-a100,     coco: false, snapshotter: "blockfile", blockfile_scratch_size: 64G },
+          { name: nvidia-gpu-snp,              vmm: qemu-nvidia-gpu-snp,            runner: amd64-nvidia-h100-snp, coco: true, snapshotter: "nydus" },
+          { name: nvidia-gpu-snp-runtime-rs,   vmm: qemu-nvidia-gpu-snp-runtime-rs, runner: amd64-nvidia-h100-snp, coco: true, snapshotter: "nydus" },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
@@ -62,8 +62,8 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
       KBS: ${{ matrix.environment.coco && 'true' || 'false' }}
-      SNAPSHOTTER: ${{ matrix.environment.coco && 'nydus' || '' }}
-      USE_EXPERIMENTAL_SNAPSHOTTER_SETUP: ${{ matrix.environment.coco && 'true' || 'false' }}
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
+      BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE: ${{ matrix.environment.blockfile_scratch_size || '10G' }}
       K8S_TEST_HOST_TYPE: baremetal
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -104,6 +104,10 @@ jobs:
         if: matrix.environment.coco
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
+      - name: Configure ${{ matrix.environment.snapshotter }} snapshotter
+        if: matrix.environment.snapshotter == 'blockfile'
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
         timeout-minutes: 20

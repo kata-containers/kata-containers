@@ -30,6 +30,9 @@ export KBS="${KBS:-false}"
 export KBS_INGRESS="${KBS_INGRESS:-}"
 export KUBERNETES="${KUBERNETES:-}"
 export SNAPSHOTTER="${SNAPSHOTTER:-}"
+export BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE="${BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE:-10G}"
+export BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE="${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE:-/opt/containerd/blockfile-scratch.img}"
+export BLOCKFILE_SNAPSHOTTER_ROOT_PATH="${BLOCKFILE_SNAPSHOTTER_ROOT_PATH:-/var/lib/containerd/io.containerd.snapshotter.v1.blockfile}"
 export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export PULL_TYPE="${PULL_TYPE:-default}"
@@ -149,11 +152,24 @@ EOF
 	sudo dmsetup status -v
 }
 
+function _setup_blockfile_device() {
+	sudo mkdir -p "$(dirname "${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE}")"
+	sudo truncate -s "${BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE}" "${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE}"
+	sudo mkfs.ext4 -F "${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE}"
+}
+
 function configure_snapshotter() {
 	echo "::group::Configuring ${SNAPSHOTTER}"
 
 	case "${SNAPSHOTTER}" in
 		devmapper) configure_devmapper ;;
+		blockfile)
+			# Create the formatted scratch image required by containerd's blockfile
+			# snapshotter. Plugin config and per-shim snapshotter mapping are applied
+			# by kata-deploy via helm_helper (containerd.userDropIn and
+			# SNAPSHOTTER_HANDLER_MAPPING).
+			_setup_blockfile_device
+			;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
 
@@ -196,6 +212,10 @@ function deploy_kata() {
 		export USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 		SNAPSHOTTER="nydus"
 		EXPERIMENTAL_FORCE_GUEST_PULL=false
+	fi
+
+	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-runtime-rs" ]] && [[ -z "${SNAPSHOTTER}" ]]; then
+		SNAPSHOTTER="blockfile"
 	fi
 
 	ANNOTATIONS="default_vcpus"

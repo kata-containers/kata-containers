@@ -466,6 +466,9 @@ endif
     DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
     # NVIDIA profile: rootfs block driver (avoid virtio-pmem/DAX for this stack)
     VMROOTFSDRIVER_NV := virtio-blk-pci
+    # NVIDIA runtime-rs with blockfile snapshotter: pass container rootfs as a block
+    # device (virtio-blk-pci) with no virtio-fs shared mount.
+    DEFSHAREDFS_QEMU_NVIDIA_GPU_RUNTIME_RS := none
     # Agent client: hybrid vsock retry delay (ms); vsock path uses this as initial backoff (clamped in agent)
     DEFDIALTIMEOUTMS_NV := 1000
     # Go qemu-nvidia-gpu dial_timeout is 1200s; runtime-rs uses ms for reconnect_timeout_ms
@@ -588,6 +591,7 @@ USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
 USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += CONFIG_QEMU_NVIDIA_GPU_IN
+USER_VARS += DEFSHAREDFS_QEMU_NVIDIA_GPU_RUNTIME_RS
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILTIN_DB

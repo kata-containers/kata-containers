@@ -885,6 +885,21 @@ function helm_helper() {
 			yq -i ".snapshotter.erofsMergeMode = \"${EROFS_MERGE_MODE}\"" "${values_yaml}"
 		fi
 
+		if [[ "${SNAPSHOTTER}" == "blockfile" ]]; then
+			BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE="${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE:-/opt/containerd/blockfile-scratch.img}"
+			BLOCKFILE_SNAPSHOTTER_ROOT_PATH="${BLOCKFILE_SNAPSHOTTER_ROOT_PATH:-/var/lib/containerd/io.containerd.snapshotter.v1.blockfile}"
+
+			HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.blockfile']"$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  root_path = \"${BLOCKFILE_SNAPSHOTTER_ROOT_PATH}\""$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  scratch_file = \"${BLOCKFILE_SNAPSHOTTER_SCRATCH_FILE}\""$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  fs_type = \"ext4\""$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  mount_options = []"$'\n'
+			HELM_CONTAINERD_USER_DROP_IN+="  recreate_scratch = false"
+
+			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
+				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
+		fi
+
 		if [[ -z "${HELM_SHIMS}" ]]; then
 			die "A list of shims is expected but none was provided"
 		fi
