@@ -74,12 +74,13 @@ impl SPDKVolume {
             }
         }
 
-        let block_driver = get_block_device_info(d).await.block_device_driver;
+        let block_dev_info = get_block_device_info(d).await;
 
         let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
             device_type: VhostUserType::Blk,
-            driver_option: block_driver,
+            driver_option: block_dev_info.block_device_driver,
+            reconnect_time: block_dev_info.vhost_user_reconnect_timeout_sec,
             ..Default::default()
         };
 
