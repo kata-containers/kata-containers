@@ -89,6 +89,10 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	// virtio-mem requires its hotplug region size to be a multiple of the
+	// virtio-mem block size (128 MiB). cloud-hypervisor rejects unaligned sizes
+	// with "Virtio-mem size is not aligned".
+	virtioMemBlockSizeMiB = 128
 )
 
 // Interface that hides the implementation of openAPI client
@@ -109,6 +113,8 @@ type clhClient interface {
 	BootVM(ctx context.Context) (*http.Response, error)
 	// Add/remove CPUs to/from the VM
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
+	// Resize a memory zone of the VM
+	VmResizeZonePut(ctx context.Context, vmResizeZone chclient.VmResizeZone) (*http.Response, error)
 	// Add VFIO PCI device to the VM
 	VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Add a new disk device to the VM
@@ -152,6 +158,10 @@ func (c *clhClientApi) BootVM(ctx context.Context) (*http.Response, error) {
 
 func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
 	return c.ApiInternal.VmResizePut(ctx).VmResize(vmResize).Execute()
+}
+
+func (c *clhClientApi) VmResizeZonePut(ctx context.Context, vmResizeZone chclient.VmResizeZone) (*http.Response, error) {
+	return c.ApiInternal.VmResizeZonePut(ctx).VmResizeZone(vmResizeZone).Execute()
 }
 
 func (c *clhClientApi) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
@@ -609,25 +619,41 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			// So we need to set shared to true in this case.
 			memoryZoneConfig.SetShared(true)
 			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
-
-			if !clh.config.ConfidentialGuest {
-				// TODO: Remove this warning once memory hotplugging is supported
-				// for template VMs.
-				//
-				// Memory hotplug is intentionally not configured for template VMs.
-				// Resizing a memory zone requires the virtio-mem hotplug method
-				// (cloud-hypervisor rejects the default ACPI hotplug on a zone that
-				// carries a hotplug_size), which is not currently supported in the
-				// templating path. As a result, VMs restored from this template
-				// cannot grow their memory beyond the template's boot size.
-				clh.Logger().Warn("memory hotplugging is currently unsupported for template VMs")
-			}
 		} else {
 			// When BootFromTemplate is true, set shared=false to ensure Copy-On-Write is used for the memory file.
 			// So that the VM can have its own private memory.
 			memoryZoneConfig.SetShared(false)
 			clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
 		}
+
+		// Enable memory hotplug for template VMs so that a VM restored from the
+		// template can grow its memory to match the incoming pod's resource limits.
+		// A file-backed memory zone can only be resized via the virtio-mem hotplug
+		// method - cloud-hypervisor rejects the default ACPI hotplug on a zone that
+		// carries a hotplug_size. Configuring this at template-creation time
+		// (BootToBeTemplate) captures the hotplug_method/hotplug_size in the snapshot
+		// so every VM restored from the template inherits a resizable memory zone.
+		// This is intentionally not enabled for confidential guests.
+		if !clh.config.ConfidentialGuest {
+			// The hotplug region is the headroom between the boot memory size and
+			// the configured maximum memory. Note that DefaultMaxMemorySize resolves
+			// to the total host memory when default_maxmemory is set to 0, which is
+			// usually not 128 MiB-aligned, so the region must be aligned down to the
+			// virtio-mem block size or cloud-hypervisor rejects it at boot.
+			var hotplugSizeMiB uint64
+			if clh.config.DefaultMaxMemorySize > uint64(clh.config.MemorySize) {
+				hotplugSizeMiB = clh.config.DefaultMaxMemorySize - uint64(clh.config.MemorySize)
+			}
+			hotplugSizeMiB = (hotplugSizeMiB / virtioMemBlockSizeMiB) * virtioMemBlockSizeMiB
+
+			if hotplugSizeMiB > 0 {
+				clh.vmconfig.Memory.SetHotplugMethod("VirtioMem")
+				memoryZoneConfig.SetHotplugSize(int64((utils.MemUnit(hotplugSizeMiB) * utils.MiB).ToBytes()))
+			} else {
+				clh.Logger().Warn("memory hotplug region too small to align to the virtio-mem block size; restored template VMs will not be able to grow their memory")
+			}
+		}
+
 		memoryZoneConfig.SetFile(clh.config.MemoryPath)
 		clh.vmconfig.Memory.Zones = &[]chclient.MemoryZoneConfig{
 			*memoryZoneConfig,
@@ -1372,6 +1398,14 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		return 0, MemoryDevice{}, err
 	}
 
+	// VMs booted with a file-backed memory zone (the template/restore path) expose
+	// their hotpluggable memory on the zone rather than on the top-level memory
+	// config, and must be resized per-zone via the virtio-mem hotplug method. The
+	// global vm.resize API does not resize zone-backed memory.
+	if info.Config.Memory.Zones != nil && len(*info.Config.Memory.Zones) > 0 {
+		return clh.resizeMemoryZone(ctx, (*info.Config.Memory.Zones)[0], reqMemMB, memoryBlockSizeMB)
+	}
+
 	// HotplugSize can be nil in cases where Hotplug is not supported, as Cloud Hypervisor API
 	// does *not* allow us to set 0 as the HotplugSize.
 	maxHotplugSize := 0 * utils.Byte
@@ -1428,6 +1462,73 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	if _, err = cl.VmResizePut(ctx, resize); err != nil {
 		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
 		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
+		return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
+	}
+
+	return uint32(newMem.ToMiB()), MemoryDevice{SizeMB: int(hotplugSize.ToMiB())}, nil
+}
+
+// resizeMemoryZone grows a file-backed memory zone (used by template/restore VMs)
+// to reqMemMB using cloud-hypervisor's per-zone virtio-mem hotplug API. The zone's
+// boot size plus its hotplug_size define the maximum total size it can reach.
+func (clh *cloudHypervisor) resizeMemoryZone(ctx context.Context, zone chclient.MemoryZoneConfig, reqMemMB uint32, memoryBlockSizeMB uint32) (uint32, MemoryDevice, error) {
+	zoneSize := utils.MemUnit(zone.Size) * utils.Byte
+
+	// hotplug_size is the additional memory that can be hotplugged on top of the
+	// zone's boot size. If it is unset the zone cannot grow.
+	maxHotplugSize := 0 * utils.Byte
+	if zone.HotplugSize != nil {
+		maxHotplugSize = utils.MemUnit(*zone.HotplugSize) * utils.Byte
+	}
+	maxMem := zoneSize + maxHotplugSize
+
+	// Current zone size is the boot size plus whatever has already been hotplugged.
+	currentMem := zoneSize
+	if zone.HotpluggedSize != nil {
+		currentMem += utils.MemUnit(*zone.HotpluggedSize) * utils.Byte
+	}
+
+	newMem := utils.MemUnit(reqMemMB) * utils.MiB
+	if newMem > maxMem {
+		clh.Logger().WithFields(log.Fields{"request": newMem, "max": maxMem}).Debug("capping memory zone request to max size")
+		newMem = maxMem
+	}
+
+	if currentMem == newMem {
+		clh.Logger().WithField("memory", reqMemMB).Debug("memory zone already has requested memory")
+		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
+	}
+
+	if currentMem > newMem {
+		clh.Logger().Warn("Remove memory is not supported, nothing to do")
+		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
+	}
+
+	// Align the amount of memory being added to the guest's memory block size.
+	blockSize := utils.MemUnit(memoryBlockSizeMB) * utils.MiB
+	hotplugSize := (newMem - currentMem).AlignMem(blockSize)
+	newMem = currentMem + hotplugSize
+	if newMem > maxMem {
+		newMem = maxMem
+		hotplugSize = newMem - currentMem
+	}
+
+	if hotplugSize == 0*utils.Byte {
+		clh.Logger().Debug("memory zone already has requested memory (after alignment)")
+		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
+	}
+
+	cl := clh.client()
+	ctx, cancelResize := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
+	defer cancelResize()
+
+	resize := *chclient.NewVmResizeZone()
+	resize.SetId(zone.Id)
+	// OpenApi does not support uint64, convert to int64
+	resize.SetDesiredRam(int64(newMem.ToBytes()))
+	clh.Logger().WithFields(log.Fields{"zone": zone.Id, "current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory zone")
+	if _, err := cl.VmResizeZonePut(ctx, resize); err != nil {
+		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to resize memory zone %s", openAPIClientError(err))
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
 	}
 
@@ -1521,6 +1622,27 @@ func (clh *cloudHypervisor) SaveVM() error {
 	cl := clh.client()
 	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancel()
+
+	// Warn (but do not block) when snapshotting a VM whose file-backed virtio-mem
+	// zone has memory hotplugged on top of it. cloud-hypervisor restores such a zone
+	// by re-mapping the hotplug region over the zone's backing file at offset 0, which
+	// can map past the file's EOF (failing the restore / SIGBUS) and punch holes in a
+	// shared template file. Templating is unaffected because the template is
+	// snapshotted at boot, before any hotplug (hotplugged_size == 0). This is left as
+	// a warning for now so the failure mode can be observed in practice.
+	if info, err := clh.vmInfo(); err != nil {
+		return err
+	} else if info.Config.Memory != nil && info.Config.Memory.Zones != nil {
+		for _, zone := range *info.Config.Memory.Zones {
+			if zone.File != nil && *zone.File != "" && zone.HotpluggedSize != nil && *zone.HotpluggedSize > 0 {
+				clh.Logger().WithFields(log.Fields{
+					"zone":            zone.Id,
+					"file":            *zone.File,
+					"hotplugged-size": *zone.HotpluggedSize,
+				}).Warn("snapshotting a file-backed virtio-mem zone with hotplugged memory; restore of a grown file-backed virtio-mem zone is not known to be safe (possible past-EOF map / template hole-punch)")
+			}
+		}
+	}
 
 	snapshotDir := filepath.Dir(clh.config.MemoryPath)
 	// Create snapshot config with file URL to template path

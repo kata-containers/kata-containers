@@ -108,6 +108,11 @@ func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmRes
 }
 
 //nolint:golint
+func (c *clhClientMock) VmResizeZonePut(ctx context.Context, vmResizeZone chclient.VmResizeZone) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
 func (c *clhClientMock) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
 	return chclient.PciDeviceInfo{}, nil, nil
 }
@@ -616,6 +621,39 @@ func TestClhSaveVM(t *testing.T) {
 		expectedDestinationURL := "file://" + filepath.Dir(clhConfig.MemoryPath)
 		assert.Equal(expectedDestinationURL, mockClient.snapshotRequest.GetDestinationUrl())
 	}
+}
+
+func TestClhSaveVMWarnsHotpluggedFileBackedZone(t *testing.T) {
+	assert := assert.New(t)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+	clhConfig.MemoryPath = filepath.Join(store.RunVMStoragePath(), "memory")
+	clhConfig.VMStorePath = store.RunVMStoragePath()
+	clhConfig.RunStorePath = store.RunStoragePath()
+
+	mockClient := &clhClientMock{}
+	// Simulate a restored template VM that has grown its file-backed virtio-mem
+	// zone (hotplugged_size > 0). SaveVM should warn but still proceed.
+	zone := chclient.NewMemoryZoneConfig("mem0", int64(512*utils.MiB.ToBytes()))
+	zone.SetFile(clhConfig.MemoryPath)
+	zone.HotpluggedSize = func(i int64) *int64 { return &i }(int64(1024 * utils.MiB.ToBytes()))
+	mockClient.vmInfo.Config = *chclient.NewVmConfig(*chclient.NewPayloadConfig())
+	mockClient.vmInfo.Config.Memory = chclient.NewMemoryConfig(0)
+	mockClient.vmInfo.Config.Memory.Zones = &[]chclient.MemoryZoneConfig{*zone}
+
+	clh := &cloudHypervisor{
+		config:    clhConfig,
+		APIClient: mockClient,
+	}
+
+	err = clh.SaveVM()
+	assert.NoError(err)
+	// The snapshot must still have been attempted despite the warning.
+	assert.NotNil(mockClient.snapshotRequest)
 }
 
 func TestCloudHypervisorStartSandbox(t *testing.T) {
