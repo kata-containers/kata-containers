@@ -113,10 +113,14 @@ impl SPDKVolume {
 
         let mut device_id = String::new();
         if let DeviceType::VhostUserBlk(device) = device_info {
-            // blk, mmioblk
-            storage.driver = device.config.driver_option;
-            // /dev/vdX
-            storage.source = device.config.virt_path;
+            storage.driver = device.config.driver_option.clone();
+            // Use PCI path so the agent can wait for the device to appear,
+            // falling back to virt_path (/dev/vdX) for non-PCI transports.
+            storage.source = if let Some(ref pci_path) = device.config.pci_path {
+                pci_path.to_string()
+            } else {
+                device.config.virt_path.clone()
+            };
             device_id = device.device_id;
         }
 
