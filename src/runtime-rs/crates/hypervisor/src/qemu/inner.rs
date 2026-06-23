@@ -959,10 +959,12 @@ impl QemuInner {
                 qmp.hotunplug_block_device(&driver, index)
                     .context("hotunplug block device")?;
             }
+            DeviceType::VhostUserBlk(vhu_blk_dev) => {
+                qmp.hotunplug_vhost_user_blk_device(&vhu_blk_dev.device_id)?;
+            }
             DeviceType::Network(_)
             | DeviceType::Vfio(_)
             | DeviceType::VfioModern(_)
-            | DeviceType::VhostUserBlk(_)
             | DeviceType::VhostUserNetwork(_)
             | DeviceType::ShareFs(_)
             | DeviceType::HybridVsock(_)

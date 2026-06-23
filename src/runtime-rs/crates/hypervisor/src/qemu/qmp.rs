@@ -1257,6 +1257,30 @@ impl Qmp {
         Ok(pci_path)
     }
 
+    pub fn hotunplug_vhost_user_blk_device(&mut self, device_id: &str) -> Result<()> {
+        let chardev_id = format!("char-{device_id}");
+
+        self.qmp
+            .execute(&qmp::device_del {
+                id: device_id.to_string(),
+            })
+            .map_err(|e| anyhow!("device_del {}: {:?}", device_id, e))?;
+
+        // device_del is asynchronous — wait for the guest to acknowledge
+        // before tearing down the chardev backend.
+        self.wait_for_device_deleted(device_id, DEVICE_DELETED_TIMEOUT)
+            .context("hotunplug_vhost_user_blk_device: waiting for DEVICE_DELETED")?;
+
+        self.qmp
+            .execute(&qmp::chardev_remove {
+                id: chardev_id.clone(),
+            })
+            .map_err(|e| anyhow!("chardev-remove {}: {:?}", chardev_id, e))
+            .map(|_| ())?;
+
+        Ok(())
+    }
+
     pub fn qmp_stop(&mut self) -> Result<()> {
         self.qmp
             .execute(&qmp::stop {})
