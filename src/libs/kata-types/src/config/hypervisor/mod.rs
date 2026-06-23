@@ -310,6 +310,11 @@ pub struct BlockDeviceInfo {
     #[serde(default)]
     pub vhost_user_store_path: String,
 
+    /// The timeout for reconnecting on non-server spdk sockets when the remote
+    /// end goes away. Zero disables reconnecting, and is the default.
+    #[serde(default)]
+    pub vhost_user_reconnect_timeout_sec: u32,
+
     /// List of valid annotations values for the vhost user store path.
     ///
     /// The default if not set is empty (all annotations rejected.)
