@@ -199,9 +199,11 @@ pub struct Config {
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
-    /// EROFS snapshotter mode (e.g., "integrity").
-    /// When set to "integrity", dm-verity is enabled and fsverity/immutable are disabled.
+    /// EROFS snapshotter rw-layer backing mode ("disk" or "memory").
     pub erofs_snapshotter_mode: Option<String>,
+    /// Enable dm-verity integrity for EROFS lower layers.
+    /// Independent of rw-layer backing; works with both disk and memory modes.
+    pub erofs_dmverity: bool,
 }
 
 impl Config {
@@ -340,11 +342,17 @@ impl Config {
             Vec::new()
         };
 
-        // EROFS snapshotter mode (e.g. "integrity" for dm-verity support)
+        // EROFS snapshotter rw-layer backing mode.
         let erofs_snapshotter_mode = env::var("EROFS_SNAPSHOTTER_MODE")
             .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
+
+        // EROFS dm-verity (lower-layer integrity via device-mapper).
+        let erofs_dmverity = env::var("EROFS_DMVERITY")
+            .unwrap_or_default()
+            .trim()
+            .eq_ignore_ascii_case("dmverity");
 
         let config = Config {
             node_name,
@@ -375,6 +383,7 @@ impl Config {
             custom_runtimes_enabled,
             custom_runtimes,
             erofs_snapshotter_mode,
+            erofs_dmverity,
         };
 
         // Validate the configuration
@@ -556,13 +565,13 @@ impl Config {
             }
         }
 
-        // Validate EROFS_SNAPSHOTTER_MODE
+        // Validate EROFS_SNAPSHOTTER_MODE.
         if let Some(mode) = self.erofs_snapshotter_mode.as_ref() {
             match mode.as_str() {
-                "disk" | "memory" | "integrity" => {}
+                "disk" | "memory" => {}
                 _ => {
                     return Err(anyhow::anyhow!(
-                        "Unsupported EROFS_SNAPSHOTTER_MODE: '{}'. Supported values: disk, memory, integrity",
+                        "Unsupported EROFS_SNAPSHOTTER_MODE: '{}'. Supported values: disk, memory",
                         mode
                     ));
                 }

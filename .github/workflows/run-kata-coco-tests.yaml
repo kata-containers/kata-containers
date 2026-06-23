@@ -399,7 +399,7 @@ jobs:
 
   # Generate jobs for testing CoCo on non-TEE environments with erofs-snapshotter
   run-k8s-tests-coco-nontee-with-erofs-snapshotter:
-    name: run-k8s-tests-coco-nontee-with-erofs-snapshotter-${{ matrix.erofs-mode }}
+    name: run-k8s-tests-coco-nontee-with-erofs-snapshotter-${{ matrix.erofs-mode }}-${{ matrix.erofs-dmverity }}
     strategy:
       fail-fast: false
       matrix:
@@ -412,7 +412,9 @@ jobs:
         erofs-mode:
           - disk
           - memory
-          - integrity
+        erofs-dmverity:
+          - ""
+          - dmverity
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -436,6 +438,7 @@ jobs:
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.erofs-mode }}
+      EROFS_DMVERITY: ${{ matrix.erofs-dmverity }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
       K8S_TEST_HOST_TYPE: "all"
       # We are skipping the auto generated policy tests for now,

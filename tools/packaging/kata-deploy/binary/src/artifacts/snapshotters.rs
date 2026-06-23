@@ -74,21 +74,24 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         "[\"erofs\",\"walking\"]",
     )?;
 
-    // In integrity mode, fsverity and immutable are disabled in favor of dm-verity.
-    let is_integrity = config.erofs_snapshotter_mode.as_deref() == Some("integrity");
+    // dm-verity is orthogonal to rw-layer backing — it verifies lower (erofs)
+    // layers via device-mapper regardless of whether the upper rw-layer lives on
+    // disk or in memory. When dm-verity is enabled, fsverity and immutable are
+    // disabled on the snapshotter side in favor of dm-verity.
+    let use_dmverity = config.erofs_dmverity;
 
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
-        if is_integrity { "false" } else { "true" },
+        true.to_string().as_str(),
     )?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
-        if is_integrity { "false" } else { "true" },
+        true.to_string().as_str(),
     )?;
 
-    if is_integrity {
+    if use_dmverity {
         toml_utils::set_toml_value(
             configuration_file,
             ".plugins.\"io.containerd.snapshotter.v1.erofs\".dmverity_mode",
@@ -105,14 +108,14 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index",
-        "false",
+        false.to_string().as_str(),
     )?;
 
-    if is_integrity {
+    if use_dmverity {
         toml_utils::set_toml_value(
             configuration_file,
             ".plugins.\"io.containerd.differ.v1.erofs\".enable_dmverity",
-            "true",
+            true.to_string().as_str(),
         )?;
     }
 

@@ -616,7 +616,7 @@ function deploy_k8s() {
 				sudo modprobe erofs
 
 				# Load device-mapper and dm-verity kernel modules.
-				if [[ "${EROFS_SNAPSHOTTER_MODE:-}" == "integrity" ]]; then
+				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
 					sudo modprobe dm-mod
 					sudo modprobe dm-verity
 
@@ -866,9 +866,6 @@ function helm_helper() {
 				memory)
 					erofs_default_size="0"
 					;;
-				integrity)
-					erofs_default_size="10G"
-					;;
 				*)
 					die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
 					;;
@@ -880,9 +877,17 @@ function helm_helper() {
 			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
 				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
 
-			# Pass the mode to kata-deploy so the Rust binary can configure
-			# containerd erofs plugin options (fsverity, dmverity, etc.) natively.
+			# Propagate rwlayer backing mode to kata-deploy.
 			yq -i ".snapshotter.erofsSnapshotterMode = \"${EROFS_SNAPSHOTTER_MODE}\"" "${values_yaml}"
+		fi
+
+		# EROFS dm-verity (lower-layer integrity via device-mapper).
+		# Independent of rwlayer backing (disk/memory); works with both.
+		if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
+			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
+				die "EROFS_DMVERITY is only supported with SNAPSHOTTER=erofs"
+			fi
+			yq -i '.snapshotter.erofsDmverity = true' "${values_yaml}"
 		fi
 
 		# EROFS merge mode ("merged" default, or "unmerged"). This is orthogonal
