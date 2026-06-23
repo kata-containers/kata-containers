@@ -115,6 +115,9 @@ impl KataAgent {
         info!(sl!(), "try to connect agent server through {:?}", sock);
         let stream = sock.connect(&config).await.context("connect")?;
         let fd = stream.into_raw_fd();
+        if fd < 0 {
+            return Err(anyhow::anyhow!("failed to get raw fd from agent stream"));
+        }
         info!(
             sl!(),
             "get stream raw fd {:?} with socket address: {:?} and server_port {:?}",
@@ -122,7 +125,8 @@ impl KataAgent {
             &inner.socket_address,
             inner.config.server_port
         );
-        let c = Client::new(fd);
+        // SAFETY: fd is valid and non-negative; all Stream variants wrap a UnixStream.
+        let c = unsafe { Client::from_raw_unix_socket_fd(fd) };
         inner.client = Some(c);
         inner.client_fd = fd;
         Ok(())
