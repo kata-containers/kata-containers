@@ -1192,6 +1192,17 @@ impl QemuInner {
                     );
                 }
             }
+            DeviceType::VhostUserBlk(mut vhu_blk_dev) => {
+                let pci_path = qmp.hotplug_vhost_user_blk_device(
+                    &vhu_blk_dev.device_id,
+                    &vhu_blk_dev.config.socket_path,
+                    vhu_blk_dev.config.num_queues,
+                    vhu_blk_dev.config.queue_size,
+                    vhu_blk_dev.config.reconnect_time,
+                )?;
+                vhu_blk_dev.config.pci_path = Some(pci_path);
+                return Ok(DeviceType::VhostUserBlk(vhu_blk_dev));
+            }
             _ => info!(
                 sl!(),
                 "Hotplugging for {:#?} is currently unsupported", device
