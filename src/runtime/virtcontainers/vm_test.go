@@ -46,7 +46,7 @@ func TestNewVM(t *testing.T) {
 	assert.Nil(err)
 	err = vm.Disconnect(context.Background())
 	assert.Nil(err)
-	err = vm.Save()
+	err = vm.Save(testDir)
 	assert.Nil(err)
 	err = vm.Stop(context.Background())
 	assert.Nil(err)
@@ -71,16 +71,8 @@ func TestNewVM(t *testing.T) {
 	err = vm.ReseedRNG(context.Background())
 	assert.Nil(err)
 
-	// template VM
-	config.HypervisorConfig.BootFromTemplate = true
-	_, err = NewVM(ctx, config)
-	assert.Error(err)
-
-	config.HypervisorConfig.MemoryPath = testDir
-	_, err = NewVM(ctx, config)
-	assert.Error(err)
-
-	config.HypervisorConfig.DevicesStatePath = testDir
-	_, err = NewVM(ctx, config)
+	// restore a VM from a snapshot
+	vmFromSnapshot, err := NewVMFromSnapshot(ctx, config, testDir)
 	assert.Nil(err)
+	assert.NotNil(vmFromSnapshot)
 }

@@ -73,10 +73,7 @@ func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory,
 func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.NumVCPUsF = 0
 	config.HypervisorConfig.MemorySize = 0
-	config.HypervisorConfig.BootToBeTemplate = false
-	config.HypervisorConfig.BootFromTemplate = false
-	config.HypervisorConfig.MemoryPath = ""
-	config.HypervisorConfig.DevicesStatePath = ""
+	config.HypervisorConfig.FileBackedMemory = nil
 	config.HypervisorConfig.SharedPath = ""
 	config.HypervisorConfig.VMStorePath = ""
 	config.HypervisorConfig.RunStorePath = ""

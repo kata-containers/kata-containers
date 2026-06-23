@@ -32,10 +32,6 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return fmt.Errorf("Image and initrd path cannot be both set")
 	}
 
-	if err := conf.CheckTemplateConfig(); err != nil {
-		return err
-	}
-
 	if conf.NumVCPUsF == 0 {
 		conf.NumVCPUsF = defaultVCPUs
 	}

@@ -463,6 +463,22 @@ type Param struct {
 	Value string
 }
 
+// FileBackedMemoryConfig describes guest memory that is backed by a host file.
+// It is a generic primitive used by features such as VM templating, live
+// migration and checkpoint/restore. The hypervisor layer only needs to know
+// where the backing file lives and whether it should be mapped shared or
+// private; it does not need to know which higher-level feature requested it.
+type FileBackedMemoryConfig struct {
+	// Path is the host path of the memory backing file.
+	Path string
+
+	// Shared selects the mapping mode for the backing file: MAP_SHARED when
+	// true (e.g. a template source whose memory is shared with clones) and
+	// MAP_PRIVATE/Copy-On-Write when false (e.g. a clone restored from a
+	// template or a migration target that needs its own private memory).
+	Shared bool
+}
+
 // HypervisorConfig is the hypervisor configuration.
 // nolint: govet
 type HypervisorConfig struct {
@@ -514,13 +530,12 @@ type HypervisorConfig struct {
 	// emulated.
 	HypervisorMachineType string
 
-	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	MemoryPath string
-
-	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	DevicesStatePath string
+	// FileBackedMemory describes file-backed guest memory. When non-nil the
+	// guest memory is backed by the file at Path and mapped either MAP_SHARED
+	// (Shared=true, e.g. a template source) or MAP_PRIVATE/Copy-On-Write
+	// (Shared=false, e.g. a clone restored from a template or a migration
+	// target). When nil the guest uses standard anonymous memory.
+	FileBackedMemory *FileBackedMemoryConfig
 
 	// EntropySource is the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
@@ -558,10 +573,20 @@ type HypervisorConfig struct {
 	// VMid is "" if the hypervisor is not created by the factory.
 	VMid string
 
-	// VMStorePath is the location on disk where VM information will persist
+	// VMStorePath is the root directory (typically /run/vc/vm, supplied by the
+	// persist driver's RunVMStoragePath()) under which each VM's VMM runtime
+	// artifacts live at <VMStorePath>/<id>: the hypervisor's control sockets
+	// (e.g. Cloud Hypervisor's API and hybrid-vsock sockets, QEMU's QMP and
+	// console sockets), QEMU's pid file, and the config.json/state.json files
+	// copied in when restoring a VM from a snapshot.
 	VMStorePath string
 
-	// VMStorePath is the location on disk where runtime information will persist
+	// RunStorePath is the root directory (typically /run/vc/sbs, supplied by
+	// the persist driver's RunStoragePath()) under which each sandbox's
+	// persisted state lives at <RunStorePath>/<id>: the sandbox and container
+	// state written by the persist driver. (A guest memory dump reads this
+	// state and copies it into the dump, but the dump itself — vmcore and
+	// hypervisor metadata — is written under GuestMemoryDumpPath, not here.)
 	RunStorePath string
 
 	// SELinux label for the VM
@@ -825,12 +850,6 @@ type HypervisorConfig struct {
 	// Enable SEV-SNP guests on AMD machines capable of both
 	SevSnpGuest bool
 
-	// BootToBeTemplate used to indicate if the VM is created to be a template VM
-	BootToBeTemplate bool
-
-	// BootFromTemplate used to indicate if the VM should be created from a template VM
-	BootFromTemplate bool
-
 	// DisableVhostNet is used to indicate if host supports vhost_net
 	DisableVhostNet bool
 
@@ -886,24 +905,6 @@ type HypervisorConfig struct {
 // vcpu mapping from vcpu number to thread number
 type VcpuThreadIDs struct {
 	vcpus map[int]int
-}
-
-func (conf *HypervisorConfig) CheckTemplateConfig() error {
-	if conf.BootToBeTemplate && conf.BootFromTemplate {
-		return fmt.Errorf("Cannot set both 'to be' and 'from' vm tempate")
-	}
-
-	if conf.BootToBeTemplate || conf.BootFromTemplate {
-		if conf.MemoryPath == "" {
-			return fmt.Errorf("Missing MemoryPath for vm template")
-		}
-
-		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
-			return fmt.Errorf("Missing DevicesStatePath to Load from vm template")
-		}
-	}
-
-	return nil
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -1305,7 +1306,16 @@ type Hypervisor interface {
 	// just perform cleanup.
 	StopVM(ctx context.Context, waitOnly bool) error
 	PauseVM(ctx context.Context) error
-	SaveVM() error
+	// SaveVM snapshots the running VM into snapshotDir. It is a pure
+	// hypervisor operation: the caller chooses the destination and is
+	// responsible for any feature-specific post-processing (e.g. template
+	// memory-sharing adjustments).
+	SaveVM(snapshotDir string) error
+	// RestoreVM brings up a VM by restoring it from a snapshot previously
+	// written to snapshotDir. The restored VM is left in a paused state; the
+	// caller decides when to ResumeVM and what post-restore housekeeping to
+	// perform (e.g. reseeding the RNG, syncing the guest clock).
+	RestoreVM(ctx context.Context, snapshotDir string) error
 	ResumeVM(ctx context.Context) error
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
 	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)

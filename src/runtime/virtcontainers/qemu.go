@@ -136,6 +136,11 @@ const (
 	qmpCapErrMsg  = "Failed to negotiate QMP Capabilities"
 	qmpExecCatCmd = "exec:cat"
 
+	// qemuDeviceStateFile is the file name, within a snapshot directory, that
+	// SaveVM writes the migrated VM device state to and RestoreVM reads it back
+	// from.
+	qemuDeviceStateFile = "state"
+
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
 	fallbackFileBackedMemDir = "/dev/shm"
@@ -888,25 +893,6 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 	return devices, ioThread, kernel, nil
 }
 
-func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
-	incoming := govmmQemu.Incoming{}
-
-	if q.config.BootToBeTemplate || q.config.BootFromTemplate {
-		knobs.FileBackedMem = true
-		memory.Path = q.config.MemoryPath
-
-		if q.config.BootToBeTemplate {
-			knobs.MemShared = true
-		}
-
-		if q.config.BootFromTemplate {
-			incoming.MigrationType = govmmQemu.MigrationDefer
-		}
-	}
-
-	return incoming
-}
-
 func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) {
 	target := fallbackFileBackedMemDir
 	if _, err := os.Stat(target); err != nil {
@@ -1033,7 +1019,17 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
-	incoming := q.setupTemplate(&knobs, &memory)
+	// Configure file-backed guest memory when requested (e.g. for VM
+	// templating). The backing path and sharing mode come straight from the
+	// generic config; the hypervisor does not need to know which feature
+	// requested it. The incoming-migration setup needed to restore a clone
+	// from a snapshot is handled separately by RestoreVM, not here.
+	incoming := govmmQemu.Incoming{}
+	if q.config.FileBackedMemory != nil {
+		knobs.FileBackedMem = true
+		memory.Path = q.config.FileBackedMemory.Path
+		knobs.MemShared = q.config.FileBackedMemory.Shared
+	}
 
 	// With the current implementations, VM templating will not work with file
 	// based memory (stand-alone) or virtiofs. This is because VM templating
@@ -1041,7 +1037,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	// subsequent ones with shared=off. virtio-fs always requires shared=on for
 	// memory.
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
-		if !q.config.BootToBeTemplate && !q.config.BootFromTemplate {
+		if q.config.FileBackedMemory == nil {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
@@ -1632,12 +1628,6 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 
-	if q.config.BootFromTemplate {
-		if err = q.bootFromTemplate(); err != nil {
-			return err
-		}
-	}
-
 	if q.config.VirtioMem {
 		err = q.setupVirtioMem(ctx)
 	}
@@ -1645,7 +1635,33 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	return err
 }
 
-func (q *qemu) bootFromTemplate() error {
+// RestoreVM brings up the VM and restores its device state from a snapshot
+// previously written to snapshotDir by SaveVM. QEMU must be launched waiting
+// for an incoming migration (-incoming defer) for the restore to succeed, so
+// RestoreVM configures the incoming migration, launches the VM via StartVM and
+// then performs the migration-incoming from the snapshot. The restored VM is
+// left paused; the caller decides when to ResumeVM and what post-restore
+// housekeeping to perform.
+func (q *qemu) RestoreVM(ctx context.Context, snapshotDir string) error {
+	span, ctx := katatrace.Trace(ctx, q.Logger(), "RestoreVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
+	defer span.End()
+
+	// Launch QEMU waiting for an incoming migration so it does not boot the
+	// guest until the device state has been loaded. The memory configuration
+	// (file-backed, private) was already set up by CreateVM from
+	// FileBackedMemory.
+	q.qemuConfig.Incoming = govmmQemu.Incoming{MigrationType: govmmQemu.MigrationDefer}
+
+	if err := q.StartVM(ctx, VmStartTimeout); err != nil {
+		return err
+	}
+
+	return q.restoreDeviceState(snapshotDir)
+}
+
+// restoreDeviceState performs the QMP migration-incoming that loads the VM
+// device state saved by SaveVM into the (already launched) QEMU process.
+func (q *qemu) restoreDeviceState(snapshotDir string) error {
 	if err := q.qmpSetup(); err != nil {
 		return err
 	}
@@ -1656,7 +1672,7 @@ func (q *qemu) bootFromTemplate() error {
 		q.Logger().WithError(err).Error("set migration ignore shared memory")
 		return err
 	}
-	uri := fmt.Sprintf("exec:cat %s", q.config.DevicesStatePath)
+	uri := fmt.Sprintf("exec:cat %s", filepath.Join(snapshotDir, qemuDeviceStateFile))
 	err = q.qmpMonitorCh.qmp.ExecuteMigrationIncoming(q.qmpMonitorCh.ctx, uri)
 	if err != nil {
 		return err
@@ -2885,16 +2901,17 @@ func (q *qemu) GetVMConsole(ctx context.Context, id string) (string, string, err
 	return consoleProtoUnix, consoleURL, nil
 }
 
-func (q *qemu) SaveVM() error {
+func (q *qemu) SaveVM(snapshotDir string) error {
 	q.Logger().Info("Save sandbox")
 
 	if err := q.qmpSetup(); err != nil {
 		return err
 	}
 
-	// BootToBeTemplate sets the VM to be a template that other VMs can clone from. We would want to
-	// bypass shared memory when saving the VM to a local file through migration exec.
-	if q.config.BootToBeTemplate {
+	// When the guest memory is backed by a shared file (e.g. a template
+	// source), bypass the shared memory when saving the VM to a local file
+	// through migration exec.
+	if q.config.FileBackedMemory != nil && q.config.FileBackedMemory.Shared {
 		err := q.arch.setIgnoreSharedMemoryMigrationCaps(q.qmpMonitorCh.ctx, q.qmpMonitorCh.qmp)
 		if err != nil {
 			q.Logger().WithError(err).Error("set migration ignore shared memory")
@@ -2902,7 +2919,8 @@ func (q *qemu) SaveVM() error {
 		}
 	}
 
-	err := q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
+	deviceStatePath := filepath.Join(snapshotDir, qemuDeviceStateFile)
+	err := q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, deviceStatePath))
 	if err != nil {
 		q.Logger().WithError(err).Error("exec migration")
 		return err

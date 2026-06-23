@@ -84,14 +84,6 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 	expectedOut := defaultCPUModel
 	model := amd64.cpuModel()
 	assert.Equal(expectedOut, model)
-
-	amd64.disableNestingChecks()
-	base, ok := amd64.(*qemuAmd64)
-	assert.True(ok)
-	base.vmFactory = true
-	expectedOut = defaultCPUModel
-	model = amd64.cpuModel()
-	assert.Equal(expectedOut, model)
 }
 
 func TestQemuAmd64MemoryTopology(t *testing.T) {
