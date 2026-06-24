@@ -624,7 +624,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// If block devices are disabled, we selectively only hotplug if
 		// the mount is an encrypted block-based emptyDir, to avoid
 		// cases that could regress 20ca4d2.
-		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !Isk8sHostEmptyDir(c.mounts[i].Source)) {
+		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !IsNonTmpFSEmptyDir(c.mounts[i].Source)) {
 			c.Logger().Warn("Block device not supported")
 			continue
 		}
@@ -883,7 +883,7 @@ func (c *Container) createEphemeralDisks() error {
 	}
 
 	for i := range c.mounts {
-		if !Isk8sHostEmptyDir(c.mounts[i].Source) {
+		if !IsNonTmpFSEmptyDir(c.mounts[i].Source) {
 			continue
 		}
 

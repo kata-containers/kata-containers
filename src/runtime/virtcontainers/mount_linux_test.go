@@ -40,17 +40,17 @@ func TestIsEphemeralStorage(t *testing.T) {
 	assert.NoError(err)
 	defer syscall.Unmount(sampleEphePath, 0)
 
-	isEphe := IsEphemeralStorage(sampleEphePath)
+	isEphe := IsTmpFSEmptyDir(sampleEphePath)
 	assert.True(isEphe)
 
-	isHostEmptyDir := Isk8sHostEmptyDir(sampleEphePath)
+	isHostEmptyDir := IsNonTmpFSEmptyDir(sampleEphePath)
 	assert.False(isHostEmptyDir)
 
 	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
-	isEphe = IsEphemeralStorage(sampleEphePath)
+	isEphe = IsTmpFSEmptyDir(sampleEphePath)
 	assert.False(isEphe)
 
-	isHostEmptyDir = Isk8sHostEmptyDir(sampleEphePath)
+	isHostEmptyDir = IsNonTmpFSEmptyDir(sampleEphePath)
 	assert.False(isHostEmptyDir)
 }
 
