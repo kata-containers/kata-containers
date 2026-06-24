@@ -322,7 +322,7 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 
 	randHex := hex.EncodeToString(randBytes)
 	caps := f.sandbox.hypervisor.Capabilities(ctx)
-	mustCopyEmptyDir := !caps.IsFsSharingSupported() && Isk8sHostEmptyDir(m.Source)
+	mustCopyEmptyDir := !caps.IsFsSharingSupported() && IsDiskEmptyDir(m.Source)
 
 	filename := shareFileName(c.id, m.Source, m.Destination, randHex, mustCopyEmptyDir)
 	guestPath := filepath.Join(kataGuestSharedDir(), filename)

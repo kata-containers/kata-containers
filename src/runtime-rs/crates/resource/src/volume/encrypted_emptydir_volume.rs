@@ -18,7 +18,7 @@ use hypervisor::{
     },
     BlockConfigModern, BlockDeviceAio,
 };
-use kata_sys_util::k8s::is_host_empty_dir;
+use kata_sys_util::k8s::is_disk_empty_dir;
 use kata_types::config::EMPTYDIR_MODE_BLOCK_ENCRYPTED;
 use kata_types::mount::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use kata_types::mount::{add_volume_mount_info, is_volume_mounted, DirectVolumeMountInfo};
@@ -206,7 +206,7 @@ pub(crate) fn is_encrypted_emptydir_volume(m: &oci::Mount, emptydir_mode: &str) 
         return false;
     }
     match m.source() {
-        Some(src) => is_host_empty_dir(&src.display().to_string()),
+        Some(src) => is_disk_empty_dir(&src.display().to_string()),
         None => false,
     }
 }

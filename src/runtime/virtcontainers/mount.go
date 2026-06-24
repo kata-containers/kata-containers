@@ -312,16 +312,8 @@ const (
 	K8sSecret    = "kubernetes.io~secret"
 )
 
-// IsEphemeralStorage returns true if the given path
-// to the storage belongs to kubernetes ephemeral storage
-//
-// This method depends on a specific path used by k8s
-// to detect if it's of type ephemeral. As of now,
-// this is a very k8s specific solution that works
-// but in future there should be a better way for this
-// method to determine if the path is for ephemeral
-// volume type
-func IsEphemeralStorage(path string) bool {
+// IsTmpFSEmptyDir returns true for tmpfs-backed emptyDirs (medium: Memory).
+func IsTmpFSEmptyDir(path string) bool {
 	if !isEmptyDir(path) {
 		return false
 	}
@@ -333,10 +325,9 @@ func IsEphemeralStorage(path string) bool {
 	return false
 }
 
-// Isk8sHostEmptyDir returns true if the given path
-// to the storage belongs to kubernetes empty-dir of medium "default"
-// i.e volumes that are directories on the host.
-func Isk8sHostEmptyDir(path string) bool {
+// IsNonTmpFSEmptyDir returns true for non-tmpfs-backed emptyDirs.
+// This includes disk-backed (medium: "", default) and hugepage-backed (medium: HugePages).
+func IsNonTmpFSEmptyDir(path string) bool {
 	if !isEmptyDir(path) {
 		return false
 	}
@@ -345,6 +336,22 @@ func Isk8sHostEmptyDir(path string) bool {
 		return true
 	}
 	return false
+}
+
+// IsHugePageEmptyDir returns true for hugepage-backed emptyDirs (medium: HugePages).
+func IsHugePageEmptyDir(path string) bool {
+	if !isEmptyDir(path) {
+		return false
+	}
+	if _, fsType, _, _ := utils.GetDevicePathAndFsTypeOptions(path); fsType == "hugetlbfs" {
+		return true
+	}
+	return false
+}
+
+// IsDiskEmptyDir returns true for disk-backed emptyDirs (medium: "", default).
+func IsDiskEmptyDir(path string) bool {
+	return IsNonTmpFSEmptyDir(path) && !IsHugePageEmptyDir(path)
 }
 
 func checkKubernetesVolume(path, volumeType string) bool {
