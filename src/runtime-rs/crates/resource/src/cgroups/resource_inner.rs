@@ -220,6 +220,35 @@ impl CgroupsResourceInner {
         Ok(hv_pids.vcpus.len())
     }
 
+    /// Absolute path to the sandbox cgroup's `cgroup.procs` file for cgroup
+    /// v2.
+    ///
+    /// The VMM (e.g. cloud-hypervisor) is moved into this cgroup *at spawn
+    /// time*, before the guest boots, so that the guest RAM faulted during
+    /// boot is charged to the pod cgroup. This is required because cgroup v2
+    /// charges memory to whichever cgroup first-touches each page and never
+    /// re-charges already-faulted pages on migration; moving the VMM after
+    /// the guest has booted (e.g. in `setup_after_start_vm`) leaves the
+    /// guest RAM charged to the cgroup the VMM was spawned in.
+    ///
+    /// Returns `None` for cgroup v1, where the existing vCPU-thread move
+    /// path is used instead.
+    pub(crate) fn sandbox_cgroup_procs_path(&self) -> Option<String> {
+        if !self.sandbox_cgroup.v2() {
+            return None;
+        }
+        match self.sandbox_cgroup.cgroup_path(None) {
+            Ok(dir) => Some(format!("{}/cgroup.procs", dir.trim_end_matches('/'))),
+            Err(e) => {
+                warn!(
+                    sl!(),
+                    "failed to resolve sandbox cgroup path for VMM placement: {}", e
+                );
+                None
+            }
+        }
+    }
+
     async fn update_sandbox_cgroups(&mut self, hypervisor: &dyn Hypervisor) -> Result<bool> {
         let needs_thread_ids = self.overhead_cgroup.is_some() || self.enable_vcpus_pinning;
 
