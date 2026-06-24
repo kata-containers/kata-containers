@@ -230,6 +230,17 @@ impl ResourceManagerInner {
             };
         }
 
+        // Under cgroup v2, tell the hypervisor which sandbox cgroup the VMM
+        // must join at spawn time (before the guest boots) so the guest RAM
+        // is charged to the pod cgroup. No-op for hypervisors that don't
+        // implement spawn-time placement, and skipped for cgroup v1.
+        if let Some(cgroup_procs_path) = self.cgroups_resource.sandbox_cgroup_procs_path().await {
+            self.hypervisor
+                .set_vmm_cgroup_path(cgroup_procs_path)
+                .await
+                .context("set vmm cgroup path before start vm")?;
+        }
+
         Ok(())
     }
 
