@@ -163,6 +163,22 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn guest_memory_block_size(&self) -> u32;
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)>;
 
+    /// Set the host cgroup v2 `cgroup.procs` path that the VMM process should
+    /// join *before* the guest boots.
+    ///
+    /// Under cgroup v2, memory is charged to whichever cgroup first-touches
+    /// each page, and already-faulted pages are not re-charged on migration.
+    /// Placing the VMM into the pod's sandbox cgroup before boot ensures the
+    /// guest RAM faulted during boot is accounted to the pod cgroup rather
+    /// than to the cgroup the VMM happened to be spawned in
+    /// (e.g. `system.slice/containerd.service`).
+    ///
+    /// Default: no-op for hypervisors that do not implement spawn-time
+    /// cgroup placement.
+    async fn set_vmm_cgroup_path(&self, _cgroup_procs_path: String) -> Result<()> {
+        Ok(())
+    }
+
     /// Resolve the in-guest PCIe path for a cold-plugged physical-endpoint VF
     /// by querying QMP (query-pci + device search by QEMU device ID).
     /// Only meaningful after the VM has started and QMP is initialised.
