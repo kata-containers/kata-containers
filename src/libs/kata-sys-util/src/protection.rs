@@ -153,16 +153,25 @@ pub fn arch_guest_protection(
     let is_snp_available = check_contents(snp_path)?;
     let is_sev_available = is_snp_available || check_contents(sev_path)?;
     if is_snp_available || is_sev_available {
-        if let Ok((cbitpos, phys_addr_reduction)) = retrieve_sev_params() {
-            let sev_snp_details = SevSnpDetails {
-                cbitpos,
-                phys_addr_reduction,
-            };
-            return Ok(if is_snp_available {
-                GuestProtection::Snp(sev_snp_details)
-            } else {
-                GuestProtection::Sev(sev_snp_details)
-            });
+        match retrieve_sev_params() {
+            Ok((cbitpos, phys_addr_reduction)) => {
+                let sev_snp_details = SevSnpDetails {
+                    cbitpos,
+                    phys_addr_reduction,
+                };
+                return Ok(if is_snp_available {
+                    GuestProtection::Snp(sev_snp_details)
+                } else {
+                    GuestProtection::Sev(sev_snp_details)
+                });
+            }
+            Err(e) => {
+                warn!(
+                    crate::sl!(),
+                    "SEV/SNP advertised by KVM module but CPU/firmware check failed ({}); falling back to no protection",
+                    e,
+                );
+            }
         }
     }
 
