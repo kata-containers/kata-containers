@@ -223,7 +223,7 @@ remove_kata_runtime_config_dropin_file() {
 }
 
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
 }
 
 # Copy the right combination of drop-ins from drop-in-examples/ into
