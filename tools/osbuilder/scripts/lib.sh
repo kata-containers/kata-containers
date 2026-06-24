@@ -189,9 +189,8 @@ create_summary_file()
 	# shellcheck disable=SC2154,SC2034
 	[[ "${AGENT_INIT}" = yes ]] && agent="${init}"
 
-	local -r agentdir="${script_dir}/../../../"
 	local agent_version
-	agent_version=$(cat "${agentdir}/VERSION" 2> /dev/null)
+	agent_version=$(cat "${script_dir}/../VERSION" 2> /dev/null)
 	[[ -z "${agent_version}" ]] && agent_version="unknown"
 
 	# shellcheck disable=SC2154

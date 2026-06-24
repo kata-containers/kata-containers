@@ -107,6 +107,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     schedulerName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resources: Option<ResourceRequirements>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -300,6 +303,9 @@ struct Probe {
     periodSeconds: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    terminationGracePeriodSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     failureThreshold: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -310,6 +316,9 @@ struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     tcpSocket: Option<TCPSocketAction>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    grpc: Option<GRPCAction>,
     // TODO: additional fields.
 }
 
@@ -320,6 +329,15 @@ struct TCPSocketAction {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     host: Option<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct GRPCAction {
+    port: u16,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.

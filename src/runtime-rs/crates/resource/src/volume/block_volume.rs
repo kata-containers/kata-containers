@@ -5,7 +5,9 @@
 //
 
 use super::Volume;
-use crate::volume::utils::{handle_block_volume, DEFAULT_VOLUME_FS_TYPE, KATA_MOUNT_BIND_TYPE};
+use crate::volume::utils::{
+    handle_block_volume, is_block_device_readonly, DEFAULT_VOLUME_FS_TYPE, KATA_MOUNT_BIND_TYPE,
+};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
@@ -42,9 +44,25 @@ impl BlockVolume {
 
         let blkdev_info = get_block_device_info(d).await;
         let fstat = stat::stat(mnt_src).context(format!("stat {}", mnt_src.display()))?;
+
+        // Honor the host block device's own read-only flag in addition to the
+        // mount-derived intent, so a device marked read-only on the host is
+        // exposed read-only to the guest.
+        let read_only = read_only
+            || is_block_device_readonly(mnt_src).unwrap_or_else(|e| {
+                warn!(
+                    sl!(),
+                    "could not query block device read-only flag for {}: {:?}",
+                    mnt_src.display(),
+                    e
+                );
+                false
+            });
+
         let block_device_config = BlockConfig {
             major: stat::major(fstat.st_rdev) as i64,
             minor: stat::minor(fstat.st_rdev) as i64,
+            is_readonly: read_only,
             driver_option: blkdev_info.block_device_driver,
             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             num_queues: blkdev_info.num_queues,

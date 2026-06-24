@@ -392,7 +392,7 @@ impl MemoryRegionFactory {
     fn configure_anon_mem(&self, mmap_reg: &MmapRegion) -> Result<(), VirtioError> {
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new_unchecked(mmap_reg.as_ptr() as *mut libc::c_void),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_DONTFORK,
             )
@@ -440,7 +440,7 @@ impl MemoryRegionFactory {
         // Safe because we just create the MmapRegion
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new_unchecked(mmap_reg.as_ptr() as *mut libc::c_void),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_HUGEPAGE,
             )

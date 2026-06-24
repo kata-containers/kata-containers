@@ -19,6 +19,7 @@ serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 url = { workspace = true }
 tracing = { workspace = true }
 oci-spec = { workspace = true }

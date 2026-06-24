@@ -115,7 +115,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-s390x
       target-branch: ${{ github.ref_name }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
       image-kind: deploy
     secrets:
@@ -187,7 +187,7 @@ jobs:
       repo: kata-containers/kata-monitor-ci
       tag: kata-monitor-latest-s390x
       target-branch: ${{ github.ref_name }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
       image-kind: monitor
     secrets:
@@ -267,10 +267,13 @@ jobs:
 
       - name: Push multi-arch monitor manifest
         run: |
+          # kata-monitor has no job-dispatcher sidecar image, so opt out of the
+          # kata-deploy-specific dispatcher manifest derivation.
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
           KATA_DEPLOY_IMAGE_TAGS: "kata-monitor-latest"
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-monitor-ci ghcr.io/${{ github.repository_owner }}/kata-monitor-ci"
+          KATA_DEPLOY_PUBLISH_JOB_DISPATCHER: "false"
 
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball

@@ -23,7 +23,7 @@ spec:
         - containerPort: 80
           protocol: TCP
         resources:
-          requests:
+          limits:
             cpu: 200m
       restartPolicy: Always
 ---

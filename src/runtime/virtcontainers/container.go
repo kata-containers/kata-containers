@@ -814,6 +814,18 @@ func (c *Container) createDeviceInfo(source, destination string, readonly, isBlo
 	var err error
 
 	if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
+		// Honor the host block device's own read-only flag in addition to the
+		// mount-derived intent, so a device marked read-only on the host is
+		// exposed read-only to the guest.
+		if !readonly {
+			if ro, roErr := config.BlockDeviceIsReadOnly(source); roErr != nil {
+				c.Logger().WithError(roErr).WithField("mount-source", source).
+					Warn("could not query block device read-only flag")
+			} else {
+				readonly = ro
+			}
+		}
+
 		di = &config.DeviceInfo{
 			HostPath:      source,
 			ContainerPath: destination,

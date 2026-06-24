@@ -102,7 +102,6 @@ type hypervisor struct {
 	VirtioFSDaemon                 string                    `toml:"virtio_fs_daemon"`
 	VirtioFSCache                  string                    `toml:"virtio_fs_cache"`
 	VhostUserStorePath             string                    `toml:"vhost_user_store_path"`
-	FileBackedMemRootDir           string                    `toml:"file_mem_backend"`
 	GuestHookPath                  string                    `toml:"guest_hook_path"`
 	GuestMemoryDumpPath            string                    `toml:"guest_memory_dump_path"`
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
@@ -118,7 +117,6 @@ type hypervisor struct {
 	VirtioFSExtraArgs              []string                  `toml:"virtio_fs_extra_args"`
 	PFlashList                     []string                  `toml:"pflashes"`
 	VhostUserStorePathList         []string                  `toml:"valid_vhost_user_store_paths"`
-	FileBackedMemRootList          []string                  `toml:"valid_file_mem_backends"`
 	EntropySourceList              []string                  `toml:"valid_entropy_sources"`
 	EnableAnnotations              []string                  `toml:"enable_annotations"`
 	RxRateLimiterMaxRate           uint64                    `toml:"rx_rate_limiter_max_rate"`
@@ -231,6 +229,7 @@ type agent struct {
 	DialTimeout          uint32   `toml:"dial_timeout"`
 	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
 	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
+	VisibleCdiDevices    bool     `toml:"visible_cdi_devices"`
 }
 
 func (orig *tomlConfig) Clone() tomlConfig {
@@ -803,6 +802,10 @@ func (a agent) launchProcessTimeout() uint32 {
 	return a.LaunchProcessTimeout
 }
 
+func (a agent) visibleCdiDevices() bool {
+	return a.VisibleCdiDevices
+}
+
 func (a agent) debug() bool {
 	return a.Debug
 }
@@ -1072,8 +1075,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		IOMMUPlatform:                 h.getIOMMUPlatform(),
 		GuestNUMANodes:                h.defaultGuestNUMANodes(),
 		NUMAMapping:                   append([]string(nil), h.NUMAMapping...),
-		FileBackedMemRootDir:          h.FileBackedMemRootDir,
-		FileBackedMemRootList:         h.FileBackedMemRootList,
 		Debug:                         h.Debug,
 		DisableNestingChecks:          h.DisableNestingChecks,
 		BlockDeviceDriver:             blockDriver,
@@ -1210,8 +1211,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemPrealloc:                    h.MemPrealloc,
 		ReclaimGuestFreedMemory:        h.ReclaimGuestFreedMemory,
 		HugePages:                      h.HugePages,
-		FileBackedMemRootDir:           h.FileBackedMemRootDir,
-		FileBackedMemRootList:          h.FileBackedMemRootList,
 		Debug:                          h.Debug,
 		DisableNestingChecks:           h.DisableNestingChecks,
 		BlockDeviceDriver:              blockDriver,
@@ -1478,6 +1477,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			DialTimeout:          agent.dialTimout(),
 			CdhApiTimeout:        agent.cdhApiTimout(),
 			LaunchProcessTimeout: agent.launchProcessTimeout(),
+			VisibleCdiDevices:    agent.visibleCdiDevices(),
 		}
 	}
 
@@ -1601,7 +1601,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HugePages:                defaultEnableHugePages,
 		IOMMU:                    defaultEnableIOMMU,
 		IOMMUPlatform:            defaultEnableIOMMUPlatform,
-		FileBackedMemRootDir:     defaultFileBackedMemRootDir,
 		Debug:                    defaultEnableDebug,
 		ExtraMonitorSocket:       defaultExtraMonitorSocket,
 		DisableNestingChecks:     defaultDisableNestingChecks,
@@ -2086,12 +2085,6 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 
 // checkFactoryConfig ensures the VM factory configuration is valid.
 func checkFactoryConfig(config oci.RuntimeConfig) error {
-	if config.FactoryConfig.Template {
-		if config.HypervisorConfig.InitrdPath == "" {
-			return errors.New("Factory option enable_template requires an initrd image")
-		}
-	}
-
 	if config.FactoryConfig.VMCacheNumber > 0 {
 		if config.HypervisorType != vc.QemuHypervisor {
 			return errors.New("VM cache just support qemu")

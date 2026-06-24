@@ -121,6 +121,9 @@ jobs:
           cargo fmt -p kata-deploy --check
           cargo clippy -p kata-deploy --all-targets --all-features -- -D warnings
           RUSTFLAGS="-D warnings" cargo test -p kata-deploy -- --test-threads=1
+          cargo fmt -p kata-deploy-job-dispatcher --check
+          cargo clippy -p kata-deploy-job-dispatcher --all-targets --all-features -- -D warnings
+          RUSTFLAGS="-D warnings" cargo test -p kata-deploy-job-dispatcher -- --test-threads=1
 
   static-checks:
     name: static-checks

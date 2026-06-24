@@ -234,48 +234,89 @@ impl UeventMatcher for VirtioBlkCCWMatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::device::test_helpers;
+    use rstest::rstest;
     #[cfg(target_arch = "s390x")]
     use std::str::FromStr;
 
+    // Test constants
+    const TEST_DEVNAME: &str = "vda";
+    const TEST_PCI_RELPATH: &str = "/0000:00:0a.0";
+    const TEST_ROOT_COMPLEX: &str = "00";
+
+    // Helper to create a standard PCI uevent for testing
+    fn create_pci_uevent(
+        devname: &str,
+        relpath: &str,
+        root_complex: &str,
+        virtio_id: u32,
+    ) -> crate::uevent::Uevent {
+        let root_bus = create_pci_root_bus_path(root_complex);
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = BLOCK.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = format!("{root_bus}{relpath}/virtio{virtio_id}/block/{devname}");
+        uev
+    }
+
+    #[rstest]
+    #[case::matcher_a_matches_uev_a("/0000:00:0a.0", "/0000:00:0a.0", 4, true)]
+    #[case::matcher_b_matches_uev_b(
+        "/0000:00:0a.0/0000:00:0b.0",
+        "/0000:00:0a.0/0000:00:0b.0",
+        0,
+        true
+    )]
+    #[case::matcher_a_rejects_uev_b("/0000:00:0a.0", "/0000:00:0a.0/0000:00:0b.0", 0, false)]
+    #[case::matcher_b_rejects_uev_a("/0000:00:0a.0/0000:00:0b.0", "/0000:00:0a.0", 4, false)]
     #[tokio::test]
-    #[allow(clippy::redundant_clone)]
-    async fn test_virtio_blk_matcher() {
-        let root_bus = create_pci_root_bus_path("00");
-        let devname = "vda";
+    async fn test_virtio_blk_pci_matcher_basic_matching(
+        #[case] matcher_relpath: &str,
+        #[case] uevent_relpath: &str,
+        #[case] virtio_id: u32,
+        #[case] should_match: bool,
+    ) {
+        let matcher = VirtioBlkPciMatcher::new(matcher_relpath, TEST_ROOT_COMPLEX);
+        let uev = create_pci_uevent(TEST_DEVNAME, uevent_relpath, TEST_ROOT_COMPLEX, virtio_id);
 
-        let mut uev_a = crate::uevent::Uevent::default();
-        let relpath_a = "/0000:00:0a.0";
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = BLOCK.to_string();
-        uev_a.devname = devname.to_string();
-        uev_a.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}");
-        let matcher_a = VirtioBlkPciMatcher::new(relpath_a, "00");
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for '{}' should {} uevent for '{}'",
+            matcher_relpath,
+            if should_match { "match" } else { "reject" },
+            uevent_relpath
+        );
+    }
 
-        let mut uev_b = uev_a.clone();
-        let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
-        uev_b.devpath = format!("{root_bus}{relpath_b}/virtio0/block/{devname}");
-        let matcher_b = VirtioBlkPciMatcher::new(relpath_b, "00");
+    #[rstest]
+    #[case::partition_vda1("vda1", "vda1")]
+    #[case::partition_vda91("vda91", "vda91")]
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_rejects_partitions(
+        #[case] partition_devname: &str,
+        #[case] partition_suffix: &str,
+    ) {
+        let root_bus = create_pci_root_bus_path(TEST_ROOT_COMPLEX);
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let mut uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, 4);
+        uev.devname = partition_devname.to_string();
+        uev.devpath = format!(
+            "{root_bus}{}/virtio4/block/{}/{}",
+            TEST_PCI_RELPATH, TEST_DEVNAME, partition_suffix
+        );
 
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
-
-        // Partition uevents must NOT match (only the whole-disk uevent should match)
-        let mut uev_part = uev_a.clone();
-        uev_part.devname = "vda1".to_string();
-        uev_part.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}/vda1");
-        assert!(!matcher_a.is_match(&uev_part));
-
-        let mut uev_part91 = uev_a.clone();
-        uev_part91.devname = "vda91".to_string();
-        uev_part91.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}/vda91");
-        assert!(!matcher_a.is_match(&uev_part91));
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject partition uevent for '{}'",
+            partition_devname
+        );
     }
 
     #[cfg(target_arch = "s390x")]
     #[tokio::test]
-    async fn test_virtio_blk_ccw_matcher() {
+    async fn test_virtio_blk_ccw_matcher_valid_path() {
         let root_bus = CCW_ROOT_BUS_PATH;
         let subsystem = "block";
         let devname = "vda";
@@ -287,55 +328,209 @@ mod tests {
         uev.devname = devname.to_string();
         uev.devpath = format!("{root_bus}/0.0.0001/{relpath}/virtio1/{subsystem}/{devname}");
 
-        // Valid path
         let device = ccw::Device::from_str(relpath).unwrap();
         let matcher = VirtioBlkCCWMatcher::new(root_bus, &device);
-        assert!(matcher.is_match(&uev));
 
-        // Invalid paths
-        uev.devpath = format!("{root_bus}/0.0.0001/0.0.0003/virtio1/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+        assert!(
+            matcher.is_match(&uev),
+            "Matcher should match valid CCW device path"
+        );
+    }
 
-        uev.devpath = format!("0.0.0001/{relpath}/virtio1/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+    #[cfg(target_arch = "s390x")]
+    #[rstest]
+    #[case::wrong_device_id(
+        "/devices/css0/0.0.0001/0.0.0003/virtio1/block/vda",
+        "Wrong device ID should be rejected"
+    )]
+    #[case::missing_root_bus(
+        "0.0.0001/0.0.0002/virtio1/block/vda",
+        "Missing root bus path should be rejected"
+    )]
+    #[case::missing_virtio_number(
+        "/devices/css0/0.0.0001/0.0.0002/virtio/block/vda",
+        "Missing virtio number should be rejected"
+    )]
+    #[case::incomplete_path(
+        "/devices/css0/0.0.0001/0.0.0002/virtio1",
+        "Incomplete path should be rejected"
+    )]
+    #[case::invalid_subchannel_set_high(
+        "/devices/css0/1.0.0001/0.0.0002/virtio1/block/vda",
+        "Invalid subchannel set (>0) should be rejected"
+    )]
+    #[case::invalid_subchannel_set_range(
+        "/devices/css0/0.4.0001/0.0.0002/virtio1/block/vda",
+        "Invalid subchannel set (>3) should be rejected"
+    )]
+    #[case::invalid_devno_range(
+        "/devices/css0/0.0.10000/0.0.0002/virtio1/block/vda",
+        "Invalid devno (>0xffff) should be rejected"
+    )]
+    #[tokio::test]
+    async fn test_virtio_blk_ccw_matcher_invalid_paths(
+        #[case] devpath: &str,
+        #[case] description: &str,
+    ) {
+        let root_bus = CCW_ROOT_BUS_PATH;
+        let subsystem = "block";
+        let devname = "vda";
+        let relpath = "0.0.0002";
 
-        uev.devpath = format!("{root_bus}/0.0.0001/{relpath}/virtio/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = subsystem.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = devpath.to_string();
 
-        uev.devpath = format!("{root_bus}/0.0.0001/{relpath}/virtio1");
-        assert!(!matcher.is_match(&uev));
+        let device = ccw::Device::from_str(relpath).unwrap();
+        let matcher = VirtioBlkCCWMatcher::new(root_bus, &device);
 
-        uev.devpath = format!("{root_bus}/1.0.0001/{relpath}/virtio1/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
 
-        uev.devpath = format!("{root_bus}/0.4.0001/{relpath}/virtio1/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+    // Helper to create a standard uevent for testing
+    fn create_mmio_uevent(devname: &str, mmio_id: u32, virtio_id: u32) -> crate::uevent::Uevent {
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = BLOCK.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = format!(
+            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.{}/virtio{}/block/{}",
+            mmio_id, virtio_id, devname
+        );
+        uev
+    }
 
-        uev.devpath = format!("{root_bus}/0.0.10000/{relpath}/virtio1/{subsystem}/{devname}");
-        assert!(!matcher.is_match(&uev));
+    #[rstest]
+    #[case::vda_matches_vda("vda", "vda", 0, 0, true)]
+    #[case::vdb_matches_vdb("vdb", "vdb", 4, 4, true)]
+    #[case::vda_rejects_vdb("vda", "vdb", 0, 0, false)]
+    #[case::vdb_rejects_vda("vdb", "vda", 4, 4, false)]
+    #[tokio::test]
+    async fn test_virtio_blk_mmio_matcher_basic_matching(
+        #[case] matcher_devname: &str,
+        #[case] uevent_devname: &str,
+        #[case] mmio_id: u32,
+        #[case] virtio_id: u32,
+        #[case] should_match: bool,
+    ) {
+        let matcher = VirtioBlkMmioMatcher::new(matcher_devname);
+        let uev = create_mmio_uevent(uevent_devname, mmio_id, virtio_id);
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for '{}' should {} uevent for '{}'",
+            matcher_devname,
+            if should_match { "match" } else { "reject" },
+            uevent_devname
+        );
+    }
+
+    #[rstest]
+    #[case::wrong_subsystem(test_helpers::SUBSYSTEM_NET, "Wrong subsystem should be rejected")]
+    #[tokio::test]
+    async fn test_virtio_blk_mmio_matcher_wrong_subsystem(
+        #[case] wrong_subsystem: &str,
+        #[case] description: &str,
+    ) {
+        let matcher = VirtioBlkMmioMatcher::new(TEST_DEVNAME);
+        let mut uev = create_mmio_uevent(TEST_DEVNAME, 0, 0);
+        uev.subsystem = wrong_subsystem.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
     }
 
     #[tokio::test]
-    #[allow(clippy::redundant_clone)]
-    async fn test_virtio_blk_mmio_matcher() {
-        let devname_a = "vda";
-        let devname_b = "vdb";
-        let mut uev_a = crate::uevent::Uevent::default();
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = BLOCK.to_string();
-        uev_a.devname = devname_a.to_string();
-        uev_a.devpath =
-            format!("/sys/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/block/{devname_a}");
-        let matcher_a = VirtioBlkMmioMatcher::new(devname_a);
+    async fn test_virtio_blk_mmio_matcher_empty_devname() {
+        let matcher = VirtioBlkMmioMatcher::new(TEST_DEVNAME);
+        let mut uev = create_mmio_uevent(TEST_DEVNAME, 0, 0);
+        uev.devname = String::new();
 
-        let mut uev_b = uev_a.clone();
-        uev_b.devpath =
-            format!("/sys/devices/virtio-mmio-cmdline/virtio-mmio.4/virtio4/block/{devname_b}");
-        let matcher_b = VirtioBlkMmioMatcher::new(devname_b);
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with empty devname"
+        );
+    }
 
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
+    #[tokio::test]
+    async fn test_virtio_blk_mmio_matcher_wrong_device_suffix() {
+        let matcher = VirtioBlkMmioMatcher::new(TEST_DEVNAME);
+        let mut uev = create_mmio_uevent(TEST_DEVNAME, 0, 0);
+        // Modify to create the wrong suffix scenario
+        uev.devpath =
+            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/block/vdc".to_string();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with wrong device suffix"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_correct_match() {
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, 4);
+
+        assert!(
+            matcher.is_match(&uev),
+            "Matcher should match correctly formatted uevent"
+        );
+    }
+
+    #[rstest]
+    #[case::wrong_subsystem(test_helpers::SUBSYSTEM_NET, "Wrong subsystem should be rejected")]
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_wrong_subsystem(
+        #[case] wrong_subsystem: &str,
+        #[case] description: &str,
+    ) {
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let mut uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, 4);
+        uev.subsystem = wrong_subsystem.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
+
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_empty_devname() {
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let mut uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, 4);
+        uev.devname = String::new();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with empty devname"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_missing_virtio_component() {
+        let root_bus = create_pci_root_bus_path(TEST_ROOT_COMPLEX);
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let mut uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, 4);
+        uev.devpath = format!("{root_bus}{}/block/{}", TEST_PCI_RELPATH, TEST_DEVNAME);
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject path without virtio component"
+        );
+    }
+
+    #[rstest]
+    #[case::virtio4(4)]
+    #[case::virtio99(99)]
+    #[case::virtio0(0)]
+    #[tokio::test]
+    async fn test_virtio_blk_pci_matcher_accepts_any_virtio_number(#[case] virtio_id: u32) {
+        let matcher = VirtioBlkPciMatcher::new(TEST_PCI_RELPATH, TEST_ROOT_COMPLEX);
+        let uev = create_pci_uevent(TEST_DEVNAME, TEST_PCI_RELPATH, TEST_ROOT_COMPLEX, virtio_id);
+
+        assert!(
+            matcher.is_match(&uev),
+            "Matcher should accept virtio{} number",
+            virtio_id
+        );
     }
 }

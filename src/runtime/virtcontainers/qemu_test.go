@@ -151,10 +151,6 @@ func TestQemuCreateVM(t *testing.T) {
 	config12.BootToBeTemplate = true
 	config12.SharedFS = config.VirtioFS
 
-	config13 := newQemuConfig()
-	config13.FileBackedMemRootDir = "/tmp/xyzabc"
-	config13.HugePages = true
-
 	config14 := newQemuConfig()
 	config14.SharedFS = config.VirtioFS
 
@@ -185,7 +181,6 @@ func TestQemuCreateVM(t *testing.T) {
 		{config10, false, true},
 		{config11, false, true},
 		{config12, true, false},
-		{config13, false, true},
 		{config14, false, true},
 		{config15, false, true},
 		{config16, false, true},
@@ -644,25 +639,8 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 
-	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+	expectErr := errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
 	assert.Equal(expectErr.Error(), err.Error())
-
-	// Check Setting of non-existent shared-mem path
-	sandbox, err = createQemuSandboxConfig()
-	assert.NoError(err)
-
-	q = &qemu{
-		config: HypervisorConfig{
-			VMStorePath:  sandbox.store.RunVMStoragePath(),
-			RunStorePath: sandbox.store.RunStoragePath(),
-		},
-	}
-	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
-	assert.NoError(err)
-	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
-	assert.Equal(q.qemuConfig.Knobs.MemShared, false)
-	assert.Equal(q.qemuConfig.Memory.Path, "")
 
 	// Check setting vhost-user storage with Hugepages
 	sandbox, err = createQemuSandboxConfig()
@@ -1412,30 +1390,6 @@ func TestBuildNUMATopologyVirtioFS(t *testing.T) {
 	assert.Len(nodes, 2)
 	assert.Equal("memory-backend-file", nodes[0].MemBackendType)
 	assert.Equal(fallbackFileBackedMemDir, nodes[0].MemBackendPath)
-}
-
-func TestBuildNUMATopologyFileBackedMem(t *testing.T) {
-	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
-		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
-	}
-	assert := assert.New(t)
-	tmpDir := t.TempDir()
-	q := &qemu{
-		config: HypervisorConfig{
-			DefaultMaxVCPUs:      4,
-			MemorySize:           1024,
-			FileBackedMemRootDir: tmpDir,
-			GuestNUMANodes: []types.GuestNUMANode{
-				{HostNodes: "0", HostCPUs: "0-1"},
-				{HostNodes: "1", HostCPUs: "2-3"},
-			},
-		},
-	}
-	nodes, _, err := q.buildNUMATopology()
-	assert.NoError(err)
-	assert.Len(nodes, 2)
-	assert.Equal("memory-backend-file", nodes[0].MemBackendType)
-	assert.Equal(tmpDir, nodes[0].MemBackendPath)
 }
 
 func TestBuildNUMATopologyTooFewVCPUs(t *testing.T) {

@@ -522,19 +522,18 @@ fn pivot_root<P1: ?Sized + NixPath, P2: ?Sized + NixPath>(
 
 pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<()> {
     let oldroot = fcntl::open("/", OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
-    defer!(unistd::close(oldroot).unwrap());
     let newroot = fcntl::open(path, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
-    defer!(unistd::close(newroot).unwrap());
+    // OwnedFd will close automatically when they go out of scope
 
     // Change to the new root so that the pivot_root actually acts on it.
-    unistd::fchdir(newroot)?;
+    unistd::fchdir(&newroot)?;
     pivot_root(".", ".").context(format!("failed to pivot_root on {path:?}"))?;
 
     // Currently our "." is oldroot (according to the current kernel code).
     // However, purely for safety, we will fchdir(oldroot) since there isn't
     // really any guarantee from the kernel what /proc/self/cwd will be after a
     // pivot_root(2).
-    unistd::fchdir(oldroot)?;
+    unistd::fchdir(&oldroot)?;
 
     // Make oldroot rslave to make sure our unmounts don't propagate to the
     // host. We don't use rprivate because this is known to cause issues due

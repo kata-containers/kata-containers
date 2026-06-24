@@ -25,7 +25,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::build_path;
-use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW};
+use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::rootless::is_rootless;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -925,10 +925,57 @@ impl QemuInner {
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "QemuInner::remove_device() {} ", device);
-        Err(anyhow!(
-            "QemuInner::remove_device({}): Not yet implemented",
-            device
-        ))
+        self.hotunplug_device(&device).await?;
+
+        self.devices.retain(|d| match (d, &device) {
+            (DeviceType::Block(a), DeviceType::Block(b)) => a.config.index != b.config.index,
+            (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => !std::sync::Arc::ptr_eq(a, b),
+            _ => true,
+        });
+
+        Ok(())
+    }
+
+    async fn hotunplug_device(&mut self, device: &DeviceType) -> Result<()> {
+        let qmp = match self.qmp {
+            Some(ref mut qmp) => qmp,
+            None => return Err(anyhow!("QMP not initialized")),
+        };
+
+        match device {
+            DeviceType::Block(ref block_device) => {
+                let block_driver = &self.config.blockdev_info.block_device_driver;
+                qmp.hotunplug_block_device(block_driver, block_device.config.index)
+                    .context("hotunplug block device")?;
+            }
+            DeviceType::BlockModern(ref block_device) => {
+                let (index, driver) = {
+                    let cfg = &block_device.lock().await.config;
+                    (
+                        cfg.index,
+                        self.config.blockdev_info.block_device_driver.clone(),
+                    )
+                };
+                qmp.hotunplug_block_device(&driver, index)
+                    .context("hotunplug block device")?;
+            }
+            DeviceType::Network(_)
+            | DeviceType::Vfio(_)
+            | DeviceType::VfioModern(_)
+            | DeviceType::VhostUserBlk(_)
+            | DeviceType::VhostUserNetwork(_)
+            | DeviceType::ShareFs(_)
+            | DeviceType::HybridVsock(_)
+            | DeviceType::Vsock(_)
+            | DeviceType::Protection(_)
+            | DeviceType::PortDevice(_) => {
+                return Err(anyhow!(
+                    "hotunplug for {} is currently unsupported",
+                    device
+                ));
+            }
+        }
+        Ok(())
     }
 
     async fn hotplug_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -949,6 +996,23 @@ impl QemuInner {
             }
             DeviceType::Block(mut block_device) => {
                 let block_driver = &self.config.blockdev_info.block_device_driver;
+
+                // Determine iothread for hotplugged virtio-blk-pci devices.
+                // Only attach iothread when:
+                // 1. enable_iothreads is true
+                // 2. indep_iothreads > 0
+                // 3. block driver is virtio-blk-pci
+                // 4. TODO: for more complex cases
+                let iothread = if self.config.enable_iothreads
+                    && self.config.indep_iothreads > 0
+                    && block_driver == VIRTIO_BLK_PCI
+                {
+                    // Use the first independent iothread (indep_iothread_0)
+                    Some("indep_iothread_0")
+                } else {
+                    None
+                };
+
                 let (pci_path, addr_str) = qmp
                     .hotplug_block_device(
                         block_driver,
@@ -966,6 +1030,7 @@ impl QemuInner {
                         block_device.config.logical_sector_size,
                         block_device.config.physical_sector_size,
                         &block_device.config.format,
+                        iothread,
                     )
                     .context("hotplug block device")?;
 
@@ -1048,6 +1113,7 @@ impl QemuInner {
                         logical_sector_size,
                         physical_sector_size,
                         &BlockDeviceFormat::default(),
+                        None,
                     )
                     .context("hotplug block device")?;
 

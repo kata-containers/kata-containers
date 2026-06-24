@@ -70,6 +70,7 @@ endif
 
 PUBLISH_COMPONENT_TARBALLS = \
 	kata-deploy-binary-tarball \
+	kata-deploy-job-dispatcher-tarball \
 	nydus-snapshotter-for-coco-guest-pull-tarball
 
 ifeq ($(ARCH), x86_64)
@@ -106,6 +107,7 @@ endif
 # can consume a single nvgpu bundle without rebuilding extra components.
 NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-deploy-static-kata-deploy-binary.tar.zst \
+	kata-deploy-static-kata-deploy-job-dispatcher.tar.zst \
 	kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst \
 	kata-static-kernel-nvidia-gpu.tar.zst \
 	kata-static-ovmf-sev.tar.zst \
@@ -312,6 +314,9 @@ virtiofsd-tarball:
 
 kata-deploy-binary-tarball:
 	$(call BUILD_KATA_DEPLOY_COMPONENT,kata-deploy-binary)
+
+kata-deploy-job-dispatcher-tarball:
+	$(call BUILD_KATA_DEPLOY_COMPONENT,kata-deploy-job-dispatcher)
 
 nydus-snapshotter-for-coco-guest-pull-tarball:
 	$(call BUILD_KATA_DEPLOY_COMPONENT,nydus-snapshotter-for-coco-guest-pull)

@@ -375,6 +375,95 @@ func TestDevicePathEmpty(t *testing.T) {
 	assert.NotNil(t, err, "This test should fail as path cannot be empty for device")
 }
 
+func TestDeviceCgroupAccessIsReadOnly(t *testing.T) {
+	assert := assert.New(t)
+
+	i64 := func(v int64) *int64 { return &v }
+	major, minor := int64(8), int64(0)
+
+	rule := func(allow bool, typ string, maj, min *int64, access string) specs.LinuxDeviceCgroup {
+		return specs.LinuxDeviceCgroup{
+			Allow:  allow,
+			Type:   typ,
+			Major:  maj,
+			Minor:  min,
+			Access: access,
+		}
+	}
+
+	resources := func(rules ...specs.LinuxDeviceCgroup) *specs.LinuxResources {
+		return &specs.LinuxResources{Devices: rules}
+	}
+
+	tests := []struct {
+		name      string
+		resources *specs.LinuxResources
+		expected  bool
+	}{
+		{"nil resources", nil, false},
+		{"no rules", resources(), false},
+		{"exact match read-only (rm)", resources(rule(true, "b", i64(major), i64(minor), "rm")), true},
+		{"exact match read-only (r)", resources(rule(true, "b", i64(major), i64(minor), "r")), true},
+		{"exact match read-write (rwm)", resources(rule(true, "b", i64(major), i64(minor), "rwm")), false},
+		{"type all (a) read-only", resources(rule(true, "a", i64(major), i64(minor), "rm")), true},
+		{"empty type read-only", resources(rule(true, "", i64(major), i64(minor), "rm")), true},
+		{"deny rule is ignored", resources(rule(false, "b", i64(major), i64(minor), "rm")), false},
+		{"wildcard major is ignored", resources(rule(true, "b", nil, i64(minor), "rm")), false},
+		{"wildcard minor is ignored", resources(rule(true, "b", i64(major), nil, "rm")), false},
+		{"type mismatch is ignored", resources(rule(true, "c", i64(major), i64(minor), "rm")), false},
+		{"different device is ignored", resources(rule(true, "b", i64(9), i64(1), "rm")), false},
+		{
+			"first exact match wins",
+			resources(
+				rule(true, "b", i64(major), i64(minor), "rm"),
+				rule(true, "b", i64(major), i64(minor), "rwm"),
+			),
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(tt.expected, deviceCgroupAccessIsReadOnly(tt.resources, "b", major, minor), tt.name)
+	}
+}
+
+func TestContainerDeviceInfosReadOnly(t *testing.T) {
+	assert := assert.New(t)
+
+	// Stub the host BLKROGET probe so the test is deterministic and does no
+	// real device I/O: only the probe-only device (8:32) reports read-only.
+	savedProbe := blockDeviceReadOnlyProbe
+	defer func() { blockDeviceReadOnlyProbe = savedProbe }()
+	blockDeviceReadOnlyProbe = func(major, minor int64) bool {
+		return major == 8 && minor == 32
+	}
+
+	i64 := func(v int64) *int64 { return &v }
+
+	var ociSpec specs.Spec
+	ociSpec.Linux = &specs.Linux{
+		Devices: []specs.LinuxDevice{
+			{Path: "/dev/cgroup-ro-blk", Type: "b", Major: 8, Minor: 0},
+			{Path: "/dev/rw-blk", Type: "b", Major: 8, Minor: 16},
+			{Path: "/dev/blkroget-ro-blk", Type: "b", Major: 8, Minor: 32},
+		},
+		Resources: &specs.LinuxResources{
+			Devices: []specs.LinuxDeviceCgroup{
+				{Allow: true, Type: "b", Major: i64(8), Minor: i64(0), Access: "rm"},
+				{Allow: true, Type: "b", Major: i64(8), Minor: i64(16), Access: "rwm"},
+				{Allow: true, Type: "b", Major: i64(8), Minor: i64(32), Access: "rwm"},
+			},
+		},
+	}
+
+	devices, err := containerDeviceInfos(ociSpec)
+	assert.NoError(err)
+	assert.Len(devices, 3)
+	assert.True(devices[0].ReadOnly, "device with cgroup access \"rm\" should be read-only")
+	assert.False(devices[1].ReadOnly, "device with cgroup access \"rwm\" and writable host device should be read-write")
+	assert.True(devices[2].ReadOnly, "device flagged read-only via BLKROGET should be read-only even with \"rwm\" cgroup access")
+}
+
 func TestGetShmSize(t *testing.T) {
 	containerConfig := vc.ContainerConfig{
 		Mounts: []vc.Mount{},
@@ -620,7 +709,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 		HypervisorType: vc.QemuHypervisor,
 	}
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
-	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/shm*"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
@@ -634,7 +722,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.MemOffset] = "512"
 	ocispec.Annotations[vcAnnotations.VirtioMem] = "true"
 	ocispec.Annotations[vcAnnotations.MemPrealloc] = "true"
-	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.HugePages] = "true"
 	ocispec.Annotations[vcAnnotations.IOMMU] = "true"
 	ocispec.Annotations[vcAnnotations.BlockDeviceDriver] = "virtio-scsi"
@@ -678,7 +765,6 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.MemOffset, uint64(512))
 	assert.Equal(sbConfig.HypervisorConfig.VirtioMem, true)
 	assert.Equal(sbConfig.HypervisorConfig.MemPrealloc, true)
-	assert.Equal(sbConfig.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(sbConfig.HypervisorConfig.HugePages, true)
 	assert.Equal(sbConfig.HypervisorConfig.IOMMU, true)
 	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
@@ -907,27 +993,22 @@ func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 	// Enable annotations
 	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
 
-	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
 	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/bin/false"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
-	config.HypervisorConfig.FileBackedMemRootDir = "do-not-touch"
 	config.HypervisorConfig.VirtioFSDaemon = "dangerous-daemon"
 	config.HypervisorConfig.EntropySource = "truly-random"
 
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Error(err)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "do-not-touch")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "dangerous-daemon")
 	assert.Equal(config.HypervisorConfig.EntropySource, "truly-random")
 
 	// Now enable them and check again
-	runtimeConfig.HypervisorConfig.FileBackedMemRootList = []string{"/dev/*m"}
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 	runtimeConfig.HypervisorConfig.EntropySourceList = []string{"/dev/*random*"}
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.NoError(err)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
 	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 

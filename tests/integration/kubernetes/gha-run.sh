@@ -176,6 +176,9 @@ function configure_snapshotter() {
 			_setup_blockfile_device
 			_configure_blockfile_drop_in
 			;;
+		erofs|nydus)
+			info "${SNAPSHOTTER} snapshotter is configured via helm drop-in, no pre-deploy setup needed"
+			;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
 

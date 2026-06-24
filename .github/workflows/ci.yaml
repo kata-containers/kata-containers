@@ -437,6 +437,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+      vmm: ${{ (inputs.pr-number == 'nightly' || inputs.pr-number == 'dev') && '["qemu", "qemu-runtime-rs", "qemu-coco-dev", "qemu-coco-dev-runtime-rs"]' || '["qemu", "qemu-runtime-rs", "qemu-coco-dev"]' }}
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 

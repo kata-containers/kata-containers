@@ -33,8 +33,8 @@ spec:
         securityContext:
           runAsUser: 3000
         resources:
-          requests:
-            cpu: 100m
-            memory: 100Mi
+          limits:
+            cpu: 500m
+            memory: 800Mi
         ports:
         - containerPort: 6379

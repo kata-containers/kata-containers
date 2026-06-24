@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -551,9 +551,9 @@ impl AddressSpaceMgr {
         // so we have to duplicate the fd here. It's really a dirty design.
         let file_offset = match region.file_offset().as_ref() {
             Some(fo) => {
-                let fd = dup(fo.file().as_raw_fd()).map_err(AddressManagerError::DupFd)?;
+                let fd = dup(fo.file()).map_err(AddressManagerError::DupFd)?;
                 // Safe because we have just duplicated the raw fd.
-                let file = unsafe { File::from_raw_fd(fd) };
+                let file = unsafe { File::from_raw_fd(fd.into_raw_fd()) };
                 let file_offset = FileOffset::new(file, fo.start());
                 Some(file_offset)
             }
@@ -598,7 +598,7 @@ impl AddressSpaceMgr {
     fn configure_anon_mem(&self, mmap_reg: &MmapRegion) -> Result<()> {
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new(mmap_reg.as_ptr() as *mut libc::c_void).unwrap(),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_DONTFORK,
             )
@@ -646,7 +646,7 @@ impl AddressSpaceMgr {
         // Safe because we just create the MmapRegion
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new(mmap_reg.as_ptr() as *mut libc::c_void).unwrap(),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_HUGEPAGE,
             )
@@ -792,6 +792,7 @@ impl Default for AddressSpaceMgr {
 mod tests {
     use dbs_boot::layout::GUEST_MEM_START;
     use std::ops::Deref;
+    use std::os::fd::AsRawFd;
 
     use vm_memory::{Bytes, GuestAddressSpace, GuestMemory, GuestMemoryRegion};
     use vmm_sys_util::tempfile::TempFile;

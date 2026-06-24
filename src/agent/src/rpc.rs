@@ -62,6 +62,9 @@ use nix::mount::MsFlags;
 use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
+#[cfg(all(test, not(target_arch = "powerpc64")))]
+use std::os::fd::AsRawFd;
+use std::os::fd::BorrowedFd;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
@@ -71,7 +74,10 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
 #[cfg(not(target_arch = "s390x"))]
 use crate::device::network_device_handler::wait_for_pci_net_interface;
-use crate::device::{add_devices, dump_nvidia_cdi_yaml, handle_cdi_devices, update_env_pci};
+use crate::device::{
+    add_devices, cdi_devices_from_visible_devices, dump_nvidia_cdi_yaml, handle_cdi_devices,
+    update_env_pci,
+};
 use crate::features::get_build_features;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -251,7 +257,22 @@ impl AgentService {
         // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
         // readonly
         dump_nvidia_cdi_yaml(&sl())?;
-        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
+        // When enabled, translate the container's VISIBLE_CDI_DEVICES
+        // environment variable into CDI GPU device requests, so that a
+        // container can select which of the VM's GPUs it sees at runtime.
+        let visible_cdi_devices = if AGENT_CONFIG.visible_cdi_devices {
+            cdi_devices_from_visible_devices(&oci)?
+        } else {
+            Vec::new()
+        };
+        handle_cdi_devices(
+            &sl(),
+            &mut oci,
+            "/var/run/cdi",
+            AGENT_CONFIG.cdi_timeout,
+            &visible_cdi_devices,
+        )
+        .await?;
 
         // Handle trusted storage configuration before mounting any storage
         cdh_handler_trusted_storage(&mut oci)
@@ -1667,10 +1688,11 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::GetOOMEventRequest,
     ) -> ttrpc::Result<OOMEvent> {
         is_allowed(&req).await?;
-        let s = self.sandbox.lock().await;
-        let event_rx = &s.event_rx.clone();
+        let event_rx = {
+            let s = self.sandbox.lock().await;
+            s.event_rx.clone()
+        };
         let mut event_rx = event_rx.lock().await;
-        drop(s);
 
         let container_id = event_rx
             .recv()
@@ -2250,7 +2272,9 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 
         // Create new symbolic link
         let symlink_target = PathBuf::from(OsStr::from_bytes(&req.data));
-        unistd::symlinkat(&symlink_target, None, &path)?;
+        // Use BorrowedFd to wrap AT_FDCWD for symlinkat
+        let cwd_fd = unsafe { BorrowedFd::borrow_raw(libc::AT_FDCWD) };
+        unistd::symlinkat(&symlink_target, cwd_fd, &path)?;
 
         // Set symlink ownership (permissions not supported for symlinks)
         let path_str = CString::new(path.as_os_str().as_bytes())?;
@@ -2870,9 +2894,12 @@ mod tests {
             let mut sandbox = Sandbox::new(&logger).unwrap();
 
             let (rfd, wfd) = unistd::pipe().unwrap();
-            if d.break_pipe {
-                unistd::close(rfd).unwrap();
-            }
+            let rfd = if d.break_pipe {
+                drop(rfd); // OwnedFd closes automatically on drop
+                None
+            } else {
+                Some(rfd)
+            };
 
             if d.create_container {
                 let (mut linux_container, _root) = create_linuxcontainer();
@@ -2890,13 +2917,14 @@ mod tests {
                 )
                 .unwrap();
 
-                let fd = {
-                    if d.has_fd {
-                        Some(wfd)
-                    } else {
-                        unistd::close(wfd).unwrap();
-                        None
-                    }
+                let fd = if d.has_fd {
+                    let raw_fd = wfd.as_raw_fd();
+                    std::mem::forget(wfd); // Prevent OwnedFd from closing the fd
+                    Some(raw_fd)
+                } else {
+                    // Let wfd drop naturally to close the fd
+                    drop(wfd);
+                    None
                 };
 
                 if d.has_tty {
@@ -2928,9 +2956,7 @@ mod tests {
                 })
                 .await;
 
-            if !d.break_pipe {
-                unistd::close(rfd).unwrap();
-            }
+            drop(rfd);
             // XXX: Do not close wfd.
             // the fd will be closed on Process's dropping.
             // unistd::close(wfd).unwrap();
@@ -3605,5 +3631,76 @@ COMMIT
             let result = is_sealed_secret_path(d.source_path);
             assert_eq!(d.result, result, "{msg}");
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_oom_event_no_deadlock() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+
+        let agent_service = Arc::new(AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        });
+
+        let svc1 = agent_service.clone();
+        let handle1 = tokio::spawn(async move {
+            let ctx = mk_ttrpc_context();
+            let req = protocols::agent::GetOOMEventRequest::default();
+            svc1.get_oom_event(&ctx, req).await
+        });
+
+        // Yield until handler #1 has released the sandbox lock (entered recv()).
+        // Each yield_now() gives the spawned task a chance to make progress.
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                tokio::task::yield_now().await;
+                if agent_service.sandbox.try_lock().is_ok() {
+                    return;
+                }
+            }
+        })
+        .await
+        .expect("sandbox lock should be free while get_oom_event waits");
+
+        let svc2 = agent_service.clone();
+        let handle2 = tokio::spawn(async move {
+            let ctx = mk_ttrpc_context();
+            let req = protocols::agent::GetOOMEventRequest::default();
+            svc2.get_oom_event(&ctx, req).await
+        });
+
+        // Yield until handler #2 has also released the sandbox lock (entered recv()).
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                tokio::task::yield_now().await;
+                if agent_service.sandbox.try_lock().is_ok() {
+                    return;
+                }
+            }
+        })
+        .await
+        .expect("sandbox lock should be free with two concurrent get_oom_event handlers");
+
+        let tx = {
+            let s = agent_service.sandbox.lock().await;
+            s.event_tx.as_ref().unwrap().clone()
+        };
+        tx.send("container-1".to_string()).await.unwrap();
+        tx.send("container-2".to_string()).await.unwrap();
+
+        let result1 = tokio::time::timeout(std::time::Duration::from_secs(5), handle1).await;
+        let result2 = tokio::time::timeout(std::time::Duration::from_secs(5), handle2).await;
+
+        assert!(result1.is_ok(), "handler #1 timed out — possible deadlock");
+        assert!(result2.is_ok(), "handler #2 timed out — possible deadlock");
+
+        let resp1 = result1.unwrap().unwrap().unwrap();
+        let resp2 = result2.unwrap().unwrap().unwrap();
+
+        let mut ids: Vec<String> = vec![resp1.container_id, resp2.container_id];
+        ids.sort();
+        assert_eq!(ids, vec!["container-1", "container-2"]);
     }
 }

@@ -46,7 +46,7 @@ dependencies = [
  "async-trait",
  "kata-types",
  "logging",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "protobuf",
  "protocols",
@@ -846,9 +846,9 @@ checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
 name = "byte-unit"
-version = "5.2.0"
+version = "5.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c6d47a4e2961fb8721bcfc54feae6455f2f64e7054f9bc67e875f0e77f4c58d"
+checksum = "37bcaa4a0975bed4a760af3efe4368825098ce5f9d37a30c5a021d635dc63d8f"
 dependencies = [
  "rust_decimal",
  "schemars",
@@ -1004,7 +1004,7 @@ dependencies = [
  "api_client",
  "kata-sys-util",
  "kata-types",
- "nix 0.26.4",
+ "nix 0.31.3",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -1111,7 +1111,7 @@ dependencies = [
  "containerd-shim-protos",
  "kata-sys-util",
  "kata-types",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "protobuf",
  "protocols",
@@ -1523,7 +1523,7 @@ dependencies = [
  "arc-swap",
  "lazy_static",
  "libc",
- "nix 0.23.2",
+ "nix 0.31.3",
  "thiserror 1.0.69",
  "vm-memory",
  "vmm-sys-util 0.15.0",
@@ -1544,7 +1544,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "memoffset 0.6.5",
- "nix 0.26.4",
+ "nix 0.31.3",
  "test-utils",
  "thiserror 1.0.69",
  "vm-memory",
@@ -1562,7 +1562,7 @@ dependencies = [
  "kvm-ioctls",
  "lazy_static",
  "libc",
- "nix 0.26.4",
+ "nix 0.31.3",
  "test-utils",
  "thiserror 1.0.69",
  "vm-fdt",
@@ -1586,7 +1586,7 @@ dependencies = [
  "kvm-bindings",
  "kvm-ioctls",
  "libc",
- "nix 0.26.4",
+ "nix 0.31.3",
  "test-utils",
  "vmm-sys-util 0.15.0",
 ]
@@ -1621,7 +1621,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.26.4",
+ "nix 0.31.3",
  "serde",
  "test-utils",
  "thiserror 1.0.69",
@@ -1650,7 +1650,7 @@ dependencies = [
  "event-manager",
  "libc",
  "log",
- "nix 0.26.4",
+ "nix 0.31.3",
  "serde",
  "serde_json",
  "test-utils",
@@ -1678,7 +1678,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix 0.31.3",
  "nydus-api",
  "nydus-rafs",
  "nydus-storage",
@@ -1869,7 +1869,7 @@ dependencies = [
  "libc",
  "linux-loader",
  "log",
- "nix 0.24.3",
+ "nix 0.31.3",
  "procfs 0.12.0",
  "prometheus",
  "seccompiler",
@@ -2788,7 +2788,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2935,7 +2935,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "nix 0.26.4",
+ "nix 0.31.3",
  "once_cell",
  "path-clean",
  "persist",
@@ -2946,7 +2946,7 @@ dependencies = [
  "rand 0.10.1",
  "regex",
  "rust-ini",
- "safe-path 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-path",
  "seccompiler",
  "serde",
  "serde_json",
@@ -3491,7 +3491,7 @@ dependencies = [
  "netlink-packet-core 0.7.0",
  "netlink-packet-route 0.19.0",
  "netlink-sys 0.7.0",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "opentelemetry 0.17.0",
  "procfs 0.12.0",
@@ -3504,7 +3504,7 @@ dependencies = [
  "runtime-spec",
  "rustjail",
  "s390_pv_core",
- "safe-path 0.1.0",
+ "safe-path",
  "scan_fmt",
  "scopeguard",
  "serde",
@@ -3547,12 +3547,12 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "protobuf",
  "protocols",
  "rand 0.10.1",
- "safe-path 0.1.0",
+ "safe-path",
  "serde",
  "serde_json",
  "slog",
@@ -3596,7 +3596,7 @@ dependencies = [
  "libc",
  "logging",
  "micro_http",
- "nix 0.25.1",
+ "nix 0.31.3",
  "privdrop",
  "procfs 0.12.0",
  "prometheus",
@@ -3651,6 +3651,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kata-deploy-job-dispatcher"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "k8s-openapi",
+ "kube",
+ "log",
+ "rstest 0.18.2",
+ "serde_yaml 0.9.34+deprecated",
+ "tokio",
+]
+
+[[package]]
 name = "kata-sys-util"
 version = "0.1.0"
 dependencies = [
@@ -3661,7 +3676,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "pci-ids",
  "rand 0.10.1",
@@ -3711,12 +3726,12 @@ dependencies = [
  "glob",
  "gpt",
  "lazy_static",
- "nix 0.26.4",
+ "nix 0.31.3",
  "num_cpus",
  "oci-spec 0.8.4",
  "regex",
  "rstest 0.18.2",
- "safe-path 0.1.0",
+ "safe-path",
  "scopeguard",
  "serde",
  "serde-enum-str",
@@ -4066,7 +4081,7 @@ dependencies = [
  "chrono",
  "lazy_static",
  "maplit",
- "nix 0.30.1",
+ "nix 0.31.3",
  "once_cell",
  "page_size",
  "slog",
@@ -4362,8 +4377,6 @@ dependencies = [
  "bitflags 1.3.2",
  "cfg-if 1.0.4",
  "libc",
- "memoffset 0.6.5",
- "pin-utils",
 ]
 
 [[package]]
@@ -4413,6 +4426,19 @@ dependencies = [
  "cfg-if 1.0.4",
  "cfg_aliases",
  "libc",
+]
+
+[[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags 2.11.1",
+ "cfg-if 1.0.4",
+ "cfg_aliases",
+ "libc",
+ "memoffset 0.9.1",
 ]
 
 [[package]]
@@ -5165,7 +5191,7 @@ dependencies = [
  "async-trait",
  "kata-sys-util",
  "kata-types",
- "safe-path 0.1.0",
+ "safe-path",
  "serde",
  "serde_json",
 ]
@@ -6308,6 +6334,8 @@ dependencies = [
  "futures",
  "futures-lite 2.6.1",
  "hex",
+ "hyper 0.14.32",
+ "hyperlocal",
  "hypervisor",
  "inotify 0.11.1",
  "kata-sys-util",
@@ -6318,7 +6346,7 @@ dependencies = [
  "netlink-packet-core 0.8.1",
  "netlink-packet-route 0.30.0",
  "netns-rs",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "persist",
  "rand 0.10.1",
@@ -6513,7 +6541,7 @@ dependencies = [
  "common",
  "containerd-shim-protos",
  "go-flag",
- "nix 0.26.4",
+ "nix 0.31.3",
  "runtimes",
  "shim",
  "tokio",
@@ -6544,7 +6572,7 @@ dependencies = [
  "linux_container",
  "logging",
  "netns-rs",
- "nix 0.25.1",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "opentelemetry 0.18.0",
  "opentelemetry-jaeger",
@@ -6674,7 +6702,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libseccomp",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "path-absolutize",
  "protobuf",
@@ -6682,7 +6710,7 @@ dependencies = [
  "regex",
  "rlimit 0.5.4",
  "runtime-spec",
- "safe-path 0.1.0",
+ "safe-path",
  "scan_fmt",
  "scopeguard",
  "serde",
@@ -6807,15 +6835,6 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "tempfile",
-]
-
-[[package]]
-name = "safe-path"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "980abdd3220aa19b67ca3ea07b173ca36383f18ae48cde696d90c8af39447ffb"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -7220,7 +7239,7 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "protobuf",
  "runtime-spec",
@@ -7256,7 +7275,7 @@ dependencies = [
  "hyperlocal",
  "kata-sys-util",
  "kata-types",
- "nix 0.26.4",
+ "nix 0.31.3",
  "tempfile",
  "test-utils",
  "tokio",
@@ -7746,7 +7765,7 @@ name = "test-utils"
 version = "0.1.0"
 dependencies = [
  "libc",
- "nix 0.26.4",
+ "nix 0.31.3",
 ]
 
 [[package]]
@@ -8648,7 +8667,7 @@ dependencies = [
  "kata-types",
  "libc",
  "logging",
- "nix 0.26.4",
+ "nix 0.31.3",
  "oci-spec 0.8.4",
  "persist",
  "pod-resources-rs",
@@ -8662,6 +8681,7 @@ dependencies = [
  "slog-scope",
  "strum 0.24.1",
  "tokio",
+ "tokio-util",
  "tracing",
  "url",
  "uuid 1.23.1",

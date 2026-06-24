@@ -1,0 +1,112 @@
+{{- /*
+Cleanup dispatcher (deploymentMode: job, pre-delete hook).
+
+The mirror image of the install dispatcher: a single tiny pre-delete hook Job that
+runs the dispatcher (kata-deploy-job-dispatcher) to fan out one node-pinned cleanup Job
+per selected node, paced to job.parallelism. Each per-node Job runs the install
+pipeline in reverse and exits:
+
+  unlabel -> revert-cri   (initContainers, run sequentially)
+  remove-artifacts        (main container)
+
+Unlike the old per-node hook model, node selection here is resolved LIVE when the
+hook runs at `helm uninstall` (the dispatcher does the lookup), not frozen at
+install/upgrade time. That is why the default cleanup selector can be
+"nodes carrying the katacontainers.io/kata-runtime label" (i.e. exactly the
+nodes install actually labeled) - see values.yaml job.cleanup.
+
+This runs while the release's kept ServiceAccount/RBAC and the job-templates
+ConfigMap still exist; they are torn down only after pre-delete hooks complete.
+*/ -}}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+{{- $root := . }}
+{{- $base := .Chart.Name }}
+{{- if .Values.env.multiInstallSuffix }}
+{{- $base = printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix }}
+{{- end }}
+{{- $sa := include "kata-deploy.dispatcherServiceAccountName" . }}
+{{- $dispatcherName := printf "%s-cleanup-dispatcher" $base | trunc 63 | trimSuffix "-" }}
+{{- $cleanup := .Values.job.cleanup | default dict }}
+{{- $cNodes := $cleanup.nodes | default list }}
+{{- $cSelector := include "kata-deploy.nodeLabelSelector" (dict "eq" ($cleanup.nodeSelector | default dict) "exprs" ($cleanup.nodeSelectorExpressions | default list)) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $dispatcherName }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    kata-deploy/dispatcher: cleanup
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        kata-deploy/dispatcher: cleanup
+    spec:
+{{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      serviceAccountName: {{ $sa }}
+      restartPolicy: Never
+      # The dispatcher never touches the host; it is a plain API client. Lock the
+      # pod down so a compromise cannot escalate beyond its (minimal) API rights.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+{{- with $root.Values.tolerations }}
+      tolerations:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with $root.Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
+      containers:
+        - name: dispatcher
+          image: {{ include "kata-deploy.dispatcherImage" $root }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /usr/bin/kata-deploy-job-dispatcher
+            - "--job-template=/etc/kata-job/cleanup-job.yaml"
+            - "--name-prefix={{ $base }}-cleanup"
+            - "--owner-job-name={{ $dispatcherName }}"
+            - "--parallelism={{ $root.Values.job.parallelism }}"
+{{- if $cNodes }}
+            - "--nodes={{ join "," $cNodes }}"
+{{- else if $cSelector }}
+            - "--node-selector={{ $cSelector }}"
+{{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: job-templates
+              mountPath: /etc/kata-job
+              readOnly: true
+      volumes:
+        - name: job-templates
+          configMap:
+            name: {{ printf "%s-job-templates" $base | trunc 63 | trimSuffix "-" }}
+{{- end }}

@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 serde = { workspace = true, features = ["rc", "derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
-nix = "0.26.2"
+nix = { workspace = true }
 thiserror = "2.0.18"
 
 # Cloud Hypervisor public HTTP API functions

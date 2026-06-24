@@ -1,0 +1,102 @@
+# OSV-Scanner check for pull requests.
+# Scans both base and PR branches, then compares to detect new vulnerabilities.
+#
+# For more information, see https://google.github.io/osv-scanner/github-action/
+
+name: OSV-Scanner (PR)
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-osv-scanner-pr
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  scan:
+    name: Scan PR changes
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read  # Required to upload SARIF file to CodeQL
+      contents: read  # Read commit contents
+      security-events: write  # Require writing security events to upload SARIF file to security tab
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - name: Scan base branch
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --recursive
+            --call-analysis=none
+            --format=json
+            --output-file=base-results.json
+            ./
+
+      - name: Upload base results
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: base-results
+          path: base-results.json
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Checkout PR branch
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Scan PR branch
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --recursive
+            --call-analysis=none
+            --format=json
+            --output-file=pr-results.json
+            ./
+
+      - name: Download base results
+        if: always()
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: base-results
+        continue-on-error: true
+
+      - name: Create empty base results if missing
+        if: always()
+        run: |
+          if [ ! -f base-results.json ]; then
+            echo "Base results not found, creating empty file"
+            echo '{"results": []}' > base-results.json
+          fi
+
+      - name: Compare results
+        uses: google/osv-scanner-action/osv-reporter-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --output=results.sarif
+            --old=base-results.json
+            --new=pr-results.json
+            --gh-annotations=true
+            --fail-on-vuln=true
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: results.sarif
+          category: osv-scanner-pr

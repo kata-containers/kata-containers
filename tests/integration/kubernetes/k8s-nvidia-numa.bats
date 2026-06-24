@@ -276,40 +276,17 @@ gpu_numa_skip_reason() {
 # and merge them into the loaded config on every sandbox start.  These
 # helpers drop in a single override fragment so the main config file is
 # never edited — teardown just deletes the fragment.
-#
-# WARNING: must run on the k8s node (sudo required) and patch/restore must
-# be paired — a leaked drop-in would silently affect every subsequent pod
-# on the same node.
-
-# kata_runtime_config_dir echoes the per-shim runtime config directory
-# (the one that holds configuration-<shim>.toml and config.d/).  Handles
-# both the Go layout (.../runtimes/<shim>) and the runtime-rs layout
-# (.../runtime-rs/runtimes/<shim>) by probing the filesystem rather than
-# parsing the shim name (some Rust shims like `dragonball` lack the
-# `-runtime-rs` suffix).
-kata_runtime_config_dir() {
-    local base="/opt/kata/share/defaults/kata-containers"
-    local rs_dir="${base}/runtime-rs/runtimes/${KATA_HYPERVISOR}"
-    local go_dir="${base}/runtimes/${KATA_HYPERVISOR}"
-    if [[ -d "${rs_dir}" ]]; then
-        echo "${rs_dir}"
-    elif [[ -d "${go_dir}" ]]; then
-        echo "${go_dir}"
-    else
-        die "no Kata runtime config dir for ${KATA_HYPERVISOR} (looked in ${rs_dir} and ${go_dir})"
-    fi
-}
 
 # kata_hypervisor_section echoes the [hypervisor.X] header from the active
 # config so the drop-in fragment targets the right table.  Discovering it
 # at runtime keeps us hypervisor-agnostic (qemu / clh / firecracker / ...).
 kata_hypervisor_section() {
-    local dir
-    dir=$(kata_runtime_config_dir)
-    local cfg="${dir}/configuration-${KATA_HYPERVISOR}.toml"
-    [[ -f "${cfg}" ]] || die "Kata config not found at ${cfg}"
+    local cfg
+    cfg=$(get_kata_runtime_config_file "${node}") || \
+        die "no Kata runtime config file for ${KATA_HYPERVISOR}"
+
     local section
-    section=$(sudo grep -oE '^\[hypervisor\.[a-z0-9_-]+\]' "${cfg}" | head -1)
+    section=$(exec_host "${node}" "grep -oE '^\\[hypervisor\\.[a-z0-9_-]+\\]' '${cfg}' | head -1")
     [[ -n "${section}" ]] || die "no [hypervisor.X] section in ${cfg}"
     echo "${section}"
 }
@@ -321,28 +298,28 @@ kata_hypervisor_section() {
 # it.  No restart needed — the next sandbox start picks it up.
 patch_kata_numa_mapping() {
     local value="${1}"
-    local dir section
-    dir=$(kata_runtime_config_dir)
+    local local_dropin section
     section=$(kata_hypervisor_section)
 
-    KATA_NUMA_DROPIN_PATH="${dir}/config.d/99-numa-test.toml"
-    export KATA_NUMA_DROPIN_PATH
-
-    sudo mkdir -p "${dir}/config.d"
-    sudo tee "${KATA_NUMA_DROPIN_PATH}" >/dev/null <<EOF
+    local_dropin="${BATS_FILE_TMPDIR}/99-numa-test.toml"
+    cat > "${local_dropin}" <<EOF
 ${section}
 numa_mapping = ${value}
 EOF
-    echo "# Wrote drop-in ${KATA_NUMA_DROPIN_PATH}:"
-    sudo cat "${KATA_NUMA_DROPIN_PATH}" | sed 's/^/#   /'
+
+    KATA_NUMA_DROPIN_PATH="$(set_kata_runtime_config_dropin_file \
+        "${node}" \
+        "${local_dropin}")" || \
+        die "failed to write Kata runtime config drop-in for ${KATA_HYPERVISOR}"
+    export KATA_NUMA_DROPIN_PATH
+
+    echo "# Wrote drop-in ${KATA_NUMA_DROPIN_PATH}"
 }
 
 # restore_kata_numa_mapping removes the drop-in file written by
 # patch_kata_numa_mapping (no-op if nothing was patched).
 restore_kata_numa_mapping() {
-    [[ -n "${KATA_NUMA_DROPIN_PATH:-}" ]] || return 0
-    sudo rm -f "${KATA_NUMA_DROPIN_PATH}"
-    echo "# Removed drop-in ${KATA_NUMA_DROPIN_PATH}"
+    remove_kata_runtime_config_dropin_file "${node}" "${KATA_NUMA_DROPIN_PATH:-}" || return 1
     unset KATA_NUMA_DROPIN_PATH
 }
 

@@ -48,6 +48,9 @@ members = [
   # kata-deploy (Kubernetes installer binary)
   "tools/packaging/kata-deploy/binary",
 
+  # kata-deploy-job-dispatcher (generic per-node Job dispatcher)
+  "tools/packaging/kata-deploy/job-dispatcher",
+
   # runtime-rs
   "src/runtime-rs",
   "src/runtime-rs/crates/agent",
@@ -70,6 +73,16 @@ exclude = [
   # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
   # those packages to think they are part of the kata root workspace
   "tools/packaging/kata-deploy/local-build/build",
+
+  # Exclude vendor directories created by cargo vendor
+  "vendor",
+  "src/agent/vendor",
+  "src/runtime-rs/vendor",
+  "src/tools/agent-ctl/vendor",
+  "src/tools/genpolicy/vendor",
+  "src/tools/kata-ctl/vendor",
+  "src/tools/trace-forwarder/vendor",
+  "tools/packaging/kata-deploy/binary/vendor",
 ]
 
 [workspace.dependencies]
@@ -162,7 +175,7 @@ netlink-packet-route = "0.19.0"
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
-nix = "0.26.4"
+nix = { version = "0.31.3", features = ["fs", "mount", "sched", "process", "ioctl", "signal", "socket", "feature", "user", "hostname", "term", "event", "mman", "reboot"] }
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 procfs = "0.12.0"
@@ -188,6 +201,7 @@ tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "1.0.26"
 tokio = "1.46.1"
+tokio-util = "0.7.17"
 tokio-vsock = "0.3.4"
 toml = "0.5.8"
 tracing = "0.1.44"

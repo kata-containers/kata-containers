@@ -11,11 +11,11 @@ use crate::types::KernelModule;
 use anyhow::{anyhow, Result};
 use nix::fcntl::{open, OFlag};
 use nix::sys::stat::Mode;
-use nix::unistd::close;
 use nix::{ioctl_write_int_bad, request_code_none};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use slog::{info, o};
+use std::os::unix::io::AsRawFd;
 
 #[cfg(target_arch = "x86_64")]
 use std::process::{Command, Stdio};
@@ -131,7 +131,7 @@ pub fn check_kvm_is_usable_generic() -> Result<()> {
         request_code_none!(KVM_IOCTL_ID, KVM_GET_API_VERSION)
     );
     // 0 is not used but required to produce output
-    let v = unsafe { kvm_api_version(fd, 0)? };
+    let v = unsafe { kvm_api_version(fd.as_raw_fd(), 0)? };
     if v != API_VERSION {
         return Err(anyhow!("KVM API version is not correct"));
     }
@@ -142,7 +142,7 @@ pub fn check_kvm_is_usable_generic() -> Result<()> {
         request_code_none!(KVM_IOCTL_ID, KVM_CREATE_VM)
     );
     // 0 is default machine type
-    let vmfd = unsafe { kvm_create_vm(fd, 0) };
+    let vmfd = unsafe { kvm_create_vm(fd.as_raw_fd(), 0) };
     let _vmfd = match vmfd {
         Ok(vm) => vm,
         Err(ref error) if error.to_string() == "EBUSY: Device or resource busy" => {
@@ -154,7 +154,7 @@ pub fn check_kvm_is_usable_generic() -> Result<()> {
         Err(error) => return Err(anyhow!("Other KVM_CREATE_VM error: {:?}", error)),
     };
 
-    let _ = close(fd);
+    // fd will be automatically closed when it goes out of scope (OwnedFd RAII)
 
     Ok(())
 }

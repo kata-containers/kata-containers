@@ -43,6 +43,7 @@ TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
+EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -732,6 +733,32 @@ function helm_helper() {
 	fi
 	yq -i ".image.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
 
+	# Derive the dispatcher image name from the main kata-deploy image,
+	# mirroring the -ci/non-ci logic used by the build/release scripts: the
+	# dispatcher lives at "<base>-job-dispatcher", with the "-ci" suffix (if
+	# any) kept at the very end (e.g. kata-deploy-ci -> kata-deploy-job-dispatcher-ci).
+	local dispatcher_reference
+	if [[ "${HELM_IMAGE_REFERENCE}" == *-ci ]]; then
+		dispatcher_reference="${HELM_IMAGE_REFERENCE%-ci}-job-dispatcher-ci"
+	else
+		dispatcher_reference="${HELM_IMAGE_REFERENCE}-job-dispatcher"
+	fi
+	yq -i ".job.dispatcherImage.reference = \"${dispatcher_reference}\"" "${values_yaml}"
+	yq -i ".job.dispatcherImage.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
+
+	# Resolve the deployment mode coming from the (base) values file so the
+	# post-install wait below knows whether to expect a DaemonSet or per-node Jobs.
+	local deployment_mode
+	deployment_mode="$(yq -r '.deploymentMode // "daemonset"' "${values_yaml}")"
+
+	# In "job" mode, the dispatcher's default node selector targets only worker
+	# (non-control-plane) nodes. Our CI clusters are typically single-node, where
+	# the only node carries the control-plane label, so clear the role filter to
+	# target every discovered node (matching the documented single-node/CI setup).
+	if [[ "${deployment_mode}" == "job" ]]; then
+		yq -i ".job.nodeSelectorExpressions = []" "${values_yaml}"
+	fi
+
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
@@ -838,6 +865,26 @@ function helm_helper() {
 		if [[ -n "${HELM_CONTAINERD_USER_DROP_IN:-}" ]]; then
 			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
 				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
+		fi
+
+		# EROFS merge mode ("merged" default, or "unmerged"). This is orthogonal
+		# to EROFS_SNAPSHOTTER_MODE (which controls default_size): it controls
+		# whether containerd merges layers into a single fsmeta.erofs (merged,
+		# runtime-rs only) or keeps per-layer layer.erofs (unmerged, required by
+		# the Go runtime).
+		if [[ -n "${EROFS_MERGE_MODE}" ]]; then
+			if [[ "${SNAPSHOTTER}" != "erofs" ]]; then
+				die "EROFS_MERGE_MODE is only supported with SNAPSHOTTER=erofs"
+			fi
+
+			case "${EROFS_MERGE_MODE}" in
+				merged|unmerged) ;;
+				*)
+					die "Unsupported EROFS_MERGE_MODE: ${EROFS_MERGE_MODE}"
+					;;
+			esac
+
+			yq -i ".snapshotter.erofsMergeMode = \"${EROFS_MERGE_MODE}\"" "${values_yaml}"
 		fi
 
 		if [[ -z "${HELM_SHIMS}" ]]; then
@@ -1073,50 +1120,81 @@ VERIFICATION_POD_EOF
 		return 1
 	fi
 
-	# helm --wait is ineffective for single-node clusters with maxUnavailable=1
-	# (the DaemonSet is considered ready with 0 ready pods). First wait until at
-	# least one kata-deploy pod exists, then wait on the pod readiness condition
-	# instead — the readiness probe (/readyz) returns 200 only after install
-	# completes (artifacts extracted, CRI restarted, node labeled).
-	local pod_label_name="kata-deploy"
-	local multi_install_suffix=""
-	multi_install_suffix="$(yq -r '.env.multiInstallSuffix // ""' "${values_yaml}")"
-	if [[ -n "${multi_install_suffix}" ]]; then
-		pod_label_name="${pod_label_name}-${multi_install_suffix}"
-	fi
+	if [[ "${deployment_mode}" == "job" ]]; then
+		# In "job" mode there is no always-on DaemonSet: the dispatcher runs as a
+		# blocking post-install hook and fans out one per-node install Job, so by
+		# the time `helm upgrade --install` returns the install pipeline has run.
+		# The final stage labels the node, so wait until at least one node carries
+		# the kata-runtime label as the "install complete" signal.
+		echo "deploymentMode=job: waiting for per-node install Jobs to label the node(s)"
+		local label_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
+		while true; do
+			if [[ -n "$(kubectl get nodes -l katacontainers.io/kata-runtime=true -o name 2>/dev/null)" ]]; then
+				break
+			fi
+			if (( SECONDS >= label_wait_deadline )); then
+				echo "ERROR: Timed out waiting for kata-deploy install Jobs to label any node"
+				echo "::group::kata-deploy job-mode status (no node labeled)"
+				kubectl -n kube-system get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
+				kubectl -n kube-system get pods -l app.kubernetes.io/name=kata-deploy -o wide || true
+				kubectl -n kube-system describe jobs -l app.kubernetes.io/name=kata-deploy || true
+				kubectl -n kube-system logs -l app.kubernetes.io/name=kata-deploy --all-containers --tail=-1 --timestamps 2>/dev/null || true
+				echo "::endgroup::"
+				return 1
+			fi
+			sleep 5
+		done
 
-	local pod_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
-	while true; do
-		if [[ -n "$(kubectl -n kube-system get pod -l "name=${pod_label_name}" -o name 2>/dev/null)" ]]; then
-			break
+		echo "::group::kata-deploy job-mode logs (current)"
+		kubectl_retry -n kube-system get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
+		kubectl_retry -n kube-system logs -l app.kubernetes.io/name=kata-deploy --all-containers --tail=-1 --timestamps 2>/dev/null || true
+		echo "::endgroup::"
+	else
+		# helm --wait is ineffective for single-node clusters with maxUnavailable=1
+		# (the DaemonSet is considered ready with 0 ready pods). First wait until at
+		# least one kata-deploy pod exists, then wait on the pod readiness condition
+		# instead — the readiness probe (/readyz) returns 200 only after install
+		# completes (artifacts extracted, CRI restarted, node labeled).
+		local pod_label_name="kata-deploy"
+		local multi_install_suffix=""
+		multi_install_suffix="$(yq -r '.env.multiInstallSuffix // ""' "${values_yaml}")"
+		if [[ -n "${multi_install_suffix}" ]]; then
+			pod_label_name="${pod_label_name}-${multi_install_suffix}"
 		fi
-		if (( SECONDS >= pod_wait_deadline )); then
-			echo "ERROR: Timed out waiting for kata-deploy pod to be created"
-			echo "::group::kata-deploy daemonset status (no pod created)"
-			kubectl -n kube-system get ds -l "name=${pod_label_name}" -o wide || true
-			kubectl -n kube-system describe ds -l "name=${pod_label_name}" || true
+
+		local pod_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
+		while true; do
+			if [[ -n "$(kubectl -n kube-system get pod -l "name=${pod_label_name}" -o name 2>/dev/null)" ]]; then
+				break
+			fi
+			if (( SECONDS >= pod_wait_deadline )); then
+				echo "ERROR: Timed out waiting for kata-deploy pod to be created"
+				echo "::group::kata-deploy daemonset status (no pod created)"
+				kubectl -n kube-system get ds -l "name=${pod_label_name}" -o wide || true
+				kubectl -n kube-system describe ds -l "name=${pod_label_name}" || true
+				echo "::endgroup::"
+				return 1
+			fi
+			sleep 1
+		done
+		if ! kubectl -n kube-system wait pod -l "name=${pod_label_name}" --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
+			echo "::group::kata-deploy pod describe (install timed out)"
+			kubectl -n kube-system describe pod -l "name=${pod_label_name}" || true
+			echo "::endgroup::"
+			echo "::group::kata-deploy logs (install timed out)"
+			kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
+			kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps 2>/dev/null || true
 			echo "::endgroup::"
 			return 1
 		fi
-		sleep 1
-	done
-	if ! kubectl -n kube-system wait pod -l "name=${pod_label_name}" --for=condition=Ready --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}s"; then
-		echo "::group::kata-deploy pod describe (install timed out)"
-		kubectl -n kube-system describe pod -l "name=${pod_label_name}" || true
-		echo "::endgroup::"
-		echo "::group::kata-deploy logs (install timed out)"
-		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
-		kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps 2>/dev/null || true
-		echo "::endgroup::"
-		return 1
-	fi
 
-	echo "::group::kata-deploy logs (current)"
-	kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps || true
-	echo "::endgroup::"
-	echo "::group::kata-deploy logs (previous)"
-	kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
-	echo "::endgroup::"
+		echo "::group::kata-deploy logs (current)"
+		kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps || true
+		echo "::endgroup::"
+		echo "::group::kata-deploy logs (previous)"
+		kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
+		echo "::endgroup::"
+	fi
 
 	echo "::group::Runtime classes"
 	kubectl_retry get runtimeclass

@@ -81,6 +81,14 @@ fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
     }
 }
 
+fn effective_log_level(enable_debug: bool, log_level: &str) -> &str {
+    if enable_debug && log_level == "info" {
+        "debug"
+    } else {
+        log_level
+    }
+}
+
 struct RuntimeHandlerManagerInner {
     id: String,
     msg_sender: Sender<Message>,
@@ -867,19 +875,22 @@ fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
 // according to the settings read from configuration file
 fn update_component_log_level(config: &TomlConfig) {
     // Retrieve the log-levels set in configuration file, modify the FILTER_RULE accordingly
-    let default_level = String::from("info");
+    let default_level = "info";
     let agent_level = if let Some(agent_config) = config.agent.get(&config.runtime.agent_name) {
-        agent_config.log_level.clone()
+        effective_log_level(agent_config.debug, &agent_config.log_level)
     } else {
-        default_level.clone()
+        default_level
     };
     let hypervisor_level =
         if let Some(hypervisor_config) = config.hypervisor.get(&config.runtime.hypervisor_name) {
-            hypervisor_config.debug_info.log_level.clone()
+            effective_log_level(
+                hypervisor_config.debug_info.enable_debug,
+                &hypervisor_config.debug_info.log_level,
+            )
         } else {
-            default_level.clone()
+            default_level
         };
-    let runtime_level = config.runtime.log_level.clone();
+    let runtime_level = effective_log_level(config.runtime.debug, &config.runtime.log_level);
 
     // Update FILTER_RULE to apply changes
     FILTER_RULE.rcu(|inner| {
@@ -887,15 +898,15 @@ fn update_component_log_level(config: &TomlConfig) {
         updated_inner.clone_from(inner);
         updated_inner.insert(
             "runtimes".to_string(),
-            convert_string_to_slog_level(&runtime_level),
+            convert_string_to_slog_level(runtime_level),
         );
         updated_inner.insert(
             "agent".to_string(),
-            convert_string_to_slog_level(&agent_level),
+            convert_string_to_slog_level(agent_level),
         );
         updated_inner.insert(
             "hypervisor".to_string(),
-            convert_string_to_slog_level(&hypervisor_level),
+            convert_string_to_slog_level(hypervisor_level),
         );
         updated_inner
     });
@@ -1010,5 +1021,14 @@ mod tests {
             .try_recv()
             .expect("an Action::Shutdown message must be sent to stop the daemon");
         assert!(matches!(msg.action, Action::Shutdown));
+    }
+
+    #[test]
+    fn test_effective_log_level() {
+        assert_eq!(effective_log_level(false, "info"), "info");
+        assert_eq!(effective_log_level(false, "debug"), "debug");
+        assert_eq!(effective_log_level(true, "info"), "debug");
+        assert_eq!(effective_log_level(true, "trace"), "trace");
+        assert_eq!(effective_log_level(true, "warn"), "warn");
     }
 }

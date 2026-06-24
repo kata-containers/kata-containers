@@ -191,7 +191,7 @@ Since this project uses a number of terms not found in conventional
 dictionaries, we have a [kata-dictionary](../tests/spellcheck/kata-dictionary.txt)
 that contains some project specific terms we use.
 
-You can run the `cspell` checking tool on your document before raising a PR to ensure it
+You can run the `make docs-spellcheck` tool on your document before raising a PR to ensure it
 is free of mistakes.
 
 If your document introduces new terms, you need to update the custom

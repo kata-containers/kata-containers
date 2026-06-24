@@ -65,6 +65,68 @@ subjects:
   name: {{ .Chart.Name }}-sa
 {{- end }}
   namespace: {{ .Release.Namespace }}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+---
+# Dedicated, least-privilege identity for the job-mode dispatcher
+# (kata-deploy-job-dispatcher). It is a pure control-plane client: it lists nodes
+# (cluster-scoped) and manages per-node Jobs in the release namespace
+# (namespace-scoped). It deliberately does NOT get the privileged kata-deploy
+# host-mutation rights (node patch, runtimeclasses, NFD, etc.); those stay on
+# kata-deploy-sa, which only the per-node Jobs use.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-noderole{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+rules:
+# Enumerating nodes is inherently cluster-scoped.
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-noderb{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Chart.Name }}-dispatcher-noderole{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+  namespace: {{ .Release.Namespace }}
+rules:
+# The dispatcher only ever creates/watches/GCs per-node Jobs in its own namespace.
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-dispatcher-rb{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Chart.Name }}-dispatcher-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 ---
 # ServiceAccount and RBAC for the post-delete Job that removes the kept RBAC above.
 # Created as post-delete hooks with lower weight than the Job so they exist when the Job runs.

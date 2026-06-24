@@ -8,6 +8,11 @@
 
 debug: false
 
+# Install Kata via short-lived per-node Jobs instead of an always-on DaemonSet.
+# A tiny dispatcher Job fans out one install Job per selected node and exits, so
+# nothing keeps running on the node once the install completes.
+deploymentMode: job
+
 snapshotter:
   setup: ["nydus"]
 

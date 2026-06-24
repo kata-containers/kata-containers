@@ -139,6 +139,7 @@ jobs:
       matrix:
         component:
           - kata-deploy-binary
+          - kata-deploy-job-dispatcher
           - nydus-snapshotter-for-coco-guest-pull
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}

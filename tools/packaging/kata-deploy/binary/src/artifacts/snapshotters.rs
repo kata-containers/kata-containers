@@ -15,36 +15,50 @@ use std::path::Path;
 pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &Path) -> Result<()> {
     info!("Configuring erofs-snapshotter");
 
+    // "unmerged" mode keeps each image layer as its own per-layer `layer.erofs`
+    // (containerd's default, non-fsmerged layout), which is the only layout the
+    // Go runtime can consume. In the default "merged" mode we force containerd
+    // to merge layers into a single `fsmeta.erofs`, which is runtime-rs only.
+    let unmerged = config.erofs_merge_mode.as_deref() == Some("unmerged");
+
     // The Go runtime does not support fsmerged EROFS (fsmeta.erofs).
     // If the snapshotter handler mapping explicitly pairs a Go shim with
-    // erofs, that is a hard misconfiguration — bail out so the operator
-    // fixes the mapping instead of hitting cryptic runtime errors later.
-    if let Some(mapping) = config.snapshotter_handler_mapping_for_arch.as_ref() {
-        let mut go_shims_on_erofs = Vec::new();
-        for entry in mapping.split(',') {
-            let parts: Vec<&str> = entry.split(':').collect();
-            if parts.len() == 2 && parts[1] == "erofs" && !utils::is_rust_shim(parts[0]) {
-                go_shims_on_erofs.push(parts[0].to_string());
+    // erofs in the (default) merged mode, that is a hard misconfiguration —
+    // bail out so the operator fixes the mapping instead of hitting cryptic
+    // runtime errors later. In "unmerged" mode the Go runtime is supported, so
+    // skip this guard.
+    if !unmerged {
+        if let Some(mapping) = config.snapshotter_handler_mapping_for_arch.as_ref() {
+            let mut go_shims_on_erofs = Vec::new();
+            for entry in mapping.split(',') {
+                let parts: Vec<&str> = entry.split(':').collect();
+                if parts.len() == 2 && parts[1] == "erofs" && !utils::is_rust_shim(parts[0]) {
+                    go_shims_on_erofs.push(parts[0].to_string());
+                }
             }
-        }
-        if !go_shims_on_erofs.is_empty() {
-            warn!("##########################################################################");
-            warn!("#                                                                        #");
-            warn!("#  Go runtime shim(s) mapped to the erofs snapshotter:                   #");
-            for s in &go_shims_on_erofs {
-                warn!("#    - {:<64} #", s);
+            if !go_shims_on_erofs.is_empty() {
+                warn!("##########################################################################");
+                warn!("#                                                                        #");
+                warn!("#  Go runtime shim(s) mapped to the erofs snapshotter:                   #");
+                for s in &go_shims_on_erofs {
+                    warn!("#    - {:<64} #", s);
+                }
+                warn!("#                                                                        #");
+                warn!(
+                    "#  The Go runtime does NOT support fsmerged EROFS (fsmeta.erofs).         #"
+                );
+                warn!("#  Only runtime-rs shims are supported with merged erofs. Set            #");
+                warn!("#  EROFS_MERGE_MODE=unmerged to use the Go runtime with erofs.           #");
+                warn!("#                                                                        #");
+                warn!("##########################################################################");
+                return Err(anyhow::anyhow!(
+                    "erofs snapshotter: Go runtime shim(s) [{}] cannot be mapped to merged erofs. \
+                     The Go runtime does not support fsmerged EROFS. \
+                     Set EROFS_MERGE_MODE=unmerged, remove these shims from \
+                     SNAPSHOTTER_HANDLER_MAPPING, or switch them to runtime-rs.",
+                    go_shims_on_erofs.join(", ")
+                ));
             }
-            warn!("#                                                                        #");
-            warn!("#  The Go runtime does NOT support fsmerged EROFS (fsmeta.erofs).         #");
-            warn!("#  Only runtime-rs shims are supported with the erofs snapshotter.        #");
-            warn!("#                                                                        #");
-            warn!("##########################################################################");
-            return Err(anyhow::anyhow!(
-                "erofs snapshotter: Go runtime shim(s) [{}] cannot be mapped to erofs. \
-                 The Go runtime does not support fsmerged EROFS. \
-                 Remove these shims from SNAPSHOTTER_HANDLER_MAPPING or switch them to runtime-rs.",
-                go_shims_on_erofs.join(", ")
-            ));
         }
     }
 
@@ -88,11 +102,27 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
         "\"10G\"",
     )?;
-    toml_utils::set_toml_value(
-        configuration_file,
-        ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
-        "0",
-    )?;
+    // In the default "merged" mode, force containerd to merge all layers into a
+    // single fsmeta.erofs (max_unmerged_layers = 0). In "unmerged" mode we delete
+    // any previously-written value so each layer stays a separate layer.erofs,
+    // which the Go runtime requires.
+    //
+    // Because kata-deploy edits the containerd config in place, switching from
+    // merged to unmerged must actively remove the old `max_unmerged_layers = 0`
+    // left behind by a previous install. Otherwise the stale `0` would keep
+    // forcing the merged layout and break Go-runtime compatibility.
+    if !unmerged {
+        toml_utils::set_toml_value(
+            configuration_file,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+            "0",
+        )?;
+    } else {
+        toml_utils::delete_toml_value(
+            configuration_file,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        )?;
+    }
 
     Ok(())
 }
@@ -126,6 +156,11 @@ pub async fn configure_nydus_snapshotter(
         configuration_file,
         &format!(".proxy_plugins.\"{nydus}\".address"),
         &format!("\"/run/{containerd_nydus}/containerd-nydus-grpc.sock\""),
+    )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        &format!(".proxy_plugins.\"{nydus}\".exports.root"),
+        &format!("\"/var/lib/{nydus}\""),
     )?;
 
     Ok(())

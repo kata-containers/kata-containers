@@ -6,6 +6,8 @@
 
 use std::{
     fs,
+    fs::OpenOptions,
+    os::unix::{fs::OpenOptionsExt, io::AsRawFd},
     path::{Path, PathBuf},
 };
 
@@ -25,6 +27,33 @@ use hypervisor::device::DeviceType;
 
 pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
+
+// BLKROGET (_IO(0x12, 94)) returns the block device's read-only flag into an
+// int. It is encoded as an `_IO` ioctl but actually transfers data, so it is a
+// "bad" ioctl; request_code_none! produces the correct, arch-aware value.
+nix::ioctl_read_bad!(blkroget, nix::request_code_none!(0x12, 94), libc::c_int);
+
+/// Query the host block device's read-only flag (BLKROGET). This reflects the
+/// device's actual writability, which is the ground truth for whether the guest
+/// should see it read-only: when the host backing is read-only, writes from the
+/// guest fail at the host anyway, so the device must be exposed read-only. The
+/// read-only intent for such devices is frequently not carried in the OCI spec
+/// (no "ro" mount option), so the device flag is the only reliable source.
+pub(crate) fn is_block_device_readonly<P: AsRef<Path>>(path: P) -> Result<bool> {
+    let path = path.as_ref();
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(path)
+        .with_context(|| format!("open {} for readonly probe", path.display()))?;
+
+    let mut ro: libc::c_int = 0;
+    // Safe: file owns a valid fd for the duration of the call and `ro` is a
+    // valid, properly aligned pointer to an initialized int.
+    unsafe { blkroget(file.as_raw_fd(), &mut ro).context("ioctl BLKROGET")? };
+
+    Ok(ro != 0)
+}
 
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src

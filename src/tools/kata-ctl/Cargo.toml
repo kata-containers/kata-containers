@@ -16,7 +16,7 @@ clap = { workspace = true, features = ["derive", "cargo"] }
 serde_json.workspace = true
 thiserror.workspace = true
 privdrop = "0.5.2"
-nix = "0.25.0"
+nix = { workspace = true }
 strum = "0.24.1"
 strum_macros = "0.24.3"
 serde.workspace = true
@@ -74,7 +74,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 [dev-dependencies]
 semver = "1.0.12"
 tempfile.workspace = true
-nix = "0.25.0"
+nix = { workspace = true }
 test-utils.workspace = true
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
 

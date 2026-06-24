@@ -41,10 +41,12 @@ jobs:
       matrix:
         environment: [
           { vmm: clh, containerd_version: latest },
+          { vmm: clh, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: clh, containerd_version: minimum },
           { vmm: dragonball, containerd_version: latest },
           { vmm: dragonball, containerd_version: minimum },
           { vmm: qemu, containerd_version: latest },
+          { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: qemu, containerd_version: minimum },
           { vmm: qemu-runtime-rs, containerd_version: latest },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
@@ -71,6 +73,8 @@ jobs:
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter || '' }}
       BLOCKFILE_SNAPSHOTTER_SCRATCH_SIZE: ${{ matrix.environment.blockfile_scratch_size || '512M' }}
+      EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.erofs_mode }}
+      EROFS_MERGE_MODE: ${{ matrix.environment.erofs_merge_mode }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -119,7 +123,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Configure ${{ matrix.environment.snapshotter }} snapshotter
-        if: ${{ matrix.environment.snapshotter != '' }}
+        if: ${{ matrix.environment.snapshotter == 'blockfile' || matrix.environment.snapshotter == 'devmapper' }}
         run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata

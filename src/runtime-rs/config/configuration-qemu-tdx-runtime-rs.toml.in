@@ -270,9 +270,17 @@ block_device_physical_sector_size = 0
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently implemented
-# for virtio-scsi and virtio-blk.
+# for virtio-scsi. For virtio-blk-pci hotplug, use indep_iothreads instead.
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
+
+# Number of independent IO threads for virtio-blk-pci devices.
+# When set to a value greater than 0, creates dedicated IO threads
+# that are attached to virtio-blk-pci devices during hotplug.
+# Requires enable_iothreads = true; has no effect otherwise.
+# Default 0 (disabled).
+#
+indep_iothreads = @DEFINDEPIOTHREADS@
 
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
@@ -326,17 +334,6 @@ enable_iommu_platform = false
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
-
-# Enable file based guest memory support. The default is an empty string which
-# will disable this feature. In the case of virtio-fs, this is enabled
-# automatically and '/dev/shm' is used as the backing folder.
-# This option will be ignored if VM templating is enabled.
-file_mem_backend = "@DEFFILEMEMBACKEND@"
-
-# List of valid annotations values for the file_mem_backend annotation
-# The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
-valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
@@ -703,8 +700,8 @@ emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 # they may break compatibility, and are prepared for a big version bump.
 # Supported experimental features:
 # for example:
-#       experimental=["force_guest_pull"]
-# which is for enable force_guest_pull mode in CoCo scenarios.
+#       experimental = ["force_guest_pull"]
+# which enables force_guest_pull mode in CoCo scenarios.
 # (default: [])
 experimental = @DEFAULTEXPFEATURES@
 

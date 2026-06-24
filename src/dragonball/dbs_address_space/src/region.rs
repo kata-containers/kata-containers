@@ -3,7 +3,6 @@
 
 use std::ffi::CString;
 use std::fs::{File, OpenOptions};
-use std::os::unix::io::FromRawFd;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -183,10 +182,10 @@ impl AddressSpaceRegion {
                     CString::new("hugeshmem").expect("CString::new('hugeshmem') failed")
                 };
                 let filename = fn_str.as_c_str();
-                let fd = memfd::memfd_create(filename, memfd::MemFdCreateFlag::empty())
+                let fd = memfd::memfd_create(filename, memfd::MFdFlags::empty())
                     .map_err(AddressSpaceError::CreateMemFd)?;
                 // Safe because we have just created the fd.
-                let file: File = unsafe { File::from_raw_fd(fd) };
+                let file: File = File::from(fd);
                 file.set_len(size).map_err(AddressSpaceError::SetFileSize)?;
                 Self::build(
                     AddressSpaceRegionType::DefaultMemory,

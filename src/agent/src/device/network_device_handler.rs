@@ -127,70 +127,186 @@ impl UeventMatcher for NetCcwMatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(target_arch = "s390x"))]
+    use crate::device::test_helpers;
+    use rstest::rstest;
+
+    #[cfg(not(target_arch = "s390x"))]
+    // Helper to create a network PCI uevent
+    fn create_net_pci_uevent(
+        relpath: &str,
+        root_complex: &str,
+        interface: &str,
+    ) -> crate::uevent::Uevent {
+        let root_bus = create_pci_root_bus_path(root_complex);
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.devpath = format!("{root_bus}{relpath}");
+        uev.subsystem = String::from("net");
+        uev.interface = String::from(interface);
+        uev
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    #[rstest]
+    #[case::matcher_a_matches_uev_a(
+        "/0000:00:02.0/0000:01:01.0",
+        "/0000:00:02.0/0000:01:01.0",
+        true
+    )]
+    #[case::matcher_b_matches_uev_b(
+        "/0000:00:02.0/0000:01:02.0",
+        "/0000:00:02.0/0000:01:02.0",
+        true
+    )]
+    #[case::matcher_a_rejects_uev_b(
+        "/0000:00:02.0/0000:01:01.0",
+        "/0000:00:02.0/0000:01:02.0",
+        false
+    )]
+    #[case::matcher_b_rejects_uev_a(
+        "/0000:00:02.0/0000:01:02.0",
+        "/0000:00:02.0/0000:01:01.0",
+        false
+    )]
+    #[tokio::test]
+    async fn test_net_pci_matcher_basic_matching(
+        #[case] matcher_relpath: &str,
+        #[case] uevent_relpath: &str,
+        #[case] should_match: bool,
+    ) {
+        let matcher = NetPciMatcher::new(matcher_relpath, "00");
+        let uev = create_net_pci_uevent(uevent_relpath, "00", "eth0");
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for '{}' should {} uevent for '{}'",
+            matcher_relpath,
+            if should_match { "match" } else { "reject" },
+            uevent_relpath
+        );
+    }
 
     #[cfg(not(target_arch = "s390x"))]
     #[tokio::test]
-    #[allow(clippy::redundant_clone)]
-    async fn test_net_pci_matcher() {
+    async fn test_net_pci_matcher_with_net_substring() {
+        let relpath = "/0000:00:02.0/0000:01:03.0";
         let root_bus = create_pci_root_bus_path("00");
-        let relpath_a = "/0000:00:02.0/0000:01:01.0";
-
-        let mut uev_a = crate::uevent::Uevent::default();
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.devpath = format!("{root_bus}{relpath_a}");
-        uev_a.subsystem = String::from("net");
-        uev_a.interface = String::from("eth0");
-        let matcher_a = NetPciMatcher::new(relpath_a, "00");
-        println!("Matcher a : {}", matcher_a.devpath);
-
-        let relpath_b = "/0000:00:02.0/0000:01:02.0";
-        let mut uev_b = uev_a.clone();
-        uev_b.devpath = format!("{root_bus}{relpath_b}");
-        let matcher_b = NetPciMatcher::new(relpath_b, "00");
-
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
-
-        let relpath_c = "/0000:00:02.0/0000:01:03.0";
         let net_substr = "/net/eth0";
-        let mut uev_c = uev_a.clone();
-        uev_c.devpath = format!("{root_bus}{relpath_c}{net_substr}");
-        let matcher_c = NetPciMatcher::new(relpath_c, "00");
 
-        assert!(matcher_c.is_match(&uev_c));
-        assert!(!matcher_a.is_match(&uev_c));
-        assert!(!matcher_b.is_match(&uev_c));
+        let matcher = NetPciMatcher::new(relpath, "00");
+        let mut uev = create_net_pci_uevent(relpath, "00", "eth0");
+        uev.devpath = format!("{root_bus}{relpath}{net_substr}");
+
+        assert!(
+            matcher.is_match(&uev),
+            "Matcher should match uevent with /net/ substring in devpath"
+        );
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    #[rstest]
+    #[case::wrong_subsystem(test_helpers::SUBSYSTEM_BLOCK, "Wrong subsystem should be rejected")]
+    #[tokio::test]
+    async fn test_net_pci_matcher_wrong_subsystem(
+        #[case] wrong_subsystem: &str,
+        #[case] description: &str,
+    ) {
+        let relpath = "/0000:00:02.0/0000:01:01.0";
+        let matcher = NetPciMatcher::new(relpath, "00");
+        let mut uev = create_net_pci_uevent(relpath, "00", "eth0");
+        uev.subsystem = wrong_subsystem.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    #[rstest]
+    #[case::wrong_action(test_helpers::ACTION_REMOVE, "Wrong action should be rejected")]
+    #[tokio::test]
+    async fn test_net_pci_matcher_wrong_action(
+        #[case] wrong_action: &str,
+        #[case] description: &str,
+    ) {
+        let relpath = "/0000:00:02.0/0000:01:01.0";
+        let matcher = NetPciMatcher::new(relpath, "00");
+        let mut uev = create_net_pci_uevent(relpath, "00", "eth0");
+        uev.action = wrong_action.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    #[tokio::test]
+    async fn test_net_pci_matcher_empty_interface() {
+        let relpath = "/0000:00:02.0/0000:01:01.0";
+        let matcher = NetPciMatcher::new(relpath, "00");
+        let mut uev = create_net_pci_uevent(relpath, "00", "eth0");
+        uev.interface = String::new();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with empty interface"
+        );
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    #[tokio::test]
+    async fn test_net_pci_matcher_wrong_devpath() {
+        let relpath = "/0000:00:02.0/0000:01:01.0";
+        let root_bus = create_pci_root_bus_path("00");
+        let matcher = NetPciMatcher::new(relpath, "00");
+        let mut uev = create_net_pci_uevent(relpath, "00", "eth0");
+        uev.devpath = format!("{}/0000:00:03.0", root_bus);
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with wrong devpath"
+        );
     }
 
     #[cfg(target_arch = "s390x")]
+    // Helper to create a network CCW uevent
+    fn create_net_ccw_uevent(device: &ccw::Device, interface: &str) -> crate::uevent::Uevent {
+        let mut uev = crate::uevent::Uevent::default();
+        uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = String::from("net");
+        uev.interface = String::from(interface);
+        uev.devpath = format!(
+            "{}/0.0.0001/{}/virtio1/{}/{}",
+            CCW_ROOT_BUS_PATH, device, uev.subsystem, uev.interface
+        );
+        uev
+    }
+
+    #[cfg(target_arch = "s390x")]
+    #[rstest]
+    #[case::dev_a_matches_uev_a(0, 1, 0, 1, true)]
+    #[case::dev_b_matches_uev_b(1, 2, 1, 2, true)]
+    #[case::dev_a_rejects_uev_b(0, 1, 1, 2, false)]
+    #[case::dev_b_rejects_uev_a(1, 2, 0, 1, false)]
     #[tokio::test]
-    async fn test_net_ccw_matcher() {
-        let dev_a = ccw::Device::new(0, 1).unwrap();
-        let dev_b = ccw::Device::new(1, 2).unwrap();
+    async fn test_net_ccw_matcher_basic_matching(
+        #[case] matcher_ssid: u8,
+        #[case] matcher_devno: u16,
+        #[case] uevent_ssid: u8,
+        #[case] uevent_devno: u16,
+        #[case] should_match: bool,
+    ) {
+        let matcher_dev = ccw::Device::new(matcher_ssid, matcher_devno).unwrap();
+        let uevent_dev = ccw::Device::new(uevent_ssid, uevent_devno).unwrap();
 
-        let mut uev_a = crate::uevent::Uevent::default();
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = String::from("net");
-        uev_a.interface = String::from("eth0");
-        uev_a.devpath = format!(
-            "{}/0.0.0001/{}/virtio1/{}/{}",
-            CCW_ROOT_BUS_PATH, dev_a, uev_a.subsystem, uev_a.interface
+        let matcher = NetCcwMatcher::new(CCW_ROOT_BUS_PATH, &matcher_dev);
+        let uev = create_net_ccw_uevent(&uevent_dev, "eth0");
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for device {} should {} uevent for device {}",
+            matcher_dev,
+            if should_match { "match" } else { "reject" },
+            uevent_dev
         );
-
-        let mut uev_b = uev_a.clone();
-        uev_b.devpath = format!(
-            "{}/0.0.0001/{}/virtio1/{}/{}",
-            CCW_ROOT_BUS_PATH, dev_b, uev_b.subsystem, uev_b.interface
-        );
-
-        let matcher_a = NetCcwMatcher::new(CCW_ROOT_BUS_PATH, &dev_a);
-        let matcher_b = NetCcwMatcher::new(CCW_ROOT_BUS_PATH, &dev_b);
-
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
     }
 }

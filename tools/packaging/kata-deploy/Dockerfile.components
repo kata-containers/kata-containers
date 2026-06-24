@@ -57,6 +57,7 @@ WORKDIR /kata
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY tools/packaging/kata-deploy/binary ./tools/packaging/kata-deploy/binary
+COPY tools/packaging/kata-deploy/job-dispatcher ./tools/packaging/kata-deploy/job-dispatcher
 
 # Install target and run tests based on architecture
 # - AMD64/arm64: use musl for fully static binaries
@@ -98,9 +99,11 @@ RUN \
 	rust_target="$(cat /tmp/rust_target)" && \
 	echo "Checking code formatting..." && \
 	cargo fmt -p kata-deploy --check && \
+	cargo fmt -p kata-deploy-job-dispatcher --check && \
 	echo "Code formatting check passed!" && \
 	echo "Running cargo clippy with target ${rust_target}..." && \
 	cargo clippy -p kata-deploy --all-targets --all-features --release --locked --target "${rust_target}" -- -D warnings && \
+	cargo clippy -p kata-deploy-job-dispatcher --all-targets --all-features --release --locked --target "${rust_target}" -- -D warnings && \
 	echo "Cargo clippy passed!"
 
 # Run tests using --test-threads=1 to prevent environment variable pollution between tests,
@@ -109,14 +112,16 @@ RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
 	echo "Running binary tests with target ${rust_target}..." && \
 	RUSTFLAGS="-D warnings" cargo test -p kata-deploy --target "${rust_target}" -- --test-threads=1 && \
+	RUSTFLAGS="-D warnings" cargo test -p kata-deploy-job-dispatcher --target "${rust_target}" -- --test-threads=1 && \
 	echo "All tests passed!"
 
 RUN \
 	rust_target="$(cat /tmp/rust_target)"; \
-	echo "Building kata-deploy binary for ${rust_target}..." && \
-	RUSTFLAGS="-D warnings" cargo build --release -p kata-deploy --target "${rust_target}" && \
+	echo "Building kata-deploy + kata-deploy-job-dispatcher binaries for ${rust_target}..." && \
+	RUSTFLAGS="-D warnings" cargo build --release -p kata-deploy -p kata-deploy-job-dispatcher --target "${rust_target}" && \
 	mkdir -p /kata-deploy/bin && \
 	cp "/kata/target/${rust_target}/release/kata-deploy" /kata-deploy/bin/kata-deploy && \
+	cp "/kata/target/${rust_target}/release/kata-deploy-job-dispatcher" /kata-deploy/bin/kata-deploy-job-dispatcher && \
 	echo "Cleaning up build artifacts to save disk space..." && \
 	rm -rf /kata/target && \
 	cargo clean

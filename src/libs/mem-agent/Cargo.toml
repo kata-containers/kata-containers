@@ -13,7 +13,7 @@ page_size = "0.6"
 chrono = "0.4"
 tokio = { version = "1.45.1", features = ["full"] }
 maplit = "1.0"
-nix = { version = "0.30.1", features = ["fs", "sched"] }
+nix = { workspace = true, features = ["fs", "sched"] }
 
 [dev-dependencies]
 maplit = "1.0"
@@ -21,5 +21,5 @@ slog-term = "2.9.0"
 slog-async = "2.7"
 once_cell = "1.9.0"
 lazy_static = "1.4"
-nix = { version = "0.30.1", features = ["user"] }
+nix = { workspace = true, features = ["user"] }
 test-utils = { path = "../test-utils" }

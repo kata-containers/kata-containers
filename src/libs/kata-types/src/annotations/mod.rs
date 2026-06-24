@@ -99,9 +99,14 @@ pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_HASH: &str =
     "io.katacontainers.config.hypervisor.jailer_hash";
 /// A sandbox annotation to enable IO to be processed in a separate thread.
-/// Supported currently for virtio-scsi driver.
+/// Supported for the virtio-scsi driver, and also used for virtio-blk-pci when
+/// combined with `KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS`.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS: &str =
     "io.katacontainers.config.hypervisor.enable_iothreads";
+/// A sandbox annotation to specify the number of independent IO threads.
+/// Used for virtio-blk-pci devices during hotplug.
+pub const KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS: &str =
+    "io.katacontainers.config.hypervisor.indep_iothreads";
 /// The hash type used for assets verification
 pub const KATA_ANNO_CFG_HYPERVISOR_ASSET_HASH_TYPE: &str =
     "io.katacontainers.config.hypervisor.asset_hash_type";
@@ -230,9 +235,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES: &str =
 /// A sandbox annotation to specify huge page mode of memory backend.
 pub const KATA_ANNO_CFG_HYPERVISOR_HUGEPAGE_TYPE: &str =
     "io.katacontainers.config.hypervisor.hugepage_type";
-/// A sandbox annotation to soecify file based memory backend root directory.
-pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
-    "io.katacontainers.config.hypervisor.file_mem_backend";
 /// A sandbox annotation that is used to enable/disable virtio-mem.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM: &str =
     "io.katacontainers.config.hypervisor.enable_virtio_mem";
@@ -570,6 +572,15 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
+                    KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            let indep_iothreads = r.unwrap_or_default();
+                            hv.indep_iothreads = indep_iothreads;
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
                     // Hypervisor Block Device related annotations
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER => {
                         hv.blockdev_info.block_device_driver = value.to_string();
@@ -802,37 +813,24 @@ impl Annotation {
                     }
                     // Hypervisor Memory related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
-                        match byte_unit::Byte::parse_str(value, true) {
-                            Ok(mem_bytes) => {
-                                let memory_size = mem_bytes
-                                    .get_adjusted_unit(byte_unit::Unit::MiB)
-                                    .get_value()
-                                    as u32;
-                                info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
-                                if memory_size
-                                    < get_hypervisor_plugin(hypervisor_name)
-                                        .unwrap()
-                                        .get_min_memory()
-                                {
-                                    return Err(io::Error::new(
-                                        io::ErrorKind::InvalidData,
-                                        format!(
-                                            "memory specified in annotation {} is less than minimum limitation {}",
-                                            memory_size,
-                                            get_hypervisor_plugin(hypervisor_name)
-                                                .unwrap()
-                                                .get_min_memory()
-                                        ),
-                                    ));
-                                }
-                                hv.memory_info.default_memory = memory_size;
+                        if let Some(memory_size) = convert_to_megabytes(value)? {
+                            if memory_size
+                                < get_hypervisor_plugin(hypervisor_name)
+                                    .unwrap()
+                                    .get_min_memory()
+                            {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "memory specified in annotation {} is less than minimum limitation {}",
+                                        memory_size,
+                                        get_hypervisor_plugin(hypervisor_name)
+                                            .unwrap()
+                                            .get_min_memory()
+                                    ),
+                                ));
                             }
-                            Err(error) => {
-                                error!(
-                                    sl!(),
-                                    "failed to parse byte from string {} error {:?}", value, error
-                                );
-                            }
+                            hv.memory_info.default_memory = memory_size;
                         }
                     }
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS => match self.get_value::<u32>(key) {
@@ -874,10 +872,6 @@ impl Annotation {
                                 ));
                             }
                         }
-                    }
-                    KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR => {
-                        hv.memory_info.validate_memory_backend_path(value)?;
-                        hv.memory_info.file_mem_backend = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM => match self.get_value::<bool>(key) {
                         Ok(r) => {
@@ -1216,5 +1210,64 @@ impl Annotation {
         config.adjust_config()?;
 
         Ok(())
+    }
+}
+
+fn convert_to_megabytes(mem_size_str: &str) -> Result<Option<u32>> {
+    match byte_unit::Byte::parse_str(mem_size_str, true) {
+        Ok(mut mem_size) => {
+            let no_suffix_given = mem_size_str
+                .trim()
+                .chars()
+                .all(|c: char| c.is_ascii_digit());
+            if no_suffix_given {
+                // NOTE the error is apparently unreachable at the moment:
+                // Byte::from_u64_with_unit() doesn't fail unless its argument
+                // is too big, however that same too big arg will fail to
+                // Byte::parse_str() in the first place.  (Obviously we still
+                // need to handle it anyway.)
+                mem_size =
+                    byte_unit::Byte::from_u64_with_unit(mem_size.as_u64(), byte_unit::Unit::MiB)
+                        .ok_or(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("failed to convert {} to MiB", mem_size.as_u64()),
+                        ))?;
+            }
+            let memory_size = mem_size.get_adjusted_unit(byte_unit::Unit::MiB).get_value() as u32;
+            Ok(Some(memory_size))
+        }
+        Err(error) => {
+            error!(
+                sl!(),
+                "failed to parse byte from string {} error {:?}", mem_size_str, error
+            );
+            Ok(None)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_memory_no_unit() {
+        let result = convert_to_megabytes("2048");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(2048));
+    }
+
+    #[test]
+    fn parse_memory_with_units() {
+        let result = convert_to_megabytes("2 GiB");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(2048));
+    }
+
+    #[test]
+    fn parse_memory_parse_error() {
+        let result = convert_to_megabytes("2048r");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
     }
 }

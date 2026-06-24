@@ -13,13 +13,13 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
-        KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
-        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
-        KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CFG_HYPERVISOR_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
-        KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
+        KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS,
+        KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH, KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES,
+        KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -49,10 +49,6 @@ mod tests {
             .expect("failed to execute process");
         std::process::Command::new("mkdir")
             .arg("./jvm")
-            .output()
-            .expect("failed to execute process");
-        std::process::Command::new("mkdir")
-            .arg("./test_file_backend_mem_root")
             .output()
             .expect("failed to execute process");
         std::process::Command::new("mkdir")
@@ -123,12 +119,12 @@ mod tests {
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
-            "false".to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_INDEP_IO_THREADS.to_string(),
+            "3".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR.to_string(),
-            "./test_file_backend_mem_root".to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
+            "false".to_string(),
         );
         anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES.to_string(),
@@ -192,11 +188,7 @@ mod tests {
             assert!(!hv.memory_info.enable_guest_swap);
             assert_eq!(hv.memory_info.default_memory, 100);
             assert!(!hv.enable_iothreads);
-            assert!(!hv.enable_iothreads);
-            assert_eq!(
-                hv.memory_info.file_mem_backend,
-                "./test_file_backend_mem_root"
-            );
+            assert_eq!(hv.indep_iothreads, 3);
             assert!(!hv.memory_info.enable_hugepages);
             assert_eq!(hv.jailer_path, "./test_jailer_path".to_string());
             assert_eq!(hv.boot_info.kernel, "./test_kernel_path");
@@ -234,11 +226,6 @@ mod tests {
             .expect("failed to execute process");
         std::process::Command::new("rmdir")
             .arg("./test_hypervisor_hook_path")
-            .output()
-            .expect("failed to execute process");
-
-        std::process::Command::new("rmdir")
-            .arg("./test_file_backend_mem_root")
             .output()
             .expect("failed to execute process");
 

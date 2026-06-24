@@ -12,6 +12,7 @@ use agent::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use common::error::is_normal_oom_shutdown_error;
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
 use common::{
@@ -78,6 +79,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use strum::Display;
 use tokio::sync::{mpsc::Sender, watch, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
@@ -133,6 +135,7 @@ pub struct VirtSandbox {
     sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
     factory: Option<Factory>,
+    cancel_token: CancellationToken,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -165,6 +168,7 @@ impl VirtSandbox {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
         let (exit_notify_tx, _) = watch::channel(false);
+        let cancel_token = CancellationToken::new();
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
@@ -177,6 +181,7 @@ impl VirtSandbox {
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
+            cancel_token,
         })
     }
 
@@ -561,23 +566,14 @@ impl VirtSandbox {
         hypervisor_config: &HypervisorConfig,
         init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
-        let available_protection = available_guest_protection()?;
-        // We need to cover the following case:
-        // - Required to run Kata containers in TEE environment
-        // E.g., available_guest_protection() returns Se, but confidential_guest is not set.
-        // Unless the configuration is skipped, the VM will fail to start
-        // due to lack of a secure boot image for IBM SEL
-        if available_protection != GuestProtection::NoProtection
-            && !hypervisor_config.security_info.confidential_guest
-        {
-            info!(
-                sl!(),
-                "confidential_guest is not set while {:?} protection is detected, \
-                 skipping protection device config",
-                available_protection
-            );
+        // No guest protection requested: skip host detection and run without
+        // a protection device (also avoids failing on hosts that advertise a
+        // protection they cannot use, e.g. SEV without SEV-SNP).
+        if !hypervisor_config.security_info.confidential_guest {
             return Ok(None);
         }
+
+        let available_protection = available_guest_protection()?;
         info!(
             sl!(),
             "sandbox: available protection: {:?}", available_protection
@@ -900,37 +896,51 @@ impl Sandbox for VirtSandbox {
 
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
+        let cancel_token = self.cancel_token.clone();
+
         info!(sl!(), "oom watcher start");
         tokio::spawn(async move {
             loop {
-                match agent
-                    .get_oom_event(agent::Empty::new())
-                    .await
-                    .context("get oom event")
-                {
-                    Ok(resp) => {
-                        let cid = &resp.container_id;
-                        warn!(sl!(), "send oom event for container {}", &cid);
-                        let event = TaskOOM {
-                            container_id: cid.to_string(),
-                            ..Default::default()
-                        };
-                        let msg = Message::new(Action::Event(Arc::new(event)));
-                        let lock_sender = sender.lock().await;
-                        if let Err(err) = lock_sender.send(msg).await.context("send event") {
-                            error!(
-                                sl!(),
-                                "failed to send oom event for {} error {:?}", cid, err
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        warn!(sl!(), "failed to get oom event error {:?}", err);
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        // Sandbox or VM is shutting down, gracefully exit watcher
+                        info!(sl!(), "oom watcher cancelled, sandbox is stopping");
                         break;
+                    }
+                    res = agent.get_oom_event(agent::Empty::new()) => {
+                        match res.context("get oom event") {
+                            Ok(resp) => {
+                                let cid = &resp.container_id;
+                                warn!(sl!(), "send oom event for container {}", &cid);
+                                let event = TaskOOM {
+                                    container_id: cid.to_string(),
+                                    ..Default::default()
+                                };
+                                let msg = Message::new(Action::Event(Arc::new(event)));
+                                let lock_sender = sender.lock().await;
+                                if let Err(err) = lock_sender.send(msg).await.context("send event") {
+                                    error!(
+                                        sl!(),
+                                        "failed to send oom event for {} error {:?}", cid, err
+                                    );
+                                }
+                            }
+                            Err(err) => {
+                                // Handle errors by type
+                                if is_normal_oom_shutdown_error(&err) {
+                                    info!(sl!(), "oom watcher exit on sandbox shutdown: {:?}", err);
+                                    break;
+                                } else {
+                                    warn!(sl!(), "failed to get oom event error {:?}", err);
+                                    continue;
+                                }
+                            }
+                        }
                     }
                 }
             }
         });
+
         self.monitor.start(id, self.agent.clone());
         self.save().await.context("save state")?;
 
@@ -1048,6 +1058,10 @@ impl Sandbox for VirtSandbox {
         if state == SandboxState::Stopped {
             return Ok(());
         }
+
+        // Cancel the OOM watcher before tearing down the VM so it exits
+        // cleanly instead of hitting ECONNRESET/EOF on a closed channel.
+        self.cancel_token.cancel();
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init {
@@ -1344,6 +1358,7 @@ impl Persist for VirtSandbox {
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
+            cancel_token: CancellationToken::default(),
         })
     }
 }

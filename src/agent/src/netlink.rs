@@ -567,7 +567,7 @@ impl Handle {
 
                 if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
                     if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
+                        if Errno::from_raw(code.get()) != Errno::EEXIST {
                             return Err(anyhow!(
                                 "Failed to add IP v6 route (src: {}, dst: {}, gtw: {},Err: {})",
                                 route.source(),
@@ -611,7 +611,7 @@ impl Handle {
 
                 if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
                     if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
+                        if Errno::from_raw(code.get()) != Errno::EEXIST {
                             return Err(anyhow!(
                                 "Failed to add IP v4 route (src: {}, dst: {}, gtw: {},Err: {})",
                                 route.source(),

@@ -111,7 +111,10 @@ RUN \
 	esac
 
 #### kata-deploy main image
-FROM gcr.io/distroless/static-debian13@sha256:972618ca78034aaddc55864342014a96b85108c607372f7cbd0dbd1361f1d841
+# distroless does not publish pinned/versioned tags - only rolling ones
+# (latest, nonroot, debug) - so :latest is the intended way to consume it.
+# hadolint ignore=DL3007
+FROM gcr.io/distroless/static-debian13:latest
 
 ARG DESTINATION=/opt/kata-artifacts
 
