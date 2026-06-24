@@ -153,16 +153,17 @@ pub fn arch_guest_protection(
     let is_snp_available = check_contents(snp_path)?;
     let is_sev_available = is_snp_available || check_contents(sev_path)?;
     if is_snp_available || is_sev_available {
-        let (cbitpos, phys_addr_reduction) = retrieve_sev_params()?;
-        let sev_snp_details = SevSnpDetails {
-            cbitpos,
-            phys_addr_reduction,
-        };
-        return Ok(if is_snp_available {
-            GuestProtection::Snp(sev_snp_details)
-        } else {
-            GuestProtection::Sev(sev_snp_details)
-        });
+        if let Ok((cbitpos, phys_addr_reduction)) = retrieve_sev_params() {
+            let sev_snp_details = SevSnpDetails {
+                cbitpos,
+                phys_addr_reduction,
+            };
+            return Ok(if is_snp_available {
+                GuestProtection::Snp(sev_snp_details)
+            } else {
+                GuestProtection::Sev(sev_snp_details)
+            });
+        }
     }
 
     Ok(GuestProtection::NoProtection)
