@@ -269,6 +269,11 @@ pub enum StartMicroVmError {
     /// Guest memory error
     #[error("Guest memory error: {0}")]
     GuestMemoryError(#[source] vm_memory::guest_memory::Error),
+
+    #[cfg(target_arch = "x86_64")]
+    /// Cannot enable hypercall map gpa range
+    #[error("Failed to enable hypercall map gpa range: {0}")]
+    EnableHcMapGpaRange(#[source] vmm_sys_util::errno::Error),
 }
 
 /// Errors associated with starting the instance.
