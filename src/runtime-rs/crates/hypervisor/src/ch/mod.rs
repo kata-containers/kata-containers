@@ -76,6 +76,12 @@ impl Hypervisor for CloudHypervisor {
         inner.start_vm(timeout).await
     }
 
+    async fn set_vmm_cgroup_path(&self, cgroup_procs_path: String) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.set_vmm_cgroup_path(cgroup_procs_path);
+        Ok(())
+    }
+
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.stop_vm().await
