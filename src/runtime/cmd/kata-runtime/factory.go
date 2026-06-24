@@ -167,7 +167,7 @@ var initFactoryCommand = cli.Command{
 			VMCache:      runtimeConfig.FactoryConfig.VMCacheNumber > 0,
 			VMConfig: vc.VMConfig{
 				HypervisorType:   runtimeConfig.HypervisorType,
-				HypervisorConfig: runtimeConfig.HypervisorConfig,
+				HypervisorConfig: oci.StaticHypervisorConfig(runtimeConfig),
 				AgentConfig:      runtimeConfig.AgentConfig,
 			},
 		}

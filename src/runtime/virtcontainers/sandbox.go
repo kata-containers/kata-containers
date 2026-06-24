@@ -1591,10 +1591,10 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 				AgentConfig:      s.config.AgentConfig,
 			})
 			if err != nil {
-				return err
+				s.Logger().WithError(err).Warn("factory GetVM failed, falling back to direct boot")
+			} else {
+				return vm.assignSandbox(s)
 			}
-
-			return vm.assignSandbox(s)
 		}
 
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
@@ -2400,26 +2400,48 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		return fmt.Errorf("sandbox config is nil")
 	}
 
-	if s.config.StaticResourceMgmt {
-		s.Logger().Debug("no resources updated: static resource management is set")
+	// Static resource management without a VM template: the VM was already booted
+	// directly at its full, correct size (default + workload), so there is nothing
+	// to resize here.
+	if s.config.StaticResourceMgmt && s.factory == nil {
+		s.Logger().Debug("no resources updated: static resource management is set and no factory in use")
 		return nil
 	}
 
-	sandboxVCPUs, err := s.calculateSandboxCPUs()
-	if err != nil {
-		return err
-	}
-	// Add default vcpus for sandbox
-	sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUsF
+	var (
+		sandboxVCPUs       float32
+		sandboxMemoryByte  uint64
+		sandboxneedPodSwap bool
+		sandboxSwapByte    int64
+		err                error
+	)
 
-	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
+	if s.config.StaticResourceMgmt {
+		// Static resource management with a VM template: the template was booted at
+		// the small static *default* size (it is shared, so it can't be pre-sized
+		// per pod). Grow it up to the full size in s.config.HypervisorConfig, which
+		// already includes the workload - so use it directly.
+		sandboxVCPUs = s.config.HypervisorConfig.NumVCPUsF
+		sandboxMemoryByte = uint64(s.config.HypervisorConfig.MemorySize) << utils.MibToBytesShift
+	} else {
+		// Dynamic resource management: nothing is sized up front. The VM was booted
+		// at the configured base/overhead size and grows on demand. The target is
+		// *additive* - the sum of the live container requests plus the base
+		// overhead - and is recomputed every time a container is added or started.
+		sandboxVCPUs, err = s.calculateSandboxCPUs()
+		if err != nil {
+			return err
+		}
+		// Add default vcpus for sandbox
+		sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUsF
 
-	// Add default / rsvd memory for sandbox.
-	hypervisorMemoryByteI64 := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
-	hypervisorMemoryByte := uint64(hypervisorMemoryByteI64)
-	sandboxMemoryByte += hypervisorMemoryByte
-	if sandboxneedPodSwap {
-		sandboxSwapByte += hypervisorMemoryByteI64
+		sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte = s.calculateSandboxMemory()
+		// Add default / rsvd memory for sandbox.
+		hypervisorMemoryByteI64 := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
+		sandboxMemoryByte += uint64(hypervisorMemoryByteI64)
+		if sandboxneedPodSwap {
+			sandboxSwapByte += hypervisorMemoryByteI64
+		}
 	}
 	s.Logger().WithField("sandboxMemoryByte", sandboxMemoryByte).WithField("sandboxneedPodSwap", sandboxneedPodSwap).WithField("sandboxSwapByte", sandboxSwapByte).Debugf("updateResources: after calculateSandboxMemory")
 
@@ -2432,21 +2454,29 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	}
 
 	// Update VCPUs
-	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
-	oldCPUs, newCPUs, err := s.hypervisor.ResizeVCPUs(ctx, RoundUpNumVCPUs(sandboxVCPUs))
-	if err != nil {
-		return err
-	}
-
-	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
-	// If the CPUs were increased, ask agent to online them
-	if oldCPUs < newCPUs {
-		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", newCPUs)
-		if err := s.agent.onlineCPUMem(ctx, newCPUs, true); err != nil {
+	reqVCPUs := RoundUpNumVCPUs(sandboxVCPUs)
+	if reqVCPUs == 0 {
+		// No workload vCPU request (e.g. a BestEffort pod restored from a
+		// template). Leave the VM at its current/boot vCPU count - resizing to 0
+		// is invalid and the template already provides the baseline vCPUs.
+		s.Logger().Debug("no vCPU request; skipping vCPU update")
+	} else {
+		s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
+		oldCPUs, newCPUs, err := s.hypervisor.ResizeVCPUs(ctx, reqVCPUs)
+		if err != nil {
 			return err
 		}
+
+		s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
+		// If the CPUs were increased, ask agent to online them
+		if oldCPUs < newCPUs {
+			s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", newCPUs)
+			if err := s.agent.onlineCPUMem(ctx, newCPUs, true); err != nil {
+				return err
+			}
+		}
+		s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
 	}
-	s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
 
 	// Update Memory --
 	// If we're using ACPI hotplug for memory, there's a limitation on the amount of memory which can be hotplugged at a single time.
@@ -2463,34 +2493,45 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	hconfig := s.hypervisor.HypervisorConfig()
 
-	for {
-		currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
+	// If the target memory is zero or not above the current VM memory, there is
+	// nothing to hotplug. This happens for BestEffort pods when default_memory=0
+	// and the VM was booted from a template at a baseline size.
+	currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
+	if finalMemoryMB <= currentMemoryMB {
+		s.Logger().WithFields(logrus.Fields{
+			"target-memory-mb":  finalMemoryMB,
+			"current-memory-mb": currentMemoryMB,
+		}).Debug("target memory does not exceed current VM memory; skipping memory hotplug")
+	} else {
+		for {
+			currentMemoryMB = s.hypervisor.GetTotalMemoryMB(ctx)
 
-		maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
+			maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
 
-		// In the case of virtio-mem, we don't have a restriction on how much can be hotplugged at
-		// a single time. As a result, the max hotpluggable is only limited by the maximum memory size
-		// of the guest.
-		if hconfig.VirtioMem {
-			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
-		}
+			// In the case of virtio-mem, we don't have a restriction on how much can be hotplugged at
+			// a single time. As a result, the max hotpluggable is only limited by the maximum memory size
+			// of the guest.
+			if hconfig.VirtioMem {
+				maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
+			}
 
-		deltaMB := int32(finalMemoryMB - currentMemoryMB)
+			deltaMB := int32(finalMemoryMB - currentMemoryMB)
 
-		if deltaMB > int32(maxhotPluggableMemoryMB) {
-			s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
-			newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
-		} else {
-			newMemoryMB = finalMemoryMB
-		}
+			if deltaMB > int32(maxhotPluggableMemoryMB) {
+				s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
+				newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
+			} else {
+				newMemoryMB = finalMemoryMB
+			}
 
-		// Add the memory to the guest and online the memory:
-		if err := s.updateMemory(ctx, newMemoryMB); err != nil {
-			return err
-		}
+			// Add the memory to the guest and online the memory:
+			if err := s.updateMemory(ctx, newMemoryMB); err != nil {
+				return err
+			}
 
-		if newMemoryMB == finalMemoryMB {
-			break
+			if newMemoryMB == finalMemoryMB {
+				break
+			}
 		}
 	}
 

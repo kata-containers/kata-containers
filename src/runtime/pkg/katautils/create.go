@@ -67,6 +67,7 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	if !runtimeConfig.FactoryConfig.Template && runtimeConfig.FactoryConfig.VMCacheNumber == 0 {
 		return
 	}
+
 	factoryConfig := vf.Config{
 		Template:        runtimeConfig.FactoryConfig.Template,
 		TemplatePath:    runtimeConfig.FactoryConfig.TemplatePath,
@@ -74,7 +75,7 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 		VMCacheEndpoint: runtimeConfig.FactoryConfig.VMCacheEndpoint,
 		VMConfig: vc.VMConfig{
 			HypervisorType:   runtimeConfig.HypervisorType,
-			HypervisorConfig: runtimeConfig.HypervisorConfig,
+			HypervisorConfig: oci.StaticHypervisorConfig(*runtimeConfig),
 			AgentConfig:      runtimeConfig.AgentConfig,
 		},
 	}

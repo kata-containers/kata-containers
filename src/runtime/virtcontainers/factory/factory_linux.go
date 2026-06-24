@@ -112,7 +112,6 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	span, ctx := katatrace.Trace(ctx, f.log(), "GetVM", factoryTracingTags)
 	defer span.End()
 
-	hypervisorConfig := config.HypervisorConfig
 	if err := config.Valid(); err != nil {
 		f.log().WithError(err).Error("invalid hypervisor config")
 		return nil, err
@@ -120,8 +119,8 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 
 	err := f.checkConfig(config)
 	if err != nil {
-		f.log().WithError(err).Info("fallback to direct factory vm")
-		return direct.New(ctx, config).GetBaseVM(ctx, config)
+		f.log().WithError(err).Warn("factory config mismatch, caller should fall back to direct boot")
+		return nil, err
 	}
 
 	f.log().Info("get base VM")
@@ -156,31 +155,9 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 		return nil, err
 	}
 
-	online := false
-	baseConfig := f.base.Config().HypervisorConfig
-	if baseConfig.NumVCPUsF < hypervisorConfig.NumVCPUsF {
-		err = vm.AddCPUs(ctx, hypervisorConfig.NumVCPUs()-baseConfig.NumVCPUs())
-		if err != nil {
-			return nil, err
-		}
-		online = true
-	}
-
-	if baseConfig.MemorySize < hypervisorConfig.MemorySize {
-		err = vm.AddMemory(ctx, hypervisorConfig.MemorySize-baseConfig.MemorySize)
-		if err != nil {
-			return nil, err
-		}
-		online = true
-	}
-
-	if online {
-		err = vm.OnlineCPUMemory(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+	// NOTE: The factory intentionally does NOT resize the restored VM here.
+	// Sizing the VM up to the pod's workload is owned solely by the sandbox's
+	// updateResources()
 	return vm, nil
 }
 

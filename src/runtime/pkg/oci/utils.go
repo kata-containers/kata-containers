@@ -1265,6 +1265,39 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 	return nil
 }
 
+// applyStaticSizingDefaults substitutes the static workload default vCPU/memory
+// values for any size that is left at 0 when static_sandbox_resource_mgmt is
+// enabled. This is the single definition of a sandbox's "base" size: the size a
+// VM (or a VM template) boots at before any per-pod workload resizing. With the
+// fork's default_vcpus=0 / default_memory=0, this resolves to the static
+// workload defaults (e.g. 512 MiB / 1 vCPU), i.e. the BestEffort baseline.
+func applyStaticSizingDefaults(hc *vc.HypervisorConfig, runtime RuntimeConfig) {
+	if !runtime.StaticSandboxResourceMgmt {
+		return
+	}
+	if hc.MemorySize == 0 && runtime.StaticSandboxWorkloadDefaultMem > 0 {
+		hc.MemorySize = runtime.StaticSandboxWorkloadDefaultMem
+	}
+	if hc.NumVCPUsF == 0 && runtime.StaticSandboxWorkloadDefaultVcpus > 0 {
+		hc.NumVCPUsF = runtime.StaticSandboxWorkloadDefaultVcpus
+	}
+
+	// Clamp the vCPU ceiling to the effective static size. Otherwise
+	// default_maxvcpus=0 resolves to the host physical core count, and a VM
+	// (or template snapshot) boots advertising that many possible vCPUs
+	hc.DefaultMaxVCPUs = hc.NumVCPUs()
+}
+
+// StaticHypervisorConfig returns a copy of the runtime's HypervisorConfig sized
+// to the static "base" size (see applyStaticSizingDefaults). It is used to build
+// VM templates so the template boots at the same base size that a per-pod
+// sandbox starts from, ensuring the factory's config match succeeds.
+func StaticHypervisorConfig(runtime RuntimeConfig) vc.HypervisorConfig {
+	hc := runtime.HypervisorConfig
+	applyStaticSizingDefaults(&hc, runtime)
+	return hc
+}
+
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
 func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
@@ -1358,9 +1391,14 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUsF
 		sandboxConfig.SandboxResources.BaseMemMB = sandboxConfig.HypervisorConfig.MemorySize
 
+		// Always size the VM to the full static size (base + workload) up front so
+		// that the normal/direct boot path is born at the correct size before boot.
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
 
+		// Clamp the vCPU ceiling to the sandbox's actual vCPU count. Without this,
+		// default_maxvcpus=0 resolves to the host physical core count, and the
+		// guest reports that many possible vCPUs via `nproc --all`.
 		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
 		ociLog.WithFields(logrus.Fields{
