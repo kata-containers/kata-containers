@@ -78,6 +78,12 @@ pub struct CloudHypervisorInner {
     pub(crate) guest_memory_block_size_mb: u32,
 
     pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
+
+    /// Host cgroup v2 `cgroup.procs` path the VMM joins before the guest
+    /// boots, so the guest RAM faulted during boot is charged to the pod
+    /// cgroup. `None` when spawn-time placement is not requested (e.g.
+    /// cgroup v1, which uses the post-boot vCPU-thread move instead).
+    pub(crate) vmm_cgroup_path: Option<String>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -120,7 +126,12 @@ impl CloudHypervisorInner {
             guest_memory_block_size_mb: 0,
 
             exit_notify,
+            vmm_cgroup_path: None,
         }
+    }
+
+    pub(crate) fn set_vmm_cgroup_path(&mut self, cgroup_procs_path: String) {
+        self.vmm_cgroup_path = Some(cgroup_procs_path);
     }
 
     pub fn set_hypervisor_config(&mut self, mut config: HypervisorConfig) {
