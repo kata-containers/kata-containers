@@ -1576,17 +1576,12 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 
 	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
 
-	// When cpuManagerPolicy=static is in use, kubelet sets quota=-1
-	// (unconstrained) and assigns CPUs via cpuset instead. In that case
-	// we derive the CPU count from the CPU shares (1024 shares per CPU).
-	//
-	// We must gate this on quota being explicitly unconstrained (< 0)
-	// rather than on numCPU == 0: a quota of 0 (or absent) means a
-	// BestEffort sandbox with no CPU request, which has to contribute 0
-	// vCPUs. Such a sandbox still carries the cgroup-floor shares value
-	// (2), and deriving from it would inflate every sandbox by one vCPU
-	// (e.g. peer-pods would boot default_vcpus+1).
-	if quota < 0 && numCPU == 0 && shares > 0 {
+	// Fall back to CPU shares when no quota-based sizing is available.
+	// Covers two cases:
+	//   quota < 0: cpuManagerPolicy=static sets quota=-1 (unconstrained), uses cpuset pinning
+	//   period == 0: cpuCFSQuota=false means kubelet never sets quota/period, both stay 0
+	// math.Round (not Ceil) prevents BestEffort inflation: shares=2 (cgroup floor) → Round(0.002) = 0.
+	if (quota < 0 || period == 0) && numCPU == 0 && shares > 0 {
 		numCPU = float32(math.Ceil(float64(shares) / 1024.0))
 	}
 
@@ -1597,7 +1592,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 // based on the provided LinuxResources
 func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
-	var period uint64
+	var period, shares uint64
 
 	if spec == nil || spec.Linux == nil || spec.Linux.Resources == nil {
 		return 0, 0
@@ -1605,16 +1600,28 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint3
 
 	resources := spec.Linux.Resources
 
-	if resources.CPU != nil && resources.CPU.Quota != nil && resources.CPU.Period != nil {
-		quota = *resources.CPU.Quota
-		period = *resources.CPU.Period
+	if resources.CPU != nil {
+		if resources.CPU.Quota != nil && resources.CPU.Period != nil {
+			quota = *resources.CPU.Quota
+			period = *resources.CPU.Period
+		}
+		if resources.CPU.Shares != nil {
+			shares = *resources.CPU.Shares
+		}
 	}
 
 	if resources.Memory != nil && resources.Memory.Limit != nil {
 		memory = *resources.Memory.Limit
 	}
 
-	return calculateVMResources(period, quota, memory)
+	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
+
+	// Same fallback as CalculateSandboxSizing.
+	if (quota < 0 || period == 0) && numCPU == 0 && shares > 0 {
+		numCPU = float32(math.Ceil(float64(shares) / 1024.0))
+	}
+
+	return numCPU, memSizeMB
 }
 
 func calculateVMResources(period uint64, quota int64, memory int64) (numCPU float32, memSizeMB uint32) {

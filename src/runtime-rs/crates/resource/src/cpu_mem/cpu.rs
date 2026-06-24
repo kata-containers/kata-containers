@@ -168,6 +168,23 @@ impl CpuResource {
             return Ok(cpuset_vcpu.len() as f32);
         }
 
+        // Fallback to CPU shares when quota and cpuset are both absent.
+        // This handles pods with no resource limits but with CPU shares set.
+        if total_quota == 0.0 && cpuset_vcpu.is_empty() {
+            let total_shares: u64 = resources
+                .values()
+                .map(|cpu_resource| cpu_resource.shares())
+                .sum();
+            if total_shares > 0 {
+                let shares_vcpu = total_shares as f32 / 1024.0;
+                info!(
+                    sl!(),
+                    "(from cpu_shares) get vcpus # {}", shares_vcpu
+                );
+                return Ok(shares_vcpu.max(1.0));
+            }
+        }
+
         // When quota is set: calculate vCPUs as quota/period after normalization
         if total_quota > 0.0 && max_period > 0.0 {
             let quota_vcpu = total_quota / max_period;

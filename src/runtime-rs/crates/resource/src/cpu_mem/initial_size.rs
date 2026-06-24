@@ -32,7 +32,7 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
 
         let annotation = Annotation::new(an.clone());
         let (period, quota, memory) =
-            get_sizing_info(annotation).context("failed to get sizing info")?;
+            get_sizing_info(&annotation).context("failed to get sizing info")?;
         let mut cpu = oci::LinuxCpu::default();
         cpu.set_period(Some(period));
         cpu.set_quota(Some(quota));
@@ -42,6 +42,15 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
         if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
             vcpu = get_nr_vcpu(&cpu_resource);
         }
+
+        // When cpuManagerPolicy=static is in use, kubelet sets quota=-1
+        // (unconstrained) and assigns CPUs via cpuset instead. In that case
+        // we derive the CPU count from the CPU shares (1024 shares per CPU).
+        let shares = annotation.get_sandbox_cpu_shares();
+        if quota < 0 && vcpu == 0.0 && shares > 0 {
+            vcpu = (shares as f32 / 1024.0).ceil();
+        }
+
         let mem_mb = convert_memory_to_mb(memory);
 
         Ok(Self {
@@ -212,7 +221,7 @@ fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
 
 // from the upper layer runtime's annotation (e.g. crio, k8s), get the *cpu quota,
 // cpu period and memory limit* for a sandbox/container
-fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
+fn get_sizing_info(annotation: &Annotation) -> Result<(u64, i64, i64)> {
     // since we are *adding* our result to the config, a value of 0 will cause no change
     // and if the annotation is not assigned (but static resource management is), we will
     // log a *warning* to fill that with zero value
@@ -286,6 +295,75 @@ mod tests {
             },
         ]
         .to_vec()
+    }
+
+    // Test that sandbox CPU-shares annotation is used as vcpu fallback when
+    // quota=-1 (cpuManagerPolicy=static). All cases set quota=-1 explicitly.
+    #[test]
+    fn test_initial_size_sandbox_cpu_shares_fallback() {
+        let cases: &[(&str, u64, f32)] = &[
+            ("1024 shares = 1.0 vcpu", 1024, 1.0),
+            ("2048 shares = 2.0 vcpu", 2048, 2.0),
+            ("512 shares -> ceil = 1.0 vcpu", 512, 1.0),
+            ("0 shares = 0.0 vcpu (no fallback)", 0, 0.0),
+        ];
+
+        for (desc, shares, expected_vcpu) in cases {
+            let annotations = HashMap::from([
+                (
+                    cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    cri_containerd::SANDBOX.to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                    "-1".to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                    format!("{}", shares),
+                ),
+            ]);
+
+            let initial_size = InitialSize::try_from(&annotations).unwrap();
+            assert_eq!(
+                initial_size.vcpu, *expected_vcpu,
+                "{}: got vcpu={}, expected {}",
+                desc, initial_size.vcpu, expected_vcpu
+            );
+        }
+    }
+
+    // Verify quota/period take precedence over shares when both are present.
+    #[test]
+    fn test_initial_size_sandbox_quota_wins_over_shares() {
+        let annotations = HashMap::from([
+            (
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::SANDBOX.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                "220000".to_string(),
+            ),
+            // shares set too - quota should win
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                "4096".to_string(), // would be 4.0 if shares were used
+            ),
+        ]);
+
+        let initial_size = InitialSize::try_from(&annotations).unwrap();
+        // 220_000/100_000 = 2.2 -> ceil = 3.0, not 4.0 from shares
+        assert_eq!(
+            initial_size.vcpu.ceil(),
+            3.0,
+            "quota should take precedence over shares, got vcpu={}",
+            initial_size.vcpu
+        );
     }
 
     #[test]
