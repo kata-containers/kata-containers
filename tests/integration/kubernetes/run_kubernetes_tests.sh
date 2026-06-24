@@ -99,6 +99,7 @@ else
 		"k8s-projected-volume.bats" \
 		"k8s-replication.bats" \
 		"k8s-sandbox-cgroup.bats" \
+		"k8s-vmm-cgroup-memory.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
