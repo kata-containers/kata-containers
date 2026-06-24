@@ -84,6 +84,18 @@ function _configure_containerd_snapshotter() {
 	info "${snapshotter_name} snapshotter configured"
 }
 
+function _configure_blockfile_drop_in() {
+	HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.blockfile']"$'\n'
+	HELM_CONTAINERD_USER_DROP_IN+="  root_path = \"/var/lib/containerd-blockfile\""$'\n'
+	HELM_CONTAINERD_USER_DROP_IN+="  scratch_file = \"/opt/containerd/blockfile\""$'\n'
+	HELM_CONTAINERD_USER_DROP_IN+="  fs_type = \"ext4\""$'\n'
+	HELM_CONTAINERD_USER_DROP_IN+="  mount_options = []"
+
+	export HELM_CONTAINERD_USER_DROP_IN
+
+	info "blockfile snapshotter drop-in configured via HELM_CONTAINERD_USER_DROP_IN"
+}
+
 function _setup_devmapper_device() {
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
@@ -151,21 +163,6 @@ readonly devmapper_tomlq_filter='
 	  end
 '
 
-# shellcheck disable=SC2016
-readonly blockfile_tomlq_filter='
-	.plugins["io.containerd.snapshotter.v1.blockfile"].root_path = "/var/lib/containerd-blockfile"
-	| .plugins["io.containerd.snapshotter.v1.blockfile"].scratch_file = "/opt/containerd/blockfile"
-	| .plugins["io.containerd.snapshotter.v1.blockfile"].fs_type = "ext4"
-	| .plugins["io.containerd.snapshotter.v1.blockfile"].mount_options = []
-	| .plugins["io.containerd.transfer.v1.local"].unpack_config =
-		[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "blockfile"})]
-	| if (.version // 0) >= 3 then
-		.plugins["io.containerd.cri.v1.images"].snapshotter = "blockfile"
-	  else
-		.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "blockfile"
-	  end
-'
-
 function configure_snapshotter() {
 	echo "::group::Configuring ${SNAPSHOTTER}"
 
@@ -177,7 +174,7 @@ function configure_snapshotter() {
 			;;
 		blockfile)
 			_setup_blockfile_device
-			_configure_containerd_snapshotter "blockfile" "${blockfile_tomlq_filter}"
+			_configure_blockfile_drop_in
 			;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac

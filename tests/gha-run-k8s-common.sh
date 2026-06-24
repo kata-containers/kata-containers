@@ -833,7 +833,9 @@ function helm_helper() {
 
 			HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
 			HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+		fi
 
+		if [[ -n "${HELM_CONTAINERD_USER_DROP_IN:-}" ]]; then
 			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
 				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
 		fi
