@@ -116,6 +116,15 @@ cpu_features = "@CPUFEATURES@"
 # > number of physical cores      --> will be set to the actual number of physical cores
 default_vcpus = @DEFAULTVCPUS_NV@
 
+# Guest-side vCPU overhead budget (fractional) used with static_sandbox_resource_mgmt.
+# When workload limits are present, vm_vcpus = requested_vcpus + overhead_vcpus
+# (rounded up at boot). If a workload limit is set on another dimension (for example
+# memory) but CPU is missing, requested_vcpus is treated as 0 and vm_vcpus equals
+# overhead_vcpus (minimum 1 at boot). When no workload limits are present,
+# default_vcpus is used instead.
+# See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
+overhead_vcpus = @DEFOVERHEADVCPUS_NV@
+
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
 #                                     of vCPUs supported by KVM if that number is exceeded
@@ -158,6 +167,14 @@ reclaim_guest_freed_memory = false
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFAULTMEMORY_NV@
+
+# Guest-side memory overhead budget (MiB) used with static_sandbox_resource_mgmt.
+# When workload limits are present, vm_memory = requested_memory + overhead_memory.
+# If a workload limit is set on another dimension (for example CPU) but memory is
+# missing, requested_memory is treated as 0, so vm_memory equals overhead_memory.
+# When no workload limits are present, default_memory is used instead.
+# See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
+overhead_memory = @DEFOVERHEADMEMSZ_NV@
 #
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
