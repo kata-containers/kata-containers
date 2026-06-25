@@ -63,13 +63,7 @@ pub fn is_disk_empty_dir(path: &str) -> bool {
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-pub fn update_ephemeral_storage_type(
-    oci_spec: &mut Spec,
-    disable_guest_empty_dir: bool,
-    emptydir_mode: &str,
-) {
-    use kata_types::config::EMPTYDIR_MODE_BLOCK_ENCRYPTED;
-
+pub fn update_ephemeral_storage_type(oci_spec: &mut Spec) {
     if let Some(mounts) = oci_spec.mounts_mut() {
         for m in mounts.iter_mut() {
             if let Some(typ) = &m.typ() {
@@ -78,34 +72,8 @@ pub fn update_ephemeral_storage_type(
                 }
             }
 
-            if let Some(source) = &m.source() {
-                let mnt_src = &source.display().to_string();
-                if is_tmpfs_empty_dir(m) {
-                    m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
-                } else if is_non_tmpfs_empty_dir(mnt_src) {
-                    // Among non-tmpfs emptyDirs:
-                    // * For hugepage-backed emptyDirs, do nothing here
-                    //   and offload to the later HugePage handler.
-                    //   Contrary to runtime-go, adding the LOCAL type
-                    //   here would wrongly circumvent the HugePage
-                    //   handler.
-                    // * For disk-backed emptyDirs, instead of adding
-                    //   the LOCAL type here, we'll do this down the
-                    //   line:
-                    //   - disable_guest_empty_dir=true: FS sharing.
-                    //   - emptyDirMode=block-encrypted: Leverage the
-                    //     EncryptedEmptyDirVolume handler.
-                    if is_hugepage_empty_dir(mnt_src) {
-                        // No-op as explained above. Keeping this branch
-                        // for now for clarity and easier comparison
-                        // with runtime-go.
-                    } else if !disable_guest_empty_dir
-                        && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
-                    {
-                        // This is a disk-backed emptyDir.
-                        m.set_typ(Some(String::from(mount::KATA_K8S_LOCAL_STORAGE_TYPE)));
-                    }
-                }
+            if is_tmpfs_empty_dir(m) {
+                m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
             }
         }
     }
