@@ -38,8 +38,8 @@ use protobuf::MessageField;
 use protocols::agent::{
     AddSwapPathRequest, AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest,
     GetIPTablesResponse, GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse,
-    Routes, SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
-    WaitProcessResponse, WriteStreamResponse,
+    ResizeVolumeRequest, Routes, SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse,
+    VolumeStatsRequest, WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::csi::{
     volume_usage::Unit as VolumeUsage_Unit, VolumeCondition, VolumeStatsResponse, VolumeUsage,
@@ -1741,6 +1741,20 @@ impl agent_ttrpc::AgentService for AgentService {
         resp.usage = usage_vec;
         resp.volume_condition = MessageField::some(condition);
         Ok(resp)
+    }
+
+    async fn resize_volume(
+        &self,
+        ctx: &TtrpcContext,
+        req: ResizeVolumeRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "resize_volume", req);
+        is_allowed(&req).await?;
+
+        Err(ttrpc_error(
+            ttrpc::Code::UNIMPLEMENTED,
+            "resize_volume is not implemented in kata-agent",
+        ))
     }
 
     async fn add_swap(
