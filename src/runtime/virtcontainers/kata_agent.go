@@ -34,6 +34,7 @@ import (
 	kataclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/client"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -302,6 +303,7 @@ type KataAgentConfig struct {
 	Debug                bool
 	Trace                bool
 	EnableDebugConsole   bool
+	VisibleCdiDevices    bool
 	Policy               string
 }
 
@@ -371,6 +373,10 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.LaunchProcessTimeout > 0 {
 		launchProcessTimeout := strconv.FormatUint(uint64(config.LaunchProcessTimeout), 10)
 		params = append(params, Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: launchProcessTimeout})
+	}
+
+	if config.VisibleCdiDevices {
+		params = append(params, Param{Key: vcAnnotations.VisibleCdiDevicesKernelParam, Value: "true"})
 	}
 
 	return params
@@ -1018,7 +1024,36 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	return nil
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool) error {
+// translateHostMemsToGuest converts a host cpuset.mems string (e.g. "0,2")
+// into guest NUMA node IDs. Each guest NUMA node index maps to a set of host
+// nodes via GuestNUMANode.HostNodes. If a host node from `mems` appears in
+// a GuestNUMANode's HostNodes, the corresponding guest node index is included.
+func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) string {
+	hostSet, err := cpuset.Parse(hostMems)
+	if err != nil {
+		return ""
+	}
+	hostSlice := hostSet.ToSlice()
+	var guestNodes []int
+	for guestIdx, gn := range numaNodes {
+		nodeSet, err := cpuset.Parse(gn.HostNodes)
+		if err != nil {
+			continue
+		}
+		for _, hostNode := range hostSlice {
+			if nodeSet.Contains(hostNode) {
+				guestNodes = append(guestNodes, guestIdx)
+				break
+			}
+		}
+	}
+	if len(guestNodes) == 0 {
+		return ""
+	}
+	return cpuset.NewCPUSet(guestNodes...).String()
+}
+
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1060,7 +1095,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		}
 	}
 
-	// By now only CPU constraints are supported
 	// Issue: https://github.com/kata-containers/runtime/issues/158
 	// Issue: https://github.com/kata-containers/runtime/issues/204
 	grpcSpec.Linux.Resources.Devices = nil
@@ -1069,20 +1103,25 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	grpcSpec.Linux.Resources.Network = nil
 	if grpcSpec.Linux.Resources.CPU != nil {
 		grpcSpec.Linux.Resources.CPU.Cpus = ""
-		grpcSpec.Linux.Resources.CPU.Mems = ""
+		if len(numaNodes) > 1 && grpcSpec.Linux.Resources.CPU.Mems != "" {
+			guestMems := translateHostMemsToGuest(grpcSpec.Linux.Resources.CPU.Mems, numaNodes)
+			grpcSpec.Linux.Resources.CPU.Mems = guestMems
+		} else {
+			grpcSpec.Linux.Resources.CPU.Mems = ""
+		}
 	}
 
-	// Disable network namespace since it is already handled on the host by
-	// virtcontainers. The network is a complex part which cannot be simply
-	// passed to the agent.
-	// Every other namespaces's paths have to be emptied. This way, there
-	// is no confusion from the agent, trying to find an existing namespace
-	// on the guest.
+	// Disable network and time namespaces since they are handled on the host
+	// (or are unsupported in the guest agent). Docker 29.5+ adds a host time
+	// namespace by default; host namespace paths must not be passed to the agent.
+	// Every other namespace's path has to be emptied so the agent does not try
+	// to join a host namespace inside the guest.
 	var tmpNamespaces []*grpc.LinuxNamespace
 	for _, ns := range grpcSpec.Linux.Namespaces {
 		switch ns.Type {
 		case string(specs.CgroupNamespace):
 		case string(specs.NetworkNamespace):
+		case string(specs.TimeNamespace):
 		default:
 			ns.Path = ""
 			tmpNamespaces = append(tmpNamespaces, ns)
@@ -1224,7 +1263,6 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       make([]string, len(devList)),
 	}
 
 	// We always pass the device information to the agent, since
@@ -1234,7 +1272,8 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
-	for i, dev := range devList {
+	var opts []string
+	for _, dev := range devList {
 		if dev.Type == config.VFIOAPDeviceMediatedType {
 			kataDevice.Type = kataVfioApDevType
 			coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -1248,11 +1287,29 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 			}
 			kataDevice.Options = dev.APDevices
 		} else {
-
 			devBDF := drivers.GetBDF(dev.BDF)
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
+			if dev.GuestPciPath.IsNil() {
+				// GuestPciPath could not be resolved (e.g. GPU behind a
+				// pxb-pcie bridge in a NUMA topology where the QOM walk
+				// fails).  The device is already present in the guest via
+				// cold-plug; there is no guest-side setup the agent can
+				// perform without a PCI path, and emitting an empty option
+				// would trip the agent policy checker.  Skip this device.
+				k.Logger().WithFields(logrus.Fields{
+					"host-bdf": devBDF,
+				}).Warn("appendVfioDevice: GuestPciPath unresolved, skipping device option")
+				continue
+			}
+			opts = append(opts, fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath))
 		}
+	}
 
+	if len(opts) == 0 && len(kataDevice.Options) == 0 {
+		// All PCIe devices had unresolvable paths — nothing useful to send.
+		return nil
+	}
+	if len(opts) > 0 {
+		kataDevice.Options = opts
 	}
 
 	return kataDevice
@@ -1291,6 +1348,109 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 	return deviceList
 }
 
+// appendPhysicalEndpointDevices synthesises a vfio-pci-gk device entry for
+// each cold-plugged physical (SR-IOV VF) network endpoint that has a resolved
+// guest PCI path.  The NVIDIA BF3 SR-IOV device plugin only injects the VF
+// BDF as a PCIDEVICE_* environment variable; it does not add the VFIO char
+// device to linux.devices.  Without this helper the agent's
+// container_has_vfio_device() gate stays closed and
+// expose_guest_infiniband_devices() is never triggered.
+func (k *kataAgent) appendPhysicalEndpointDevices(deviceList []*grpc.Device, sandbox *Sandbox) []*grpc.Device {
+	if sandbox == nil {
+		return deviceList
+	}
+	for _, ep := range sandbox.network.Endpoints() {
+		if ep.Type() != PhysicalEndpointType {
+			continue
+		}
+		pe, ok := ep.(*PhysicalEndpoint)
+		if !ok || pe.BDF == "" || ep.PciPath().IsNil() {
+			continue
+		}
+		guestPath := ep.PciPath()
+
+		vfioDevPath, err := drivers.GetVFIODevPath(pe.BDF)
+		if err != nil {
+			k.Logger().WithFields(logrus.Fields{
+				"host-bdf": pe.BDF,
+			}).WithError(err).Warn("appendPhysicalEndpointDevices: cannot get VFIO device path, skipping VFIO device exposure")
+			continue
+		}
+
+		groupNum := filepath.Base(vfioDevPath)
+		devBDF := drivers.GetBDF(pe.BDF)
+
+		k.Logger().WithFields(logrus.Fields{
+			"host-bdf":       pe.BDF,
+			"guest-pci-path": guestPath.String(),
+			"vfio-path":      vfioDevPath,
+		}).Info("appendPhysicalEndpointDevices: injecting vfio-pci-gk entry for cold-plug physical endpoint")
+
+		deviceList = append(deviceList, &grpc.Device{
+			ContainerPath: vfioDevPath,
+			Id:            groupNum,
+			Type:          kataVfioPciGuestKernelDevType,
+			Options:       []string{fmt.Sprintf("0000:%s=%s", devBDF, guestPath)},
+		})
+	}
+	return deviceList
+}
+
+func (k *kataAgent) resolveColdPlugVFIOGuestPciPaths(sandbox *Sandbox, c *Container) error {
+	if sandbox == nil || c == nil {
+		return nil
+	}
+
+	if sandbox.config.HypervisorConfig.ColdPlugVFIO == config.NoPort {
+		return nil
+	}
+
+	q, ok := sandbox.hypervisor.(*qemu)
+	if !ok {
+		return nil
+	}
+
+	if err := q.qmpSetup(); err != nil {
+		return err
+	}
+
+	for _, dev := range c.devices {
+		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
+		if device == nil || device.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+
+		vfioDevs, ok := device.GetDeviceInfo().([]*config.VFIODev)
+		if !ok || vfioDevs == nil {
+			continue
+		}
+
+		for _, vfioDev := range vfioDevs {
+			if vfioDev.Type == config.VFIOAPDeviceMediatedType || !vfioDev.GuestPciPath.IsNil() {
+				continue
+			}
+
+			pciPath, err := q.arch.qomGetPciPath(vfioDev.ID, &q.qmpMonitorCh)
+			if err != nil {
+				// Non-fatal: some PCIe topologies (e.g. pxb-pcie/NUMA) do
+				// not expose an `addr` QOM property and the walk fails.
+				// Leave GuestPciPath nil; appendVfioDevice will skip the
+				// option for this device and the agent falls back to its
+				// existing by-BDF device matching.
+				k.Logger().WithFields(logrus.Fields{
+					"device-id": vfioDev.ID,
+					"host-bdf":  vfioDev.BDF,
+				}).WithError(err).Warn("resolveColdPlugVFIOGuestPciPaths: QMP walk failed, leaving GuestPciPath unset")
+				continue
+			}
+
+			vfioDev.GuestPciPath = pciPath
+		}
+	}
+
+	return nil
+}
+
 // rollbackFailingContainerCreation rolls back important steps that might have
 // been performed before the container creation failed.
 // - Unmount container volumes.
@@ -1312,6 +1472,31 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		return nil
 	}
 
+	// Resolve the guest PCI path for cold-plugged VFIO PCIe devices whose
+	// GuestPciPath is not yet known. The path is needed below to stamp
+	// Interface.devicePath in the agent proto; without it the agent falls
+	// back to a by-MAC link lookup, which fails for SR-IOV VFs whose
+	// firmware MAC differs from the CNI-assigned MAC after the
+	// vfio-pci unbind/rebind cycle.
+	var coldPlugVFIODevs []*config.VFIODev
+	for _, dev := range sandbox.devManager.GetAllDevices() {
+		if dev.DeviceType() != config.DeviceVFIO {
+			continue
+		}
+		if vfioDevs, ok := dev.GetDeviceInfo().([]*config.VFIODev); ok {
+			for _, vfioDev := range vfioDevs {
+				if vfioDev.IsPCIe && vfioDev.GuestPciPath.IsNil() && vfioDev.ID != "" {
+					coldPlugVFIODevs = append(coldPlugVFIODevs, vfioDev)
+				}
+			}
+		}
+	}
+	if len(coldPlugVFIODevs) > 0 {
+		if err := sandbox.hypervisor.ResolveColdPlugVFIOGuestPciPaths(ctx, coldPlugVFIODevs); err != nil {
+			k.Logger().WithError(err).Warn("setupNetworks: failed to resolve guest PCI paths for cold-plug VFIO devices")
+		}
+	}
+
 	var err error
 	var endpoints []Endpoint
 	if c == nil || c.id == sandbox.id {
@@ -1322,6 +1507,26 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		// creation, so no need to skip them here anymore.
 		for _, ep := range sandbox.network.Endpoints() {
 			if ep.Type() != VfioEndpointType {
+				// For cold-plugged SR-IOV VFs that appear as PhysicalEndpoints,
+				// the guest PCI path is known after resolveColdPlugVFIOGuestPciPaths
+				// has run (during createContainers). Look it up and stamp it on the
+				// endpoint so that generateVCNetworkStructures emits a non-empty
+				// devicePath in the agent Interface proto. Without this the agent
+				// receives devicePath="" and falls back to a by-MAC link lookup,
+				// which fails when the VF firmware MAC differs from the OVN MAC.
+				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
+					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
+						if !guestPath.IsNil() {
+							ep.SetPciPath(guestPath)
+							k.Logger().WithFields(logrus.Fields{
+								"endpoint-name":  ep.Name(),
+								"host-bdf":       pe.BDF,
+								"guest-pci-path": guestPath.String(),
+							}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
+						}
+					}
+				}
 				endpoints = append(endpoints, ep)
 			}
 		}
@@ -1453,8 +1658,26 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	if err = k.resolveColdPlugVFIOGuestPciPaths(sandbox, c); err != nil {
+		return nil, err
+	}
+
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
+
+	// The SR-IOV device plugin for physical network VFs only injects the BDF
+	// as a PCIDEVICE_* env var; it does not add a VFIO char device to
+	// linux.devices.  That means appendDevices() finds nothing VFIO-related
+	// in c.devices, so the agent never receives a vfio-pci-gk entry, the
+	// container_has_vfio_device() gate stays closed, and
+	// expose_guest_infiniband_devices() is never called — leaving
+	// /dev/infiniband absent from the container even though the guest kernel
+	// created the IB devices.
+	//
+	// Walk the sandbox's physical endpoints: for each one with a resolved
+	// guest PCI path (set by setupNetworks/ResolveColdPlugVFIOGuestPciPaths)
+	// synthesise a vfio-pci-gk device entry so the agent gate fires.
+	ctrDevices = k.appendPhysicalEndpointDevices(ctrDevices, sandbox)
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.
@@ -1495,7 +1718,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes)
 	if err != nil {
 		return nil, err
 	}

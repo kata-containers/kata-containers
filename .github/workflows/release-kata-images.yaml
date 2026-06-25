@@ -1,0 +1,114 @@
+name: release-kata-images
+on:
+  workflow_call:
+    inputs:
+      registries:
+        description: "Space-separated list of registries to push to."
+        required: false
+        type: string
+        default: "quay.io/kata-containers/kata-monitor ghcr.io/kata-containers/kata-monitor"
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-kata-monitor-release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  resolve-tags:
+    name: Resolve image tags
+    runs-on: ubuntu-22.04
+    outputs:
+      tags: ${{ steps.tags.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve tags
+        id: tags
+        run: |
+          tag=$(echo "${GITHUB_REF}" | cut -d/ -f3-)
+          if [ "${tag}" = "main" ]; then
+            tag=$(./tools/packaging/release/release.sh release-version)
+            echo "tags=${tag} latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${tag}" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish-monitor:
+    needs: resolve-tags
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            tag_suffix: -amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            tag_suffix: -arm64
+            runner: ubuntu-24.04-arm
+          - arch: s390x
+            tag_suffix: -s390x
+            runner: ubuntu-24.04-s390x
+          - arch: ppc64le
+            tag_suffix: -ppc64le
+            runner: ubuntu-24.04-ppc64le
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor
+      tag: latest
+      tags: ${{ needs.resolve-tags.outputs.tags }}
+      tag-suffix: ${{ matrix.tag_suffix }}
+      runner: ${{ matrix.runner }}
+      arch: ${{ matrix.arch }}
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-multi-arch-manifest:
+    name: Publish multi-arch manifest
+    needs: [resolve-tags, publish-monitor]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Login to Kata Containers ghcr.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: quay.io
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Publish multi-arch manifest
+        env:
+          TAGS: ${{ needs.resolve-tags.outputs.tags }}
+          REGISTRIES: ${{ inputs.registries }}
+        run: |
+          # kata-monitor has no job-dispatcher sidecar image, so opt out of the
+          # kata-deploy-specific dispatcher manifest derivation.
+          KATA_DEPLOY_IMAGE_TAGS="${TAGS}" \
+          KATA_DEPLOY_REGISTRIES="${REGISTRIES}" \
+          KATA_DEPLOY_PUBLISH_JOB_DISPATCHER="false" \
+          ./tools/packaging/release/release.sh publish-multiarch-manifest

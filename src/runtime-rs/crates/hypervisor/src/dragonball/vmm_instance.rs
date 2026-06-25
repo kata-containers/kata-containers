@@ -7,7 +7,7 @@
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
-    os::unix::{io::IntoRawFd, prelude::AsRawFd},
+    os::unix::io::IntoRawFd,
     sync::{Arc, Mutex, RwLock},
     thread,
     time::Duration,
@@ -146,8 +146,7 @@ impl VmmInstance {
                             info!(sl!(), "set netns for vmm master {}", &netns_path);
                             let netns_fd = File::open(&netns_path)
                                 .with_context(|| format!("open netns path {}", &netns_path))?;
-                            setns(netns_fd.as_raw_fd(), CloneFlags::CLONE_NEWNET)
-                                .context("set netns ")?;
+                            setns(&netns_fd, CloneFlags::CLONE_NEWNET).context("set netns ")?;
                         }
                         let exit_code =
                             Vmm::run_vmm_event_loop(Arc::new(Mutex::new(vmm)), vmm_service);

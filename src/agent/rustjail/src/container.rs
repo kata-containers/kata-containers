@@ -14,7 +14,7 @@ use std::clone::Clone;
 use std::ffi::CString;
 use std::fmt::Display;
 use std::fs;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsFd, BorrowedFd, IntoRawFd, OwnedFd, RawFd};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs::File;
@@ -362,9 +362,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         // by unshare from the parent pidns.
         match std::env::var(PIDNS_FD) {
             Ok(fd) => {
-                let pidns_fd = fd.parse::<i32>().context("get parent pidns fd")?;
-                sched::setns(pidns_fd, CloneFlags::CLONE_NEWPID).context("failed to join pidns")?;
-                let _ = unistd::close(pidns_fd);
+                let pidns_fd = unsafe {
+                    OwnedFd::from_raw_fd(fd.parse::<i32>().context("get parent pidns fd")?)
+                };
+                sched::setns(&pidns_fd, CloneFlags::CLONE_NEWPID)
+                    .context("failed to join pidns")?;
+                // close is automatic on drop
             }
             Err(_e) => {
                 sched::unshare(CloneFlags::CLONE_NEWPID)?;
@@ -417,23 +420,19 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let fs_cm: Result<FsManager, serde_json::Error> = serde_json::from_str(cm_str);
     let systemd_cm: Result<SystemdManager, serde_json::Error> = serde_json::from_str(cm_str);
 
-    let p = if spec.process().is_some() {
-        spec.process().as_ref().unwrap()
-    } else {
-        return Err(anyhow!("didn't find process in Spec"));
-    };
+    let p = spec
+        .process()
+        .as_ref()
+        .ok_or_else(|| anyhow!("didn't find process in Spec"))?;
 
-    if spec.linux().is_none() {
-        return Err(anyhow!(MissingLinux));
-    }
-    let linux = spec.linux().as_ref().unwrap();
+    let linux = spec.linux().as_ref().ok_or_else(|| anyhow!(MissingLinux))?;
 
     // get namespace vector to join/new
     let nses = get_namespaces(linux);
 
     let mut userns = false;
     let mut to_new = CloneFlags::empty();
-    let mut to_join = Vec::new();
+    let mut to_join: Vec<(CloneFlags, OwnedFd)> = Vec::new();
 
     for ns in &nses {
         let ns_type = ns.typ().to_string();
@@ -524,16 +523,16 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         setid(Uid::from_raw(0), Gid::from_raw(0))?;
     }
 
-    let mut mount_fd = -1;
+    let mut mount_fd: Option<OwnedFd> = None;
     let mut bind_device = false;
     for (s, fd) in to_join {
         if s == CloneFlags::CLONE_NEWNS {
-            mount_fd = fd;
+            mount_fd = Some(fd);
             continue;
         }
 
         log_child!(cfd_log, "join namespace {:?}", s);
-        sched::setns(fd, s).or_else(|e| {
+        sched::setns(&fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e != Errno::EINVAL {
                     let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
@@ -604,9 +603,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         read_sync(crfd)?;
     }
 
-    if mount_fd != -1 {
-        sched::setns(mount_fd, CloneFlags::CLONE_NEWNS)?;
-        unistd::close(mount_fd)?;
+    if let Some(mount_fd) = mount_fd {
+        sched::setns(&mount_fd, CloneFlags::CLONE_NEWNS)?;
+        // mount_fd will be automatically closed when dropped
     }
 
     if init {
@@ -844,7 +843,8 @@ fn set_stdio_permissions(uid: Uid) -> Result<()> {
     ];
 
     for fd in &fds {
-        let stat = stat::fstat(*fd)?;
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(*fd) };
+        let stat = stat::fstat(borrowed_fd)?;
         // Skip chown of /dev/null if it was used as one of the STDIO fds.
         if stat.st_rdev == meta.rdev() {
             continue;
@@ -856,7 +856,8 @@ fn set_stdio_permissions(uid: Uid) -> Result<()> {
         // that users expect to be able to actually use their console. Without
         // this code, you couldn't effectively run as a non-root user inside a
         // container and also have a console set up.
-        unistd::fchown(*fd, Some(uid), None).with_context(|| "set stdio permissions failed")?;
+        unistd::fchown(borrowed_fd, Some(uid), None)
+            .with_context(|| "set stdio permissions failed")?;
     }
 
     Ok(())
@@ -961,11 +962,12 @@ impl BaseContainer for LinuxContainer {
             }
             unistd::mkfifo(fifo_file.as_str(), Mode::from_bits(0o644).unwrap())?;
 
-            fifofd = fcntl::open(
+            let fd = fcntl::open(
                 fifo_file.as_str(),
                 OFlag::O_PATH,
                 Mode::from_bits(0).unwrap(),
             )?;
+            fifofd = fd.into_raw_fd();
         }
         info!(logger, "exec fifo opened!");
 
@@ -995,53 +997,56 @@ impl BaseContainer for LinuxContainer {
 
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
 
-        let _ = fcntl::fcntl(pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+        let _ = fcntl::fcntl(&pfd_log, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
             .map_err(|e| warn!(logger, "fcntl pfd log FD_CLOEXEC {:?}", e));
 
         let child_logger = logger.new(o!("action" => "child process log"));
-        let log_handler = setup_child_logger(pfd_log, child_logger);
+        let log_handler = setup_child_logger(pfd_log.as_fd().as_raw_fd(), child_logger);
 
         let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
 
-        let _ = fcntl::fcntl(prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+        let _ = fcntl::fcntl(&prfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
             .map_err(|e| warn!(logger, "fcntl prfd FD_CLOEXEC {:?}", e));
 
-        let _ = fcntl::fcntl(pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+        let _ = fcntl::fcntl(&pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
             .map_err(|e| warn!(logger, "fcntl pwfd FD_COLEXEC {:?}", e));
 
-        let mut pipe_r = PipeStream::from_fd(prfd);
-        let mut pipe_w = PipeStream::from_fd(pwfd);
+        let mut pipe_r = PipeStream::from_fd(prfd.as_fd().as_raw_fd());
+        let mut pipe_w = PipeStream::from_fd(pwfd.as_fd().as_raw_fd());
 
         let child_stdin: std::process::Stdio;
         let child_stdout: std::process::Stdio;
         let child_stderr: std::process::Stdio;
 
         if tty {
-            // NOTE(#11842): This code will require changes if we upgrade to nix 0.27+:
-            // - `pseudo` will contain OwnedFds instead of RawFds.
-            // - We'll have to use `OwnedFd::into_raw_fd()` which will
-            //   transfer the ownership to the caller.
-            // - The duplication strategy will not change.
-
             let pseudo = pty::openpty(None, None)?;
-            p.term_master = Some(pseudo.master);
-            let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            let _ = fcntl::fcntl(&pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
                 .map_err(|e| warn!(logger, "fnctl pseudo.master {:?}", e));
-            let _ = fcntl::fcntl(pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            let _ = fcntl::fcntl(&pseudo.slave, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
                 .map_err(|e| warn!(logger, "fcntl pseudo.slave {:?}", e));
 
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
+            // Transfer ownership of master to raw fd for multiple uses
+            let master_raw = pseudo.master.into_raw_fd();
+            p.term_master = Some(master_raw);
+
+            let slave_raw = pseudo.slave.into_raw_fd();
+            child_stdin = unsafe { std::process::Stdio::from_raw_fd(slave_raw) };
+            // Create temporary OwnedFd for dup operations, then forget it since stdin owns the fd
+            let slave_fd = unsafe { OwnedFd::from_raw_fd(slave_raw) };
+            child_stdout =
+                unsafe { std::process::Stdio::from_raw_fd(unistd::dup(&slave_fd)?.into_raw_fd()) };
+            child_stderr =
+                unsafe { std::process::Stdio::from_raw_fd(unistd::dup(&slave_fd)?.into_raw_fd()) };
+            std::mem::forget(slave_fd); // Don't close - stdin owns it
 
             if let Some(proc_io) = &mut p.proc_io {
                 // A reference count used to clean up the term master fd.
-                let term_closer = Arc::from(unsafe { File::from_raw_fd(pseudo.master) });
+                let term_closer = Arc::from(unsafe { File::from_raw_fd(master_raw) });
 
                 // Copy from stdin to term_master
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
-                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let mut term_master = unsafe { File::from_raw_fd(master_raw) };
                     let logger = logger.clone();
                     let term_closer = term_closer.clone();
                     tokio::spawn(async move {
@@ -1056,7 +1061,7 @@ impl BaseContainer for LinuxContainer {
                 // Copy from term_master to stdout
                 if let Some(mut stdout_stream) = proc_io.stdout.take() {
                     let wgw_output = proc_io.wg_output.worker();
-                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let mut term_master = unsafe { File::from_raw_fd(master_raw) };
                     let logger = logger.clone();
                     let term_closer = term_closer;
                     tokio::spawn(async move {
@@ -1144,9 +1149,9 @@ impl BaseContainer for LinuxContainer {
             .stderr(child_stderr)
             .env(INIT, format!("{}", p.init))
             .env(NO_PIVOT, format!("{}", self.config.no_pivot_root))
-            .env(CRFD_FD, format!("{crfd}"))
-            .env(CWFD_FD, format!("{cwfd}"))
-            .env(CLOG_FD, format!("{cfd_log}"))
+            .env(CRFD_FD, format!("{}", crfd.as_fd().as_raw_fd()))
+            .env(CWFD_FD, format!("{}", cwfd.as_fd().as_raw_fd()))
+            .env(CLOG_FD, format!("{}", cfd_log.as_fd().as_raw_fd()))
             .env(PIDNS_ENABLED, format!("{}", pidns.enabled));
 
         if p.init {
@@ -1159,9 +1164,10 @@ impl BaseContainer for LinuxContainer {
 
         child.spawn()?;
 
-        unistd::close(crfd)?;
-        unistd::close(cwfd)?;
-        unistd::close(cfd_log)?;
+        // OwnedFd will be automatically closed when dropped
+        drop(crfd);
+        drop(cwfd);
+        drop(cfd_log);
 
         // get container process's pid
         let pid_buf = read_async(&mut pipe_r).await?;
@@ -1330,7 +1336,7 @@ impl BaseContainer for LinuxContainer {
         let fifo = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         let fd = fcntl::open(fifo.as_str(), OFlag::O_WRONLY, Mode::from_bits_truncate(0))?;
         let data: &[u8] = &[0];
-        unistd::write(fd, data)?;
+        unistd::write(&fd, data)?;
         info!(self.logger, "container started");
         self.init_process_start_time = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -1453,7 +1459,7 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<PidNs> {
                 })?,
             };
 
-            return Ok(PidNs::new(true, Some(fd)));
+            return Ok(PidNs::new(true, Some(fd.into_raw_fd())));
         }
     }
 
@@ -1631,8 +1637,8 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Resul
     info!(logger, "mapping: {}", data);
     if !data.is_empty() {
         let fd = fcntl::open(path, OFlag::O_WRONLY, Mode::empty())?;
-        defer!(unistd::close(fd).unwrap());
-        unistd::write(fd, data.as_bytes())
+        // OwnedFd will be automatically closed when dropped
+        unistd::write(&fd, data.as_bytes())
             .inspect_err(|_| info!(logger, "cannot write mapping"))?;
     }
     Ok(())

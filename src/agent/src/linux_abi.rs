@@ -26,15 +26,29 @@ pub fn create_pci_root_bus_path(root_complex: &str) -> String {
     format!("/devices/pci0000:{root_complex}")
 }
 
-// This is used in several modules, let's create a helper function to parse the
-// qom path and switch easily once the shim sends us the full NUMA path
+// Parses a device tree path into a (root_complex, PCI path) pair.
+//
+// Supports two formats:
+//   - Full NUMA path: "root_complex/bus/device" (e.g. "10/00/02") where the
+//     first segment is the root complex and the rest form the PCI path.
+//   - Legacy path: "bus/device" (e.g. "00/02") which defaults to root complex "00".
 pub fn pcipath_from_dev_tree_path(dev_tree_path: &str) -> Result<(&str, pci::Path)> {
-    // Placeholder until the shim send us the full NUMA path
-    // via shim in the form of root_complex/bus/device  10/00/02
-    // Currently the shim only sends us the bus/device 00/02
-    let pci_path = pci::Path::from_str(dev_tree_path)
-        .with_context(|| format!("Failed to parse PCI path from QOM path '{}'", dev_tree_path))?;
-    Ok(("00", pci_path))
+    let segments: Vec<&str> = dev_tree_path.split('/').collect();
+    if segments.len() >= 3 {
+        let root_complex = segments[0];
+        let pci_part = &dev_tree_path[root_complex.len() + 1..];
+        let pci_path = pci::Path::from_str(pci_part).with_context(|| {
+            format!(
+                "Failed to parse PCI path from NUMA path '{}'",
+                dev_tree_path
+            )
+        })?;
+        Ok((root_complex, pci_path))
+    } else {
+        let pci_path = pci::Path::from_str(dev_tree_path)
+            .with_context(|| format!("Failed to parse PCI path from '{}'", dev_tree_path))?;
+        Ok(("00", pci_path))
+    }
 }
 
 #[cfg(target_arch = "aarch64")]

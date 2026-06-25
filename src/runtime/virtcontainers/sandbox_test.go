@@ -1679,3 +1679,29 @@ func TestSandboxHugepageLimit(t *testing.T) {
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
 }
+
+func TestCheckVCPUsPinningNUMATooFewVCPUs(t *testing.T) {
+	assert := assert.New(t)
+	s := &Sandbox{}
+	vCPUThreadsMap := VcpuThreadIDs{vcpus: map[int]int{0: 100}}
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7})
+	assert.Error(err)
+	assert.Contains(err.Error(), "must be >= NUMA node count")
+}
+
+func TestCheckVCPUsPinningNUMABadHostCPUs(t *testing.T) {
+	assert := assert.New(t)
+	s := &Sandbox{}
+	vCPUThreadsMap := VcpuThreadIDs{vcpus: map[int]int{0: 100, 1: 101, 2: 102, 3: 103}}
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "not-valid"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7})
+	assert.Error(err)
+	assert.Contains(err.Error(), "failed to parse HostCPUs")
+}

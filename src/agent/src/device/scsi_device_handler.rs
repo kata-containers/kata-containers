@@ -17,6 +17,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
+/// The path segment in the uevent devpath that separates the SCSI path and the block device name.
+const BLOCK_SEGMENT: &str = "/block/";
+
 #[derive(Debug)]
 pub struct ScsiDeviceHandler {}
 
@@ -53,20 +56,41 @@ pub async fn get_scsi_device_name(
 // SCSI host.
 #[derive(Debug)]
 pub struct ScsiBlockMatcher {
-    search: String,
+    /// Expected SCSI path suffix before `/block/`, e.g. `/0:0:2:0`
+    scsi_path_suffix: String,
 }
 
 impl ScsiBlockMatcher {
     pub fn new(scsi_addr: &str) -> ScsiBlockMatcher {
-        let search = format!(r"/0:0:{scsi_addr}/block/");
+        ScsiBlockMatcher {
+            scsi_path_suffix: format!("/0:0:{scsi_addr}"),
+        }
+    }
 
-        ScsiBlockMatcher { search }
+    fn split_block_devpath<'a>(&self, devpath: &'a str) -> Option<(&'a str, &'a str)> {
+        let idx = devpath.find(BLOCK_SEGMENT)?;
+        let prefix = &devpath[..idx];
+        let suffix = &devpath[idx + BLOCK_SEGMENT.len()..];
+        Some((prefix, suffix))
     }
 }
 
 impl UeventMatcher for ScsiBlockMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == BLOCK && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
+        if uev.action != U_EVENT_ACTION_ADD {
+            return false;
+        }
+
+        if uev.subsystem != BLOCK || uev.devname.is_empty() {
+            return false;
+        }
+
+        let (prefix, suffix) = match self.split_block_devpath(&uev.devpath) {
+            Some(parts) => parts,
+            None => return false,
+        };
+
+        prefix.ends_with(&self.scsi_path_suffix) && !suffix.contains('/') && suffix == uev.devname
     }
 }
 
@@ -106,31 +130,145 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::device::test_helpers;
+    use crate::linux_abi::U_EVENT_ACTION_ADD;
+    use rstest::rstest;
+
+    fn make_scsi_block_uevent(addr: &str, devname: &str, devpath_suffix: &str) -> Uevent {
+        let root_bus = create_pci_root_bus_path("00");
+
+        let mut uev = Uevent::default();
+        uev.action = U_EVENT_ACTION_ADD.to_string();
+        uev.subsystem = BLOCK.to_string();
+        uev.devname = devname.to_string();
+        uev.devpath = format!(
+            "{root_bus}/0000:00:00.0/virtio0/host0/target0:0:{target}/0:0:{addr}/block/{devpath_suffix}",
+            target = addr.split(':').next().unwrap_or("0"),
+            addr = addr,
+            devpath_suffix = devpath_suffix,
+        );
+        uev
+    }
+
+    #[rstest]
+    #[case::addr_a_matches_uev_a("0:0", "sda", "0:0", "sda", true)]
+    #[case::addr_b_matches_uev_b("2:0", "sdb", "2:0", "sdb", true)]
+    #[case::addr_a_rejects_uev_b("0:0", "sda", "2:0", "sdb", false)]
+    #[case::addr_b_rejects_uev_a("2:0", "sdb", "0:0", "sda", false)]
+    #[tokio::test]
+    async fn test_scsi_block_matcher_basic_matching(
+        #[case] matcher_addr: &str,
+        #[case] _matcher_devname: &str,
+        #[case] uevent_addr: &str,
+        #[case] uevent_devname: &str,
+        #[case] should_match: bool,
+    ) {
+        let matcher = ScsiBlockMatcher::new(matcher_addr);
+        let uev = make_scsi_block_uevent(uevent_addr, uevent_devname, uevent_devname);
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "Matcher for SCSI addr '{}' should {} uevent for addr '{}'",
+            matcher_addr,
+            if should_match { "match" } else { "reject" },
+            uevent_addr
+        );
+    }
+
+    #[rstest]
+    #[case::wrong_subsystem(test_helpers::SUBSYSTEM_NET, "Wrong subsystem should be rejected")]
+    #[tokio::test]
+    async fn test_scsi_block_matcher_wrong_subsystem(
+        #[case] wrong_subsystem: &str,
+        #[case] description: &str,
+    ) {
+        let addr = "0:0";
+        let matcher = ScsiBlockMatcher::new(addr);
+        let mut uev = make_scsi_block_uevent(addr, "sda", "sda");
+        uev.subsystem = wrong_subsystem.to_string();
+
+        assert!(!matcher.is_match(&uev), "{}", description);
+    }
 
     #[tokio::test]
-    #[allow(clippy::redundant_clone)]
-    async fn test_scsi_block_matcher() {
+    async fn test_scsi_block_matcher_empty_devname() {
+        let addr = "0:0";
+        let matcher = ScsiBlockMatcher::new(addr);
+        let mut uev = make_scsi_block_uevent(addr, "sda", "sda");
+        uev.devname = String::new();
+
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject uevent with empty devname"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scsi_block_matcher_wrong_path() {
         let root_bus = create_pci_root_bus_path("00");
-        let devname = "sda";
+        let addr = "0:0";
+        let matcher = ScsiBlockMatcher::new(addr);
+        let mut uev = make_scsi_block_uevent(addr, "sda", "sda");
+        uev.devpath =
+            format!("{root_bus}/0000:00:00.0/virtio0/host0/target0:0:1/0:0:1:0/block/sdc");
 
-        let mut uev_a = crate::uevent::Uevent::default();
-        let addr_a = "0:0";
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = BLOCK.to_string();
-        uev_a.devname = devname.to_string();
-        uev_a.devpath =
-            format!("{root_bus}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{addr_a}/block/sda");
-        let matcher_a = ScsiBlockMatcher::new(addr_a);
+        assert!(
+            !matcher.is_match(&uev),
+            "Matcher should reject devpath not containing the SCSI address search string"
+        );
+    }
 
-        let mut uev_b = uev_a.clone();
-        let addr_b = "2:0";
-        uev_b.devpath =
-            format!("{root_bus}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{addr_b}/block/sdb");
-        let matcher_b = ScsiBlockMatcher::new(addr_b);
+    #[rstest]
+    #[case::addr_1_1_matches("1:1", "sdc", true)]
+    #[case::addr_0_0_rejects("0:0", "sda", false)]
+    #[tokio::test]
+    async fn test_scsi_block_matcher_different_addresses(
+        #[case] test_addr: &str,
+        #[case] test_devname: &str,
+        #[case] should_match_1_1: bool,
+    ) {
+        let root_bus = create_pci_root_bus_path("00");
+        let matcher = ScsiBlockMatcher::new("1:1");
+        let mut uev = make_scsi_block_uevent(test_addr, test_devname, test_devname);
 
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
+        // Adjust devpath for addr 1:1
+        if test_addr == "1:1" {
+            uev.devpath = format!("{root_bus}/0000:00:00.0/virtio0/host0/target0:0:1/0:0:{test_addr}/block/{test_devname}");
+        }
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match_1_1,
+            "Matcher for '1:1' should {} uevent for addr '{}'",
+            if should_match_1_1 { "match" } else { "reject" },
+            test_addr
+        );
+    }
+
+    #[rstest]
+    #[case::whole_disk("0:0", "sda", "sda", true)]
+    #[case::partition("0:0", "sda1", "sda/sda1", false)]
+    #[tokio::test]
+    async fn test_scsi_block_matcher_rejects_partitions(
+        #[case] addr: &str,
+        #[case] devname: &str,
+        #[case] devpath_suffix: &str,
+        #[case] should_match: bool,
+    ) {
+        let matcher = ScsiBlockMatcher::new(addr);
+        let uev = make_scsi_block_uevent(addr, devname, devpath_suffix);
+
+        assert_eq!(
+            matcher.is_match(&uev),
+            should_match,
+            "{} uevent should {} match",
+            if devpath_suffix.contains('/') {
+                "partition"
+            } else {
+                "whole disk"
+            },
+            if should_match { "" } else { "not" }
+        );
     }
 }

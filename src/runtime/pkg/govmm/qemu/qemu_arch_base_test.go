@@ -14,8 +14,8 @@ var (
 	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
 	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 	deviceSerialString             = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom,max_ports=2"
-	deviceVhostUserNetString       = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,romfile=efi-virtio.rom"
-	deviceVSOCKString              = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=efi-virtio.rom"
+	deviceVhostUserNetString       = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,bus=pcie.0,romfile=efi-virtio.rom"
+	deviceVSOCKString              = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,bus=pcie.0,romfile=efi-virtio.rom"
 	deviceVFIOString               = "-device vfio-pci,host=02:10.0,x-pci-vendor-id=0x1234,x-pci-device-id=0x5678,romfile=efi-virtio.rom"
 	devicePCIeRootPortSimpleString = "-device pcie-root-port,id=rp1,bus=pcie.0,chassis=0x00,slot=0x00,multifunction=off"
 	devicePCIeRootPortFullString   = "-device pcie-root-port,id=rp2,bus=pcie.0,chassis=0x0,slot=0x1,addr=0x2,multifunction=on,bus-reserve=0x3,pref64-reserve=16G,mem-reserve=1G,io-reserve=512M,romfile=efi-virtio.rom"
@@ -23,8 +23,8 @@ var (
 	deviceVFIOPCIeFullString       = "-device vfio-pci,host=02:00.0,x-pci-vendor-id=0x10de,x-pci-device-id=0x15f8,romfile=efi-virtio.rom,bus=rp1"
 	deviceSCSIControllerStr        = "-device virtio-scsi-pci,id=foo,disable-modern=false,romfile=efi-virtio.rom"
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
-	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
-	deviceVhostUserBlkString       = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2,romfile=efi-virtio.rom"
+	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,bus=pcie.0,romfile=efi-virtio.rom"
+	deviceVhostUserBlkString       = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2,bus=pcie.0,romfile=efi-virtio.rom"
 	deviceBlockString              = "-device virtio-blk-pci,disable-modern=true,drive=hd0,config-wce=off,romfile=efi-virtio.rom,share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly=on"
 	devicePCIBridgeString          = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff,romfile=efi-virtio.rom"
 	devicePCIBridgeStringReserved  = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=off,addr=ff,romfile=efi-virtio.rom,io-reserve=4k,mem-reserve=1m,pref64-reserve=1m"
@@ -42,7 +42,8 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserBlk,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserBlkDevice, deviceVhostUserBlkString, t)
+	// vhost-user-pci device strings include bus=pcie.0 — gated to q35/virt.
+	testAppendQ35(vhostuserBlkDevice, deviceVhostUserBlkString, t)
 
 	vhostuserSCSIDevice := VhostUserDevice{
 		SocketPath:    "/tmp/nonexistentsocket.socket",
@@ -52,7 +53,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserSCSI,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
+	testAppendQ35(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
 
 	vhostuserNetDevice := VhostUserDevice{
 		SocketPath:    "/tmp/nonexistentsocket.socket",
@@ -62,7 +63,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		VhostUserType: VhostUserNet,
 		ROMFile:       romfile,
 	}
-	testAppend(vhostuserNetDevice, deviceVhostUserNetString, t)
+	testAppendQ35(vhostuserNetDevice, deviceVhostUserNetString, t)
 }
 
 func TestAppendVirtioBalloon(t *testing.T) {

@@ -13,30 +13,36 @@ set -o errtrace
 
 SCRIPT_DIR="$(cd "$(dirname "${0}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
-KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
-STAGED_ARTIFACT="${KATA_DEPLOY_DIR}/kata-static.tar.zst"
-KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.zst"}"
-REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
-TAG="${3:-}"
 
-# Only remove a staged copy we created (skip when source is already the staged path).
-REMOVE_STAGED_ON_EXIT=false
+REGISTRY="${1:-"quay.io/kata-containers/kata-deploy"}"
+TAG="${2:-}"
+ARTIFACTS_BUILD_DIR="${3:-${REPO_ROOT}/tools/packaging/kata-deploy/local-build/build}"
+# Separate, minimal image for the job-mode dispatcher (kata-deploy-job-dispatcher).
+# Built from its own staged tarball, with the same tag scheme as the kata-deploy
+# image. The repo name mirrors the kata-deploy repo with "-job-dispatcher" inserted
+# before any "-ci" suffix, so the "-ci" stays last:
+#   .../kata-deploy     -> .../kata-deploy-job-dispatcher
+#   .../kata-deploy-ci  -> .../kata-deploy-job-dispatcher-ci
+if [[ "${REGISTRY}" == *-ci ]]; then
+	default_job_dispatcher_image_reference="${REGISTRY%-ci}-job-dispatcher-ci"
+else
+	default_job_dispatcher_image_reference="${REGISTRY}-job-dispatcher"
+fi
+JOB_DISPATCHER_IMAGE_REFERENCE="${4:-${default_job_dispatcher_image_reference}}"
+
+KATA_DEPLOY_DIR="${REPO_ROOT}/tools/packaging/kata-deploy"
+ARTIFACTS_STAGE_DIR="${KATA_DEPLOY_DIR}/kata-artifacts"
+
+# Stage the component tarballs into a directory that is visible to the
+# Docker build context (local-build/ is excluded via .dockerignore).
+mkdir -p "${ARTIFACTS_STAGE_DIR}"
+cp "${ARTIFACTS_BUILD_DIR}"/kata-static-*.tar.zst "${ARTIFACTS_STAGE_DIR}/"
+cp "${ARTIFACTS_BUILD_DIR}"/kata-deploy-static-*.tar.zst "${ARTIFACTS_STAGE_DIR}/"
+
 cleanup() {
-	if [[ "${REMOVE_STAGED_ON_EXIT}" = true ]]; then
-		rm -f "${STAGED_ARTIFACT}"
-	fi
+	rm -rf "${ARTIFACTS_STAGE_DIR}"
 }
 trap cleanup EXIT
-
-src_rp="$(realpath -e "${KATA_DEPLOY_ARTIFACT}" 2>/dev/null || true)"
-dest_rp="$(realpath -e "${STAGED_ARTIFACT}" 2>/dev/null || true)"
-if [[ -n "${src_rp}" ]] && [[ -n "${dest_rp}" ]] && [[ "${src_rp}" = "${dest_rp}" ]]; then
-	echo "Artifact already at staged path ${STAGED_ARTIFACT}; skipping copy"
-else
-	echo "Copying ${KATA_DEPLOY_ARTIFACT} to ${STAGED_ARTIFACT}"
-	cp "${KATA_DEPLOY_ARTIFACT}" "${STAGED_ARTIFACT}"
-	REMOVE_STAGED_ON_EXIT=true
-fi
 
 pushd "${REPO_ROOT}"
 
@@ -46,22 +52,36 @@ arch=$(uname -m)
 # Disable provenance and SBOM so each tag is a single image manifest. quay.io rejects
 # pushing multi-arch manifest lists that include attestation manifests ("manifest invalid").
 PLATFORM="linux/${arch}"
-IMAGE_TAG="${REGISTRY}:kata-containers-$(git -C "${REPO_ROOT}" rev-parse HEAD)-${arch}"
+COMMIT_TAG="kata-containers-$(git -C "${REPO_ROOT}" rev-parse HEAD)-${arch}"
+IMAGE_TAG="${REGISTRY}:${COMMIT_TAG}"
+JOB_DISPATCHER_IMAGE_TAG="${JOB_DISPATCHER_IMAGE_REFERENCE}:${COMMIT_TAG}"
 
 DOCKERFILE="${REPO_ROOT}/tools/packaging/kata-deploy/Dockerfile"
+JOB_DISPATCHER_DOCKERFILE="${REPO_ROOT}/tools/packaging/kata-deploy/job-dispatcher/Dockerfile"
 
-echo "Building the image"
+echo "Building the kata-deploy image"
 docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
 	-f "${DOCKERFILE}" \
 	--tag "${IMAGE_TAG}" --push .
 
+echo "Building the kata-deploy-job-dispatcher image"
+docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
+	-f "${JOB_DISPATCHER_DOCKERFILE}" \
+	--tag "${JOB_DISPATCHER_IMAGE_TAG}" --push .
+
 if [[ -n "${TAG}" ]]; then
 	ADDITIONAL_TAG="${REGISTRY}:${TAG}"
+	JOB_DISPATCHER_ADDITIONAL_TAG="${JOB_DISPATCHER_IMAGE_REFERENCE}:${TAG}"
 
 	echo "Building the ${ADDITIONAL_TAG} image"
 	docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
 		-f "${DOCKERFILE}" \
 		--tag "${ADDITIONAL_TAG}" --push .
+
+	echo "Building the ${JOB_DISPATCHER_ADDITIONAL_TAG} image"
+	docker buildx build --platform "${PLATFORM}" --provenance false --sbom false \
+		-f "${JOB_DISPATCHER_DOCKERFILE}" \
+		--tag "${JOB_DISPATCHER_ADDITIONAL_TAG}" --push .
 fi
 
 popd

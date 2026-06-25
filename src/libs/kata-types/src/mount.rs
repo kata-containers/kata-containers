@@ -507,6 +507,43 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
     Ok(mount_info)
 }
 
+/// Writes a `DirectVolumeMountInfo` as `mountInfo.json` under the direct-volume root
+/// for the given `volume_path`.
+#[cfg(feature = "safe-path")]
+pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountInfo) -> Result<()> {
+    let root = kata_direct_volume_root_path();
+    // safe_path::scoped_join requires the root to exist; ensure it does before
+    // calling join_path (mirrors Go's os.MkdirAll behaviour in AddMountInfo).
+    std::fs::create_dir_all(&root)
+        .with_context(|| format!("failed to create direct-volume root {:?}", root))?;
+    let dir = join_path(&root, volume_path)?;
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create direct-volume dir {:?}", dir))?;
+    let file_path = dir.join(KATA_MOUNT_INFO_FILE_NAME);
+    let data =
+        serde_json::to_string(mount_info).context("failed to serialize DirectVolumeMountInfo")?;
+    std::fs::write(&file_path, data)
+        .with_context(|| format!("failed to write mount info to {:?}", file_path))?;
+    Ok(())
+}
+
+/// Returns `true` if a `mountInfo.json` exists for the given `volume_path`.
+#[cfg(feature = "safe-path")]
+pub fn is_volume_mounted(volume_path: &str) -> bool {
+    get_volume_mount_info(volume_path).is_ok()
+}
+
+/// Removes the direct-volume metadata directory for the given `volume_path`.
+#[cfg(feature = "safe-path")]
+pub fn remove_volume_path(volume_path: &str) -> Result<()> {
+    let dir = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)
+            .with_context(|| format!("failed to remove direct-volume dir {:?}", dir))?;
+    }
+    Ok(())
+}
+
 /// Checks whether a mount type is a marker for a Kata specific volume.
 pub fn is_kata_special_volume(ty: &str) -> bool {
     ty.len() > KATA_VOLUME_TYPE_PREFIX.len() && ty.starts_with(KATA_VOLUME_TYPE_PREFIX)

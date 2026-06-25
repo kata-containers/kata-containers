@@ -40,7 +40,8 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.agent.enable_tracing` | `boolean` | enable tracing for the agent |
 | `io.katacontainers.config.agent.container_pipe_size` | uint32 | specify the size of the std(in/out) pipes created for containers |
 | `io.katacontainers.config.agent.kernel_modules` | string | the list of kernel modules and their parameters that will be loaded in the guest kernel. Semicolon separated list of kernel modules and their parameters. These modules will be loaded in the guest kernel using `modprobe`(8). E.g., `e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0` |
-| `io.katacontainers.config.agent.cdh_api_timeout` | uint32 | timeout in second for Confidential Data Hub (CDH) API service, default is `50` |
+| `io.katacontainers.config.agent.cdh_api_timeout` | uint32 | Go runtime timeout in seconds for Confidential Data Hub (CDH) API service, default is `50` |
+| `io.katacontainers.config.agent.cdh_api_timeout_ms` | uint32 | runtime-rs timeout in milliseconds for Confidential Data Hub (CDH) API service, default is `50000` |
 
 ### Hypervisor Options
 
@@ -48,8 +49,10 @@ Hypervisor annotations must be explicitly whitelisted in the Kata runtime config
 
 ```toml title="/path/to/configuration.toml"
 # List of valid annotation names for the hypervisor
-enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
+enable_annotations = ["enable_iommu", "kernel_params"]
 ```
+
+Warning: do not enable `virtio_fs_extra_args` in `enable_annotations` unless you fully trust all annotation sources. Passing arbitrary `virtiofsd` options can be abused for malicious host-side behavior.
 
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
@@ -76,7 +79,6 @@ enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
 | `io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec` | `string`| the timeout for reconnecting vhost user socket (QEMU)
 | `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |
 | `io.katacontainers.config.hypervisor.entropy_source` (R) | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
-| `io.katacontainers.config.hypervisor.file_mem_backend` (R) | string | file based memory backend root directory |
 | `io.katacontainers.config.hypervisor.firmware_hash` | string | container firmware SHA-512 hash value |
 | `io.katacontainers.config.hypervisor.firmware` | string | the guest firmware that will run the container VM |
 | `io.katacontainers.config.hypervisor.firmware_volume_hash` | string | container firmware volume SHA-512 hash value |
@@ -106,7 +108,7 @@ enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
 | `io.katacontainers.config.hypervisor.virtio_fs_cache_size` | uint32 | virtio-fs DAX cache size in `MiB` |
 | `io.katacontainers.config.hypervisor.virtio_fs_cache` | string | the cache mode for virtio-fs, valid values are `always`, `auto` and `never` |
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
-| `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
+| `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon. **Security warning:** enabling this annotation can be abused for malicious host-side behavior |
 | `io.katacontainers.config.hypervisor.enable_guest_swap` | `boolean` | enable swap in the guest |
 | `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
 | `io.katacontainers.config.hypervisor.default_gpus` | uint32 | the minimum number of GPUs required for the VM. Only used by remote hypervisor to help with instance selection |
@@ -167,7 +169,6 @@ In the following example two PODs are created, but the kernel modules `e1000e`
 and `i915` are inserted only in the POD `pod1`. Also guest `seccomp` is only enabled
 in the POD `pod2`.
 
-
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -225,7 +226,6 @@ the configuration entry:
 | Key | Config file entry | Comments |
 |-------| ----- | ----- |
 | `entropy_source` | `valid_entropy_sources` | Valid entropy sources, e.g. `/dev/random` |
-| `file_mem_backend`  | `valid_file_mem_backends` | Valid locations for the file-based memory backend root directory |
 | `jailer_path`  | `valid_jailer_paths`| Valid paths for the jailer constraining the container VM (Firecracker) |
 | `path`  | `valid_hypervisor_paths` | Valid hypervisors to run the container VM |
 | `vhost_user_store_path`  | `valid_vhost_user_store_paths` | Valid paths for vhost-user related files|

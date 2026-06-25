@@ -37,10 +37,6 @@ on:
         required: true
       AZ_SUBSCRIPTION_ID:
         required: true
-      CI_HKD_PATH:
-        required: true
-      ITA_KEY:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
       NGC_API_KEY:
@@ -69,12 +65,12 @@ jobs:
     secrets:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
-  publish-kata-deploy-payload-amd64:
+  publish-kata-deploy-image-amd64:
     needs: build-kata-static-tarball-amd64
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -84,6 +80,25 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-amd64:
+    needs: build-kata-static-tarball-amd64
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-monitor-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-22.04
+      arch: amd64
+      image-kind: monitor
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -101,12 +116,12 @@ jobs:
     secrets:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
-  publish-kata-deploy-payload-arm64:
+  publish-kata-deploy-image-arm64:
     needs: build-kata-static-tarball-arm64
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -116,6 +131,25 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-arm
       arch: arm64
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-arm64:
+    needs: build-kata-static-tarball-arm64
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-monitor-ci
+      tag: ${{ inputs.tag }}-arm64
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-24.04-arm
+      arch: arm64
+      image-kind: monitor
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -131,7 +165,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:
@@ -146,12 +179,12 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-s390x:
+  publish-kata-deploy-image-s390x:
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -164,12 +197,31 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-ppc64le:
+  publish-kata-monitor-image-s390x:
+    needs: build-kata-static-tarball-s390x
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-monitor-ci
+      tag: ${{ inputs.tag }}-s390x
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-24.04-s390x
+      arch: s390x
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-deploy-image-ppc64le:
     needs: build-kata-static-tarball-ppc64le
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -179,6 +231,25 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-ppc64le
       arch: ppc64le
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-ppc64le:
+    needs: build-kata-static-tarball-ppc64le
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-monitor-ci
+      tag: ${{ inputs.tag }}-ppc64le
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-24.04-ppc64le
+      arch: ppc64le
+      image-kind: monitor
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -226,16 +297,31 @@ jobs:
 
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
+    needs: [build-kata-static-tarball-amd64, publish-kata-monitor-image-amd64]
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      kata-monitor-image: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci:${{ inputs.tag }}-amd64
+
+  run-kata-monitor-k8s-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: [publish-kata-deploy-image-amd64, publish-kata-monitor-image-amd64]
+    uses: ./.github/workflows/run-kata-monitor-k8s-tests.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      pr-number: ${{ inputs.pr-number }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      kata-monitor-image-reference: ghcr.io/${{ github.repository_owner }}/kata-monitor-ci
+      kata-monitor-image-tag: ${{ inputs.tag }}-amd64
 
   run-k8s-tests-on-aks:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
 
     permissions:
@@ -256,7 +342,7 @@ jobs:
 
   run-k8s-tests-on-free-runner:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     permissions:
       contents: read
     uses: ./.github/workflows/run-k8s-tests-on-free-runner.yaml
@@ -271,7 +357,7 @@ jobs:
 
   run-k8s-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-arm64
+    needs: publish-kata-deploy-image-arm64
     uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
     with:
       registry: ghcr.io
@@ -284,7 +370,7 @@ jobs:
   run-kata-coco-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
     needs:
-      - publish-kata-deploy-payload-arm64
+      - publish-kata-deploy-image-arm64
       - build-and-publish-tee-confidential-unencrypted-image
     uses: ./.github/workflows/run-kata-coco-tests-arm64-k8s.yaml
     with:
@@ -300,7 +386,7 @@ jobs:
 
   run-k8s-tests-on-nvidia-gpu:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
+    needs: publish-kata-deploy-image-amd64
     uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -310,6 +396,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+      enable-nvrc-trace: ${{ inputs.pr-number != 'nightly' }}
     secrets:
       NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
@@ -317,7 +404,7 @@ jobs:
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs:
-     - publish-kata-deploy-payload-amd64
+     - publish-kata-deploy-image-amd64
      - build-and-publish-tee-confidential-unencrypted-image
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     permissions:
@@ -338,11 +425,10 @@ jobs:
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-      ITA_KEY: ${{ secrets.ITA_KEY }}
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
+    needs: [publish-kata-deploy-image-s390x, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
     with:
       registry: ghcr.io
@@ -351,12 +437,13 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+      vmm: ${{ (inputs.pr-number == 'nightly' || inputs.pr-number == 'dev') && '["qemu", "qemu-runtime-rs", "qemu-coco-dev", "qemu-coco-dev-runtime-rs"]' || '["qemu", "qemu-runtime-rs", "qemu-coco-dev"]' }}
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-ppc64le
+    needs: publish-kata-deploy-image-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
     with:
       registry: ghcr.io
@@ -368,7 +455,7 @@ jobs:
 
   run-kata-deploy-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-amd64]
+    needs: [publish-kata-deploy-image-amd64]
     uses: ./.github/workflows/run-kata-deploy-tests.yaml
     with:
       registry: ghcr.io
@@ -403,16 +490,16 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          { containerd_version: lts,    vmm: clh              },
-          { containerd_version: lts,    vmm: dragonball       },
-          { containerd_version: lts,    vmm: qemu             },
-          { containerd_version: lts,    vmm: clh-runtime-rs   },
-          { containerd_version: lts,    vmm: qemu-runtime-rs  },
-          { containerd_version: active, vmm: clh              },
-          { containerd_version: active, vmm: dragonball       },
-          { containerd_version: active, vmm: qemu             },
-          { containerd_version: active, vmm: clh-runtime-rs   },
-          { containerd_version: active, vmm: qemu-runtime-rs  },
+          { containerd_version: latest,    vmm: clh              },
+          { containerd_version: latest,    vmm: dragonball       },
+          { containerd_version: latest,    vmm: qemu             },
+          { containerd_version: latest,    vmm: clh-runtime-rs   },
+          { containerd_version: latest,    vmm: qemu-runtime-rs  },
+          { containerd_version: minimum, vmm: clh              },
+          { containerd_version: minimum, vmm: dragonball       },
+          { containerd_version: minimum, vmm: qemu             },
+          { containerd_version: minimum, vmm: clh-runtime-rs   },
+          { containerd_version: minimum, vmm: qemu-runtime-rs  },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ toJSON(matrix) }}
@@ -434,8 +521,8 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          {containerd_version: active, vmm: qemu},
-          {containerd_version: active, vmm: qemu-runtime-rs},
+          {containerd_version: latest, vmm: qemu},
+          {containerd_version: latest, vmm: qemu-runtime-rs},
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
@@ -457,7 +544,7 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          {containerd_version: active, vmm: qemu},
+          {containerd_version: latest, vmm: qemu},
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-ppc64le-${{ toJSON(matrix) }}

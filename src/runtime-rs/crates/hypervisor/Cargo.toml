@@ -29,13 +29,13 @@ lazy_static = { workspace = true }
 tracing = { workspace = true }
 ttrpc = { workspace = true, features = ["async"] }
 futures = "0.3.25"
-safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
 qapi = { version = "0.15", features = ["qmp", "async-tokio-all"] }
 qapi-spec = "0.3.2"
 qapi-qmp = "0.15.0"
 hyper = { workspace = true, features = ["client"] }
-
+regex = "1"
+once_cell = "1.21.3"
 # Local dependencies
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
@@ -43,6 +43,7 @@ logging = { workspace = true }
 protocols = { workspace = true, features = ["async"] }
 persist = { workspace = true }
 ch-config = { workspace = true, optional = true }
+safe-path = { workspace = true }
 tests_utils = { workspace = true }
 
 # Dependencies that only exist to support hypervisors which upstream only

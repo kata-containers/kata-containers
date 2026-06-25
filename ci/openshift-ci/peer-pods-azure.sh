@@ -225,7 +225,7 @@ kubectl create secret generic my-provider-creds \
        --from-literal=AZURE_CLIENT_ID="${AZURE_CLIENT_ID}" \
        --from-literal=AZURE_CLIENT_SECRET="${AZURE_CLIENT_SECRET}" \
        --from-literal=AZURE_TENANT_ID="${AZURE_TENANT_ID}"
-helm install peerpods . -f providers/azure.yaml --set secrets.mode=reference --set secrets.existingSecretName=my-provider-creds --set providerConfigs.azure.AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}" --set providerConfigs.azure.AZURE_REGION="${PP_REGION}" --set providerConfigs.azure.AZURE_INSTANCE_SIZE="Standard_D2as_v5" --set providerConfigs.azure.AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}" --set providerConfigs.azure.AZURE_SUBNET_ID="${PP_SUBNET_ID}" --set providerConfigs.azure.AZURE_IMAGE_ID="${PP_IMAGE_ID}" --set providerConfigs.azure.DISABLECVM="true" --set providerConfigs.azure.PEERPODS_LIMIT_PER_NODE="50" --set kata-deploy.snapshotter.setup= --dependency-update -n confidential-containers-system --create-namespace --wait
+helm install peerpods . -f providers/azure.yaml --set secrets.mode=reference --set secrets.existingSecretName=my-provider-creds --set providerConfigs.azure.AZURE_SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID}" --set providerConfigs.azure.AZURE_REGION="${PP_REGION}" --set providerConfigs.azure.AZURE_INSTANCE_SIZE="Standard_D2as_v5" --set providerConfigs.azure.AZURE_RESOURCE_GROUP="${PP_RESOURCE_GROUP}" --set providerConfigs.azure.AZURE_SUBNET_ID="${PP_SUBNET_ID}" --set providerConfigs.azure.AZURE_IMAGE_ID="${PP_IMAGE_ID}" --set providerConfigs.azure.DISABLECVM="true" --set providerConfigs.azure.PEERPODS_LIMIT_PER_NODE="50" --dependency-update -n confidential-containers-system --create-namespace --wait
 popd	# charts
 popd	# git_sparse_clone CAA
 

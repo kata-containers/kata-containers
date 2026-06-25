@@ -115,12 +115,14 @@ case "${RUNTIME_CHOICE}" in
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			-w "${repo_root_dir}/src/runtime" \
 			--user "$(id -u)":"$(id -g)" \
+			--env GOMODCACHE=/opt/.cache/gomod \
 			"${container_image}" \
 			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			-w "${repo_root_dir}/src/runtime" \
 			--user "$(id -u)":"$(id -g)" \
+			--env GOMODCACHE=/opt/.cache/gomod \
 			"${container_image}" \
 			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS} install"
 		;;

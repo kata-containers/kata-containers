@@ -347,8 +347,8 @@ $ helm install --wait --generate-name \
 >
 > For heterogeneous clusters with different GPU types, you can specify an
 > empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
-> `-    --set 'sandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
-> `-    --set 'sandboxDevicePlugin.env[0].value=""' \`
+> `-    --set 'kataSandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
+> `-    --set 'kataSandboxDevicePlugin.env[0].value=""' \`
 > This will cause the sandbox device plugin to create GPU model-specific
 > resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
 > default `pgpu` type, which usually results in advertising a resource of
@@ -505,6 +505,17 @@ Done
 To stop the pod, run: `kubectl delete pod cuda-vectoradd-kata`.
 
 ### Next steps
+
+#### NUMA topology for GPU locality
+
+On multi-NUMA hosts, enabling NUMA support ensures GPU memory accesses stay
+local to the NUMA node where the GPU is physically attached, avoiding
+cross-NUMA latency. The NVIDIA GPU configuration templates ship with
+`enable_numa = true` by default.
+
+For details on NUMA configuration, topology verification, and
+troubleshooting, see the
+[NUMA support guide](../how-to/how-to-use-numa-with-kata.md).
 
 #### Use multi-GPU passthrough
 

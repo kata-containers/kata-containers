@@ -1,4 +1,44 @@
 {{- /*
+  Common RuntimeClass overhead defaults keyed by shim/baseConfig.
+
+  NOTE: the QEMU shims use 320Mi rather than 160Mi. On aarch64 the VMM host
+  footprint is larger (QEMU's own anon RSS is ~160Mi+ before any guest RAM),
+  and with sandbox_cgroup_only the VMM runs inside the pod cgroup, so a 160Mi
+  overhead lets the VMM get OOM-killed for small-memory-limit pods. 320Mi keeps
+  it comfortably within the cgroup. It is applied on all arches for simplicity
+  (x86 is over-provisioned by ~160Mi, which is acceptable).
+*/ -}}
+{{- define "kata-deploy.runtimeClassConfigs" -}}
+{{- toYaml (dict
+  "clh" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-azure" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
+  "clh-azure-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
+  "dragonball" (dict "memory" "130Mi" "cpu" "250m")
+  "fc" (dict "memory" "130Mi" "cpu" "250m")
+  "qemu" (dict "memory" "320Mi" "cpu" "250m")
+  "qemu-coco-dev" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-coco-dev-runtime-rs" (dict "memory" "320Mi" "cpu" "250m")
+  "qemu-runtime-rs" (dict "memory" "320Mi" "cpu" "250m")
+  "qemu-se-runtime-rs" (dict "memory" "1024Mi" "cpu" "1.0")
+  "qemu-se" (dict "memory" "1024Mi" "cpu" "1.0")
+  "qemu-snp" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-snp-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-tdx-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
+  "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
+  "remote" (dict "memory" "120Mi" "cpu" "250m")
+) -}}
+{{- end -}}
+
+{{- /*
   Render a single RuntimeClass. Params (dict): root (.), shim, config, shimConfig,
   nameOverride (optional; if set, use as metadata.name for default RC), useShimNodeSelectors.
 */ -}}
@@ -21,6 +61,8 @@ metadata:
 {{- else }}
     kata-deploy/instance: "default"
 {{- end }}
+  annotations:
+{{- include "kata-deploy.runtimeclassAnnotations" .root | nindent 4 }}
 {{- if .root.Values.env.multiInstallSuffix }}
 handler: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
 {{- else }}
@@ -93,28 +135,7 @@ scheduling:
 {{- end -}}
 {{- end -}}
 
-{{- $runtimeClassConfigs := dict
-  "clh" (dict "memory" "130Mi" "cpu" "250m")
-  "clh-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
-  "dragonball" (dict "memory" "130Mi" "cpu" "250m")
-  "fc" (dict "memory" "130Mi" "cpu" "250m")
-  "qemu" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-coco-dev" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-coco-dev-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-se-runtime-rs" (dict "memory" "1024Mi" "cpu" "1.0")
-  "qemu-se" (dict "memory" "1024Mi" "cpu" "1.0")
-  "qemu-snp" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-snp-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-tdx-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu" (dict "memory" "10240Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-tdx" (dict "memory" "10240Mi" "cpu" "1.0")
-  "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
-  "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
-  "remote" (dict "memory" "120Mi" "cpu" "250m")
-}}
+{{- $runtimeClassConfigs := fromYaml (include "kata-deploy.runtimeClassConfigs" .) }}
 
 {{- /* Create RuntimeClass for each enabled shim; when default RC is requested, emit it by reusing the same template with nameOverride */ -}}
 {{- $defaultShim := index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}

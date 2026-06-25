@@ -127,8 +127,103 @@ get_kubelet_data_dir() {
 	esac
 }
 
+# Return the per-shim Kata runtime config directory on a k8s node.
+#
+# This is the directory that holds configuration-<shim>.toml and config.d/.
+# Probe the filesystem instead of parsing the shim name, since some runtime-rs
+# shims like dragonball do not use the -runtime-rs suffix.
+get_kata_runtime_config_dir() {
+	local node_name="$1"
+	local base="/opt/kata/share/defaults/kata-containers"
+	local rs_dir="${base}/runtime-rs/runtimes/${KATA_HYPERVISOR}"
+	local go_dir="${base}/runtimes/${KATA_HYPERVISOR}"
+	local legacy_dir="${base}"
+
+	if exec_host "${node_name}" "test -d '${rs_dir}'" >/dev/null 2>&1; then
+		echo "${rs_dir}"
+	elif exec_host "${node_name}" "test -d '${go_dir}'" >/dev/null 2>&1; then
+		echo "${go_dir}"
+	elif exec_host "${node_name}" "test -f '${legacy_dir}/configuration-${KATA_HYPERVISOR}.toml'" >/dev/null 2>&1; then
+		echo "${legacy_dir}"
+	else
+		return 1
+	fi
+}
+
+get_kata_runtime_config_file() {
+	local node_name="$1"
+	local config_dir
+
+	config_dir="$(get_kata_runtime_config_dir "${node_name}")" || return 1
+	echo "${config_dir}/configuration-${KATA_HYPERVISOR}.toml"
+}
+
+get_kata_runtime_config_dropin_dir() {
+	local node_name="$1"
+	local config_dir
+
+	config_dir="$(get_kata_runtime_config_dir "${node_name}")" || return 1
+	echo "${config_dir}/config.d"
+}
+
+# Copy a local TOML fragment under the active Kata runtime config.d directory
+# on a k8s node. Echoes the full drop-in path.
+#
+# Callers must pair this with remove_kata_runtime_config_dropin_file during
+# teardown. A leaked drop-in would silently affect every subsequent pod on the
+# same node.
+set_kata_runtime_config_dropin_file() {
+	local node_name="$1"
+	local local_dropin="$2"
+	local dropin_file
+	local dropin_dir
+	local dropin_path
+	local quoted_dropin_dir
+
+	[[ -f "${local_dropin}" ]] || die "Kata runtime config drop-in file does not exist: ${local_dropin}"
+	dropin_file="$(basename "${local_dropin}")"
+
+	case "${dropin_file}" in
+		""|*/*|*[^A-Za-z0-9._-]*)
+			die "Invalid Kata runtime config drop-in file name: ${dropin_file}"
+			;;
+	esac
+	case "${dropin_file}" in
+		*.toml) ;;
+		*) die "Kata runtime config drop-in file must end in .toml: ${dropin_file}" ;;
+	esac
+
+	dropin_dir="$(get_kata_runtime_config_dropin_dir "${node_name}")" || return 1
+	dropin_path="${dropin_dir}/${dropin_file}"
+	printf -v quoted_dropin_dir "%q" "${dropin_dir}"
+	exec_host "${node_name}" "mkdir -p ${quoted_dropin_dir}" || return 1
+	copy_file_to_host "${local_dropin}" "${node_name}" "${dropin_path}" || return 1
+	echo "${dropin_path}"
+}
+
+# Remove a TOML fragment created under the active Kata runtime config.d
+# directory. Empty paths are accepted as a no-op for teardown convenience.
+remove_kata_runtime_config_dropin_file() {
+	local node_name="$1"
+	local dropin_path="${2:-}"
+	local dropin_dir
+	local quoted_dropin_path
+
+	[[ -n "${dropin_path}" ]] || return 0
+
+	dropin_dir="$(get_kata_runtime_config_dropin_dir "${node_name}")" || return 1
+	case "${dropin_path}" in
+		"${dropin_dir}"/*.toml) ;;
+		*) die "Refusing to remove path outside Kata runtime config.d: ${dropin_path}" ;;
+	esac
+
+	printf -v quoted_dropin_path "%q" "${dropin_path}"
+	exec_host "${node_name}" "rm -f ${quoted_dropin_path}"
+	echo "# Removed drop-in ${dropin_path}"
+}
+
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
 }
 
 # Copy the right combination of drop-ins from drop-in-examples/ into
@@ -151,7 +246,7 @@ install_genpolicy_drop_ins() {
 
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
-		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
+		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
 	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
@@ -161,10 +256,6 @@ install_genpolicy_drop_ins() {
 		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
 	fi
 
-	# 20-* runtime-rs overlay (disable encrypted emptyDir, not supported yet)
-	if is_runtime_rs; then
-		cp "${examples_dir}/20-runtime-rs-drop-in.json" "${settings_d}/"
-	fi
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings
@@ -172,7 +263,6 @@ install_genpolicy_drop_ins() {
 # genpolicy-settings.json and genpolicy-settings.d/*.json (drop-ins).
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
-	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
 
@@ -182,7 +272,7 @@ create_common_genpolicy_settings() {
 	mkdir -p "${genpolicy_settings_dir}/genpolicy-settings.d"
 	install_genpolicy_drop_ins \
 		"${genpolicy_settings_dir}/genpolicy-settings.d" \
-		"${default_genpolicy_settings_dir}/drop-in-examples"
+		"${GENPOLICY_SETTINGS_DIR}/drop-in-examples"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -221,6 +311,8 @@ auto_generate_policy() {
 	declare -r yaml_file="$2"
 	declare -r config_map_yaml_file="${3:-""}"
 	declare additional_flags="${4:-""}"
+
+	seed_initdata_from_yaml "${settings_dir}" "${yaml_file}"
 
 	additional_flags="${additional_flags} --initdata-path=${settings_dir}/default-initdata.toml"
 
@@ -344,7 +436,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-coco-dev-runtime-rs")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-tdx-runtime-rs" "qemu-coco-dev-runtime-rs")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
@@ -429,6 +521,45 @@ add_allow_all_policy_to_yaml() {
 		;;
 
 	esac
+}
+
+get_cc_init_data_annotation_from_yaml() {
+	local yaml_file="$1"
+	local resource_kind
+	resource_kind=$(yq eval 'select(documentIndex == 0) | .kind' "${yaml_file}")
+
+	case "${resource_kind}" in
+	Pod)
+		yq eval \
+			'select(documentIndex == 0) | .metadata.annotations."io.katacontainers.config.hypervisor.cc_init_data" // ""' \
+			"${yaml_file}"
+		;;
+
+	Deployment|Job|ReplicationController)
+		yq eval \
+			'select(documentIndex == 0) | .spec.template.metadata.annotations."io.katacontainers.config.hypervisor.cc_init_data" // ""' \
+			"${yaml_file}"
+		;;
+
+	*)
+		echo ""
+		;;
+	esac
+}
+
+seed_initdata_from_yaml() {
+	local settings_dir="$1"
+	local yaml_file="$2"
+	local existing_initdata
+
+	auto_generate_policy_enabled || return 0
+
+	existing_initdata="$(get_cc_init_data_annotation_from_yaml "${yaml_file}")"
+	[[ -z "${existing_initdata}" ]] && return 0
+
+	if ! printf "%s" "${existing_initdata}" | base64 -d | gzip -d > "${settings_dir}/default-initdata.toml"; then
+		die "Failed to decode existing cc_init_data annotation from ${yaml_file}"
+	fi
 }
 
 # Execute "kubectl describe pods -l app=${app_label}, until its output contains "${endpoint} is blocked by policy"

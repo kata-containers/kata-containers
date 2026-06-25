@@ -1,0 +1,7 @@
+# Copyright (c) 2026 Florian Vichot
+# SPDX-License-Identifier: Apache-2.0
+
+# Remove everything except the few things we actually need
+*
+!src/runtime/
+!VERSION

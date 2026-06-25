@@ -13,6 +13,7 @@ edition = "2018"
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
+dbs-acpi = { workspace = true }
 dbs-address-space = { workspace = true }
 dbs-allocator = { workspace = true }
 dbs-arch = { workspace = true }
@@ -33,7 +34,7 @@ lazy_static = "1.2"
 libc = "0.2.39"
 linux-loader = { workspace = true }
 log = "0.4.14"
-nix = "0.24.2"
+nix = { workspace = true, features = ["mman"] }
 procfs = "0.12.0"
 prometheus = { version = "0.14.0", features = ["process"] }
 seccompiler = { workspace = true }
@@ -51,6 +52,9 @@ crossbeam-channel = "0.5.6"
 vfio-bindings = { workspace = true, optional = true }
 vfio-ioctls = { workspace = true, optional = true }
 kata-sys-util = { path = "../libs/kata-sys-util" }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+tdx = { workspace = true }
 
 [dev-dependencies]
 slog-async = "2.7.0"

@@ -16,13 +16,14 @@ use cdi::annotations::parse_annotations;
 use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
 use cdi::spec_dirs::with_spec_dirs;
 use container_device_interface as cdi;
+use kata_sys_util::pcilibs::{is_vfio_device_type, snapshot_infiniband};
 use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
 use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use slog::Logger;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::prelude::FileTypeExt;
@@ -247,7 +248,183 @@ pub async fn add_devices(
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
         update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
+
+    // Expose any RDMA / InfiniBand char devices the guest kernel
+    // created for cold-plugged VFs, but only for containers that
+    // actually requested at least one VFIO device. Without this gate
+    // every container — including unrelated workloads sharing the
+    // sandbox — would get `/dev/infiniband/*` mapped in plus matching
+    // device cgroup `allow` entries, which weakens per-container
+    // isolation for no benefit. Cold-plug VFIO + guest-kernel RDMA
+    // is the only flow that needs `uverbs<N>` / `rdma_cm`, and that
+    // flow always shows up in `devices` with one of the VFIO driver
+    // types.
+    if container_has_vfio_device(devices) {
+        expose_guest_infiniband_devices(logger, spec).context("expose_guest_infiniband_devices")?;
+    }
+
     update_spec_devices(logger, spec, dev_updates)
+}
+
+/// Returns true if `devices` contains at least one entry whose
+/// `type_` matches one of the VFIO driver constants. Callers use
+/// this to gate host-wide VFIO-only side effects (e.g. exposing
+/// `/dev/infiniband/*` to the container) so the agent does not
+/// widen device access for unrelated containers.
+fn container_has_vfio_device(devices: &[Device]) -> bool {
+    devices
+        .iter()
+        .any(|d| is_vfio_device_type(d.type_.as_str()))
+}
+
+pub fn dump_nvidia_cdi_yaml(logger: &Logger) -> Result<()> {
+    let file_path = "/var/run/cdi/nvidia.yaml";
+    let path = PathBuf::from(file_path);
+
+    if !path.exists() {
+        debug!(
+            logger,
+            "CDI spec file does not exist, skipping: {}", file_path
+        );
+        return Ok(());
+    }
+
+    let metadata = fs::metadata(&path)?;
+    debug!(
+        logger,
+        "CDI spec at {}: {} bytes",
+        file_path,
+        metadata.len()
+    );
+
+    Ok(())
+}
+
+const VISIBLE_CDI_DEVICES_ENV: &str = "VISIBLE_CDI_DEVICES";
+
+/// Translate a container's VISIBLE_CDI_DEVICES environment variable into a
+/// list of fully-qualified CDI device names (e.g. "nvidia.com/gpu=all" or
+/// "nvidia.com/ib=0"). The variable is a ':'-separated list of
+/// "<cdi-kind>=<devices>" entries.
+/// Returns an empty vector when the variable is unset, empty, or set to one of
+/// the sentinel values "none"/"void" (following the NVIDIA *_VISIBLE_DEVICES
+/// convention) that explicitly request no CDI devices.
+pub fn cdi_devices_from_visible_devices(spec: &Spec) -> Result<Vec<String>> {
+    let prefix = format!("{VISIBLE_CDI_DEVICES_ENV}=");
+    let value = spec
+        .process()
+        .as_ref()
+        .and_then(|p| p.env().as_ref())
+        .and_then(|env| env.iter().find_map(|e| e.strip_prefix(prefix.as_str())));
+
+    let value = match value {
+        Some(v) => v.trim(),
+        None => return Ok(Vec::new()),
+    };
+
+    match value {
+        "" | "none" | "void" => Ok(Vec::new()),
+        list => {
+            let mut devices = Vec::new();
+            for entry in list.split(':').map(str::trim) {
+                devices.extend(cdi_devices_from_entry(entry)?);
+            }
+            Ok(devices)
+        }
+    }
+}
+
+// Translate a single "<cdi-kind>=<devices>" entry (e.g. "nvidia.com/ib=0,1")
+// into a list of fully-qualified CDI device names (e.g.
+// ["nvidia.com/ib=0", "nvidia.com/ib=1"]). <devices> is a comma-separated list
+// of "all" or non-negative device indices. The CDI kind must be specified
+// explicitly, there is no default.
+fn cdi_devices_from_entry(entry: &str) -> Result<Vec<String>> {
+    let (kind, devices) = entry.split_once('=').ok_or_else(|| {
+        anyhow!(
+            "invalid {}: entry {:?} is missing a CDI kind (expected \"<kind>=<devices>\")",
+            VISIBLE_CDI_DEVICES_ENV,
+            entry
+        )
+    })?;
+
+    let kind = kind.trim();
+    if kind.is_empty() {
+        return Err(anyhow!(
+            "invalid {}: entry {:?} has an empty CDI kind",
+            VISIBLE_CDI_DEVICES_ENV,
+            entry
+        ));
+    }
+
+    let devices = devices.trim();
+    if devices.is_empty() {
+        return Err(anyhow!(
+            "invalid {}: CDI kind {:?} has no devices",
+            VISIBLE_CDI_DEVICES_ENV,
+            kind
+        ));
+    }
+
+    let tokens: Vec<&str> = devices.split(',').map(str::trim).collect();
+
+    if tokens.len() > 1 && tokens.contains(&"all") {
+        return Err(anyhow!(
+            "invalid {}: CDI kind {:?} mixes \"all\" with explicit device indices",
+            VISIBLE_CDI_DEVICES_ENV,
+            kind
+        ));
+    }
+
+    tokens
+        .into_iter()
+        .map(|token| token_to_kind_and_device(kind, token))
+        .collect()
+}
+
+// Translate a single device token into a fully-qualified CDI device name. The token must be either
+// "all" or a non-negative integer device index.
+fn token_to_kind_and_device(kind: &str, token: &str) -> Result<String> {
+    if token == "all" {
+        return Ok(format!("{kind}=all"));
+    }
+
+    token
+        .parse::<u32>()
+        .map(|n| format!("{kind}={n}"))
+        .map_err(|_| {
+            anyhow!(
+                "invalid {}: {:?} is not \"all\" or a non-negative device index for CDI kind {:?}",
+                VISIBLE_CDI_DEVICES_ENV,
+                token,
+                kind
+            )
+        })
+}
+
+fn cdi_kind(device: &str) -> Option<&str> {
+    device.split_once('=').map(|(kind, _)| kind)
+}
+
+/// Return the requested devices that can never be injected: those whose CDI
+/// kind is already present in `available` but which name a device the kind does
+/// not provide (e.g. "nvidia.com/gpu=5" when only GPUs 0-3 exist).
+///
+/// A requested device whose kind is entirely absent from `available` is
+/// deliberately omitted: its CDI spec may simply not have been generated yet,
+/// and the caller should keep waiting for it rather than fail.
+fn unsatisfiable_cdi_devices(available: &[String], requested: &[String]) -> Vec<String> {
+    let known_kinds: HashSet<&str> = available.iter().filter_map(|d| cdi_kind(d)).collect();
+    let available: HashSet<&str> = available.iter().map(String::as_str).collect();
+
+    requested
+        .iter()
+        .filter(|d| match cdi_kind(d) {
+            Some(kind) => known_kinds.contains(kind) && !available.contains(d.as_str()),
+            None => false,
+        })
+        .cloned()
+        .collect()
 }
 
 #[instrument]
@@ -256,6 +433,7 @@ pub async fn handle_cdi_devices(
     spec: &mut Spec,
     spec_dir: &str,
     cdi_timeout: time::Duration,
+    extra_devices: &[String],
 ) -> Result<()> {
     if let Some(container_type) = spec
         .annotations()
@@ -267,7 +445,19 @@ pub async fn handle_cdi_devices(
         }
     }
 
-    let (_, devices) = parse_annotations(spec.annotations().as_ref().unwrap())?;
+    let mut devices = match spec.annotations().as_ref() {
+        Some(annotations) => parse_annotations(annotations)?.1,
+        None => Vec::new(),
+    };
+
+    // Devices requested via the container's VISIBLE_CDI_DEVICES environment
+    // variable are merged with any devices the host injected through
+    // cdi.k8s.io/* annotations.
+    for dev in extra_devices {
+        if !devices.contains(dev) {
+            devices.push(dev.clone());
+        }
+    }
 
     if devices.is_empty() {
         info!(logger, "no CDI annotations, no devices to inject");
@@ -279,7 +469,7 @@ pub async fn handle_cdi_devices(
     let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
 
     for i in 0..=cdi_timeout.as_secs() {
-        let inject_result = {
+        let (unsatisfiable, inject_result) = {
             // Lock cache within this scope, std::sync::Mutex has no Send
             // and await will not work with time::sleep
             let mut cache = cache.lock().unwrap();
@@ -289,7 +479,9 @@ pub async fn handle_cdi_devices(
                     return Err(anyhow!("error refreshing cache: {:?}", e));
                 }
             }
-            cache.inject_devices(Some(spec), devices.clone())
+            let unsatisfiable = unsatisfiable_cdi_devices(&cache.list_devices(), &devices);
+            let inject_result = cache.inject_devices(Some(spec), devices.clone());
+            (unsatisfiable, inject_result)
         };
 
         match inject_result {
@@ -301,6 +493,15 @@ pub async fn handle_cdi_devices(
                 return Ok(());
             }
             Err(e) => {
+                if !unsatisfiable.is_empty() {
+                    return Err(anyhow!(
+                        "CDI device(s) {:?} do not exist; their CDI kind(s) are present \
+                         in {} but do not provide them: {:?}",
+                        unsatisfiable,
+                        spec_dir,
+                        e
+                    ));
+                }
                 info!(
                     logger,
                     "waiting for CDI spec(s) to be generated ({} of {} max tries) {:?}",
@@ -308,9 +509,9 @@ pub async fn handle_cdi_devices(
                     cdi_timeout.as_secs(),
                     e
                 );
+                time::sleep(Duration::from_secs(1)).await;
             }
         }
-        time::sleep(Duration::from_secs(1)).await;
     }
     Err(anyhow!(
         "failed to inject devices after CDI timeout of {} seconds",
@@ -423,6 +624,7 @@ pub fn update_env_pci(
 
         let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
+        let mut translation_skipped = false;
         for host_addr_str in val.split(',') {
             let host_addr = match pci::Address::from_str(host_addr_str) {
                 Ok(addr) => addr,
@@ -435,15 +637,41 @@ pub fn update_env_pci(
                     continue 'env_loop;
                 }
             };
-            let host_guest = pcimap
-                .get(cid)
-                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
-            let guest_addr = host_guest
-                .get(&host_addr)
-                .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+            let host_guest = match pcimap.get(cid) {
+                Some(m) => m,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        "update_env_pci: no per-container pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
+            let guest_addr = match host_guest.get(&host_addr) {
+                Some(g) => g,
+                None => {
+                    tracing::warn!(
+                        cid = cid.as_str(),
+                        env_name = name,
+                        host_addr = host_addr_str,
+                        pcimap_size = host_guest.len(),
+                        "update_env_pci: host PCI address missing in pcimap; leaving PCIDEVICE env var untranslated"
+                    );
+                    translation_skipped = true;
+                    break;
+                }
+            };
 
             guest_addrs.push(format!("{guest_addr}"));
             addr_map.insert(host_addr_str.to_string(), format!("{guest_addr}"));
+        }
+
+        if translation_skipped {
+            // Keep both PCIDEVICE_* and matching *_INFO untouched.
+            continue 'env_loop;
         }
 
         pci_dev_map.insert(format!("{name}_INFO"), addr_map);
@@ -570,6 +798,104 @@ fn update_spec_devices(
     Ok(())
 }
 
+fn parse_pci_bdf_name(name: &str) -> Option<pci::Address> {
+    pci::Address::from_str(name).ok()
+}
+
+fn bus_of_addr(addr: &pci::Address) -> Result<String> {
+    // addr.to_string() format: "0000:01:00.0"
+    let s = addr.to_string();
+    let mut parts = s.split(':');
+
+    let domain = parts
+        .next()
+        .ok_or_else(|| anyhow!("bad pci address {}", s))?;
+    let bus = parts
+        .next()
+        .ok_or_else(|| anyhow!("bad pci address {}", s))?;
+
+    Ok(format!("{domain}:{bus}"))
+}
+
+fn unique_bus_from_pci_addresses(addrs: &[pci::Address]) -> Result<String> {
+    let mut buses = addrs.iter().map(bus_of_addr).collect::<Result<Vec<_>>>()?;
+
+    buses.sort();
+    buses.dedup();
+
+    match buses.len() {
+        1 => Ok(buses[0].clone()),
+        0 => Err(anyhow!("no downstream PCI devices found")),
+        _ => Err(anyhow!("multiple downstream buses found: {:?}", buses)),
+    }
+}
+
+fn read_single_bus_from_pci_bus_dir(bridgebuspath: &PathBuf) -> Result<String> {
+    let mut files = Vec::new();
+
+    for entry in fs::read_dir(bridgebuspath)? {
+        files.push(entry?);
+    }
+
+    if files.len() != 1 {
+        return Err(anyhow!(
+            "expected exactly one PCI bus in {:?}, got {}",
+            bridgebuspath,
+            files.len()
+        ));
+    }
+
+    files[0]
+        .file_name()
+        .into_string()
+        .map_err(|e| anyhow!("bad filename under {:?}: {:?}", bridgebuspath, e))
+}
+
+fn infer_bus_from_child_devices(devpath: &PathBuf) -> Result<String> {
+    let mut child_pci_addrs = Vec::new();
+
+    for entry in fs::read_dir(devpath)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let name = name
+            .to_str()
+            .ok_or_else(|| anyhow!("non-utf8 filename under {:?}: {:?}", devpath, name))?;
+
+        if let Some(addr) = parse_pci_bdf_name(name) {
+            child_pci_addrs.push(addr);
+        }
+    }
+
+    unique_bus_from_pci_addresses(&child_pci_addrs).with_context(|| {
+        format!(
+            "failed to infer downstream bus from child PCI devices under {:?}",
+            devpath
+        )
+    })
+}
+
+fn get_next_bus_from_bridge(devpath: &PathBuf) -> Result<String> {
+    let bridgebuspath = devpath.join("pci_bus");
+
+    if bridgebuspath.exists() {
+        return read_single_bus_from_pci_bus_dir(&bridgebuspath)
+            .with_context(|| format!("failed to read downstream bus from {:?}", bridgebuspath));
+    }
+
+    infer_bus_from_child_devices(devpath).with_context(|| {
+        format!(
+            "bridge {:?} has no pci_bus directory; fallback to child device scan failed",
+            devpath
+        )
+    })
+}
+
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
@@ -577,6 +903,10 @@ fn update_spec_devices(
 pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
+
+    if pcipath.is_empty() {
+        return Err(anyhow!("empty PCI path"));
+    }
 
     for i in 0..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
@@ -588,26 +918,14 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
             break;
         }
 
-        // Find out the bus exposed by bridge
-        let bridgebuspath = format!("{root_bus_sysfs}{relpath}/pci_bus");
-        let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
+        let devpath = PathBuf::from(root_bus_sysfs).join(relpath.trim_start_matches('/'));
 
-        match files.pop() {
-            Some(busfile) if files.is_empty() => {
-                bus = busfile?
-                    .file_name()
-                    .into_string()
-                    .map_err(|e| anyhow!("Bad filename under {}: {:?}", &bridgebuspath, e))?;
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Expected exactly one PCI bus in {}, got {} instead",
-                    bridgebuspath,
-                    // Adjust to original value as we've already popped
-                    files.len() + 1
-                ));
-            }
-        };
+        bus = get_next_bus_from_bridge(&devpath).with_context(|| {
+            format!(
+                "failed to resolve next bus for PCI path element {} (device {}) under root {}",
+                i, bdf, root_bus_sysfs
+            )
+        })?;
     }
 
     Ok(relpath)
@@ -617,6 +935,163 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
+}
+
+/// Walk `/dev/infiniband/` and append every char device found to the
+/// workload container's OCI spec, so that applications inside the
+/// container can use the guest's RDMA stack.
+///
+/// Only called when the container has at least one VFIO device
+/// (`container_has_vfio_device`), so this is a no-op for unrelated
+/// containers sharing the sandbox.
+///
+/// If `/dev/infiniband/` does not exist or is empty the function
+/// returns `Ok(())` immediately — the guest simply does not have IB
+/// devices (no mlx5_ib or VF not yet rebound).
+fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<()> {
+    let ib_dir = std::path::Path::new("/dev/infiniband");
+    if !ib_dir.exists() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband does not \
+             exist, skipping (no IB driver in guest, or VF not yet rebound)";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    let entries: Vec<_> = match fs::read_dir(ib_dir) {
+        Ok(it) => it.flatten().collect(),
+        Err(e) => {
+            warn!(
+                logger,
+                "expose_guest_infiniband_devices: read_dir(/dev/infiniband) failed: {e}"
+            );
+            return Ok(());
+        }
+    };
+
+    if entries.is_empty() {
+        info!(
+            logger,
+            "expose_guest_infiniband_devices: /dev/infiniband is empty, skipping";
+            "snapshot" => snapshot_infiniband(),
+        );
+        return Ok(());
+    }
+
+    struct IbDev {
+        path: PathBuf,
+        name: String,
+        major: i64,
+        minor: i64,
+        mode: u32,
+        uid: u32,
+        gid: u32,
+    }
+
+    let mut ib_devs: Vec<IbDev> = Vec::new();
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+
+        let metadata = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!(
+                    logger,
+                    "expose_guest_infiniband_devices: skipping {} (stat: {e})",
+                    path.display()
+                );
+                continue;
+            }
+        };
+
+        if !metadata.file_type().is_char_device() {
+            continue;
+        }
+
+        let rdev = metadata.rdev();
+        ib_devs.push(IbDev {
+            path,
+            name,
+            major: stat::major(rdev) as i64,
+            minor: stat::minor(rdev) as i64,
+            mode: (metadata.mode() & 0o7777) as u32,
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        });
+    }
+
+    // Pass 1: append LinuxDevice entries to spec.linux.devices.
+    {
+        let linux = spec
+            .linux_mut()
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+        for ib in &ib_devs {
+            let device = oci::LinuxDeviceBuilder::default()
+                .path(ib.path.clone())
+                .typ(oci::LinuxDeviceType::C)
+                .major(ib.major)
+                .minor(ib.minor)
+                .file_mode(ib.mode)
+                .uid(ib.uid)
+                .gid(ib.gid)
+                .build()
+                .map_err(|e| {
+                    anyhow!("failed to build LinuxDevice for {}: {e}", ib.path.display())
+                })?;
+
+            if let Some(devices) = linux.devices_mut() {
+                let already = devices
+                    .iter()
+                    .any(|d| d.path().display().to_string() == ib.path.display().to_string());
+                if !already {
+                    devices.push(device);
+                }
+            } else {
+                linux.set_devices(Some(vec![device]));
+            }
+        }
+    }
+
+    // Pass 2: cgroup allow rules.
+    let mut exposed: Vec<String> = Vec::with_capacity(ib_devs.len());
+    for ib in &ib_devs {
+        let info = DeviceInfo {
+            cgroup_type: String::from("c"),
+            guest_major: ib.major,
+            guest_minor: ib.minor,
+        };
+        insert_devices_cgroup_rule(logger, spec, &info, true, "rwm")
+            .context("insert IB device cgroup rule")?;
+        exposed.push(format!(
+            "{}({}:{},mode=0o{:o})",
+            ib.name, ib.major, ib.minor, ib.mode
+        ));
+    }
+
+    info!(
+        logger,
+        "expose_guest_infiniband_devices: injected {} guest IB char device(s)",
+        exposed.len();
+        "exposed" => exposed.join(","),
+        "snapshot" => snapshot_infiniband(),
+    );
+
+    Ok(())
+}
+
+// Test helper constants for common edge case testing
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    #[cfg(not(target_arch = "s390x"))]
+    pub const SUBSYSTEM_BLOCK: &str = "block";
+    pub const SUBSYSTEM_NET: &str = "net";
+    #[cfg(not(target_arch = "s390x"))]
+    pub const ACTION_REMOVE: &str = "remove";
 }
 
 #[cfg(test)]
@@ -629,14 +1104,301 @@ mod tests {
         LinuxResources, LinuxResourcesBuilder, SpecBuilder,
     };
     use oci_spec::runtime as oci;
+    use rstest::rstest;
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
     const VM_ROOTFS: &str = "/";
+    const TEST_CONTAINER_PATH: &str = "/dev/null";
+    const TEST_VM_PATH: &str = "/dev/null";
+    const TEST_MAJOR: i64 = 7;
+    const TEST_MINOR: i64 = 2;
+
+    // Helper function to create a test logger
+    fn create_test_logger() -> slog::Logger {
+        slog::Logger::root(slog::Discard, o!())
+    }
+
+    // Helper function to create a device update map
+    fn create_device_update<'a>(
+        container_path: &'a str,
+        vm_path: &str,
+    ) -> HashMap<&'a str, DevUpdate> {
+        HashMap::from_iter(vec![(
+            container_path,
+            DevUpdate::new(container_path, vm_path).unwrap(),
+        )])
+    }
+
+    #[rstest]
+    #[case::valid_zeros("0000:00:00.0", true)]
+    #[case::valid_normal("0000:01:02.3", true)]
+    #[case::valid_max("ffff:ff:1f.7", true)]
+    #[case::invalid_text("invalid", false)]
+    #[case::empty_string("", false)]
+    #[case::invalid_format("not_a_pci_address", false)]
+    #[case::random_string("random_string", false)]
+    #[test]
+    fn test_parse_pci_bdf_name(#[case] input: &str, #[case] should_parse: bool) {
+        let result = parse_pci_bdf_name(input);
+        assert_eq!(
+            result.is_some(),
+            should_parse,
+            "parse_pci_bdf_name('{}') should {} parse",
+            input,
+            if should_parse {
+                "successfully"
+            } else {
+                "fail to"
+            }
+        );
+    }
+
+    #[rstest]
+    #[case::normal(0, 1, 2, 3, "0000:01")]
+    #[case::max_values(0xffff, 0xff, 0x1f, 7, "ffff:ff")]
+    #[case::all_zeros(0, 0, 0, 0, "0000:00")]
+    #[test]
+    fn test_bus_of_addr(
+        #[case] domain: u16,
+        #[case] bus: u8,
+        #[case] slot: u8,
+        #[case] func: u8,
+        #[case] expected: &str,
+    ) {
+        let addr = pci::Address::new(domain, bus, pci::SlotFn::new(slot, func).unwrap());
+        assert_eq!(bus_of_addr(&addr).unwrap(), expected);
+    }
+
+    #[rstest]
+    #[case::single_bus(
+        vec![(0, 1, 0, 0), (0, 1, 1, 0), (0, 1, 2, 0)],
+        Some("0000:01")
+    )]
+    #[case::multiple_buses(
+        vec![(0, 1, 0, 0), (0, 2, 0, 0)],
+        None
+    )]
+    #[case::empty_list(vec![], None)]
+    #[test]
+    fn test_unique_bus_from_pci_addresses(
+        #[case] addr_tuples: Vec<(u16, u8, u8, u8)>,
+        #[case] expected: Option<&str>,
+    ) {
+        let addrs: Vec<pci::Address> = addr_tuples
+            .into_iter()
+            .map(|(d, b, s, f)| pci::Address::new(d, b, pci::SlotFn::new(s, f).unwrap()))
+            .collect();
+
+        match expected {
+            Some(bus) => assert_eq!(unique_bus_from_pci_addresses(&addrs).unwrap(), bus),
+            None => assert!(unique_bus_from_pci_addresses(&addrs).is_err()),
+        }
+    }
+
+    #[test]
+    fn test_read_single_bus_from_pci_bus_dir() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let bridgebuspath = testdir.path().join("pci_bus");
+        fs::create_dir_all(&bridgebuspath).unwrap();
+
+        let bus_dir = bridgebuspath.join("0000:01");
+        fs::create_dir(&bus_dir).unwrap();
+        assert_eq!(
+            read_single_bus_from_pci_bus_dir(&bridgebuspath).unwrap(),
+            "0000:01"
+        );
+
+        let bus_dir2 = bridgebuspath.join("0000:02");
+        fs::create_dir(&bus_dir2).unwrap();
+        assert!(read_single_bus_from_pci_bus_dir(&bridgebuspath).is_err());
+
+        let empty_dir = testdir.path().join("empty_pci_bus");
+        fs::create_dir_all(&empty_dir).unwrap();
+        assert!(read_single_bus_from_pci_bus_dir(&empty_dir).is_err());
+    }
+
+    #[test]
+    fn test_infer_bus_from_child_devices() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let devpath = testdir.path();
+
+        let dev1 = devpath.join("0000:01:00.0");
+        let dev2 = devpath.join("0000:01:01.0");
+        let dev3 = devpath.join("0000:01:02.0");
+        fs::create_dir(&dev1).unwrap();
+        fs::create_dir(&dev2).unwrap();
+        fs::create_dir(&dev3).unwrap();
+
+        assert_eq!(
+            infer_bus_from_child_devices(&devpath.to_path_buf()).unwrap(),
+            "0000:01"
+        );
+
+        let dev4 = devpath.join("0000:02:00.0");
+        fs::create_dir(&dev4).unwrap();
+        assert!(infer_bus_from_child_devices(&devpath.to_path_buf()).is_err());
+
+        let empty_dir = testdir.path().join("no_devices");
+        fs::create_dir_all(&empty_dir).unwrap();
+        assert!(infer_bus_from_child_devices(&empty_dir).is_err());
+
+        let non_pci_dir = testdir.path().join("with_non_pci");
+        fs::create_dir_all(&non_pci_dir).unwrap();
+        let pci_dev = non_pci_dir.join("0000:03:00.0");
+        let non_pci = non_pci_dir.join("not_a_pci_device");
+        fs::create_dir(&pci_dev).unwrap();
+        fs::create_dir(&non_pci).unwrap();
+        assert_eq!(
+            infer_bus_from_child_devices(&non_pci_dir).unwrap(),
+            "0000:03"
+        );
+    }
+
+    #[test]
+    fn test_online_device() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let device_path = testdir.path().join("online");
+
+        online_device(device_path.to_str().unwrap()).unwrap();
+        assert_eq!(fs::read_to_string(&device_path).unwrap(), "1");
+
+        assert!(online_device("/nonexistent/path/to/device").is_err());
+    }
+
+    #[test]
+    fn test_dev_update_new() {
+        let result = DevUpdate::new("/dev/null", "/dev/null");
+        assert!(result.is_ok());
+
+        let update = result.unwrap();
+        assert_eq!(update.final_path, Some("/dev/null".to_string()));
+
+        let result2 = DevUpdate::new("/dev/null", "/dev/custom");
+        assert!(result2.is_ok());
+        let update2 = result2.unwrap();
+        assert_eq!(update2.final_path, Some("/dev/custom".to_string()));
+
+        let result_invalid = DevUpdate::new("/nonexistent/device", "/dev/null");
+        assert!(result_invalid.is_err());
+    }
+
+    #[rstest]
+    #[case::char_device("/dev/null", true, "c", true)]
+    #[case::block_device("/", false, "b", true)]
+    #[case::nonexistent("/nonexistent/path", true, "", false)]
+    #[case::empty_path("", true, "", false)]
+    #[test]
+    fn test_device_info_new(
+        #[case] path: &str,
+        #[case] is_char: bool,
+        #[case] expected_type: &str,
+        #[case] should_succeed: bool,
+    ) {
+        let result = DeviceInfo::new(path, is_char);
+
+        if should_succeed {
+            let info = result.unwrap();
+            assert_eq!(info.cgroup_type, expected_type);
+            assert!(info.guest_major >= 0);
+            assert!(info.guest_minor >= 0);
+        } else {
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_spec_update_conversions() {
+        let info = DeviceInfo::new("/dev/null", true).unwrap();
+        let spec_update: SpecUpdate = info.into();
+        assert!(spec_update.dev.is_some());
+        assert_eq!(spec_update.pci.len(), 0);
+
+        let dev_update = DevUpdate::new("/dev/null", "/dev/null").unwrap();
+        let spec_update2: SpecUpdate = dev_update.into();
+        assert!(spec_update2.dev.is_some());
+        assert_eq!(spec_update2.pci.len(), 0);
+
+        let spec_update3 = SpecUpdate::default();
+        assert!(spec_update3.dev.is_none());
+        assert_eq!(spec_update3.pci.len(), 0);
+    }
+
+    #[test]
+    fn test_cdi_devices_from_visible_devices() {
+        let make_spec = |val: Option<&str>| {
+            let mut spec = Spec::default();
+            if let Some(v) = val {
+                let mut process = oci::Process::default();
+                *process.env_mut() = Some(vec![format!("VISIBLE_CDI_DEVICES={v}")]);
+                spec.set_process(Some(process));
+            }
+            spec
+        };
+
+        assert!(cdi_devices_from_visible_devices(&make_spec(None))
+            .expect("Failed to get CDI devices")
+            .is_empty());
+        for v in ["", "none", "void"] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v)))
+                    .expect("Failed to get CDI devices")
+                    .is_empty(),
+                "expected no devices for VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+
+        assert_eq!(
+            cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu=all")))
+                .expect("Failed to get CDI devices"),
+            vec!["nvidia.com/gpu=all".to_string()]
+        );
+
+        assert_eq!(
+            cdi_devices_from_visible_devices(&make_spec(Some(
+                "nvidia.com/gpu=all : nvidia.com/ib=0, 1 ,2"
+            )))
+            .expect("Failed to get CDI devices"),
+            vec![
+                "nvidia.com/gpu=all".to_string(),
+                "nvidia.com/ib=0".to_string(),
+                "nvidia.com/ib=1".to_string(),
+                "nvidia.com/ib=2".to_string(),
+            ]
+        );
+
+        assert!(
+            cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu=0, 1 ,,2"))).is_err()
+        );
+
+        for v in ["all", "0,1"] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v))).is_err(),
+                "expected an error for kind-less VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+
+        assert!(cdi_devices_from_visible_devices(&make_spec(Some("=all"))).is_err());
+        assert!(cdi_devices_from_visible_devices(&make_spec(Some("nvidia.com/gpu="))).is_err());
+
+        for v in [
+            "nvidia.com/gpu=all,0",
+            "nvidia.com/gpu=0,all",
+            "nvidia.com/gpu=all : nvidia.com/ib=0,all",
+        ] {
+            assert!(
+                cdi_devices_from_visible_devices(&make_spec(Some(v))).is_err(),
+                "expected an error for mixed all/index VISIBLE_CDI_DEVICES={:?}",
+                v
+            );
+        }
+    }
 
     #[test]
     fn test_update_device_cgroup() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let mut linux = Linux::default();
         linux.set_resources(Some(LinuxResources::default()));
         let mut spec = SpecBuilder::default().linux(linux).build().unwrap();
@@ -667,8 +1429,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices() {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let (major, minor) = (7, 2);
+        let logger = create_test_logger();
         let mut spec = Spec::default();
 
         // vm_path empty
@@ -676,15 +1437,10 @@ mod tests {
         assert!(update.is_err());
 
         // linux is empty
-        let container_path = "/dev/null";
-        let vm_path = "/dev/null";
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_err());
 
@@ -694,10 +1450,7 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_err());
 
@@ -706,8 +1459,8 @@ mod tests {
             .unwrap()
             .set_devices(Some(vec![LinuxDeviceBuilder::default()
                 .path(PathBuf::from("/dev/null2"))
-                .major(major)
-                .minor(minor)
+                .major(TEST_MAJOR)
+                .minor(TEST_MINOR)
                 .build()
                 .unwrap()]));
 
@@ -715,16 +1468,13 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(
             res.is_err(),
             "container_path={:?} vm_path={:?} spec={:?}",
-            container_path,
-            vm_path,
+            TEST_CONTAINER_PATH,
+            TEST_VM_PATH,
             spec
         );
 
@@ -734,16 +1484,13 @@ mod tests {
             .devices_mut()
             .as_mut()
             .unwrap()[0]
-            .set_path(PathBuf::from(container_path));
+            .set_path(PathBuf::from(TEST_CONTAINER_PATH));
 
         // spec.linux.resources is empty
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_ok());
 
@@ -752,17 +1499,17 @@ mod tests {
             .as_mut()
             .unwrap()
             .set_devices(Some(vec![LinuxDeviceBuilder::default()
-                .path(PathBuf::from(container_path))
-                .major(major)
-                .minor(minor)
+                .path(PathBuf::from(TEST_CONTAINER_PATH))
+                .major(TEST_MAJOR)
+                .minor(TEST_MINOR)
                 .build()
                 .unwrap()]));
 
         spec.linux_mut().as_mut().unwrap().set_resources(Some(
             oci::LinuxResourcesBuilder::default()
                 .devices(vec![LinuxDeviceCgroupBuilder::default()
-                    .major(major)
-                    .minor(minor)
+                    .major(TEST_MAJOR)
+                    .minor(TEST_MINOR)
                     .build()
                     .unwrap()])
                 .build()
@@ -772,17 +1519,14 @@ mod tests {
         let res = update_spec_devices(
             &logger,
             &mut spec,
-            HashMap::from_iter(vec![(
-                container_path,
-                DeviceInfo::new(vm_path, true).unwrap().into(),
-            )]),
+            create_device_update(TEST_CONTAINER_PATH, TEST_VM_PATH),
         );
         assert!(res.is_ok());
     }
 
     #[test]
     fn test_update_spec_devices_guest_host_conflict() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let zero_rdev = fs::metadata("/dev/zero").unwrap().rdev();
@@ -907,7 +1651,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices_char_block_conflict() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
 
@@ -1007,7 +1751,7 @@ mod tests {
 
     #[test]
     fn test_update_spec_devices_final_path() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
 
         let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
         let guest_major = stat::major(null_rdev) as i64;
@@ -1132,6 +1876,60 @@ mod tests {
     }
 
     #[test]
+    fn test_update_env_pci_missing_cid_in_pcimap() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:06:02.6".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+                .to_string(),
+            "OTHER=value".to_string(),
+        ];
+        let pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+
+        let cid = "container-0".to_string();
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(
+            res.is_ok(),
+            "must not error when pcimap[cid] missing: {:?}",
+            res
+        );
+
+        // Both PCIDEVICE_* and *_INFO stay untouched.
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:06:02.6");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:06:02.6\":{\"generic\":{\"deviceID\":\"0000:06:02.6\"}}}"
+        );
+        assert_eq!(env[2], "OTHER=value");
+    }
+
+    #[test]
+    fn test_update_env_pci_unknown_host_bdf() {
+        let mut env = vec![
+            "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9".to_string(),
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}".to_string(),
+        ];
+
+        let cid = "container-0".to_string();
+        let mut inner: HashMap<pci::Address, pci::Address> = HashMap::new();
+        inner.insert(
+            pci::Address::from_str("0000:1a:01.0").unwrap(),
+            pci::Address::from_str("0000:01:01.0").unwrap(),
+        );
+        let mut pcimap: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pcimap.insert(cid.clone(), inner);
+
+        let res = update_env_pci(&cid, &mut env, &pcimap);
+        assert!(res.is_ok(), "must not error on partial pcimap: {:?}", res);
+
+        // Must leave env vars untouched (no half-translation).
+        assert_eq!(env[0], "PCIDEVICE_RES=0000:1a:01.0,0000:99:99.9");
+        assert_eq!(
+            env[1],
+            "PCIDEVICE_RES_INFO={\"0000:1a:01.0\":{},\"0000:99:99.9\":{}}"
+        );
+    }
+
+    #[test]
     fn test_pcipath_to_sysfs() {
         let testdir = tempdir().expect("failed to create tmpdir");
         let rootbuspath = testdir.path().to_str().unwrap();
@@ -1195,6 +1993,21 @@ mod tests {
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 
+    #[test]
+    fn test_pcipath_to_sysfs_fallback_child_device_scan() {
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let rootbuspath = testdir.path().to_str().unwrap();
+
+        let path23 = pci::Path::from_str("02/03").unwrap();
+        let bridge2path = format!("{}{}", rootbuspath, "/0000:00:02.0");
+        let child_device_path = format!("{bridge2path}/0000:01:03.0");
+
+        fs::create_dir_all(child_device_path).unwrap();
+
+        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
+    }
+
     // We use device specific variants of this for real cases, but
     // they have some complications that make them troublesome to unit
     // test
@@ -1225,7 +2038,7 @@ mod tests {
         uev.devpath = devpath.clone();
         uev.devname = devname.to_string();
 
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let sandbox = Arc::new(Mutex::new(Sandbox::new(&logger).unwrap()));
 
         let mut sb = sandbox.lock().await;
@@ -1249,7 +2062,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_cdi_devices() {
-        let logger = slog::Logger::root(slog::Discard, o!());
+        let logger = create_test_logger();
         let mut spec = Spec::default();
 
         let mut annotations = HashMap::new();
@@ -1318,6 +2131,7 @@ mod tests {
             &mut spec,
             temp_dir.path().to_str().unwrap(),
             cdi_timeout,
+            &[],
         )
         .await;
         println!("modfied spec {spec:?}");
@@ -1342,5 +2156,115 @@ mod tests {
         // find TEST_INNER_ENV in env
         let inner_env = env.iter().find(|e| e.starts_with("TEST_INNER_ENV"));
         assert!(inner_env.is_some(), "TEST_INNER_ENV not found in env");
+    }
+
+    #[test]
+    fn test_unsatisfiable_cdi_devices() {
+        let available = vec![
+            "kata.com/gpu=0".to_string(),
+            "kata.com/gpu=1".to_string(),
+            "kata.com/gpu=all".to_string(),
+        ];
+
+        // Devices the kind provides are satisfiable.
+        for d in ["kata.com/gpu=0", "kata.com/gpu=1", "kata.com/gpu=all"] {
+            assert!(
+                unsatisfiable_cdi_devices(&available, &[d.to_string()]).is_empty(),
+                "{} should be satisfiable",
+                d
+            );
+        }
+
+        // A device the (present) kind does not provide is unsatisfiable.
+        assert_eq!(
+            unsatisfiable_cdi_devices(&available, &["kata.com/gpu=5".to_string()]),
+            vec!["kata.com/gpu=5".to_string()]
+        );
+
+        // A kind that is entirely absent is left for the caller to wait on.
+        assert!(
+            unsatisfiable_cdi_devices(&available, &["other.com/gpu=0".to_string()]).is_empty(),
+            "an absent kind must not be reported as unsatisfiable"
+        );
+
+        // Only the offending device of a mixed request is reported.
+        assert_eq!(
+            unsatisfiable_cdi_devices(
+                &available,
+                &[
+                    "kata.com/gpu=0".to_string(),
+                    "kata.com/gpu=5".to_string(),
+                    "other.com/gpu=0".to_string(),
+                ]
+            ),
+            vec!["kata.com/gpu=5".to_string()]
+        );
+    }
+
+    async fn run_handle_cdi_devices(
+        spec_dir: &str,
+        cdi_timeout: Duration,
+        extra_devices: &[String],
+    ) -> Result<()> {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut spec = Spec::default();
+        handle_cdi_devices(&logger, &mut spec, spec_dir, cdi_timeout, extra_devices).await
+    }
+
+    #[tokio::test]
+    async fn test_handle_cdi_devices_missing_device_of_known_kind() {
+        // A CDI spec providing kind "kata.com/gpu" with only devices "0" and "1".
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let spec_dir = temp_dir.path().to_str().unwrap();
+        let cdi_content = r#"{
+            "cdiVersion": "0.6.0",
+            "kind": "kata.com/gpu",
+            "devices": [
+                { "name": "0", "containerEdits": { "deviceNodes": [{ "path": "/dev/null" }] } },
+                { "name": "1", "containerEdits": { "deviceNodes": [{ "path": "/dev/null" }] } }
+            ]
+        }"#;
+        fs::write(temp_dir.path().join("kata.json"), cdi_content)
+            .expect("Failed to write CDI file");
+
+        // The kind is present but device "5" is not. Use a generous timeout: if
+        // the fail-fast path is broken the test would otherwise hang for the
+        // full duration before reporting a timeout instead.
+        let res = run_handle_cdi_devices(
+            spec_dir,
+            Duration::from_secs(30),
+            &["kata.com/gpu=5".to_string()],
+        )
+        .await;
+        let msg = res
+            .expect_err("missing device of a known kind must be rejected")
+            .to_string();
+        assert!(
+            msg.contains("kata.com/gpu=5"),
+            "error should name the missing device, got: {}",
+            msg
+        );
+        assert!(
+            !msg.contains("CDI timeout"),
+            "should fail fast, not via the wait/timeout path, got: {}",
+            msg
+        );
+
+        // An entirely absent kind goes through the wait path and ultimately
+        // times out (cdi_timeout = 0 means a single attempt).
+        let res = run_handle_cdi_devices(
+            spec_dir,
+            Duration::from_secs(0),
+            &["absent.com/gpu=0".to_string()],
+        )
+        .await;
+        let msg = res
+            .expect_err("an unsatisfied absent kind must eventually time out")
+            .to_string();
+        assert!(
+            msg.contains("CDI timeout"),
+            "an absent kind should take the wait/timeout path, got: {}",
+            msg
+        );
     }
 }

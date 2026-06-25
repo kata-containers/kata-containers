@@ -98,7 +98,10 @@ impl ResourceManager {
     /// interfaces are detected, a single `handle_network` call creates and
     /// attaches them.  Agent RPCs run under a read lock so other
     /// resource-manager operations are not blocked.
-    pub async fn rescan_network_if_unconfigured(&self, net_cfg: NetworkWithNetNsConfig) -> Result<()> {
+    pub async fn rescan_network_if_unconfigured(
+        &self,
+        net_cfg: NetworkWithNetNsConfig,
+    ) -> Result<()> {
         use anyhow::{anyhow, Context};
         use std::time::{Duration, Instant};
 

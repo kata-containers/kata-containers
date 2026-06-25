@@ -307,7 +307,6 @@ pub struct PolicyCopyFileRequest {
     // Below fields are copied from the original request. They are not used by the genpolicy rules,
     // but might be relevant for alternative rule sets. The data field is intentionally omitted to
     // reduce serde overhead and protect the rules engine.
-
     pub file_size: i64,
     pub file_mode: u32,
     pub dir_mode: u32,

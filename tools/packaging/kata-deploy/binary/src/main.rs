@@ -5,19 +5,50 @@
 
 mod artifacts;
 mod config;
+mod health;
 mod k8s;
 mod runtime;
 mod utils;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
+
+/// Env var name used to thread the detected container runtime through the
+/// post-install re-exec. Avoids re-querying the apiserver after we've already
+/// committed to a runtime.
+const DETECTED_RUNTIME_ENV: &str = "KATA_DEPLOY_DETECTED_RUNTIME";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Override kata-deploy log verbosity.
+    #[arg(long, value_enum)]
+    log_level: Option<LogLevel>,
+
     #[arg(value_enum)]
     action: Action,
+}
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug)]
+enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl From<LogLevel> for log::LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        match value {
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Trace => log::LevelFilter::Trace,
+        }
+    }
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -25,27 +56,83 @@ enum Action {
     Install,
     Cleanup,
     Reset,
+    /// Stage 0 of a staged (JobSet) install: validate host/node prerequisites
+    /// without mutating the host. Fails fast with actionable diagnostics when
+    /// the node cannot support installation.
+    #[clap(name = "install-stage-host-check")]
+    InstallStageHostCheck,
+    /// Stage 1 of a staged (JobSet) install: install kata artifacts/config on
+    /// the host and set up configured snapshotters. Does not touch CRI
+    /// configuration, but is still privileged (host writes + snapshotter setup
+    /// shell into the host via nsenter).
+    #[clap(name = "install-stage-artifacts")]
+    InstallStageArtifacts,
+    /// Stage 2 of a staged (JobSet) install: write CRI drop-ins, restart the
+    /// runtime, and wait for node readiness. Privileged + short-lived.
+    #[clap(name = "install-stage-cri")]
+    InstallStageCri,
+    /// Stage 3 of a staged (JobSet) install: apply the kata-runtime node label.
+    /// Unprivileged, Kubernetes API only.
+    #[clap(name = "install-stage-label")]
+    InstallStageLabel,
+    /// Cleanup stage 1 of a staged (JobSet) uninstall: remove the kata-runtime
+    /// node label first so the scheduler stops placing kata workloads here.
+    /// Unprivileged, Kubernetes API only.
+    #[clap(name = "cleanup-stage-unlabel")]
+    CleanupStageUnlabel,
+    /// Cleanup stage 2 of a staged (JobSet) uninstall: remove CRI drop-ins,
+    /// restart the runtime, and wait for readiness. Privileged + short-lived.
+    #[clap(name = "cleanup-stage-revert-cri")]
+    CleanupStageRevertCri,
+    /// Cleanup stage 3 of a staged (JobSet) uninstall: remove kata
+    /// artifacts/config/symlinks from the host. Privileged (mutates the host
+    /// filesystem under the install dir).
+    #[clap(name = "cleanup-stage-remove-artifacts")]
+    CleanupStageRemoveArtifacts,
+    /// Internal: entered via re-exec after install completes. Holds the
+    /// DaemonSet pod alive waiting for SIGTERM, then runs cleanup. Hidden
+    /// from `--help`; users should never invoke this directly.
+    #[clap(name = "internal-post-install-wait", hide = true)]
+    InternalPostInstallWait,
 }
 
-#[tokio::main]
+/// Node label applied to mark a node as kata-capable. Shared across the
+/// install/cleanup label stages so the key stays consistent.
+const KATA_RUNTIME_LABEL: &str = "katacontainers.io/kata-runtime";
+
+// Cap the tokio runtime to a small fixed number of worker threads. The default
+// multi-thread runtime allocates `num_cpus()` workers (each with a ~2 MiB
+// stack), which on a 200+ vCPU GPU node is the dominant contributor to the
+// DaemonSet pod's VmData reservation (~440 MiB). Two workers is plenty:
+//
+//   - the install path is overwhelmingly I/O-bound,
+//   - it shells out to `nsenter ... systemctl restart …` (synchronous,
+//     blocking calls that wedge the thread they run on for tens of seconds);
+//     a second worker keeps the health server able to answer kubelet probes
+//     within timeoutSeconds while the first is blocked.
+//
+// `current_thread` would be tighter still, but starves the health server the
+// moment a host_systemctl call runs — the kubelet then fails the readiness
+// probe and the pod is restarted before install can finish.
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+
     // Set log level based on DEBUG environment variable
-    // This must be done before initializing the logger
+    // unless explicitly overridden via --log-level.
     let debug_enabled = std::env::var("DEBUG")
         .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
         .unwrap_or(false);
 
-    let log_level = if debug_enabled {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
+    let log_level = match args.log_level {
+        Some(level) => level.into(),
+        None if debug_enabled => log::LevelFilter::Debug,
+        None => log::LevelFilter::Info,
     };
 
     env_logger::Builder::from_default_env()
         .filter_level(log_level)
         .init();
-
-    let args = Args::parse();
 
     // Check if running as root (UID 0)
     if unsafe { libc::geteuid() } != 0 {
@@ -57,11 +144,29 @@ async fn main() -> Result<()> {
         Action::Install => "install",
         Action::Cleanup => "cleanup",
         Action::Reset => "reset",
+        Action::InstallStageHostCheck => "install-stage-host-check",
+        Action::InstallStageArtifacts => "install-stage-artifacts",
+        Action::InstallStageCri => "install-stage-cri",
+        Action::InstallStageLabel => "install-stage-label",
+        Action::CleanupStageUnlabel => "cleanup-stage-unlabel",
+        Action::CleanupStageRevertCri => "cleanup-stage-revert-cri",
+        Action::CleanupStageRemoveArtifacts => "cleanup-stage-remove-artifacts",
+        Action::InternalPostInstallWait => "internal-post-install-wait",
     };
     config.print_info(action_str);
 
-    let runtime = runtime::get_container_runtime(&config).await?;
-    info!("Detected container runtime: {runtime}");
+    // After re-exec we already know which runtime we committed to during
+    // install — trust the env var and skip the apiserver round-trip. For
+    // every other action we always detect from the cluster.
+    let runtime = match args.action {
+        Action::InternalPostInstallWait => std::env::var(DETECTED_RUNTIME_ENV)
+            .with_context(|| format!("missing {DETECTED_RUNTIME_ENV} env var after re-exec"))?,
+        _ => {
+            let r = runtime::get_container_runtime(&config).await?;
+            info!("Detected container runtime: {r}");
+            r
+        }
+    };
 
     match args.action {
         Action::Install => {
@@ -78,6 +183,17 @@ async fn main() -> Result<()> {
                 }
             };
 
+            let health_state = health::HealthState::new();
+            let health_port = health::health_port_from_env();
+            let health_listener = health::bind_health(health_port).await?;
+            // Clear FD_CLOEXEC now (before we hand the listener to the
+            // spawned task) so that the kernel keeps the socket open across
+            // the post-install re-exec below. Without this, the child
+            // process would have to re-bind the port, briefly exposing
+            // the kubelet's startup/liveness probes to bind races.
+            let health_fd = health::prepare_listener_for_exec(&health_listener)?;
+            tokio::spawn(health::serve_health(health_listener, health_state.clone()));
+
             // Race install against SIGTERM so cleanup always runs, even if
             // SIGTERM arrives during install (e.g. helm uninstall while the
             // container is restarting after a failed install attempt).
@@ -93,17 +209,64 @@ async fn main() -> Result<()> {
             };
 
             install_result?;
+            health_state.set(health::State::Ready);
 
-            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to maintain
-            // the kata-runtime label and artifacts. On SIGTERM (pod termination),
-            // run cleanup to undo install before exiting.
-            info!("Install completed, daemonset mode: waiting for SIGTERM");
+            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to
+            // maintain the kata-runtime label and artifacts. On SIGTERM
+            // (pod termination), run cleanup to undo install before exit.
+            //
+            // Memory note: `install` builds up substantial peak heap
+            // (kube clients, deserialised Node/RuntimeClass objects, TLS
+            // pools). Neither musl nor glibc returns most of that to the
+            // kernel after free, so a long-running idle wait here would
+            // pin the DaemonSet's RSS at the install peak for the
+            // lifetime of the pod. Re-exec into a tiny post-install
+            // waiter instead: the kernel discards the entire address
+            // space and we come back up holding only what cleanup
+            // actually needs.
+            //
+            // The health-server listening socket is inherited across the
+            // exec so kubelet probes don't see a single failure during
+            // the handover.
+            info!("Install completed, re-exec'ing into post-install waiter");
+            reexec_into_post_install_wait(&runtime, health_fd)?;
+            // reexec_into_post_install_wait only returns on failure —
+            // bubble that up so the pod restarts and retries install.
+            unreachable!("reexec_into_post_install_wait returned unexpectedly");
+        }
+        Action::InternalPostInstallWait => {
+            use tokio::signal::unix::{signal, SignalKind};
+
+            // Resume the health server on the listener inherited from the
+            // install process so the kubelet keeps seeing /readyz=200
+            // across the re-exec. The state is `Ready` from the start —
+            // we only ever reach this action *after* a successful install.
+            if let Some(fd_str) = std::env::var(health::HEALTH_FD_ENV)
+                .ok()
+                .filter(|s| !s.is_empty())
+            {
+                let fd: std::os::fd::RawFd = fd_str.parse().with_context(|| {
+                    format!("invalid {} value: {fd_str:?}", health::HEALTH_FD_ENV)
+                })?;
+                let listener = health::listener_from_inherited_fd(fd)?;
+                let state = health::HealthState::new();
+                state.set(health::State::Ready);
+                tokio::spawn(health::serve_health(listener, state));
+            } else {
+                log::warn!(
+                    "{} not set on re-exec; post-install waiter will not serve health probes",
+                    health::HEALTH_FD_ENV
+                );
+            }
+
+            let mut sigterm = signal(SignalKind::terminate())
+                .context("failed to register SIGTERM handler in post-install waiter")?;
+            info!("Post-install waiter ready, blocking on SIGTERM");
             sigterm.recv().await;
             info!("Received SIGTERM, running cleanup before exit");
             if let Err(e) = cleanup(&config, &runtime).await {
                 error!("Cleanup on SIGTERM failed: {}", e);
             }
-            return Ok(());
         }
         Action::Cleanup => {
             cleanup(&config, &runtime).await?;
@@ -126,30 +289,108 @@ async fn main() -> Result<()> {
             // Exit after completion so the job can complete
             info!("Reset completed, exiting");
         }
+        // Staged (JobSet) install actions. Each runs one step of the install
+        // pipeline as a short-lived Job/initContainer and exits. The DaemonSet
+        // path does not use these directly; it goes through `install` above,
+        // which composes the same stage functions.
+        Action::InstallStageHostCheck => {
+            install_stage_host_check(&config, &runtime).await?;
+            info!("Install host-check stage completed, exiting");
+        }
+        Action::InstallStageArtifacts => {
+            install_stage_artifacts(&config, &runtime).await?;
+            info!("Install artifacts stage completed, exiting");
+        }
+        Action::InstallStageCri => {
+            install_stage_cri(&config, &runtime).await?;
+            info!("Install CRI stage completed, exiting");
+        }
+        Action::InstallStageLabel => {
+            install_stage_label(&config).await?;
+            info!("Install label stage completed, exiting");
+        }
+        // Staged (JobSet) cleanup actions. These run in reverse order
+        // (unlabel -> revert-cri -> remove-artifacts) and, unlike the DaemonSet
+        // `cleanup` above, do not perform DaemonSet-presence gating: the JobSet
+        // workflow only schedules these when an uninstall is actually intended.
+        Action::CleanupStageUnlabel => {
+            cleanup_stage_unlabel(&config).await?;
+            info!("Cleanup unlabel stage completed, exiting");
+        }
+        Action::CleanupStageRevertCri => {
+            cleanup_stage_revert_cri(&config, &runtime).await?;
+            info!("Cleanup revert-cri stage completed, exiting");
+        }
+        Action::CleanupStageRemoveArtifacts => {
+            cleanup_stage_remove_artifacts(&config).await?;
+            info!("Cleanup remove-artifacts stage completed, exiting");
+        }
     }
 
-    #[allow(unreachable_code)]
     Ok(())
 }
 
+/// Re-exec the current binary into the hidden `internal-post-install-wait`
+/// action. Propagates the detected runtime (so we don't have to re-query the
+/// apiserver) and the health-listener FD (so kubelet probes don't see a gap
+/// during the handover) through the environment. Only returns on failure.
+fn reexec_into_post_install_wait(
+    runtime: &str,
+    health_fd: std::os::fd::RawFd,
+) -> Result<std::convert::Infallible> {
+    use std::os::unix::process::CommandExt;
+
+    let me = std::env::current_exe().context("failed to resolve current_exe for re-exec")?;
+    let err = std::process::Command::new(&me)
+        .arg("internal-post-install-wait")
+        .env(DETECTED_RUNTIME_ENV, runtime)
+        .env(health::HEALTH_FD_ENV, health_fd.to_string())
+        .exec();
+    Err(anyhow::anyhow!(
+        "failed to re-exec {} into post-install waiter: {}",
+        me.display(),
+        err
+    ))
+}
+
+/// Full install pipeline. Used by the DaemonSet deployment model. Composes the
+/// same per-stage functions the staged JobSet workflow invokes individually, in
+/// the canonical order: host-check -> artifacts -> cri -> label.
 async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Installing Kata Containers");
 
-    const SUPPORTED_RUNTIMES: &[&str] = &[
-        "crio",
-        "containerd",
-        "k3s",
-        "k3s-agent",
-        "rke2-agent",
-        "rke2-server",
-        "k0s-worker",
-        "k0s-controller",
-        "microk8s",
-    ];
+    install_stage_host_check(config, runtime).await?;
+    install_stage_artifacts(config, runtime).await?;
+    install_stage_cri(config, runtime).await?;
+    install_stage_label(config).await?;
+
+    info!("Kata Containers installation completed successfully");
+    Ok(())
+}
+
+const SUPPORTED_RUNTIMES: &[&str] = &[
+    "crio",
+    "containerd",
+    "k3s",
+    "k3s-agent",
+    "rke2-agent",
+    "rke2-server",
+    "k0s-worker",
+    "k0s-controller",
+    "microk8s",
+];
+
+/// Install stage 0 (host-check): validate that this node can support a Kata
+/// installation before any host mutation happens. This is read-only and safe
+/// to run repeatedly; it fails fast with actionable diagnostics so a staged
+/// JobSet can abort the per-node pipeline before the privileged stages run.
+async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Result<()> {
+    info!("install (host-check): validating node prerequisites for runtime {runtime}");
 
     if !SUPPORTED_RUNTIMES.contains(&runtime) {
-        error!("Runtime {runtime} not supported, skipping installation");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "Runtime {runtime} is not supported for Kata Containers installation"
+        ));
     }
 
     if runtime != "crio" {
@@ -203,16 +444,44 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
         }
     }
 
-    runtime::containerd::setup_containerd_config_files(runtime, config).await?;
+    info!("install (host-check): node prerequisites satisfied");
+    Ok(())
+}
+
+/// Install stage 1 (artifacts): place kata artifacts/config on the host and set
+/// up any configured snapshotters. This does not touch CRI configuration, but it
+/// still needs privileged host access: writing under the host install dir and
+/// the snapshotter setup (e.g. nydus) shell into the host via nsenter.
+async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
+    info!("install (artifacts): installing kata artifacts on host");
 
     artifacts::install_artifacts(config, runtime).await?;
+
+    if runtime != "crio" {
+        if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
+            for snapshotter in snapshotters {
+                artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
+            }
+        }
+    }
+
+    info!("install (artifacts): artifacts installed");
+    Ok(())
+}
+
+/// Install stage 2 (cri): write CRI drop-ins, configure snapshotters, restart
+/// the runtime, and wait for the node to become ready. This is the privileged,
+/// node-disrupting stage and is kept short-lived.
+async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()> {
+    info!("install (cri): configuring CRI runtime");
+
+    runtime::containerd::setup_containerd_config_files(runtime, config).await?;
 
     runtime::configure_cri_runtime(config, runtime).await?;
 
     if runtime != "crio" {
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
             for snapshotter in snapshotters {
-                artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
                 artifacts::snapshotters::configure_snapshotter(snapshotter, runtime, config)
                     .await?;
             }
@@ -223,10 +492,131 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     runtime::lifecycle::restart_runtime(config, runtime).await?;
     info!("Runtime restart completed successfully");
 
-    k8s::label_node(config, "katacontainers.io/kata-runtime", Some("true"), true).await?;
-
-    info!("Kata Containers installation completed successfully");
     Ok(())
+}
+
+/// Install stage 3 (label): apply the kata-runtime node label. Unprivileged,
+/// Kubernetes API only. Skips re-applying when the label is already correct.
+async fn install_stage_label(config: &config::Config) -> Result<()> {
+    info!("install (label): applying node label");
+
+    match k8s::get_node_label(config, KATA_RUNTIME_LABEL).await {
+        Ok(Some(ref val)) if val == "true" => {
+            info!(
+                "install (label): node already labeled {}=true, skipping",
+                KATA_RUNTIME_LABEL
+            );
+            return Ok(());
+        }
+        // Any other state (absent, different value, or a transient read error)
+        // falls through to label_node_with_retry, which applies and verifies.
+        _ => {}
+    }
+
+    label_node_with_retry(config, KATA_RUNTIME_LABEL, "true").await?;
+
+    Ok(())
+}
+
+/// Label the node and verify the label sticks, retrying if necessary.
+///
+/// On rke2/k3s a CRI restart also restarts the kubelet, and `wait_till_node_is_ready`
+/// can return on a *stale* Ready=True observation from before the kubelet has
+/// actually finished restarting (the kubelet only re-publishes node status every
+/// ~10 s by default). That means a naive "apply + verify once" round-trips entirely
+/// inside the window where the kubelet hasn't re-registered yet: we'd happily
+/// confirm the label is set, declare install done, and only then would the kubelet
+/// come back up and clobber the label with its cached set.
+///
+/// To outlive that race we require the label to remain at `label_value` for
+/// `STABILITY_CHECKS` consecutive observations spaced `CHECK_INTERVAL` apart
+/// (≈ 15 s by default — comfortably more than the kubelet's status-update period).
+/// If it ever drifts inside that window we re-apply and restart the stability
+/// counter. The whole thing is bounded by `MAX_APPLY_ATTEMPTS`.
+async fn label_node_with_retry(
+    config: &config::Config,
+    label_key: &str,
+    label_value: &str,
+) -> Result<()> {
+    const MAX_APPLY_ATTEMPTS: u32 = 12;
+    const STABILITY_CHECKS: u32 = 6;
+    const CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+    for attempt in 1..=MAX_APPLY_ATTEMPTS {
+        k8s::label_node(config, label_key, Some(label_value), true).await?;
+        info!(
+            "Applied label {}={} (attempt {}/{}); verifying stability ({} checks @ {}s)",
+            label_key,
+            label_value,
+            attempt,
+            MAX_APPLY_ATTEMPTS,
+            STABILITY_CHECKS,
+            CHECK_INTERVAL.as_secs(),
+        );
+
+        let mut stable_count: u32 = 0;
+        let mut needs_reapply = false;
+        while stable_count < STABILITY_CHECKS {
+            tokio::time::sleep(CHECK_INTERVAL).await;
+
+            match k8s::get_node_label(config, label_key).await {
+                Ok(Some(val)) if val == label_value => {
+                    stable_count += 1;
+                    info!(
+                        "Label {}={} stable {}/{}",
+                        label_key, label_value, stable_count, STABILITY_CHECKS
+                    );
+                }
+                Ok(actual) => {
+                    log::warn!(
+                        "Label {}={} drifted to {:?} after {}/{} stable observation(s); \
+                         re-applying (attempt {}/{})",
+                        label_key,
+                        label_value,
+                        actual,
+                        stable_count,
+                        STABILITY_CHECKS,
+                        attempt,
+                        MAX_APPLY_ATTEMPTS,
+                    );
+                    needs_reapply = true;
+                    break;
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to verify label {} during stability check \
+                         (attempt {}/{}): {}; will re-apply",
+                        label_key,
+                        attempt,
+                        MAX_APPLY_ATTEMPTS,
+                        e,
+                    );
+                    needs_reapply = true;
+                    break;
+                }
+            }
+        }
+
+        if !needs_reapply {
+            info!(
+                "Label {}={} confirmed stable on node after {} apply attempt(s)",
+                label_key, label_value, attempt
+            );
+            return Ok(());
+        }
+
+        if attempt < MAX_APPLY_ATTEMPTS {
+            tokio::time::sleep(RETRY_DELAY).await;
+        }
+    }
+
+    anyhow::bail!(
+        "Label {}={} did not remain stable after {} apply attempts",
+        label_key,
+        label_value,
+        MAX_APPLY_ATTEMPTS
+    );
 }
 
 async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
@@ -296,7 +686,7 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     info!("No other kata-deploy DaemonSets found, performing full shared cleanup");
 
     info!("Removing kata-runtime label from node");
-    k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
+    k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
     info!("Successfully removed kata-runtime label");
 
     // Restart the CRI runtime last. On k3s/rke2 this restarts the entire
@@ -310,10 +700,111 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     Ok(())
 }
 
+/// Cleanup stage 1 (unlabel): remove the kata-runtime node label first so the
+/// scheduler stops placing kata workloads on this node before any host
+/// mutation. Unprivileged, Kubernetes API only. Skips when already absent.
+async fn cleanup_stage_unlabel(config: &config::Config) -> Result<()> {
+    info!("cleanup (unlabel): removing node label");
+
+    // If the label is already absent, there is nothing to do. Any other state
+    // (present, or unknown due to a transient read error) falls through to the
+    // removal below.
+    if let Ok(None) = k8s::get_node_label(config, KATA_RUNTIME_LABEL).await {
+        info!(
+            "cleanup (unlabel): label {} already absent, skipping",
+            KATA_RUNTIME_LABEL
+        );
+        return Ok(());
+    }
+
+    k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
+    info!("cleanup (unlabel): label removed");
+    Ok(())
+}
+
+/// Cleanup stage 2 (revert-cri): remove CRI drop-ins (and any snapshotter
+/// config), then restart the runtime and wait for readiness. This is the
+/// privileged, node-disrupting cleanup stage and is kept short-lived. Skips
+/// entirely when the CRI drop-ins are already absent, avoiding an unnecessary
+/// runtime restart.
+async fn cleanup_stage_revert_cri(config: &config::Config, runtime: &str) -> Result<()> {
+    info!("cleanup (revert-cri): reverting CRI configuration");
+
+    if !cri_drop_in_present(config, runtime).await {
+        info!("cleanup (revert-cri): CRI drop-ins already absent, skipping");
+        return Ok(());
+    }
+
+    if runtime != "crio" {
+        if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
+            for snapshotter in snapshotters {
+                info!("cleanup (revert-cri): uninstalling snapshotter {snapshotter}");
+                artifacts::snapshotters::uninstall_snapshotter(snapshotter, config).await?;
+            }
+        }
+    }
+
+    runtime::cleanup_cri_runtime_config(config, runtime).await?;
+
+    info!("cleanup (revert-cri): restarting runtime");
+    runtime::restart_and_wait_for_ready(config, runtime).await?;
+    info!("cleanup (revert-cri): runtime restarted");
+
+    Ok(())
+}
+
+/// Cleanup stage 3 (remove-artifacts): delete kata artifacts/config/symlinks
+/// from the host. Skips when the install directory is already gone.
+async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
+    info!("cleanup (remove-artifacts): removing kata artifacts from host");
+
+    if !std::path::Path::new(&config.host_install_dir).exists() {
+        info!(
+            "cleanup (remove-artifacts): install dir {} already absent, skipping",
+            config.host_install_dir
+        );
+        return Ok(());
+    }
+
+    artifacts::remove_artifacts(config).await?;
+    info!("cleanup (remove-artifacts): artifacts removed");
+    Ok(())
+}
+
+/// Best-effort check for whether kata's CRI drop-in configuration is present on
+/// the host for this runtime. Used by the staged cleanup to skip a disruptive
+/// runtime restart when there is nothing to revert. On any uncertainty (e.g.
+/// the containerd paths cannot be resolved) this returns `true` so the caller
+/// errs on the side of running the revert rather than incorrectly skipping it.
+async fn cri_drop_in_present(config: &config::Config, runtime: &str) -> bool {
+    if runtime == "crio" {
+        return std::path::Path::new(&config.crio_drop_in_conf_file).exists();
+    }
+
+    match config.get_containerd_paths(runtime).await {
+        Ok(paths) => {
+            // /etc/containerd is mounted directly; other paths live under /host.
+            let resolved = if paths.drop_in_file.starts_with("/etc/containerd/") {
+                std::path::PathBuf::from(&paths.drop_in_file)
+            } else {
+                std::path::Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
+            };
+            resolved.exists()
+        }
+        Err(e) => {
+            log::warn!(
+                "cleanup (revert-cri): could not resolve containerd paths to check drop-in \
+                 presence ({e}); proceeding with revert"
+            );
+            true
+        }
+    }
+}
+
 async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Resetting Kata Containers");
 
-    k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
+    k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
     runtime::lifecycle::restart_cri_runtime(config, runtime).await?;
     if matches!(runtime, "crio" | "containerd") {
         utils::host_systemctl(&["restart", "kubelet"])?;
@@ -322,4 +813,87 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
 
     info!("Kata Containers reset completed successfully");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! Tests for CLI action wiring. The staged install/cleanup actions are the
+    //! entrypoints the JobSet workflow invokes per node, so we lock in their
+    //! exact subcommand names (a rename would silently break the chart) and the
+    //! mapping into the `Action` enum.
+
+    use super::*;
+    use clap::ValueEnum;
+    use rstest::rstest;
+
+    /// Every staged subcommand name parses into the expected `Action` variant.
+    /// Keep this in sync with the `#[clap(name = ...)]` attributes above.
+    #[rstest]
+    #[case("install", Action::Install)]
+    #[case("cleanup", Action::Cleanup)]
+    #[case("reset", Action::Reset)]
+    #[case("install-stage-host-check", Action::InstallStageHostCheck)]
+    #[case("install-stage-artifacts", Action::InstallStageArtifacts)]
+    #[case("install-stage-cri", Action::InstallStageCri)]
+    #[case("install-stage-label", Action::InstallStageLabel)]
+    #[case("cleanup-stage-unlabel", Action::CleanupStageUnlabel)]
+    #[case("cleanup-stage-revert-cri", Action::CleanupStageRevertCri)]
+    #[case("cleanup-stage-remove-artifacts", Action::CleanupStageRemoveArtifacts)]
+    #[case("internal-post-install-wait", Action::InternalPostInstallWait)]
+    fn test_action_parses_from_arg(#[case] arg: &str, #[case] expected: Action) {
+        let args = Args::try_parse_from(["kata-deploy", arg])
+            .unwrap_or_else(|e| panic!("failed to parse action {arg:?}: {e}"));
+        assert_eq!(
+            std::mem::discriminant(&args.action),
+            std::mem::discriminant(&expected),
+            "arg {arg:?} parsed into the wrong Action variant",
+        );
+    }
+
+    /// Unknown actions must be rejected rather than silently accepted.
+    #[rstest]
+    #[case("install-stage")]
+    #[case("cleanup-stage")]
+    #[case("install-stage-foo")]
+    #[case("bogus")]
+    fn test_unknown_action_is_rejected(#[case] arg: &str) {
+        assert!(
+            Args::try_parse_from(["kata-deploy", arg]).is_err(),
+            "expected action {arg:?} to be rejected",
+        );
+    }
+
+    /// The hidden internal waiter must stay hidden from `--help` so users never
+    /// invoke it directly, while still being parseable (asserted above).
+    #[test]
+    fn test_internal_action_is_hidden() {
+        let internal = Action::InternalPostInstallWait
+            .to_possible_value()
+            .expect("internal action should have a possible value");
+        assert!(
+            internal.is_hide_set(),
+            "internal-post-install-wait should be hidden from --help",
+        );
+    }
+
+    /// All non-internal staged actions remain visible in `--help` so operators
+    /// can discover and run individual stages.
+    #[rstest]
+    #[case(Action::InstallStageHostCheck)]
+    #[case(Action::InstallStageArtifacts)]
+    #[case(Action::InstallStageCri)]
+    #[case(Action::InstallStageLabel)]
+    #[case(Action::CleanupStageUnlabel)]
+    #[case(Action::CleanupStageRevertCri)]
+    #[case(Action::CleanupStageRemoveArtifacts)]
+    fn test_staged_actions_are_visible(#[case] action: Action) {
+        let value = action
+            .to_possible_value()
+            .expect("staged action should have a possible value");
+        assert!(
+            !value.is_hide_set(),
+            "staged action {:?} should be visible in --help",
+            value.get_name(),
+        );
+    }
 }

@@ -84,9 +84,13 @@ type FilesystemShare struct {
 	configVolRegex *regexp.Regexp
 	// Regex to match only the timestamped directory inside the k8's volume mount
 	timestampDirRegex *regexp.Regexp
-	// The same volume mount can be shared by multiple containers in the same sandbox (pod)
-	srcDstMap            map[string][]string
-	srcDstMapLock        sync.Mutex
+	// srcDstMap tracks file-level source to destination mappings for configmap/secret watching
+	srcDstMap     map[string][]string
+	srcDstMapLock sync.Mutex
+	// srcGuestMap caches volume source path to guest path, enabling multiple containers
+	// in the same pod to share the same volume mount
+	srcGuestMap          map[string]string
+	srcGuestMapLock      sync.Mutex
 	eventLoopStarted     bool
 	eventLoopStartedLock sync.Mutex
 	watcherDoneChannel   chan bool
@@ -114,6 +118,7 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		sandbox:            s,
 		watcherDoneChannel: make(chan bool),
 		srcDstMap:          make(map[string][]string),
+		srcGuestMap:        make(map[string]string),
 		watcher:            watcher,
 		configVolRegex:     configVolRegex,
 		timestampDirRegex:  timestampDirRegex,
@@ -302,19 +307,37 @@ func (f *FilesystemShare) Cleanup(ctx context.Context) error {
 	return nil
 }
 
+func shareFileName(containerID, source, destination, randHex string, isSandboxScoped bool) string {
+	if isSandboxScoped {
+		return fmt.Sprintf("sandbox-%s-%s", randHex, filepath.Base(filepath.Clean(source)))
+	}
+	return fmt.Sprintf("%s-%s-%s", containerID, randHex, filepath.Base(destination))
+}
+
 func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount) (*SharedFile, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return nil, err
 	}
 
-	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
+	randHex := hex.EncodeToString(randBytes)
+	caps := f.sandbox.hypervisor.Capabilities(ctx)
+	mustCopyEmptyDir := !caps.IsFsSharingSupported() && IsDiskEmptyDir(m.Source)
+
+	filename := shareFileName(c.id, m.Source, m.Destination, randHex, mustCopyEmptyDir)
 	guestPath := filepath.Join(kataGuestSharedDir(), filename)
 
 	// copy file to container's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
-	caps := f.sandbox.hypervisor.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
+		if mustCopyEmptyDir {
+			f.srcGuestMapLock.Lock()
+			defer f.srcGuestMapLock.Unlock()
+			if guestPath, ok := f.srcGuestMap[m.Source]; ok {
+				return &SharedFile{guestPath: guestPath}, nil
+			}
+		}
+
 		f.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
 		var ignored bool
@@ -393,6 +416,11 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			return nil, nil
 		}
 
+		if mustCopyEmptyDir {
+			// Cache the host emptyDir guestPath so other containers in the pod
+			// share the same copied writable directory.
+			f.srcGuestMap[m.Source] = guestPath
+		}
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(getMountPath(f.sandbox.ID()), filename)
@@ -448,6 +476,9 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 			syscall.Rmdir(m.HostPath)
 		}
 	}
+
+	// Not deleting from f.srcGuestMap since this function is not
+	// called for mounts without HostPath.
 
 	return nil
 }

@@ -9,6 +9,8 @@ package virtcontainers
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -254,4 +256,89 @@ func TestFcSetConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(fc.config, config)
+}
+
+func TestReadJailedFirecrackerPID(t *testing.T) {
+	assert := assert.New(t)
+
+	tests := []struct {
+		name        string
+		fileContent string
+		createFile  bool
+		expectPID   int
+		expectError bool
+	}{
+		{
+			name:        "valid pid",
+			fileContent: "12345",
+			createFile:  true,
+			expectPID:   12345,
+			expectError: false,
+		},
+		{
+			name:        "valid pid with trailing newline",
+			fileContent: "12345\n",
+			createFile:  true,
+			expectPID:   12345,
+			expectError: false,
+		},
+		{
+			name:        "valid pid with surrounding whitespace",
+			fileContent: "  12345  \n",
+			createFile:  true,
+			expectPID:   12345,
+			expectError: false,
+		},
+		{
+			name:        "missing file",
+			createFile:  false,
+			expectError: true,
+		},
+		{
+			name:        "non-numeric content",
+			fileContent: "not-a-pid",
+			createFile:  true,
+			expectError: true,
+		},
+		{
+			name:        "zero pid",
+			fileContent: "0",
+			createFile:  true,
+			expectError: true,
+		},
+		{
+			name:        "negative pid",
+			fileContent: "-1",
+			createFile:  true,
+			expectError: true,
+		},
+		{
+			name:        "empty file",
+			fileContent: "",
+			createFile:  true,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			fc := firecracker{jailerRoot: tmpDir}
+
+			if tt.createFile {
+				pidFile := filepath.Join(tmpDir, "firecracker.pid")
+				err := os.WriteFile(pidFile, []byte(tt.fileContent), 0644)
+				assert.NoError(err)
+			}
+
+			pid, err := fc.readJailedFirecrackerPID()
+			if tt.expectError {
+				assert.Error(err)
+				assert.Equal(0, pid)
+			} else {
+				assert.NoError(err)
+				assert.Equal(tt.expectPID, pid)
+			}
+		})
+	}
 }

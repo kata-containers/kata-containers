@@ -108,10 +108,6 @@ shared_fs = "none"
 ```toml
 disable_image_nvdimm = true
 ```
-- Disable shared memory (uncomment)
-```toml
-file_mem_backend = ""
-```
 - Enable confidential guests (uncomment)
 ```toml
 confidential_guest = true

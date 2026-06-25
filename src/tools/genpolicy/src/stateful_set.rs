@@ -215,6 +215,13 @@ impl yaml::K8sResource for StatefulSet {
     fn get_pod_security_context(&self) -> Option<&pod::PodSecurityContext> {
         self.spec.template.spec.securityContext.as_ref()
     }
+
+    fn get_labels(&self) -> &Option<BTreeMap<String, String>> {
+        if let Some(metadata) = &self.spec.template.metadata {
+            return &metadata.labels;
+        }
+        &None
+    }
 }
 
 impl StatefulSet {

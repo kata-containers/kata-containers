@@ -122,7 +122,14 @@ pub async fn cloud_hypervisor_vm_netdev_add_with_fds(
     request_fds: Vec<RawFd>,
 ) -> Result<Option<String>> {
     let body = serde_json::to_string(&net_config)?;
-    api_command(api_socket, "PUT", "vm.add-net", Some(body), Some(request_fds)).await
+    api_command(
+        api_socket,
+        "PUT",
+        "vm.add-net",
+        Some(body),
+        Some(request_fds),
+    )
+    .await
 }
 
 pub async fn cloud_hypervisor_vm_device_add(

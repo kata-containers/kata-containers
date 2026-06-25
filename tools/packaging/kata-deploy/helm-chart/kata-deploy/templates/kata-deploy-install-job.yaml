@@ -1,0 +1,113 @@
+{{- /*
+Install dispatcher (deploymentMode: job).
+
+A single, tiny post-install/post-upgrade hook Job that runs the dispatcher
+(kata-deploy-job-dispatcher). The dispatcher enumerates the selected nodes LIVE, then
+creates one node-pinned install Job per node from the job-templates ConfigMap,
+keeping at most job.parallelism in flight and refilling as they finish. This
+guarantees one install per node (coverage) with a paced rollout, while the Helm
+release stays O(1) regardless of fleet size.
+
+Each per-node Job runs the staged pipeline as ordered initContainers and exits:
+
+  host-check -> artifacts -> cri   (initContainers, run sequentially)
+  label                            (main container)
+
+Helm waits only on THIS dispatcher Job (the verification hook runs at a higher
+weight, after it). before-hook-creation lets `helm upgrade` re-run the dispatcher,
+which re-enumerates nodes (idempotent stages skip already-installed nodes and
+pick up newly added ones).
+*/ -}}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+{{- $root := . }}
+{{- $base := .Chart.Name }}
+{{- if .Values.env.multiInstallSuffix }}
+{{- $base = printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix }}
+{{- end }}
+{{- $sa := include "kata-deploy.dispatcherServiceAccountName" . }}
+{{- $dispatcherName := printf "%s-install-dispatcher" $base | trunc 63 | trimSuffix "-" }}
+{{- $nodes := .Values.job.nodes | default list }}
+{{- $selector := include "kata-deploy.nodeLabelSelector" (dict "eq" (.Values.job.nodeSelector | default dict) "exprs" (.Values.job.nodeSelectorExpressions | default list)) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $dispatcherName }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    kata-deploy/dispatcher: install
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  # The dispatcher does per-node retries (job.backoffLimit) itself; a dispatcher
+  # failure means "some node failed" and should surface, not be retried blindly.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        kata-deploy/dispatcher: install
+    spec:
+{{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      serviceAccountName: {{ $sa }}
+      restartPolicy: Never
+      # The dispatcher never touches the host; it is a plain API client. Lock the
+      # pod down so a compromise cannot escalate beyond its (minimal) API rights.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+{{- with $root.Values.tolerations }}
+      tolerations:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with $root.Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
+      containers:
+        - name: dispatcher
+          image: {{ include "kata-deploy.dispatcherImage" $root }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /usr/bin/kata-deploy-job-dispatcher
+            - "--job-template=/etc/kata-job/install-job.yaml"
+            - "--name-prefix={{ $base }}-install"
+            - "--owner-job-name={{ $dispatcherName }}"
+            - "--parallelism={{ $root.Values.job.parallelism }}"
+{{- if $nodes }}
+            - "--nodes={{ join "," $nodes }}"
+{{- else if $selector }}
+            - "--node-selector={{ $selector }}"
+{{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: job-templates
+              mountPath: /etc/kata-job
+              readOnly: true
+      volumes:
+        - name: job-templates
+          configMap:
+            name: {{ printf "%s-job-templates" $base | trunc 63 | trimSuffix "-" }}
+{{- end }}

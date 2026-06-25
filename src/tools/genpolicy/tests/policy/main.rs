@@ -344,4 +344,14 @@ mod tests {
     async fn test_create_container_gpu_vfio_cdi() {
         runtests("createcontainer/gpu_vfio_cdi").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_ignored_fields() {
+        runtests("createcontainer/ignored_fields").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_env_vars() {
+        runtests("createcontainer/env_vars").await;
+    }
 }

@@ -88,4 +88,5 @@ markdown_extensions:
 plugins:
     - search
     - awesome-nav
+    - open-in-new-tab
 

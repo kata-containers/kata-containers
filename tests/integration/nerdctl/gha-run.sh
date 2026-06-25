@@ -53,7 +53,8 @@ function install_dependencies() {
 
 	# Create the default containerd configuration
 	sudo mkdir -p /etc/containerd
-	containerd config default > sudo tee /etc/containerd/config.toml
+	PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+	ensure_containerd_conf_d_rootful_api_sockets
 	sudo systemctl restart containerd
 }
 

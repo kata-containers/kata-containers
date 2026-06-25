@@ -30,7 +30,6 @@ export KBS="${KBS:-false}"
 export KBS_INGRESS="${KBS_INGRESS:-}"
 export KUBERNETES="${KUBERNETES:-}"
 export SNAPSHOTTER="${SNAPSHOTTER:-}"
-export ITA_KEY="${ITA_KEY:-}"
 export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export PULL_TYPE="${PULL_TYPE:-default}"
@@ -106,7 +105,7 @@ EOF
 		| .plugins["io.containerd.snapshotter.v1.devmapper"].base_image_size = "4096MB"
 		| .plugins["io.containerd.transfer.v1.local"].unpack_config =
 			[((.plugins["io.containerd.transfer.v1.local"].unpack_config[0] // {}) + {platform: $platform, snapshotter: "devmapper"})]
-		| if .version == 3 then
+		| if (.version // 0) >= 3 then
 			.plugins["io.containerd.cri.v1.images"].snapshotter = "devmapper"
 		  else
 			.plugins["io.containerd.grpc.v1.cri"].containerd.snapshotter = "devmapper"
@@ -178,6 +177,11 @@ function deploy_coco_kbs() {
 function deploy_kata() {
 	platform="${1:-}"
 
+	if ! is_supported_hypervisor "${KATA_HYPERVISOR}" ; then
+		# shellcheck disable=SC2154
+		die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Supported values: ${ALL_HYPERVISORS[*]}"
+	fi
+
 	[[ "${platform}" = "kcli" ]] && \
 	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
@@ -195,7 +199,7 @@ function deploy_kata() {
 	fi
 
 	ANNOTATIONS="default_vcpus"
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == *azure* ]]; then
 		ANNOTATIONS="image kernel default_vcpus cc_init_data"
 	fi
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
@@ -210,11 +214,6 @@ function deploy_kata() {
 	PULL_TYPE_MAPPING=""
 	if [[ "${PULL_TYPE}" != "default" ]]; then
 		PULL_TYPE_MAPPING="${KATA_HYPERVISOR}:${PULL_TYPE}"
-	fi
-
-	HOST_OS=""
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		HOST_OS="${KATA_HOST_OS}"
 	fi
 
 	# nydus and erofs are always deployed by kata-deploy; set this unconditionally
@@ -242,7 +241,6 @@ function deploy_kata() {
 	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
 	export HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 	export HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL}"
-	export HELM_HOST_OS="${HOST_OS}"
 	helm_helper
 }
 
@@ -282,8 +280,10 @@ function run_tests() {
 		# enabled. Therefore, use containerd's default settings instead of distro's defaults. Note that
 		# the k8s test cluster nodes have their own containerd settings (created by kata-deploy),
 		# independent from the local settings being created here.
-		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+		PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
+		ensure_containerd_conf_d_rootful_api_sockets
+		require_containerd_config_schema_v3_plus
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
 
 		# Allow genpolicy to access the containerd image pull APIs without sudo.
@@ -312,7 +312,7 @@ function run_tests() {
 		echo "start_time=${start_time}" >> "${GITHUB_ENV}"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "clh-runtime-rs" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+	if [[ "${KATA_HYPERVISOR}" =~ ^clh(-azure)?-runtime-rs$ ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		if [[ -n "${GITHUB_ENV}" ]]; then
 			KATA_TEST_VERBOSE=true
 			export KATA_TEST_VERBOSE
@@ -411,11 +411,22 @@ function collect_artifacts() {
 function cleanup_kata_deploy() {
 	ensure_helm
 
+	local release_name="kata-deploy"
+	local namespace="kube-system"
+
+	# Avoid helm uninstall --wait (up to 10m) on fresh clusters: free-runner jobs
+	# set K8S_TEST_HOST_TYPE=baremetal-* for test selection only and often have
+	# no prior release in kube-system.
+	if ! helm status "${release_name}" -n "${namespace}" &>/dev/null; then
+		info "No Helm release '${release_name}' in '${namespace}'; skipping kata-deploy uninstall"
+		return 0
+	fi
+
 	# Do not return after deleting only the parent object cascade=foreground
 	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug || true
+	helm uninstall "${release_name}" --ignore-not-found --wait --cascade foreground --timeout 10m --namespace "${namespace}" --debug || true
 
-	wait_for_api_and_retry_uninstall "kata-deploy" "kube-system"
+	wait_for_api_and_retry_uninstall "${release_name}" "${namespace}"
 }
 
 function cleanup() {
@@ -460,7 +471,7 @@ function main() {
 		        ( "${TARGET_ARCH}" = "x86_64" || "${TARGET_ARCH}" = "aarch64" ) && \
 		        "${PULL_TYPE}" != "experimental-force-guest-pull" ]]; then
 			AUTO_GENERATE_POLICY="yes"
-		elif [[ "${KATA_HYPERVISOR}" = qemu-nvidia-gpu-* ]]; then
+		elif is_confidential_gpu_hypervisor "${KATA_HYPERVISOR}"; then
 			AUTO_GENERATE_POLICY="yes"
 		fi
 	fi

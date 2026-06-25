@@ -22,6 +22,34 @@ pub const K3S_RKE2_CONTAINERD_V2_TMPL: &str = "/etc/containerd/config.toml.tmpl"
 /// snapshotter field, and the base name for the data directory and socket path on the host.
 pub const NYDUS_FOR_KATA_TEE: &str = "nydus-for-kata-tee";
 
+/// Check if containerd config has an imports directive that would auto-load conf.d files.
+/// Returns true if the config file has "imports = [...]" directive that includes /etc/containerd/conf.d.
+fn config_has_containerd_confd_import(config_file: &str) -> bool {
+    use crate::utils::toml as toml_utils;
+
+    let has_conf_d_import = toml_utils::get_toml_array(Path::new(config_file), ".imports")
+        .map(|imports| {
+            imports
+                .iter()
+                .any(|path| path.contains("/etc/containerd/conf.d"))
+        })
+        .unwrap_or(false);
+
+    if has_conf_d_import {
+        info!(
+            "Found imports directive with /etc/containerd/conf.d in {}, will use conf.d auto-loading",
+            config_file
+        );
+    } else {
+        info!(
+            "No imports directive with /etc/containerd/conf.d in {}, will add it explicitly",
+            config_file
+        );
+    }
+
+    has_conf_d_import
+}
+
 /// Resolves whether to use the containerd 2.x split-CRI layout (true) or the v1 CRI gRPC layout (false) for K3s/RKE2.
 /// 1. Tries config.toml: if it has `version = 2` use legacy CRI table; if `version >= 3` (including 4+) use split CRI.
 /// 2. Else falls back to the node's containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1").
@@ -150,6 +178,14 @@ pub struct Config {
     pub multi_install_suffix: Option<String>,
     pub helm_post_delete_hook: bool,
     pub experimental_setup_snapshotter: Option<Vec<String>>,
+    /// EROFS snapshotter merge mode: "merged" (default) or "unmerged".
+    ///
+    /// In "unmerged" mode kata-deploy does not force containerd's erofs
+    /// snapshotter to merge layers (it leaves `max_unmerged_layers` at the
+    /// containerd default), so each image layer is exposed as its own
+    /// per-layer `layer.erofs`. This is the only layout the Go runtime can
+    /// consume; the merged (`fsmeta.erofs`) layout is runtime-rs only.
+    pub erofs_merge_mode: Option<String>,
     pub experimental_force_guest_pull_for_arch: Vec<String>,
     pub dest_dir: String,
     pub host_install_dir: String,
@@ -159,6 +195,7 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub containerd_user_drop_in_source_file: Option<String>,
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
@@ -265,6 +302,10 @@ impl Config {
         let containerd_conf_file_backup = format!("{containerd_conf_file}.bak");
         let containerd_drop_in_conf_file =
             format!("{dest_dir}/containerd/config.d/kata-deploy.toml");
+        let containerd_user_drop_in_source_file = env::var("CONTAINERD_USER_DROP_IN_SOURCE_FILE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
 
         let helm_post_delete_hook =
             env::var("HELM_POST_DELETE_HOOK").unwrap_or_else(|_| "false".to_string()) == "true";
@@ -273,6 +314,11 @@ impl Config {
             .ok()
             .filter(|s| !s.is_empty())
             .map(|s| s.split(',').map(|s| s.trim().to_string()).collect());
+
+        let erofs_merge_mode = env::var("EROFS_MERGE_MODE")
+            .ok()
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty());
 
         // Only use arch-specific variable for experimental force guest pull
         let experimental_force_guest_pull_for_arch =
@@ -305,6 +351,7 @@ impl Config {
             multi_install_suffix,
             helm_post_delete_hook,
             experimental_setup_snapshotter,
+            erofs_merge_mode,
             experimental_force_guest_pull_for_arch,
             dest_dir,
             host_install_dir,
@@ -314,6 +361,7 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            containerd_user_drop_in_source_file,
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
@@ -474,6 +522,17 @@ impl Config {
             _ => {}
         }
 
+        // Validate EROFS_MERGE_MODE
+        // Only "merged" (default) and "unmerged" are accepted.
+        if let Some(mode) = self.erofs_merge_mode.as_ref() {
+            if mode != "merged" && mode != "unmerged" {
+                return Err(anyhow::anyhow!(
+                    "EROFS_MERGE_MODE must be either 'merged' or 'unmerged', got '{}'",
+                    mode
+                ));
+            }
+        }
+
         // Validate EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH
         // This is a list of shim names
         for shim in &self.experimental_force_guest_pull_for_arch {
@@ -517,11 +576,16 @@ impl Config {
             "* EXPERIMENTAL_SETUP_SNAPSHOTTER: {:?}",
             self.experimental_setup_snapshotter
         );
+        info!("* EROFS_MERGE_MODE: {:?}", self.erofs_merge_mode);
         info!(
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
         info!("* CONTAINERD_CONF_FILE: {}", self.containerd_conf_file);
+        info!(
+            "* CONTAINERD_USER_DROP_IN_SOURCE_FILE: {:?}",
+            self.containerd_user_drop_in_source_file
+        );
         info!(
             "* CUSTOM_RUNTIMES_ENABLED: {}",
             self.custom_runtimes_enabled
@@ -539,15 +603,25 @@ impl Config {
                 );
             }
         }
+
+        log::debug!("Resolved kata-deploy configuration:\n{:#?}", self);
     }
 
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
 
-        // Check if drop-in files can be used based on containerd version
-        let use_drop_in =
-            manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
+        // Get containerd version once for drop-in and conf.d capability checks.
+        // Not required for k0s (drop-ins are always supported there).
+        let container_runtime_version = if matches!(runtime, "k0s-worker" | "k0s-controller") {
+            None
+        } else {
+            Some(k8s::get_container_runtime_version(self).await?)
+        };
+        let use_drop_in = manager::is_containerd_capable_of_drop_in(
+            runtime,
+            container_runtime_version.as_deref(),
+        );
 
         let paths = match runtime {
             "k0s-worker" | "k0s-controller" => ContainerdPaths {
@@ -572,10 +646,6 @@ impl Config {
                 // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
                 // missing we bail; the cluster must configure the template with the import
                 // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
-                let container_runtime_version =
-                    k8s::get_node_field(self, ".status.nodeInfo.containerRuntimeVersion")
-                        .await
-                        .ok();
                 let use_v3 = k3s_rke2_resolve_use_v3(
                     k3s_rke2_rendered_config_path(),
                     container_runtime_version.as_deref(),
@@ -617,14 +687,41 @@ impl Config {
                     plugin_id: Some(k3s_rke2_containerd_plugin_id(use_v3).to_string()),
                 }
             }
-            _ => ContainerdPaths {
-                config_file: self.containerd_conf_file.clone(),
-                backup_file: self.containerd_conf_file_backup.clone(),
-                imports_file: Some(self.containerd_conf_file.clone()),
-                drop_in_file: self.containerd_drop_in_conf_file.clone(),
-                use_drop_in,
-                plugin_id: None,
-            },
+            _ => {
+                // For containerd >= 2.2.0, use /etc/containerd/conf.d/ which is auto-imported
+                // by containerd, avoiding the need to modify the main config entirely.
+                // Check if the config actually has imports before skipping adding it explicitly.
+                let supports_conf_d = container_runtime_version
+                    .as_deref()
+                    .map(|v| {
+                        manager::containerd_version_is_2_2_or_newer(v)
+                            && config_has_containerd_confd_import(&self.containerd_conf_file)
+                    })
+                    .unwrap_or(false);
+
+                let (imports_file, drop_in_file) = if supports_conf_d {
+                    let drop_in = if let Some(ref suffix) = self.multi_install_suffix {
+                        format!("/etc/containerd/conf.d/kata-deploy-{suffix}.toml")
+                    } else {
+                        "/etc/containerd/conf.d/kata-deploy.toml".to_string()
+                    };
+                    (None, drop_in)
+                } else {
+                    (
+                        Some(self.containerd_conf_file.clone()),
+                        self.containerd_drop_in_conf_file.clone(),
+                    )
+                };
+
+                ContainerdPaths {
+                    config_file: self.containerd_conf_file.clone(),
+                    backup_file: self.containerd_conf_file_backup.clone(),
+                    imports_file,
+                    drop_in_file,
+                    use_drop_in,
+                    plugin_id: None,
+                }
+            }
         };
 
         Ok(paths)
@@ -737,7 +834,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
 /// Returns only shims that are supported for that architecture
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
+        "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
         "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-cca",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu",

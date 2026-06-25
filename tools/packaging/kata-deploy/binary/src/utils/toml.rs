@@ -121,6 +121,47 @@ pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+/// Delete a TOML value (or table) at a given path.
+///
+/// Navigates to the parent table and removes the final key. This is a no-op if
+/// any path component (including the final key) does not exist, so callers can
+/// unconditionally remove a value that may or may not be present.
+pub fn delete_toml_value(file_path: &Path, path: &str) -> Result<()> {
+    let content = std::fs::read_to_string(file_path)
+        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+
+    let (header, toml_content) = split_non_toml_header(&content);
+    let mut doc = toml_content
+        .parse::<DocumentMut>()
+        .context("Failed to parse TOML")?;
+
+    let parts = parse_toml_path(path)?;
+
+    let mut current_table = doc.as_table_mut();
+    for (i, part) in parts.iter().enumerate() {
+        let is_last = i == parts.len() - 1;
+
+        if is_last {
+            // Remove the value; absent key is fine (no-op).
+            current_table.remove(part.as_str());
+        } else {
+            // Navigate into the intermediate table. If it does not exist, there
+            // is nothing to delete.
+            match current_table
+                .get_mut(part.as_str())
+                .and_then(|item| item.as_table_mut())
+            {
+                Some(table) => current_table = table,
+                None => return Ok(()),
+            }
+        }
+    }
+
+    write_toml_with_header(file_path, header, &doc)?;
+
+    Ok(())
+}
+
 /// Get a TOML value at a given path
 pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let content = std::fs::read_to_string(file_path)
@@ -1182,8 +1223,6 @@ kernel_params = "console=hvc0"
                     .replace("@DEFENABLEIOTHREADS@", "false")
                     .replace("@DEFENABLEVHOSTUSERSTORE@", "false")
                     .replace("@DEFENTROPYSOURCE@", "/dev/urandom")
-                    .replace("@DEFFILEMEMBACKEND@", "")
-                    .replace("@DEFVALIDFILEMEMBACKENDS@", "[]")
                     .replace("@DEFBLOCKSTORAGEDRIVER_QEMU@", "virtio-blk")
                     .replace("@DEFBLOCKDEVICEAIO_QEMU@", "io_uring")
                     .replace("@DEFAULTEXPFEATURES@", "[]")
@@ -1715,5 +1754,101 @@ imports = ["/etc/containerd/conf.d/*.toml", "/opt/kata/containerd/config.d/kata-
         )
         .unwrap();
         assert_eq!(runtime_type, "io.containerd.kata-qemu.v2");
+    }
+
+    #[test]
+    fn test_delete_toml_value() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(
+            temp_path,
+            "[plugins.\"io.containerd.snapshotter.v1.erofs\"]\nmax_unmerged_layers = 0\nenable_fsverity = true\n",
+        )
+        .unwrap();
+
+        // Sanity check: value is present before deletion.
+        let before = get_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        )
+        .unwrap();
+        assert_eq!(before, "0");
+
+        delete_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        )
+        .unwrap();
+
+        // The deleted key is gone, but sibling keys remain.
+        let result = get_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        );
+        assert!(result.is_err(), "deleted key should no longer be found");
+
+        let sibling = get_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
+        )
+        .unwrap();
+        assert_eq!(sibling, "true", "sibling keys must be preserved");
+    }
+
+    #[test]
+    fn test_delete_toml_value_missing_key_is_noop() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        let initial = "[plugins.\"io.containerd.snapshotter.v1.erofs\"]\nenable_fsverity = true\n";
+        std::fs::write(temp_path, initial).unwrap();
+
+        // Deleting a key that does not exist must succeed and leave the file usable.
+        delete_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        )
+        .unwrap();
+
+        // Deleting through a non-existent intermediate table is also a no-op.
+        delete_toml_value(temp_path, ".plugins.\"nonexistent.plugin\".some_key").unwrap();
+        let sibling = get_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
+        )
+        .unwrap();
+        assert_eq!(sibling, "true");
+    }
+
+    #[test]
+    fn test_delete_toml_value_preserves_k3s_header() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path();
+        std::fs::write(
+            temp_path,
+            "{{ template \"base\" . }}\n[plugins.\"io.containerd.snapshotter.v1.erofs\"]\nmax_unmerged_layers = 0\n",
+        )
+        .unwrap();
+
+        delete_toml_value(
+            temp_path,
+            ".plugins.\"io.containerd.snapshotter.v1.erofs\".max_unmerged_layers",
+        )
+        .unwrap();
+
+        let content = std::fs::read_to_string(temp_path).unwrap();
+        assert!(
+            content.starts_with("{{ template \"base\" . }}\n"),
+            "non-TOML header must be preserved"
+        );
+        assert!(
+            !content.contains("max_unmerged_layers"),
+            "value must be removed"
+        );
+    }
+
+    #[test]
+    fn test_delete_toml_value_nonexistent_file() {
+        let result = delete_toml_value(Path::new("/nonexistent/file.toml"), "some.path");
+        assert!(result.is_err());
     }
 }

@@ -90,9 +90,14 @@ pub struct ConnectConfig {
 
 impl ConnectConfig {
     pub fn new(dial_timeout_ms: u64, reconnect_timeout_ms: u64) -> Self {
+        // With static sandbox resource sizing enabled by default, tiny CPU
+        // allocations can make early guest boot/agent startup exceed 3s on
+        // loaded nodes. Keep a reasonable lower bound to avoid premature
+        // sandbox teardown during agent bring-up.
+        const MIN_RECONNECT_TIMEOUT_MS: u64 = 10_000;
         Self {
             dial_timeout_ms,
-            reconnect_timeout_ms,
+            reconnect_timeout_ms: reconnect_timeout_ms.max(MIN_RECONNECT_TIMEOUT_MS),
         }
     }
 }

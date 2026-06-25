@@ -41,8 +41,6 @@ on:
         required: true
       AZ_SUBSCRIPTION_ID:
         required: true
-      ITA_KEY:
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-coco
@@ -59,6 +57,8 @@ jobs:
         include:
           - runner: tdx
             vmm: qemu-tdx
+          - runner: tdx
+            vmm: qemu-tdx-runtime-rs
           - runner: sev-snp
             vmm: qemu-snp
           - runner: sev-snp
@@ -81,67 +81,75 @@ jobs:
       PULL_TYPE: "guest-pull"
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      GH_ITA_KEY: ${{ secrets.ITA_KEY }}
       AUTO_GENERATE_POLICY: "yes"
     steps:
+      - name: Skip non-nightly TDX runtime-rs
+        if: ${{ matrix.vmm == 'qemu-tdx-runtime-rs' && inputs.pr-number != 'nightly' }}
+        run: echo "SKIP_JOB=true" >> "${GITHUB_ENV}"
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: ${{ env.SKIP_JOB != 'true' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Rebase atop of the latest target branch
+        if: ${{ env.SKIP_JOB != 'true' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-kata-tools-tarball
+        if: ${{ env.SKIP_JOB != 'true' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-tools-artifacts
 
       - name: Install kata-tools
+        if: ${{ env.SKIP_JOB != 'true' }}
         run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Deploy Kata
+        if: ${{ env.SKIP_JOB != 'true' }}
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Uninstall previous `kbs-client`
+        if: ${{ env.SKIP_JOB != 'true' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
 
       - name: Deploy CoCo KBS
+        if: ${{ env.SKIP_JOB != 'true' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
-        env:
-          ITA_KEY: ${{ env.KATA_HYPERVISOR == 'qemu-tdx' && env.GH_ITA_KEY || '' }}
 
       - name: Install `kbs-client`
+        if: ${{ env.SKIP_JOB != 'true' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run tests
+        if: ${{ env.SKIP_JOB != 'true' }}
         timeout-minutes: 100
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Report tests
-        if: always()
+        if: ${{ always() && env.SKIP_JOB != 'true' }}
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Delete kata-deploy
-        if: always()
+        if: ${{ always() && env.SKIP_JOB != 'true' }}
         timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
 
       - name: Delete CoCo KBS
-        if: always()
+        if: ${{ always() && env.SKIP_JOB != 'true' }}
         timeout-minutes: 10
-        run: |
-          [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && echo "ITA_KEY=${GH_ITA_KEY}" >> "${GITHUB_ENV}"
-          bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+        run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
@@ -182,7 +190,7 @@ jobs:
       AUTO_GENERATE_POLICY: "yes"
       K8S_TEST_HOST_TYPE: "all"
       CONTAINER_ENGINE: "containerd"
-      CONTAINER_ENGINE_VERSION: "active"
+      CONTAINER_ENGINE_VERSION: "latest"
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -391,7 +399,7 @@ jobs:
 
   # Generate jobs for testing CoCo on non-TEE environments with erofs-snapshotter
   run-k8s-tests-coco-nontee-with-erofs-snapshotter:
-    name: run-k8s-tests-coco-nontee-with-erofs-snapshotter
+    name: run-k8s-tests-coco-nontee-with-erofs-snapshotter-${{ matrix.erofs-mode }}
     strategy:
       fail-fast: false
       matrix:
@@ -401,8 +409,11 @@ jobs:
           - erofs
         pull-type:
           - default
+        erofs-mode:
+          - disk
+          - memory
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-24.04
     environment:
@@ -423,6 +434,7 @@ jobs:
       CONTAINER_ENGINE_VERSION: "v2.3"
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
+      EROFS_SNAPSHOTTER_MODE: ${{ matrix.erofs-mode }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
       K8S_TEST_HOST_TYPE: "all"
       # We are skipping the auto generated policy tests for now,

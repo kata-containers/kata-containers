@@ -13,8 +13,8 @@ readme = "README.md"
 [dependencies]
 arc-swap = ">=0.4.8"
 libc = "0.2.39"
-nix = "0.23.1"
+nix = { workspace = true }
 lazy_static = "1"
 thiserror = "1"
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }

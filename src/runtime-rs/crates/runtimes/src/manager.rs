@@ -81,6 +81,14 @@ fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
     }
 }
 
+fn effective_log_level(enable_debug: bool, log_level: &str) -> &str {
+    if enable_debug && log_level == "info" {
+        "debug"
+    } else {
+        log_level
+    }
+}
+
 struct RuntimeHandlerManagerInner {
     id: String,
     msg_sender: Sender<Message>,
@@ -215,6 +223,13 @@ impl RuntimeHandlerManagerInner {
             InitialSizeManager::new_from(&sandbox_config.annotations)
                 .context("failed to construct static resource manager")?
         };
+
+        // For CRI sandboxes, sizing annotations are carried in PodSandboxConfig
+        // and may be absent from the OCI sandbox spec. Fill any missing sizing
+        // values from sandbox annotations before applying static sizing.
+        initial_size_manager
+            .supplement_from_annotations(&sandbox_config.annotations)
+            .context("failed to supplement static resource manager from annotations")?;
 
         initial_size_manager
             .setup_config(&mut config)
@@ -535,6 +550,29 @@ impl RuntimeHandlerManager {
 
             Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
+            // A teardown RPC must still make the shim daemon exit even when
+            // the runtime instance was never (fully) created -- e.g. after a
+            // failed CreateContainer.  In that case containerd's follow-up
+            // Shutdown would otherwise hit `get_runtime_instance()`, fail with
+            // "runtime not ready", and the service loop would never receive
+            // `Action::Shutdown`.  Because the shim ignores SIGTERM the daemon
+            // would then be left running and orphaned by containerd.
+            if let TaskRequest::ShutdownContainer(_) = &req {
+                if self.get_runtime_instance().await.is_err() {
+                    warn!(
+                        sl!(),
+                        "shutdown requested but runtime instance is not ready; \
+                         forcing shim exit to avoid an orphaned shim process"
+                    );
+                    let sender = self.inner.read().await.msg_sender.clone();
+                    sender
+                        .send(Message::new(Action::Shutdown))
+                        .await
+                        .context("send shutdown message")?;
+                    return Ok(TaskResponse::ShutdownContainer);
+                }
+            }
+
             self.handler_task_request(req)
                 .await
                 .context("handler TaskRequest")
@@ -581,7 +619,7 @@ impl RuntimeHandlerManager {
                     sandbox_id: status.sandbox_id,
                     pid: status.pid,
                     state: status.state,
-                    created_at: None,
+                    created_at: status.created_at,
                     exited_at: None,
                 }))
             }
@@ -837,19 +875,22 @@ fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
 // according to the settings read from configuration file
 fn update_component_log_level(config: &TomlConfig) {
     // Retrieve the log-levels set in configuration file, modify the FILTER_RULE accordingly
-    let default_level = String::from("info");
+    let default_level = "info";
     let agent_level = if let Some(agent_config) = config.agent.get(&config.runtime.agent_name) {
-        agent_config.log_level.clone()
+        effective_log_level(agent_config.debug, &agent_config.log_level)
     } else {
-        default_level.clone()
+        default_level
     };
     let hypervisor_level =
         if let Some(hypervisor_config) = config.hypervisor.get(&config.runtime.hypervisor_name) {
-            hypervisor_config.debug_info.log_level.clone()
+            effective_log_level(
+                hypervisor_config.debug_info.enable_debug,
+                &hypervisor_config.debug_info.log_level,
+            )
         } else {
-            default_level.clone()
+            default_level
         };
-    let runtime_level = config.runtime.log_level.clone();
+    let runtime_level = effective_log_level(config.runtime.debug, &config.runtime.log_level);
 
     // Update FILTER_RULE to apply changes
     FILTER_RULE.rcu(|inner| {
@@ -857,15 +898,15 @@ fn update_component_log_level(config: &TomlConfig) {
         updated_inner.clone_from(inner);
         updated_inner.insert(
             "runtimes".to_string(),
-            convert_string_to_slog_level(&runtime_level),
+            convert_string_to_slog_level(runtime_level),
         );
         updated_inner.insert(
             "agent".to_string(),
-            convert_string_to_slog_level(&agent_level),
+            convert_string_to_slog_level(agent_level),
         );
         updated_inner.insert(
             "hypervisor".to_string(),
-            convert_string_to_slog_level(&hypervisor_level),
+            convert_string_to_slog_level(hypervisor_level),
         );
         updated_inner
     });
@@ -949,4 +990,45 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::types::ShutdownRequest;
+    use tokio::sync::mpsc::channel;
+
+    // A ShutdownContainer RPC that arrives before any runtime instance was
+    // created (e.g. after a failed CreateContainer) must still drive the shim
+    // daemon to exit, otherwise the process is orphaned.  Verify it returns
+    // ShutdownContainer and emits Action::Shutdown on the service channel.
+    #[tokio::test]
+    async fn test_shutdown_without_runtime_instance_forces_exit() {
+        let (sender, mut receiver) = channel::<Message>(8);
+        let manager = RuntimeHandlerManager::new("test-sid", sender).unwrap();
+
+        let resp = manager
+            .handler_task_message(TaskRequest::ShutdownContainer(ShutdownRequest {
+                container_id: "test-sid".to_string(),
+                is_now: true,
+            }))
+            .await
+            .expect("shutdown should succeed even without a runtime instance");
+
+        assert!(matches!(resp, TaskResponse::ShutdownContainer));
+
+        let msg = receiver
+            .try_recv()
+            .expect("an Action::Shutdown message must be sent to stop the daemon");
+        assert!(matches!(msg.action, Action::Shutdown));
+    }
+
+    #[test]
+    fn test_effective_log_level() {
+        assert_eq!(effective_log_level(false, "info"), "info");
+        assert_eq!(effective_log_level(false, "debug"), "debug");
+        assert_eq!(effective_log_level(true, "info"), "debug");
+        assert_eq!(effective_log_level(true, "trace"), "trace");
+        assert_eq!(effective_log_level(true, "warn"), "warn");
+    }
 }

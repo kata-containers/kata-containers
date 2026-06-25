@@ -1,0 +1,20 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_NUMA}
+  labels:
+    app: ${POD_NAME_NUMA}
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: numa-check
+    image: "quay.io/kata-containers/numa:2026-05-15@sha256:a863fcf95fcbbf63352b0555a61a62537f74399dc4bca826a2e42d001e26accb"
+    resources:
+      limits:
+        cpu: "${NUMA_TEST_VCPUS}"
+        memory: "${NUMA_TEST_MEMORY}"

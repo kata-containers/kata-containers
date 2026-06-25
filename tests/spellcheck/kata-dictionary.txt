@@ -14,15 +14,19 @@ upcall
 virtcontainers
 
 # Open source projects
-
+bootc
+distroless
 materialx
+ostree
 
 # Hardware & Architecture
 AMD
 APQN
+chiplet
 cpuid
 DCAP
 DGPU
+ioctls
 IOMMU
 IOVA
 MDEV
@@ -32,6 +36,7 @@ mmio
 NVDIMM
 OVMF
 SEV
+TDVF
 SLES
 SNP
 SRIOV
@@ -49,6 +54,7 @@ NCCL
 NRAS
 NVCR
 NVLINK
+NVML
 nvswitch
 nvswitches
 NVRC
@@ -56,9 +62,13 @@ nvlib
 pgpu
 PPCIE
 Quadro
+RCAR
 
 # Storage & Filesystems
 AUFS
+confext
+overlayfs
+sysext
 blockfile
 devicemapper
 devmapper
@@ -70,6 +80,16 @@ Sharedfs
 Initdata
 fsmerge
 fsmerged
+Rafs
+virtiofs
+virtiofsd
+Virtiofs
+nydusd
+Lowerdir
+lowerdir
+Upperdir
+upperdir
+
 
 # Networking & Communication
 netns
@@ -77,17 +97,25 @@ Netlink
 ttrpc
 vsock
 
+# Security & Encryption
+LUKS
+ocicrypt
+
 # Container, Runtime & Misc terms
+Burstable
 cgroupsv1
 coredump
 CPUSET
 crio
 nerdctl
+crictl
 dockershim
 dentries
+hexdump
 hypercalls
 inodes
 libelf-dev
+loopless
 memcg
 nydus
 patchset

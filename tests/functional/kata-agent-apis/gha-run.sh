@@ -21,8 +21,12 @@ function install_dependencies() {
 
 	# Dependency list of projects that we can rely on the system packages
 	# - jq
+	# - skopeo (for container image operations)
+	# - umoci (for OCI image unpacking)
 	declare -a deps=(
 		jq
+		skopeo
+		umoci
 	)
 
 	sudo apt-get update

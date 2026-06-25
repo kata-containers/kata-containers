@@ -38,10 +38,16 @@ walkdir = "2.5.0"
 flate2 = "1.1"
 tempfile = "3.19.1"
 hex = "0.4"
+base64 = { workspace = true }
+hyper = { workspace = true, features = ["client", "http1"] }
+hyperlocal = { workspace = true }
 
 ## Dependencies from `rust-netlink`
-netlink-packet-route = "0.26"
-rtnetlink = "0.19"
+## 0.30+ parses IFLA_INET6_CONF on kernels 6.17+ (240-byte blob; DEVCONF_FORCE_FORWARDING).
+futures-lite = "2"
+netlink-packet-core = "0.8"
+netlink-packet-route = "0.30"
+rtnetlink = "0.21"
 
 # Local dependencies
 agent = { workspace = true }

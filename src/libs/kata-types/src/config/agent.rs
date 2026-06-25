@@ -93,6 +93,12 @@ pub struct Agent {
     #[serde(default)]
     pub debug_console_enabled: bool,
 
+    /// When enabled, the agent translates a container's VISIBLE_CDI_DEVICES
+    /// environment variable into CDI GPU device requests (nvidia.com/gpu) so
+    /// that the container sees the matching GPUs present in the VM.
+    #[serde(default)]
+    pub visible_cdi_devices: bool,
+
     /// Agent server port
     #[serde(default = "default_server_port")]
     pub server_port: u32,
@@ -112,6 +118,10 @@ pub struct Agent {
     /// Agent reconnect timeout value in millisecond
     #[serde(default = "default_reconnect_timeout")]
     pub reconnect_timeout_ms: u32,
+
+    /// Confidential Data Hub API timeout value in milliseconds
+    #[serde(default = "default_cdh_api_timeout_ms")]
+    pub cdh_api_timeout_ms: u32,
 
     /// Agent request timeout value in millisecond
     /// This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -176,13 +186,15 @@ impl std::default::Default for Agent {
             log_level: "info".to_string(),
             enable_tracing: false,
             debug_console_enabled: false,
+            visible_cdi_devices: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,
             log_port: DEFAULT_AGENT_LOG_PORT,
             passfd_listener_port: DEFAULT_PASSFD_LISTENER_PORT,
             dial_timeout_ms: DEFAULT_AGENT_DIAL_TIMEOUT_MS,
-            reconnect_timeout_ms: 3_000,
-            request_timeout_ms: 30_000,
-            health_check_request_timeout_ms: 90_000,
+            reconnect_timeout_ms: default_reconnect_timeout(),
+            cdh_api_timeout_ms: default_cdh_api_timeout_ms(),
+            request_timeout_ms: default_request_timeout(),
+            health_check_request_timeout_ms: default_health_check_timeout(),
             kernel_modules: Default::default(),
             container_pipe_size: 0,
             launch_process_timeout: 0,
@@ -216,6 +228,11 @@ fn default_dial_timeout() -> u32 {
 fn default_reconnect_timeout() -> u32 {
     // ms
     3_000
+}
+
+fn default_cdh_api_timeout_ms() -> u32 {
+    // ms
+    50_000
 }
 
 fn default_request_timeout() -> u32 {

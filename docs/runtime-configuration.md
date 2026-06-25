@@ -1,56 +1,64 @@
 # Runtime Configuration
 
-The containerd shims (both the Rust and Go implementations) take configuration files to control their behavior. These files are in `/opt/kata/share/defaults/kata-containers/`. An example excerpt:
 
-```toml title="/opt/kata/share/defaults/kata-containers/configuration.toml"
+## Drop-in Files
+
+When kata-deploy installs Kata Containers, the base configuration files at
+`/opt/kata/share/defaults/kata-containers` should not be modified directly. Instead, use
+drop-in configuration files to customize settings. This approach ensures your
+customizations survive kata-deploy upgrades.
+
+### How Drop-in Files Work
+
+The Kata runtime reads the base configuration file and then applies any `.toml`
+files found in the `config.d/` directory alongside it. Files are processed in
+alphabetical order, with later files overriding earlier settings.
+
+### Base Configuration Files
+
+The base configuration references for the Go runtime can be found [here](https://github.com/kata-containers/kata-containers/tree/main/src/runtime/config), and for the Rust runtime [here](https://github.com/kata-containers/kata-containers/tree/main/src/runtime-rs/config).
+
+!!! tip "What runtime implementation am I using?"
+
+    By looking at the `/opt/kata/containerd/config.d/kata-deploy.toml` file, each runtimeClass (ex. `kata-qemu-nvidia-gpu`, `kata-qemu-nvidia-gpu-runtime-rs`) is configured with a specific `runtime_path`. If this path is set to `#!toml runtime_path = "/opt/kata/bin/containerd-shim-kata-v2"` you are using the Go runtime. Otherwise if it's `#!toml runtime_path = "/opt/kata/runtime-rs/bin/containerd-shim-kata-v2"`, it's the Rust runtime.
+
+Note that Rust will be the default runtime in Kata v4.
+
+### Creating Custom Drop-in Files
+
+The recommended way to create custom drop-in files is to use the [helm chart](helm-configuration.md#drop-in-runtime-configuration).
+Drop-in files may also be added directly to the filesystem.
+
+To add custom settings, create a `.toml` file in the appropriate `config.d/`
+directory. Use a numeric prefix to control the order of application.
+
+**Reserved prefixes** (used by kata-deploy):
+
+- `10-*`: Core kata-deploy settings
+- `20-*`: Debug settings
+- `30-*`: Kernel parameters
+- `50-*`: Settings from the helm chart
+
+**Recommended prefixes for custom settings**: `50-89`
+
+### Drop-In Config Examples
+
+#### Adding Custom Kernel Parameters
+
+```bash
+# SSH into the node or use kubectl exec
+sudo mkdir -p /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/
+sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-custom.toml << 'EOF'
 [hypervisor.qemu]
-path = "/opt/kata/bin/qemu-system-x86_64"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-image = "/opt/kata/share/kata-containers/kata-containers.img"
-machine_type = "q35"
-
-# rootfs filesystem type:
-#   - ext4 (default)
-#   - xfs
-#   - erofs
-rootfs_type = "ext4"
-
-# Enable running QEMU VMM as a non-root user.
-# By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
-# a non-root random user. See documentation for the limitations of this mode.
-rootless = false
-
-# List of valid annotation names for the hypervisor
-# Each member of the list is a regular expression, which is the base name
-# of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
+kernel_params = "my_param=value"
+EOF
 ```
 
-These files should never be modified directly. If you wish to create a modified version of these files, you may create your own [custom runtime](helm-configuration.md#custom-runtimes). For example, to modify the image path, we provide these values to helm:
+#### Changing Default Memory Size
 
-```yaml title="values.yaml"
-customRuntimes:
-  enabled: true
-  runtimes:
-    my-gpu-runtime:
-      baseConfig: "qemu-nvidia-gpu"
-      dropIn: |
-        [hypervisor.qemu]
-        image = "/path/to/custom-image.img"
-      runtimeClass: |
-        kind: RuntimeClass
-        apiVersion: node.k8s.io/v1
-        metadata:
-          name: kata-my-gpu-runtime
-          labels:
-            app.kubernetes.io/managed-by: kata-deploy
-        handler: kata-my-gpu-runtime
-        overhead:
-          podFixed:
-            memory: "640Mi"
-            cpu: "500m"
-        scheduling:
-          nodeSelector:
-            katacontainers.io/kata-runtime: "true"
+```bash
+sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-memory.toml << 'EOF'
+[hypervisor.qemu]
+default_memory = 4096
+EOF
 ```
-

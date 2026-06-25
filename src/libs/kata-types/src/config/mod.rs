@@ -30,7 +30,10 @@ pub use self::hypervisor::{
 };
 
 mod runtime;
-pub use self::runtime::{Runtime, RuntimeVendor, RUNTIME_NAME_VIRTCONTAINER};
+pub use self::runtime::{
+    Runtime, RuntimeVendor, EMPTYDIR_MODE_BLOCK_ENCRYPTED, EMPTYDIR_MODE_SHARED_FS,
+    RUNTIME_NAME_VIRTCONTAINER,
+};
 
 pub use self::agent::AGENT_NAME_KATA;
 
@@ -58,6 +61,8 @@ pub const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 pub const LAUNCH_PROCESS_TIMEOUT_OPTION: &str = "agent.launch_process_timeout";
 /// Option of setting the fd passthrough io listener port
 pub const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
+/// Option enabling translation of VISIBLE_CDI_DEVICES into CDI GPU requests
+pub const VISIBLE_CDI_DEVICES_OPTION: &str = "agent.visible_cdi_devices";
 
 /// Trait to manipulate global Kata configuration information.
 pub trait ConfigPlugin: Send + Sync {
@@ -228,12 +233,23 @@ impl TomlConfig {
                     launch_process_timeout,
                 );
             }
+            if cfg.cdh_api_timeout_ms > 0 {
+                // Convert milliseconds to seconds for agent kernel parameter
+                let cdh_api_timeout_secs = cfg.cdh_api_timeout_ms / 1000;
+                kv.insert(
+                    "agent.cdh_api_timeout".to_string(),
+                    cdh_api_timeout_secs.to_string(),
+                );
+            }
             if cfg.debug_console_enabled {
                 kv.insert(DEBUG_CONSOLE_FLAG.to_string(), "".to_string());
                 kv.insert(
                     DEBUG_CONSOLE_VPORT_OPTION.to_string(),
                     DEFAULT_AGENT_DBG_CONSOLE_PORT.to_string(),
                 );
+            }
+            if cfg.visible_cdi_devices {
+                kv.insert(VISIBLE_CDI_DEVICES_OPTION.to_string(), "true".to_string());
             }
             if cfg.mem_agent.enable {
                 kv.insert("psi".to_string(), "1".to_string());
@@ -489,6 +505,7 @@ mod tests {
             container_pipe_size: 20,
             debug_console_enabled: true,
             launch_process_timeout: 60,
+            visible_cdi_devices: true,
             ..Default::default()
         };
         let agent_name = "test_agent";
@@ -502,5 +519,6 @@ mod tests {
         kv.get("agent.debug_console").unwrap();
         assert_eq!(kv.get("agent.debug_console_vport").unwrap(), "1026"); // 1026 is the default port
         assert_eq!(kv.get("agent.launch_process_timeout").unwrap(), "60");
+        assert_eq!(kv.get("agent.visible_cdi_devices").unwrap(), "true");
     }
 }

@@ -6,6 +6,7 @@
 
 mod block_volume;
 mod default_volume;
+pub(crate) mod encrypted_emptydir_volume;
 mod ephemeral_volume;
 pub mod hugepage;
 mod local_volume;
@@ -31,6 +32,14 @@ use tokio::sync::RwLock;
 
 const BIND: &str = "bind";
 
+pub struct VolumeContext<'a> {
+    pub share_fs: &'a Option<Arc<dyn ShareFs>>,
+    pub d: &'a RwLock<DeviceManager>,
+    pub sid: &'a str,
+    pub agent: Arc<dyn Agent>,
+    pub emptydir_mode: &'a str,
+}
+
 #[async_trait]
 pub trait Volume: Send + Sync {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
@@ -42,6 +51,7 @@ pub trait Volume: Send + Sync {
 #[derive(Default)]
 pub struct VolumeResourceInner {
     volumes: Vec<Arc<dyn Volume>>,
+    ephemeral_disks: Vec<encrypted_emptydir_volume::EphemeralDiskInfo>,
 }
 
 #[derive(Default)]
@@ -64,13 +74,14 @@ impl VolumeResource {
 
     pub async fn handler_volumes(
         &self,
-        share_fs: &Option<Arc<dyn ShareFs>>,
+        ctx: &VolumeContext<'_>,
         cid: &str,
         spec: &oci::Spec,
-        d: &RwLock<DeviceManager>,
-        sid: &str,
-        agent: Arc<dyn Agent>,
     ) -> Result<Vec<Arc<dyn Volume>>> {
+        let share_fs = ctx.share_fs;
+        let d = ctx.d;
+        let sid = ctx.sid;
+        let emptydir_mode = ctx.emptydir_mode;
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts().clone().unwrap_or_default();
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
@@ -92,6 +103,15 @@ impl VolumeResource {
                     ephemeral_volume::EphemeralVolume::new(m)
                         .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
+            } else if encrypted_emptydir_volume::is_encrypted_emptydir_volume(m, emptydir_mode) {
+                let vol = encrypted_emptydir_volume::EncryptedEmptyDirVolume::new(d, m, sid)
+                    .await
+                    .with_context(|| format!("new encrypted emptydir volume {m:?}"))?;
+                let vol_arc: Arc<dyn Volume> = Arc::new(vol.clone());
+                let mut inner = self.inner.write().await;
+                inner.ephemeral_disks.push(vol.disk_info);
+                drop(inner);
+                vol_arc
             } else if is_block_volume(m) {
                 // handle block volume
                 Arc::new(
@@ -126,7 +146,7 @@ impl VolumeResource {
                         m,
                         cid,
                         read_only,
-                        agent.clone(),
+                        ctx.agent.clone(),
                         self.volume_manager.clone(),
                     )
                     .await
@@ -148,6 +168,27 @@ impl VolumeResource {
         }
 
         Ok(volumes)
+    }
+
+    pub async fn cleanup_ephemeral_disks(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        for disk in &inner.ephemeral_disks {
+            if let Err(e) = std::fs::remove_file(&disk.disk_path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    warn!(
+                        sl!(),
+                        "failed to remove ephemeral disk {:?}: {}", disk.disk_path, e
+                    );
+                }
+            }
+            if let Err(e) = kata_types::mount::remove_volume_path(&disk.source_path) {
+                warn!(
+                    sl!(),
+                    "failed to remove direct-volume path for {}: {}", disk.source_path, e
+                );
+            }
+        }
+        Ok(())
     }
 
     pub async fn dump(&self) {

@@ -21,8 +21,9 @@ function usage() {
 	cat <<EOF
 Usage: ${script_name} tarball-name
 This script creates a tarball with all the cargo vendored code
-that a distro would need to do a full build of the project in
-a disconnected environment, generating a "tarball-name" file.
+and the go vendored code that a distro would need to do a full
+build of the project in a disconnected environment, generating
+a "tarball-name" file.
 
 EOF
 
@@ -30,21 +31,32 @@ EOF
 
 create_vendor_tarball() {
 	vendor_dir_list=""
+	tarball_path="$(cd "$(dirname "${1}")" && pwd)/$(basename "${1}")"
 	pushd "${repo_dir}"
 		# shellcheck disable=SC2044
-		for i in $(find . -name 'Cargo.lock'); do
+		for i in $(find . -path './vendor' -prune -o \( -name 'Cargo.lock' -o -name 'go.mod' \) -print); do
 			dir="$(dirname "${i}")"
 			pushd "${dir}"
-				[[ -d .cargo ]] || mkdir .cargo
-				cargo vendor >> .cargo/config
-				vendor_dir_list+=" ${dir}/vendor ${dir}/.cargo/config"
+				case "$(basename "${i}")" in
+				    Cargo.lock)
+				        [[ -d .cargo ]] || mkdir .cargo
+				        cargo vendor >> .cargo/config.toml
+                                        vendor_dir_list+=" ${dir}/vendor ${dir}/.cargo/config.toml"
+				        ;;
+				    go.mod)
+                                        go mod tidy
+                                        go mod vendor
+                                        go mod verify
+                                        vendor_dir_list+=" ${dir}/vendor"
+				        ;;
+				esac
 				echo "${vendor_dir_list}"
 			popd
 		done
-	popd
 
 	# shellcheck disable=SC2086
-	tar -cvzf "${1}" ${vendor_dir_list}
+	tar -cvzf "${tarball_path}" ${vendor_dir_list}
+	popd
 }
 
 main () {

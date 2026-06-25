@@ -20,10 +20,10 @@ machine_type = "@MACHINETYPE@"
 tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
 # rootfs filesystem type:
-#   - ext4 (default)
+#   - ext4
 #   - xfs
-#   - erofs
-rootfs_type = @DEFROOTFSTYPE@
+#   - erofs (default for NVIDIA)
+rootfs_type = @DEFROOTFSTYPE_NV@
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -337,7 +337,12 @@ enable_iommu_platform = false
 # as is: map VM NUMA nodes to host 1:1 and bind vCPUs to related CPUs.
 # Note: To take proper advantage of NUMA, static_sandbox_resource_mgmt should
 # also be enabled for memory pre-allocation.
-enable_numa = false
+#
+# GPU workloads strongly benefit from NUMA awareness: when enabled, the runtime
+# validates that each cold-plugged VFIO device (GPU) resides on a host NUMA
+# node covered by the guest NUMA topology, ensuring memory locality. Consider
+# enabling this on multi-NUMA hosts with GPU passthrough.
+enable_numa = @DEFENABLENUMA_NV@
 
 # NUMA node mapping allows customizing how VM NUMA nodes map to host NUMA nodes.
 # Each entry defines a VM NUMA node and the host NUMA node(s) it maps to.
@@ -356,17 +361,6 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # qemu will delay this many seconds and then attempt to reconnect.
 # Zero disables reconnecting, and the default is zero.
 vhost_user_reconnect_timeout_sec = 0
-
-# Enable file based guest memory support. The default is an empty string which
-# will disable this feature. In the case of virtio-fs, this is enabled
-# automatically and '/dev/shm' is used as the backing folder.
-# This option will be ignored if VM templating is enabled.
-file_mem_backend = "@DEFFILEMEMBACKEND@"
-
-# List of valid annotations values for the file_mem_backend annotation
-# The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
-valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]
@@ -594,6 +588,29 @@ dial_timeout = @DEFAULTTIMEOUT_NV@
 # to collect evidence during initialization.
 # (agent default when unset: 6)
 launch_process_timeout = @DEFAULTLAUNCHPROCESSTIMEOUT_NV@
+
+# If enabled, the agent translates a container's VISIBLE_CDI_DEVICES
+# environment variable into CDI GPU device requests (nvidia.com/gpu), resolved
+# against the GPUs present in the VM via the CDI spec generated in the guest at
+# /var/run/cdi/. The format of VISIBLE_CDI_DEVICES is:
+#
+#   <cdi-kind>=<devices>[:<cdi-kind>=<devices>[...]]
+#
+# For example, you may set something like:
+#
+#   VISIBLE_CDI_DEVICES="nvidia.com/gpu=all:nvidia.com/ib=0,1"
+#
+# The devices can be referenced by explicit CDI index or through the "all"
+# keyword.
+#
+# This parameter is useful in the case where multiple containers in a pod need
+# access to the same GPU and do not want to request additional GPUs from the
+# outer runtime. This is especially useful with GPU observability where one
+# workload container performs the CDI request to the outer runtime, and the
+# sidecar observability containers would get access to the same resources by
+# setting VISIBLE_CDI_DEVICES="nvidia.com/gpu=all".
+# (default: false)
+visible_cdi_devices = false
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

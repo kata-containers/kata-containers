@@ -98,6 +98,33 @@ CHART_PATH="$(get_chart_path)"
 	! grep -q "CUSTOM_RUNTIMES_ENABLED" /tmp/rendered.yaml
 }
 
+@test "Helm template: Default runtime drop-in works without custom runtimes" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+customRuntimes:
+  enabled: false
+shims:
+  qemu:
+    dropIn: |
+      [agent.kata]
+      dial_timeout = 999
+EOF
+
+	helm template kata-deploy "${CHART_PATH}" \
+		-f "${values_file}" \
+		--set image.reference=quay.io/kata-containers/kata-deploy \
+		--set image.tag=latest \
+		> /tmp/rendered.yaml
+	rm -f "${values_file}"
+
+	grep -q "kata-deploy-custom-configs" /tmp/rendered.yaml
+	grep -q "dropin-qemu.toml" /tmp/rendered.yaml
+	grep -q "dial_timeout = 999" /tmp/rendered.yaml
+	grep -q "mountPath: /custom-configs/" /tmp/rendered.yaml
+	! grep -q "CUSTOM_RUNTIMES_ENABLED" /tmp/rendered.yaml
+}
+
 @test "Helm template: Custom runtimes only mode (no standard shims)" {
 	# Test that Helm chart renders correctly when all standard shims are disabled
 	# using shims.disableAll and only custom runtimes are enabled

@@ -914,7 +914,7 @@ impl AgentPolicy {
             &self.config_maps,
             &self.secrets,
             namespace,
-            resource.get_annotations(),
+            resource,
             service_account_name,
         );
         debug!(

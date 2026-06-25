@@ -1,0 +1,69 @@
+{{- if .Values.monitor.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/name: kata-monitor
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: kata-monitor
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kata-monitor
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kata-monitor
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        prometheus.io/scrape: "true"
+    spec:
+{{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 6 }}
+{{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with .Values.tolerations }}
+      tolerations:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+{{- end }}
+      containers:
+      - name: kata-monitor
+        image: {{ include "kata-deploy.monitorImage" . }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+{{- toYaml .Values.monitor.securityContext | nindent 10 }}
+        args:
+          - -listen-address={{ .Values.monitor.listenAddress }}
+          - -log-level={{ .Values.monitor.logLevel }}
+          - -runtime-endpoint={{ .Values.monitor.runtimeEndpoint }}
+        ports:
+          - containerPort: {{ .Values.monitor.port }}
+        resources:
+{{- toYaml .Values.monitor.resources | nindent 10 }}
+        volumeMounts:
+        - name: containerd-sock
+          mountPath: /run/containerd
+          readOnly: true
+        - name: sbs
+          mountPath: /run/vc/sbs/
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd
+          type: Directory
+      - name: sbs
+        hostPath:
+          path: /run/vc/sbs/
+          type: DirectoryOrCreate
+{{- end }}

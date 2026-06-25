@@ -10,7 +10,7 @@
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
     os::unix::{
-        io::{AsRawFd, FromRawFd, RawFd},
+        io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
         net::UnixStream,
     },
     time::Duration,
@@ -211,7 +211,7 @@ impl SockHandler for VsockConfig {
 
         // Wrap the socket fd in UnixStream, so that it is closed
         // when anything fails.
-        let stream = unsafe { UnixStream::from_raw_fd(vsock_fd) };
+        let stream = unsafe { UnixStream::from_raw_fd(vsock_fd.into_raw_fd()) };
         // Connect the socket to vsock server.
         connect(stream.as_raw_fd(), &sock_addr)
             .with_context(|| format!("failed to connect to server {:?}", &sock_addr))?;

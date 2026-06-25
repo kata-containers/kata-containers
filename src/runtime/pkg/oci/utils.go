@@ -320,7 +320,62 @@ func checkAnnotationNameIsValid(list []string, name string, prefix string) bool 
 	return true
 }
 
-func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
+// deviceCgroupAccessIsReadOnly derives a device's read-only intent from the
+// cgroup device access rules. Block-mode volumes (e.g. Kubernetes
+// volumeDevices) are passed as device nodes in spec.Linux.Devices and carry no
+// mount "ro" option; their read-only intent is expressed solely through the
+// cgroup device access in spec.Linux.Resources.Devices ("rm" = read+mknod, no
+// write, for read-only; "rwm" for read-write).
+//
+// The allow rule that exactly matches the device (type and exact major/minor)
+// decides: the device is read-only when that rule grants access without the
+// write ("w") bit. Wildcard rules (nil major/minor) describe broad device
+// classes and are ignored so they cannot override a specific device's access.
+// If no exact rule matches, the device is left read-write, preserving the
+// previous behavior.
+func deviceCgroupAccessIsReadOnly(resources *specs.LinuxResources, devType string, major, minor int64) bool {
+	if resources == nil {
+		return false
+	}
+
+	for _, r := range resources.Devices {
+		if !r.Allow {
+			continue
+		}
+		if r.Major == nil || r.Minor == nil {
+			continue
+		}
+		if *r.Major != major || *r.Minor != minor {
+			continue
+		}
+		if r.Type != "" && r.Type != "a" && r.Type != devType {
+			continue
+		}
+
+		return !strings.Contains(r.Access, "w")
+	}
+
+	return false
+}
+
+// blockDeviceReadOnlyProbe reports whether the host block device identified by
+// major:minor advertises the read-only flag (BLKROGET). It is a package
+// variable so tests can stub the host probe. The default implementation does a
+// best-effort probe of /dev/block/<major>:<minor> (the canonical sysfs-backed
+// node that always exists for a registered block device); any failure is logged
+// and treated as not-read-only so it can never flip a positive signal back.
+var blockDeviceReadOnlyProbe = func(major, minor int64) bool {
+	path := fmt.Sprintf("/dev/block/%d:%d", major, minor)
+	ro, err := config.BlockDeviceIsReadOnly(path)
+	if err != nil {
+		ociLog.WithError(err).WithField("device", path).
+			Warn("could not query block device read-only flag")
+		return false
+	}
+	return ro
+}
+
+func newLinuxDeviceInfo(d specs.LinuxDevice, resources *specs.LinuxResources) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
 	if !contains(allowedDeviceTypes, d.Type) {
@@ -331,11 +386,22 @@ func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
 		return nil, fmt.Errorf("Path cannot be empty for device")
 	}
 
+	// Read-only intent comes from the cgroup device access rule. For block
+	// devices, also honor the host device's own read-only flag (BLKROGET):
+	// block-mode volumes frequently carry no read-only signal in the OCI spec,
+	// so the device flag is the only reliable source. Either signal being
+	// positive marks the device read-only.
+	readOnly := deviceCgroupAccessIsReadOnly(resources, d.Type, d.Major, d.Minor)
+	if !readOnly && d.Type == "b" {
+		readOnly = blockDeviceReadOnlyProbe(d.Major, d.Minor)
+	}
+
 	deviceInfo := config.DeviceInfo{
 		ContainerPath: d.Path,
 		DevType:       d.Type,
 		Major:         d.Major,
 		Minor:         d.Minor,
+		ReadOnly:      readOnly,
 	}
 	if d.UID != nil {
 		deviceInfo.UID = *d.UID
@@ -359,9 +425,14 @@ func containerDeviceInfos(spec specs.Spec) ([]config.DeviceInfo, error) {
 		return []config.DeviceInfo{}, nil
 	}
 
+	var resources *specs.LinuxResources
+	if spec.Linux != nil {
+		resources = spec.Linux.Resources
+	}
+
 	var devices []config.DeviceInfo
 	for _, d := range ociLinuxDevices {
-		linuxDeviceInfo, err := newLinuxDeviceInfo(d)
+		linuxDeviceInfo, err := newLinuxDeviceInfo(d, resources)
 		if err != nil {
 			return []config.DeviceInfo{}, err
 		}
@@ -750,13 +821,6 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.FileBackedMemRootList, value) {
-			return fmt.Errorf("file_mem_backend value %v required from annotation is not valid", value)
-		}
-		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
-	}
-
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ReclaimGuestFreedMemory).setBool(func(reclaimGuestFreedMemory bool) {
 		sbConfig.HypervisorConfig.ReclaimGuestFreedMemory = reclaimGuestFreedMemory
 	}); err != nil {
@@ -794,11 +858,15 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 	}
 
 	if annotation, ok := ocispec.Annotations[vcAnnotations.NUMAMapping]; ok {
-		guestNUMANodes, err := vcutils.GetGuestNUMANodes(strings.Fields(annotation))
+		mapping := strings.Fields(annotation)
+		guestNUMANodes, err := vcutils.GetGuestNUMANodes(mapping)
 		if err != nil {
 			return err
 		}
 		sbConfig.HypervisorConfig.GuestNUMANodes = guestNUMANodes
+		// Record the raw user-provided mapping so the hypervisor
+		// backend honors it verbatim instead of right-sizing.
+		sbConfig.HypervisorConfig.NUMAMapping = mapping
 	}
 
 	return nil
@@ -1457,7 +1525,7 @@ func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) err
 // be added to the VM if sandbox annotations are provided with this sizing details
 func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
-	var period uint64
+	var shares, period uint64
 	var err error
 
 	if spec == nil || spec.Annotations == nil {
@@ -1488,6 +1556,15 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUShares]
+	if ok {
+		shares, err = strconv.ParseUint(annotation, 10, 64)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUShares: %s", annotation)
+			shares = 0
+		}
+	}
+
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
 		memory, err = strconv.ParseInt(annotation, 10, 64)
@@ -1497,7 +1574,23 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
-	return calculateVMResources(period, quota, memory)
+	numCPU, memSizeMB = calculateVMResources(period, quota, memory)
+
+	// When cpuManagerPolicy=static is in use, kubelet sets quota=-1
+	// (unconstrained) and assigns CPUs via cpuset instead. In that case
+	// we derive the CPU count from the CPU shares (1024 shares per CPU).
+	//
+	// We must gate this on quota being explicitly unconstrained (< 0)
+	// rather than on numCPU == 0: a quota of 0 (or absent) means a
+	// BestEffort sandbox with no CPU request, which has to contribute 0
+	// vCPUs. Such a sandbox still carries the cgroup-floor shares value
+	// (2), and deriving from it would inflate every sandbox by one vCPU
+	// (e.g. peer-pods would boot default_vcpus+1).
+	if quota < 0 && numCPU == 0 && shares > 0 {
+		numCPU = float32(math.Ceil(float64(shares) / 1024.0))
+	}
+
+	return numCPU, memSizeMB
 }
 
 // CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed

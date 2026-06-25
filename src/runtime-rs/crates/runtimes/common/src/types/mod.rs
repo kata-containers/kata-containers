@@ -233,6 +233,7 @@ pub struct SandboxStatus {
     pub pid: u32,
     pub state: String,
     pub info: std::collections::HashMap<String, String>,
+    pub created_at: Option<std::time::SystemTime>,
 }
 
 #[derive(Debug, Clone)]

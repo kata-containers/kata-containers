@@ -65,13 +65,23 @@ pub(crate) async fn setup_virtio_fs(
     std::fs::create_dir_all(&host_path).context("virtio-fs:: failed to create root path")?;
 
     // plugin the device
+    // Use queue size and num from hypervisor config, with fallback to sensible defaults
+    // if not configured (e.g., 1024 queue size, 1 queue as per previous CH defaults)
+    let queue_size: u64 = if shared_fs_info.virtio_fs_queue_size > 0 {
+        shared_fs_info.virtio_fs_queue_size as u64
+    } else {
+        1024 // Default queue size matching previous CH behavior
+    };
+
+    let queue_num: u64 = 1; // Default to 1 queue (previous CH default)
+
     let share_fs_config = ShareFsConfig {
         host_shared_path: host_path.clone(),
         sock_path: generate_sock_path(&host_path),
         mount_tag: String::from(MOUNT_GUEST_TAG),
         fs_type: VIRTIO_FS.to_string(),
-        queue_size: 0,
-        queue_num: 0,
+        queue_size,
+        queue_num,
         options: vec![],
         mount_config: None,
     };
@@ -104,8 +114,6 @@ fn virtiofsd_args(cfg: SharedFsInfo, shared_dir: &str, sock_path: &str) -> Resul
         String::from(shared_dir),
         String::from("--cache"),
         cfg.virtio_fs_cache.clone(),
-        String::from("--sandbox"),
-        String::from("none"),
     ];
 
     if !cfg.virtio_fs_extra_args.is_empty() {

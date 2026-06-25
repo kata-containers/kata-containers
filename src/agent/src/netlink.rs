@@ -3,20 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(not(target_arch = "s390x"))]
+use crate::linux_abi::{create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR};
+#[cfg(not(target_arch = "s390x"))]
+use crate::{device::pcipath_to_sysfs, pci};
 use anyhow::{anyhow, Context, Result};
-use futures::{future, StreamExt, TryStreamExt};
+use futures::{future, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use netlink_packet_route::link::{LinkAttribute, LinkMessage};
-use netlink_packet_route::neighbour::{self, NeighbourFlag};
+use netlink_packet_route::neighbour::NeighbourFlag;
 use netlink_packet_route::route::{RouteFlag, RouteHeader, RouteProtocol, RouteScope, RouteType};
 use netlink_packet_route::{
     address::{AddressAttribute, AddressMessage},
     route::RouteMetric,
 };
 use netlink_packet_route::{
-    neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourState},
+    neighbour::NeighbourState,
     route::{RouteAddress, RouteAttribute, RouteMessage},
-    AddressFamily,
 };
 use nix::errno::Errno;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
@@ -226,6 +229,60 @@ impl Handle {
         let link = self.find_link(LinkFilter::Name("lo")).await?;
         self.enable_link(link.index(), true).await?;
         Ok(())
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    pub fn netdev_name_from_pci_path(&self, dev_tree_path: &str) -> Result<Option<String>> {
+        let (root_complex, pcipath) = pcipath_from_dev_tree_path(dev_tree_path)
+            .with_context(|| format!("invalid PCI path for network interface: {dev_tree_path}"))?;
+        let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
+        let sysfs_rel_path = pcilib_to_sysfs_path(&root_bus_sysfs, &pcipath)?;
+        let net_dir = format!("{root_bus_sysfs}{sysfs_rel_path}/net");
+
+        let mut entries = match fs::read_dir(&net_dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e).with_context(|| format!("failed to read net dir {net_dir}")),
+        };
+
+        if let Some(entry) = entries.next() {
+            let entry = entry.with_context(|| format!("failed to read entry under {net_dir}"))?;
+            let name = entry.file_name().into_string().map_err(|non_utf8| {
+                anyhow!("non-UTF8 netdev name under {}: {:?}", net_dir, non_utf8)
+            })?;
+            return Ok(Some(name));
+        }
+
+        Ok(None)
+    }
+
+    #[cfg(not(target_arch = "s390x"))]
+    pub async fn set_link_mac_by_name(&self, ifname: &str, mac: &str) -> Result<String> {
+        let link = self.find_link(LinkFilter::Name(ifname)).await?;
+        let prev_mac = link.address();
+        if prev_mac.eq_ignore_ascii_case(mac) {
+            return Ok(prev_mac);
+        }
+
+        let parsed_mac = parse_mac_address(mac)
+            .with_context(|| format!("failed to parse MAC address: {mac}"))?;
+        if link.is_up() {
+            self.enable_link(link.index(), false).await?;
+        }
+
+        let mut request = self.handle.link().set(link.index());
+        request.message_mut().header = link.header.clone();
+        request
+            .address(parsed_mac.to_vec())
+            .execute()
+            .await
+            .with_context(|| format!("failed to set MAC for interface {} to {}", ifname, mac))?;
+
+        if link.is_up() {
+            self.enable_link(link.index(), true).await?;
+        }
+
+        Ok(prev_mac)
     }
 
     /// Retireve available network interfaces.
@@ -510,7 +567,7 @@ impl Handle {
 
                 if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
                     if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
+                        if Errno::from_raw(code.get()) != Errno::EEXIST {
                             return Err(anyhow!(
                                 "Failed to add IP v6 route (src: {}, dst: {}, gtw: {},Err: {})",
                                 route.source(),
@@ -554,7 +611,7 @@ impl Handle {
 
                 if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
                     if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
+                        if Errno::from_raw(code.get()) != Errno::EEXIST {
                             return Err(anyhow!(
                                 "Failed to add IP v4 route (src: {}, dst: {}, gtw: {},Err: {})",
                                 route.source(),
@@ -641,20 +698,6 @@ impl Handle {
         let ip = IpAddr::from_str(ip_address)
             .map_err(|e| anyhow!("Failed to parse IP {}: {:?}", ip_address, e))?;
 
-        // Import rtnetlink objects that make sense only for this function
-        use libc::{NDA_UNSPEC, NLM_F_ACK, NLM_F_CREATE, NLM_F_REPLACE, NLM_F_REQUEST};
-        use neighbour::{NeighbourHeader, NeighbourMessage};
-        use netlink_packet_core::{NetlinkMessage, NetlinkPayload};
-        use netlink_packet_route::RouteNetlinkMessage as RtnlMessage;
-        use rtnetlink::Error;
-
-        const IFA_F_PERMANENT: u16 = 0x80; // See https://github.com/little-dude/netlink/blob/0185b2952505e271805902bf175fee6ea86c42b8/netlink-packet-route/src/rtnl/constants.rs#L770
-        let state = if neigh.state != 0 {
-            neigh.state as u16
-        } else {
-            IFA_F_PERMANENT
-        };
-
         let link = self.find_link(LinkFilter::Name(&neigh.device)).await?;
 
         let mut flags = Vec::new();
@@ -663,46 +706,29 @@ impl Handle {
                 flags.push(flag);
             }
         }
-
-        let mut message = NeighbourMessage::default();
-
-        message.header = NeighbourHeader {
-            family: match ip {
-                IpAddr::V4(_) => AddressFamily::Inet,
-                IpAddr::V6(_) => AddressFamily::Inet6,
-            },
-            ifindex: link.index(),
-            state: NeighbourState::from(state),
-            flags,
-            kind: RouteType::from(NDA_UNSPEC as u8),
+        let state = if neigh.state == 0 {
+            NeighbourState::Permanent
+        } else {
+            (neigh.state as u16).into()
         };
-
-        let mut nlas = vec![NeighbourAttribute::Destination(match ip {
-            IpAddr::V4(ipv4_addr) => NeighbourAddress::from(ipv4_addr),
-            IpAddr::V6(ipv6_addr) => NeighbourAddress::from(ipv6_addr),
-        })];
-
+        let mut req = self
+            .handle
+            .neighbours()
+            .add(link.index(), ip)
+            .state(state)
+            .flags(flags)
+            .replace();
         if !neigh.lladdr.is_empty() {
-            nlas.push(NeighbourAttribute::LinkLocalAddress(
-                parse_mac_address(&neigh.lladdr)?.to_vec(),
-            ));
+            let lladdr = parse_mac_address(&neigh.lladdr).context("parsing lladdr")?;
+            req = req.link_local_address(&lladdr);
         }
-
-        message.attributes = nlas;
-
-        // Send request and ACK
-        let mut req = NetlinkMessage::from(RtnlMessage::NewNeighbour(message));
-        req.header.flags = (NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_REPLACE) as u16;
-
-        let mut response = self.handle.request(req)?;
-        while let Some(message) = response.next().await {
-            if let NetlinkPayload::Error(err) = message.payload {
-                return Err(anyhow!(Error::NetlinkError(err)));
-            }
-        }
-
-        Ok(())
+        req.execute().await.context("executing NeighbourAddRequest")
     }
+}
+
+#[cfg(not(target_arch = "s390x"))]
+fn pcilib_to_sysfs_path(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+    pcipath_to_sysfs(root_bus_sysfs, pcipath)
 }
 
 fn format_address(data: &[u8]) -> Result<String> {

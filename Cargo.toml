@@ -2,7 +2,7 @@
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.88"
+rust-version = "1.94"
 
 [workspace]
 members = [
@@ -11,6 +11,7 @@ members = [
   "src/libs/kata-types",
   "src/libs/logging",
   "src/libs/mem-agent",
+  "src/libs/pod-resources-rs",
   "src/libs/protocols",
   "src/libs/runtime-spec",
   "src/libs/safe-path",
@@ -34,22 +35,21 @@ members = [
   "src/dragonball/dbs_interrupt",
   "src/dragonball/dbs_legacy_devices",
   "src/dragonball/dbs_pci",
-  "src/dragonball/dbs_tdx",
   "src/dragonball/dbs_upcall",
   "src/dragonball/dbs_utils",
   "src/dragonball/dbs_virtio_devices",
 
-  # genpolicy
+  # tools
+  "src/tools/agent-ctl",
   "src/tools/genpolicy",
-
-  # kata-ctl
   "src/tools/kata-ctl",
-
-  # trace-forwarder
   "src/tools/trace-forwarder",
 
   # kata-deploy (Kubernetes installer binary)
   "tools/packaging/kata-deploy/binary",
+
+  # kata-deploy-job-dispatcher (generic per-node Job dispatcher)
+  "tools/packaging/kata-deploy/job-dispatcher",
 
   # runtime-rs
   "src/runtime-rs",
@@ -73,6 +73,16 @@ exclude = [
   # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
   # those packages to think they are part of the kata root workspace
   "tools/packaging/kata-deploy/local-build/build",
+
+  # Exclude vendor directories created by cargo vendor
+  "vendor",
+  "src/agent/vendor",
+  "src/runtime-rs/vendor",
+  "src/tools/agent-ctl/vendor",
+  "src/tools/genpolicy/vendor",
+  "src/tools/kata-ctl/vendor",
+  "src/tools/trace-forwarder/vendor",
+  "tools/packaging/kata-deploy/binary/vendor",
 ]
 
 [workspace.dependencies]
@@ -82,8 +92,8 @@ kvm-bindings = "0.14.0"
 kvm-ioctls = "0.24.0"
 linux-loader = "0.13.0"
 seccompiler = "0.5.0"
-vfio-bindings = "0.6.1"
-vfio-ioctls = "0.5.0"
+vfio-bindings = "0.6.2"
+vfio-ioctls = "0.6.0"
 virtio-bindings = "0.2.0"
 virtio-queue = "0.17.0"
 vm-fdt = "0.3.0"
@@ -102,7 +112,6 @@ dbs-device = { path = "src/dragonball/dbs_device" }
 dbs-interrupt = { path = "src/dragonball/dbs_interrupt" }
 dbs-legacy-devices = { path = "src/dragonball/dbs_legacy_devices" }
 dbs-pci = { path = "src/dragonball/dbs_pci" }
-dbs-tdx = { path = "src/dragonball/dbs_tdx" }
 dbs-upcall = { path = "src/dragonball/dbs_upcall" }
 dbs-utils = { path = "src/dragonball/dbs_utils" }
 dbs-virtio-devices = { path = "src/dragonball/dbs_virtio_devices" }
@@ -123,6 +132,7 @@ wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
 
 # Local dependencies from `src/lib`
 kata-sys-util = { path = "src/libs/kata-sys-util" }
+pod-resources-rs = { path = "src/libs/pod-resources-rs" }
 kata-types = { path = "src/libs/kata-types", features = ["safe-path"] }
 logging = { path = "src/libs/logging" }
 mem-agent = { path = "src/libs/mem-agent" }
@@ -140,6 +150,7 @@ vsock-exporter = { path = "src/agent/vsock-exporter" }
 # Outside dependencies
 actix-rt = "2.7.0"
 anyhow = "1.0"
+base64 = "0.22"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
 bilge = "0.3.0"
@@ -164,7 +175,7 @@ netlink-packet-route = "0.19.0"
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
-nix = "0.26.4"
+nix = { version = "0.31.3", features = ["fs", "mount", "sched", "process", "ioctl", "signal", "socket", "feature", "user", "hostname", "term", "event", "mman", "reboot"] }
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
 procfs = "0.12.0"
@@ -186,9 +197,11 @@ slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
+tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "1.0.26"
 tokio = "1.46.1"
+tokio-util = "0.7.17"
 tokio-vsock = "0.3.4"
 toml = "0.5.8"
 tracing = "0.1.44"
@@ -197,3 +210,14 @@ tracing-subscriber = "0.3.20"
 ttrpc = "0.8.4"
 url = "2.5.4"
 which = "4.3.0"
+gpt = "4.1.0"
+
+# Per-package release profile overrides for kata-deploy. The kata-deploy
+# binary runs once at pod start and then idles waiting for SIGTERM, so we
+# size-optimise it (opt-level = "z") and keep codegen-units = 1 to give
+# the optimiser the whole picture. These overrides only affect the
+# kata-deploy crate; agent / runtime-rs / dragonball compile with their
+# usual defaults.
+[profile.release.package."kata-deploy"]
+opt-level = "z"
+codegen-units = 1

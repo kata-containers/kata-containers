@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,13 +49,17 @@ func newQemuConfig() HypervisorConfig {
 	}
 }
 
-func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool) {
+func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool, confidentialGuest bool) {
 	qemuConfig := newQemuConfig()
 	qemuConfig.KernelParams = kernelParams
 	assert := assert.New(t)
 
-	if debug == true {
+	if debug {
 		qemuConfig.Debug = true
+	}
+
+	if confidentialGuest {
+		qemuConfig.ConfidentialGuest = true
 	}
 
 	q := &qemu{
@@ -66,7 +72,6 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
@@ -78,8 +83,18 @@ func TestQemuKernelParameters(t *testing.T) {
 		},
 	}
 
-	testQemuKernelParameters(t, params, expectedOut, true)
-	testQemuKernelParameters(t, params, expectedOut, false)
+	t.Run("NonConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is included for non-confidential guests
+		expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
+		testQemuKernelParameters(t, params, expectedOut, true, false)
+		testQemuKernelParameters(t, params, expectedOut, false, false)
+	})
+
+	t.Run("ConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is omitted for confidential guests (CPU hotplug not applicable)
+		expectedOut := "panic=1 selinux=0 foo=foo bar=bar"
+		testQemuKernelParameters(t, params, expectedOut, false, true)
+	})
 }
 
 func TestQemuCreateVM(t *testing.T) {
@@ -136,10 +151,6 @@ func TestQemuCreateVM(t *testing.T) {
 	config12.BootToBeTemplate = true
 	config12.SharedFS = config.VirtioFS
 
-	config13 := newQemuConfig()
-	config13.FileBackedMemRootDir = "/tmp/xyzabc"
-	config13.HugePages = true
-
 	config14 := newQemuConfig()
 	config14.SharedFS = config.VirtioFS
 
@@ -170,7 +181,6 @@ func TestQemuCreateVM(t *testing.T) {
 		{config10, false, true},
 		{config11, false, true},
 		{config12, true, false},
-		{config13, false, true},
 		{config14, false, true},
 		{config15, false, true},
 		{config16, false, true},
@@ -283,7 +293,7 @@ func TestQemuCPUTopology(t *testing.T) {
 		MaxCPUs: uint32(vcpus),
 	}
 
-	smp := q.cpuTopology()
+	smp := q.cpuTopology(0)
 	assert.Exactly(smp, expectedOut)
 }
 
@@ -629,25 +639,8 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 
-	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+	expectErr := errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
 	assert.Equal(expectErr.Error(), err.Error())
-
-	// Check Setting of non-existent shared-mem path
-	sandbox, err = createQemuSandboxConfig()
-	assert.NoError(err)
-
-	q = &qemu{
-		config: HypervisorConfig{
-			VMStorePath:  sandbox.store.RunVMStoragePath(),
-			RunStorePath: sandbox.store.RunStoragePath(),
-		},
-	}
-	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
-	assert.NoError(err)
-	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
-	assert.Equal(q.qemuConfig.Knobs.MemShared, false)
-	assert.Equal(q.qemuConfig.Memory.Path, "")
 
 	// Check setting vhost-user storage with Hugepages
 	sandbox, err = createQemuSandboxConfig()
@@ -1199,4 +1192,678 @@ func TestResizeMemoryVirtioMemNegativeSize(t *testing.T) {
 	assert.Equal(MemoryDevice{}, memDev)
 	// State should remain unchanged
 	assert.Equal(100, q.state.HotpluggedMemory)
+}
+
+func TestNumaPlacementActive(t *testing.T) {
+	assert := assert.New(t)
+	cases := []struct {
+		name  string
+		nodes []types.GuestNUMANode
+		want  bool
+	}{
+		{"empty", nil, false},
+		{"single-node-no-binding", []types.GuestNUMANode{{}}, false},
+		{"single-node-host-0", []types.GuestNUMANode{{HostNodes: "0"}}, true},
+		{"single-node-host-1", []types.GuestNUMANode{{HostNodes: "1"}}, true},
+		{"single-node-host-range", []types.GuestNUMANode{{HostNodes: "0-1"}}, true},
+		{"two-nodes", []types.GuestNUMANode{{HostNodes: "0"}, {HostNodes: "1"}}, true},
+	}
+	for _, c := range cases {
+		assert.Equal(c.want, numaPlacementActive(c.nodes), c.name)
+	}
+}
+
+func TestBuildNUMATopologySingleNode(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// A single guest node mapped to a specific host node (e.g. produced
+	// by maybeRightSizeAutoNUMA() collapsing a multi-node sandbox to the
+	// GPU's host NUMA node) must still emit a one-node topology so that
+	// the memory backend gets a host-nodes= binding.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 1)
+	assert.Equal(uint32(0), nodes[0].NodeID)
+	assert.Equal("0-3", nodes[0].CPUs)
+	assert.Equal("1024M", nodes[0].MemSize)
+	assert.Equal("0", nodes[0].HostNodes)
+	assert.Equal("memory-backend-ram", nodes[0].MemBackendType)
+}
+
+func TestBuildNUMATopologySingleNodeNoHostBinding(t *testing.T) {
+	// A single guest node without a HostNodes value carries no NUMA
+	// binding intent; buildNUMATopology() must return nil so that the
+	// QEMU command line falls through to the flat memdev path.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "", HostCPUs: "0-3"},
+			},
+		},
+	}
+	nodes, dists, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Nil(nodes)
+	assert.Nil(dists)
+}
+
+func TestBuildNUMATopologySingleNodeExplicitNonZeroHost(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// User explicitly mapped the only guest node to a non-zero host node
+	// (e.g. numa_mapping = ["1"]).  buildNUMATopology() must propagate
+	// HostNodes verbatim so the memory backend ends up bound to host
+	// node 1 rather than the default node 0.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			NUMAMapping:     []string{"1"},
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "1", HostCPUs: "0-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 1)
+	assert.Equal(uint32(0), nodes[0].NodeID)
+	assert.Equal("1", nodes[0].HostNodes)
+}
+
+func TestBuildNUMATopologyExplicitRangedHostNodes(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	// User explicitly mapped two guest nodes to disjoint host-node ranges
+	// (e.g. numa_mapping = ["0-1", "2-3"]).  buildNUMATopology() must
+	// preserve the ranged HostNodes strings on each emitted NUMANode.
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 8,
+			MemorySize:      2048,
+			NUMAMapping:     []string{"0-1", "2-3"},
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0-1", HostCPUs: "0-3"},
+				{HostNodes: "2-3", HostCPUs: "4-7"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	assert.Equal("0-1", nodes[0].HostNodes)
+	assert.Equal("2-3", nodes[1].HostNodes)
+}
+
+func TestBuildNUMATopologyTwoNodes(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+
+	assert.Equal(uint32(0), nodes[0].NodeID)
+	assert.Equal("0-1", nodes[0].CPUs)
+	assert.Equal("512M", nodes[0].MemSize)
+	assert.Equal("memory-backend-ram", nodes[0].MemBackendType)
+
+	assert.Equal(uint32(1), nodes[1].NodeID)
+	assert.Equal("2-3", nodes[1].CPUs)
+	assert.Equal("512M", nodes[1].MemSize)
+}
+
+func TestBuildNUMATopologyHugePages(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	if _, err := os.Stat("/dev/hugepages"); err != nil {
+		t.Skip("skipping: /dev/hugepages not available")
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			HugePages:       true,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	assert.Equal("memory-backend-file", nodes[0].MemBackendType)
+	assert.Equal("/dev/hugepages", nodes[0].MemBackendPath)
+	assert.Equal("512M", nodes[0].MemSize)
+}
+
+func TestBuildNUMATopologyVirtioFS(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1024,
+			SharedFS:        config.VirtioFS,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-3"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	assert.Equal("memory-backend-file", nodes[0].MemBackendType)
+	assert.Equal(fallbackFileBackedMemDir, nodes[0].MemBackendPath)
+}
+
+func TestBuildNUMATopologyTooFewVCPUs(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 1,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0"},
+				{HostNodes: "1", HostCPUs: "1"},
+			},
+		},
+	}
+	nodes, dists, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Nil(nodes)
+	assert.Nil(dists)
+}
+
+func TestBuildNUMATopologyUnevenVCPUs(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 5,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-4"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	// cpuTopology() rounds MaxCPUs to ceil(5/2)*2=6, so 6 CPU slots
+	// are distributed proportionally: 2 host CPUs → 2 vCPUs,
+	// 3 host CPUs → 4 vCPUs (3 proportional + 1 remainder).
+	assert.Equal("0-1", nodes[0].CPUs)
+	assert.Equal("2-5", nodes[1].CPUs)
+}
+
+func TestBuildNUMATopologyUnevenVCPUsConfidentialGuest(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	// Mirror TestBuildNUMATopologyUnevenVCPUs but with confidentialGuest=true.
+	// Without the fix, maxVCPUs=ceil(5/2)*2=6 would assign cpus=2-5 to node 1
+	// while QEMU infers maxcpus=5, making index 5 out of range.
+	// With the fix, maxVCPUs=5 and node 1 gets cpus=2-4.
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs:   5,
+			MemorySize:        1024,
+			ConfidentialGuest: true,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-4"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	// 5 vCPUs distributed proportionally: 2 host CPUs → 2 vCPUs, 3 → 3.
+	// All indices within [0, 4] — no index ≥ maxcpus(5).
+	assert.Equal("0-1", nodes[0].CPUs)
+	assert.Equal("2-4", nodes[1].CPUs)
+}
+
+func TestBuildNUMATopologyMemMisaligned(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 4,
+			MemorySize:      1,
+			HugePages:       true,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-3"},
+			},
+		},
+	}
+	_, _, err := q.buildNUMATopology()
+	assert.Error(err)
+	assert.Contains(err.Error(), "cannot be evenly distributed")
+}
+
+func TestBuildNUMATopologyMemMisalignedRemainder(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 6,
+			MemorySize:      1025,
+			HugePages:       true,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-2"},
+				{HostNodes: "1", HostCPUs: "3-5"},
+			},
+		},
+	}
+	_, _, err := q.buildNUMATopology()
+	assert.Error(err)
+	assert.Contains(err.Error(), "cannot be evenly distributed")
+}
+
+func TestBuildNUMATopologyEvenMemory(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 6,
+			MemorySize:      1024,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-2"},
+				{HostNodes: "1", HostCPUs: "3-5"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+
+	assert.Equal("0-2", nodes[0].CPUs)
+	assert.Equal("512M", nodes[0].MemSize)
+
+	assert.Equal("3-5", nodes[1].CPUs)
+	assert.Equal("512M", nodes[1].MemSize)
+}
+
+func TestBuildNUMATopologyProportionalVCPUs(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 10,
+			MemorySize:      1000,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-7"},
+				{HostNodes: "1", HostCPUs: "8-9"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	// 8 out of 10 host CPUs on node 0 → 8 vCPUs
+	assert.Equal("0-7", nodes[0].CPUs)
+	assert.Equal("800M", nodes[0].MemSize)
+	// 2 out of 10 host CPUs on node 1 → 2 vCPUs
+	assert.Equal("8-9", nodes[1].CPUs)
+	assert.Equal("200M", nodes[1].MemSize)
+}
+
+func TestBuildCoveredHostNodes(t *testing.T) {
+	assert := assert.New(t)
+
+	covered := buildCoveredHostNodes([]types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	})
+	assert.Len(covered, 2)
+	assert.Equal(uint32(0), covered[0])
+	assert.Equal(uint32(1), covered[1])
+}
+
+func TestBuildCoveredHostNodesRange(t *testing.T) {
+	assert := assert.New(t)
+
+	covered := buildCoveredHostNodes([]types.GuestNUMANode{
+		{HostNodes: "0-1", HostCPUs: "0-7"},
+	})
+	assert.Len(covered, 2)
+	assert.Equal(uint32(0), covered[0])
+	assert.Equal(uint32(0), covered[1])
+}
+
+func TestBuildCoveredHostNodesEmpty(t *testing.T) {
+	assert := assert.New(t)
+
+	covered := buildCoveredHostNodes(nil)
+	assert.Len(covered, 0)
+}
+
+func TestBuildCoveredHostNodesInvalidParse(t *testing.T) {
+	assert := assert.New(t)
+
+	covered := buildCoveredHostNodes([]types.GuestNUMANode{
+		{HostNodes: "invalid", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	})
+	assert.Len(covered, 1)
+	assert.Equal(uint32(1), covered[1])
+}
+
+// silentLogger returns a logrus.Entry that discards all output, suitable
+// for use in unit tests that exercise NUMA right-sizing decisions.
+func silentLogger() *logrus.Entry {
+	l := logrus.New()
+	l.Out = io.Discard
+	return logrus.NewEntry(l)
+}
+
+// fakeCapFn returns a hostNUMACapFn backed by a static map. Unknown nodes
+// produce an error so we exercise the "skip unknown" branch in
+// sumNUMACapacity when intended.
+func fakeCapFn(caps map[int]struct {
+	cpus  int
+	memMB uint64
+}) hostNUMACapFn {
+	return func(nodeID int) (int, uint64, error) {
+		if c, ok := caps[nodeID]; ok {
+			return c.cpus, c.memMB, nil
+		}
+		return 0, 0, fmt.Errorf("unknown host NUMA node %d", nodeID)
+	}
+}
+
+// twoNodeHostCaps describes a typical 2-socket host: 32 CPUs and 128 GiB
+// per node.
+func twoNodeHostCaps() map[int]struct {
+	cpus  int
+	memMB uint64
+} {
+	return map[int]struct {
+		cpus  int
+		memMB uint64
+	}{
+		0: {cpus: 32, memMB: 128 * 1024},
+		1: {cpus: 32, memMB: 128 * 1024},
+	}
+}
+
+func twoNodeAutoTopology() []types.GuestNUMANode {
+	return []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-31"},
+		{HostNodes: "1", HostCPUs: "32-63"},
+	}
+}
+
+func TestSumNUMACapacity(t *testing.T) {
+	assert := assert.New(t)
+
+	cpus, memMB := sumNUMACapacity(twoNodeAutoTopology(), fakeCapFn(twoNodeHostCaps()))
+	assert.Equal(64, cpus)
+	assert.Equal(uint64(256*1024), memMB)
+}
+
+func TestSumNUMACapacityDeduplicatesHostNodes(t *testing.T) {
+	assert := assert.New(t)
+
+	// Two guest entries that both reference host node 0 must only count
+	// once. The merged "0-1" entry adds host node 1.
+	nodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-31"},
+		{HostNodes: "0-1", HostCPUs: "0-63"},
+	}
+	cpus, memMB := sumNUMACapacity(nodes, fakeCapFn(twoNodeHostCaps()))
+	assert.Equal(64, cpus)
+	assert.Equal(uint64(256*1024), memMB)
+}
+
+func TestSumNUMACapacitySkipsUnknown(t *testing.T) {
+	assert := assert.New(t)
+
+	caps := map[int]struct {
+		cpus  int
+		memMB uint64
+	}{
+		0: {cpus: 16, memMB: 32 * 1024},
+		// host node 1 missing on purpose
+	}
+	cpus, memMB := sumNUMACapacity(twoNodeAutoTopology(), fakeCapFn(caps))
+	assert.Equal(16, cpus)
+	assert.Equal(uint64(32*1024), memMB)
+}
+
+func TestSelectNUMANodesPassthroughForSingleNode(t *testing.T) {
+	assert := assert.New(t)
+
+	in := []types.GuestNUMANode{{HostNodes: "0", HostCPUs: "0-31"}}
+	out := selectNUMANodes(in, 4, 1024, nil, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+func TestSelectNUMANodesNoVFIOFitsOneNode(t *testing.T) {
+	// Small sandbox (8 vCPUs / 16 GiB) fits comfortably in one host node:
+	// expect collapse to the first guest node.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	out := selectNUMANodes(in, 8, 16*1024, nil, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Len(out, 1)
+	assert.Equal("0", out[0].HostNodes)
+}
+
+func TestSelectNUMANodesNoVFIOExceedsOneNode(t *testing.T) {
+	// 64 vCPUs needs both 32-CPU nodes: expect full topology.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	out := selectNUMANodes(in, 64, 16*1024, nil, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+func TestSelectNUMANodesNoVFIOMemoryExceedsOneNode(t *testing.T) {
+	// CPU fits in one node but memory does not: expect full topology.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	out := selectNUMANodes(in, 8, 200*1024, nil, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+func TestSelectNUMANodesVFIOSubsetFits(t *testing.T) {
+	// VFIO device on host node 1; sandbox fits in one node: expect
+	// collapse to the guest node covering host node 1.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	vfio := map[int]struct{}{1: {}}
+	out := selectNUMANodes(in, 8, 16*1024, vfio, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Len(out, 1)
+	assert.Equal("1", out[0].HostNodes)
+}
+
+func TestSelectNUMANodesVFIOSubsetTooSmall(t *testing.T) {
+	// VFIO device on host node 1, but sandbox needs more than one node's
+	// worth of memory: expect the full topology so the sandbox actually
+	// fits, even at the cost of cross-NUMA traffic.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	vfio := map[int]struct{}{1: {}}
+	out := selectNUMANodes(in, 8, 200*1024, vfio, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+func TestSelectNUMANodesVFIOSpansAllNodes(t *testing.T) {
+	// One VFIO device per host node: VFIO subset == full topology, no
+	// collapse possible. Result is the input unchanged.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	vfio := map[int]struct{}{0: {}, 1: {}}
+	out := selectNUMANodes(in, 8, 16*1024, vfio, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+func TestSelectNUMANodesVFIONoCoverage(t *testing.T) {
+	// VFIO host node not represented in the guest topology (rare, but can
+	// happen if numa_mapping has been customized). Keep the full topology
+	// rather than dropping all nodes.
+	assert := assert.New(t)
+
+	in := twoNodeAutoTopology()
+	vfio := map[int]struct{}{2: {}}
+	out := selectNUMANodes(in, 8, 16*1024, vfio, fakeCapFn(twoNodeHostCaps()), silentLogger())
+	assert.Equal(in, out)
+}
+
+// rightSizeNUMAWithFakeCaps mirrors maybeRightSizeAutoNUMA but lets tests
+// inject a synthetic capacity oracle in place of realHostNUMACapFn so the
+// decision is hermetic.
+func rightSizeNUMAWithFakeCaps(hc *HypervisorConfig, capFn hostNUMACapFn) {
+	if hc == nil || len(hc.NUMAMapping) > 0 || len(hc.GuestNUMANodes) <= 1 {
+		return
+	}
+	hc.GuestNUMANodes = selectNUMANodes(
+		hc.GuestNUMANodes,
+		hc.DefaultMaxVCPUs,
+		uint64(hc.MemorySize),
+		nil, // no VFIO devices in this test
+		capFn,
+		silentLogger(),
+	)
+}
+
+func TestMaybeRightSizeAutoNUMACollapsesToOneNode(t *testing.T) {
+	// Empty NUMAMapping (auto) + sandbox fits in one host node:
+	// GuestNUMANodes is trimmed to a single entry.
+	assert := assert.New(t)
+
+	hc := &HypervisorConfig{
+		DefaultMaxVCPUs: 1,
+		MemorySize:      1,
+		GuestNUMANodes:  twoNodeAutoTopology(),
+	}
+	rightSizeNUMAWithFakeCaps(hc, fakeCapFn(twoNodeHostCaps()))
+	assert.Len(hc.GuestNUMANodes, 1)
+	assert.Equal("0", hc.GuestNUMANodes[0].HostNodes)
+}
+
+func TestMaybeRightSizeAutoNUMAExplicitMappingHonored(t *testing.T) {
+	// Non-empty NUMAMapping (user-provided) is left untouched, even if
+	// the sandbox would fit in a single node.
+	assert := assert.New(t)
+
+	hc := &HypervisorConfig{
+		DefaultMaxVCPUs: 1,
+		MemorySize:      1,
+		NUMAMapping:     []string{"0", "1"},
+		GuestNUMANodes:  twoNodeAutoTopology(),
+	}
+	rightSizeNUMAWithFakeCaps(hc, fakeCapFn(twoNodeHostCaps()))
+	assert.Len(hc.GuestNUMANodes, 2)
+}
+
+func TestMaybeRightSizeAutoNUMAKeepsFullWhenSandboxSpansNodes(t *testing.T) {
+	// Sandbox needs more CPUs than a single host node has: full topology
+	// is preserved.
+	assert := assert.New(t)
+
+	hc := &HypervisorConfig{
+		DefaultMaxVCPUs: 64, // > one node's 32 CPUs
+		MemorySize:      1024,
+		GuestNUMANodes:  twoNodeAutoTopology(),
+	}
+	rightSizeNUMAWithFakeCaps(hc, fakeCapFn(twoNodeHostCaps()))
+	assert.Len(hc.GuestNUMANodes, 2)
+}
+
+func TestMaybeRightSizeAutoNUMANoOpForFlatTopology(t *testing.T) {
+	// A topology with ≤ 1 node is a no-op regardless of NUMAMapping or
+	// budget.
+	assert := assert.New(t)
+
+	for _, tc := range []struct {
+		name string
+		hc   *HypervisorConfig
+	}{
+		{
+			name: "nil config",
+			hc:   nil,
+		},
+		{
+			name: "single node",
+			hc: &HypervisorConfig{
+				GuestNUMANodes: []types.GuestNUMANode{{HostNodes: "0", HostCPUs: "0-31"}},
+			},
+		},
+		{
+			name: "empty",
+			hc:   &HypervisorConfig{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := 0
+			if tc.hc != nil {
+				before = len(tc.hc.GuestNUMANodes)
+			}
+			rightSizeNUMAWithFakeCaps(tc.hc, fakeCapFn(twoNodeHostCaps()))
+			after := 0
+			if tc.hc != nil {
+				after = len(tc.hc.GuestNUMANodes)
+			}
+			assert.Equal(before, after)
+		})
+	}
 }

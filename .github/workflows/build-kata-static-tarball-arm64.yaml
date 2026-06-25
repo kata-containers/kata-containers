@@ -149,6 +149,47 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  build-kata-deploy-components:
+    name: build-kata-deploy-components
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      matrix:
+        component:
+          - kata-deploy-binary
+          - kata-deploy-job-dispatcher
+          - nydus-snapshotter-for-coco-guest-pull
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Build ${{ matrix.component }}
+        run: |
+          make "${KATA_DEPLOY_COMPONENT}-tarball"
+          mkdir -p kata-deploy-build
+          cp "tools/packaging/kata-deploy/local-build/build/kata-deploy-static-${KATA_DEPLOY_COMPONENT}.tar.zst" kata-deploy-build/
+        env:
+          KATA_DEPLOY_COMPONENT: ${{ matrix.component }}
+
+      - name: store-artifact ${{ matrix.component }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kata-artifacts-arm64-${{ matrix.component }}${{ inputs.tarball-suffix }}
+          path: kata-deploy-build/kata-deploy-static-${{ matrix.component }}.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-rootfs:
     name: build-asset-rootfs
     runs-on: ubuntu-24.04-arm
@@ -196,8 +237,8 @@ jobs:
 
       - name: Build ${{ matrix.asset }}
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
@@ -262,6 +303,14 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        asset:
+          - shim-v2-go
+          - shim-v2-rust
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -290,16 +339,16 @@ jobs:
           path: kata-artifacts
           merge-multiple: true
 
-      - name: Build shim-v2
+      - name: Build ${{ matrix.asset }}
         run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
-          make "${KATA_ASSET}-tarball"
+          make install-prebuilt-artifacts
+          make DEPS= "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
-          KATA_ASSET: shim-v2
-          TAR_OUTPUT: shim-v2.tar.gz
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
           ARTEFACT_REGISTRY: ghcr.io
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
@@ -308,11 +357,11 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           MEASURED_ROOTFS: yes
 
-      - name: store-artifact shim-v2
+      - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: kata-artifacts-arm64-shim-v2${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-shim-v2.tar.zst
+          name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 

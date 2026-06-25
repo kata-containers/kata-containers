@@ -332,34 +332,37 @@ copy_cdh_runtime_deps() {
 	local libdir="lib/${machine_arch}-linux-gnu"
 
 	# Shared libraries required by /usr/local/bin/confidential-data-hub.
-	# Note: libcryptsetup loads some optional helpers (e.g. libpopt/libssh) only
-	# when specific features are used. The current CDH path (LUKS2 + mkfs.ext4)
-	# does not require those optional libs.
-	cp -a "${stage_one}/${libdir}"/libcryptsetup.so.12*    "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libuuid.so.1*           "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libdevmapper.so.1.02.1* "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libselinux.so.1*        "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libpcre2-8.so.0*        "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libudev.so.1*           "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libcap.so.2*            "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libcrypto.so.3*         "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libz.so.1*              "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libzstd.so.1*           "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libjson-c.so.5*         "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libblkid.so.1*          "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libargon2.so.1*         "${libdir}/."
 	cp -a "${stage_one}/${libdir}"/libgcc_s.so.1*          "${libdir}/."
 	cp -a "${stage_one}/${libdir}"/libm.so.6*              "${libdir}/."
 	cp -a "${stage_one}/${libdir}"/libc.so.6*              "${libdir}/."
 
-	# e2fsprogs (mkfs.ext4) runtime libs
-	cp -a "${stage_one}/${libdir}"/libext2fs.so.2*         "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libe2p.so.2*            "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libss.so.2*             "${libdir}/."
-	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*        "${libdir}/."
+	# Shared libraries required by the cryptsetup, mkfs.ext4, and dd binaries
+	# used by CDH secure_mount.
+	#
+	# cryptsetup direct dependencies
+	cp -a "${stage_one}/${libdir}"/libcryptsetup.so.12*    "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libpopt.so.0*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libuuid.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libblkid.so.1*          "${libdir}/."
 
-	# mkfs.ext4 and dd are used by CDH secure_mount
-	mkdir -p sbin etc usr/bin bin
+	# libcryptsetup transitive dependencies
+	cp -a "${stage_one}/${libdir}"/libdevmapper.so.1.02.1* "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcrypto.so.3*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libargon2.so.1*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libjson-c.so.5*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libselinux.so.1*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libudev.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libpcre2-8.so.0*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcap.so.2*            "${libdir}/."
+
+	# e2fsprogs (mke2fs/mkfs.ext4) runtime libs
+	cp -a "${stage_one}/${libdir}"/libext2fs.so.2*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libe2p.so.2*            "${libdir}/."
+
+	# cryptsetup, mkfs.ext4, and dd are used by CDH secure_mount.
+	mkdir -p sbin etc bin
+	cp -a "${stage_one}/sbin/cryptsetup" sbin/.
 	cp -a "${stage_one}/sbin/mke2fs" sbin/.
 	cp -a "${stage_one}/sbin/mkfs.ext4" sbin/.
 	cp -a "${stage_one}/etc/mke2fs.conf" etc/.

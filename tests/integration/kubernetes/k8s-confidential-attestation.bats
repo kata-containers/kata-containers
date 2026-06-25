@@ -117,8 +117,17 @@ setup() {
 # (the AS policy must return an affirming trust vector), but no
 # reference values are set.
 #
-# This can run on all platforms.
+# Skipped on IBM SEL / qemu-se* because that environment returns an
+# affirming trust vector when verification completes successfully, even
+# without reference values.
 @test "Cannot get CDH resource when affirming policy is set without reference values" {
+
+	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
+		local skip_reason="IBM SEL returns an affirming trust vector if the verification process "
+		skip_reason+="completes successfully, even if no reference values are set. See "
+		skip_reason+="https://github.com/confidential-containers/trustee/blob/d4e317620c4039c89779b725f74974d8f005da66/attestation-service/src/ear_token/ear_default_policy_cpu.rego#L323-L339"
+		skip "${skip_reason}"
+	fi
 
 	# Require CPU0 to have affirming trust level.
 	kbs_set_cpu0_resource_policy

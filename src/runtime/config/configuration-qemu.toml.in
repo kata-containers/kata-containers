@@ -314,6 +314,11 @@ enable_iommu_platform = false
 # as is: map VM NUMA nodes to host 1:1 and bind vCPUs to related CPUs.
 # Note: To take proper advantage of NUMA, static_sandbox_resource_mgmt should
 # also be enabled for memory pre-allocation.
+#
+# When VFIO devices (e.g. GPUs) are cold-plugged and NUMA is enabled, the
+# runtime validates that each device's host NUMA node is covered by the guest
+# NUMA topology. A warning is logged if a device falls outside the configured
+# nodes, indicating potential cross-NUMA memory access overhead.
 enable_numa = false
 
 # NUMA node mapping allows customizing how VM NUMA nodes map to host NUMA nodes.
@@ -333,17 +338,6 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # qemu will delay this many seconds and then attempt to reconnect.
 # Zero disables reconnecting, and the default is zero.
 vhost_user_reconnect_timeout_sec = 0
-
-# Enable file based guest memory support. The default is an empty string which
-# will disable this feature. In the case of virtio-fs, this is enabled
-# automatically and '/dev/shm' is used as the backing folder.
-# This option will be ignored if VM templating is enabled.
-file_mem_backend = "@DEFFILEMEMBACKEND@"
-
-# List of valid annotations values for the file_mem_backend annotation
-# The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @DEFVALIDFILEMEMBACKENDS@
-valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 
 # -pflash can add image file to VM. The arguments of it should be in format
 # of ["/path/to/flash0.img", "/path/to/flash1.img"]

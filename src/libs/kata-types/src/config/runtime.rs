@@ -18,6 +18,12 @@ pub use shared_mount::SharedMount;
 /// Type of runtime VirtContainer.
 pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
 
+/// EmptyDir mode: share the emptyDir folder with the guest using shared-fs.
+pub const EMPTYDIR_MODE_SHARED_FS: &str = "shared-fs";
+
+/// EmptyDir mode: plug a block device to be encrypted in the guest.
+pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -143,6 +149,15 @@ pub struct Runtime {
     #[serde(default)]
     pub disable_guest_empty_dir: bool,
 
+    /// Specifies how Kubernetes emptyDir volumes are handled.
+    ///
+    /// Options:
+    /// - shared-fs (default): shares the emptyDir folder with the guest using the method
+    ///   given by the shared_fs setting.
+    /// - block-encrypted: plugs a block device to be encrypted in the guest via CDH/LUKS2.
+    #[serde(default)]
+    pub emptydir_mode: String,
+
     /// Determines how VFIO devices should be be presented to the container.
     ///
     /// Options:
@@ -190,6 +205,26 @@ pub struct Runtime {
     /// If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.
     #[serde(default = "default_passfd_listener_port")]
     pub passfd_listener_port: u32,
+
+    /// pod_resource_api_sock specifies the unix socket for the Kubelet's
+    /// PodResource API endpoint. If empty, kubernetes based cold plug
+    /// will not be attempted. In order for this feature to work, the
+    /// KubeletPodResourcesGet featureGate must be enabled in Kubelet,
+    /// if using Kubelet older than 1.34.
+
+    /// The pod resource API's socket is relative to the Kubelet's root-dir,
+    /// which is defined by the cluster admin, and its location is:
+    /// ${KubeletRootDir}/pod-resources/kubelet.sock
+
+    /// cold_plug_vfio (see hypervisor config) acts as a feature gate:
+    ///      cold_plug_vfio = "no-port" (default) => no cold plug
+    ///      cold_plug_vfio != "no-port" AND pod_resource_api_sock = "" => need
+    ///              explicit CDI annotation for cold plug (applies mainly
+    ///              to non-k8s cases)
+    ///      cold_plug_vfio != "no-port" AND pod_resource_api_sock != "" => kubelet
+    ///              based cold plug.
+    #[serde(default)]
+    pub pod_resource_api_sock: String,
 }
 
 fn default_passfd_listener_port() -> u32 {
@@ -201,6 +236,9 @@ impl ConfigOps for Runtime {
         RuntimeVendor::adjust_config(conf)?;
         if conf.runtime.internetworking_model.is_empty() {
             conf.runtime.internetworking_model = default::DEFAULT_INTERNETWORKING_MODEL.to_owned();
+        }
+        if conf.runtime.emptydir_mode.is_empty() {
+            conf.runtime.emptydir_mode = EMPTYDIR_MODE_SHARED_FS.to_owned();
         }
 
         for bind in conf.runtime.sandbox_bind_mounts.iter_mut() {
@@ -240,6 +278,15 @@ impl ConfigOps for Runtime {
         if !vfio_mode.is_empty() && vfio_mode != "vfio" && vfio_mode != "guest-kernel" {
             return Err(std::io::Error::other(format!(
                 "Invalid vfio_mode `{vfio_mode}` in configuration file",
+            )));
+        }
+
+        let emptydir_mode = &conf.runtime.emptydir_mode;
+        if emptydir_mode != EMPTYDIR_MODE_SHARED_FS
+            && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+        {
+            return Err(std::io::Error::other(format!(
+                "Invalid emptydir_mode `{emptydir_mode}` in configuration file",
             )));
         }
 
@@ -339,6 +386,45 @@ vfio_mode = "guest_kernel"
 "#;
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap_err();
+    }
+
+    #[test]
+    fn test_invalid_emptydir_mode() {
+        let content = r#"
+[runtime]
+emptydir_mode = "invalid-value"
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+    }
+
+    #[test]
+    fn test_valid_emptydir_mode() {
+        let content = r#"
+[runtime]
+emptydir_mode = "shared-fs"
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(&config.runtime.emptydir_mode, "shared-fs");
+
+        let content = r#"
+[runtime]
+emptydir_mode = "block-encrypted"
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(&config.runtime.emptydir_mode, "block-encrypted");
+    }
+
+    #[test]
+    fn test_default_emptydir_mode() {
+        let content = r#"
+[runtime]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(&config.runtime.emptydir_mode, "shared-fs");
     }
 
     #[test]

@@ -89,6 +89,7 @@ impl ShareFs for ShareVirtioFsInline {
             fs_group: None,
             options: SHARED_DIR_VIRTIO_FS_OPTIONS.clone(),
             mount_point: kata_guest_share_dir(),
+            shared: false,
         };
 
         storages.push(shared_volume);

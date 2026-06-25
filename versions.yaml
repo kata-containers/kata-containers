@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v10.2.1"
-      tag: "v10.2.1"
+      version: "v11.0.1"
+      tag: "v11.0.1"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -107,12 +107,12 @@ assets:
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-snp-20260107"
+      tag: "gpu-snp-20260430"
 
     qemu-tdx-experimental:
       description: "QEMU with GPU+TDX support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-tdx-20260107"
+      tag: "gpu-tdx-20260430"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
@@ -207,11 +207,11 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.15"
+    version: "v6.18.35"
     nvidia:
       description: "Linux kernel optimised for virtual machines"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.15"
+      version: "v6.18.35"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -226,7 +226,7 @@ assets:
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.22"
+    version: "v6.18.35"
 
 externals:
   description: "Third-party projects used by the system"
@@ -292,16 +292,16 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "de3f6ff62aa736619b80d99dfca5bc3d2c9a799d"
+    version: "f1561038b9a58d309a3366cc8e25d8e6162424a0"
     toolchain: "1.90.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
+    version: "d4e317620c4039c89779b725f74974d8f005da66"
     # image and image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "22788122660d6e9be3e4bf52704282de5fcc0a2a"
+    image_tag: "d4e317620c4039c89779b725f74974d8f005da66"
     toolchain: "1.90.0"
 
   containerd:
@@ -312,17 +312,8 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.7.25"
-    lts: "v1.7"
-    active: "v2.2"
-
-  critools:
-    description: "CLI tool for Container Runtime Interface (CRI)"
-    url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.23.0"
-    # As we don't want to disrupt what we have on the `tests` repo, let's
-    # create a "latest" entry and use that for the GitHub actions tests.
-    latest: "v1.29"
+    minimum: "v1.7"
+    latest: "v2.3"
 
   runc:
     description: "CLI tool for spawning and running containers"
@@ -468,23 +459,23 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.25.9"
+    version: "1.25.11"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.25.9"
+      newest-version: "1.25.11"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     # Keep in sync with rust-toolchain.toml
-    version: "1.93"
+    version: "1.94"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.93"
+      newest-version: "1.94"
 
   golangci-lint:
     description: "golangci-lint"

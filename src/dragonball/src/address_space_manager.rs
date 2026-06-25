@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -27,7 +27,14 @@ use dbs_address_space::{
     AddressSpaceRegionType, NumaNode, NumaNodeInfo, MPOL_MF_MOVE, MPOL_PREFERRED,
 };
 use dbs_allocator::Constraint;
-use kvm_bindings::kvm_userspace_memory_region;
+#[cfg(target_arch = "x86_64")]
+use dbs_boot::layout::{BIOS_MEM_SIZE, BIOS_MEM_START};
+use kvm_bindings::{
+    kvm_create_guest_memfd, kvm_userspace_memory_region, kvm_userspace_memory_region2,
+    KVM_MEM_GUEST_MEMFD,
+};
+#[cfg(target_arch = "x86_64")]
+use kvm_bindings::{kvm_memory_attributes, KVM_MEMORY_ATTRIBUTE_PRIVATE};
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, warn};
 use nix::sys::mman;
@@ -151,6 +158,19 @@ pub enum AddressManagerError {
     /// Failed to create Address Space Region
     #[error("address manager failed to create Address Space Region {0}")]
     CreateAddressSpaceRegion(#[source] AddressSpaceError),
+
+    /// Failed to create VM-bound memfd
+    #[error("address manager failed to create VM-bound memfd: {0}")]
+    CreateVmboundMemfd(#[source] kvm_ioctls::Error),
+
+    /// Failed to set KVM memory slot with VM-bound memfd
+    #[error("address manager failed to configure KVM memory slot with VM-bound memfd: {0}")]
+    KvmSetMemorySlotWithMemfd(#[source] kvm_ioctls::Error),
+
+    #[cfg(target_arch = "x86_64")]
+    /// Failed to configure KVM memory attributes
+    #[error("address manager failed to configure KVM memory attributes: {0}")]
+    KvmSetMemoryAttributes(#[source] kvm_ioctls::Error),
 }
 
 type Result<T> = std::result::Result<T, AddressManagerError>;
@@ -164,6 +184,9 @@ pub struct AddressSpaceMgrBuilder<'a> {
     mem_prealloc: bool,
     dirty_page_logging: bool,
     vmfd: Option<Arc<VmFd>>,
+    use_firmware: bool,
+    #[cfg(target_arch = "x86_64")]
+    kvm_mem_attr_private: bool,
 }
 
 impl<'a> AddressSpaceMgrBuilder<'a> {
@@ -180,6 +203,9 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
             mem_prealloc: false,
             dirty_page_logging: false,
             vmfd: None,
+            use_firmware: false,
+            #[cfg(target_arch = "x86_64")]
+            kvm_mem_attr_private: false,
         })
     }
 
@@ -199,6 +225,17 @@ impl<'a> AddressSpaceMgrBuilder<'a> {
     /// Enable/disable KVM dirty page logging.
     pub fn toggle_dirty_page_logging(&mut self, logging: bool) {
         self.dirty_page_logging = logging;
+    }
+
+    /// Enable/disable firmware memory region.
+    pub fn toggle_use_firmware(&mut self, firmware: bool) {
+        self.use_firmware = firmware;
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    /// Set KVM memory attribute to private/shared.
+    pub fn toggle_kvm_mem_attr_private(&mut self, private: bool) {
+        self.kvm_mem_attr_private = private;
     }
 
     /// Set KVM [`VmFd`] handle to configure memory slots.
@@ -317,17 +354,32 @@ impl AddressSpaceMgr {
             }
         }
 
+        #[cfg(target_arch = "x86_64")]
+        if param.use_firmware {
+            let region = Arc::new(
+                AddressSpaceRegion::create_firmware_region(
+                    GuestAddress(BIOS_MEM_START),
+                    BIOS_MEM_SIZE,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                )
+                .map_err(AddressManagerError::CreateAddressSpaceRegion)?,
+            );
+            regions.push(region);
+        }
+
         // Create GuestMemory object
         let mut vm_memory = GuestMemoryMmap::new();
         for reg in regions.iter() {
-            // Allocate used guest memory addresses.
-            // These addresses are statically allocated, resource allocation/update should not fail.
-            let constraint = Constraint::new(reg.len())
-                .min(reg.start_addr().raw_value())
-                .max(reg.last_addr().raw_value());
-            let _key = res_mgr
-                .allocate_mem_address(&constraint)
-                .ok_or(AddressManagerError::NoAvailableMemAddress)?;
+            if reg.region_type() != AddressSpaceRegionType::FirmwareMemory {
+                // Allocate used guest memory addresses.
+                // These addresses are statically allocated, resource allocation/update should not fail.
+                let constraint = Constraint::new(reg.len())
+                    .min(reg.start_addr().raw_value())
+                    .max(reg.last_addr().raw_value());
+                let _key = res_mgr
+                    .allocate_mem_address(&constraint)
+                    .ok_or(AddressManagerError::NoAvailableMemAddress)?;
+            }
             let mmap_reg = self.create_mmap_region(reg.clone())?;
 
             vm_memory = vm_memory
@@ -407,24 +459,67 @@ impl AddressSpaceMgr {
             let host_addr = mmap_reg
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|_e| AddressManagerError::InvalidOperation)?;
-            let flags = 0u32;
+            let mut flags = 0u32;
 
-            let mem_region = kvm_userspace_memory_region {
-                slot,
-                guest_phys_addr: reg.start_addr().raw_value(),
-                memory_size: reg.len(),
-                userspace_addr: host_addr as u64,
-                flags,
-            };
+            #[cfg(not(target_arch = "x86_64"))]
+            let kvm_guest_memfd = false;
+            #[cfg(target_arch = "x86_64")]
+            let kvm_guest_memfd = param.kvm_mem_attr_private;
 
-            info!(
-                "VM: guest memory region {:x} starts at {:x?}",
-                reg.start_addr().raw_value(),
-                host_addr
-            );
-            // Safe because the guest regions are guaranteed not to overlap.
-            unsafe { vmfd.set_user_memory_region(mem_region) }
-                .map_err(AddressManagerError::KvmSetMemorySlot)?;
+            if !kvm_guest_memfd {
+                let mem_region = kvm_userspace_memory_region {
+                    slot,
+                    guest_phys_addr: reg.start_addr().raw_value(),
+                    memory_size: reg.len(),
+                    userspace_addr: host_addr as u64,
+                    flags,
+                };
+
+                info!(
+                    "VM: guest memory region {:x} starts at {:x?}",
+                    reg.start_addr().raw_value(),
+                    host_addr
+                );
+                // Safe because the guest regions are guaranteed not to overlap.
+                unsafe { vmfd.set_user_memory_region(mem_region) }
+                    .map_err(AddressManagerError::KvmSetMemorySlot)?;
+            } else {
+                let memfd = vmfd
+                    .create_guest_memfd(kvm_create_guest_memfd {
+                        size: reg.len(),
+                        flags: 0,
+                        ..Default::default()
+                    })
+                    .map_err(AddressManagerError::CreateVmboundMemfd)?;
+                flags |= KVM_MEM_GUEST_MEMFD;
+                let guest_phys_addr = reg.start_addr().raw_value();
+                let memory_size = reg.len();
+                unsafe {
+                    vmfd.set_user_memory_region2(kvm_userspace_memory_region2 {
+                        slot,
+                        flags,
+                        guest_phys_addr,
+                        memory_size,
+                        userspace_addr: host_addr as u64,
+                        guest_memfd_offset: 0,
+                        guest_memfd: memfd as u32,
+                        ..Default::default()
+                    })
+                    .map_err(AddressManagerError::KvmSetMemorySlotWithMemfd)?;
+                }
+
+                #[cfg(target_arch = "x86_64")]
+                if param.kvm_mem_attr_private {
+                    let attributes = KVM_MEMORY_ATTRIBUTE_PRIVATE as u64;
+                    vmfd.set_memory_attributes(kvm_memory_attributes {
+                        address: guest_phys_addr,
+                        size: memory_size,
+                        attributes,
+                        flags: 0,
+                    })
+                    .map_err(AddressManagerError::KvmSetMemoryAttributes)?;
+                }
+            }
         }
 
         self.base_to_slot
@@ -456,9 +551,9 @@ impl AddressSpaceMgr {
         // so we have to duplicate the fd here. It's really a dirty design.
         let file_offset = match region.file_offset().as_ref() {
             Some(fo) => {
-                let fd = dup(fo.file().as_raw_fd()).map_err(AddressManagerError::DupFd)?;
+                let fd = dup(fo.file()).map_err(AddressManagerError::DupFd)?;
                 // Safe because we have just duplicated the raw fd.
-                let file = unsafe { File::from_raw_fd(fd) };
+                let file = unsafe { File::from_raw_fd(fd.into_raw_fd()) };
                 let file_offset = FileOffset::new(file, fo.start());
                 Some(file_offset)
             }
@@ -503,7 +598,7 @@ impl AddressSpaceMgr {
     fn configure_anon_mem(&self, mmap_reg: &MmapRegion) -> Result<()> {
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new(mmap_reg.as_ptr() as *mut libc::c_void).unwrap(),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_DONTFORK,
             )
@@ -551,7 +646,7 @@ impl AddressSpaceMgr {
         // Safe because we just create the MmapRegion
         unsafe {
             mman::madvise(
-                mmap_reg.as_ptr() as *mut libc::c_void,
+                std::ptr::NonNull::new(mmap_reg.as_ptr() as *mut libc::c_void).unwrap(),
                 mmap_reg.size(),
                 mman::MmapAdvise::MADV_HUGEPAGE,
             )
@@ -697,6 +792,7 @@ impl Default for AddressSpaceMgr {
 mod tests {
     use dbs_boot::layout::GUEST_MEM_START;
     use std::ops::Deref;
+    use std::os::fd::AsRawFd;
 
     use vm_memory::{Bytes, GuestAddressSpace, GuestMemory, GuestMemoryRegion};
     use vmm_sys_util::tempfile::TempFile;

@@ -1,0 +1,62 @@
+# Periodic OSV-Scanner scanning for vulnerabilities in the whole repository.
+# Runs on push to main, on schedule, and can be manually triggered.
+#
+# For more information, see https://google.github.io/osv-scanner/github-action/
+
+name: OSV-Scanner (Scheduled)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * 0'  # Weekly on Sunday at 1 AM UTC
+  push:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-osv-scanner-scheduled
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  scan:
+    name: Scan whole repository
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read # Required to upload SARIF file to CodeQL
+      contents: read  # Read commit contents
+      security-events: write  # Require writing security events to upload SARIF file to security tab
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Run OSV-Scanner (display results)
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --recursive
+            --call-analysis=none
+            ./
+
+      - name: Run OSV-Scanner (generate SARIF)
+        if: always()
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --recursive
+            --call-analysis=none
+            --format=sarif
+            --output-file=results.sarif
+            ./
+
+      - name: Upload SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          sarif_file: results.sarif
+          category: osv-scanner-scheduled

@@ -90,7 +90,7 @@ version = 3
 
   [plugins.'io.containerd.snapshotter.v1.erofs']
     default_size = '<SIZE>' # SIZE=6G or 10G or other size
-    max_unmerged_layers = 1
+    max_unmerged_layers = 0
 ```
 
 #### Verify the EROFS plugins are loaded

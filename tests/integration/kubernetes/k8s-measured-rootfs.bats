@@ -36,7 +36,12 @@ setup() {
 }
 
 @test "Test cannot launch pod with measured boot enabled and incorrect hash" {
-	pod_config="$(new_pod_config nginx "kata-${KATA_HYPERVISOR}")"
+	ensure_yq
+	nginx_registry=$(get_from_kata_deps ".docker_images.nginx.registry")
+	nginx_digest=$(get_from_kata_deps ".docker_images.nginx.digest")
+	nginx_image="${nginx_registry}@${nginx_digest}"
+
+	pod_config="$(new_pod_config "${nginx_image}" "kata-${KATA_HYPERVISOR}")"
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 
 	incorrect_hash="1111111111111111111111111111111111111111111111111111111111111111"

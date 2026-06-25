@@ -186,7 +186,7 @@ QEMUTDXEXPERIMENTALVALIDHYPERVISORPATHS := [\"$(QEMUTDXEXPERIMENTALPATH)\"]
 QEMUCCAEXPERIMENTALPATH := $(QEMUBINDIR)/$(QEMUCCAEXPERIMENTALCMD)
 QEMUCCAEXPERIMENTALVALIDHYPERVISORPATHS := [\"$(QEMUCCAEXPERIMENTALPATH)\"]
 
-QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 4050
+QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 0
 
 QEMUSNPPATH := $(QEMUBINDIR)/$(QEMUSNPCMD)
 QEMUSNPVALIDHYPERVISORPATHS := [\"$(QEMUSNPPATH)\"]
@@ -223,10 +223,12 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+# Security note: do not enable "virtio_fs_extra_args" by default.
+# Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
-DEFDISABLEGUESTEMPTYDIR := false
+DEFDISABLEGUESTEMPTYDIR := true
 DEFEMPTYDIRMODE := shared-fs
 DEFEMPTYDIRMODE_COCO := block-encrypted
 #Default experimental features enabled
@@ -283,8 +285,6 @@ DEFENABLEVHOSTUSERSTORE := false
 DEFENABLEVIRTIOMEM ?= false
 DEFVHOSTUSERSTOREPATH := $(PKGRUNDIR)/vhost-user
 DEFVALIDVHOSTUSERSTOREPATHS := [\"$(DEFVHOSTUSERSTOREPATH)\"]
-DEFFILEMEMBACKEND := ""
-DEFVALIDFILEMEMBACKENDS := [\"$(DEFFILEMEMBACKEND)\"]
 DEFMSIZE9P := 8192
 DEFVFIOMODE := guest-kernel
 
@@ -509,6 +509,11 @@ ifneq (,$(QEMUCMD))
 
     DEFENABLEVCPUPINNING_NV = true
 
+    DEFENABLENUMA_NV = true
+
+    # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
+    DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
+
     ifneq (,$(QEMUFW))
         FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
     endif
@@ -532,9 +537,24 @@ ifneq (,$(CLHCMD))
 
     CONFIGS += $(CONFIG_CLH)
 
+    CONFIG_FILE_CLH_AZURE = configuration-clh-azure.toml
+    CONFIG_CLH_AZURE = config/$(CONFIG_FILE_CLH_AZURE)
+    CONFIG_CLH_AZURE_IN = $(CONFIG_CLH_AZURE).in
+
+    CONFIG_PATH_CLH_AZURE = $(abspath $(CONFDIR)/$(CONFIG_FILE_CLH_AZURE))
+    CONFIG_PATHS += $(CONFIG_PATH_CLH_AZURE)
+
+    SYSCONFIG_CLH_AZURE = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_CLH_AZURE))
+    SYSCONFIG_PATHS += $(SYSCONFIG_CLH_AZURE)
+
+    CONFIGS += $(CONFIG_CLH_AZURE)
+
     # CLH-specific options (all should be suffixed by "_CLH")
     # currently, huge pages are required for virtiofsd support
     DEFNETWORKMODEL_CLH := tcfilter
+    IMAGEPATH_CLH_AZURE := $(PKGDATADIR)/kata-containers-mariner.img
+    KERNELPATH_CLH_AZURE := /usr/share/cloud-hypervisor/vmlinux.bin
+    DEFSTATICRESOURCEMGMT_CLH_AZURE := true
     KERNELTYPE_CLH = uncompressed
     KERNEL_NAME_CLH = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_CLH))
     KERNELPATH_CLH = $(KERNELDIR)/$(KERNEL_NAME_CLH)
@@ -659,6 +679,7 @@ USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGECONFIDENTIALNAME
 USER_VARS += IMAGEPATH
+USER_VARS += IMAGEPATH_CLH_AZURE
 USER_VARS += IMAGECONFIDENTIALPATH
 USER_VARS += INITRDNAME
 USER_VARS += INITRDCONFIDENTIALNAME
@@ -684,6 +705,8 @@ USER_VARS += DEFAULTTIMEOUT_NV
 USER_VARS += DEFAULTLAUNCHPROCESSTIMEOUT_NV
 USER_VARS += DEFSANDBOXCGROUPONLY_NV
 USER_VARS += DEFENABLEVCPUPINNING_NV
+USER_VARS += DEFENABLENUMA_NV
+USER_VARS += DEFROOTFSTYPE_NV
 USER_VARS += DEFROOTFSTYPE
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
@@ -695,6 +718,7 @@ USER_VARS += KERNELCONFIDENTIALPATH
 USER_VARS += KERNELCONFIDENTIALPATH_CCA
 USER_VARS += KERNELSEPATH
 USER_VARS += KERNELPATH_CLH
+USER_VARS += KERNELPATH_CLH_AZURE
 USER_VARS += KERNELPATH_FC
 USER_VARS += KERNELPATH_STRATOVIRT
 USER_VARS += KERNELVIRTIOFSPATH
@@ -793,8 +817,6 @@ USER_VARS += DEFSECCOMPSANDBOXPARAM
 USER_VARS += DEFENABLEVHOSTUSERSTORE
 USER_VARS += DEFVHOSTUSERSTOREPATH
 USER_VARS += DEFVALIDVHOSTUSERSTOREPATHS
-USER_VARS += DEFFILEMEMBACKEND
-USER_VARS += DEFVALIDFILEMEMBACKENDS
 USER_VARS += DEFMSIZE9P
 USER_VARS += DEFENTROPYSOURCE
 USER_VARS += DEFVALIDENTROPYSOURCES
@@ -802,6 +824,7 @@ USER_VARS += DEFSANDBOXCGROUPONLY
 USER_VARS += DEFSTATICRESOURCEMGMT
 USER_VARS += DEFSTATICRESOURCEMGMT_QEMU
 USER_VARS += DEFSTATICRESOURCEMGMT_CLH
+USER_VARS += DEFSTATICRESOURCEMGMT_CLH_AZURE
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFSTATICRESOURCEMGMT_STRATOVIRT
 USER_VARS += DEFSTATICRESOURCEMGMT_TEE
@@ -834,7 +857,7 @@ QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 BUILDTAGS :=
 
 # go build common flags
-BUILDFLAGS := -buildmode=pie -mod=vendor ${BUILDTAGS}
+BUILDFLAGS := -buildmode=pie ${BUILDTAGS}
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
@@ -931,8 +954,7 @@ $(MONITOR_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) .git-commit
 	pre-commit \
 	show-header \
 	show-summary \
-	show-variables \
-	vendor
+	show-variables
 
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
@@ -958,7 +980,7 @@ go-test: $(GENERATED_FILES)
 
 fast-test: $(GENERATED_FILES)
 	go clean -testcache
-	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
+	for s in $$(go list ./...); do if ! go test -failfast -v -p 1 $$s; then break; fi; done
 
 GOLANGCI_LINT_FILE := ../../tests/.golangci.yml
 GOLANGCI_LINT_NAME = golangci-lint
@@ -980,7 +1002,7 @@ lint: all
 pre-commit: lint fast-test
 
 coverage:
-	go test -v -mod=vendor -covermode=atomic -coverprofile=coverage.txt ./...
+	go test -v -covermode=atomic -coverprofile=coverage.txt ./...
 	go tool cover -html=coverage.txt -o coverage.html
 
 install: all install-runtime install-containerd-shim-v2 install-monitor
@@ -1008,14 +1030,6 @@ install-scripts: $(SCRIPTS)
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
-
-handle_vendor:
-	go mod tidy
-	go mod vendor
-	go mod verify
-
-vendor: handle_vendor
-	./hack/tree_status.sh
 
 static-checks-build: $(GENERATED_FILES)
 

@@ -46,9 +46,25 @@ type Machine struct {
 const (
 	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
 	MachineTypeMicrovm string = "microvm"
-	// (fixed) Unix Domain Socket Path served by Intel TDX Quote Generation Service
-	qgsSocketPath string = "/var/run/tdx-qgs/qgs.socket"
 )
+
+// qgsSocketPath is the Unix Domain Socket path served by the Intel TDX Quote
+// Generation Service. Declared as a var so tests can override it.
+var qgsSocketPath = "/var/run/tdx-qgs/qgs.socket"
+
+// hasPCIeRoot reports whether the configured QEMU machine type exposes a
+// `pcie.0` root complex (q35 on x86, virt on arm64).  Machines such as
+// pseries (ppc64le -> pci.0), s390-ccw-virtio (s390x -> CCW transport)
+// and microvm (no PCI at all) do not have a `pcie.0` bus, so emitting
+// `bus=pcie.0` on virtio-pci leaf devices would fail to start QEMU.
+// Used to gate the bus= pin we apply to keep leaf devices off pxb-pcie.
+func hasPCIeRoot(config *Config) bool {
+	if config == nil {
+		return false
+	}
+	t := config.Machine.Type
+	return strings.HasPrefix(t, "q35") || strings.HasPrefix(t, "virt")
+}
 
 const (
 	// Well known vsock CID for host system.
@@ -132,6 +148,10 @@ const (
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
+	// PXBPCIe is a PCIe Expander Bridge that creates a new PCI root
+	// complex with NUMA node affinity.
+	PXBPCIe DeviceDriver = "pxb-pcie"
+
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
 
@@ -152,7 +172,7 @@ const (
 
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
-	case "amd64", "386", "ppc64le", "arm64":
+	case "amd64", "ppc64le", "arm64":
 		if config != nil && config.Machine.Type == MachineTypeMicrovm {
 			// microvm does not support NUMA
 			return false
@@ -520,7 +540,13 @@ func (t *TdxQomObject) String() string {
 
 func getQgsSocketAddress(portNum uint32) SocketAddress {
 	if portNum == 0 {
-		return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		// Check if the Unix socket exists
+		if _, err := os.Stat(qgsSocketPath); err == nil {
+			return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		}
+		// Fall back to port 4050 with vsock for backwards compatibility
+		log.Printf("Warning: QGS socket %s not found, falling back to vsock port 4050", qgsSocketPath)
+		return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: "4050"}
 	}
 
 	return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: fmt.Sprint(portNum)}
@@ -1064,6 +1090,11 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 
 	if netdev.Bus != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", netdev.Bus))
+	} else if netdev.Transport.isVirtioPCI(config) && hasPCIeRoot(config) {
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device as the default bus.  Skipped on machines
+		// without a `pcie.0` root (pseries, microvm, s390-ccw-virtio).
+		deviceParams = append(deviceParams, "bus=pcie.0")
 	}
 
 	if netdev.Addr != "" {
@@ -1586,8 +1617,15 @@ func (vhostuserDev VhostUserDevice) QemuNetParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
 	deviceParams = append(deviceParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 
-	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	if vhostuserDev.Transport.isVirtioPCI(config) {
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device.  See hasPCIeRoot() for skipped machines.
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vhostuserDev.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+		}
 	}
 
 	qemuParams = append(qemuParams, "-netdev")
@@ -1612,8 +1650,13 @@ func (vhostuserDev VhostUserDevice) QemuSCSIParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 
-	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	if vhostuserDev.Transport.isVirtioPCI(config) {
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vhostuserDev.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+		}
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -1637,8 +1680,13 @@ func (vhostuserDev VhostUserDevice) QemuBlkParams(config *Config) []string {
 	deviceParams = append(deviceParams, "size=512M")
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 
-	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	if vhostuserDev.Transport.isVirtioPCI(config) {
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vhostuserDev.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+		}
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -1674,8 +1722,13 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 		}
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vhostuserDev.DevNo))
 	}
-	if vhostuserDev.Transport.isVirtioPCI(config) && vhostuserDev.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+	if vhostuserDev.Transport.isVirtioPCI(config) {
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vhostuserDev.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
+		}
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -1736,6 +1789,36 @@ func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
 	default:
 		return ""
 	}
+}
+
+// PXBPCIeDevice represents a PCIe Expander Bridge (pxb-pcie).
+// It creates a new PCI root complex with NUMA node affinity, allowing
+// devices attached to its bus hierarchy to inherit the NUMA association.
+// This is the only QEMU PCI device that carries a numa_node property.
+type PXBPCIeDevice struct {
+	// ID is the QEMU device identifier (e.g. "pxb-numa0").
+	ID string
+
+	// BusNr is the guest PCI bus number for this root complex.
+	// Use values spaced apart (e.g. 0x20, 0x40) to leave room for
+	// bridges beneath each pxb-pcie.
+	BusNr uint8
+
+	// NUMANode is the guest NUMA node index this root complex belongs to.
+	NUMANode int
+}
+
+// QemuParams returns the QEMU parameters for a pxb-pcie device.
+func (dev PXBPCIeDevice) QemuParams(_ *Config) []string {
+	return []string{
+		"-device",
+		fmt.Sprintf("pxb-pcie,id=%s,bus_nr=%d,numa_node=%d", dev.ID, dev.BusNr, dev.NUMANode),
+	}
+}
+
+// Valid returns true if the PXBPCIeDevice structure is valid and complete.
+func (dev PXBPCIeDevice) Valid() bool {
+	return dev.ID != ""
 }
 
 // PCIeRootPortDevice represents a memory balloon device.
@@ -2003,6 +2086,15 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
+	// Emit `id=` for the QEMU vfio-pci device so that callers
+	// (notably the cold-plug path) can later resolve the device's
+	// guest PCI path via QMP `qom-get` keyed on this ID.
+	// Without this, QEMU auto-generates an internal name and any
+	// `qomGetPciPath(vfioDev.ID)` call fails with "Device 'X' not
+	// found", as currently happens for cold-plugged VFIO devices.
+	if vfioDev.ID != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vfioDev.ID))
+	}
 	if vfioDev.Transport.isVirtioPCI(config) {
 		if vfioDev.VendorID != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf("x-pci-vendor-id=%s", vfioDev.VendorID))
@@ -2310,8 +2402,15 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vsock.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf("%s=%d", VSOCKGuestCID, vsock.ContextID))
 
-	if vsock.Transport.isVirtioPCI(config) && vsock.ROMFile != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vsock.ROMFile))
+	if vsock.Transport.isVirtioPCI(config) {
+		// Pin to pcie.0 (when present) so pxb-pcie can't capture
+		// this leaf device.  See hasPCIeRoot() for skipped machines.
+		if hasPCIeRoot(config) {
+			deviceParams = append(deviceParams, "bus=pcie.0")
+		}
+		if vsock.ROMFile != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", vsock.ROMFile))
+		}
 	}
 
 	if vsock.Transport.isVirtioCCW(config) {
@@ -2689,7 +2788,8 @@ type SMP struct {
 	Sockets uint32
 
 	// MaxCPUs is the maximum number of VCPUs that a VM can have.
-	// This value, if non-zero, MUST BE equal to or greater than CPUs
+	// This value, if non-zero, MUST BE equal to or greater than CPUs,
+	// and must be equal to Sockets * Cores * Threads if all are non-zero.
 	MaxCPUs uint32
 }
 
@@ -2773,6 +2873,36 @@ func (fwcfg FwCfg) QemuParams(config *Config) []string {
 	}
 
 	return qemuParams
+}
+
+// NUMANode describes a guest NUMA node and its mapping to host resources.
+type NUMANode struct {
+	// NodeID is the guest NUMA node identifier (0-based).
+	NodeID uint32
+
+	// CPUs is the guest vCPU range assigned to this node (e.g. "0-3").
+	CPUs string
+
+	// MemSize is the amount of memory for this node (e.g. "512M", "1G").
+	MemSize string
+
+	// HostNodes is the host NUMA node(s) this guest node maps to (e.g. "0" or "0-1").
+	HostNodes string
+
+	// MemBackendType selects the QEMU memory backend object type.
+	// Typical values: "memory-backend-ram" or "memory-backend-file".
+	MemBackendType string
+
+	// MemBackendPath is the mem-path for file-backed memory (hugepages, file-backed).
+	// Empty when using memory-backend-ram.
+	MemBackendPath string
+}
+
+// NUMADist describes a NUMA distance entry for `-numa dist`.
+type NUMADist struct {
+	Src uint32
+	Dst uint32
+	Val uint32
 }
 
 // Knobs regroups a set of qemu boolean settings
@@ -2921,6 +3051,14 @@ type Config struct {
 	FwCfg []FwCfg
 
 	IOThreads []IOThread
+
+	// NUMANodes defines multi-NUMA guest topology. When non-empty,
+	// appendMemoryKnobs creates per-node memory backends and -numa entries
+	// instead of a single flat memory region.
+	NUMANodes []NUMANode
+
+	// NUMADists defines inter-node distance entries emitted as -numa dist.
+	NUMADists []NUMADist
 
 	// PidFile is the -pidfile parameter
 	PidFile string
@@ -3096,6 +3234,13 @@ func (config *Config) appendCPUs() error {
 				return fmt.Errorf("MaxCPUs %d must be equal to or greater than CPUs %d",
 					config.SMP.MaxCPUs, config.SMP.CPUs)
 			}
+			if len(config.NUMANodes) > 1 && config.SMP.Sockets > 0 && config.SMP.Cores > 0 && config.SMP.Threads > 0 {
+				expected := config.SMP.Sockets * config.SMP.Cores * config.SMP.Threads
+				if config.SMP.MaxCPUs != expected {
+					return fmt.Errorf("MaxCPUs %d must equal Sockets(%d) * Cores(%d) * Threads(%d) = %d",
+						config.SMP.MaxCPUs, config.SMP.Sockets, config.SMP.Cores, config.SMP.Threads, expected)
+				}
+			}
 			SMPParams = append(SMPParams, fmt.Sprintf("maxcpus=%d", config.SMP.MaxCPUs))
 		}
 
@@ -3169,6 +3314,12 @@ func (config *Config) appendMemoryKnobs() {
 	if config.Memory.Size == "" {
 		return
 	}
+
+	if len(config.NUMANodes) > 0 && isDimmSupported(config) {
+		config.appendMultiNUMAMemoryKnobs()
+		return
+	}
+
 	var objMemParam, numaMemParam string
 	dimmName := "dimm1"
 	if config.Knobs.HugePages {
@@ -3197,6 +3348,49 @@ func (config *Config) appendMemoryKnobs() {
 	} else {
 		config.qemuParams = append(config.qemuParams, "-machine")
 		config.qemuParams = append(config.qemuParams, "memory-backend="+dimmName)
+	}
+}
+
+func (config *Config) appendMultiNUMAMemoryKnobs() {
+	for _, node := range config.NUMANodes {
+		memID := fmt.Sprintf("numa-mem%d", node.NodeID)
+
+		backendType := node.MemBackendType
+		if backendType == "" {
+			backendType = "memory-backend-ram"
+		}
+
+		objMemParam := fmt.Sprintf("%s,id=%s,size=%s", backendType, memID, node.MemSize)
+
+		if node.MemBackendPath != "" {
+			objMemParam += ",mem-path=" + node.MemBackendPath
+		}
+
+		if node.HostNodes != "" {
+			objMemParam += ",host-nodes=" + node.HostNodes + ",policy=bind"
+		}
+
+		if config.Knobs.MemShared {
+			objMemParam += ",share=on"
+		}
+		if config.Knobs.MemPrealloc {
+			objMemParam += ",prealloc=on"
+		}
+
+		config.qemuParams = append(config.qemuParams, "-object")
+		config.qemuParams = append(config.qemuParams, objMemParam)
+
+		numaParam := fmt.Sprintf("node,nodeid=%d,memdev=%s", node.NodeID, memID)
+		if node.CPUs != "" {
+			numaParam += ",cpus=" + node.CPUs
+		}
+		config.qemuParams = append(config.qemuParams, "-numa")
+		config.qemuParams = append(config.qemuParams, numaParam)
+	}
+
+	for _, dist := range config.NUMADists {
+		config.qemuParams = append(config.qemuParams, "-numa")
+		config.qemuParams = append(config.qemuParams, fmt.Sprintf("dist,src=%d,dst=%d,val=%d", dist.Src, dist.Dst, dist.Val))
 	}
 }
 

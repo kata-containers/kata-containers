@@ -128,7 +128,7 @@ fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
                 });
                 neigh.to_ip_address = addr;
             }
-            NeighbourAttribute::LinkLocalAddress(addr) => {
+            NeighbourAttribute::LinkLayerAddress(addr) => {
                 if addr.len() < 6 {
                     continue;
                 }

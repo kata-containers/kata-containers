@@ -441,7 +441,7 @@ impl VmmService {
         boot_source_config: BootSourceConfig,
     ) -> VmmRequestResult {
         use super::BootSourceConfigError::{
-            InvalidInitrdPath, InvalidKernelCommandLine, InvalidKernelPath,
+            InvalidFirmwarePath, InvalidInitrdPath, InvalidKernelCommandLine, InvalidKernelPath,
             UpdateNotAllowedPostBoot,
         };
         use super::VmmActionError::BootSource;
@@ -468,7 +468,14 @@ impl VmmService {
             .insert_str(boot_args)
             .map_err(|e| BootSource(InvalidKernelCommandLine(e)))?;
 
-        let kernel_config = KernelConfigInfo::new(kernel_file, initrd_file, cmdline);
+        let firmware_file = match boot_source_config.firmware_path {
+            None => None,
+            Some(ref path) => {
+                Some(File::open(path).map_err(|e| BootSource(InvalidFirmwarePath(e)))?)
+            }
+        };
+
+        let kernel_config = KernelConfigInfo::new(kernel_file, initrd_file, cmdline, firmware_file);
         vm.set_kernel_config(kernel_config);
 
         Ok(VmmData::Empty)

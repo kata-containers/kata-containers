@@ -82,7 +82,7 @@ func New(ctx context.Context, id string, publisher cdshim.Publisher, shutdown fu
 	logrus.SetOutput(io.Discard)
 	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
 	if !opts.Debug {
-		logrus.SetLevel(logrus.WarnLevel)
+		logrus.SetLevel(logrus.InfoLevel)
 	}
 	vci.SetLogger(ctx, shimLog)
 	katautils.SetLogger(ctx, shimLog, shimLog.Logger.Level)

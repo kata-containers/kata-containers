@@ -21,6 +21,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +45,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -193,8 +195,10 @@ func (q *qemu) kernelParameters() string {
 	// use default parameters
 	params = append(params, defaultKernelParameters...)
 
-	// set the maximum number of vCPUs
-	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	// set the maximum number of vCPUs (not applicable for confidential guests)
+	if !q.config.ConfidentialGuest {
+		params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	}
 
 	// set the SELinux params in accordance with the runtime configuration, disable_guest_selinux.
 	if q.config.DisableGuestSeLinux {
@@ -249,6 +253,14 @@ func (q *qemu) qemuPath() (string, error) {
 func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *HypervisorConfig) error {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "setup", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
+
+	// Right-size auto-derived NUMA topology before snapshotting the config.
+	// We mutate the caller-owned pointer so the sandbox's shared
+	// HypervisorConfig (used by vCPU pinning and cpuset.mems forwarding)
+	// observes the same trimmed topology that QEMU is launched with.
+	// No-op when numa_mapping was set explicitly or when the topology
+	// already has one or zero nodes.
+	maybeRightSizeAutoNUMA(hypervisorConfig, q.Logger())
 
 	if err := q.setConfig(hypervisorConfig); err != nil {
 		return err
@@ -325,8 +337,8 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 	return nil
 }
 
-func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs)
+func (q *qemu) cpuTopology(effectiveNUMANodes uint32) govmmQemu.SMP {
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, effectiveNUMANodes, q.config.ConfidentialGuest)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
@@ -337,6 +349,413 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 	}
 
 	return q.arch.memoryTopology(memMb, 0, 0), nil
+}
+
+// vfioHostNUMANodes walks the given VFIO devices and returns the set of
+// host NUMA node IDs that contain at least one of them. Devices for which
+// the NUMA node cannot be determined (returned as -1 by the kernel when
+// the device is not bound to any node) are skipped silently. Resolution
+// failures are logged as warnings and treated as "no constraint" for that
+// device. The function is a free function (not a method) so it can be
+// invoked before q.config is populated, e.g. during pre-setConfig
+// right-sizing.
+func vfioHostNUMANodes(devices []config.DeviceInfo, log *logrus.Entry) map[int]struct{} {
+	nodes := make(map[int]struct{})
+	for _, dev := range devices {
+		hostPath, err := config.GetHostPath(dev, false, "")
+		if err != nil {
+			log.WithError(err).WithField("device", dev.HostPath).Warn("Failed to resolve VFIO device host path for NUMA placement")
+			continue
+		}
+		dev.HostPath = hostPath
+		var vfioDevs []*config.VFIODev
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
+			vfioDevs, err = drivers.GetDeviceFromVFIODev(dev)
+		} else {
+			vfioDevs, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+		}
+		if err != nil {
+			log.WithError(err).WithField("device", dev.HostPath).Warn("Failed to enumerate VFIO device(s) for NUMA placement")
+			continue
+		}
+		for _, vd := range vfioDevs {
+			if vd.NUMANode >= 0 {
+				nodes[vd.NUMANode] = struct{}{}
+			}
+		}
+	}
+	return nodes
+}
+
+// guestNodeCoversAny reports whether the HostNodes of guestNode references
+// any host NUMA ID present in the given set.
+func guestNodeCoversAny(guestNode types.GuestNUMANode, hostSet map[int]struct{}) bool {
+	if len(hostSet) == 0 {
+		return false
+	}
+	parsed, err := cpuset.Parse(guestNode.HostNodes)
+	if err != nil {
+		return false
+	}
+	for _, id := range parsed.ToSlice() {
+		if _, ok := hostSet[id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// guestNodeHostIDs returns the host NUMA IDs covered by a single guest node.
+func guestNodeHostIDs(gn types.GuestNUMANode) []int {
+	parsed, err := cpuset.Parse(gn.HostNodes)
+	if err != nil {
+		return nil
+	}
+	return parsed.ToSlice()
+}
+
+// hostNUMACapFn returns the (cpu_count, mem_mb) capacity of a host NUMA
+// node. Used to inject sysfs reads for testability.
+type hostNUMACapFn func(nodeID int) (cpus int, memMB uint64, err error)
+
+// realHostNUMACapFn is the production capacity provider, backed by sysfs.
+func realHostNUMACapFn(nodeID int) (int, uint64, error) {
+	c, err := utils.GetHostNUMANodeCapacity(nodeID)
+	if err != nil {
+		return 0, 0, err
+	}
+	return c.CPUs, c.MemMB, nil
+}
+
+// sumNUMACapacity returns the (cpu_count, mem_mb) sum of the unique host
+// NUMA nodes referenced by the given guest NUMA nodes. Nodes whose capacity
+// can't be queried are skipped silently.
+func sumNUMACapacity(nodes []types.GuestNUMANode, capFn hostNUMACapFn) (int, uint64) {
+	seen := make(map[int]struct{})
+	var totalCPUs int
+	var totalMemMB uint64
+	for _, gn := range nodes {
+		for _, hid := range guestNodeHostIDs(gn) {
+			if _, ok := seen[hid]; ok {
+				continue
+			}
+			seen[hid] = struct{}{}
+			cpus, memMB, err := capFn(hid)
+			if err != nil {
+				continue
+			}
+			totalCPUs += cpus
+			totalMemMB += memMB
+		}
+	}
+	return totalCPUs, totalMemMB
+}
+
+// selectNUMANodes is the pure right-sizing decision: given an auto-derived
+// guest NUMA topology, the sandbox's CPU/memory budget, the set of host
+// NUMA nodes containing an attached VFIO device, and a capacity oracle,
+// return the smallest subset of numaNodes that satisfies the constraints.
+//
+// Heuristic, in order:
+//
+//  1. If a VFIO device is attached, keep the guest nodes covering host
+//     nodes that contain a device. If their combined capacity fits the
+//     sandbox, return only that subset.
+//  2. With no VFIO devices, if the smallest single host node has enough
+//     CPU+memory for the sandbox, return the first guest node.
+//  3. Otherwise, return the input unchanged.
+//
+// The function is pure (no I/O), so it is unit-testable. Callers must pass
+// a capFn that resolves host NUMA capacity; production code uses
+// realHostNUMACapFn.
+func selectNUMANodes(
+	numaNodes []types.GuestNUMANode,
+	vcpus uint32,
+	memMB uint64,
+	vfioHostSet map[int]struct{},
+	capFn hostNUMACapFn,
+	log *logrus.Entry,
+) []types.GuestNUMANode {
+	if len(numaNodes) <= 1 {
+		return numaNodes
+	}
+
+	// 1) VFIO-aware: keep the guest nodes covering device-bearing host nodes.
+	if len(vfioHostSet) > 0 {
+		var covered []types.GuestNUMANode
+		for _, gn := range numaNodes {
+			if guestNodeCoversAny(gn, vfioHostSet) {
+				covered = append(covered, gn)
+			}
+		}
+		if len(covered) == 0 {
+			log.WithField("vfio-host-nodes", vfioHostSet).
+				Warn("No guest NUMA node covers VFIO device host nodes; keeping full topology")
+			return numaNodes
+		}
+		cpus, memCap := sumNUMACapacity(covered, capFn)
+		if uint32(cpus) >= vcpus && memCap >= memMB {
+			log.WithFields(logrus.Fields{
+				"selected-nodes":  len(covered),
+				"input-nodes":     len(numaNodes),
+				"vfio-host-nodes": vfioHostSet,
+				"vcpus":           vcpus,
+				"mem-mb":          memMB,
+			}).Info("Right-sized NUMA topology to VFIO-aligned subset")
+			return covered
+		}
+		log.WithFields(logrus.Fields{
+			"vfio-host-nodes":  vfioHostSet,
+			"covered-cpus":     cpus,
+			"covered-mem-mb":   memCap,
+			"requested-vcpus":  vcpus,
+			"requested-mem-mb": memMB,
+		}).Info("VFIO-aligned NUMA subset too small for sandbox; keeping full topology")
+		return numaNodes
+	}
+
+	// 2) No VFIO constraints: collapse if the sandbox fits in a single
+	// (smallest) host node.
+	var smallestCPUs int = -1
+	var smallestMem uint64 = math.MaxUint64
+	for _, gn := range numaNodes {
+		cpus, memCap := sumNUMACapacity([]types.GuestNUMANode{gn}, capFn)
+		if smallestCPUs < 0 || cpus < smallestCPUs {
+			smallestCPUs = cpus
+		}
+		if memCap < smallestMem {
+			smallestMem = memCap
+		}
+	}
+	if smallestCPUs > 0 && uint32(smallestCPUs) >= vcpus && smallestMem >= memMB {
+		log.WithFields(logrus.Fields{
+			"input-nodes":         len(numaNodes),
+			"vcpus":               vcpus,
+			"mem-mb":              memMB,
+			"smallest-node-cpus":  smallestCPUs,
+			"smallest-node-memMB": smallestMem,
+		}).Info("Right-sized NUMA topology: sandbox fits in a single host node")
+		return numaNodes[:1]
+	}
+
+	// 3) Sandbox spans multiple nodes; preserve the auto-derived topology.
+	return numaNodes
+}
+
+// maybeRightSizeAutoNUMA right-sizes an auto-derived guest NUMA topology
+// in place on the given HypervisorConfig. It is a no-op when the user
+// configured an explicit numa_mapping (TOML or annotation), or when the
+// topology has at most one node.
+//
+// This must run before the config is consumed by the rest of the runtime
+// (sandbox vCPU pinning, cpuset.mems forwarding, QEMU command-line build),
+// so callers should invoke it on the *shared* HypervisorConfig pointer
+// owned by the sandbox, not on a local copy.
+func maybeRightSizeAutoNUMA(hc *HypervisorConfig, log *logrus.Entry) {
+	if hc == nil || len(hc.NUMAMapping) > 0 || len(hc.GuestNUMANodes) <= 1 {
+		return
+	}
+	hc.GuestNUMANodes = selectNUMANodes(
+		hc.GuestNUMANodes,
+		hc.DefaultMaxVCPUs,
+		uint64(hc.MemorySize),
+		vfioHostNUMANodes(hc.VFIODevices, log),
+		realHostNUMACapFn,
+		log,
+	)
+}
+
+func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
+	// q.config.GuestNUMANodes has already been right-sized (when applicable)
+	// by maybeRightSizeAutoNUMA() at hypervisor setup time.  Empty means
+	// no NUMA topology; a single node may still carry a HostNodes binding
+	// (e.g. right-sized to the GPU's NUMA node), in which case we must
+	// emit it so memory is bound to the correct host node.
+	numaNodes := q.config.GuestNUMANodes
+	if !numaPlacementActive(numaNodes) {
+		return nil, nil, nil
+	}
+
+	switch goruntime.GOARCH {
+	case "amd64", "arm64":
+	default:
+		return nil, nil, fmt.Errorf("multi-NUMA not supported on architecture %s", goruntime.GOARCH)
+	}
+
+	// NUMA requires static_sandbox_resource_mgmt=true, which guarantees
+	// NumVCPUs == DefaultMaxVCPUs (set in oci/utils.go). All boot vCPUs
+	// are present at VM start, so the per-node CPU ranges below are valid.
+	//
+	// For non-confidential guests, cpuTopology() rounds MaxCPUs up to
+	// (numNUMANodes * coresPerSocket). When vCPUs don't divide evenly across
+	// nodes, the last node gets one fewer boot CPU but the extra CPU slot is
+	// still pre-assigned to that node in the NUMA map so it lands on the
+	// correct node when hotplugged. Apply the same ceiling here.
+	//
+	// For confidential guests, cpuTopology() omits maxcpus so QEMU infers
+	// maxcpus=vcpus. CPU indices in the NUMA map must stay within [0, vcpus-1];
+	// skip the ceiling and distribute exactly DefaultMaxVCPUs. An uneven vCPU
+	// count simply means one node gets one fewer CPU — no hotplug slot needed.
+	numNodes := uint32(len(numaNodes))
+	if q.config.DefaultMaxVCPUs < numNodes {
+		hvLogger.WithFields(logrus.Fields{
+			"vcpus":      q.config.DefaultMaxVCPUs,
+			"numa-nodes": numNodes,
+		}).Warn("DefaultMaxVCPUs < NUMA node count; skipping multi-NUMA topology")
+		return nil, nil, nil
+	}
+	var maxVCPUs uint32
+	if q.config.ConfidentialGuest {
+		maxVCPUs = q.config.DefaultMaxVCPUs
+	} else {
+		coresPerSocket := (q.config.DefaultMaxVCPUs + numNodes - 1) / numNodes
+		maxVCPUs = numNodes * coresPerSocket
+	}
+
+	vcpusPerNode, err := utils.DistributeVCPUsProportionally(numaNodes, maxVCPUs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to distribute vCPUs across NUMA nodes: %w", err)
+	}
+
+	memMb := uint64(q.config.MemorySize)
+
+	var memAlign uint64 = 1
+	if q.config.HugePages {
+		memAlign = 2
+	}
+
+	backendType := "memory-backend-ram"
+	backendPath := ""
+	if q.config.HugePages {
+		backendType = "memory-backend-file"
+		backendPath = "/dev/hugepages"
+	} else if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
+		backendType = "memory-backend-file"
+		backendPath = fallbackFileBackedMemDir
+	}
+	if backendPath != "" {
+		if _, err := os.Stat(backendPath); err != nil {
+			return nil, nil, fmt.Errorf("NUMA memory backend path %q does not exist: %w", backendPath, err)
+		}
+	}
+
+	// Distribute memory proportionally to vCPU counts, aligned to memAlign.
+	memPerNode := make([]uint64, numNodes)
+	var memAssigned uint64
+	for i := uint32(0); i < numNodes; i++ {
+		raw := memMb * uint64(vcpusPerNode[i]) / uint64(maxVCPUs)
+		memPerNode[i] = (raw / memAlign) * memAlign
+		if memPerNode[i] == 0 {
+			memPerNode[i] = memAlign
+		}
+		memAssigned += memPerNode[i]
+	}
+	// Give the remainder to the last node (must also be aligned).
+	if memAssigned < memMb {
+		remainder := memMb - memAssigned
+		if remainder%memAlign != 0 {
+			return nil, nil, fmt.Errorf("MemorySize (%d MiB) cannot be evenly distributed across %d NUMA nodes with %d MiB alignment",
+				memMb, numNodes, memAlign)
+		}
+		memPerNode[numNodes-1] += remainder
+	} else if memAssigned > memMb {
+		return nil, nil, fmt.Errorf("MemorySize (%d MiB) cannot be evenly distributed across %d NUMA nodes with %d MiB alignment",
+			memMb, numNodes, memAlign)
+	}
+
+	var nodes []govmmQemu.NUMANode
+	var cpuOffset uint32
+	for i, gn := range numaNodes {
+		startCPU := cpuOffset
+		endCPU := startCPU + vcpusPerNode[i] - 1
+		cpuOffset = endCPU + 1
+		cpuRange := fmt.Sprintf("%d-%d", startCPU, endCPU)
+
+		nodes = append(nodes, govmmQemu.NUMANode{
+			NodeID:         uint32(i),
+			CPUs:           cpuRange,
+			MemSize:        fmt.Sprintf("%dM", memPerNode[i]),
+			HostNodes:      gn.HostNodes,
+			MemBackendType: backendType,
+			MemBackendPath: backendPath,
+		})
+	}
+
+	var dists []govmmQemu.NUMADist
+	hostDists := utils.GetHostNUMADistances(numaNodes)
+	for _, hd := range hostDists {
+		dists = append(dists, govmmQemu.NUMADist{
+			Src: hd.Src,
+			Dst: hd.Dst,
+			Val: hd.Val,
+		})
+	}
+
+	q.validateVFIODeviceNUMAPlacement(numaNodes)
+
+	return nodes, dists, nil
+}
+
+// buildCoveredHostNodes maps each host NUMA node ID to its guest NUMA node
+// index based on the GuestNUMANode HostNodes configuration.
+func buildCoveredHostNodes(numaNodes []types.GuestNUMANode) map[int]uint32 {
+	covered := make(map[int]uint32)
+	for guestIdx, gn := range numaNodes {
+		nodeSet, err := cpuset.Parse(gn.HostNodes)
+		if err != nil {
+			continue
+		}
+		for _, n := range nodeSet.ToSlice() {
+			covered[n] = uint32(guestIdx)
+		}
+	}
+	return covered
+}
+
+// validateVFIODeviceNUMAPlacement checks that every cold-plugged VFIO device
+// (e.g. GPU) resides on a host NUMA node that is covered by the guest NUMA
+// topology. A mismatch means the device will incur cross-NUMA memory accesses.
+func (q *qemu) validateVFIODeviceNUMAPlacement(numaNodes []types.GuestNUMANode) {
+	coveredHostNodes := buildCoveredHostNodes(numaNodes)
+
+	for _, dev := range q.config.VFIODevices {
+		hostPath, err := config.GetHostPath(dev, false, "")
+		if err != nil {
+			q.Logger().WithError(err).WithField("device", dev.HostPath).Warn("Failed to resolve VFIO device host path for NUMA placement validation")
+			continue
+		}
+		dev.HostPath = hostPath
+		var vfioDevs []*config.VFIODev
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
+			vfioDevs, err = drivers.GetDeviceFromVFIODev(dev)
+		} else {
+			vfioDevs, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+		}
+		if err != nil {
+			q.Logger().WithError(err).WithField("device", dev.HostPath).Warn("Failed to enumerate VFIO device(s) for NUMA placement validation")
+			continue
+		}
+		for _, vd := range vfioDevs {
+			if vd.NUMANode < 0 {
+				continue
+			}
+			guestNode, ok := coveredHostNodes[vd.NUMANode]
+			if !ok {
+				q.Logger().WithFields(logrus.Fields{
+					"bdf":           vd.BDF,
+					"host-numa":     vd.NUMANode,
+					"guest-numa":    "none",
+					"covered-nodes": coveredHostNodes,
+				}).Warn("VFIO device on host NUMA node not covered by guest NUMA topology; cross-NUMA memory accesses may occur")
+			} else {
+				q.Logger().WithFields(logrus.Fields{
+					"bdf":        vd.BDF,
+					"host-numa":  vd.NUMANode,
+					"guest-numa": guestNode,
+				}).Debug("VFIO device NUMA placement validated")
+			}
+		}
+	}
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
@@ -489,12 +908,7 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 }
 
 func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) {
-	var target string
-	if q.config.FileBackedMemRootDir != "" {
-		target = q.config.FileBackedMemRootDir
-	} else {
-		target = fallbackFileBackedMemDir
-	}
+	target := fallbackFileBackedMemDir
 	if _, err := os.Stat(target); err != nil {
 		q.Logger().WithError(err).Error("File backed memory location does not exist")
 		return
@@ -596,7 +1010,13 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	smp := q.cpuTopology()
+	numaNodes, numaDists, err := q.buildNUMATopology()
+	if err != nil {
+		return err
+	}
+
+	effectiveNUMANodes := uint32(len(numaNodes))
+	smp := q.cpuTopology(effectiveNUMANodes)
 
 	memory, err := q.memoryTopology()
 	if err != nil {
@@ -620,12 +1040,11 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	// builds the first VM with file-backed memory and shared=on and the
 	// subsequent ones with shared=off. virtio-fs always requires shared=on for
 	// memory.
-	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
-		q.config.FileBackedMemRootDir != "" {
+	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		if !q.config.BootToBeTemplate && !q.config.BootFromTemplate {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
-			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+			return errors.New("VM templating has been enabled with virtio-fs and this configuration will not work")
 		}
 		if q.config.HugePages {
 			knobs.MemPrealloc = true
@@ -717,6 +1136,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		QMPSockets:     qmpSockets,
 		Knobs:          knobs,
 		Incoming:       incoming,
+		NUMANodes:      numaNodes,
+		NUMADists:      numaDists,
 		VGA:            "none",
 		GlobalParam:    "kvm-pit.lost_tick_policy=discard",
 		Bios:           firmwarePath,
@@ -881,6 +1302,15 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
+
+		// When NUMA is active (multi-node OR a single node right-sized to a
+		// specific host node), create pxb-pcie bridges so cold-plugged VFIO
+		// devices inherit the correct guest NUMA affinity.
+		if numaPlacementActive(q.config.GuestNUMANodes) && len(hypervisorConfig.VFIODevices) > 0 {
+			qemuConfig.Devices = q.createNUMAPCIeTopology(qemuConfig.Devices, hypervisorConfig, numOfPluggablePorts)
+			return nil
+		}
+
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts)
 		return nil
 	}
@@ -953,8 +1383,7 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
 		}
 
-		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
-			q.config.FileBackedMemRootDir != "" {
+		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 			target = q.qemuConfig.Memory.Path
 			memoryBack = "memory-backend-file"
 		}
@@ -1418,6 +1847,48 @@ func (q *qemu) togglePauseSandbox(ctx context.Context, pause bool) error {
 		return q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
 	}
 	return q.qmpMonitorCh.qmp.ExecuteCont(q.qmpMonitorCh.ctx)
+}
+
+// ResolveColdPlugVFIOGuestPciPaths implements Hypervisor. For each VFIODev
+// with IsPCIe=true and an empty GuestPciPath, it queries QMP to find the
+// in-guest PCI path and writes it back onto the device.
+func (q *qemu) ResolveColdPlugVFIOGuestPciPaths(ctx context.Context, vfioDevs []*config.VFIODev) error {
+	if len(vfioDevs) == 0 {
+		return nil
+	}
+	if err := q.qmpSetup(); err != nil {
+		return fmt.Errorf("ResolveColdPlugVFIOGuestPciPaths: qmpSetup: %w", err)
+	}
+	for _, vfioDev := range vfioDevs {
+		if vfioDev == nil || !vfioDev.IsPCIe {
+			continue
+		}
+		if !vfioDev.GuestPciPath.IsNil() {
+			q.Logger().WithFields(logrus.Fields{
+				"qemu-device-id": vfioDev.ID,
+				"host-bdf":       vfioDev.BDF,
+				"guest-pci-path": vfioDev.GuestPciPath.String(),
+			}).Debug("ResolveColdPlugVFIOGuestPciPaths: skipping device with pre-computed guest PCI path")
+			continue
+		}
+		guestPath, err := q.arch.qomGetPciPath(vfioDev.ID, &q.qmpMonitorCh)
+		if err != nil {
+			q.Logger().WithFields(logrus.Fields{
+				"qemu-device-id": vfioDev.ID,
+				"host-bdf":       vfioDev.BDF,
+			}).WithError(err).Warn("ResolveColdPlugVFIOGuestPciPaths: failed to resolve guest PCI path")
+			continue
+		}
+		vfioDev.GuestPciPath = guestPath
+		q.Logger().WithFields(logrus.Fields{
+			"qemu-device-id": vfioDev.ID,
+			"host-bdf":       vfioDev.BDF,
+			"port":           vfioDev.Port,
+			"bus":            vfioDev.Bus,
+			"guest-pci-path": guestPath.String(),
+		}).Info("ResolveColdPlugVFIOGuestPciPaths: resolved guest PCI path")
+	}
+	return nil
 }
 
 func (q *qemu) qmpSetup() error {
@@ -2660,7 +3131,107 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
-// genericAppendPCIeRootPort appends to devices the given pcie-root-port
+// numaPlacementActive reports whether the runtime should emit per-NUMA
+// pxb-pcie / memory-binding QEMU args.  True when there is more than one
+// guest node, OR a single guest node with an explicit HostNodes binding.
+//
+// The single-node case covers two scenarios that the runtime cannot tell
+// apart after right-sizing:
+//   - a multi-NUMA host whose workload was collapsed to one host node
+//     (e.g. GPU on host node 0) — pxb-pcie + host-nodes binding are
+//     required so the guest GPU reports the correct NUMA affinity;
+//   - a single-NUMA host with `enable_numa=true` — emitting the binding
+//     is a functional no-op (the only host node is node 0 anyway).
+//
+// Single node without a HostNodes value (no NUMA mapping at all) falls
+// through to the flat memdev path.
+func numaPlacementActive(nodes []types.GuestNUMANode) bool {
+	if len(nodes) > 1 {
+		return true
+	}
+	return len(nodes) == 1 && nodes[0].HostNodes != ""
+}
+
+// createNUMAPCIeTopology creates pxb-pcie bridges for NUMA nodes that have
+// VFIO devices, then creates root ports on each pxb bus.  VFIO devices will
+// be assigned to these root ports during Attach() based on their host NUMA
+// node, giving the guest kernel correct NUMA affinity for the PCI devices.
+func (q *qemu) createNUMAPCIeTopology(devices []govmmQemu.Device, hypervisorConfig *HypervisorConfig, totalPorts uint32) []govmmQemu.Device {
+	coveredHostNodes := buildCoveredHostNodes(q.config.GuestNUMANodes)
+
+	// Count VFIO devices per host NUMA node.
+	numaDevCount := make(map[int]int)
+	for _, dev := range hypervisorConfig.VFIODevices {
+		hostPath, err := config.GetHostPath(dev, false, "")
+		if err != nil {
+			continue
+		}
+		dev.HostPath = hostPath
+		var vfioDevs []*config.VFIODev
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
+			vfioDevs, _ = drivers.GetDeviceFromVFIODev(dev)
+		} else {
+			vfioDevs, _ = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+		}
+		for _, vd := range vfioDevs {
+			if vd.NUMANode >= 0 && drivers.IsPCIeDevice(vd.BDF) {
+				numaDevCount[vd.NUMANode]++
+			}
+		}
+	}
+
+	if len(numaDevCount) == 0 {
+		return q.arch.appendPCIeRootPortDevice(devices, totalPorts)
+	}
+
+	// Create a pxb-pcie + root ports per NUMA node that has devices.
+	var rpIndex uint32
+	const busNrSpacing uint8 = 0x20
+
+	for hostNode, devCount := range numaDevCount {
+		guestNode, ok := coveredHostNodes[hostNode]
+		if !ok {
+			q.Logger().WithField("host-numa", hostNode).Warn("VFIO device on uncovered NUMA node; skipping pxb-pcie")
+			continue
+		}
+
+		pxbID := fmt.Sprintf("pxb-numa%d", guestNode)
+		busNr := busNrSpacing * uint8(guestNode+1)
+
+		devices = append(devices, govmmQemu.PXBPCIeDevice{
+			ID:       pxbID,
+			BusNr:    busNr,
+			NUMANode: int(guestNode),
+		})
+
+		// Create root ports on this pxb bus for the VFIO devices.
+		var rpIDs []string
+		for i := 0; i < devCount; i++ {
+			rpID := fmt.Sprintf("rp-numa%d-%d", guestNode, i)
+			rpIDs = append(rpIDs, rpID)
+			devices = append(devices, govmmQemu.PCIeRootPortDevice{
+				ID:      rpID,
+				Bus:     pxbID,
+				Chassis: fmt.Sprintf("%d", 10+guestNode),
+				Slot:    fmt.Sprintf("%d", i),
+			})
+			rpIndex++
+		}
+
+		config.NUMARootPorts[hostNode] = rpIDs
+
+		q.Logger().WithFields(logrus.Fields{
+			"pxb-id":     pxbID,
+			"bus-nr":     busNr,
+			"guest-numa": guestNode,
+			"host-numa":  hostNode,
+			"root-ports": rpIDs,
+		}).Info("Created pxb-pcie with root ports for NUMA VFIO placement")
+	}
+
+	return devices
+}
+
 func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
 	var (
 		bus           string

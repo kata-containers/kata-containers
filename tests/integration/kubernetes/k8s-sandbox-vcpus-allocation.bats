@@ -10,8 +10,6 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "See: https://github.com/kata-containers/kata-containers/issues/12492"
-
 	setup_common || die "setup_common failed"
 
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
@@ -33,8 +31,14 @@ setup() {
 	# Create the pods
 	kubectl create -f "${yaml_file}"
 
-	# Wait for completion
-	kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout=$timeout pod --all
+	# Wait for each test container to terminate successfully. Using container
+	# termination state is more robust than pod phase checks, which can lag.
+	for pod in "${pods[@]}"; do
+		kubectl wait \
+			--for=jsonpath='{.status.containerStatuses[0].state.terminated.reason}'=Completed \
+			--timeout=$timeout \
+			"pod/${pod}"
+	done
 
 	# Check the pods
 	for i in {0..2}; do
@@ -49,8 +53,6 @@ setup() {
 }
 
 teardown() {
-	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && skip "See: https://github.com/kata-containers/kata-containers/issues/12492"
-
 	for pod in "${pods[@]}"; do
 		kubectl logs ${pod}
 	done

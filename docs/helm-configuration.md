@@ -35,6 +35,9 @@ Shims can also have configuration options specific to them:
     enabled: ~
     supportedArches:
       - amd64
+    dropIn: |
+      [agent.kata]
+      dial_timeout = 999
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -45,6 +48,10 @@ Shims can also have configuration options specific to them:
       # nodeSelector:
         # nvidia.com/cc.ready.state: "false"
 ```
+
+The optional `shims.<shim>.dropIn` field lets you add a custom Kata drop-in for a
+default (non-custom) runtime. kata-deploy writes it as
+`config.d/50-user-overrides.toml` for that shim.
 
 It's best to reference the default `values.yaml` file above for more details.
 
@@ -86,6 +93,187 @@ customRuntimes:
 
 Again, view the default [`values.yaml`](#parameters) file for more details.
 
+### Drop-In Runtime Configuration
+
+The base runtime configuration shipped with Kata Containers can be modified using an
+overlay method. This can be done directly on the filesystem using the instructions
+found [here](runtime-configuration.md#drop-in-files).
+You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
+chart to achieve the same results.
+
+## Deployment Modes (DaemonSet vs Job)
+
+The chart can install Kata on nodes in one of two ways, selected with the
+top-level `deploymentMode` value:
+
+- **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
+  Kata on every matching node and reverts it when the pod is terminated (i.e. on
+  uninstall). This is the historical behavior and is unchanged.
+- **`job`**: there is **no always-on component**. A tiny *dispatcher* Job (the
+  dispatcher, `kata-deploy-job-dispatcher`) runs as a `post-install`/`post-upgrade` hook,
+  enumerates the selected nodes **live** via the Kubernetes API, and creates one
+  node-pinned install `Job` per node. Each per-node Job runs the staged install
+  pipeline as ordered `initContainers` and then exits:
+
+  ```
+  host-check -> artifacts -> cri   (initContainers)  ->  label (main)
+  ```
+
+  On `helm uninstall`, a `pre-delete` dispatcher fans out per-node Jobs that run
+  the pipeline in reverse (`unlabel -> revert-cri -> remove-artifacts`). Unlike
+  the DaemonSet, **nothing keeps running on the node after installation
+  completes**, and the dispatcher itself only ever talks to the API server — it
+  never touches the host (so it ships as a separate, minimal image,
+  `job.dispatcherImage`).
+
+  The privilege split is explicit: the dispatcher pod runs **fully unprivileged**
+  (`runAsNonRoot`, all capabilities dropped, no privilege escalation, read-only
+  root filesystem, `RuntimeDefault` seccomp) under a **dedicated minimal
+  ServiceAccount** whose only rights are `nodes: list` (cluster-scoped) and
+  managing Jobs in the release namespace. All privileged, host-mutating work
+  stays in the per-node Jobs, which continue to use the `kata-deploy`
+  ServiceAccount.
+
+```yaml title="values.yaml"
+deploymentMode: job
+```
+
+#### Why a dispatcher instead of Helm-rendered per-node Jobs
+
+Rendering one Job per node directly in the chart does not scale: Helm stores the
+whole rendered release in a single (~1 MiB) Secret and runs hook resources
+sequentially, so large fleets blow the size limit and/or take far too long. A
+single `Indexed Job` or a `JobSet` removes those limits but **cannot guarantee
+one pod per node** once `parallelism < node-count`: Kubernetes' topology-spread
+and affinity scheduling ignore *completed* pods, so as paced pods finish, later
+pods pile onto a subset of nodes and leave others uncovered.
+
+The dispatcher sidesteps both problems: the Helm release stays O(1) (just the
+dispatcher + a constant-size ConfigMap holding the per-node Job templates), node
+membership is resolved at run time, and the dispatcher itself paces the rollout
+(at most `job.parallelism` per-node Jobs in flight) while **guaranteeing one Job
+per node**. Per-node Jobs are garbage-collected via an `ownerReference` to the
+dispatcher and `job.ttlSecondsAfterFinished`.
+
+### Adding nodes in `job` mode
+
+The dispatcher only runs on `helm install` / `helm upgrade` / `helm uninstall`.
+There is **no dispatcher watching for new nodes**, so when you add nodes later,
+re-run `helm upgrade`; the dispatcher re-enumerates the cluster and installs the
+new nodes:
+
+```sh
+helm upgrade kata-deploy "${CHART}" --version "${VERSION}" --reuse-values
+```
+
+Each per-node stage is idempotent (it skips when already applied), so the
+upgrade only does real work on the newly added nodes.
+
+### Recovering from a failed or deleted dispatcher
+
+The dispatcher runs as a **blocking** `post-install`/`post-upgrade` hook Job with
+`restartPolicy: Never` and `backoffLimit: 0`, so if its pod is evicted, drained,
+or deleted mid-rollout the Job is marked *failed* and is **not** restarted
+automatically — `helm install`/`helm upgrade` surfaces the failure rather than
+leaving you silently half-installed.
+
+What survives the dispatcher dying:
+
+- **Per-node Jobs already created keep running.** They are independent,
+  `nodeName`-pinned Jobs, not children of the dispatcher pod, so installs that
+  were already dispatched run to completion and those nodes get labeled. Only
+  nodes still queued (never dispatched) are skipped, so at worst you get
+  *partial coverage* — never a half-mutated host, because each stage is
+  idempotent.
+- Those per-node Jobs carry a (non-controller) `ownerReference` to the dispatcher
+  Job, so they survive *pod* deletion but are garbage-collected once the
+  dispatcher **Job** itself is removed or its `job.ttlSecondsAfterFinished`
+  elapses. Keep that TTL comfortably larger than a single node's install so
+  in-flight Jobs are not reaped early.
+
+Recovery is the same one-liner as adding nodes — re-run `helm upgrade`:
+
+```sh
+helm upgrade kata-deploy "${CHART}" --version "${VERSION}" --reuse-values
+```
+
+The `before-hook-creation` delete policy first removes the stale dispatcher Job
+(cascading away any leftover per-node Jobs); the fresh dispatcher then
+re-enumerates nodes live, recreates the per-node Jobs (adopting any that still
+exist rather than duplicating them), and because every stage is idempotent the
+already-installed nodes are fast no-ops. Coverage converges on the re-run.
+
+### Choosing which nodes get a Job
+
+In `job` mode, node selection is configured under the `job` key, with the
+following precedence (highest first):
+
+1. `job.nodes`: an explicit list of node names, passed to the dispatcher verbatim.
+2. `job.nodeSelector` (an equality map) **ANDed with**
+   `job.nodeSelectorExpressions` (Kubernetes label-selector requirements using
+   the operators `In`, `NotIn`, `Exists`, `DoesNotExist`). These are compiled
+   into a single label-selector string that the dispatcher resolves live.
+3. If both are empty, **all** nodes are targeted.
+
+By **default the expressions target worker (non-control-plane) nodes**, so no
+custom node labeling is required (this differs from the DaemonSet `nodeSelector`
+examples above, which rely on you labeling nodes). Override as needed:
+
+```yaml title="values.yaml"
+# Target nodes carrying a specific label:
+job:
+  nodeSelector:
+    kata-containers: "enabled"
+
+# Target every node, including control-plane (e.g. single-node clusters / CI):
+job:
+  nodeSelectorExpressions: []
+
+# Richer expressions:
+job:
+  nodeSelectorExpressions:
+    - { key: kubernetes.io/os, operator: In, values: ["linux"] }
+    - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
+
+# Pin to explicit nodes:
+job:
+  nodes: ["worker-1", "worker-2"]
+```
+
+Use `job.parallelism` to pace the rollout — it caps how many per-node Jobs run
+concurrently (e.g. to limit how many CRI runtimes restart at once on a big
+fleet). It is effectively capped at the number of targeted nodes.
+
+### Choosing which nodes are cleaned up on uninstall
+
+Because the cleanup dispatcher resolves nodes **live when it runs** at
+`helm uninstall` (the dispatcher does the lookup, not Helm at render time), the
+node set is *not* frozen into the stored release. This means the **default
+cleanup selector can simply be "nodes carrying the
+`katacontainers.io/kata-runtime` label"** — i.e. exactly the nodes the install
+actually labeled, regardless of how the install selector has drifted since.
+
+Override it under `job.cleanup`, with the same precedence/semantics as install
+(`cleanup.nodes`, then `cleanup.nodeSelector` ANDed with
+`cleanup.nodeSelectorExpressions`, else all nodes):
+
+```yaml title="values.yaml"
+# Only uninstall from specific nodes:
+job:
+  cleanup:
+    nodes: ["worker-1"]
+
+# Use an explicit selector instead of the kata-runtime label default:
+job:
+  cleanup:
+    nodeSelectorExpressions:
+      - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
+```
+
+See the default [`values.yaml`](#parameters) for the remaining `job.*` options
+(e.g. `dispatcherImage`, `parallelism`, `ttlSecondsAfterFinished`,
+`backoffLimit`).
+
 ## Examples
 
 We provide a few examples that you can pass to helm via the `-f`/`--values` flag.
@@ -111,7 +299,9 @@ Includes:
 
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
-This file enables only the NVIDIA GPU-enabled shims:
+This file enables only the NVIDIA GPU-enabled shims and installs them using the
+[`job` deployment mode](#deployment-modes-daemonset-vs-job) (no always-on
+DaemonSet on the node):
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -214,49 +404,3 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
 
-## Customizing Configuration with Drop-in Files
-
-When kata-deploy installs Kata Containers, the base configuration files should not
-be modified directly. Instead, use drop-in configuration files to customize
-settings. This approach ensures your customizations survive kata-deploy upgrades.
-
-### How Drop-in Files Work
-
-The Kata runtime reads the base configuration file and then applies any `.toml`
-files found in the `config.d/` directory alongside it. Files are processed in
-alphabetical order, with later files overriding earlier settings.
-
-### Creating Custom Drop-in Files
-
-To add custom settings, create a `.toml` file in the appropriate `config.d/`
-directory. Use a numeric prefix to control the order of application.
-
-**Reserved prefixes** (used by kata-deploy):
-
-- `10-*`: Core kata-deploy settings
-- `20-*`: Debug settings
-- `30-*`: Kernel parameters
-
-**Recommended prefixes for custom settings**: `50-89`
-
-### Drop-In Config Examples
-
-#### Adding Custom Kernel Parameters
-
-```bash
-# SSH into the node or use kubectl exec
-sudo mkdir -p /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/
-sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-custom.toml << 'EOF'
-[hypervisor.qemu]
-kernel_params = "my_param=value"
-EOF
-```
-
-#### Changing Default Memory Size
-
-```bash
-sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-memory.toml << 'EOF'
-[hypervisor.qemu]
-default_memory = 4096
-EOF
-```

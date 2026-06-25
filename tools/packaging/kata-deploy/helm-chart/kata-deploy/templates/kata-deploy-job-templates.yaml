@@ -1,0 +1,33 @@
+{{- /*
+Per-node Job templates for deploymentMode: job.
+
+This ConfigMap holds the install and cleanup per-node Job manifests, rendered
+ONCE (constant size, independent of the number of nodes). The job-mode dispatcher
+(kata-deploy-job-dispatcher) mounts it, and for every selected node clones the relevant
+template, injects metadata.name + spec.template.spec.nodeName, and creates the
+Job. Keeping the rich pod spec (env/volumes/shim config) here means the Helm
+chart stays the single source of truth; the dispatcher only does fan-out.
+
+It is a normal (non-hook) resource: Helm creates it before the post-install
+dispatcher hook runs, and it still exists during the pre-delete cleanup hook
+(release resources are torn down only after pre-delete hooks complete).
+*/ -}}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+{{- $base := .Chart.Name }}
+{{- if .Values.env.multiInstallSuffix }}
+{{- $base = printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-job-templates" $base | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  install-job.yaml: |
+{{ include "kata-deploy.perNodeJob" (dict "root" . "stage" "install") | indent 4 }}
+  cleanup-job.yaml: |
+{{ include "kata-deploy.perNodeJob" (dict "root" . "stage" "cleanup") | indent 4 }}
+{{- end }}

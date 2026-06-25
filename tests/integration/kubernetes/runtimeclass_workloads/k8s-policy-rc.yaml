@@ -43,3 +43,4 @@ spec:
       - name: hostpath-vol-read-only
         hostPath:
           path: /tmp/results-read-only
+      preemptionPolicy: PreemptLowerPriority

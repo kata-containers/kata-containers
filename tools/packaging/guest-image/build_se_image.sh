@@ -21,7 +21,7 @@ source "${packaging_root_dir}/scripts/lib.sh"
 source "${script_dir}/lib_se.sh"
 
 ARCH=${ARCH:-$(uname -m)}
-if [[ "$(uname -m)" == "${ARCH}" ]]; then
+if [[ "${FAKE_SE_IMAGE:-}" != "true" && "$(uname -m)" == "${ARCH}" ]]; then
 	[[ "${ARCH}" == "s390x" ]] || die "Building a Secure Execution image is currently only supported on s390x."
 fi
 usage() {
@@ -34,19 +34,30 @@ Options:
   --destdir=\${destdir}
 
 Environment variables:
-  HKD_PATH (required): a path for a directory which includes at least one host key document
+  HKD_PATH (required unless FAKE_SE_IMAGE=true): a path for a directory which includes at least one host key document
                   for Secure Execution, generally specific to your machine. See
                   https://www.ibm.com/docs/en/linux-on-systems?topic=tasks-verify-host-key-document
                   for information on how to retrieve and verify this document.
   SIGNING_KEY_CERT_PATH: a path for the IBM zSystem signing key certificate
   INTERMEDIATE_CA_CERT_PATH: a path for the intermediate CA certificate signed by the root CA
   HOST_KEY_CRL_PATH: a path for the host key CRL
+  FAKE_SE_IMAGE : If set to "true", creates a dummy kata-containers-se.img via touch command
+                  instead of using genprotimg. Useful for testing without real SE setup.
   DEBUG         : If set, display debug information.
 EOF
 	exit "${1:-0}"
 }
 
 build_image() {
+	# Check if FAKE_SE_IMAGE mode is enabled
+	if [[ "${FAKE_SE_IMAGE:-}" == "true" ]]; then
+		echo "FAKE_SE_IMAGE mode enabled: Skipping tarball extraction"
+		if ! build_secure_image "" "" "${install_dir}"; then
+			usage 1
+		fi
+		return 0
+	fi
+
 	image_source_dir="${builddir}/secure-image"
 	mkdir -p "${image_source_dir}"
 	pushd "${tarball_dir}"

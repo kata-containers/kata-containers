@@ -12,6 +12,14 @@ on:
         required: false
         type: string
         default: ""
+      kata-monitor-image:
+        description: >-
+          Container image reference for kata-monitor to be exercised by
+          the tests. When unset the tests fall back to running the
+          kata-monitor binary installed from the kata-static tarball.
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-kata-monitor
@@ -28,24 +36,18 @@ jobs:
         vmm:
           - qemu
         container_engine:
-          - crio
           - containerd
-        # TODO: enable when https://github.com/kata-containers/kata-containers/issues/9853 is fixed
-        #include:
-        #  - container_engine: containerd
-        #    containerd_version: lts
-        exclude:
-          # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
-          - container_engine: containerd
-            vmm: qemu
+        containerd_version:
+          - latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
-      #CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KATA_MONITOR_IMAGE: ${{ inputs.kata-monitor-image }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -72,6 +74,10 @@ jobs:
 
       - name: Install kata
         run: bash tests/functional/kata-monitor/gha-run.sh install-kata kata-artifacts
+
+      - name: Pre-pull kata-monitor image
+        if: ${{ inputs.kata-monitor-image != '' }}
+        run: sudo docker pull "${KATA_MONITOR_IMAGE}"
 
       - name: Run kata-monitor tests
         run: bash tests/functional/kata-monitor/gha-run.sh run

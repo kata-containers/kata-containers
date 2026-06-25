@@ -114,6 +114,10 @@ pub trait K8sResource {
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         vec![]
     }
+
+    fn get_labels(&self) -> &Option<BTreeMap<String, String>> {
+        panic!("Unsupported");
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

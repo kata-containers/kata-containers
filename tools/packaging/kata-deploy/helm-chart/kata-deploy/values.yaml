@@ -1,3 +1,106 @@
+# Deployment model for installing/cleaning up Kata on nodes.
+#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
+#              every matching node and reverts it on pod termination (uninstall).
+#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
+#              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
+#              the selected nodes LIVE, and creates one node-pinned install Job
+#              per node - paced to job.parallelism and guaranteeing one install
+#              per node. Each per-node Job runs the staged pipeline as ordered
+#              initContainers and exits. Uninstall works the same way via a
+#              pre-delete dispatcher (reverse pipeline).
+#
+# Why a dispatcher instead of rendering per-node Jobs in the chart: Helm stores
+# the whole rendered release in one ~1 MiB Secret and runs hook resources
+# sequentially, and neither an Indexed Job nor a JobSet can guarantee one pod
+# per node once parallelism < node-count (the scheduler ignores completed pods
+# when balancing spread). The dispatcher keeps the release O(1), enumerates nodes
+# at run time, and paces a guaranteed-coverage rollout with built-in Jobs only.
+#
+# NOTE on "job" mode and new nodes:
+#   The dispatcher only runs on `helm install` / `helm upgrade` / `helm uninstall`.
+#   When you add nodes later, re-run `helm upgrade` so the dispatcher enumerates
+#   and installs the new nodes (the staged actions are idempotent, so already-
+#   installed nodes are skipped). This is intentional: it avoids an always-on
+#   privileged component on every node.
+deploymentMode: daemonset  # daemonset | job
+
+# Settings specific to deploymentMode: job
+job:
+  # Dispatcher image: the dispatcher that fans out per-node Jobs. It only talks to
+  # the Kubernetes API (lists nodes, creates/watches Jobs); it never touches the
+  # host. Supports reference:tag or reference@sha256:digest; tag defaults to the
+  # chart appVersion.
+  dispatcherImage:
+    reference: quay.io/kata-containers/kata-deploy-job-dispatcher
+    tag: ""
+  # Maximum number of nodes processed concurrently (the dispatcher keeps at most
+  # this many per-node Jobs in flight, refilling as they finish). Lower it to
+  # pace the rollout (e.g. limit how many CRI runtimes restart at once on a big
+  # fleet); raise it to install faster. Effectively capped at the node count.
+  parallelism: 100
+  # How to choose which nodes get a per-node INSTALL Job. Precedence:
+  #   1. job.nodes (explicit list of node names) - if non-empty, used verbatim
+  #      (passed to the dispatcher as --nodes).
+  #   2. otherwise a label selector built from job.nodeSelector (equality) ANDed
+  #      with job.nodeSelectorExpressions (In/NotIn/Exists/DoesNotExist) is
+  #      passed to the dispatcher, which resolves matching nodes LIVE at run time.
+  #   3. if both are empty, ALL nodes are targeted.
+  #
+  # DEFAULT: target worker (non-control-plane) nodes, so no custom labeling is
+  # required. Override these freely:
+  #   - Target nodes with a specific label:
+  #       job:
+  #         nodeSelector: { kata-containers: "enabled" }
+  #   - Target every node (including control-plane), e.g. single-node clusters/CI:
+  #       job:
+  #         nodeSelectorExpressions: []
+  #   - Richer expressions:
+  #       job:
+  #         nodeSelectorExpressions:
+  #           - { key: kubernetes.io/os, operator: In, values: ["linux"] }
+  #           - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
+  #   - Pin to explicit nodes:
+  #       job:
+  #         nodes: ["worker-1", "worker-2"]
+  nodes: []
+  # Equality label selector (ANDed with nodeSelectorExpressions). Ignored when
+  # job.nodes is set. Empty by default.
+  nodeSelector: {}
+  # Kubernetes-style label selector requirements (ANDed with nodeSelector).
+  # Each entry: { key, operator, values }. operator is one of:
+  #   In | NotIn (values required) | Exists | DoesNotExist (values must be empty).
+  # Default selects nodes that are NOT control-plane/master (i.e. worker nodes).
+  # Set to [] to disable role filtering and target all discovered nodes.
+  nodeSelectorExpressions:
+    - key: node-role.kubernetes.io/control-plane
+      operator: DoesNotExist
+    - key: node-role.kubernetes.io/master
+      operator: DoesNotExist
+  # Node selection for the UNINSTALL (pre-delete hook) dispatcher. Same precedence
+  # and semantics as install (cleanup.nodes, else cleanup.nodeSelector ANDed with
+  # cleanup.nodeSelectorExpressions, else all nodes).
+  #
+  # The cleanup dispatcher resolves nodes LIVE when it runs at `helm uninstall`
+  # (the dispatcher does the lookup), so - unlike a frozen Helm-rendered hook -
+  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime",
+  # i.e. exactly the nodes install actually labeled. Override to clean a
+  # different set, e.g.:
+  #   job:
+  #     cleanup:
+  #       nodes: ["worker-1"]
+  cleanup:
+    nodes: []
+    nodeSelector: {}
+    nodeSelectorExpressions:
+      - key: katacontainers.io/kata-runtime
+        operator: Exists
+  # How long finished per-node Jobs are retained before automatic garbage
+  # collection (seconds). Applies to both install and cleanup per-node Jobs.
+  ttlSecondsAfterFinished: 600
+  # Per-node retry budget: retries for a single node's Job before it is marked
+  # failed. One node failing never aborts the others.
+  backoffLimit: 3
+
 imagePullPolicy: Always
 
 imagePullSecrets: []
@@ -9,6 +112,27 @@ image:
 kubectlImage:
   reference: quay.io/kata-containers/kubectl
   tag: latest
+
+monitor:
+  enabled: false
+  image:
+    reference: quay.io/kata-containers/kata-monitor
+    tag: ""
+  listenAddress: "0.0.0.0:8090"
+  runtimeEndpoint: "unix:///run/containerd/containerd.sock"
+  logLevel: "info"
+  port: 8090
+  securityContext:
+    privileged: false
+    runAsUser: 0
+    runAsGroup: 0
+  resources:
+    limits:
+      cpu: 200m
+      memory: 300Mi
+    requests:
+      cpu: 200m
+      memory: 300Mi
 
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
@@ -25,6 +149,14 @@ containerd:
   # or auto-detects based on the runtime (k0s, microk8s, k3s/rke2).
   # Example: "my-config.toml"
   configFileName: ""
+  # Optional user-provided containerd drop-in TOML content.
+  # This is written as an extra drop-in loaded after kata-deploy's generated drop-in,
+  # so user keys can override kata-deploy defaults.
+  # Example: set erofs snapshotter default size to zero:
+  # userDropIn: |
+  #   [plugins.'io.containerd.snapshotter.v1.erofs']
+  #     default_size = 0
+  userDropIn: ""
 
 # Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
 # Examples:
@@ -37,6 +169,23 @@ containerd:
 #     effect: "NoSchedule"
 nodeSelector: {}
 tolerations: []
+
+# Priority class name for the kata-deploy DaemonSet pods.
+#
+# kata-deploy is an infrastructure DaemonSet that installs Kata runtime
+# artifacts on every node. If it gets evicted under node pressure, the
+# node loses its Kata runtime until the pod is rescheduled. Setting a
+# high-priority class prevents the kubelet from evicting kata-deploy
+# before lower-priority workloads.
+#
+# Kubernetes ships "system-node-critical" and "system-cluster-critical"
+# PriorityClasses by default. You can also create your own.
+#
+# Examples:
+# priorityClassName: system-node-critical
+# priorityClassName: system-cluster-critical
+# priorityClassName: my-custom-priority-class
+priorityClassName: "system-node-critical"
 
 # Update strategy for the kata-deploy DaemonSet
 # Default is RollingUpdate with maxUnavailable: 1
@@ -52,10 +201,88 @@ updateStrategy:
   rollingUpdate:
     maxUnavailable: 1
 
+# Resource requests/limits for the kata-deploy container.
+#
+# kata-deploy does its real work (host file copies, kubeconfig parsing,
+# apiserver calls, snapshotter setup) once at pod start and then re-execs
+# into a tiny waiter that just blocks on SIGTERM.
+#
+# Defaults sized from real measurements: VmRSS of the unpatched binary on
+# a ~220-vCPU node tops out under 10 MiB, and the patched post-re-exec
+# waiter is smaller still. 16Mi is roughly 2x that headroom.
+#
+# No memory limit is set by default. During the install phase the kernel
+# page cache for artifact copies can peak well above any reasonable fixed
+# limit (e.g. the CoCo/nydus CI image is ~1.6 GiB), causing OOMKill if a
+# limit is applied. Operators who want to cap memory on the post-install
+# waiter can override this field.
+#
+# Set to {} to remove all requests/limits, or override individual fields.
+resources:
+  requests:
+    cpu: 25m
+    memory: 16Mi
+
 debug: false
+
+# Optional CLI log level override for kata-deploy.
+# Supported values: error, warn, info, debug, trace
+# When empty, debug:true implies --log-level debug; otherwise kata-deploy falls
+# back to DEBUG env var behavior.
+logLevel: ""
+
+# Health probes for the kata-deploy DaemonSet.
+# The binary runs an HTTP health server exposing /healthz (liveness) and /readyz (readiness).
+# /healthz returns 200 as soon as the server starts (process is alive).
+# /readyz returns 200 only after install completes; 503 while installing.
+#
+# The startup probe uses /readyz so it only passes once install completes. While
+# the startup probe is active the liveness probe is suppressed, giving install up
+# to failureThreshold * periodSeconds (default 20 min) before the kubelet kills
+# the container. Without a startup probe the liveness probe would fire immediately.
+#
+# The 20-min budget covers slow GitHub-hosted free runners — single-node kubeadm
+# clusters on small Azure VMs, where artifact extraction and `systemctl restart
+# containerd` (which restarts the apiserver static pod with it) can push install
+# past the 15-min mark (seen on dragonball + lts containerd matrix jobs). On
+# real multi-node clusters install completes in tens of seconds, so the only cost
+# of the wider deadline is a longer wait on a genuinely-broken pod.
+#
+# The readiness probe makes rolling updates safer: the DaemonSet controller waits for
+# a pod to become ready before proceeding to the next node (respecting maxUnavailable).
+health:
+  port: 8090
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 1
+    periodSeconds: 10
+    failureThreshold: 60
+    timeoutSeconds: 3
+  livenessProbe:
+    enabled: true
+    periodSeconds: 30
+    failureThreshold: 3
+    timeoutSeconds: 3
+  readinessProbe:
+    enabled: true
+    periodSeconds: 10
+    failureThreshold: 3
+    timeoutSeconds: 3
 
 snapshotter:
   setup: ["nydus"]  # ["nydus", "erofs"] or []
+  # EROFS merge mode: "merged" (default) or "unmerged".
+  #
+  # "merged" forces containerd's erofs snapshotter to merge all image layers
+  # into a single fsmeta.erofs (max_unmerged_layers = 0). This layout is only
+  # supported by runtime-rs shims.
+  #
+  # "unmerged" leaves max_unmerged_layers at the containerd default so each
+  # image layer is exposed as its own per-layer layer.erofs. This is the only
+  # layout the Go runtime can consume, so set this when mapping a Go shim to the
+  # erofs snapshotter. When empty, kata-deploy uses its built-in default
+  # (merged).
+  erofsMergeMode: ""
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
@@ -69,6 +296,7 @@ snapshotter:
 #   shims:
 #     <shim-name>:
 #       enabled: ~                    # true | false | ~ (null = follow disableAll)
+#       dropIn: ""                    # optional Kata TOML drop-in applied as 50-user-overrides.toml
 #       supportedArches:              # list of supported architectures
 #         - amd64
 #       allowedHypervisorAnnotations: []  # hypervisor annotations to pass through
@@ -98,7 +326,23 @@ shims:
     containerd:
       snapshotter: ""
 
+  clh-azure:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
   clh-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  clh-azure-runtime-rs:
     enabled: ~
     supportedArches:
       - amd64
@@ -156,6 +400,20 @@ shims:
       nodeSelector:
         nvidia.com/cc.ready.state: "false"
 
+  qemu-nvidia-gpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+    runtimeClass:
+      # This label is automatically added by gpu-operator. Override it
+      # if you want to use a different label.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "false"
+
   qemu-nvidia-gpu-snp:
     enabled: ~
     supportedArches:
@@ -178,6 +436,24 @@ shims:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
 
+  qemu-nvidia-gpu-snp-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        amd.feature.node.kubernetes.io/snp: "true"
+
   qemu-nvidia-gpu-tdx:
     enabled: ~
     supportedArches:
@@ -196,6 +472,24 @@ shims:
       # respectively. Override if you want to use a different label.
       # If you don't have NFD, you need to add the tdx label by other
       # means to your TDX nodes.
+      nodeSelector:
+        nvidia.com/cc.ready.state: "true"
+        intel.feature.node.kubernetes.io/tdx: "true"
+
+  qemu-nvidia-gpu-tdx-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+    runtimeClass:
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
@@ -418,6 +712,8 @@ verification:
 #
 # IMPORTANT: The base config is copied AFTER kata-deploy has applied its modifications
 # (debug, proxy, annotations). Custom runtimes inherit these settings from their base.
+# RuntimeClass overhead defaults are also inherited from baseConfig when not set.
+# Set inheritBaseOverhead: false to disable that inheritance for a custom runtime.
 #
 # Usage with values file (recommended):
 #   Create a custom-runtimes.values.yaml file:
@@ -446,6 +742,7 @@ verification:
 #           scheduling:
 #             nodeSelector:
 #               katacontainers.io/kata-runtime: "true"
+#         inheritBaseOverhead: true        # Optional: set false to remove inherited overhead
 #         # Optional: CRI-specific configuration
 #         containerd:
 #           snapshotter: "nydus"  # Configure containerd snapshotter (nydus, erofs, etc.)
@@ -468,6 +765,7 @@ customRuntimes:
   #     dropIn: ""                      # Optional: TOML overrides for config.d
   #     runtimeClass: |
   #       <full RuntimeClass YAML>
+  #     inheritBaseOverhead: true       # Optional: set false to avoid baseConfig overhead inheritance
   #     containerd:
   #       snapshotter: ""  # Optional: nydus, erofs, or empty for default
   #     crio:

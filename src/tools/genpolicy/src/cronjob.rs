@@ -176,4 +176,11 @@ impl yaml::K8sResource for CronJob {
             .securityContext
             .as_ref()
     }
+
+    fn get_labels(&self) -> &Option<BTreeMap<String, String>> {
+        if let Some(metadata) = &self.spec.jobTemplate.spec.template.metadata {
+            return &metadata.labels;
+        }
+        &None
+    }
 }

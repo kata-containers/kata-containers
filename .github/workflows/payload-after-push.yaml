@@ -53,7 +53,6 @@ jobs:
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-ppc64le:
@@ -68,12 +67,12 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-amd64:
+  publish-kata-deploy-image-amd64:
     needs: build-assets-amd64
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
       registry: quay.io
@@ -82,15 +81,16 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04
       arch: amd64
+      image-kind: deploy
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-arm64:
+  publish-kata-deploy-image-arm64:
     needs: build-assets-arm64
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
       registry: quay.io
@@ -99,32 +99,34 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-arm
       arch: arm64
+      image-kind: deploy
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-s390x:
+  publish-kata-deploy-image-s390x:
     needs: build-assets-s390x
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-s390x
       target-branch: ${{ github.ref_name }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
+      image-kind: deploy
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  publish-kata-deploy-payload-ppc64le:
+  publish-kata-deploy-image-ppc64le:
     needs: build-assets-ppc64le
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
       registry: quay.io
@@ -133,6 +135,79 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-ppc64le
       arch: ppc64le
+      image-kind: deploy
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-amd64:
+    needs: build-assets-amd64
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor-ci
+      tag: kata-monitor-latest-amd64
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-22.04
+      arch: amd64
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-arm64:
+    needs: build-assets-arm64
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor-ci
+      tag: kata-monitor-latest-arm64
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-arm
+      arch: arm64
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-s390x:
+    needs: build-assets-s390x
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor-ci
+      tag: kata-monitor-latest-s390x
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-s390x
+      arch: s390x
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+  publish-kata-monitor-image-ppc64le:
+    needs: build-assets-ppc64le
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor-ci
+      tag: kata-monitor-latest-ppc64le
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-ppc64le
+      arch: ppc64le
+      image-kind: monitor
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -142,7 +217,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x, publish-kata-deploy-payload-ppc64le]
+    needs: [publish-kata-deploy-image-amd64, publish-kata-deploy-image-arm64, publish-kata-deploy-image-s390x, publish-kata-deploy-image-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -162,6 +237,43 @@ jobs:
         env:
           KATA_DEPLOY_IMAGE_TAGS: "kata-containers-latest"
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy-ci"
+
+  publish-kata-monitor-manifest:
+    name: publish-kata-monitor-manifest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    needs: [publish-kata-monitor-image-amd64, publish-kata-monitor-image-arm64, publish-kata-monitor-image-s390x, publish-kata-monitor-image-ppc64le]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Login to Kata Containers ghcr.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: quay.io
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Push multi-arch monitor manifest
+        run: |
+          # kata-monitor has no job-dispatcher sidecar image, so opt out of the
+          # kata-deploy-specific dispatcher manifest derivation.
+          ./tools/packaging/release/release.sh publish-multiarch-manifest
+        env:
+          KATA_DEPLOY_IMAGE_TAGS: "kata-monitor-latest"
+          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-monitor-ci ghcr.io/${{ github.repository_owner }}/kata-monitor-ci"
+          KATA_DEPLOY_PUBLISH_JOB_DISPATCHER: "false"
 
   upload-helm-chart-tarball:
     name: upload-helm-chart-tarball
@@ -190,14 +302,13 @@ jobs:
 
       - name: Push helm chart to the OCI registries
         run: |
-          echo "Adjusting the Chart.yaml and values.yaml"
-          yq eval '.version = "0.0.0-dev" | .appVersion = "0.0.0-dev"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
-          yq eval '.image.reference = "quay.io/kata-containers/kata-deploy-ci" | .image.tag = "kata-containers-latest"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
-
-          echo "Generating the chart package"
-          helm dependencies update tools/packaging/kata-deploy/helm-chart/kata-deploy
-          helm package tools/packaging/kata-deploy/helm-chart/kata-deploy
-
-          echo "Pushing the chart to the OCI registries"
-          helm push "kata-deploy-0.0.0-dev.tgz" oci://quay.io/kata-containers/kata-deploy-charts
-          helm push "kata-deploy-0.0.0-dev.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
+            quay.io/kata-containers/kata-deploy-ci \
+            kata-containers-latest \
+            quay.io/kata-containers/kata-deploy-charts \
+            0.0.0-dev
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-helm-chart.sh \
+            quay.io/kata-containers/kata-deploy-ci \
+            kata-containers-latest \
+            ghcr.io/kata-containers/kata-deploy-charts \
+            0.0.0-dev

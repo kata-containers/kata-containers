@@ -35,8 +35,11 @@ use std::time::Instant;
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
-const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 5000;
+const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
+const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
+
+const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -74,7 +77,7 @@ impl Qmp {
             let stream = UnixStream::connect(qmp_sock_path)?;
 
             stream
-                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
+                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_INIT_READ_TIMEOUT)))
                 .context("set qmp read timeout")?;
 
             let mut qmp = Qmp {
@@ -486,14 +489,44 @@ impl Qmp {
         netdev: &Netdev,
         virtio_net_device: &DeviceVirtioNet,
     ) -> Result<()> {
-        debug!(
-            sl!(),
-            "hotplug_network_device(): PCI before {}: {:#?}",
-            virtio_net_device.get_netdev_id(),
-            self.qmp.execute(&qapi_qmp::query_pci {})?
-        );
+        let use_ccw_bus = crate::utils::uses_native_ccw_bus();
+        let netdev_id = netdev.get_id().clone();
 
-        let (bus, slot) = self.find_free_slot()?;
+        let mut netdev_frontend_args = Dictionary::new();
+        netdev_frontend_args.insert(
+            "netdev".to_owned(),
+            virtio_net_device.get_netdev_id().clone().into(),
+        );
+        netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
+        netdev_frontend_args.insert("mq".to_owned(), true.into());
+
+        let frontend_id = format!("frontend-{}", virtio_net_device.get_netdev_id());
+
+        let bus = if use_ccw_bus {
+            let subchannel = self.ccw_subchannel.as_mut().ok_or_else(|| {
+                anyhow!("CCW subchannel not available for virtio-net-ccw hotplug")
+            })?;
+            let slot = subchannel
+                .add_device(&frontend_id)
+                .map_err(|e| anyhow!("CCW subchannel add_device failed: {:?}", e))?;
+            let devno = subchannel.address_format_ccw(slot);
+            netdev_frontend_args.insert("devno".to_owned(), devno.into());
+            None
+        } else {
+            let (bus, slot) = self.find_free_slot()?;
+            netdev_frontend_args.insert("addr".to_owned(), format!("{slot:02}").into());
+            // As the golang runtime documents the vectors computation, it's
+            // 2N+2 vectors, N for tx queues, N for rx queues, 1 for config,
+            // and one for possible control vq.  PCI-specific (MSI-X).
+            netdev_frontend_args.insert(
+                "vectors".to_owned(),
+                (2 * virtio_net_device.get_num_queues() + 2).into(),
+            );
+            if virtio_net_device.get_disable_modern() {
+                netdev_frontend_args.insert("disable-modern".to_owned(), true.into());
+            }
+            Some(bus)
+        };
 
         let mut fd_names = vec![];
         for (idx, fd) in netdev.get_fds().iter().enumerate() {
@@ -511,7 +544,7 @@ impl Qmp {
 
         self.qmp
             .execute(&qapi_qmp::netdev_add(qapi_qmp::Netdev::tap {
-                id: netdev.get_id().clone(),
+                id: netdev_id.clone(),
                 tap: qapi_qmp::NetdevTapOptions {
                     br: None,
                     downscript: None,
@@ -539,38 +572,48 @@ impl Qmp {
                     vhostforce: None,
                     vnet_hdr: None,
                 },
-            }))?;
+            }))
+            .map_err(|e| {
+                if use_ccw_bus {
+                    if let Some(subchannel) = self.ccw_subchannel.as_mut() {
+                        let _ = subchannel.remove_device(&frontend_id);
+                    }
+                }
 
-        let mut netdev_frontend_args = Dictionary::new();
-        netdev_frontend_args.insert(
-            "netdev".to_owned(),
-            virtio_net_device.get_netdev_id().clone().into(),
-        );
-        netdev_frontend_args.insert("addr".to_owned(), format!("{slot:02}").into());
-        netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
-        netdev_frontend_args.insert("mq".to_owned(), true.into());
-        // As the golang runtime documents the vectors computation, it's
-        // 2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq
-        netdev_frontend_args.insert(
-            "vectors".to_owned(),
-            (2 * virtio_net_device.get_num_queues() + 2).into(),
-        );
-        if virtio_net_device.get_disable_modern() {
-            netdev_frontend_args.insert("disable-modern".to_owned(), true.into());
-        }
+                anyhow!(e)
+            })?;
 
-        self.qmp.execute(&qmp::device_add {
-            bus: Some(bus),
-            id: Some(format!("frontend-{}", virtio_net_device.get_netdev_id())),
+        let device_add_result = self.qmp.execute(&qmp::device_add {
+            bus,
+            id: Some(frontend_id.clone()),
             driver: virtio_net_device.get_device_driver().clone(),
             arguments: netdev_frontend_args,
-        })?;
+        });
+        if let Err(e) = device_add_result {
+            if use_ccw_bus {
+                if let Some(subchannel) = self.ccw_subchannel.as_mut() {
+                    let _ = subchannel.remove_device(&frontend_id);
+                }
+            }
+
+            if let Err(del_err) = self.qmp.execute(&qmp::netdev_del {
+                id: netdev_id.clone(),
+            }) {
+                warn!(
+                    sl!(),
+                    "hotplug_network_device(): netdev_del failed for {} after device_add error {:?}: {:?}",
+                    netdev_id,
+                    e,
+                    del_err
+                );
+            }
+
+            return Err(e.into());
+        }
 
         debug!(
             sl!(),
-            "hotplug_network_device(): PCI after {}: {:#?}",
-            virtio_net_device.get_netdev_id(),
-            self.qmp.execute(&qapi_qmp::query_pci {})?
+            "hotplug_network_device(): successfully added {}", frontend_id
         );
 
         Ok(())
@@ -594,6 +637,94 @@ impl Qmp {
         }
 
         Err(anyhow!("no target device found"))
+    }
+
+    /// Execute device_add for a block device. On failure, automatically
+    /// rolls back the blockdev node added earlier to avoid orphaned resources.
+    fn device_add_with_rollback(
+        &mut self,
+        node_name: &str,
+        bus: Option<String>,
+        driver: &str,
+        arguments: Dictionary,
+    ) -> Result<()> {
+        if let Err(e) = self.qmp.execute(&qmp::device_add {
+            bus,
+            id: Some(node_name.to_owned()),
+            driver: driver.to_owned(),
+            arguments,
+        }) {
+            if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_del {
+                node_name: node_name.to_owned(),
+            }) {
+                warn!(
+                    sl!(),
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
+                    node_name,
+                    e
+                );
+            }
+            return Err(anyhow!("device_add {:?}", e));
+        }
+        Ok(())
+    }
+
+    fn wait_for_device_deleted(&mut self, device_id: &str, timeout: Duration) -> Result<()> {
+        const POLL_INTERVAL: Duration = Duration::from_millis(100);
+        let deadline = Instant::now() + timeout;
+
+        self.qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(timeout))?;
+
+        let result = loop {
+            if let Err(e) = self.qmp.nop() {
+                warn!(
+                    sl!(),
+                    "The QMP nop() failed for {}: {:?}",
+                    device_id,
+                    e
+                );
+            }
+
+            let found = self.qmp.events().any(|event| {
+                matches!(event, qapi_qmp::Event::DEVICE_DELETED { ref data, .. }
+                    if data.device.as_deref() == Some(device_id))
+            });
+            if found {
+                info!(
+                    sl!(),
+                    "The QMP received DEVICE_DELETED event for {}",
+                    device_id
+                );
+                break Ok(());
+            }
+
+            let now = Instant::now();
+            if now >= deadline {
+                break Err(anyhow!(
+                    "timed out ({:?}) waiting for DEVICE_DELETED event for {}",
+                    timeout,
+                    device_id
+                ));
+            }
+            thread::sleep(POLL_INTERVAL.min(deadline - now));
+        };
+
+        // Reset the default read timeout for subsequent QMP operations.
+        // Failure here is non-fatal — a stale timeout only affects the next
+        // QMP read, not the already-completed device removal.
+        if let Err(e) = self.qmp.inner_mut().get_mut_write().set_read_timeout(Some(
+            Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT),
+        )) {
+            warn!(
+                sl!(),
+                "Failed to reset read timeout: {:?}", e
+            );
+        }
+
+        result
     }
 
     /// Hotplug block device:
@@ -647,9 +778,10 @@ impl Qmp {
         logical_block_size: u32,
         physical_block_size: u32,
         format: &BlockDeviceFormat,
+        iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
-        let node_name = format!("drive-{index}");
+        let node_name = block_node_name(index);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
             auto_read_only: None,
@@ -787,15 +919,12 @@ impl Qmp {
                 "scsi-hd",
                 blkdev_add_args
             );
-            self.qmp
-                .execute(&qmp::device_add {
-                    bus: Some("scsi0.0".to_string()),
-                    id: Some(node_name.clone()),
-                    driver: "scsi-hd".to_string(),
-                    arguments: blkdev_add_args,
-                })
-                .map_err(|e| anyhow!("device_add {:?}", e))
-                .map(|_| ())?;
+            self.device_add_with_rollback(
+                &node_name,
+                Some("scsi0.0".to_string()),
+                "scsi-hd",
+                blkdev_add_args,
+            )?;
 
             info!(
                 sl!(),
@@ -804,13 +933,29 @@ impl Qmp {
 
             Ok((None, Some(scsi_addr)))
         } else if block_driver == VIRTIO_BLK_CCW {
-            let subchannel = self.ccw_subchannel.as_mut().ok_or_else(|| {
-                anyhow!("CCW subchannel not available for virtio-blk-ccw hotplug")
-            })?;
+            let subchannel = match self.ccw_subchannel.as_mut() {
+                Some(sub) => sub,
+                None => {
+                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                        node_name: node_name.to_owned(),
+                    })?;
 
-            let slot = subchannel
-                .add_device(&node_name)
-                .map_err(|e| anyhow!("CCW subchannel add_device failed: {:?}", e))?;
+                    return Err(anyhow!(
+                        "CCW subchannel not available for virtio-blk-ccw hotplug"
+                    ));
+                }
+            };
+
+            let slot = match subchannel.add_device(&node_name) {
+                Ok(s) => s,
+                Err(e) => {
+                    self.qmp.execute(&qapi_qmp::blockdev_del {
+                        node_name: node_name.to_owned(),
+                    })?;
+
+                    return Err(anyhow!("CCW subchannel add_device failed: {:?}", e));
+                }
+            };
             let devno = subchannel.address_format_ccw(slot);
             let ccw_addr = subchannel.address_format_ccw_for_virt_server(slot);
 
@@ -827,16 +972,17 @@ impl Qmp {
                 blkdev_add_args,
                 ccw_addr
             );
-            let device_add_result = self.qmp.execute(&qmp::device_add {
-                bus: None,
-                id: Some(node_name.clone()),
-                driver: block_driver.to_string(),
-                arguments: blkdev_add_args,
-            });
-            if let Err(e) = device_add_result {
-                // Roll back CCW subchannel state if QMP device_add fails
-                let _ = subchannel.remove_device(&node_name);
-                return Err(anyhow!("device_add {:?}", e));
+            if let Err(e) = self.device_add_with_rollback(
+                &node_name,
+                None,
+                block_driver,
+                blkdev_add_args,
+            ) {
+                if let Some(ref mut sub) = self.ccw_subchannel {
+                    // Roll back CCW subchannel state if QMP device_add fails
+                    let _ = sub.remove_device(&node_name);
+                }
+                return Err(e);
             }
 
             info!(
@@ -852,6 +998,15 @@ impl Qmp {
                 blkdev_add_args.insert("share-rw".to_string(), true.into());
             }
 
+            // Add iothread parameter for virtio-blk devices if specified
+            if let Some(iothread_id) = iothread {
+                info!(
+                    sl!(),
+                    "hotplug_block_device(): attaching to iothread: {}", iothread_id
+                );
+                blkdev_add_args.insert("iothread".to_owned(), iothread_id.to_string().into());
+            }
+
             info!(
                 sl!(),
                 "hotplug_block_device(): device_add arguments: bus: {}, id: {}, driver: {}, blkdev_add_args: {:#?}",
@@ -860,15 +1015,13 @@ impl Qmp {
                 block_driver,
                 blkdev_add_args
             );
-            self.qmp
-                .execute(&qmp::device_add {
-                    bus: Some(bus),
-                    id: Some(node_name.clone()),
-                    driver: block_driver.to_string(),
-                    arguments: blkdev_add_args,
-                })
-                .map_err(|e| anyhow!("device_add {:?}", e))
-                .map(|_| ())?;
+
+            self.device_add_with_rollback(
+                &node_name,
+                Some(bus),
+                block_driver,
+                blkdev_add_args,
+            )?;
 
             let pci_path = self
                 .get_device_by_qdev_id(&node_name)
@@ -880,6 +1033,66 @@ impl Qmp {
 
             Ok((Some(pci_path), None))
         }
+    }
+
+    /// Hotunplug block device.
+    pub fn hotunplug_block_device(
+        &mut self,
+        block_driver: &str,
+        index: u64,
+    ) -> Result<()> {
+        let node_name = block_node_name(index);
+
+        let result = (|| -> Result<()> {
+            // Remove the frontend device (virtio-blk-pci / scsi-hd / virtio-blk-ccw).
+            self.qmp
+                .execute(&qmp::device_del {
+                    id: node_name.clone(),
+                })
+                .map_err(|e| anyhow!("device_del for block device {}: {:?}", node_name, e))?;
+
+            // device_del is asynchronous — wait for the guest to acknowledge removal
+            // before tearing down the backend, otherwise blockdev_del may fail with
+            // "Node is still in use".
+            self.wait_for_device_deleted(&node_name, DEVICE_DELETED_TIMEOUT)
+                .context("hotunplug_block_device(): waiting for DEVICE_DELETED")?;
+
+            // Remove the blockdev backend node.
+            self.qmp
+                .execute(&qapi_qmp::blockdev_del {
+                    node_name: node_name.clone(),
+                })
+                .map_err(|e| {
+                    anyhow!("blockdev_del for block device {}: {:?}", node_name, e)
+                })?;
+
+            Ok(())
+        })();
+
+        if let Err(ref e) = result {
+            warn!(
+                sl!(),
+                "hotunplug_block_device(): failed for {}, cleaning up CCW state: {:?}",
+                node_name,
+                e
+            );
+        }
+
+        // Clean up CCW subchannel state (s390x) on all paths.
+        if block_driver == VIRTIO_BLK_CCW {
+            if let Some(ref mut subchannel) = self.ccw_subchannel {
+                let _ = subchannel.remove_device(&node_name);
+            }
+        }
+
+        result?;
+
+        info!(
+            sl!(),
+            "hotunplug_block_device(): successfully removed {}", node_name
+        );
+
+        Ok(())
     }
 
     pub fn hotplug_vfio_device(
@@ -1076,4 +1289,9 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
     } else {
         QMP_SOCKET_FILE.to_string()
     }
+}
+
+/// Generate a blockdev node name based on the given index.
+fn block_node_name(index: u64) -> String {
+    format!("drive-{index}")
 }

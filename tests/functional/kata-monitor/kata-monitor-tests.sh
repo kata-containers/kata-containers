@@ -27,7 +27,13 @@ readonly MONITOR_MIN_METRICS_NUM=200
 readonly TIMEOUT="20s"
 CONTAINER_ENGINE=${CONTAINER_ENGINE:-"containerd"}
 CRICTL_RUNTIME=${CRICTL_RUNTIME:-"kata"}
+# When KATA_MONITOR_IMAGE is set, kata-monitor runs inside that container
+# image instead of as an on-disk binary. This is what CI does — it
+# validates the actual image we ship. Manual runs without the env var
+# keep the previous behaviour of executing ${KATA_MONITOR_BIN}.
+KATA_MONITOR_IMAGE="${KATA_MONITOR_IMAGE:-}"
 KATA_MONITOR_BIN="${KATA_MONITOR_BIN:-$(command -v kata-monitor || true)}"
+readonly KATA_MONITOR_CONTAINER_NAME="kata-monitor-test"
 KATA_MONITOR_PID=""
 TMPATH=$(mktemp -d -t kata-monitor-test-XXXXXXXXX)
 METRICS_FILE="${TMPATH}/metrics.txt"
@@ -83,11 +89,59 @@ cleanup() {
 	stop_workload
 	stop_workload "${RUNC_CID}" "${RUNC_POD_ID}"
 
+	stop_kata_monitor
+
+	rm -rf "${TMPATH}"
+}
+
+start_kata_monitor() {
+	local args="$1"
+
+	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
+		# `--network host` keeps the default 127.0.0.1:8090 bind
+		# reachable from the host-side test code without having to
+		# publish a port. Mount /run/containerd so the monitor can
+		# reach containerd's CRI socket, plus the kata sandbox base
+		# path for the per-sandbox shim-monitor sockets.
+
+		# Ensure /run/vc/sbs/ exists on the host so the readonly mount
+		# does not fail before the first kata sandbox is created.
+		sudo mkdir -p /run/vc/sbs
+
+		# shellcheck disable=SC2086
+		sudo docker run --rm -d \
+			--name "${KATA_MONITOR_CONTAINER_NAME}" \
+			--network host \
+			-v /run/containerd:/run/containerd:ro \
+			-v /run/vc/sbs:/run/vc/sbs:ro \
+			"${KATA_MONITOR_IMAGE}" \
+			${args} --log-level trace > /dev/null
+		# Stream container logs into the same file the binary path
+		# writes to, so error_with_msg's dump works identically in
+		# both modes. The redirect target lives under our own
+		# ${TMPATH}, so SC2024 (sudo doesn't affect redirects) is a
+		# false positive here.
+		# shellcheck disable=SC2024
+		sudo docker logs -f "${KATA_MONITOR_CONTAINER_NAME}" \
+			> "${MONITOR_LOG_FILE}" 2>&1 &
+		return
+	fi
+
+	[[ ! -x "${KATA_MONITOR_BIN}" ]] && error_with_msg "kata-monitor binary not found"
+	# shellcheck disable=SC2024,SC2086
+	sudo "${KATA_MONITOR_BIN}" ${args} --log-level trace > "${MONITOR_LOG_FILE}" 2>&1 &
+	KATA_MONITOR_PID="$!"
+}
+
+stop_kata_monitor() {
+	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
+		sudo docker stop "${KATA_MONITOR_CONTAINER_NAME}" > /dev/null 2>&1 || true
+		return
+	fi
+
 	[[ -n "${KATA_MONITOR_PID}" ]] \
 		&& [[ -d "/proc/${KATA_MONITOR_PID}" ]] \
 		&& kill -9 "${KATA_MONITOR_PID}"
-
-	rm -rf "${TMPATH}"
 }
 
 create_sandbox_json() {
@@ -231,7 +285,7 @@ main() {
 	title "create workloads"
 
 	CURRENT_TASK="start workload (runc)"
-	start_workload
+	start_workload runc
 	RUNC_POD_ID="${POD_ID}"
 	RUNC_CID="${CID}"
 	echo_ok "${CURRENT_TASK} - POD ID:${POD_ID}, CID:${CID}"
@@ -243,15 +297,13 @@ main() {
 	###########################
 	title "start kata-monitor"
 
-	[[ ! -x "${KATA_MONITOR_BIN}" ]] && error_with_msg "kata-monitor binary not found"
-
-	[[ "${CONTAINER_ENGINE}" = "crio" ]] && args="--runtime-endpoint /run/crio/crio.sock"
-
 	CURRENT_TASK="start kata-monitor"
-	# shellcheck disable=SC2024,SC2086
-	sudo "${KATA_MONITOR_BIN}" ${args} --log-level trace > "${MONITOR_LOG_FILE}" 2>&1 &
-	KATA_MONITOR_PID="$!"
-	echo_ok "${CURRENT_TASK} (${KATA_MONITOR_PID})"
+	start_kata_monitor "${args}"
+	if [[ -n "${KATA_MONITOR_IMAGE}" ]]; then
+		echo_ok "${CURRENT_TASK} (image ${KATA_MONITOR_IMAGE})"
+	else
+		echo_ok "${CURRENT_TASK} (pid ${KATA_MONITOR_PID})"
+	fi
 
 	###########################
 	title "kata-monitor cache update checks"

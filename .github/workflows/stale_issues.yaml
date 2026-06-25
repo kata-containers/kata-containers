@@ -37,9 +37,10 @@ jobs:
         uses: actions/stale@b5d41d4e1d5dceea10e7104786b73624c18a190f # v10.2.0
         with:
           stale-pr-message: 'This issue has had no activity since before ${DATE}. Please comment on the issue, or it will be closed in 30 days'
+          days-before-stale: -1
           days-before-pr-stale: -1
           days-before-pr-close: -1
-          days-before-issue-stale: ${AGE}
+          days-before-issue-stale: ${{ env.AGE }}
           days-before-issue-close: 30
           operations-per-run: 100
         env:

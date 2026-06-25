@@ -11,6 +11,8 @@ set -o pipefail
 set -o errtrace
 
 script_path=$(dirname "$0")
+# shellcheck source=/dev/null
+source "${script_path}/../../common.bash"
 registry_port="${REGISTRY_PORT:-5000}"
 registry_name="local-registry"
 container_engine="${container_engine:-docker}"
@@ -236,7 +238,7 @@ run_test() {
 }
 
 configure_containerd_for_runtime_rs() {
-    local config_file="/etc/containerd/config.toml"
+    local vfio_rs_drop="/etc/containerd/conf.d/52-kata-ci-vfio-ap-qemu-runtime-rs.toml"
 
     sudo rm -f /usr/local/bin/containerd-shim-kata-qemu-runtime-rs-v2 \
         "${runtime_config_base}/runtime-rs/configuration.toml"
@@ -253,15 +255,27 @@ configure_containerd_for_runtime_rs() {
     sudo ln -sf "${runtime_config_base}/runtime-rs/configuration-qemu-runtime-rs.toml" \
         "${runtime_config_base}/runtime-rs/configuration.toml"
 
-    if [[ ! -f "${config_file}" ]]; then
+    if [[ ! -f "/etc/containerd/config.toml" ]]; then
         echo "/etc/containerd/config.toml not found" >&2
         exit 1
     fi
 
-    if ! grep -q "kata-qemu-runtime-rs" "${config_file}"; then
-        cat <<EOF | sudo tee -a "${config_file}"
-        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-runtime-rs]
-          runtime_type = "io.containerd.kata-qemu-runtime-rs.v2"
+    local schema
+    schema="$(_containerd_resolved_schema_version)"
+    if [[ "${schema}" -ge 3 ]]; then
+        # containerd v2.x (schema v3+): add the runtime via a conf.d drop-in.
+        sudo mkdir -p /etc/containerd/conf.d
+        cat <<EOF | sudo tee "${vfio_rs_drop}"
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata-qemu-runtime-rs]
+  runtime_type = 'io.containerd.kata-qemu-runtime-rs.v2'
+  sandboxer = 'podsandbox'
+EOF
+    else
+        # containerd v1.x (schema v2): conf.d is not honoured the same way, so
+        # append the (new) runtime table directly to config.toml.
+        cat <<EOF | sudo tee -a /etc/containerd/config.toml
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-runtime-rs]
+  runtime_type = "io.containerd.kata-qemu-runtime-rs.v2"
 EOF
     fi
 

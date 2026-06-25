@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, do_update_device, DeviceManager},
+        device_manager::{do_handle_device, do_update_device, get_shared_fs_info, DeviceManager},
         driver::{ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType},
         DeviceConfig,
     },
@@ -54,8 +54,12 @@ pub(crate) async fn prepare_virtiofs(
         sock_path: generate_sock_path(root),
         mount_tag: String::from(MOUNT_GUEST_TAG),
         fs_type: fs_type.to_string(),
-        queue_size: 0,
-        queue_num: 0,
+        // Pull virtio-fs queue size from the hypervisor config so the value
+        // configured via `virtio_fs_queue_size` in the toml actually reaches
+        // the VMM device line. There is currently no toml knob for the number
+        // of virtqueues, so we use a single queue (matching the prior default).
+        queue_size: get_shared_fs_info(d).await.virtio_fs_queue_size as u64,
+        queue_num: 1,
         options: vec![],
         mount_config: None,
     };

@@ -540,9 +540,6 @@ type HypervisorConfig struct {
 	// VirtioFSCache cache mode for fs version cache
 	VirtioFSCache string
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
-
 	// VhostUserStorePath is the directory path where vhost-user devices
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
@@ -587,9 +584,6 @@ type HypervisorConfig struct {
 
 	// Enable annotations by name
 	EnableAnnotations []string
-
-	// FileBackedMemRootList is the list of valid root directories values for annotations
-	FileBackedMemRootList []string
 
 	// PFlash image paths
 	PFlash []string
@@ -802,6 +796,15 @@ type HypervisorConfig struct {
 
 	// GuestNUMANodes defines guest NUMA topology and mapping to host NUMA nodes and CPUs.
 	GuestNUMANodes []types.GuestNUMANode
+
+	// NUMAMapping is the raw user-provided NUMA mapping (TOML
+	// `numa_mapping` or the io.katacontainers.config.hypervisor.numa_mapping
+	// annotation). When empty, GuestNUMANodes was auto-derived from the
+	// host topology and may be right-sized at sandbox creation (e.g.
+	// collapsed to a single host node when the sandbox fits, or
+	// restricted to host nodes containing attached VFIO devices). When
+	// non-empty, the topology is honored verbatim.
+	NUMAMapping []string
 
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
@@ -1307,6 +1310,11 @@ type Hypervisor interface {
 	AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error
 	HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
 	HotplugRemoveDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error)
+	// ResolveColdPlugVFIOGuestPciPaths resolves the in-guest PCI path for each
+	// VFIODev with IsPCIe=true and an empty GuestPciPath, writing the result
+	// back onto the device. Hypervisors that do not require this (e.g. CLH,
+	// which already populates GuestPciPath during hot-plug) return nil.
+	ResolveColdPlugVFIOGuestPciPaths(ctx context.Context, vfioDevs []*config.VFIODev) error
 	ResizeMemory(ctx context.Context, memMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error)
 	ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error)
 	GetTotalMemoryMB(ctx context.Context) uint32

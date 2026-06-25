@@ -40,16 +40,18 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { vmm: clh, containerd_version: lts },
-          { vmm: clh, containerd_version: active },
-          { vmm: dragonball, containerd_version: lts },
-          { vmm: dragonball, containerd_version: active },
-          { vmm: qemu, containerd_version: lts },
-          { vmm: qemu, containerd_version: active },
-          { vmm: qemu-runtime-rs, containerd_version: lts },
-          { vmm: qemu-runtime-rs, containerd_version: active },
-          { vmm: clh-runtime-rs, containerd_version: lts },
-          { vmm: clh-runtime-rs, containerd_version: active },
+          { vmm: clh, containerd_version: latest },
+          { vmm: clh, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
+          { vmm: clh, containerd_version: minimum },
+          { vmm: dragonball, containerd_version: latest },
+          { vmm: dragonball, containerd_version: minimum },
+          { vmm: qemu, containerd_version: latest },
+          { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
+          { vmm: qemu, containerd_version: minimum },
+          { vmm: qemu-runtime-rs, containerd_version: latest },
+          { vmm: qemu-runtime-rs, containerd_version: minimum },
+          { vmm: clh-runtime-rs, containerd_version: latest },
+          { vmm: clh-runtime-rs, containerd_version: minimum },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
@@ -68,6 +70,9 @@ jobs:
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
+      EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.erofs_mode }}
+      EROFS_MERGE_MODE: ${{ matrix.environment.erofs_merge_mode }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

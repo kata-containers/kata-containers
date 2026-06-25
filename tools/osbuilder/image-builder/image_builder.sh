@@ -79,6 +79,9 @@ Extra environment variables:
 	BLOCK_SIZE:     Use to specify the size of blocks in bytes. DEFAULT: 4096
 	IMAGE_REGISTRY: Hostname for the image registry used to pull down the rootfs build image.
 	NSDAX_BIN:      Use to specify path to pre-compiled 'nsdax' tool.
+	SKIP_DAX_HEADER: If set to "yes", skip the DAX/NVDIMM header. Use for
+	                virtio-blk-pci images that never use NVDIMM.
+	                DEFAULT: "no"
 	USE_DOCKER:     If set will build image in a Docker Container (requries docker)
 	                DEFAULT: not set
 	USE_PODMAN:     If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
@@ -163,7 +166,7 @@ build_with_container() {
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
-	# shellcheck disable=SC2086
+	# shellcheck disable=SC2086,SC2154
 	"${container_engine}" run  \
 		   --rm \
 		   --runtime "${DOCKER_RUNTIME}"  \
@@ -174,6 +177,7 @@ build_with_container() {
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
+		   --env SKIP_DAX_HEADER="${SKIP_DAX_HEADER}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
@@ -316,8 +320,11 @@ calculate_img_size() {
 	local fs_type="$3"
 	local block_size="$4"
 
-	# rootfs start + DAX header size + rootfs end
-	local reserved_size_mb=$((rootfs_start + dax_header_sz + rootfs_end))
+	local dax_overhead=0
+	if [[ "${SKIP_DAX_HEADER:-no}" != "yes" ]]; then
+		dax_overhead="${dax_header_sz}"
+	fi
+	local reserved_size_mb=$((rootfs_start + dax_overhead + rootfs_end))
 
 	disk_size="$(calculate_required_disk_size "${rootfs}" "${fs_type}" "${block_size}")"
 
@@ -453,6 +460,67 @@ setup_systemd() {
 		touch "${mount_dir}/etc/machine-id"
 }
 
+# Parse veritysetup output and format as kernel parameters.
+# $1: veritysetup format output text
+# $2: image path (for error messages)
+build_kernel_verity_params() {
+	local -r output="$1"
+	local -r image="$2"
+	local root_hash
+	local salt
+	local data_blocks
+	local data_block_size
+	local hash_block_size
+
+	read_verity_field() {
+		local -r label="$1"
+		local value
+
+		value=$(printf '%s\n' "${output}" | sed -n "s/^${label}:[[:space:]]*//p")
+		value="${value// \[*/}"
+		[[ -n "${value}" ]] || die "Missing '${label}' in verity output for ${image}"
+
+		echo "${value}"
+	}
+
+	root_hash=$(read_verity_field "Root hash")
+	salt=$(read_verity_field "Salt")
+	data_blocks=$(read_verity_field "Data blocks")
+	data_block_size=$(read_verity_field "Data block size")
+	hash_block_size=$(read_verity_field "Hash block size")
+
+	printf 'root_hash=%s,salt=%s,data_blocks=%s,data_block_size=%s,hash_block_size=%s' \
+		"${root_hash}" \
+		"${salt}" \
+		"${data_blocks}" \
+		"${data_block_size}" \
+		"${hash_block_size}"
+}
+
+# Run veritysetup on an image's rootfs (p1) and hash (p2) partitions,
+# then write the resulting verity parameters to a file.
+# $1: loop device (e.g. /dev/loop0)
+# $2: image path
+setup_verity() {
+	local -r device="$1"
+	local -r image="$2"
+
+	if [[ "${MEASURED_ROOTFS}" != "yes" ]] || [[ ! -b "${device}p2" ]]; then
+		return 0
+	fi
+
+	info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
+	local -r image_dir=$(dirname "${image}")
+	local verity_output
+	verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
+
+	local kernel_verity_params
+	kernel_verity_params="$(build_kernel_verity_params "${verity_output}" "${image}")"
+
+	printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
+	OK "Root hash file created for variant: ${BUILD_VARIANT}"
+}
+
 create_rootfs_image() {
 	local rootfs="$1"
 	local image="$2"
@@ -497,50 +565,7 @@ create_rootfs_image() {
 		fsck.ext4 -D -y "${device}p1"
 	fi
 
-	if [[ "${MEASURED_ROOTFS}" == "yes" ]] && [[ -b "${device}p2" ]]; then
-		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
-		local -r image_dir=$(dirname "${image}")
-		local verity_output
-		verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
-		build_kernel_verity_params() {
-			local -r output="$1"
-			local root_hash
-			local salt
-			local data_blocks
-			local data_block_size
-			local hash_block_size
-
-			read_verity_field() {
-				local -r label="$1"
-				local value
-
-				value=$(printf '%s\n' "${output}" | sed -n "s/^${label}:[[:space:]]*//p")
-				value="${value// \[*/}"
-				[[ -n "${value}" ]] || die "Missing '${label}' in verity output for ${image}"
-
-				echo "${value}"
-			}
-
-			root_hash=$(read_verity_field "Root hash")
-			salt=$(read_verity_field "Salt")
-			data_blocks=$(read_verity_field "Data blocks")
-			data_block_size=$(read_verity_field "Data block size")
-			hash_block_size=$(read_verity_field "Hash block size")
-
-			printf 'root_hash=%s,salt=%s,data_blocks=%s,data_block_size=%s,hash_block_size=%s' \
-				"${root_hash}" \
-				"${salt}" \
-				"${data_blocks}" \
-				"${data_block_size}" \
-				"${hash_block_size}"
-		}
-
-		local kernel_verity_params
-		kernel_verity_params="$(build_kernel_verity_params "${verity_output}")"
-
-		printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
-		OK "Root hash file created for variant: ${BUILD_VARIANT}"
-	fi
+	setup_verity "${device}" "${image}"
 
 	losetup -d "${device}"
 	rm -rf "${mount_dir}"
@@ -554,10 +579,6 @@ create_erofs_rootfs_image() {
 
 	if [[ "${block_size}" -ne 4096 ]]; then
 		die "Invalid block size for erofs"
-	fi
-
-	if ! device="$(setup_loop_device "${image}")"; then
-		die "Could not setup loop device"
 	fi
 
 	local mount_dir
@@ -576,18 +597,32 @@ create_erofs_rootfs_image() {
 	setup_systemd "${mount_dir}"
 
 	local -r fsimage="$(mktemp)"
-	mkfs.erofs -Enoinline_data "${fsimage}" "${mount_dir}"
+	mkfs.erofs -zlz4hc -Enoinline_data "${fsimage}" "${mount_dir}"
 	local -r img_size="$(stat -c"%s" "${fsimage}")"
-	local -r img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
+	local img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
+
+	if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
+		# create_disk places the hash partition at 99% of the disk,
+		# so p1 only gets 99% of img_size_mb. Scale up so the erofs
+		# data still fits: img_size_mb / 0.99 ≈ img_size_mb * 100 / 99 + 1
+		img_size_mb=$(( (img_size_mb * 100 / 99) + 1 ))
+	fi
 
 	create_disk "${image}" "${img_size_mb}" "ext4" "${rootfs_start}"
 
+	if ! device="$(setup_loop_device "${image}")"; then
+		die "Could not setup loop device"
+	fi
+
 	dd if="${fsimage}" of="${device}p1"
+	rm -f "${fsimage}"
+
+	setup_verity "${device}" "${image}"
 
 	losetup -d "${device}"
 	rm -rf "${mount_dir}"
 
-	return "${img_size_mb}"
+	erofs_img_size_mb="${img_size_mb}"
 }
 
 set_dax_header() {
@@ -602,7 +637,13 @@ set_dax_header() {
 	local dax_image="${image}.dax"
 	rm -f "${dax_image}" "${header_image}"
 
-	create_disk "${header_image}" "${img_size}" "${fs_type}" "${rootfs_offset}"
+	# parted doesn't recognize erofs as a partition type, use ext4 as the
+	# partition label -- it's just metadata and doesn't affect the contents.
+	local parted_fs_type="${fs_type}"
+	if [[ "${fs_type}" == "erofs" ]]; then
+		parted_fs_type="ext4"
+	fi
+	create_disk "${header_image}" "${img_size}" "${parted_fs_type}" "${rootfs_offset}"
 
 	dax_header_bytes=$((dax_header_sz * 1024 * 1024))
 	dax_alignment_bytes=$((dax_alignment * 1024 * 1024))
@@ -678,25 +719,34 @@ main() {
 		die "Invalid rootfs"
 	fi
 
+	local skip_dax="${SKIP_DAX_HEADER:-no}"
+	local dax_overhead=0
+	if [[ "${skip_dax}" != "yes" ]]; then
+		dax_overhead="${dax_header_sz}"
+	fi
+
 	if [[ "${fs_type}" == 'erofs' ]]; then
 		# mkfs.erofs accepts an src root dir directory as an input
 		# rather than some device, so no need to guess the device dest size first.
 		create_erofs_rootfs_image "${rootfs}" "${image}" \
 						"${block_size}" "${agent_bin}"
-		rootfs_img_size=$?
-		img_size=$((rootfs_img_size + dax_header_sz))
+		rootfs_img_size="${erofs_img_size_mb}"
+		img_size=$((rootfs_img_size + dax_overhead))
 	else
 		img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" \
 			"${fs_type}" "${block_size}")
 
 		# the first 2M are for the first MBR + NVDIMM metadata and were already
-		# consider in calculate_img_size
-		rootfs_img_size=$((img_size - dax_header_sz))
+		# considered in calculate_img_size
+		rootfs_img_size=$((img_size - dax_overhead))
 		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
 	fi
-	# insert at the beginning of the image the MBR + DAX header
-	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+
+	if [[ "${skip_dax}" != "yes" ]]; then
+		# insert at the beginning of the image the MBR + DAX header
+		set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+	fi
 
 	# shellcheck disable=SC2154
 	chown "${USER}:${GROUP}" "${image}"

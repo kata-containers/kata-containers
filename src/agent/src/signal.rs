@@ -18,6 +18,25 @@ use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
 use unistd::Pid;
 
+// Offset added to a signal number to derive the exit code of a process that
+// was terminated by that signal, following the conventional shell semantics
+// described in https://tldp.org/LDP/abs/html/exitcodes.html.
+const SIGNAL_EXIT_CODE_BASE: i32 = 128;
+
+/// Derive a process exit code from its `WaitStatus`.
+///
+/// A process that exits normally reports its own exit code, while a process
+/// terminated by a signal reports `128 + signal_number` (e.g. SIGKILL(9) ->
+/// 137, SIGTERM(15) -> 143). Returns `None` for statuses that do not represent
+/// process termination (e.g. stopped/continued), which the caller should skip.
+fn exit_code_from_wait_status(wait_status: WaitStatus) -> Option<i32> {
+    match wait_status {
+        WaitStatus::Exited(_, code) => Some(code),
+        WaitStatus::Signaled(_, sig, _) => Some(SIGNAL_EXIT_CODE_BASE + (sig as i32)),
+        _ => None,
+    }
+}
+
 async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result<()> {
     info!(logger, "handling signal"; "signal" => "SIGCHLD");
 
@@ -59,10 +78,9 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
             let p = process.unwrap();
 
-            let ret: i32 = match wait_status {
-                WaitStatus::Exited(_, c) => c,
-                WaitStatus::Signaled(_, sig, _) => sig as i32,
-                _ => {
+            let ret: i32 = match exit_code_from_wait_status(wait_status) {
+                Some(code) => code,
+                None => {
                     info!(logger, "got wrong status for process";
                                   "child-status" => format!("{:?}", wait_status));
                     continue;
@@ -124,9 +142,48 @@ pub async fn setup_signal_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::sys::signal::Signal;
     use tokio::pin;
     use tokio::sync::watch::channel;
     use tokio::time::Duration;
+
+    #[test]
+    fn test_exit_code_from_wait_status() {
+        let pid = Pid::from_raw(1);
+
+        // Normal exits report their own code unchanged.
+        assert_eq!(
+            exit_code_from_wait_status(WaitStatus::Exited(pid, 0)),
+            Some(0)
+        );
+        assert_eq!(
+            exit_code_from_wait_status(WaitStatus::Exited(pid, 42)),
+            Some(42)
+        );
+
+        // Signal-terminated processes report 128 + signal number.
+        // SIGKILL(9) -> 137, SIGTERM(15) -> 143, SIGINT(2) -> 130,
+        // SIGSEGV(11) -> 139.
+        for (sig, expected) in [
+            (Signal::SIGKILL, 137),
+            (Signal::SIGTERM, 143),
+            (Signal::SIGINT, 130),
+            (Signal::SIGSEGV, 139),
+        ] {
+            assert_eq!(
+                exit_code_from_wait_status(WaitStatus::Signaled(pid, sig, false)),
+                Some(expected),
+                "unexpected exit code for {sig:?}"
+            );
+        }
+
+        // Non-terminating statuses are skipped.
+        assert_eq!(
+            exit_code_from_wait_status(WaitStatus::Stopped(pid, Signal::SIGSTOP)),
+            None
+        );
+        assert_eq!(exit_code_from_wait_status(WaitStatus::StillAlive), None);
+    }
 
     #[tokio::test]
     async fn test_setup_signal_handler() {

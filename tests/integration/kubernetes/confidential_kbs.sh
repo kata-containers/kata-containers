@@ -401,22 +401,14 @@ function kbs_k8s_deploy() {
 	[[ -n "${ingress}" ]] && _handle_ingress "${ingress}"
 
 	echo "::group::Deploy the KBS"
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		if [[ -n "${HTTPS_PROXY}" ]]; then
-			# Ideally this should be something kustomizable on trustee side.
-			#
-			# However, for now let's take the bullet and do it here, and revert this as
-			# soon as https://github.com/confidential-containers/trustee/issues/567 is
-			# solved.
-			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
-				ensure_yq
-
-				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"${HTTPS_PROXY}\"}]" -i deployment.yaml
-			popd
-		fi
-	fi
-
 	./deploy-kbs.sh
+
+	# Set proxy env vars and enable debug logging on the KBS deployment.
+	# Using 'kubectl set env' avoids patching the trustee source tree.
+	# All vars are set in a single call to avoid triggering two rolling restarts.
+	local kbs_env_args=(RUST_LOG=debug)
+	is_tdx_hypervisor && [[ -n "${HTTPS_PROXY}" ]] && kbs_env_args+=(https_proxy="${HTTPS_PROXY}")
+	kubectl set env deployment/kbs -n "${KBS_NS}" "${kbs_env_args[@]}"
 
 	# Check the private key used to install the KBS exist and save it in a
 	# well-known location. That's the access key used by the kbs-client.

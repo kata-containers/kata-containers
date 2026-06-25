@@ -60,6 +60,7 @@ pub struct Storage {
     pub fs_group: Option<FSGroup>,
     pub options: Vec<String>,
     pub mount_point: String,
+    pub shared: bool,
 }
 
 #[derive(PartialEq, Clone, Default)]

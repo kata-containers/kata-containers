@@ -20,7 +20,7 @@ MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
-# this GOPATH is for installing yq from install_yq.sh
+# GOPATH is used as a fallback location for yq (see scripts/lib.sh)
 export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
 # The kata agent enables seccomp feature.
@@ -415,9 +415,6 @@ compare_versions()
 
 check_env_variables()
 {
-	# this will be mounted to container for using yq on the host side.
-	GOPATH_LOCAL="${GOPATH%%:*}"
-
 	[[ "${AGENT_INIT}" == "yes" ]] || [[ "${AGENT_INIT}" == "no" ]] || die "AGENT_INIT(${AGENT_INIT}) is invalid (must be yes or no)"
 	[[ "${AGENT_POLICY}" == "yes" ]] || [[ "${AGENT_POLICY}" == "no" ]] || die "AGENT_POLICY(${AGENT_POLICY}) is invalid (must be yes or no)"
 
@@ -548,19 +545,18 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname "${GUEST_HOOKS_TARBALL}"):$(dirname "${GUEST_HOOKS_TARBALL}")"
 		fi
 
-		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
+		# Install yq to /usr/local/bin inside the container instead of relying on
+		# a host GOPATH bind-mount (ci/install_yq.sh).
+		engine_run_args+=" --env INSTALL_IN_GOPATH=false"
 
 		engine_run_args+=" $(docker_extra_args "${distro}")"
 
 		# Relabel volumes so SELinux allows access (see docker-run(1))
 		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
-			SRC_VOL=("${GOPATH_LOCAL}")
-
 			for volume_dir in "${script_dir}" \
 					  "${ROOTFS_DIR}" \
 					  "${script_dir}/../scripts" \
-					  "${kernel_mod_dir}" \
-					  "${SRC_VOL[@]}"; do
+					  "${kernel_mod_dir}"; do
 				chcon -Rt svirt_sandbox_file_t "${volume_dir}"
 			done
 		fi

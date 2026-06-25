@@ -98,6 +98,18 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     priorityClassName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preemptionPolicy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    priority: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    schedulerName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resources: Option<ResourceRequirements>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -175,16 +187,64 @@ pub struct Container {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Affinity {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub nodeAffinity: Option<NodeAffinity>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub podAntiAffinity: Option<PodAntiAffinity>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub podAffinity: Option<PodAffinity>,
-    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct NodeAffinity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requiredDuringSchedulingIgnoredDuringExecution: Option<NodeSelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preferredDuringSchedulingIgnoredDuringExecution: Option<Vec<PreferredSchedulingTerm>>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PreferredSchedulingTerm {
+    weight: i32,
+    preference: NodeSelectorTerm,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct NodeSelector {
+    nodeSelectorTerms: Vec<NodeSelectorTerm>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct NodeSelectorTerm {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchExpressions: Option<Vec<NodeSelectorRequirement>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchFields: Option<Vec<NodeSelectorRequirement>>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct NodeSelectorRequirement {
+    key: String,
+    operator: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    values: Option<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct PodAffinity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preferredDuringSchedulingIgnoredDuringExecution: Option<Vec<WeightedPodAffinityTerm>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     requiredDuringSchedulingIgnoredDuringExecution: Option<Vec<PodAffinityTerm>>,
 }
@@ -197,7 +257,6 @@ struct PodAntiAffinity {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     requiredDuringSchedulingIgnoredDuringExecution: Option<Vec<PodAffinityTerm>>,
-    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -214,7 +273,18 @@ struct PodAffinityTerm {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     labelSelector: Option<yaml::LabelSelector>,
-    // TODO: additional fields.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchLabelKeys: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mismatchLabelKeys: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    namespaceSelector: Option<yaml::LabelSelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    namespaces: Option<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -233,6 +303,9 @@ struct Probe {
     periodSeconds: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    terminationGracePeriodSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     failureThreshold: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -243,6 +316,9 @@ struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     tcpSocket: Option<TCPSocketAction>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    grpc: Option<GRPCAction>,
     // TODO: additional fields.
 }
 
@@ -253,6 +329,15 @@ struct TCPSocketAction {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     host: Option<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct GRPCAction {
+    port: u16,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    service: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -618,7 +703,7 @@ impl Container {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
-        annotations: &Option<BTreeMap<String, String>>,
+        resource: &dyn yaml::K8sResource,
         service_account_name: &str,
     ) {
         if let Some(source_env) = &self.env {
@@ -627,7 +712,7 @@ impl Container {
                     config_maps,
                     secrets,
                     namespace,
-                    annotations,
+                    resource,
                     service_account_name,
                 );
                 let src_string = format!("{}={value}", &env_variable.name);
@@ -767,72 +852,111 @@ impl EnvVar {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
-        annotations: &Option<BTreeMap<String, String>>,
+        resource: &dyn yaml::K8sResource,
         service_account_name: &str,
     ) -> String {
+        // When neither `value` nor `valueFrom` were specified, the default value is an empty string:
+        // https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#environment-variables
         if let Some(value) = &self.value {
-            return value.clone();
+            value.clone()
+        } else {
+            self.get_value_from(
+                config_maps,
+                secrets,
+                namespace,
+                resource,
+                service_account_name,
+            )
+            .unwrap_or_default()
         }
+    }
 
+    fn get_value_from(
+        &self,
+        config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
+        namespace: &str,
+        resource: &dyn yaml::K8sResource,
+        service_account_name: &str,
+    ) -> Option<String> {
         if let Some(value_from) = &self.valueFrom {
             if let Some(value) = config_map::get_value(value_from, config_maps) {
-                return value.clone();
+                return Some(value);
             }
 
             if let Some(value) = secret::get_value(value_from, secrets) {
-                return value.clone();
+                return Some(value);
             }
 
-            if let Some(field_ref) = &value_from.fieldRef {
-                let path: &str = &field_ref.fieldPath;
-                match path {
-                    "metadata.name" => return "$(sandbox-name)".to_string(),
-                    "metadata.namespace" => {
-                        return if namespace.is_empty() {
-                            "$(sandbox-namespace)".to_string()
-                        } else {
-                            namespace.to_string()
-                        };
-                    }
-                    "metadata.uid" => return "$(pod-uid)".to_string(),
-                    "status.hostIP" => return "$(host-ip)".to_string(),
-                    "status.podIP" => return "$(pod-ip)".to_string(),
-                    "spec.nodeName" => return "$(node-name)".to_string(),
-                    "spec.serviceAccountName" => return service_account_name.to_string(),
-                    _ => {
-                        if let Some(value) = self.get_annotation_value(path, annotations) {
-                            return value;
-                        } else {
-                            panic!(
-                                "Env var: unsupported field reference: {}",
-                                &field_ref.fieldPath
-                            )
-                        }
-                    }
-                }
+            if let Some(value) =
+                self.get_value_from_field_ref(value_from, namespace, resource, service_account_name)
+            {
+                return Some(value);
             }
 
             if value_from.resourceFieldRef.is_some() {
                 // TODO: should resource fields such as "limits.cpu" or "limits.memory"
                 // be handled in a different way?
-                return "$(resource-field)".to_string();
+                return Some("$(resource-field)".to_string());
             }
-        } else {
-            panic!("Environment variable without value or valueFrom!");
+
+            panic!("Couldn't get the value of env var: {}", &self.name);
         }
 
-        panic!("Couldn't get the value of env var: {}", &self.name);
+        None
+    }
+
+    fn get_value_from_field_ref(
+        &self,
+        value_from: &EnvVarSource,
+        namespace: &str,
+        resource: &dyn yaml::K8sResource,
+        service_account_name: &str,
+    ) -> Option<String> {
+        if let Some(field_ref) = &value_from.fieldRef {
+            let path: &str = &field_ref.fieldPath;
+            let v = match path {
+                "metadata.name" => "$(sandbox-name)",
+                "metadata.namespace" => {
+                    if namespace.is_empty() {
+                        "$(sandbox-namespace)"
+                    } else {
+                        namespace
+                    }
+                }
+                "metadata.uid" => "$(pod-uid)",
+                "status.hostIP" => "$(host-ip)",
+                "status.podIP" => "$(pod-ip)",
+                "spec.nodeName" => "$(node-name)",
+                "spec.serviceAccountName" => service_account_name,
+                _ => {
+                    if let Some(value) = self.get_annotation_value(path, resource) {
+                        &value.to_string()
+                    } else if let Some(value) = self.get_label_value(path, resource) {
+                        &value.to_string()
+                    } else {
+                        panic!(
+                            "Env var: unsupported field reference: {}",
+                            &field_ref.fieldPath
+                        )
+                    }
+                }
+            };
+            Some(v.to_string())
+        } else {
+            None
+        }
     }
 
     fn get_annotation_value(
         &self,
         reference: &str,
-        anno: &Option<BTreeMap<String, String>>,
+        resource: &dyn yaml::K8sResource,
     ) -> Option<String> {
         let prefix = "metadata.annotations['";
         let suffix = "']";
         if reference.starts_with(prefix) && reference.ends_with(suffix) {
-            if let Some(annotations) = anno {
+            if let Some(annotations) = resource.get_annotations() {
                 let start = prefix.len();
                 let end = reference.len() - 2;
                 let annotation = reference[start..end].to_string();
@@ -849,6 +973,25 @@ impl EnvVar {
 
             // TODO: should missing annotations be handled differently?
             return Some("$(todo-annotation)".to_string());
+        }
+        None
+    }
+
+    fn get_label_value(&self, reference: &str, resource: &dyn yaml::K8sResource) -> Option<String> {
+        let prefix = "metadata.labels['";
+        let suffix = "']";
+        if reference.starts_with(prefix) && reference.ends_with(suffix) {
+            if let Some(labels) = resource.get_labels() {
+                let start = prefix.len();
+                let end = reference.len() - 2;
+                let label = reference[start..end].to_string();
+
+                if let Some(value) = labels.get(&label) {
+                    return Some(value.clone());
+                } else {
+                    panic!("Can't find the value of label {}.", &label);
+                }
+            }
         }
         None
     }
@@ -944,6 +1087,10 @@ impl yaml::K8sResource for Pod {
     fn get_pod_security_context(&self) -> Option<&PodSecurityContext> {
         self.spec.securityContext.as_ref()
     }
+
+    fn get_labels(&self) -> &Option<BTreeMap<String, String>> {
+        &self.metadata.labels
+    }
 }
 
 impl Container {
@@ -1018,7 +1165,9 @@ impl Container {
                 let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
                     Ok(gid) => gid,
                     Err(e) => {
-                        debug!("get_process_fields: no GID for UID = {new_uid} in container image, error {e}");
+                        debug!(
+                            "get_process_fields: no GID for UID = {new_uid} in container image, error {e}"
+                        );
                         process.User.GID
                     }
                 };

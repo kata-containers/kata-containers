@@ -86,8 +86,6 @@ setup_langchain_flow() {
 # generated policy.rego to it and set it as the cc_init_data annotation.
 # We must overwrite the default empty file AFTER create_tmp_policy_settings_dir()
 # copies it to the temp directory.
-# As we use multiple vCPUs we set `max_concurrent_layer_downloads_per_image = 1`,
-# see: https://github.com/kata-containers/kata-containers/issues/12721
 create_nim_initdata_file() {
     local output_file="$1"
     local cc_kbs_address
@@ -110,7 +108,6 @@ name = "cc_kbc"
 url = "${cc_kbs_address}"
 
 [image]
-max_concurrent_layer_downloads_per_image = 1
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
 image_security_policy_uri = "kbs:///default/security-policy/nim"
 '''
@@ -226,6 +223,16 @@ setup_file() {
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
         create_embedqa_pod
+    fi
+
+    # BATS_TEST_COMPLETED is per-test and remains empty in teardown_file.
+    # Persist file-level state so success does not trigger journal dumps.
+    touch "${BATS_FILE_TMPDIR}/setup-file-completed"
+}
+
+teardown() {
+    if [[ "${BATS_TEST_COMPLETED:-}" != "1" && -z "${BATS_TEST_SKIPPED:-}" ]]; then
+        touch "${BATS_FILE_TMPDIR}/test-failed"
     fi
 }
 
@@ -498,5 +505,9 @@ teardown_file() {
         cleanup_loop_device /tmp/trusted-image-storage-embedqa.img || true
     fi
 
-    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}" >&3
+    local bats_test_completed=1
+    if [[ ! -f "${BATS_FILE_TMPDIR}/setup-file-completed" || -f "${BATS_FILE_TMPDIR}/test-failed" ]]; then
+        bats_test_completed=
+    fi
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${bats_test_completed}" >&3
 }

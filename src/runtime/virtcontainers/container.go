@@ -624,7 +624,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// If block devices are disabled, we selectively only hotplug if
 		// the mount is an encrypted block-based emptyDir, to avoid
 		// cases that could regress 20ca4d2.
-		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !Isk8sHostEmptyDir(c.mounts[i].Source)) {
+		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !IsNonTmpFSEmptyDir(c.mounts[i].Source)) {
 			c.Logger().Warn("Block device not supported")
 			continue
 		}
@@ -814,6 +814,18 @@ func (c *Container) createDeviceInfo(source, destination string, readonly, isBlo
 	var err error
 
 	if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
+		// Honor the host block device's own read-only flag in addition to the
+		// mount-derived intent, so a device marked read-only on the host is
+		// exposed read-only to the guest.
+		if !readonly {
+			if ro, roErr := config.BlockDeviceIsReadOnly(source); roErr != nil {
+				c.Logger().WithError(roErr).WithField("mount-source", source).
+					Warn("could not query block device read-only flag")
+			} else {
+				readonly = ro
+			}
+		}
+
 		di = &config.DeviceInfo{
 			HostPath:      source,
 			ContainerPath: destination,
@@ -871,7 +883,7 @@ func (c *Container) createEphemeralDisks() error {
 	}
 
 	for i := range c.mounts {
-		if !Isk8sHostEmptyDir(c.mounts[i].Source) {
+		if !IsNonTmpFSEmptyDir(c.mounts[i].Source) {
 			continue
 		}
 
@@ -1043,6 +1055,69 @@ func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo
 	return deviceInfos, nil
 }
 
+// physicalEndpointBDFs returns the set of host PCI BDFs backing physical
+// network endpoints already cold-plugged into the sandbox.
+func (c *Container) physicalEndpointBDFs() map[string]struct{} {
+	bdfs := map[string]struct{}{}
+	if c.sandbox == nil || c.sandbox.network == nil {
+		return bdfs
+	}
+	for _, ep := range c.sandbox.network.Endpoints() {
+		if ep.Type() != PhysicalEndpointType {
+			continue
+		}
+		if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+			bdfs[pe.BDF] = struct{}{}
+		}
+	}
+	return bdfs
+}
+
+// vfioDeviceIsPhysicalEndpoint reports whether the VFIO device at devPath
+// resolves to a BDF owned by a physical network endpoint.
+func (c *Container) vfioDeviceIsPhysicalEndpoint(devPath string, endpointBDFs map[string]struct{}) bool {
+	for _, bdf := range vfioDeviceBDFs(devPath) {
+		if _, ok := endpointBDFs[bdf]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// vfioDeviceBDFs resolves a VFIO device path to the host PCI BDF(s) it exposes.
+// Handles both the iommufd cdev (/dev/vfio/devices/vfio<N>) and the legacy
+// group node (/dev/vfio/<group>, which may contain multiple devices).
+func vfioDeviceBDFs(devPath string) []string {
+	if strings.HasPrefix(filepath.Base(devPath), "vfio") {
+		// IOMMUFD device (/dev/vfio/devices/vfio<NUM>): single device per char dev
+		major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
+		if err != nil {
+			return nil
+		}
+		bdf, err := deviceUtils.GetBDFFromVFIODev(major, minor)
+		if err != nil {
+			return nil
+		}
+		return []string{bdf}
+	}
+	// Legacy VFIO group (/dev/vfio/<GROUP>): may contain multiple devices
+	vfioGroup := filepath.Base(devPath)
+	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+	deviceFiles, err := os.ReadDir(iommuDevicesPath)
+	if err != nil {
+		return nil
+	}
+	var bdfs []string
+	for _, deviceFile := range deviceFiles {
+		bdf, _, _, err := deviceUtils.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
+		if err != nil {
+			continue
+		}
+		bdfs = append(bdfs, bdf)
+	}
+	return bdfs
+}
+
 func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
@@ -1069,24 +1144,29 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 	hotPlugDevices := []config.DeviceInfo{}
 	vfioColdPlugDevices := []config.DeviceInfo{}
 
-	for i, vfio := range deviceInfos {
-		// If device is already attached during sandbox creation, e.g.
-		// with an CDI annotation, skip it in the container creation and
-		// only create the proper CDI annotation for the kata-agent
-		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
-			if dev.HostPath == vfio.ContainerPath {
-				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
-			}
-		}
-		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
-			if dev.HostPath == vfio.ContainerPath {
-				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
-			}
-		}
+	// VFs that back a physical network endpoint are already cold-plugged into
+	// QEMU during sandbox network setup (PhysicalEndpoint.Attach -> AddDevice).
+	// The SR-IOV device plugin sometimes ALSO lists the same VF in the
+	// container's linux.devices.  Attaching it again here fails ("port is not
+	// set" / already present), so build the set of BDFs owned by physical
+	// endpoints and skip any container VFIO device that resolves to one of
+	// them.  Exposing these VFs to the agent is handled separately by
+	// kata_agent.appendPhysicalEndpointDevices().
+	physicalEndpointBDFs := c.physicalEndpointBDFs()
 
+	for i, vfio := range deviceInfos {
 		// Only considering VFIO updates for Port and ColdPlug or
 		// HotPlug updates
 		isVFIODevice := deviceManager.IsVFIODevice(vfio.ContainerPath)
+
+		if isVFIODevice && len(physicalEndpointBDFs) > 0 {
+			if c.vfioDeviceIsPhysicalEndpoint(vfio.ContainerPath, physicalEndpointBDFs) {
+				c.Logger().WithField("device", vfio.ContainerPath).Info(
+					"skipping VFIO device already cold-plugged as a physical network endpoint")
+				continue
+			}
+		}
+
 		if hotPlugVFIO && isVFIODevice {
 			deviceInfos[i].ColdPlug = false
 			deviceInfos[i].Port = c.sandbox.config.HypervisorConfig.HotPlugVFIO
@@ -1106,7 +1186,22 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
 	// Sort the devices starting with device #1 being the VFIO control group
 	// device and the next the actuall device(s) /dev/vfio/<group>
-	if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+	//
+	// Cold-plug VFIO devices must also reach the agent in
+	// `VfioMode == GuestKernel`. The agent's `vfio-pci-gk` handler
+	// returns `dev: None` (so /dev/vfio/<group> is *not* materialised in
+	// the container spec — `constrainGRPCSpec(stripVfio=true)` will have
+	// already removed it from `grpcSpec.Linux.Devices`), but it still
+	// records the host->guest PCI mapping into `sandbox.pcimap[cid]`.
+	// Without that mapping, `update_env_pci` cannot translate the
+	// `PCIDEVICE_<RES>=<host-BDF>` env vars set by the SR-IOV device
+	// plugin and aborts the container creation with
+	// "No PCI mapping found for container <id>".
+	//
+	// `devManager.NewDevice` calls `FindDevice` first, which matches the
+	// already-cold-plugged sandbox-level device by HostPath/major/minor,
+	// so this does not double-attach.
+	if coldPlugVFIO {
 		// DeviceInfo should still be added to the sandbox's device manager
 		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
 		// This ensures that ociSpec.Linux.Devices is updated with
@@ -1527,7 +1622,10 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	}
 
 	if err := c.state.ValidTransition(c.state.State, types.StateStopped); err != nil {
-		return err
+		if !force {
+			return err
+		}
+		c.Logger().WithError(err).Warn("invalid state transition to Stopped; continuing because force is set")
 	}
 
 	// Force the container to be killed. For most of the cases, this
@@ -1739,12 +1837,17 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		return err
 	}
 
-	// There currently isn't a notion of cpusets.cpus or mems being tracked
-	// inside of the guest. Make sure we clear these before asking agent to update
-	// the container's cgroups.
+	// Cpus/Mems in cgroup cpuset are host-relative; clear Cpus since vCPU
+	// numbering differs inside the guest. For Mems, translate host NUMA node
+	// IDs to guest node IDs when multi-NUMA is configured, otherwise clear.
 	if resources.CPU != nil {
-		resources.CPU.Mems = ""
 		resources.CPU.Cpus = ""
+		numaNodes := c.sandbox.config.HypervisorConfig.GuestNUMANodes
+		if len(numaNodes) > 1 && resources.CPU.Mems != "" {
+			resources.CPU.Mems = translateHostMemsToGuest(resources.CPU.Mems, numaNodes)
+		} else {
+			resources.CPU.Mems = ""
+		}
 	}
 
 	return c.sandbox.agent.updateContainer(ctx, c.sandbox, *c, resources)

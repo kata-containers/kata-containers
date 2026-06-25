@@ -16,7 +16,7 @@ byteorder = "1.4.3"
 fail = "0.5.1"
 lazy_static = "1.4.0"
 libc = "0.2.100"
-nix = "0.26.4"
+nix = { workspace = true, features = ["fs", "mount", "sched", "process", "ioctl"] }
 serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.73"
 slog = "2.5.2"
@@ -25,8 +25,7 @@ subprocess = "0.2.8"
 rand = { version = "0.10.1", features = ["std", "std_rng", "thread_rng"] }
 thiserror = "1.0.30"
 hex = "0.4.3"
-pci-ids = "0.2.5"
-mockall = "0.13.1"
+pci-ids = "0.2.6"
 
 kata-types = { path = "../kata-types" }
 oci-spec = { version = "0.8.1", features = ["runtime"] }

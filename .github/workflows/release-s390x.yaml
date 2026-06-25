@@ -6,8 +6,6 @@ on:
         required: true
         type: string
     secrets:
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
@@ -24,7 +22,6 @@ jobs:
       push-to-registry: yes
       stage: release
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
     permissions:
       contents: read
@@ -58,10 +55,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: get-kata-tarball
+      - name: get-kata-artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-s390x
+          pattern: kata-artifacts-s390x-*
+          path: tools/packaging/kata-deploy/local-build/build
+          merge-multiple: true
 
       - name: build-and-push-kata-deploy-ci-s390x
         id: build-and-push-kata-deploy-ci-s390x
@@ -79,9 +78,9 @@ jobs:
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.zst "ghcr.io/kata-containers/kata-deploy" \
+                  "ghcr.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.zst "quay.io/kata-containers/kata-deploy" \
+                  "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
           done

@@ -74,6 +74,7 @@ impl AddressSpaceLayout {
                     return false;
                 }
             }
+            AddressSpaceRegionType::FirmwareMemory => {}
         }
 
         true

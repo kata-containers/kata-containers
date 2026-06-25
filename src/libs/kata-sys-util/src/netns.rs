@@ -26,7 +26,7 @@ impl NetnsGuard {
                 .with_context(|| format!("open current netns path {}", &current_netns_path))?;
             let new_netns = File::open(new_netns_path)
                 .with_context(|| format!("open new netns path {}", &new_netns_path))?;
-            setns(new_netns.as_raw_fd(), CloneFlags::CLONE_NEWNET)
+            setns(&new_netns, CloneFlags::CLONE_NEWNET)
                 .with_context(|| "set netns to new netns")?;
             info!(
                 sl!(),
@@ -47,9 +47,8 @@ impl NetnsGuard {
 impl Drop for NetnsGuard {
     fn drop(&mut self) {
         if let Some(old_netns) = self.old_netns.as_ref() {
-            let old_netns_fd = old_netns.as_raw_fd();
-            setns(old_netns_fd, CloneFlags::CLONE_NEWNET).unwrap();
-            info!(sl!(), "set netns to old {:?}", old_netns_fd);
+            setns(old_netns, CloneFlags::CLONE_NEWNET).unwrap();
+            info!(sl!(), "set netns to old {:?}", old_netns.as_raw_fd());
         }
     }
 }

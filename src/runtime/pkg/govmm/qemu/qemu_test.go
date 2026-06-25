@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,15 @@ const DevNo = "fe.1.1234"
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
 	var config Config
+	testConfigAppend(&config, structure, expected, t)
+}
+
+// testAppendQ35 is testAppend with Config.Machine.Type set to "q35" so
+// device emitters that gate on hasPCIeRoot() (e.g. virtio-pci leaves
+// pinned to bus=pcie.0) take the PCIe path.  Use this for tests whose
+// expected string contains "bus=pcie.0".
+func testAppendQ35(structure interface{}, expected string, t *testing.T) {
+	config := Config{Machine: Machine{Type: "q35"}}
 	testConfigAppend(&config, structure, expected, t)
 }
 
@@ -129,10 +139,23 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 
 var (
 	tdxObjectVsock = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`
-	tdxObjectUnix  = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}`
 )
 
 func TestTdxQuoteSocket(t *testing.T) {
+	// Create a temp socket file so the unix path is always exercised.
+	dir := t.TempDir()
+	origPath := qgsSocketPath
+	qgsSocketPath = dir + "/qgs.socket"
+	defer func() { qgsSocketPath = origPath }()
+
+	f, err := os.Create(qgsSocketPath)
+	if err != nil {
+		t.Fatalf("failed to create temp socket file: %v", err)
+	}
+	f.Close()
+
+	tdxObjectUnix := fmt.Sprintf(`-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"%s"}}`, qgsSocketPath)
+
 	object := Object{
 		Type:     TDXGuest,
 		ID:       "tdx",
@@ -141,10 +164,15 @@ func TestTdxQuoteSocket(t *testing.T) {
 		QgsPort:  0,
 	}
 
+	// port=0 with socket present: use Unix socket
 	testAppend(object, tdxObjectUnix, t)
 
-	object.QgsPort = 4050
+	// port=0 without socket present: fall back to vsock port 4050
+	qgsSocketPath = dir + "/missing.socket"
+	testAppend(object, tdxObjectVsock, t)
 
+	// Explicit vsock port
+	object.QgsPort = 4050
 	testAppend(object, tdxObjectVsock, t)
 }
 
@@ -342,7 +370,32 @@ func TestAppendVSOCK(t *testing.T) {
 		vsockDevice.DevNo = DevNo
 	}
 
-	testAppend(vsockDevice, deviceVSOCKString, t)
+	// deviceVSOCKString includes bus=pcie.0 — gated to q35/virt machines.
+	testAppendQ35(vsockDevice, deviceVSOCKString, t)
+}
+
+// TestAppendVSOCKNoPCIeRoot verifies that on machines without a `pcie.0`
+// root (e.g. ppc64le's pseries, microvm, s390-ccw-virtio), we do NOT
+// emit `bus=pcie.0` — doing so would crash QEMU with
+// "Bus 'pcie.0' not found".  Transport and ROMFile are set explicitly
+// rather than using the arch-conditional `romfile` constant (which is
+// "" on s390x via qemu_s390x_test.go), so the test exercises the
+// same code path on every architecture.
+func TestAppendVSOCKNoPCIeRoot(t *testing.T) {
+	const vsockRomfile = "efi-virtio.rom"
+	vsockDevice := VSOCKDevice{
+		ID:            "vhost-vsock-pci0",
+		ContextID:     4,
+		VHostFD:       nil,
+		DisableModern: true,
+		ROMFile:       vsockRomfile,
+		Transport:     TransportPCI,
+	}
+
+	// pseries -> hasPCIeRoot returns false -> no bus=pcie.0 emitted.
+	expected := "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=" + vsockRomfile
+	config := Config{Machine: Machine{Type: "pseries"}}
+	testConfigAppend(&config, vsockDevice, expected, t)
 }
 
 func TestVSOCKValid(t *testing.T) {
@@ -1114,6 +1167,140 @@ func TestBadMemoryKnobs(t *testing.T) {
 	c.appendMemoryKnobs()
 	if len(c.qemuParams) != 0 {
 		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestAppendMultiNUMAMemoryKnobs(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size:   "2G",
+			Slots:  8,
+			MaxMem: "4G",
+		},
+		NUMANodes: []NUMANode{
+			{
+				NodeID:         0,
+				CPUs:           "0-3",
+				MemSize:        "1G",
+				HostNodes:      "0",
+				MemBackendType: "memory-backend-ram",
+			},
+			{
+				NodeID:         1,
+				CPUs:           "4-7",
+				MemSize:        "1G",
+				HostNodes:      "1",
+				MemBackendType: "memory-backend-ram",
+			},
+		},
+		Knobs: Knobs{
+			MemShared:   true,
+			MemPrealloc: true,
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expected := []string{
+		"-object", "memory-backend-ram,id=numa-mem0,size=1G,host-nodes=0,policy=bind,share=on,prealloc=on",
+		"-numa", "node,nodeid=0,memdev=numa-mem0,cpus=0-3",
+		"-object", "memory-backend-ram,id=numa-mem1,size=1G,host-nodes=1,policy=bind,share=on,prealloc=on",
+		"-numa", "node,nodeid=1,memdev=numa-mem1,cpus=4-7",
+	}
+	if len(c.qemuParams) != len(expected) {
+		t.Fatalf("Expected %d params, got %d: %v", len(expected), len(c.qemuParams), c.qemuParams)
+	}
+	for i, p := range expected {
+		if c.qemuParams[i] != p {
+			t.Errorf("Param %d: expected %q, got %q", i, p, c.qemuParams[i])
+		}
+	}
+}
+
+func TestAppendMultiNUMAHugePages(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size:   "2G",
+			Slots:  8,
+			MaxMem: "4G",
+		},
+		NUMANodes: []NUMANode{
+			{
+				NodeID:         0,
+				CPUs:           "0-1",
+				MemSize:        "1G",
+				HostNodes:      "0",
+				MemBackendType: "memory-backend-file",
+				MemBackendPath: "/dev/hugepages",
+			},
+			{
+				NodeID:         1,
+				CPUs:           "2-3",
+				MemSize:        "1G",
+				HostNodes:      "1",
+				MemBackendType: "memory-backend-file",
+				MemBackendPath: "/dev/hugepages",
+			},
+		},
+		Knobs: Knobs{
+			MemShared: true,
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expected := []string{
+		"-object", "memory-backend-file,id=numa-mem0,size=1G,mem-path=/dev/hugepages,host-nodes=0,policy=bind,share=on",
+		"-numa", "node,nodeid=0,memdev=numa-mem0,cpus=0-1",
+		"-object", "memory-backend-file,id=numa-mem1,size=1G,mem-path=/dev/hugepages,host-nodes=1,policy=bind,share=on",
+		"-numa", "node,nodeid=1,memdev=numa-mem1,cpus=2-3",
+	}
+	if len(c.qemuParams) != len(expected) {
+		t.Fatalf("Expected %d params, got %d: %v", len(expected), len(c.qemuParams), c.qemuParams)
+	}
+	for i, p := range expected {
+		if c.qemuParams[i] != p {
+			t.Errorf("Param %d: expected %q, got %q", i, p, c.qemuParams[i])
+		}
+	}
+}
+
+func TestAppendNUMADist(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	c := &Config{
+		Memory: Memory{
+			Size: "2G",
+		},
+		NUMANodes: []NUMANode{
+			{NodeID: 0, CPUs: "0-1", MemSize: "1G", MemBackendType: "memory-backend-ram"},
+			{NodeID: 1, CPUs: "2-3", MemSize: "1G", MemBackendType: "memory-backend-ram"},
+		},
+		NUMADists: []NUMADist{
+			{Src: 0, Dst: 1, Val: 20},
+			{Src: 1, Dst: 0, Val: 20},
+		},
+	}
+
+	c.appendMemoryKnobs()
+
+	expectedDist := []string{
+		"-numa", "dist,src=0,dst=1,val=20",
+		"-numa", "dist,src=1,dst=0,val=20",
+	}
+	params := c.qemuParams
+	distParams := params[len(params)-4:]
+	for i, p := range expectedDist {
+		if distParams[i] != p {
+			t.Errorf("Dist param %d: expected %q, got %q", i, p, distParams[i])
+		}
 	}
 }
 

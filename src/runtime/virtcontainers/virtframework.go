@@ -12,6 +12,7 @@ package virtcontainers
 import (
 	"context"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
@@ -134,4 +135,8 @@ func (vfw *virtFramework) GenerateSocket(id string) (interface{}, error) {
 
 func (vfw *virtFramework) IsRateLimiterBuiltin() bool {
 	return false
+}
+
+func (vfw *virtFramework) ResolveColdPlugVFIOGuestPciPaths(_ context.Context, _ []*config.VFIODev) error {
+	return nil
 }

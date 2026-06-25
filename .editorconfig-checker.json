@@ -5,10 +5,6 @@
   "SpacesAfterTabs": false,
   "NoColor": false,
   "Exclude": [
-    "src/runtime/vendor",
-    "src/tools/log-parser/vendor",
-    "tests/metrics/cmd/checkmetrics/vendor",
-    "tests/vendor",
     "src/runtime/virtcontainers/pkg/cloud-hypervisor/client",
     "\\.img$",
     "\\.dtb$",

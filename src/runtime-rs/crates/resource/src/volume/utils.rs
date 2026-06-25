@@ -6,6 +6,8 @@
 
 use std::{
     fs,
+    fs::OpenOptions,
+    os::unix::{fs::OpenOptionsExt, io::AsRawFd},
     path::{Path, PathBuf},
 };
 
@@ -25,6 +27,33 @@ use hypervisor::device::DeviceType;
 
 pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
+
+// BLKROGET (_IO(0x12, 94)) returns the block device's read-only flag into an
+// int. It is encoded as an `_IO` ioctl but actually transfers data, so it is a
+// "bad" ioctl; request_code_none! produces the correct, arch-aware value.
+nix::ioctl_read_bad!(blkroget, nix::request_code_none!(0x12, 94), libc::c_int);
+
+/// Query the host block device's read-only flag (BLKROGET). This reflects the
+/// device's actual writability, which is the ground truth for whether the guest
+/// should see it read-only: when the host backing is read-only, writes from the
+/// guest fail at the host anyway, so the device must be exposed read-only. The
+/// read-only intent for such devices is frequently not carried in the OCI spec
+/// (no "ro" mount option), so the device flag is the only reliable source.
+pub(crate) fn is_block_device_readonly<P: AsRef<Path>>(path: P) -> Result<bool> {
+    let path = path.as_ref();
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(path)
+        .with_context(|| format!("open {} for readonly probe", path.display()))?;
+
+    let mut ro: libc::c_int = 0;
+    // Safe: file owns a valid fd for the duration of the call and `ro` is a
+    // valid, properly aligned pointer to an initialized int.
+    unsafe { blkroget(file.as_raw_fd(), &mut ro).context("ioctl BLKROGET")? };
+
+    Ok(ro != 0)
+}
 
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src
@@ -64,6 +93,44 @@ pub(crate) async fn generate_shared_path(
     Ok(guest_path)
 }
 
+/// Extract storage source information from block device configuration.
+/// This helper function handles the common logic for determining the storage source
+/// based on the driver type (BLK/SCSI/CCW).
+fn extract_storage_source(
+    driver_option: &str,
+    pci_path: Option<&hypervisor::device::pci_path::PciPath>,
+    scsi_addr: Option<&str>,
+    ccw_addr: Option<&str>,
+    virt_path: &str,
+) -> Result<String> {
+    let source = match driver_option {
+        KATA_BLK_DEV_TYPE => {
+            if let Some(pci_path) = pci_path {
+                pci_path.to_string()
+            } else {
+                return Err(anyhow!("block driver is blk but no pci path exists"));
+            }
+        }
+        KATA_SCSI_DEV_TYPE => {
+            if let Some(scsi_addr) = scsi_addr {
+                scsi_addr.to_string()
+            } else {
+                return Err(anyhow!("block driver is scsi but no scsi address exists"));
+            }
+        }
+        KATA_CCW_DEV_TYPE => {
+            if let Some(ccw_addr) = ccw_addr {
+                ccw_addr.to_string()
+            } else {
+                return Err(anyhow!("block driver is ccw but no ccw address exists"));
+            }
+        }
+        _ => virt_path.to_string(),
+    };
+
+    Ok(source)
+}
+
 pub async fn handle_block_volume(
     device_info: DeviceType,
     m: &oci::Mount,
@@ -86,34 +153,29 @@ pub async fn handle_block_volume(
     // BlockVolume.
     // safe here, device_info is correct and only unwrap it.
     let mut device_id = String::new();
+
+    if let DeviceType::BlockModern(device_mod) = device_info.clone() {
+        let device = &device_mod.lock().await;
+        storage.driver = device.config.driver_option.clone();
+        storage.source = extract_storage_source(
+            &device.config.driver_option,
+            device.config.pci_path.as_ref(),
+            device.config.scsi_addr.as_deref(),
+            device.config.ccw_addr.as_deref(),
+            &device.config.virt_path,
+        )?;
+        device_id = device.device_id.clone();
+    }
+
     if let DeviceType::Block(device) = device_info {
-        let blk_driver = device.config.driver_option;
-        // blk, mmioblk
-        storage.driver = blk_driver.clone();
-        storage.source = match blk_driver.as_str() {
-            KATA_BLK_DEV_TYPE => {
-                if let Some(pci_path) = device.config.pci_path {
-                    pci_path.to_string()
-                } else {
-                    return Err(anyhow!("block driver is blk but no pci path exists"));
-                }
-            }
-            KATA_SCSI_DEV_TYPE => {
-                if let Some(scsi_addr) = device.config.scsi_addr {
-                    scsi_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
-                }
-            }
-            KATA_CCW_DEV_TYPE => {
-                if let Some(ccw_addr) = device.config.ccw_addr {
-                    ccw_addr.to_string()
-                } else {
-                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
-                }
-            }
-            _ => device.config.virt_path,
-        };
+        storage.driver = device.config.driver_option.clone();
+        storage.source = extract_storage_source(
+            &device.config.driver_option,
+            device.config.pci_path.as_ref(),
+            device.config.scsi_addr.as_deref(),
+            device.config.ccw_addr.as_deref(),
+            &device.config.virt_path,
+        )?;
         device_id = device.device_id;
     }
 

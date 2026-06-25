@@ -8,10 +8,25 @@ SNP_HYPERVISORS=("qemu-snp" "qemu-snp-runtime-rs")
 TDX_HYPERVISORS=("qemu-tdx" "qemu-tdx-runtime-rs")
 SE_HYPERVISORS=("qemu-se" "qemu-se-runtime-rs")
 CCA_HYPERVISORS=("qemu-cca")
-GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
 TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${CCA_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
 NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 FIRECRACKER_HYPERVISORS=("firecracker" "fc")
+
+ALL_HYPERVISORS=(
+	"clh"
+	"clh-azure"
+	"clh-runtime-rs"
+	"clh-azure-runtime-rs"
+	"dragonball"
+	"qemu"
+	"qemu-runtime-rs"
+	"qemu-nvidia-gpu"
+	"qemu-nvidia-gpu-runtime-rs"
+	"${TEE_HYPERVISORS[@]}"
+	"${NON_TEE_HYPERVISORS[@]}"
+	"${FIRECRACKER_HYPERVISORS[@]}"
+)
 
 function is_snp_hypervisor() {
 	local hypervisor="${1:-${KATA_HYPERVISOR}}"
@@ -59,6 +74,13 @@ function is_firecracker_hypervisor() {
 	local hypervisor="${1:-${KATA_HYPERVISOR}}"
 	# shellcheck disable=SC2076 # intentionally use literal string matching
 	[[ " ${FIRECRACKER_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
+	return 1
+}
+
+function is_supported_hypervisor() {
+	local hypervisor="${1:-${KATA_HYPERVISOR}}"
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	[[ " ${ALL_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
 	return 1
 }
 
