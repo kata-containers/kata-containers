@@ -12,6 +12,7 @@ extern crate slog;
 
 logging::logger_with_subsystem!(sl, "resource");
 
+pub(crate) mod block_device;
 pub mod cgroups;
 pub mod manager;
 mod manager_inner;
