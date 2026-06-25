@@ -228,7 +228,7 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # - virtio-blk-ccw
 # - virtio-scsi
 # - nvidmm
-block_device_driver = "@VMROOTFSDRIVER_NV@"
+block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # aio is the I/O mechanism used by qemu
 # Options:

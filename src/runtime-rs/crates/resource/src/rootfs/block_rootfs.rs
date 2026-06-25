@@ -5,7 +5,10 @@
 //
 
 use super::{Rootfs, ROOTFS};
-use crate::share_fs::{do_get_guest_path, do_get_host_path};
+use crate::{
+    block_device::agent_storage_source_from_block_config,
+    share_fs::{do_get_guest_path, do_get_host_path},
+};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -16,9 +19,7 @@ use hypervisor::{
     },
     BlockConfig, BlockDeviceAio,
 };
-use kata_types::config::hypervisor::{
-    VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
-};
+use kata_types::config::hypervisor::VIRTIO_PMEM;
 use kata_types::fs::VM_ROOTFS_FILESYSTEM_XFS;
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
@@ -89,37 +90,22 @@ impl BlockRootfs {
 
         let mut device_id: String = "".to_owned();
         if let DeviceType::Block(device) = device_info {
-            storage.driver = device.config.driver_option;
-            device_id = device.device_id;
-
-            match block_driver.as_str() {
-                VIRTIO_BLK_PCI => {
-                    storage.source = device
-                        .config
-                        .pci_path
-                        .ok_or("PCI path missing for pci block device")
-                        .map_err(|e| anyhow!(e))?
-                        .to_string();
-                }
-                VIRTIO_BLK_MMIO => {
-                    storage.source = device.config.virt_path;
-                }
-                VIRTIO_BLK_CCW => {
-                    storage.source = device
-                        .config
-                        .ccw_addr
-                        .ok_or_else(|| anyhow!("CCW address missing for ccw block device"))?;
-                }
-                VIRTIO_SCSI | VIRTIO_PMEM => {
-                    return Err(anyhow!(
-                        "Complete support for block driver {} has not been implemented yet",
-                        block_driver
-                    ));
-                }
-                _ => {
-                    return Err(anyhow!("Unknown block driver : {}", block_driver));
-                }
+            if block_driver == VIRTIO_PMEM {
+                return Err(anyhow!(
+                    "Complete support for block driver {} has not been implemented yet",
+                    block_driver
+                ));
             }
+
+            storage.driver = device.config.driver_option.clone();
+            storage.source = agent_storage_source_from_block_config(
+                &device.config.driver_option,
+                device.config.pci_path.as_ref(),
+                device.config.scsi_addr.as_deref(),
+                device.config.ccw_addr.as_deref(),
+                &device.config.virt_path,
+            )?;
+            device_id = device.device_id;
         }
 
         Ok(Self {
