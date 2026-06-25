@@ -31,6 +31,7 @@ spec:
       resources:
         limits:
           cpu: "2"
+          memory: "2Gi"
       volumeDevices:
         - devicePath: /dev/trusted_store
           name: trusted-storage

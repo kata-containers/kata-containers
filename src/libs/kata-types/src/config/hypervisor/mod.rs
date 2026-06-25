@@ -641,6 +641,13 @@ pub struct CpuInfo {
     /// - `> number of physical cores`: Set to actual number of physical cores
     #[serde(default)]
     pub default_vcpus: f32,
+    /// vCPU overhead to be added when sandbox/container CPU limits are provided.
+    ///
+    /// This value is used by runtime-rs static sandbox sizing as:
+    /// - if no CPU limits are provided: use `default_vcpus`
+    /// - if CPU limits are provided: use `overhead_vcpus + workload_vcpus`
+    #[serde(default)]
+    pub overhead_vcpus: f32,
 
     /// Default maximum number of vCPUs per SB/VM:
     /// - Unspecified or `0`: Set to actual number of physical cores or
@@ -973,6 +980,14 @@ pub struct MemoryInfo {
     /// Default memory size in MiB for SB/VM.
     #[serde(default)]
     pub default_memory: u32,
+    /// Memory overhead in MiB to be added when sandbox/container memory
+    /// limits are provided.
+    ///
+    /// This value is used by runtime-rs static sandbox sizing as:
+    /// - if no memory limits are provided: use `default_memory`
+    /// - if memory limits are provided: use `overhead_memory + workload_memory`
+    #[serde(default)]
+    pub overhead_memory: u32,
 
     /// Default maximum memory in MiB per SB/VM:
     /// - Unspecified or `0`: Set to actual physical RAM
@@ -1974,11 +1989,13 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus: 0.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                 },
             },
@@ -1987,11 +2004,13 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 9999999.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: node_cpus,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                 },
             },
@@ -2000,12 +2019,29 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "a, b ,c".to_string(),
                     default_vcpus: -1.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 1.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
+                },
+            },
+            TestData {
+                desc: "overhead_vcpus explicitly set keeps value",
+                input: &mut CpuInfo {
+                    cpu_features: "x, y".to_string(),
+                    default_vcpus: 0.0,
+                    overhead_vcpus: 0.5,
+                    default_maxvcpus: 2,
+                },
+                output: CpuInfo {
+                    cpu_features: "x,y".to_string(),
+                    default_vcpus,
+                    overhead_vcpus: 0.5,
+                    default_maxvcpus: 2,
                 },
             },
         ];
@@ -2029,7 +2065,28 @@ mod tests {
                 "test[{}] default_maxvcpus",
                 tc.desc
             );
+            assert_eq!(
+                tc.input.overhead_vcpus, tc.output.overhead_vcpus,
+                "test[{}] overhead_vcpus",
+                tc.desc
+            );
         }
+    }
+
+    #[test]
+    fn test_memory_info_adjust_config_keeps_explicit_overhead_memory() {
+        let mut mem = MemoryInfo {
+            default_memory: 1024,
+            overhead_memory: 512,
+            default_maxmemory: 4096,
+            ..Default::default()
+        };
+
+        mem.adjust_config().unwrap();
+
+        assert_eq!(mem.overhead_memory, 512);
+        assert_eq!(mem.default_memory, 1024);
+        assert_eq!(mem.default_maxmemory, 4096);
     }
 
     #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
