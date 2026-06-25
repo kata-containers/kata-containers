@@ -11,7 +11,7 @@ use super::Volume;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
-use kata_sys_util::mount::{get_mount_path, get_mount_type};
+use kata_sys_util::mount::get_mount_path;
 use kata_types::mount::KATA_K8S_LOCAL_STORAGE_TYPE;
 use nix::sys::stat::stat;
 use oci_spec::runtime as oci;
@@ -120,8 +120,4 @@ impl Volume for LocalStorage {
     fn get_device_id(&self) -> Result<Option<String>> {
         Ok(None)
     }
-}
-
-pub(crate) fn is_local_volume(m: &oci::Mount) -> bool {
-    get_mount_type(m).as_str() == KATA_K8S_LOCAL_STORAGE_TYPE
 }

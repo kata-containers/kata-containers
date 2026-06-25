@@ -26,7 +26,8 @@ use agent::Agent;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
-use kata_sys_util::mount::get_mount_options;
+use kata_sys_util::{k8s::is_disk_empty_dir, mount::get_mount_options};
+use kata_types::config::EMPTYDIR_MODE_BLOCK_ENCRYPTED;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -38,6 +39,7 @@ pub struct VolumeContext<'a> {
     pub sid: &'a str,
     pub agent: Arc<dyn Agent>,
     pub emptydir_mode: &'a str,
+    pub fs_sharing_supported: bool,
 }
 
 #[async_trait]
@@ -82,6 +84,7 @@ impl VolumeResource {
         let d = ctx.d;
         let sid = ctx.sid;
         let emptydir_mode = ctx.emptydir_mode;
+        let fs_sharing_supported = ctx.fs_sharing_supported;
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts().clone().unwrap_or_default();
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
@@ -92,11 +95,6 @@ impl VolumeResource {
                 Arc::new(
                     shm_volume::ShmVolume::new(m)
                         .with_context(|| format!("new shm volume {m:?}"))?,
-                )
-            } else if local_volume::is_local_volume(m) {
-                Arc::new(
-                    local_volume::LocalStorage::new(m, sid, cid)
-                        .with_context(|| format!("new local volume {m:?}"))?,
                 )
             } else if ephemeral_volume::is_ephemeral_volume(m) {
                 Arc::new(
@@ -112,6 +110,17 @@ impl VolumeResource {
                 inner.ephemeral_disks.push(vol.disk_info);
                 drop(inner);
                 vol_arc
+            } else if need_local_volume(m, fs_sharing_supported, emptydir_mode) {
+                // This branch comes after the is_encrypted_emptydir_volume() branch
+                // to ensure encrypted handling takes precedence.
+                warn!(
+                    sl!(),
+                    "handling emptyDir as guest-local volume because fs sharing is unsupported; Kubelet cannot enforce sizeLimit-based eviction",
+                );
+                Arc::new(
+                    local_volume::LocalStorage::new(m, sid, cid)
+                        .with_context(|| format!("new local volume {m:?}"))?,
+                )
             } else if is_block_volume(m) {
                 // handle block volume
                 Arc::new(
@@ -202,6 +211,23 @@ impl VolumeResource {
             );
         }
     }
+}
+
+/// Indicates whether a mount needs to be a local volume, i.e. created
+/// inside the guest instead of being shared from the host.
+///
+/// This returns true when the hypervisor doesn't support fs sharing
+/// (e.g. peer pods) and the mount is a non-block-based disk-backed
+/// emptyDir.
+///
+/// Limitation: Local volumes cannot be managed by Kubelet and hence may
+/// starve the host storage.
+fn need_local_volume(m: &oci::Mount, fs_sharing_supported: bool, emptydir_mode: &str) -> bool {
+    !fs_sharing_supported
+        && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+        && m.source()
+            .as_ref()
+            .is_some_and(|src| is_disk_empty_dir(&src.display().to_string()))
 }
 
 fn is_skip_volume(_m: &oci::Mount) -> bool {
