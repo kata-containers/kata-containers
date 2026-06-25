@@ -2629,7 +2629,6 @@ mod tests {
 
     fn mk_ttrpc_context() -> TtrpcContext {
         TtrpcContext {
-            fd: -1,
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,

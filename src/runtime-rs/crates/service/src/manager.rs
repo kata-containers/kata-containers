@@ -5,7 +5,7 @@
 //
 
 use std::fs;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::RawFd;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -62,8 +62,10 @@ impl ServiceManager {
         let (sender, receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let rt_mgr = RuntimeHandlerManager::new(id, sender).context("new runtime handler")?;
         let handler = Arc::new(rt_mgr);
-        let mut server = unsafe { Server::from_raw_fd(task_server_fd) };
-        server = server.set_domain_unix();
+        let server_builder = Server::new();
+        // SAFETY: task_server_fd is a valid unix listener fd passed from containerd.
+        let server = unsafe { server_builder.add_unix_listener(task_server_fd) }
+            .context("add unix listener fd to ttrpc server")?;
         let event_publisher = new_event_publisher(namespace)
             .await
             .context("new event publisher")?;
