@@ -204,6 +204,17 @@ pub struct Config {
     /// Enable dm-verity integrity for EROFS lower layers.
     /// Independent of rw-layer backing; works with both disk and memory modes.
     pub erofs_dmverity: bool,
+    /// Startup taints to remove from the node once Kata is installed and the
+    /// node has been labeled `katacontainers.io/kata-runtime=true`. Each entry
+    /// is either a bare taint key (matches any effect) or `key:effect` (matches
+    /// only that effect). Empty means "remove nothing" and is the default, so
+    /// the behavior is opt-in and a no-op for users who don't configure it.
+    ///
+    /// This lets a node be provisioned with a startup taint that keeps Kata
+    /// workloads from being scheduled before the runtime binaries exist; kata-deploy
+    /// removes the taint as its final install step, closing the window in which a
+    /// pod could land on a not-yet-ready node.
+    pub startup_taints: Vec<String>,
 }
 
 impl Config {
@@ -352,6 +363,15 @@ impl Config {
             .trim()
             .eq_ignore_ascii_case("dmverity");
 
+        // Startup taints to remove after install+label. Comma- or whitespace-separated
+        // list of `key` or `key:effect` entries. Empty/unset means "remove nothing".
+        let startup_taints = env::var("STARTUP_TAINTS")
+            .unwrap_or_default()
+            .split([',', ' ', '\t', '\n'])
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
         let config = Config {
             node_name,
             debug,
@@ -382,6 +402,7 @@ impl Config {
             custom_runtimes,
             erofs_snapshotter_mode,
             erofs_dmverity,
+            startup_taints,
         };
 
         // Validate the configuration
@@ -620,6 +641,7 @@ impl Config {
             "* CUSTOM_RUNTIMES_ENABLED: {}",
             self.custom_runtimes_enabled
         );
+        info!("* STARTUP_TAINTS: {}", self.startup_taints.join(" "));
         if !self.custom_runtimes.is_empty() {
             info!("* CUSTOM_RUNTIMES:");
             for runtime in &self.custom_runtimes {
@@ -948,6 +970,7 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
+            "STARTUP_TAINTS",
         ];
         for var in &vars {
             std::env::remove_var(var);
