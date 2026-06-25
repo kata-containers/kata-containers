@@ -1807,6 +1807,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &::ttrpc::r#async::TtrpcContext,
         config: protocols::agent::MemAgentMemcgConfig,
     ) -> ::ttrpc::Result<Empty> {
+        is_allowed(&config).await?;
         if let Some(ma) = &self.oma {
             ma.memcg_set_config_async(mem_agent_memcgconfig_to_memcg_optionconfig(&config))
                 .await
@@ -1831,6 +1832,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &::ttrpc::r#async::TtrpcContext,
         config: protocols::agent::MemAgentCompactConfig,
     ) -> ::ttrpc::Result<Empty> {
+        is_allowed(&config).await?;
         if let Some(ma) = &self.oma {
             ma.compact_set_config_async(mem_agent_compactconfig_to_compact_optionconfig(&config))
                 .await
