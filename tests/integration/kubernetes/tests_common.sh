@@ -263,7 +263,6 @@ install_genpolicy_drop_ins() {
 # genpolicy-settings.json and genpolicy-settings.d/*.json (drop-ins).
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
-	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
 
@@ -273,7 +272,7 @@ create_common_genpolicy_settings() {
 	mkdir -p "${genpolicy_settings_dir}/genpolicy-settings.d"
 	install_genpolicy_drop_ins \
 		"${genpolicy_settings_dir}/genpolicy-settings.d" \
-		"${default_genpolicy_settings_dir}/drop-in-examples"
+		"${GENPOLICY_SETTINGS_DIR}/drop-in-examples"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
