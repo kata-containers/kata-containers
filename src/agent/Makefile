@@ -14,6 +14,11 @@ PROJECT_COMPONENT = kata-agent
 
 TARGET = $(PROJECT_COMPONENT)
 
+# Find all packages of this component
+PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
+                jq -r --arg d "$(CURDIR)/" '.packages[] | select(.manifest_path | startswith($$d)) | .name')
+PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
+
 VERSION_FILE := ./VERSION
 VERSION := $(shell grep -v ^\# $(VERSION_FILE) 2>/dev/null || echo "unknown")
 COMMIT_NO := $(shell git rev-parse HEAD 2>/dev/null || true)
@@ -141,7 +146,7 @@ clean:
 
 #TARGET test: run cargo tests
 test: $(GENERATED_FILES)
-	@RUST_LIB_BACKTRACE=0 RUST_BACKTRACE=1 cargo test -p kata-agent --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@RUST_LIB_BACKTRACE=0 RUST_BACKTRACE=1 cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
