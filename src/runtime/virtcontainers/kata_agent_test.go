@@ -8,8 +8,10 @@ package virtcontainers
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,9 +19,12 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -65,6 +70,8 @@ func TestKataAgentConnect(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	err = k.connect(context.Background())
@@ -89,6 +96,8 @@ func TestKataAgentDisconnect(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	assert.NoError(k.connect(context.Background()))
@@ -127,6 +136,8 @@ func TestKataAgentSendReq(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	ctx := context.Background()
@@ -906,6 +917,8 @@ func TestAgentCreateContainer(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	dir := t.TempDir()
@@ -935,6 +948,8 @@ func TestAgentNetworkOperation(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	_, err = k.updateInterface(k.ctx, nil)
@@ -984,6 +999,8 @@ func TestKataCopyFile(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	err = k.copyFile(context.Background(), "/abc/xyz/123", "/tmp")
@@ -1030,6 +1047,8 @@ func TestKataCopyFileWithSymlink(t *testing.T) {
 		state: KataAgentState{
 			URL: url,
 		},
+		reconnectAttempts: 1,
+		reconnectDelay:    100 * time.Millisecond,
 	}
 
 	tempDir := t.TempDir()
@@ -1320,6 +1339,8 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 				state: KataAgentState{
 					URL: url,
 				},
+				reconnectAttempts: 1,
+				reconnectDelay:    100 * time.Millisecond,
 			}
 
 			mockReceiver := &api.MockDeviceReceiver{}
@@ -1414,4 +1435,242 @@ func TestTranslateHostMemsToGuestRangeNodes(t *testing.T) {
 
 	result = translateHostMemsToGuest("0,3", numaNodes)
 	assert.Equal("0-1", result)
+}
+
+func TestIsConnectionError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "ttrpc closed",
+			err:      errors.New("ttrpc: closed"),
+			expected: true,
+		},
+		{
+			name:     "connection refused",
+			err:      errors.New("dial unix /path/to/socket: connection refused"),
+			expected: true,
+		},
+		{
+			name:     "connection reset",
+			err:      errors.New("read: connection reset by peer"),
+			expected: true,
+		},
+		{
+			name:     "broken pipe",
+			err:      errors.New("write: broken pipe"),
+			expected: true,
+		},
+		{
+			name:     "EOF",
+			err:      errors.New("unexpected EOF"),
+			expected: true,
+		},
+		{
+			name:     "closed network connection",
+			err:      errors.New("use of closed network connection"),
+			expected: true,
+		},
+		{
+			name:     "grpc unavailable",
+			err:      grpcStatus.Error(codes.Unavailable, "service unavailable"),
+			expected: true,
+		},
+		{
+			name:     "grpc aborted",
+			err:      grpcStatus.Error(codes.Aborted, "operation aborted"),
+			expected: true,
+		},
+		{
+			name:     "grpc not found - not connection error",
+			err:      grpcStatus.Error(codes.NotFound, "not found"),
+			expected: false,
+		},
+		{
+			name:     "normal error",
+			err:      errors.New("some other error"),
+			expected: false,
+		},
+		{
+			name:     "permission denied - not connection error",
+			err:      errors.New("permission denied"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isConnectionError(tt.err)
+			assert.Equal(t, tt.expected, result, "isConnectionError(%v) = %v, want %v", tt.err, result, tt.expected)
+		})
+	}
+}
+
+func TestConnect_DeadAgentNoURL(t *testing.T) {
+	assert := assert.New(t)
+
+	k := &kataAgent{
+		ctx:  context.Background(),
+		dead: true,
+		state: KataAgentState{
+			URL: "",
+		},
+	}
+
+	err := k.connect(context.Background())
+	assert.Error(err)
+	assert.Contains(err.Error(), "dead agent with no URL to reconnect")
+	assert.True(k.dead, "agent should remain dead")
+}
+
+func TestConnect_DeadAgentNoSocket(t *testing.T) {
+	assert := assert.New(t)
+
+	k := &kataAgent{
+		ctx:               context.Background(),
+		dead:              true,
+		reconnectAttempts: 1,
+		reconnectDelay:    10 * time.Millisecond,
+		state: KataAgentState{
+			URL: "unix:///nonexistent/path/to/socket.sock",
+		},
+	}
+
+	err := k.connect(context.Background())
+	assert.Error(err)
+	assert.Contains(err.Error(), "socket not available")
+	assert.True(k.dead, "agent should remain dead")
+}
+
+func TestConnect_DeadAgentSocketNotConnectable(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpFile, err := os.CreateTemp("", "fake-socket-*")
+	assert.NoError(err)
+	defer os.Remove(tmpFile.Name())
+	tmpFile.Close()
+
+	k := &kataAgent{
+		ctx:               context.Background(),
+		dead:              true,
+		reconnectAttempts: 1,
+		reconnectDelay:    10 * time.Millisecond,
+		state: KataAgentState{
+			URL: "unix://" + tmpFile.Name(),
+		},
+	}
+
+	err = k.connect(context.Background())
+	assert.Error(err)
+	assert.Contains(err.Error(), "socket not connectable")
+	assert.True(k.dead, "agent should remain dead")
+}
+
+func TestConnect_DeadAgentWithSocket(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpDir, err := os.MkdirTemp("", "kata-test-*")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpDir)
+
+	socketPath := filepath.Join(tmpDir, "test.sock")
+	listener, err := net.Listen("unix", socketPath)
+	assert.NoError(err)
+	defer listener.Close()
+
+	k := &kataAgent{
+		ctx:               context.Background(),
+		dead:              true,
+		reconnectAttempts: 1,
+		reconnectDelay:    10 * time.Millisecond,
+		state: KataAgentState{
+			URL: "unix://" + socketPath,
+		},
+	}
+
+	assert.True(k.dead)
+	assert.Nil(k.client)
+
+	err = k.connect(context.Background())
+
+	// Should attempt reconnection, not reject with "Dead agent"
+	assert.Error(err)
+	assert.NotContains(err.Error(), "Dead agent")
+	assert.NotContains(err.Error(), "dead agent with no URL")
+	assert.NotContains(err.Error(), "socket not available")
+	assert.NotContains(err.Error(), "socket not connectable")
+}
+
+func TestMarkDeadNormal(t *testing.T) {
+	assert := assert.New(t)
+
+	k := &kataAgent{
+		ctx:  context.Background(),
+		dead: false,
+	}
+
+	k.markDead(context.Background())
+
+	assert.True(k.dead, "markDead should set dead")
+}
+
+func TestSendReqWithRetry_ReconnectsAfterServerBreak(t *testing.T) {
+	assert := assert.New(t)
+
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
+
+	server := mock.HybridVSockTTRPCMock{}
+	err = server.Start(url)
+	assert.NoError(err)
+
+	k := &kataAgent{
+		ctx: context.Background(),
+		state: KataAgentState{
+			URL: url,
+		},
+		keepConn:          true,
+		reconnectAttempts: 3,
+		reconnectDelay:    100 * time.Millisecond,
+	}
+
+	// Phase 1: Initial RPC succeeds
+	_, err = k.sendReq(context.Background(), &pb.CheckRequest{})
+	assert.NoError(err)
+	assert.False(k.dead)
+	assert.NotNil(k.client)
+	assert.NotNil(k.reqHandlers)
+	originalClient := k.client
+
+	// Server-side close — tears down listener and all active connections
+	err = server.Stop()
+	assert.NoError(err)
+
+	// Phase 2: RPC fails, reconnection also fails (server is down)
+	_, err = k.sendReq(context.Background(), &pb.CheckRequest{})
+	assert.Error(err)
+	assert.True(k.dead)
+	assert.NotNil(k.reqHandlers, "reqHandlers should never be nil'd")
+
+	// Restart server on the same URL
+	server2 := mock.HybridVSockTTRPCMock{}
+	err = server2.Start(url)
+	assert.NoError(err)
+	defer server2.Stop()
+
+	// Phase 3: RPC succeeds — connect() recovers from dead state
+	_, err = k.sendReq(context.Background(), &pb.CheckRequest{})
+	assert.NoError(err)
+	assert.False(k.dead)
+	assert.NotNil(k.client)
+	assert.NotNil(k.reqHandlers)
+	assert.True(k.client != originalClient, "should be a fresh connection")
 }

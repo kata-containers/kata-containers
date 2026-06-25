@@ -21,7 +21,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultMinTimeout = 60
+const (
+	defaultMinTimeout       = 60
+	defaultRetryAttempts    = 5
+	defaultRetryBaseDelay   = time.Second
+)
 
 type remoteHypervisor struct {
 	sandboxID       remoteHypervisorSandboxID
@@ -37,8 +41,21 @@ type remoteService struct {
 }
 
 func openRemoteService(socketPath string) (*remoteService, error) {
+	return openRemoteServiceWithRetry(socketPath, defaultRetryAttempts, defaultRetryBaseDelay)
+}
 
-	conn, err := net.Dial("unix", socketPath)
+func openRemoteServiceWithRetry(socketPath string, maxAttempts int, baseDelay time.Duration) (*remoteService, error) {
+	var conn net.Conn
+	var err error
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		conn, err = net.Dial("unix", socketPath)
+		if err == nil {
+			break
+		}
+		hvLogger.WithField("attempt", attempt+1).WithError(err).Warn("failed to connect to remote hypervisor, retrying...")
+		time.Sleep(time.Duration(1<<attempt) * baseDelay)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to remote hypervisor socket: %w", err)
 	}
@@ -60,11 +77,16 @@ func (s *remoteService) Close() error {
 }
 
 func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
+	if err := rh.setConfig(hypervisorConfig); err != nil {
+		return err
+	}
 
 	rh.sandboxID = remoteHypervisorSandboxID(id)
 
-	if err := rh.setConfig(hypervisorConfig); err != nil {
-		return err
+	// Check if we're reconnecting to an existing sandbox (state was restored via Load())
+	if rh.agentSocketPath != "" {
+		hvLogger.Infof("remoteHypervisor: reconnecting to existing sandbox %s", rh.sandboxID)
+		return nil
 	}
 
 	s, err := openRemoteService(hypervisorConfig.RemoteHypervisorSocket)
@@ -286,12 +308,14 @@ func (rh *remoteHypervisor) Check() error {
 	return nil
 }
 
-func (rh *remoteHypervisor) Save() persistapi.HypervisorState {
-	return persistapi.HypervisorState{}
+func (rh *remoteHypervisor) Save() (s persistapi.HypervisorState) {
+	s.AgentSocketPath = rh.agentSocketPath
+	return
 }
 
-func (rh *remoteHypervisor) Load(persistapi.HypervisorState) {
-	notImplemented("Load")
+func (rh *remoteHypervisor) Load(s persistapi.HypervisorState) {
+	rh.agentSocketPath = s.AgentSocketPath
+	hvLogger.Infof("remoteHypervisor: restored agentSocketPath from state (set=%v)", s.AgentSocketPath)
 }
 
 func (rh *remoteHypervisor) IsRateLimiterBuiltin() bool {
