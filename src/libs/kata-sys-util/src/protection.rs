@@ -91,6 +91,37 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
 }
 
 #[cfg(target_arch = "x86_64")]
+fn retrieve_sev_params() -> Result<(u32, u32), ProtectionError> {
+    // The initial checks for AMD and SEV shouldn't be necessary due to
+    // the context this function is currently called from, however it
+    // shouldn't hurt to double-check and have better logging if anything
+    // goes wrong.
+
+    let fn0 = x86_64::__cpuid(0);
+    // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
+    // interpreted byte-wise as ASCII.  No need to bother here with an
+    // actual conversion to string though.
+    // See also AMD64 Architecture Programmer's Manual pg. 600
+    // https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24594.pdf
+    if fn0.ebx != 0x68747541 || fn0.edx != 0x69746e65 || fn0.ecx != 0x444d4163 {
+        return Err(ProtectionError::CheckFailed(
+            "Not an AMD processor".to_owned(),
+        ));
+    }
+
+    // AMD64 Architecture Programmer's Manual Fn8000_001f docs on pg. 640
+    let fn8000_001f = x86_64::__cpuid(0x8000_001f);
+    if fn8000_001f.eax & 0x10 == 0 {
+        return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
+    }
+
+    let cbitpos = fn8000_001f.ebx & 0b11_1111;
+    let phys_addr_reduction = (fn8000_001f.ebx & 0b1111_1100_0000) >> 6;
+
+    Ok((cbitpos, phys_addr_reduction))
+}
+
+#[cfg(target_arch = "x86_64")]
 pub fn arch_guest_protection(
     sev_path: &str,
     snp_path: &str,
@@ -104,6 +135,18 @@ pub fn arch_guest_protection(
         }
     }
 
+    arch_guest_protection_with_retrieve(sev_path, snp_path, retrieve_sev_params)
+}
+
+#[cfg(target_arch = "x86_64")]
+fn arch_guest_protection_with_retrieve<F>(
+    sev_path: &str,
+    snp_path: &str,
+    retrieve_fn: F,
+) -> Result<GuestProtection, ProtectionError>
+where
+    F: FnOnce() -> Result<(u32, u32), ProtectionError>,
+{
     let check_contents = |file_name: &str| -> Result<bool, ProtectionError> {
         let file_path = Path::new(file_name);
         if !file_path.exists() {
@@ -120,49 +163,28 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
-    let retrieve_sev_params = || -> Result<(u32, u32), ProtectionError> {
-        // The initial checks for AMD and SEV shouldn't be necessary due to
-        // the context this function is currently called from, however it
-        // shouldn't hurt to double-check and have better logging if anything
-        // goes wrong.
-
-        let fn0 = x86_64::__cpuid(0);
-        // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
-        // interpreted byte-wise as ASCII.  No need to bother here with an
-        // actual conversion to string though.
-        // See also AMD64 Architecture Programmer's Manual pg. 600
-        // https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24594.pdf
-        if fn0.ebx != 0x68747541 || fn0.edx != 0x69746e65 || fn0.ecx != 0x444d4163 {
-            return Err(ProtectionError::CheckFailed(
-                "Not an AMD processor".to_owned(),
-            ));
-        }
-
-        // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
-        let fn8000_001f = x86_64::__cpuid(0x8000_001f);
-        if fn8000_001f.eax & 0x10 == 0 {
-            return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
-        }
-
-        let cbitpos = fn8000_001f.ebx & 0b11_1111;
-        let phys_addr_reduction = (fn8000_001f.ebx & 0b1111_1100_0000) >> 6;
-
-        Ok((cbitpos, phys_addr_reduction))
-    };
-
     let is_snp_available = check_contents(snp_path)?;
     let is_sev_available = is_snp_available || check_contents(sev_path)?;
     if is_snp_available || is_sev_available {
-        let (cbitpos, phys_addr_reduction) = retrieve_sev_params()?;
-        let sev_snp_details = SevSnpDetails {
-            cbitpos,
-            phys_addr_reduction,
-        };
-        return Ok(if is_snp_available {
-            GuestProtection::Snp(sev_snp_details)
-        } else {
-            GuestProtection::Sev(sev_snp_details)
-        });
+        match retrieve_fn() {
+            Ok((cbitpos, phys_addr_reduction)) => {
+                let sev_snp_details = SevSnpDetails {
+                    cbitpos,
+                    phys_addr_reduction,
+                };
+                return Ok(if is_snp_available {
+                    GuestProtection::Snp(sev_snp_details)
+                } else {
+                    GuestProtection::Sev(sev_snp_details)
+                });
+            }
+            Err(err) => {
+                slog_scope::warn!(
+                    "SEV/SNP is enabled in kernel module configuration but SEV parameters could not be retrieved; falling back to NoProtection";
+                    "error" => err.to_string()
+                );
+            }
+        }
     }
 
     Ok(GuestProtection::NoProtection)
@@ -285,6 +307,26 @@ mod tests {
 
         writeln!(sev_file, "N").unwrap();
         let actual = arch_guest_protection(sev_path.to_str().unwrap(), "/xyz/tmp");
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
+    }
+
+    #[test]
+    fn test_arch_guest_protection_sev_unsupported_cpu() {
+        let dir = tempdir().unwrap();
+        let sev_file_path = dir.path().join("sev");
+        let snp_file_path = dir.path().join("sev_snp");
+
+        let mut sev_file = fs::File::create(&sev_file_path).unwrap();
+        writeln!(sev_file, "Y").unwrap();
+
+        let sev_path = sev_file_path.to_str().unwrap();
+        let snp_path = snp_file_path.to_str().unwrap();
+
+        let actual = arch_guest_protection_with_retrieve(sev_path, snp_path, || {
+            Err(ProtectionError::CheckFailed("SEV not supported".to_owned()))
+        });
+
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
     }
