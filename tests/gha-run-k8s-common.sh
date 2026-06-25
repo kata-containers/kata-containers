@@ -665,6 +665,59 @@ function delete_test_runners(){
 	done
 }
 
+function is_erofs_snapshotter_test() {
+	[[ "${SNAPSHOTTER:-}" == "erofs" ]] || \
+	[[ "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}" == *"erofs"* ]] || \
+	[[ "${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}" == *":erofs"* ]]
+}
+
+function print_erofs_kata_deploy_values() {
+	local values_yaml="${1}"
+
+	is_erofs_snapshotter_test || return 0
+
+	echo "::group::kata-deploy EROFS values summary"
+	echo "SNAPSHOTTER=${SNAPSHOTTER:-}"
+	echo "EROFS_SNAPSHOTTER_MODE=${EROFS_SNAPSHOTTER_MODE:-}"
+	echo "EROFS_MERGE_MODE=${EROFS_MERGE_MODE:-}"
+	echo "HELM_SNAPSHOTTER_HANDLER_MAPPING=${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
+	echo "HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER=${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
+	echo "TARGET_ARCH=${TARGET_ARCH:-}"
+	echo "--- .snapshotter ---"
+	yq '.snapshotter' "${values_yaml}" || true
+	echo "--- .containerd.userDropIn ---"
+	yq '.containerd.userDropIn' "${values_yaml}" || true
+	echo "--- selected shim containerd config ---"
+	HELM_DEFAULT_SHIM="${HELM_DEFAULT_SHIM:-}" \
+		yq '.shims[strenv(HELM_DEFAULT_SHIM)].containerd' "${values_yaml}" || true
+	echo "--- .defaultShim ---"
+	yq '.defaultShim' "${values_yaml}" || true
+	echo "::endgroup::"
+}
+
+function print_erofs_containerd_state() {
+	is_erofs_snapshotter_test || return 0
+
+	echo "::group::containerd EROFS state"
+	sudo -n containerd --version || true
+	echo "--- containerd sockets ---"
+	sudo -n ls -l /run/containerd/containerd.sock /var/run/containerd/containerd.sock 2>&1 || true
+	echo "--- containerd service ---"
+	sudo -n systemctl status containerd -l --no-pager 2>&1 | tail -120 || true
+	echo "--- containerd config fragments matching EROFS/transfer/snapshotter ---"
+	sudo -n grep -RInE 'erofs|transfer\.v1\.local|unpack_config|runtime_platforms|snapshotter' /etc/containerd 2>&1 || true
+	echo "--- plugins matching EROFS/transfer/diff/snapshotter ---"
+	if sudo -n test -S /run/containerd/containerd.sock; then
+		sudo -n ctr plugins ls 2>&1 | grep -E 'erofs|transfer|diff|snapshot|cri' || true
+	else
+		echo "containerd socket missing; skipping ctr plugins ls"
+	fi
+	echo "--- effective config lines matching EROFS/transfer/runtime snapshotter ---"
+	sudo -n containerd config dump 2>/dev/null | \
+		grep -n -C 3 -E 'erofs|transfer\.v1\.local|runtime_platforms|qemu-nvidia-gpu-runtime-rs|snapshotter' || true
+	echo "::endgroup::"
+}
+
 function helm_helper() {
 	local max_tries
 	local interval
@@ -1081,6 +1134,8 @@ VERIFICATION_POD_EOF
 		trap 'rm -f '"${verification_yaml}"'' EXIT
 	fi
 
+	print_erofs_kata_deploy_values "${values_yaml}"
+
 	echo "::group::Final kata-deploy manifests used in the test"
 	cat "${values_yaml}"
 	echo ""
@@ -1188,6 +1243,7 @@ VERIFICATION_POD_EOF
 			kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
 			kubectl -n kube-system logs -l "name=${pod_label_name}" --all-containers --tail=-1 --timestamps 2>/dev/null || true
 			echo "::endgroup::"
+			print_erofs_containerd_state
 			return 1
 		fi
 
@@ -1198,6 +1254,8 @@ VERIFICATION_POD_EOF
 		kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
 		echo "::endgroup::"
 	fi
+
+	print_erofs_containerd_state
 
 	echo "::group::Runtime classes"
 	kubectl_retry get runtimeclass
