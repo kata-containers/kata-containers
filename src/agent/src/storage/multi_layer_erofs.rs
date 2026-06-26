@@ -11,7 +11,7 @@
 //! - Storage with X-kata.overlay-lower: erofs layers (lowerdir)
 //! - Creates overlay to combine them
 //! - Supports X-kata.mkdir.path options to create directories in upper layer before overlay mount
-//! - Supports GPT-partitioned disks where each layer is a separate partition
+//! - Supports GPT-partitioned disks with dm-verity integrity verification for each partition
 
 use std::collections::HashMap;
 use std::fs;
@@ -30,6 +30,8 @@ use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, Mounter};
 use kata_types::device::{DRIVER_BLK_PCI_TYPE, DRIVER_SCSI_TYPE};
+#[cfg(feature = "devicemapper")]
+use kata_types::dmverity::{cleanup_dmverity_devices, create_dmverity_device, DmVerityInfo};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use safe_path::scoped_join;
@@ -53,6 +55,26 @@ const OPT_MULTI_LAYER: &str = "X-kata.multi-layer=true";
 const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
+
+/// dm-verity related storage options
+#[allow(dead_code)]
+const OPT_DMVERITY_ENABLED: &str = "X-kata.dmverity-enabled=true";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_ROOT_HASH: &str = "X-kata.dmverity.roothash=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_HASH_OFFSET: &str = "X-kata.dmverity.hashoffset=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_BLOCK_SIZE: &str = "X-kata.dmverity.blocksize=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_HASH_SIZE: &str = "X-kata.dmverity.hashsize=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_HASH_ALGORITHM: &str = "X-kata.dmverity.algorithm=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_SALT: &str = "X-kata.dmverity.salt=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_HASH_TYPE: &str = "X-kata.dmverity.hashtype=";
+#[cfg(feature = "devicemapper")]
+const OPT_DMVERITY_NO_SUPERBLOCK: &str = "X-kata.dmverity.no-superblock=";
 
 #[derive(Debug)]
 pub struct MultiLayerErofsHandler {}
@@ -162,6 +184,7 @@ pub async fn handle_multi_layer_erofs_group(
             upper_storage = Some(*storage);
         } else if is_lower_storage(storage) {
             // Each GPT partition is provided as a separate storage entry by the host
+            // No special handling needed here - just add to erofs_storages
             if !has_gpt_partition && is_gpt_partitioned(storage) {
                 has_gpt_partition = true;
             }
@@ -259,16 +282,14 @@ pub async fn handle_multi_layer_erofs_group(
 
     let mut lower_mounts = Vec::new();
     let mut verity_devices = Vec::new();
-    let mut base_device_cache: HashMap<String, String> = HashMap::new();
 
-    for (index, erofs) in erofs_storages.iter().enumerate() {
-        let lower_mount = temp_base.join(format!("lower-{}", index));
-        fs::create_dir_all(&lower_mount).context(format!(
-            "failed to create lower mount dir {}",
-            lower_mount.display()
-        ))?;
-
-        let base_dev_path = if is_gpt_partitioned(erofs) {
+    // Pre-resolve all base device paths outside the parallel block to avoid
+    // contention on the sandbox lock and the HashMap.
+    let erofs_count = erofs_storages.len();
+    let mut resolved_base_devs: Vec<Option<String>> = Vec::with_capacity(erofs_count);
+    let mut base_device_cache: HashMap<String, String> = HashMap::with_capacity(erofs_count);
+    for erofs in &erofs_storages {
+        let base_dev = if is_gpt_partitioned(erofs) {
             Some(
                 base_device_cache
                     .entry(erofs.source.clone())
@@ -278,12 +299,98 @@ pub async fn handle_multi_layer_erofs_group(
         } else {
             None
         };
+        resolved_base_devs.push(base_dev);
+    }
 
-        let mount_info =
-            wait_and_mount_layer(erofs, &lower_mount, sandbox, &logger, base_dev_path).await?;
+    // Pre-create all lower mount directories so they are ready before
+    // concurrent mounting begins.
+    let lower_mount_paths: Vec<PathBuf> = (0..erofs_count)
+        .map(|index| temp_base.join(format!("lower-{}", index)))
+        .collect();
+    for lm in &lower_mount_paths {
+        fs::create_dir_all(lm)
+            .context(format!("failed to create lower mount dir {}", lm.display()))?;
+    }
+
+    // Concurrently create dm-verity devices and mount layers.
+    // No worry about that because each layer has independent device nodes and mount points,
+    // so there is no ordering dependency during creation — only the final lowerdir list must
+    // preserve the original sort order.
+    let futures: Vec<_> = erofs_storages
+        .iter()
+        .enumerate()
+        .zip(resolved_base_devs.into_iter())
+        .map(|((index, erofs), base_dev_path)| {
+            let lower_mount = lower_mount_paths[index].clone();
+            let sandbox = Arc::clone(sandbox);
+            let logger = logger.clone();
+            async move {
+                wait_and_mount_layer(erofs, &lower_mount, &sandbox, &logger, base_dev_path)
+                    .await
+                    .map(|mount_info| (index, lower_mount, mount_info))
+            }
+        })
+        .collect();
+
+    info!(
+        logger,
+        "Starting concurrent mounting of EROFS layers";
+        "layer-count" => erofs_count,
+    );
+
+    let mut results: Vec<(usize, PathBuf, LayerMountInfo)> = Vec::with_capacity(erofs_count);
+    let mut failed_verity_devices: Vec<String> = Vec::new();
+    let mut failed_mount_points: Vec<PathBuf> = Vec::new();
+    let mut first_err: Option<anyhow::Error> = None;
+
+    for result in futures::future::join_all(futures).await {
+        match result {
+            Ok(t) => results.push(t),
+            Err(e) => {
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
+        }
+    }
+
+    if let Some(e) = first_err {
+        // Collect resources from successfully created layers
+        let mut sort_results: Vec<_> = results;
+        sort_results.sort_by_key(|(index, _, _)| *index);
+        for (_, lower_mount, mount_info) in sort_results {
+            if let Some(verity_dev) = mount_info.verity_device {
+                failed_verity_devices.push(verity_dev);
+            }
+            failed_mount_points.push(lower_mount);
+        }
+
+        // Unmount layers before destroying dm-verity devices.
+        for mp in failed_mount_points.iter().rev() {
+            if let Err(umount_err) = nix::mount::umount(mp) {
+                warn!(
+                    logger,
+                    "failed to unmount layer during concurrent-mount cleanup";
+                    "mount-point" => mp.display(),
+                    "error" => format!("{:#}", umount_err),
+                );
+            }
+        }
+
+        #[cfg(feature = "devicemapper")]
+        if !failed_verity_devices.is_empty() {
+            cleanup_dmverity_devices(&failed_verity_devices, &logger);
+        }
+
+        return Err(e.context("failed to mount one or more EROFS layers concurrently"));
+    }
+
+    // Restore the original sort order so that lowerdir precedence
+    // matches the host-supplied partition ordering.
+    results.sort_by_key(|(index, _, _)| *index);
+
+    for (_, lower_mount, mount_info) in results {
         lower_mounts.push(lower_mount);
-
-        // Collect dm-verity device for cleanup
         if let Some(verity_dev) = mount_info.verity_device {
             verity_devices.push(verity_dev);
         }
@@ -436,6 +543,136 @@ fn is_lower_storage(storage: &Storage) -> bool {
         || (storage.fstype == EROFS_TYPE && storage.options.iter().any(|o| o == OPT_MULTI_LAYER))
 }
 
+/// Check if dm-verity is enabled for this storage
+fn is_dmverity_enabled(storage: &Storage) -> bool {
+    storage.options.iter().any(|o| o == OPT_DMVERITY_ENABLED)
+}
+
+/// Parse dm-verity configuration from storage options
+#[cfg(feature = "devicemapper")]
+pub fn parse_dmverity_options(storage: &Storage) -> Result<DmVerityInfo> {
+    let mut hashtype = String::from("sha256");
+    let mut hash = String::new();
+    let mut blocknum: u64 = 0;
+    let mut blocksize: u64 = 4096;
+    let mut hashsize: u64 = 4096;
+    let mut offset: u64 = 0;
+    let mut salt: Option<String> = None;
+    let mut hash_type: u32 = 1;
+    let mut no_superblock: bool = false;
+
+    for opt in &storage.options {
+        if let Some(value) = opt.strip_prefix(OPT_DMVERITY_ROOT_HASH) {
+            hash = value.to_string();
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_HASH_OFFSET) {
+            offset = value.parse::<u64>().context("Invalid hashoffset value")?;
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_BLOCK_SIZE) {
+            blocksize = value.parse::<u64>().context("Invalid blocksize value")?;
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_HASH_SIZE) {
+            hashsize = value.parse::<u64>().context("Invalid hashsize value")?;
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_HASH_ALGORITHM) {
+            hashtype = value.to_string();
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_SALT) {
+            salt = if value.is_empty() || value == "-" {
+                None
+            } else {
+                Some(value.to_string())
+            };
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_HASH_TYPE) {
+            hash_type = value.parse::<u32>().context("Invalid hash type value")?;
+        } else if let Some(value) = opt.strip_prefix(OPT_DMVERITY_NO_SUPERBLOCK) {
+            no_superblock = value
+                .parse::<bool>()
+                .context("Invalid no-superblock value")?;
+        }
+    }
+
+    // Calculate blocknum from hashoffset and blocksize
+    if offset > 0 && blocksize > 0 {
+        blocknum = offset / blocksize;
+    }
+
+    if hash.is_empty() {
+        return Err(anyhow!("dm-verity roothash is required but not provided"));
+    }
+    if offset == 0 {
+        return Err(anyhow!("dm-verity hashoffset is required but not provided"));
+    }
+    if blocksize == 0 || hashsize == 0 {
+        return Err(anyhow!("dm-verity blocksize/hashsize must be non-zero"));
+    }
+    if !offset.is_multiple_of(blocksize) {
+        return Err(anyhow!(
+            "dm-verity hashoffset {} is not aligned to blocksize {}",
+            offset,
+            blocksize
+        ));
+    }
+    if blocknum == 0 {
+        return Err(anyhow!(
+            "dm-verity blocknum resolved to zero from hashoffset {} and blocksize {}",
+            offset,
+            blocksize
+        ));
+    }
+
+    Ok(DmVerityInfo {
+        hashtype,
+        hash,
+        blocknum,
+        blocksize,
+        hashsize,
+        offset,
+        salt,
+        hash_type,
+        no_superblock,
+    })
+}
+
+/// Create dm-verity device for a partition and return the verity device path
+#[cfg(feature = "devicemapper")]
+async fn create_partition_dmverity_device(
+    partition_path: &str,
+    storage: &Storage,
+    logger: &Logger,
+) -> Result<String> {
+    info!(
+        logger,
+        "Creating dm-verity device for partition";
+        "partition" => partition_path,
+        "source" => &storage.source,
+    );
+
+    // Parse dm-verity options from storage
+    let verity_info =
+        parse_dmverity_options(storage).context("Failed to parse dm-verity options")?;
+
+    // Create dm-verity device
+    let verity_device_path = create_dmverity_device(&verity_info, Path::new(partition_path))
+        .await
+        .context("failed to create dm-verity device")?;
+
+    info!(
+        logger,
+        "Successfully created dm-verity device";
+        "partition" => partition_path,
+        "verity-device" => &verity_device_path,
+    );
+
+    Ok(verity_device_path)
+}
+
+#[cfg(not(feature = "devicemapper"))]
+async fn create_partition_dmverity_device(
+    _partition_path: &str,
+    _storage: &Storage,
+    _logger: &Logger,
+) -> Result<String> {
+    Err(anyhow!(
+        "dm-verity support not compiled in: build with `--features devicemapper` to enable",
+    ))
+}
+
 /// Validate that a container ID does not contain path traversal sequences.
 ///
 /// Container IDs are used to construct filesystem paths. A malicious ID containing
@@ -560,21 +797,22 @@ async fn wait_and_mount_layer(
 
     let is_gpt = is_gpt_partitioned(layer);
     let partition_num = get_partition_number(layer);
+    let dmverity_enabled = is_dmverity_enabled(layer);
 
     // Get the base device path
-    let dev_path = match base_dev_path {
+    let base_dev_path = match base_dev_path {
         Some(path) => path,
         None => resolve_base_device_path(layer, sandbox).await?,
     };
 
     // For GPT-partitioned disks, use the partition device path
-    let dev_path = if is_gpt {
+    let partition_path = if is_gpt {
         if let Some(part_num) = partition_num {
-            let path = get_partition_device_path(&dev_path, part_num);
+            let path = get_partition_device_path(&base_dev_path, part_num);
             info!(
                 logger,
                 "GPT-partitioned mode: using partition device";
-                "base-device" => &dev_path,
+                "base-device" => &base_dev_path,
                 "partition-number" => part_num,
                 "partition-device" => &path,
             );
@@ -582,7 +820,7 @@ async fn wait_and_mount_layer(
             // Wait for partition device node to appear
             wait_for_partition_device(&path, logger).await?;
 
-            path
+            Some(path)
         } else {
             return Err(anyhow!(
                 "GPT-partitioned storage missing partition number: {:?}",
@@ -590,8 +828,33 @@ async fn wait_and_mount_layer(
             ));
         }
     } else {
+        // Non-GPT mode: no partition path
+        None
+    };
+
+    // Determine the device path to mount
+    // If dm-verity is enabled, we'll create a verity device and mount that instead
+    let (dev_path, verity_device_path) = if dmverity_enabled {
+        // dm-verity mode: create verity device from partition
+        let partition = partition_path.as_ref().ok_or_else(|| {
+            anyhow!("dm-verity requires GPT-partitioned storage with partition number")
+        })?;
+
+        // Create dm-verity device
+        let verity_device = create_partition_dmverity_device(partition, layer, logger).await?;
+        info!(
+            logger,
+            "Using dm-verity device for mount";
+            "partition" => partition,
+            "verity-device" => &verity_device,
+        );
+        (verity_device.clone(), Some(verity_device))
+    } else if let Some(ref partition) = partition_path {
+        // GPT mode without dm-verity: use partition directly
+        (partition.clone(), None)
+    } else {
         // Non-GPT mode: use base device directly
-        dev_path.clone()
+        (base_dev_path.clone(), None)
     };
 
     info!(
@@ -602,6 +865,7 @@ async fn wait_and_mount_layer(
         "devname" => &dev_path,
         "mount-point" => layer_mount.display(),
         "gpt-mode" => is_gpt,
+        "dmverity-enabled" => dmverity_enabled,
     );
 
     create_mount_destination(Path::new(&dev_path), layer_mount, "", &layer.fstype)
@@ -651,7 +915,7 @@ async fn wait_and_mount_layer(
     track_temporary_mount_for_cleanup(sandbox, layer_mount, logger).await?;
 
     Ok(LayerMountInfo {
-        verity_device: None,
+        verity_device: verity_device_path,
     })
 }
 
@@ -722,7 +986,6 @@ fn get_partition_device_path(base_path: &str, partition_number: u32) -> String {
 /// When a virtio-blk device with a GPT is hotplugged, the kernel automatically
 /// scans the partition table and creates partition nodes. However, devtmpfs node
 /// creation may lag slightly behind the uevent, so we poll briefly if needed.
-#[allow(dead_code)]
 async fn wait_for_partition_device(device_path: &str, logger: &Logger) -> Result<()> {
     let device_path_buf = PathBuf::from(device_path);
     if device_path_buf.exists() {
@@ -940,5 +1203,64 @@ mod tests {
             base,
             part
         );
+    }
+
+    // --- parse_dmverity_options ---
+
+    #[cfg(feature = "devicemapper")]
+    #[test]
+    fn test_parse_dmverity_options_required_fields_and_blocknum() {
+        // Test required fields and blocknum calculation.
+        //
+        // dm-verity roothash and hashoffset are mandatory — without them the
+        // verity table cannot be constructed. blocknum is computed as
+        // offset/blocksize and must be non-zero for a valid verity device.
+        // Uses hashoffset=8192, blocksize=4096 so blocknum = 8192/4096 = 2.
+        let make_valid_dmverity_storage = || -> Storage {
+            Storage {
+                options: vec![
+                    OPT_DMVERITY_ENABLED.to_string(),
+                    format!("{}{}", OPT_DMVERITY_ROOT_HASH, "aabbccdd"),
+                    format!("{}{}", OPT_DMVERITY_HASH_OFFSET, "8192"),
+                    format!("{}{}", OPT_DMVERITY_BLOCK_SIZE, "4096"),
+                    format!("{}{}", OPT_DMVERITY_HASH_SIZE, "4096"),
+                    format!("{}{}", OPT_DMVERITY_SALT, "0000000000000000"),
+                    format!("{}{}", OPT_DMVERITY_NO_SUPERBLOCK, "false"),
+                ],
+                ..Default::default()
+            }
+        };
+
+        // Missing roothash
+        let mut s = make_valid_dmverity_storage();
+        s.options.retain(|o| !o.starts_with(OPT_DMVERITY_ROOT_HASH));
+        let err = parse_dmverity_options(&s).unwrap_err();
+        assert!(
+            err.to_string().contains("roothash is required"),
+            "expected roothash error, got: {}",
+            err
+        );
+
+        // hashoffset=0
+        let mut s = make_valid_dmverity_storage();
+        s.options
+            .retain(|o| !o.starts_with(OPT_DMVERITY_HASH_OFFSET));
+        s.options
+            .push(format!("{}{}", OPT_DMVERITY_HASH_OFFSET, "0"));
+        let err = parse_dmverity_options(&s).unwrap_err();
+        assert!(
+            err.to_string().contains("hashoffset is required"),
+            "expected hashoffset error, got: {}",
+            err
+        );
+
+        // Valid case: verify blocknum = offset / blocksize
+        let s = make_valid_dmverity_storage();
+        let info = parse_dmverity_options(&s).expect("valid options should succeed");
+        assert_eq!(info.blocknum, 2); // 8192 / 4096
+        assert_eq!(info.offset, 8192);
+        assert_eq!(info.blocksize, 4096);
+        assert_eq!(info.salt.as_deref(), Some("0000000000000000"));
+        assert!(!info.no_superblock);
     }
 }

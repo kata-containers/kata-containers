@@ -211,6 +211,7 @@ ttrpc = "0.8.4"
 url = "2.5.4"
 which = "4.3.0"
 gpt = "4.1.0"
+devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy
 # binary runs once at pod start and then idles waiting for SIGTERM, so we
@@ -221,3 +222,4 @@ gpt = "4.1.0"
 [profile.release.package."kata-deploy"]
 opt-level = "z"
 codegen-units = 1
+

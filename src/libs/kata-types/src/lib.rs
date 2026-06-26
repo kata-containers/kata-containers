@@ -57,6 +57,10 @@ pub mod machine_type;
 /// GPT (GUID Partition Table) disk layout and metadata generation.
 pub mod gpt_disk;
 
+/// dm-verity related constants and data types.
+#[cfg(feature = "devicemapper")]
+pub mod dmverity;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};

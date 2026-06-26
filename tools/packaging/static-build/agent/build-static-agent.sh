@@ -18,10 +18,11 @@ build_agent_from_source() {
 
 	/usr/bin/install_libseccomp.sh /opt /opt
 
+	# Note: when USE_DEVMAPPER=yes the agent Makefile overrides LIBC=gnu
 	cd src/agent
 	# shellcheck disable=SC2154
-	DESTDIR="${DESTDIR}" AGENT_POLICY="${AGENT_POLICY}" INIT_DATA="${INIT_DATA}" make
-	DESTDIR="${DESTDIR}" AGENT_POLICY="${AGENT_POLICY}" INIT_DATA="${INIT_DATA}" make install
+	DESTDIR="${DESTDIR}" AGENT_POLICY="${AGENT_POLICY}" INIT_DATA="${INIT_DATA}" USE_DEVMAPPER="${USE_DEVMAPPER:-no}" make
+	DESTDIR="${DESTDIR}" AGENT_POLICY="${AGENT_POLICY}" INIT_DATA="${INIT_DATA}" USE_DEVMAPPER="${USE_DEVMAPPER:-no}" make install
 }
 
 build_agent_from_source "$@"

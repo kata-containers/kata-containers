@@ -11,10 +11,6 @@ use log::info;
 use std::time::Duration;
 use tokio::time::sleep;
 
-pub async fn wait_till_node_is_ready(config: &Config) -> Result<()> {
-    wait_till_node_is_ready_timeout(config, None).await
-}
-
 pub async fn wait_till_node_is_ready_timeout(
     config: &Config,
     timeout_secs: Option<u64>,
@@ -83,7 +79,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
     }
 
     info!("restart_runtime: Waiting for node to become ready");
-    wait_till_node_is_ready(config).await?;
+    wait_till_node_is_ready_timeout(config, Some(300)).await?;
     info!("restart_runtime: Node is ready");
     Ok(())
 }

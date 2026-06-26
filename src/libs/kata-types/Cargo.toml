@@ -35,7 +35,8 @@ gpt = "4.1.0"
 scopeguard = "1.0.0"
 crc = "3.4.0"
 safe-path = { path = "../safe-path", optional = true }
-
+devicemapper = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["time", "rt"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 sysctl = "0.7.1"
 
@@ -49,3 +50,4 @@ rstest = "0.18"
 default = []
 enable-vendor = []
 safe-path = ["dep:safe-path"] # safe-path is platform-specific
+devicemapper = ["dep:devicemapper", "dep:tokio"]

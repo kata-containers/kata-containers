@@ -809,7 +809,7 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
     if matches!(runtime, "crio" | "containerd") {
         utils::host_systemctl(&["restart", "kubelet"])?;
     }
-    runtime::lifecycle::wait_till_node_is_ready(config).await?;
+    runtime::lifecycle::wait_till_node_is_ready_timeout(config, Some(300)).await?;
 
     info!("Kata Containers reset completed successfully");
     Ok(())

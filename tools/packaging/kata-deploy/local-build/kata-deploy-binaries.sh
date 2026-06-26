@@ -88,6 +88,11 @@ error() {
 	echo "ERROR: $*"
 }
 
+# Sanitize a string so it is valid as a Docker / OCI image tag component.
+sanitize_tag_component() {
+	echo "$1" | tr -dc '[:print:]' | tr -c 'a-zA-Z0-9_.\-' _
+}
+
 usage() {
 	return_code=${1:-0}
 	cat <<EOF
@@ -276,7 +281,7 @@ install_cached_tarball_component() {
 		install_cached_shim_v2_tarball_get_root_hash
 	fi
 
-	oras pull "${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)" || return 1
+	oras pull "${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-$(sanitize_tag_component "${TARGET_BRANCH}")-$(uname -m)" || return 1
 
 	cached_version="$(cat "${component}"-version)"
 	cached_image_version="$(cat "${component}"-builder-image-version)"
@@ -1614,14 +1619,11 @@ handle_build() {
 		normalized_tags=""
 		for tag in "${tags[@]}"; do
 			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
-			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
-			# characters with underscode and trim down to leave enough space for the arch suffix
+			# and are limited to 128 characters. Sanitize via the shared helper
+			# (the pull path uses the same helper) and trim down to leave room
+			# for the arch suffix.
 			tag_length_limit="$((128 - $(echo "-$(uname -m)" | wc -c)))"
-			normalized_tag="$(echo "${tag}" \
-				| tr -dc '[:print:]' \
-				| tr -c 'a-zA-Z0-9_.\-' _ \
-				| head -c "${tag_length_limit}" \
-			)-$(uname -m)"
+			normalized_tag="$(sanitize_tag_component "${tag}" | head -c "${tag_length_limit}")-$(uname -m)"
 			normalized_tags="${normalized_tags},${normalized_tag}"
 		done
 		declare -a files_to_push=(

@@ -581,6 +581,14 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: EROFS_MERGE_MODE
   value: {{ $erofsMergeMode | quote }}
 {{- end }}
+{{- if .Values.snapshotter.erofsSnapshotterMode | trim }}
+- name: EROFS_SNAPSHOTTER_MODE
+  value: {{ .Values.snapshotter.erofsSnapshotterMode | trim | quote }}
+{{- end }}
+{{- if .Values.snapshotter.erofsDmverity }}
+- name: EROFS_DMVERITY
+  value: "dmverity"
+{{- end }}
 {{- $forceGuestPullAmd64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $forceGuestPullAmd64 }}
 - name: EXPERIMENTAL_FORCE_GUEST_PULL_X86_64
