@@ -77,6 +77,8 @@ impl DragonballInner {
                         block.config.no_drop,
                         block.config.is_direct,
                         use_pci_bus,
+                        None,
+                        None,
                     )
                     .context("add block device")?;
 
@@ -96,9 +98,87 @@ impl DragonballInner {
                     block.no_drop,
                     None,
                     None,
+                    None,
+                    None,
                 )
                 .context("add vhost user based block device")?;
                 Ok(DeviceType::VhostUserBlk(block))
+            }
+            DeviceType::BlockModern(block_device) => {
+                let (
+                    device_id,
+                    path_on_host,
+                    is_readonly,
+                    no_drop,
+                    is_direct,
+                    driver_option,
+                    num_queues,
+                    queue_size,
+                ) = {
+                    let dev = block_device.lock().await;
+                    let cfg = &dev.config;
+                    (
+                        dev.device_id.clone(),
+                        cfg.path_on_host.clone(),
+                        cfg.is_readonly,
+                        cfg.no_drop,
+                        cfg.is_direct,
+                        cfg.driver_option.clone(),
+                        if cfg.num_queues > 0 {
+                            Some(cfg.num_queues)
+                        } else {
+                            None
+                        },
+                        if cfg.queue_size > 0 {
+                            Some(cfg.queue_size)
+                        } else {
+                            None
+                        },
+                    )
+                };
+
+                let use_pci_bus = if driver_option == KATA_BLK_DEV_TYPE {
+                    Some(true)
+                } else {
+                    None
+                };
+
+                info!(
+                    sl!(),
+                    "BlockModern hotplug: device_id={}, path={}, driver={}, readonly={}",
+                    device_id,
+                    path_on_host,
+                    driver_option,
+                    is_readonly,
+                );
+
+                let guest_device_id = self
+                    .add_block_device(
+                        &path_on_host,
+                        &device_id,
+                        is_readonly,
+                        no_drop,
+                        is_direct,
+                        use_pci_bus,
+                        num_queues,
+                        queue_size,
+                    )
+                    .context("add block modern device")?;
+
+                info!(
+                    sl!(),
+                    "BlockModern hotplug result: device_id={}, guest_device_id={:?}",
+                    device_id, guest_device_id
+                );
+
+                if let Some(slot) = guest_device_id {
+                    if slot > 0 {
+                        let mut dev = block_device.lock().await;
+                        dev.config.pci_path = Some(PciPath::try_from(slot as u32)?);
+                    }
+                }
+
+                Ok(DeviceType::BlockModern(block_device))
             }
             DeviceType::HybridVsock(hvsock) => {
                 self.add_hvsock(&hvsock.config).context("add vsock")?;
@@ -134,6 +214,11 @@ impl DragonballInner {
             DeviceType::Block(block) => self
                 .remove_block_drive(block.device_id.as_str())
                 .context("remove block drive"),
+            DeviceType::BlockModern(block_device) => {
+                let device_id = block_device.lock().await.device_id.clone();
+                self.remove_block_drive(&device_id)
+                    .context("remove block modern drive")
+            }
             DeviceType::Vfio(hostdev) => {
                 let primary_device = hostdev.devices.first().unwrap().clone();
                 let hostdev_id = primary_device.hostdev_id;
@@ -223,6 +308,8 @@ impl DragonballInner {
         no_drop: bool,
         is_direct: Option<bool>,
         use_pci_bus: Option<bool>,
+        num_queues: Option<usize>,
+        queue_size: Option<u32>,
     ) -> Result<Option<i32>> {
         let jailed_drive = self.get_resource(path, id).context("get resource")?;
         self.cached_block_devices.insert(id.to_string());
@@ -251,17 +338,34 @@ impl DragonballInner {
         let blk_cfg = BlockDeviceConfigInfo {
             drive_id: id.to_string(),
             device_type: BlockDeviceType::get_type(path),
-            path_on_host: PathBuf::from(jailed_drive),
+            path_on_host: PathBuf::from(jailed_drive.clone()),
             is_direct: is_direct.unwrap_or(self.config.blockdev_info.block_device_cache_direct),
             no_drop,
             is_read_only: read_only,
             use_pci_bus,
+            num_queues: num_queues.unwrap_or(1),
+            queue_size: queue_size.map(|s| s.min(65535) as u16).unwrap_or(256),
             rate_limiter: Some(block_rate_limit),
             ..Default::default()
         };
-        self.vmm_instance
+        info!(
+            sl!(),
+            "add_block_device: id={}, path={}, device_type={:?}, use_pci_bus={:?}, vm_running={}",
+            id,
+            jailed_drive,
+            BlockDeviceType::get_type(path),
+            use_pci_bus,
+            self.state == VmmState::VmRunning
+        );
+        let result = self
+            .vmm_instance
             .insert_block_device(blk_cfg, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
-            .context("insert block device")
+            .context("insert block device");
+        match &result {
+            Ok(guest_id) => info!(sl!(), "add_block_device success: id={}, guest_id={:?}", id, guest_id),
+            Err(e) => error!(sl!(), "add_block_device failed: id={}, error={:?}", id, e),
+        }
+        result
     }
 
     fn remove_block_drive(&mut self, id: &str) -> Result<()> {
