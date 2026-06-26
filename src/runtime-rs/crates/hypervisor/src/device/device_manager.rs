@@ -167,6 +167,13 @@ impl DeviceManager {
                     self.shared_info
                         .release_device_index(device.config.index, false);
                 }
+                DeviceType::BlockModern(device) => {
+                    let (index, is_pmem) = {
+                        let cfg = &device.lock().await.config;
+                        (cfg.index, cfg.driver_option == *KATA_NVDIMM_DEV_TYPE)
+                    };
+                    self.shared_info.release_device_index(index, is_pmem);
+                }
                 _ => {
                     debug!(sl!(), "no need to do release device index.");
                 }
@@ -191,12 +198,15 @@ impl DeviceManager {
                 Ok(index) => {
                     if let Some(i) = index {
                         // release the declared device index
-                        let is_pmem =
-                            if let DeviceType::Block(blk) = device_guard.get_device_info().await {
+                        let is_pmem = match device_guard.get_device_info().await {
+                            DeviceType::Block(blk) => {
                                 blk.config.driver_option == *KATA_NVDIMM_DEV_TYPE
-                            } else {
-                                false
-                            };
+                            }
+                            DeviceType::BlockModern(dev) => {
+                                dev.lock().await.config.driver_option == *KATA_NVDIMM_DEV_TYPE
+                            }
+                            _ => false,
+                        };
                         self.shared_info.release_device_index(i, is_pmem);
                     }
                     Ok(())
