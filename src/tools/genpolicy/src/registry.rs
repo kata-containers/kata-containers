@@ -348,8 +348,14 @@ impl Container {
          * 2. Contain only a UID
          * 3. Contain a UID:GID pair, in that format
          * 4. Contain a user name, which we need to translate into a UID/GID pair
-         * 5. Contain a (user name:group name) pair, which we need to translate into a UID/GID pair
-         * 6. Be erroneus, somehow
+         * 5. Contain a user name:group name pair
+         * 6. Be erroneous, somehow
+         *
+         * For Kubernetes, containerd CRI ImageStatus strips any group component
+         * before kubelet maps the image user into a CRI security context. Keep
+         * genpolicy aligned with that path: USER user:group behaves like USER
+         * user, and USER uid:gid behaves like USER uid. Direct ctr/crictl paths
+         * can resolve the group component differently because they bypass kubelet.
          */
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
@@ -765,4 +771,57 @@ fn parse_group_file(group: &str) -> Result<Vec<GroupRecord>> {
     }
 
     Ok(records)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn container_with_image_user(user: &str) -> Container {
+        Container {
+            image: "test-image".to_string(),
+            config_layer: DockerConfigLayer {
+                config: DockerImageConfig {
+                    User: Some(user.to_string()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            passwd:
+                "root:x:0:0:root:/root:/bin/sh\nwww-data:x:33:33:www-data:/var/www:/sbin/nologin\n"
+                    .to_string(),
+            group: "root:x:0:\nwww-data:x:33:\nstaff:x:50:\nwheel:x:10:\n".to_string(),
+        }
+    }
+
+    #[test]
+    fn image_user_group_component_matches_kubernetes_path() {
+        let cases = [
+            "33:10",
+            "33:wheel",
+            "www-data:50",
+            "www-data:staff",
+            "www-data:thisgroupdoesnotexist",
+        ];
+
+        for image_user in cases {
+            let container = container_with_image_user(image_user);
+            let mut process = policy::KataProcess::default();
+
+            container.get_process(&mut process, false, false);
+
+            assert_eq!(process.User.UID, 33, "image user: {image_user}");
+            assert_eq!(process.User.GID, 33, "image user: {image_user}");
+            assert_eq!(
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                vec![33],
+                "image user: {image_user}"
+            );
+        }
+    }
 }
