@@ -139,6 +139,7 @@ mapping:
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-22.04)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-2...
       - Static checks / build-checks-depending-on-kvm (runtime-rs)
+      - Static checks / check-agent-policy-coverage
       - Static checks / check-kernel-config-version
       - Static checks / codegen
       - Static checks / static-checks (make static-checks)
