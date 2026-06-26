@@ -143,7 +143,7 @@ default_memory = @DEFMEMSZ@
 # missing, requested_memory is treated as 0, so vm_memory equals overhead_memory.
 # When no workload limits are present, default_memory is used instead.
 # See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
-overhead_memory = @DEFOVERHEADMEMSZ_TEE@
+overhead_memory = @DEFOVERHEADMEMSZ_TEE_SE@
 #
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
