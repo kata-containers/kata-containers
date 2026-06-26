@@ -118,7 +118,7 @@ impl BlockEmptyDirVolume {
             .context("plug block emptyDir block device")?;
 
         let (storage, mut mount, device_id) =
-            crate::volume::utils::handle_block_volume(device_info, m, false, sid, "ext4")
+            crate::volume::utils::handle_block_volume(device_info, m, false, sid, "ext4", Some(&[]))
                 .await
                 .context("handle block emptyDir block volume")?;
 
