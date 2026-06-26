@@ -1808,6 +1808,11 @@ type PXBPCIeDevice struct {
 	// ID is the QEMU device identifier (e.g. "pxb-numa0").
 	ID string
 
+	// Bus is the parent root bus (default pcie.0). Each pxb-pcie must be
+	// plugged directly into the machine root complex, not into another
+	// pxb-pcie bus.
+	Bus string
+
 	// BusNr is the guest PCI bus number for this root complex.
 	// Use values spaced apart (e.g. 0x20, 0x40) to leave room for
 	// bridges beneath each pxb-pcie.
@@ -1819,9 +1824,13 @@ type PXBPCIeDevice struct {
 
 // QemuParams returns the QEMU parameters for a pxb-pcie device.
 func (dev PXBPCIeDevice) QemuParams(_ *Config) []string {
+	bus := dev.Bus
+	if bus == "" {
+		bus = "pcie.0"
+	}
 	return []string{
 		"-device",
-		fmt.Sprintf("pxb-pcie,id=%s,bus_nr=%d,numa_node=%d", dev.ID, dev.BusNr, dev.NUMANode),
+		fmt.Sprintf("pxb-pcie,id=%s,bus=%s,bus_nr=%d,numa_node=%d", dev.ID, bus, dev.BusNr, dev.NUMANode),
 	}
 }
 

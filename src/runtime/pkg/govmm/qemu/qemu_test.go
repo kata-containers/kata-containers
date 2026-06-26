@@ -380,6 +380,15 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
+func TestAppendDevicePXBPCIe(t *testing.T) {
+	pxb := PXBPCIeDevice{
+		ID:       "pxb-numa1",
+		BusNr:    64,
+		NUMANode: 1,
+	}
+	testAppend(pxb, "-device pxb-pcie,id=pxb-numa1,bus=pcie.0,bus_nr=64,numa_node=1", t)
+}
+
 func TestAppendVSOCK(t *testing.T) {
 	vsockDevice := VSOCKDevice{
 		ID:            "vhost-vsock-pci0",

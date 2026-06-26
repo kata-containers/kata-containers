@@ -1602,6 +1602,77 @@ func TestBuildCoveredHostNodesInvalidParse(t *testing.T) {
 	assert.Equal(uint32(1), covered[1])
 }
 
+func TestVfioGuestNUMANodesFromHostSet(t *testing.T) {
+	assert := assert.New(t)
+
+	covered := buildCoveredHostNodes(twoNodeAutoTopology())
+	guestNodes := vfioGuestNUMANodesFromHostSet(covered, map[int]struct{}{0: {}, 1: {}})
+	assert.Len(guestNodes, 2)
+
+	guestNodes = vfioGuestNUMANodesFromHostSet(covered, map[int]struct{}{1: {}})
+	assert.Len(guestNodes, 1)
+	assert.Contains(guestNodes, uint32(1))
+}
+
+func TestNumaMemoryOnlyTopologyNeeded(t *testing.T) {
+	assert := assert.New(t)
+	topology := twoNodeAutoTopology()
+	bothNodes := map[int]struct{}{0: {}, 1: {}}
+	oneNode := map[int]struct{}{0: {}}
+
+	assert.True(numaMemoryOnlyTopologyNeeded(topology, 1, bothNodes))
+	assert.False(numaMemoryOnlyTopologyNeeded(topology, 2, bothNodes))
+	assert.False(numaMemoryOnlyTopologyNeeded(topology, 1, oneNode))
+	assert.False(numaMemoryOnlyTopologyNeeded(topology, 1, nil))
+}
+
+func TestBuildNUMATopologySkipsWhenLowVCPUsNoVFIO(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs: 1,
+			MemorySize:      65536,
+			GuestNUMANodes:  twoNodeAutoTopology(),
+		},
+	}
+	nodes, dists, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Nil(nodes)
+	assert.Nil(dists)
+}
+
+func TestBuildNUMATopologyMemoryOnlyNodesForMultiNodeVFIO(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+
+	// Mirror the 8-GPU dual-socket case: 1 vCPU, 64Gi, VFIO on both host
+	// nodes. The guest must still get two NUMA nodes (memory-only on node 1)
+	// so pxb-pcie can use numa_node=0 and numa_node=1.
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs:   1,
+			MemorySize:        65536,
+			ConfidentialGuest: true,
+			GuestNUMANodes:    twoNodeAutoTopology(),
+		},
+	}
+
+	nodes, _, err := q.buildNUMATopologyForVFIOHostSet(map[int]struct{}{0: {}, 1: {}})
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	assert.Equal("0-0", nodes[0].CPUs)
+	assert.Equal("", nodes[1].CPUs)
+	assert.Equal("32768M", nodes[0].MemSize)
+	assert.Equal("32768M", nodes[1].MemSize)
+	assert.Equal("0", nodes[0].HostNodes)
+	assert.Equal("1", nodes[1].HostNodes)
+}
+
 // silentLogger returns a logrus.Entry that discards all output, suitable
 // for use in unit tests that exercise NUMA right-sizing decisions.
 func silentLogger() *logrus.Entry {
