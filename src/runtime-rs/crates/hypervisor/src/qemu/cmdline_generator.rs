@@ -2331,6 +2331,21 @@ impl PCIeVfioDevice {
     }
 }
 
+/// s390x VFIO-AP device: `-device vfio-ap,sysfsdev=<path>`
+struct VfioApDevice {
+    sysfs_path: String,
+}
+
+#[async_trait]
+impl ToQemuParams for VfioApDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-device".to_string(),
+            format!("vfio-ap,sysfsdev={}", self.sysfs_path),
+        ])
+    }
+}
+
 #[async_trait]
 impl ToQemuParams for PCIeVfioDevice {
     async fn qemu_params(&self) -> Result<Vec<String>> {
@@ -3166,6 +3181,16 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(root_port));
         self.devices.push(Box::new(vfio_device));
 
+        Ok(())
+    }
+
+    /// Adds an s390x VFIO-AP device to the QEMU command line.
+    ///
+    /// Generates: `-device vfio-ap,sysfsdev=<sysfs_path>`
+    pub fn add_vfio_ap_device(&mut self, sysfs_path: &str) -> Result<()> {
+        self.devices.push(Box::new(VfioApDevice {
+            sysfs_path: sysfs_path.to_string(),
+        }));
         Ok(())
     }
 

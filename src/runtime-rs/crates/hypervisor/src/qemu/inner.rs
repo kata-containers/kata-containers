@@ -203,50 +203,59 @@ impl QemuInner {
                     }
                 }
                 DeviceType::VfioModern(vfio_dev) => {
-                    // To avoid holding the lock for too long, we first snapshot the necessary VFIO parameters,
-                    // then release the lock before doing the coldplug via cmdline,
-                    // and finally re-acquire the lock to update the guest PCI path after coldplug.
-                    let (devices, bus_port_id) = {
+                    // Snapshot parameters under the lock; release before doing cmdline work.
+                    let (device_type, ap_sysfs_path, devices, bus_port_id) = {
                         let vfio_device = vfio_dev.lock().await;
+                        let device_type = vfio_device.device.device_type.clone();
+                        let ap_sysfs_path =
+                            vfio_device.device.primary.sysfs_path.display().to_string();
                         let devices = vfio_device
                             .device
                             .iommu_group
                             .as_ref()
                             .map(|g| g.clone().devices)
                             .unwrap_or_default();
-
-                        (devices, vfio_device.config.bus_port_id.clone())
+                        (
+                            device_type,
+                            ap_sysfs_path,
+                            devices,
+                            vfio_device.config.bus_port_id.clone(),
+                        )
                     };
 
-                    // Cold plug devices
-                    for dev in devices.iter() {
-                        let host_bdf = dev.addr.to_string();
+                    if device_type == VfioDeviceType::MediatedAp {
+                        // s390x VFIO-AP: -device vfio-ap,sysfsdev=<path>
+                        // No PCIe root port, no guest_pci_path.
+                        cmdline.add_vfio_ap_device(&ap_sysfs_path)?;
+                        info!(sl!(), "Completed VFIOModern AP coldplug for sysfsdev: {}", ap_sysfs_path);
+                    } else {
+                        // PCI cold plug devices
+                        for dev in devices.iter() {
+                            let host_bdf = dev.addr.to_string();
 
-                        let vfio_cfg = VfioDeviceConfig::new(
-                            host_bdf,
-                            bus_port_id.1 as u16,
-                            bus_port_id.1 + 1,
-                        )
-                        .with_vfio_bus(bus_port_id.0.clone());
+                            let vfio_cfg = VfioDeviceConfig::new(
+                                host_bdf,
+                                bus_port_id.1 as u16,
+                                bus_port_id.1 + 1,
+                            )
+                            .with_vfio_bus(bus_port_id.0.clone());
 
-                        cmdline.add_pcie_vfio_device(vfio_cfg)?;
+                            cmdline.add_pcie_vfio_device(vfio_cfg)?;
+                        }
+
+                        // Write back guest PCI path
+                        let pci_path =
+                            PciPath::try_from(format!("{:02x}/00", bus_port_id.1).as_str())?;
+                        {
+                            let mut vfio_device = vfio_dev.lock().await;
+                            vfio_device.config.guest_pci_path = Some(pci_path.clone());
+                        }
+                        info!(
+                            sl!(),
+                            "Completed VFIOModern coldplug with returned guest pci path: {:?}",
+                            pci_path
+                        );
                     }
-
-                    // Write back with lock
-                    let pci_path = PciPath::try_from(format!("{:02x}/00", bus_port_id.1).as_str())?;
-
-                    {
-                        let mut vfio_device = vfio_dev.lock().await;
-                        // Update the guest PCI path for the VFIO device after coldplug,
-                        // which will be used for device mapping into from Guest to Container Environment.
-                        vfio_device.config.guest_pci_path = Some(pci_path.clone());
-                    }
-
-                    info!(
-                        sl!(),
-                        "Completed VFIOModern coldplug with returned guest pci path: {:?}",
-                        pci_path
-                    );
                 }
                 DeviceType::Vfio(vfio_dev) => {
                     // Cold-plug physical-endpoint VFs (non-IOMMUFD VFIO) onto
@@ -908,6 +917,7 @@ async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> 
 }
 
 use crate::device::DeviceType;
+use crate::vfio_device::VfioDeviceType;
 
 // device manager part of Hypervisor
 impl QemuInner {
@@ -1141,38 +1151,41 @@ impl QemuInner {
             }
             DeviceType::VfioModern(ref vfiodev) => {
                 // Snapshot VFIO parameters inside the lock.
-                let (hostdev_id, sysfs_path, address, driver_type, bus) = {
+                let (hostdev_id, device_type, sysfs_path, address, driver_type, bus) = {
                     let vfio_device = vfiodev.lock().await;
                     let hostdev_id = vfio_device.device_id.clone();
                     let device = &vfio_device.device;
+                    let device_type = device.device_type.clone();
 
-                    // FIXME: The first device in the group might not be the actual device intended for passthrough.
-                    // Multi-function support is tracked via issue #11292.
-                    let primary_device = device
-                        .clone()
-                        .iommu_group
-                        .ok_or_else(|| anyhow!("IOMMU group missing for VFIO device"))?
-                        .primary;
+                    let sysfs_path = device.primary.sysfs_path.display().to_string();
 
-                    info!(
-                        sl!(),
-                        "QMP hotplug VFIO primary_device address: {:?}", &primary_device.addr
-                    );
+                    // For AP devices there is no IOMMU group or BDF; use empty strings.
+                    let (address, driver_type, bus) = if device_type == VfioDeviceType::MediatedAp {
+                        (String::new(), "vfio-ap".to_string(), String::new())
+                    } else {
+                        // FIXME: The first device in the group might not be the actual device intended for passthrough.
+                        // Multi-function support is tracked via issue #11292.
+                        let primary_device = device
+                            .clone()
+                            .iommu_group
+                            .ok_or_else(|| anyhow!("IOMMU group missing for VFIO device"))?
+                            .primary;
 
-                    let sysfs_path = primary_device.sysfs_path.display().to_string();
-                    let driver_type = primary_device
-                        .driver
-                        .clone()
-                        .ok_or_else(|| anyhow!("Driver type missing for primary device"))?;
-                    let address = format!("{}", primary_device.addr);
+                        info!(
+                            sl!(),
+                            "QMP hotplug VFIO primary_device address: {:?}", &primary_device.addr
+                        );
 
-                    (
-                        hostdev_id,
-                        sysfs_path,
-                        address,
-                        driver_type,
-                        vfio_device.config.bus_port_id.0.clone(),
-                    )
+                        let driver_type = primary_device
+                            .driver
+                            .clone()
+                            .ok_or_else(|| anyhow!("Driver type missing for primary device"))?;
+                        let address = format!("{}", primary_device.addr);
+                        let bus = vfio_device.config.bus_port_id.0.clone();
+                        (address, driver_type, bus)
+                    };
+
+                    (hostdev_id, device_type, sysfs_path, address, driver_type, bus)
                 };
 
                 // Execute hotplug outside the lock.
@@ -1184,12 +1197,13 @@ impl QemuInner {
                     &bus,
                 )?;
 
-                // Write the resulting Guest PCI Path back within the lock.
+                // Write the resulting Guest PCI Path back within the lock (PCI only).
                 {
                     let mut vfio_device = vfiodev.lock().await;
-                    if let Some(p) = guest_pci_path {
-                        // Very important to write back the guest pci path for VFIO devices.
-                        vfio_device.config.guest_pci_path = Some(p);
+                    if device_type != VfioDeviceType::MediatedAp {
+                        if let Some(p) = guest_pci_path {
+                            vfio_device.config.guest_pci_path = Some(p);
+                        }
                     }
                     info!(
                         sl!(),
