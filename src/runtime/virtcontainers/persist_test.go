@@ -21,7 +21,9 @@ func TestSandboxRestore(t *testing.T) {
 	var err error
 	assert := assert.New(t)
 	sconfig := SandboxConfig{
-		ID: "test-exp",
+		ID:                         "test-exp",
+		MonitorCheckInterval:       9,
+		AgentCheckFailureThreshold: 4,
 	}
 	container := make(map[string]*Container)
 	container["test-exp"] = &Container{}
@@ -58,6 +60,8 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Equal(sandbox.state.State, types.StateString(""))
 	assert.Equal(sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
 	assert.Equal(len(sandbox.state.BlockIndexMap), 0)
+	assert.Equal(sandbox.config.MonitorCheckInterval, uint64(9))
+	assert.Equal(sandbox.config.AgentCheckFailureThreshold, uint32(4))
 
 	// set state data and Save again
 	sandbox.state.State = types.StateString("running")

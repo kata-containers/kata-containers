@@ -70,7 +70,9 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	}()
 
 	runtimeConfig := RuntimeConfig{
-		HypervisorType: vc.QemuHypervisor,
+		HypervisorType:             vc.QemuHypervisor,
+		MonitorCheckInterval:       7,
+		AgentCheckFailureThreshold: 3,
 	}
 
 	capList := []string{"CAP_AUDIT_WRITE", "CAP_KILL", "CAP_NET_BIND_SERVICE"}
@@ -176,6 +178,9 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		},
 
 		SystemdCgroup: true,
+
+		MonitorCheckInterval:       7,
+		AgentCheckFailureThreshold: 3,
 	}
 
 	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)

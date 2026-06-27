@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	defaultCheckInterval = 5 * time.Second
-	watcherChannelSize   = 128
+	defaultCheckInterval              = 5 * time.Second
+	defaultAgentCheckFailureThreshold = 1
+	watcherChannelSize                = 128
 )
 
 var monitorLog = virtLog.WithField("subsystem", "virtcontainers/monitor")
@@ -31,6 +32,9 @@ type monitor struct {
 	stopCh        chan bool
 	checkInterval time.Duration
 
+	agentCheckFailures         uint32
+	agentCheckFailureThreshold uint32
+
 	running bool
 }
 
@@ -38,10 +42,23 @@ func newMonitor(s *Sandbox) *monitor {
 	// there should only be one monitor for one sandbox,
 	// so it's safe to let monitorLog as a global variable.
 	monitorLog = monitorLog.WithField("sandbox", s.ID())
+
+	checkInterval := defaultCheckInterval
+	agentCheckFailureThreshold := uint32(defaultAgentCheckFailureThreshold)
+	if s.config != nil {
+		if s.config.MonitorCheckInterval > 0 {
+			checkInterval = time.Duration(s.config.MonitorCheckInterval) * time.Second
+		}
+		if s.config.AgentCheckFailureThreshold > 0 {
+			agentCheckFailureThreshold = s.config.AgentCheckFailureThreshold
+		}
+	}
+
 	return &monitor{
-		sandbox:       s,
-		checkInterval: defaultCheckInterval,
-		stopCh:        make(chan bool, 1),
+		sandbox:                    s,
+		checkInterval:              checkInterval,
+		agentCheckFailureThreshold: agentCheckFailureThreshold,
+		stopCh:                     make(chan bool, 1),
 	}
 }
 
@@ -141,10 +158,22 @@ func (m *monitor) stop() {
 
 func (m *monitor) watchAgent(ctx context.Context) {
 	err := m.sandbox.agent.check(ctx)
-	if err != nil {
-		// TODO: define and export error types
-		m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
+	if err == nil {
+		m.agentCheckFailures = 0
+		return
 	}
+
+	m.agentCheckFailures++
+	if m.agentCheckFailures < m.agentCheckFailureThreshold {
+		monitorLog.WithError(err).
+			WithField("failure-count", m.agentCheckFailures).
+			WithField("failure-threshold", m.agentCheckFailureThreshold).
+			Warn("suppressing transient agent health check failure")
+		return
+	}
+
+	// TODO: define and export error types
+	m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
 }
 
 func (m *monitor) watchHypervisor(ctx context.Context) error {

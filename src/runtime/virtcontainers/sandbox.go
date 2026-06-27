@@ -194,6 +194,13 @@ type SandboxConfig struct {
 	// needed for the workload(s)
 	CreateContainerTimeout uint64
 
+	// MonitorCheckInterval is the sandbox monitor check interval in seconds.
+	MonitorCheckInterval uint64
+
+	// AgentCheckFailureThreshold is the number of consecutive failed agent checks
+	// before the monitor marks the agent dead.
+	AgentCheckFailureThreshold uint32
+
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
 
