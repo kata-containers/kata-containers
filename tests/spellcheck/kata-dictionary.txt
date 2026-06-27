@@ -33,6 +33,7 @@ MDEV
 MKVP
 MMDS
 mmio
+mshv
 NVDIMM
 OVMF
 SEV
