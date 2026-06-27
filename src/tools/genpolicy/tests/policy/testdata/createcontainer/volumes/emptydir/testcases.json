@@ -168,7 +168,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -180,7 +181,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -192,7 +194,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -204,7 +207,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -365,7 +369,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -377,7 +382,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -389,7 +395,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -401,7 +408,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -572,7 +580,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -584,7 +593,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -596,7 +606,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -608,7 +619,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -764,7 +776,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -776,7 +789,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -788,7 +802,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -800,7 +815,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1315,7 +1331,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1327,7 +1344,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1339,7 +1357,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1351,7 +1370,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1512,7 +1532,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1526,7 +1547,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1540,7 +1562,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1554,7 +1577,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "ext4",
@@ -1717,7 +1741,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "invalid_fstype",
@@ -1729,7 +1754,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "invalid_fstype",
@@ -1741,7 +1767,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "invalid_fstype",
@@ -1753,7 +1780,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": null,
           "fstype": "invalid_fstype",

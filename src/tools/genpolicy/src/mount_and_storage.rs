@@ -17,6 +17,10 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::str;
 
+const EMPTYDIR_TYPE_SHARED_FS: &str = "shared-fs";
+const EMPTYDIR_TYPE_BLOCK_ENCRYPTED: &str = "block-encrypted";
+const EMPTYDIR_TYPE_BLOCK_PLAIN: &str = "block-plain";
+
 pub fn get_policy_mounts(
     settings: &settings::Settings,
     p_mounts: &mut Vec<policy::KataMount>,
@@ -145,15 +149,24 @@ fn get_empty_dir_mount(
     pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     let settings_volumes = &settings.volumes;
-    let (volume, block_encrypted_emptydir) = match emptyDir.medium.as_deref() {
+    let (volume, block_emptydir) = match emptyDir.medium.as_deref() {
         Some("Memory") => (&settings_volumes.emptyDir_memory, false),
-        _ if settings.cluster_config.encrypted_emptydir => {
+        _ if settings.cluster_config.emptydir_type == EMPTYDIR_TYPE_BLOCK_ENCRYPTED => {
             (&settings_volumes.emptyDir_encrypted, true)
         }
-        _ => (&settings_volumes.emptyDir, false),
+        _ if settings.cluster_config.emptydir_type == EMPTYDIR_TYPE_BLOCK_PLAIN => {
+            (&settings_volumes.emptyDir_plain, true)
+        }
+        _ if settings.cluster_config.emptydir_type == EMPTYDIR_TYPE_SHARED_FS => {
+            (&settings_volumes.emptyDir, false)
+        }
+        _ => panic!(
+            "Unsupported emptydir_type {:?}",
+            settings.cluster_config.emptydir_type
+        ),
     };
 
-    if emptyDir.medium.as_deref() == Some("Memory") || block_encrypted_emptydir {
+    if emptyDir.medium.as_deref() == Some("Memory") || block_emptydir {
         get_guest_empty_dir_mount_and_storage(
             settings,
             p_mounts,
@@ -161,7 +174,7 @@ fn get_empty_dir_mount(
             yaml_mount,
             volume,
             pod_security_context,
-            block_encrypted_emptydir,
+            block_emptydir,
         );
     } else {
         let access = if yaml_mount.readOnly == Some(true) {
@@ -181,21 +194,21 @@ fn get_guest_empty_dir_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
     settings_empty_dir: &settings::EmptyDirVolume,
     pod_security_context: &Option<pod::PodSecurityContext>,
-    block_encrypted_emptydir: bool,
+    block_emptydir: bool,
 ) {
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
     if yaml_mount.subPathExpr.is_none() {
         let mut options = settings_empty_dir.options.clone();
         // Pod fsGroup in policy must mirror how the shim encodes it on Storage:
-        // - block-encrypted host emptyDirs become virtio-blk/scsi volumes; the runtime sets
+        // - block host emptyDirs become virtio-blk/scsi volumes; the runtime sets
         //   Storage.fs_group from mount metadata (handleDeviceBlockVolume in kata_agent.go).
         // - shared-fs / guest-local emptyDirs use Storage.options: the runtime appends
         //   fsgid=<host GID> when the volume is not root-owned (handleEphemeralStorage and
         //   handleLocalStorage in kata_agent.go). Genpolicy uses pod fsGroup when non-zero as
         //   the usual kubelet-applied GID for that stat.
         let pod_gid = pod_security_context.as_ref().and_then(|sc| sc.fsGroup);
-        let fs_group = if block_encrypted_emptydir {
+        let fs_group = if block_emptydir {
             match pod_gid {
                 Some(gid) if gid > 0 => protobuf::MessageField::some(agent::FSGroup {
                     group_id: u32::try_from(gid).unwrap_or_else(|_| {

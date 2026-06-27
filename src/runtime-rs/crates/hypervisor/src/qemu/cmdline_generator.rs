@@ -943,6 +943,7 @@ struct BlockBackend {
     cache_direct: bool,
     cache_no_flush: bool,
     read_only: bool,
+    discard_unmap: bool,
 }
 
 impl BlockBackend {
@@ -955,6 +956,7 @@ impl BlockBackend {
             cache_direct,
             cache_no_flush: false,
             read_only: true,
+            discard_unmap: false,
         }
     }
 
@@ -987,6 +989,12 @@ impl BlockBackend {
         self.read_only = read_only;
         self
     }
+
+    #[allow(dead_code)]
+    fn set_discard_unmap(&mut self, discard_unmap: bool) -> &mut Self {
+        self.discard_unmap = discard_unmap;
+        self
+    }
 }
 
 #[async_trait]
@@ -1011,6 +1019,9 @@ impl ToQemuParams for BlockBackend {
             params.push("auto-read-only=on".to_owned());
         } else {
             params.push("auto-read-only=off".to_owned());
+        }
+        if self.discard_unmap {
+            params.push("discard=unmap".to_owned());
         }
         Ok(vec!["-blockdev".to_owned(), params.join(",")])
     }
@@ -1070,6 +1081,7 @@ struct DeviceVirtioBlk {
     id: String,
     config_wce: bool,
     share_rw: bool,
+    discard: bool,
     devno: Option<String>,
 }
 
@@ -1080,6 +1092,7 @@ impl DeviceVirtioBlk {
             id: id.to_owned(),
             config_wce: false,
             share_rw: true,
+            discard: false,
             devno,
         }
     }
@@ -1093,6 +1106,12 @@ impl DeviceVirtioBlk {
     #[allow(dead_code)]
     fn set_share_rw(&mut self, share_rw: bool) -> &mut Self {
         self.share_rw = share_rw;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_discard(&mut self, discard: bool) -> &mut Self {
+        self.discard = discard;
         self
     }
 }
@@ -1112,6 +1131,9 @@ impl ToQemuParams for DeviceVirtioBlk {
             params.push("share-rw=on".to_owned());
         } else {
             params.push("share-rw=off".to_owned());
+        }
+        if self.discard {
+            params.push("discard=on".to_owned());
         }
         params.push(format!("serial=image-{}", self.id));
         if let Some(devno) = &self.devno {
@@ -2870,16 +2892,19 @@ impl<'a> QemuCmdLine<'a> {
         path: &str,
         is_direct: bool,
         is_scsi: bool,
+        discard_unmap: bool,
     ) -> Result<()> {
-        self.devices
-            .push(Box::new(BlockBackend::new(device_id, path, is_direct)));
+        let mut backend = BlockBackend::new(device_id, path, is_direct);
+        backend.set_discard_unmap(discard_unmap);
+        self.devices.push(Box::new(backend));
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
         if is_scsi {
             self.devices
                 .push(Box::new(DeviceScsiHd::new(device_id, "scsi0.0", devno)));
         } else {
-            self.devices
-                .push(Box::new(DeviceVirtioBlk::new(device_id, bus_type(), devno)));
+            let mut device = DeviceVirtioBlk::new(device_id, bus_type(), devno);
+            device.set_discard(discard_unmap);
+            self.devices.push(Box::new(device));
         }
 
         Ok(())
@@ -3466,5 +3491,34 @@ impl SeccompSandbox {
 impl ToQemuParams for SeccompSandbox {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         Ok(vec!["-sandbox".to_owned(), self.param.clone()])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn contains_param(params: &[String], expected: &str) -> bool {
+        params
+            .iter()
+            .flat_map(|param| param.split(','))
+            .any(|param| param == expected)
+    }
+
+    #[actix_rt::test]
+    async fn test_qemu_block_discard_unmap_params() {
+        let mut backend = BlockBackend::new("blk0", "/tmp/disk.img", true);
+        backend.set_discard_unmap(true);
+        let backend_params = backend.qemu_params().await.unwrap();
+        assert!(contains_param(&backend_params, "discard=unmap"));
+
+        let mut virtio_blk = DeviceVirtioBlk::new("blk0", VirtioBusType::Pci, None);
+        virtio_blk.set_discard(true);
+        let virtio_blk_params = virtio_blk.qemu_params().await.unwrap();
+        assert!(contains_param(&virtio_blk_params, "discard=on"));
+
+        let scsi_hd = DeviceScsiHd::new("blk0", "scsi0.0", None);
+        let scsi_hd_params = scsi_hd.qemu_params().await.unwrap();
+        assert!(!contains_param(&scsi_hd_params, "discard=on"));
     }
 }

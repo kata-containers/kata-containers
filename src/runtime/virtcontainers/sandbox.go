@@ -184,7 +184,7 @@ type SandboxConfig struct {
 	DisableGuestSeccomp bool
 
 	// EmptyDirMode specifies how Kubernetes emptyDir volumes are handled.
-	// Valid values are "shared-fs" (default) or "block-encrypted".
+	// Valid values are "shared-fs" (default), "block-encrypted", or "block-plain".
 	EmptyDirMode string
 
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
@@ -1129,7 +1129,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 // cleanupEphemeralDisks removes ephemeral disk images and their mount info.
 func (s *Sandbox) cleanupEphemeralDisks() error {
-	if s.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+	if !isBlockEmptyDirMode(s.config.EmptyDirMode) {
 		return nil
 	}
 
@@ -1143,6 +1143,10 @@ func (s *Sandbox) cleanupEphemeralDisks() error {
 	}
 
 	return nil
+}
+
+func isBlockEmptyDirMode(mode string) bool {
+	return mode == EmptyDirModeVirtioBlkEncrypted || mode == EmptyDirModeVirtioBlkPlain
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {

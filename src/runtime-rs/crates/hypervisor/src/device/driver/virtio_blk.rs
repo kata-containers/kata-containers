@@ -85,6 +85,9 @@ pub struct BlockConfig {
     /// drive is opened as read-write.
     pub is_readonly: bool,
 
+    /// Enables discard/unmap support for this block device.
+    pub discard_unmap: bool,
+
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
 

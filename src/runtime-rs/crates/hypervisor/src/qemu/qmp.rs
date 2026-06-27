@@ -14,7 +14,7 @@ use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
-    self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
+    self as qmp, BlockdevAioOptions, BlockdevDiscardOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
     MigrationInfo, PciDeviceInfo,
 };
@@ -775,6 +775,7 @@ impl Qmp {
         is_direct: Option<bool>,
         is_readonly: bool,
         no_drop: bool,
+        discard_unmap: bool,
         logical_block_size: u32,
         physical_block_size: u32,
         format: &BlockDeviceFormat,
@@ -782,6 +783,7 @@ impl Qmp {
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
+        let discard_option = || discard_unmap.then_some(BlockdevDiscardOptions::unmap);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
             auto_read_only: None,
@@ -794,7 +796,7 @@ impl Qmp {
                 })
             },
             detect_zeroes: None,
-            discard: None,
+            discard: discard_option(),
             force_share: None,
             node_name: None,
             read_only: Some(is_readonly),
@@ -832,7 +834,7 @@ impl Qmp {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
-                    discard: None,
+                    discard: discard_option(),
                     force_share: if is_readonly { Some(true) } else { None },
                     auto_read_only: None,
                     node_name: Some(node_name.clone()),
@@ -857,7 +859,7 @@ impl Qmp {
                     base: BlockdevOptionsBase {
                         detect_zeroes: None,
                         cache: None,
-                        discard: None,
+                        discard: discard_option(),
                         force_share: Some(true),
                         auto_read_only: None,
                         node_name: Some(node_name.clone()),
@@ -882,6 +884,9 @@ impl Qmp {
         // `device_add`
         let mut blkdev_add_args = Dictionary::new();
         blkdev_add_args.insert("drive".to_owned(), node_name.clone().into());
+        if discard_unmap && block_driver != VIRTIO_SCSI {
+            blkdev_add_args.insert("discard".to_owned(), true.into());
+        }
 
         if logical_block_size > 0 {
             blkdev_add_args.insert("logical_block_size".to_owned(), logical_block_size.into());

@@ -395,6 +395,30 @@ add_requests_to_policy_settings() {
 	done
 }
 
+# Change genpolicy settings to use the requested emptyDir storage type.
+# Appends a "replace" op to 99-test-overrides.json.
+set_genpolicy_emptydir_type() {
+	declare -r settings_dir="$1"
+	declare -r emptydir_type="$2"
+
+	auto_generate_policy_enabled || return 0
+
+	case "${emptydir_type}" in
+		shared-fs|block-encrypted|block-plain) ;;
+		*) die "Unsupported genpolicy emptydir_type ${emptydir_type}" ;;
+	esac
+
+	local drop_in_dir="${settings_dir}/genpolicy-settings.d"
+	mkdir -p "${drop_in_dir}"
+	local overrides_file="${drop_in_dir}/99-test-overrides.json"
+	[[ -f "${overrides_file}" ]] || echo '[]' > "${overrides_file}"
+
+	info "Setting genpolicy emptydir_type to ${emptydir_type} in ${overrides_file}"
+	jq --arg emptydir_type "${emptydir_type}" \
+		'. + [{"op":"replace","path":"/cluster_config/emptydir_type","value":$emptydir_type}]' \
+		"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
+}
+
 # Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
 allow_requests() {
 	declare -r settings_dir="$1"

@@ -800,6 +800,10 @@ func (q *QMP) blockdevAddBaseArgs(driver string, blockDevice *BlockDevice) map[s
 	}
 
 	blockdevArgs["node-name"] = blockDevice.ID
+	if blockDevice.DiscardUnmap {
+		blockdevArgs["discard"] = "unmap"
+		blockdevArgs["file"].(map[string]interface{})["discard"] = "unmap"
+	}
 
 	return blockdevArgs
 }
@@ -863,6 +867,16 @@ func (q *QMP) ExecuteBlockdevAddWithDriverCache(ctx context.Context, driver stri
 // the logical and physical block sizes for the device; if either is 0, the
 // hypervisor default is used for that size.
 func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern bool, logicalBlockSize, physicalBlockSize uint32) error {
+	return q.executeDeviceAdd(ctx, blockdevID, devID, driver, bus, romfile, shared, disableModern, false, logicalBlockSize, physicalBlockSize)
+}
+
+// ExecuteDeviceAddWithDiscard is like ExecuteDeviceAdd, with explicit virtio-blk
+// discard support.
+func (q *QMP) ExecuteDeviceAddWithDiscard(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern, discardUnmap bool, logicalBlockSize, physicalBlockSize uint32) error {
+	return q.executeDeviceAdd(ctx, blockdevID, devID, driver, bus, romfile, shared, disableModern, discardUnmap, logicalBlockSize, physicalBlockSize)
+}
+
+func (q *QMP) executeDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern, discardUnmap bool, logicalBlockSize, physicalBlockSize uint32) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -879,6 +893,9 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 
 	if shared {
 		args["share-rw"] = true
+	}
+	if discardUnmap && strings.HasPrefix(driver, "virtio-blk") {
+		args["discard"] = true
 	}
 	if transport.isVirtioPCI(nil) {
 		args["romfile"] = romfile
@@ -1121,6 +1138,16 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 // 1.0 in nested environments. logicalBlockSize and physicalBlockSize specify the logical and
 // physical sector sizes reported to the guest; set to 0 to use the hypervisor default.
 func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool, iothreadID string, logicalBlockSize, physicalBlockSize uint32) error {
+	return q.executePCIDeviceAdd(ctx, blockdevID, devID, driver, addr, bus, romfile, queues, shared, disableModern, false, iothreadID, logicalBlockSize, physicalBlockSize)
+}
+
+// ExecutePCIDeviceAddWithDiscard is like ExecutePCIDeviceAdd, with explicit
+// virtio-blk discard support.
+func (q *QMP) ExecutePCIDeviceAddWithDiscard(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern, discardUnmap bool, iothreadID string, logicalBlockSize, physicalBlockSize uint32) error {
+	return q.executePCIDeviceAdd(ctx, blockdevID, devID, driver, addr, bus, romfile, queues, shared, disableModern, discardUnmap, iothreadID, logicalBlockSize, physicalBlockSize)
+}
+
+func (q *QMP) executePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern, discardUnmap bool, iothreadID string, logicalBlockSize, physicalBlockSize uint32) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -1132,6 +1159,9 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	}
 	if shared {
 		args["share-rw"] = true
+	}
+	if discardUnmap && strings.HasPrefix(driver, "virtio-blk") {
+		args["discard"] = true
 	}
 	if queues > 0 {
 		args["num-queues"] = queues

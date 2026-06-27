@@ -338,6 +338,46 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 				},
 			},
 		},
+		{
+			BlockDeviceDriver: config.VirtioBlock,
+			inputMount: Mount{
+				BlockDeviceCreateFs: true,
+				Options:             []string{blockVolumeDiscardOption},
+			},
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					PCIPath:  testPCIPath,
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver:        kataBlkDevType,
+				Source:        testPCIPath.String(),
+				DriverOptions: []string{volume.BlockVolumeCreateFsDriverKey},
+				Options:       []string{blockVolumeDiscardOption},
+			},
+		},
+		{
+			BlockDeviceDriver: config.VirtioBlock,
+			inputMount: Mount{
+				EncryptionKey:       "ephemeral",
+				BlockDeviceCreateFs: true,
+			},
+			inputDev: &drivers.BlockDevice{
+				BlockDrive: &config.BlockDrive{
+					PCIPath:  testPCIPath,
+					VirtPath: testVirtPath,
+				},
+			},
+			resultVol: &pb.Storage{
+				Driver: kataBlkDevType,
+				Source: testPCIPath.String(),
+				DriverOptions: []string{
+					encryptionKeyDriverOption + "=ephemeral",
+					volume.BlockVolumeCreateFsDriverKey,
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

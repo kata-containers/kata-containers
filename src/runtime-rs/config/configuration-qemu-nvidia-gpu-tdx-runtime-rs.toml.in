@@ -728,6 +728,9 @@ vfio_mode = "@DEFVFIOMODE_NV@"
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
 #
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
+#
 emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 
 # Enabled experimental feature list, format: ["a", "b"].

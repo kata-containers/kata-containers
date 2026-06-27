@@ -622,9 +622,9 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 	// iterate all mounts and create block device if it's block based.
 	for i := range c.mounts {
 		// If block devices are disabled, we selectively only hotplug if
-		// the mount is an encrypted block-based emptyDir, to avoid
+		// the mount is a block-based emptyDir, to avoid
 		// cases that could regress 20ca4d2.
-		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !IsNonTmpFSEmptyDir(c.mounts[i].Source)) {
+		if !c.checkBlockDeviceSupport(ctx) && (!isBlockEmptyDirMode(c.sandbox.config.EmptyDirMode) || !IsDiskEmptyDir(c.mounts[i].Source)) {
 			c.Logger().Warn("Block device not supported")
 			continue
 		}
@@ -679,6 +679,13 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				switch key {
 				case volume.EncryptionKeyMetadataKey:
 					c.mounts[i].EncryptionKey = value
+				case volume.CreateFilesystemMetadataKey:
+					createFs, err := strconv.ParseBool(value)
+					if err != nil {
+						c.Logger().WithError(err).Errorf("invalid create filesystem value %s provided for key %s", value, volume.CreateFilesystemMetadataKey)
+						continue
+					}
+					c.mounts[i].BlockDeviceCreateFs = createFs
 				case volume.FSGroupMetadataKey:
 					gid, err := strconv.Atoi(value)
 					if err != nil {
@@ -702,6 +709,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		// instead of passing this as a shared mount.
 		di, err := c.createDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination, c.mounts[i].ReadOnly, isBlockFile)
 		if err == nil && di != nil {
+			di.DiscardUnmap = c.mounts[i].BlockDeviceCreateFs && slices.Contains(c.mounts[i].Options, blockVolumeDiscardOption)
+
 			b, err := c.sandbox.devManager.NewDevice(*di)
 			if err != nil {
 				// Do not return an error, try to create
@@ -878,12 +887,12 @@ func getFilesystemCapacity(path string) (uint64, error) {
 }
 
 func (c *Container) createEphemeralDisks() error {
-	if c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+	if !isBlockEmptyDirMode(c.sandbox.config.EmptyDirMode) {
 		return nil
 	}
 
 	for i := range c.mounts {
-		if !IsNonTmpFSEmptyDir(c.mounts[i].Source) {
+		if !IsDiskEmptyDir(c.mounts[i].Source) {
 			continue
 		}
 
@@ -896,7 +905,7 @@ func (c *Container) createEphemeralDisks() error {
 			continue
 		}
 
-		diskPath, err := c.setupEphemeralDisk(c.mounts[i].Source)
+		diskPath, err := c.setupEphemeralDisk(c.mounts[i].Source, c.sandbox.config.EmptyDirMode)
 		if err != nil {
 			return err
 		}
@@ -914,7 +923,7 @@ func (c *Container) createEphemeralDisks() error {
 // inside the given emptyDir. It returns the path to the created disk
 // image. The fd is always closed and the disk image is removed if any
 // step after creation fails.
-func (c *Container) setupEphemeralDisk(emptyDirPath string) (diskPath string, err error) {
+func (c *Container) setupEphemeralDisk(emptyDirPath, emptyDirMode string) (diskPath string, err error) {
 	// Create the disk file in the same folder as the original
 	// emptyDir mount so that Kubelet can enforce the sizeLimit.
 	diskPath = filepath.Join(emptyDirPath, "disk.img")
@@ -950,8 +959,15 @@ func (c *Container) setupEphemeralDisk(emptyDirPath string) (diskPath string, er
 		return
 	}
 
-	metadata := map[string]string{
-		volume.EncryptionKeyMetadataKey: "ephemeral",
+	metadata := map[string]string{}
+	var options []string
+	if isBlockEmptyDirMode(emptyDirMode) {
+		metadata[volume.CreateFilesystemMetadataKey] = strconv.FormatBool(true)
+	}
+	if emptyDirMode == EmptyDirModeVirtioBlkEncrypted {
+		metadata[volume.EncryptionKeyMetadataKey] = "ephemeral"
+	} else if emptyDirMode == EmptyDirModeVirtioBlkPlain {
+		options = []string{blockVolumeDiscardOption}
 	}
 	if sourceStat.Gid != 0 {
 		metadata[volume.FSGroupMetadataKey] = strconv.FormatUint(uint64(sourceStat.Gid), 10)
@@ -962,6 +978,7 @@ func (c *Container) setupEphemeralDisk(emptyDirPath string) (diskPath string, er
 		Device:     diskPath,
 		FsType:     "ext4",
 		Metadata:   metadata,
+		Options:    options,
 	}); err != nil {
 		c.Logger().WithError(err).Errorf("failed to assign direct volume for mount %s", emptyDirPath)
 		return

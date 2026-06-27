@@ -522,6 +522,21 @@ disable_new_netns = false
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
 sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY_CLH@
 
+# Specifies how Kubernetes emptyDir volumes are handled.
+# Options:
+#
+#   - shared-fs (default)
+#     Shares the emptyDir folder with the guest using the method given
+#     by the `shared_fs` setting.
+#
+#   - block-encrypted
+#     Plugs a block device to be encrypted in the guest.
+#
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE@"
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.

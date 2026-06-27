@@ -342,6 +342,29 @@ func TestAppendDeviceBlock(t *testing.T) {
 	testAppend(blkdev, deviceBlockString, t)
 }
 
+func TestAppendDeviceBlockDiscardUnmap(t *testing.T) {
+	blkdev := BlockDevice{
+		Driver:        VirtioBlock,
+		ID:            "hd0",
+		File:          "/var/lib/vm.img",
+		AIO:           Threads,
+		Format:        QCOW2,
+		Interface:     NoInterface,
+		WCE:           false,
+		DisableModern: true,
+		ROMFile:       romfile,
+		ShareRW:       true,
+		ReadOnly:      true,
+		DiscardUnmap:  true,
+	}
+	params := strings.Join(blkdev.QemuParams(&Config{}), " ")
+	for _, opt := range []string{"discard=on", "discard=unmap"} {
+		if !strings.Contains(params, opt) {
+			t.Fatalf("missing %s in block device params: %s", opt, params)
+		}
+	}
+}
+
 func TestAppendDeviceVFIO(t *testing.T) {
 	vfioDevice := VFIODevice{
 		BDF:      "02:10.0",

@@ -9,7 +9,7 @@ OS_NAME=cbl-mariner
 OS_VERSION=${OS_VERSION:-3.0}
 # shellcheck disable=SC2034
 LIBC="gnu"
-PACKAGES="kata-packages-uvm"
+PACKAGES="kata-packages-uvm e2fsprogs"
 # shellcheck disable=SC2154
 if [[ "${AGENT_INIT}" = "no" ]]; then PACKAGES+=" systemd"; fi
 # shellcheck disable=SC2154

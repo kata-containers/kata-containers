@@ -1378,6 +1378,9 @@ type BlockDevice struct {
 	// ReadOnly sets the block device in readonly mode
 	ReadOnly bool
 
+	// DiscardUnmap enables discard/unmap support for this block device.
+	DiscardUnmap bool
+
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
 }
@@ -1425,6 +1428,9 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	if blkdev.ShareRW {
 		deviceParams = append(deviceParams, "share-rw=on")
 	}
+	if blkdev.DiscardUnmap {
+		deviceParams = append(deviceParams, "discard=on")
+	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("serial=%s", blkdev.ID))
 
@@ -1436,6 +1442,9 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 
 	if blkdev.ReadOnly {
 		blkParams = append(blkParams, "readonly=on")
+	}
+	if blkdev.DiscardUnmap {
+		blkParams = append(blkParams, "discard=unmap")
 	}
 
 	qemuParams = append(qemuParams, "-device")

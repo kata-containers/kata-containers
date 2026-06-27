@@ -166,7 +166,7 @@ type RuntimeConfig struct {
 	DisableGuestEmptyDir bool
 
 	// EmptyDirMode specifies how Kubernetes emptyDir volumes are handled.
-	// Valid values are "shared-fs" (default) or "block-encrypted".
+	// Valid values are "shared-fs" (default), "block-encrypted", or "block-plain".
 	EmptyDirMode string
 
 	// CreateContainer timeout which, if provided, indicates the createcontainer request timeout

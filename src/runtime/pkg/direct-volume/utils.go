@@ -18,8 +18,10 @@ const (
 	mountInfoFileName = "mountInfo.json"
 
 	EncryptionKeyMetadataKey       = "encryptionKey"
+	CreateFilesystemMetadataKey    = "createFilesystem"
 	FSGroupMetadataKey             = "fsGroup"
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
+	BlockVolumeCreateFsDriverKey   = "create_filesystem"
 )
 
 // FSGroupChangePolicy holds policies that will be used for applying fsGroup to a volume.

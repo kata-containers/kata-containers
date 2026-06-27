@@ -24,6 +24,9 @@ pub const EMPTYDIR_MODE_SHARED_FS: &str = "shared-fs";
 /// EmptyDir mode: plug a block device to be encrypted in the guest.
 pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 
+/// EmptyDir mode: plug a block device to be mounted directly in the guest.
+pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -149,6 +152,7 @@ pub struct Runtime {
     /// - shared-fs (default): shares the emptyDir folder with the guest using the method
     ///   given by the shared_fs setting.
     /// - block-encrypted: plugs a block device to be encrypted in the guest via CDH/LUKS2.
+    /// - block-plain: plugs a block device to be mounted directly in the guest.
     #[serde(default)]
     pub emptydir_mode: String,
 
@@ -277,6 +281,7 @@ impl ConfigOps for Runtime {
         let emptydir_mode = &conf.runtime.emptydir_mode;
         if emptydir_mode != EMPTYDIR_MODE_SHARED_FS
             && emptydir_mode != EMPTYDIR_MODE_BLOCK_ENCRYPTED
+            && emptydir_mode != EMPTYDIR_MODE_BLOCK_PLAIN
         {
             return Err(std::io::Error::other(format!(
                 "Invalid emptydir_mode `{emptydir_mode}` in configuration file",
@@ -408,6 +413,14 @@ emptydir_mode = "block-encrypted"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(&config.runtime.emptydir_mode, "block-encrypted");
+
+        let content = r#"
+[runtime]
+emptydir_mode = "block-plain"
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(&config.runtime.emptydir_mode, "block-plain");
     }
 
     #[test]

@@ -213,11 +213,11 @@ func (r runtime) emptyDirMode() (string, error) {
 	}
 
 	switch r.EmptyDirMode {
-	case vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted:
+	case vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted, vc.EmptyDirModeVirtioBlkPlain:
 		return r.EmptyDirMode, nil
 	default:
-		return "", fmt.Errorf("invalid emptydir_mode=%q, allowed values: %q, %q",
-			r.EmptyDirMode, vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted)
+		return "", fmt.Errorf("invalid emptydir_mode=%q, allowed values: %q, %q, %q",
+			r.EmptyDirMode, vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted, vc.EmptyDirModeVirtioBlkPlain)
 	}
 }
 
