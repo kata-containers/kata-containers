@@ -109,6 +109,15 @@ struct CommandLineOptions {
 
     #[clap(long, help = "Path to the initdata TOML file", require_equals = true)]
     initdata_path: Option<String>,
+
+    #[clap(
+        short,
+        long,
+        help = "Maximum amount of attempts for pulling manifests, config and image layers before giving up.",
+        default_value_t = 5,
+        require_equals = true
+    )]
+    max_pull_attempts: u8,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -131,6 +140,7 @@ pub struct Config {
     pub layers_cache: layers_cache::ImageLayersCache,
     pub version: bool,
     pub initdata: kata_types::initdata::InitData,
+    pub max_pull_attempts: u8,
 }
 
 impl Config {
@@ -182,6 +192,7 @@ impl Config {
             layers_cache: layers_cache::ImageLayersCache::new(&layers_cache_file_path),
             version: args.version,
             initdata,
+            max_pull_attempts: args.max_pull_attempts,
         }
     }
 }
