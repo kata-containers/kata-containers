@@ -106,6 +106,9 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     p_storages := p_container.storages
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
 
+    allow_image(p_oci, i_oci)
+    allow_image_storages(p_oci, i_oci, i_storages)
+
     p_devices := p_container.devices
     allow_devices(p_devices, i_devices, i_oci)
 
@@ -307,6 +310,108 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
     allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name, i_s_namespace)
 
     print("allow_by_anno 2: true")
+}
+
+# Allow the pause container.
+allow_image(p_oci, i_oci) if {
+    print("allow_image 1: start")
+    i_oci.Annotations["io.kubernetes.cri.container-type"] == "sandbox"
+    print("allow_image 1: sandbox container, skipping image gate, true")
+}
+
+# Other containers:
+#
+# Input forms:
+# - REGISTRY/NAME:TAG
+# - REGISTRY/NAME:DIGEST
+#
+# Policy forms:
+# - REGISTRY/NAME:TAG
+# - REGISTRY/NAME:DIGEST
+# - NAME:TAG
+# - NAME:DIGEST
+#
+# - If DIGEST in input, require DIGEST matches policy (REGISTRY/NAME do not matter)
+# - If no DIGEST in input:
+#   - If REGISTRY in input and REGISTRY in policy, match exactly
+#   - If REGISTRY in input but no REGISTRY in policy, match NAME:TAG
+#     - At runtime, input always has REGISTRY
+allow_image(p_oci, i_oci) if {
+    print("allow_image 2: start")
+    i_oci.Annotations["io.kubernetes.cri.container-type"] == "container"
+
+    p_image := p_oci.Annotations["io.kubernetes.cri.image-name"]
+    i_image := i_oci.Annotations["io.kubernetes.cri.image-name"]
+    print("allow_image 2: p_image =", p_image, "i_image =", i_image)
+
+    allow_image_name(p_image, i_image)
+
+    print("allow_image 2: true")
+}
+
+# Extract the "ALGO:HASH" from a digest-pinned reference
+# (e.g. "registry/repo@sha256:abc" → "sha256:abc").
+# Undefined when ref has no "@".
+image_digest(ref) := digest if {
+    parts := split(ref, "@")
+    count(parts) == 2
+    digest := parts[1]
+}
+
+# Primary path: both refs carry a digest: Compare only the digest component,
+# registry/name differences don't matter.
+allow_image_name(p_image, i_image) if {
+    image_digest(p_image) == image_digest(i_image)
+}
+# Fallback path (floating tag): Exact equality.
+allow_image_name(p_image, i_image) if {
+    not contains(p_image, "@")
+    p_image == i_image
+}
+# Fallback path (floating tag): Policy carries a short name (e.g. "nginx:1.27")
+# and the runtime or storage source provides the fully-qualified form
+# (e.g. "docker.io/library/nginx:1.27").
+allow_image_name(p_image, i_image) if {
+    not contains(p_image, "@")
+    endswith(i_image, concat("", ["/", p_image]))
+}
+
+# The Kata Agent reads storage.source.
+allow_image_storages(p_oci, i_oci, i_storages) if {
+    print("allow_image_storages 1: start")
+    i_oci.Annotations["io.kubernetes.cri.container-type"] == "sandbox"
+    print("allow_image_storages 1: sandbox container, skipping storage image gate, true")
+}
+allow_image_storages(p_oci, i_oci, i_storages) if {
+    print("allow_image_storages 2: start")
+    i_oci.Annotations["io.kubernetes.cri.container-type"] == "container"
+
+    p_image := p_oci.Annotations["io.kubernetes.cri.image-name"]
+    print("allow_image_storages 2: p_image =", p_image)
+
+    every i_storage in i_storages {
+        allow_image_storage(p_image, i_storage)
+    }
+
+    print("allow_image_storages 2: true")
+}
+
+# Non-image_guest_pull storages carry no image reference; nothing to gate.
+allow_image_storage(p_image, i_storage) if {
+    i_storage.driver != "image_guest_pull"
+}
+# image_guest_pull: the agent pulls via storage.source, gate on that alone.
+# storage.source always carries the fully-qualified reference; reuse
+# allow_image_name so that digest and short-name cases are handled the same as
+# the annotation check.
+allow_image_storage(p_image, i_storage) if {
+    print("allow_image_storage: start")
+    i_storage.driver == "image_guest_pull"
+
+    print("allow_image_storage: p_image =", p_image, "i_storage.source =", i_storage.source)
+    allow_image_name(p_image, i_storage.source)
+
+    print("allow_image_storage: true")
 }
 
 allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name, s_namespace) if {

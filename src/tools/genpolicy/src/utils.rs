@@ -104,6 +104,12 @@ struct CommandLineOptions {
         require_equals = true
     )]
     layers_cache_file_path: Option<String>,
+    #[clap(
+        long,
+        help = "Rewrite image tags to digest-pinned references in both the output YAML and the policy"
+    )]
+    lock_digests: bool,
+
     #[clap(short, long, help = "Print version information and exit")]
     version: bool,
 
@@ -124,6 +130,7 @@ pub struct Config {
     pub settings: settings::Settings,
     pub config_files: Option<Vec<String>>,
 
+    pub lock_digests: bool,
     pub silent_unsupported_fields: bool,
     pub raw_out: bool,
     pub base64_out: bool,
@@ -175,6 +182,7 @@ impl Config {
             rego_rules_path: args.rego_rules_path,
             settings,
             config_files,
+            lock_digests: args.lock_digests,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
             base64_out: args.base64_out,

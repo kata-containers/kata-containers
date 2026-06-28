@@ -695,6 +695,21 @@ impl Container {
         self.registry = registry::get_container(config, &self.image, is_pause_container)
             .await
             .unwrap();
+
+        if config.lock_digests && !self.image.contains("@") {
+            let digest = self.registry.manifest_digest.clone();
+            let image_ref = if !digest.is_empty() {
+                let base = self.image.rfind('/').map(|p| p + 1).unwrap_or(0);
+                let rest = self.image[base..]
+                    .find(':')
+                    .map(|colon| &self.image[..base + colon])
+                    .unwrap_or(&self.image);
+                format!("{}@{}", rest, digest)
+            } else {
+                self.image.clone()
+            };
+            self.image = image_ref;
+        }
     }
 
     pub fn get_env_variables(
@@ -1002,6 +1017,11 @@ impl yaml::K8sResource for Pod {
     async fn init(&mut self, config: &Config, doc_mapping: &serde_yaml::Value, _silent: bool) {
         yaml::k8s_resource_init(&mut self.spec, config).await;
         self.doc_mapping = doc_mapping.clone();
+        if config.lock_digests {
+            if let Some(spec_val) = self.doc_mapping.get_mut("spec") {
+                yaml::rewrite_container_images(spec_val, &self.spec.containers);
+            }
+        }
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
