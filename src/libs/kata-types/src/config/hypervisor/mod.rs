@@ -810,10 +810,6 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub default_bridges: u32,
 
-    /// Enable hotplugging on root bus for devices with large PCI bars.
-    #[serde(default)]
-    pub hotplug_vfio_on_root_bus: bool,
-
     /// Cold-plug VFIO devices to a PCIe port type.
     ///
     /// Accepted values: `"no-port"` (default, disabled), `"root-port"`.
@@ -824,13 +820,13 @@ pub struct DeviceInfo {
 
     /// Number of PCIe root ports to create during VM creation.
     ///
-    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
+    /// Valid when `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_root_port: u32,
 
     /// Number of PCIe switch ports to create during VM creation.
     ///
-    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
+    /// Valid when `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_switch_port: u32,
 

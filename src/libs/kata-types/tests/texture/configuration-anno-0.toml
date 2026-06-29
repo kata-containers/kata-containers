@@ -47,7 +47,6 @@ enable_iommu_platform = true
 pflashes = ["/proc/mounts"]
 enable_debug = true
 disable_image_nvdimm = true
-hotplug_vfio_on_root_bus = true
 pcie_root_port = 2
 disable_vhost_net = true
 entropy_source= "/dev/urandom"

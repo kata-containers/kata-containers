@@ -191,10 +191,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MAX_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_max_vcpus";
 
 // Hypervisor Device related annotations
-/// A sandbox annotation used to indicate if devices need to be hotplugged on the root bus instead
-/// of a bridge.
-pub const KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS: &str =
-    "io.katacontainers.config.hypervisor.hotplug_vfio_on_root_bus";
 /// PCIeRootPort is used to indicate the number of PCIe Root Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_root_port";
@@ -718,16 +714,6 @@ impl Annotation {
                         }
                     }
                     // Hypervisor Device related annotations
-                    KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS => {
-                        match self.get_value::<bool>(key) {
-                            Ok(r) => {
-                                hv.device_info.hotplug_vfio_on_root_bus = r.unwrap_or_default();
-                            }
-                            Err(_e) => {
-                                return Err(bool_err);
-                            }
-                        }
-                    }
                     // Limitations documents aligned with runtime-go:
                     // If number of PCIe root ports > 16 then bail out otherwise we may
                     // use up all slots or IO memory on the root bus and vfio-XXX-pci devices
