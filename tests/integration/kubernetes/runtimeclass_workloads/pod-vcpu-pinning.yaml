@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Guaranteed-QoS pod for the vCPU pinning regression test.
+#
+# requests == limits on an integer cpu makes the pod Guaranteed QoS, which is
+# what the Kubernetes static CPU manager requires to hand out exclusive host
+# CPUs.  That exclusive cpuset is what the Kata runtime pins vCPU threads to.
+#
+# With overhead_vcpus = 0.5 (the runtime-rs GPU/CoCo default) and 2 CPUs the
+# VM boots ceil(2 + 0.5) = 3 vCPUs while the pod cpuset has 2 CPUs.  This is
+# the exact condition that used to make runtime-rs skip pinning entirely.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vcpu-pinning-test
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: workload
+    image: quay.io/prometheus/busybox:latest
+    command: ["sleep", "infinity"]
+    resources:
+      requests:
+        cpu: "2"
+        memory: "256Mi"
+      limits:
+        cpu: "2"
+        memory: "256Mi"

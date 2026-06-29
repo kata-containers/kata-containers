@@ -73,6 +73,7 @@ if [[ -n "${K8S_TEST_NV:-}" ]]; then
 else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-numa.bats" \
+		"k8s-vcpu-pinning.bats" \
 		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-nim.bats" \
 		"k8s-nvidia-nim-service.bats")
