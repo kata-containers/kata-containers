@@ -16,6 +16,7 @@ pub enum Error {
 }
 
 /// Get CPUID value for (`function`, `count`).
+#[allow(unused_unsafe)]
 pub fn get_cpuid(function: u32, count: u32) -> Result<CpuidResult, Error> {
     #[cfg(target_env = "sgx")]
     {
@@ -24,16 +25,16 @@ pub fn get_cpuid(function: u32, count: u32) -> Result<CpuidResult, Error> {
 
     // TODO: replace with validation based on `has_cpuid()` when it becomes stable:
     //  https://doc.rust-lang.org/core/arch/x86/fn.has_cpuid.html
-    // this is safe because the host supports the `cpuid` instruction
-    let max_function = __get_cpuid_max(function & leaf_0x80000000::LEAF_NUM).0;
+    // SAFETY: the host supports the `cpuid` instruction
+    let max_function = unsafe { __get_cpuid_max(function & leaf_0x80000000::LEAF_NUM) }.0;
     if function > max_function {
         return Err(Error::InvalidParameters(format!(
             "Function not supported: 0x{function:x}",
         )));
     }
 
-    // this is safe because the host supports the `cpuid` instruction
-    let entry = __cpuid_count(function, count);
+    // SAFETY: the host supports the `cpuid` instruction
+    let entry = unsafe { __cpuid_count(function, count) };
     if entry.eax == 0 && entry.ebx == 0 && entry.ecx == 0 && entry.edx == 0 {
         return Err(Error::InvalidParameters(format!("Invalid count: {count}")));
     }
