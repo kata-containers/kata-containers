@@ -18,6 +18,7 @@ RUN apk add --no-cache util-linux-misc zstd
 COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
 COPY ${KATA_ARTIFACTS_DIR}/kata-deploy-static-*.tar.zst ${DESTINATION}/tarballs/
 COPY tools/packaging/kata-deploy/shim-components.json ${DESTINATION}/
+COPY versions.yaml ${DESTINATION}/
 
 RUN \
 	mkdir -p /opt/prebuilt && \
