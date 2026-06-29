@@ -36,6 +36,9 @@ pub struct NetworkPair {
     pub virt_iface: NetworkInterface,
     pub model: Arc<dyn network_model::NetworkModel>,
     pub network_qos: bool,
+    /// Number of virtio queue pairs (each pair = 1 RX + 1 TX).
+    /// Derived from `network_queues` in the hypervisor TOML config.
+    pub network_queues: usize,
 }
 
 impl NetworkPair {
@@ -46,6 +49,8 @@ impl NetworkPair {
         model: &str,
         queues: usize,
     ) -> Result<Self> {
+        // Ensure that the queues >= 1
+        let queues = queues.max(1);
         let unique_id = kata_sys_util::rand::UUID::new();
         let model = network_model::new(model).context("new network model")?;
         let tap_iface_name = format!("tap{idx}{TAP_SUFFIX}");
@@ -127,6 +132,7 @@ impl NetworkPair {
             },
             model,
             network_qos: false,
+            network_queues: queues,
         };
 
         Ok(net_pair)
