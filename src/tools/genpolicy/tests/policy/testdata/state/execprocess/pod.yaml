@@ -29,3 +29,8 @@ spec:
         exec:
           command:
             - test2
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    supplementalGroups:
+      - 10

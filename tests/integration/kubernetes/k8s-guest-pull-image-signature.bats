@@ -26,6 +26,7 @@ setup() {
     UNSIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:unsigned"
     COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed"
     COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed-key2"
+    test_image_supplemental_groups="10"
     SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
     policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 }
@@ -88,7 +89,8 @@ EOF
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
-    create_coco_pod_yaml "${UNSIGNED_UNPROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node"
+    create_coco_pod_yaml "${UNSIGNED_UNPROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -102,7 +104,8 @@ EOF
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
 
-    create_coco_pod_yaml "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node"
+    create_coco_pod_yaml "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -116,7 +119,8 @@ EOF
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
-    create_coco_pod_yaml "${COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node"
+    create_coco_pod_yaml "${COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -130,7 +134,8 @@ EOF
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
 
-    create_coco_pod_yaml "${COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node"
+    create_coco_pod_yaml "${COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE}" "${SECURITY_POLICY_KBS_URI}" "" "" "resource" "$node" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -144,7 +149,8 @@ EOF
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
-    create_coco_pod_yaml "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "" "resource" "$node"
+    create_coco_pod_yaml "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "" "resource" "$node" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -161,7 +167,8 @@ EOF
     setup_kbs_image_policy "reject"
 
     initdata=$(get_initdata_with_security_policy)
-    create_coco_pod_yaml_with_annotations "${UNSIGNED_UNPROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_UNPROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -178,7 +185,8 @@ EOF
     setup_kbs_image_policy
 
     initdata=$(get_initdata_with_security_policy)
-    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -195,7 +203,8 @@ EOF
     setup_kbs_image_policy "reject"
 
     initdata=$(get_initdata_with_security_policy)
-    create_coco_pod_yaml_with_annotations "${COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -212,7 +221,8 @@ EOF
     setup_kbs_image_policy
 
     initdata=$(get_initdata_with_security_policy)
-    create_coco_pod_yaml_with_annotations "${COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE}" "" "${initdata}" "${node}"
+    create_coco_pod_yaml_with_annotations "${COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE}" "" "${initdata}" "${node}" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake
@@ -228,7 +238,8 @@ EOF
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
-    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "${node}"
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "${node}" \
+        "" "" "${test_image_supplemental_groups}"
     auto_generate_policy "${policy_settings_dir}" "${kata_pod}"
 
     # For debug sake

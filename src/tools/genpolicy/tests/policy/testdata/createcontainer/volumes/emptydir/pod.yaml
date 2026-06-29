@@ -18,6 +18,9 @@ spec:
       readOnly: true
     - mountPath: /mnt/test4
       name: test-volume2
+    securityContext:
+      runAsUser: 65535
+      runAsGroup: 0
   volumes:
   - name: test-volume
     emptyDir: {}

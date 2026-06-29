@@ -12,6 +12,8 @@ metadata:
     io.katacontainers.config.runtime.sandbox_cgroup_only: "false"
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   restartPolicy: Never
   containers:
   - image: quay.io/prometheus/busybox:latest

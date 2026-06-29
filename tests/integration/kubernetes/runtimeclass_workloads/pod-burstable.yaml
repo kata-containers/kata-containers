@@ -9,6 +9,8 @@ metadata:
   name: burstable-test
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   containers:
   - name: qos-burstable
     image: quay.io/prometheus/busybox:latest

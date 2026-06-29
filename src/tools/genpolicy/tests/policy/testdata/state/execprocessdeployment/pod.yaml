@@ -23,3 +23,8 @@ spec:
             command:
               - /bin/true
 
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        supplementalGroups:
+          - 10

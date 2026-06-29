@@ -10,6 +10,8 @@ metadata:
   name: test-pod-hostname
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   restartPolicy: Never
   containers:
   - image: quay.io/prometheus/busybox:latest

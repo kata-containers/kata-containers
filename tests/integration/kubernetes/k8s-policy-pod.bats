@@ -80,6 +80,7 @@ replace_prometheus_image() {
 	yq -i \
 		'.spec.containers[0].image = "quay.io/prometheus/busybox:latest"' \
 		"${correct_pod_yaml}"
+	set_pod_spec_security_context "${correct_pod_yaml}" ".spec" "" "" "10"
 }
 
 wait_for_pod_ready() {

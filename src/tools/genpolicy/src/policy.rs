@@ -26,6 +26,7 @@ use std::boxed;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 use std::io::Write;
+use std::process::exit;
 
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
@@ -457,9 +458,7 @@ pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
 
-    /// Whether or not the cluster uses the guest pull mechanism
-    /// In guest pull, host can't look into layers to determine GID.
-    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
+    /// Whether or not the cluster uses the guest pull mechanism.
     pub guest_pull: bool,
 
     /// Supported values:
@@ -854,6 +853,103 @@ impl AgentPolicy {
         }
     }
 
+    fn exit_if_guest_pull_needs_security_context(
+        &self,
+        resource: &dyn yaml::K8sResource,
+        yaml_container: &pod::Container,
+        is_pause_container: bool,
+        process: &KataProcess,
+    ) {
+        if is_pause_container || !self.config.settings.cluster_config.guest_pull {
+            return;
+        }
+
+        let pod_security_context = resource.get_pod_security_context();
+        let uid = i64::from(process.User.UID);
+        let gid = i64::from(process.User.GID);
+
+        let effective_run_as_user = yaml_container
+            .run_as_user()
+            .or_else(|| pod_security_context.and_then(|context| context.runAsUser));
+        let explicit_uid = effective_run_as_user == Some(uid);
+
+        let effective_run_as_group = yaml_container
+            .run_as_group()
+            .or_else(|| pod_security_context.and_then(|context| context.runAsGroup));
+        let explicit_gid = effective_run_as_group == Some(gid);
+
+        let mut explicitly_added_gids = BTreeSet::new();
+        if let Some(context) = pod_security_context {
+            if let Some(fs_group) = context.fsGroup {
+                explicitly_added_gids.insert(u32::try_from(fs_group).unwrap());
+            }
+            if let Some(supplemental_groups) = &context.supplementalGroups {
+                explicitly_added_gids.extend(supplemental_groups.iter().copied());
+            }
+        }
+
+        let missing_uid = process.User.UID != 0 && !explicit_uid;
+        let missing_gid = process.User.GID != 0 && !explicit_gid;
+
+        let missing_supplemental_groups: Vec<u32> = process
+            .User
+            .AdditionalGids
+            .iter()
+            .copied()
+            .filter(|additional_gid| {
+                *additional_gid != process.User.GID
+                    && !explicitly_added_gids.contains(additional_gid)
+            })
+            .collect();
+
+        if !missing_uid && !missing_gid && missing_supplemental_groups.is_empty() {
+            return;
+        }
+
+        let mut recommendations = Vec::new();
+        if missing_uid || missing_gid {
+            let mut container_recommendation = format!(
+                "containers:\n  - name: {}\n    securityContext:",
+                yaml_container.name
+            );
+            if process.User.UID != 0 {
+                container_recommendation
+                    .push_str(&format!("\n      runAsUser: {}", process.User.UID));
+            }
+            if process.User.GID != 0 {
+                container_recommendation
+                    .push_str(&format!("\n      runAsGroup: {}", process.User.GID));
+            }
+            recommendations.push(container_recommendation);
+        }
+        if !missing_supplemental_groups.is_empty() {
+            let supplemental_groups = missing_supplemental_groups
+                .iter()
+                .map(|gid| gid.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            recommendations.push(format!(
+                "securityContext:\n  supplementalGroups: [{supplemental_groups}]"
+            ));
+        }
+        let recommendation = recommendations.join("\n");
+
+        eprintln!(
+            "ERROR: guest_pull is enabled for container '{}' using image '{}'. \
+             The generated policy expects UID={}, GID={}, AdditionalGids={:?}; \
+             containerd may not reproduce image-derived user/group values when image layers are pulled in the guest. \
+             Set explicit Kubernetes securityContext values, for example:\n{}\n\
+             See docs/Limitations.md#guest-pulled-container-images.",
+            yaml_container.name,
+            yaml_container.image,
+            process.User.UID,
+            process.User.GID,
+            process.User.AdditionalGids,
+            recommendation
+        );
+        exit(1);
+    }
+
     fn get_container_process(
         &self,
         resource: &dyn yaml::K8sResource,
@@ -1023,6 +1119,12 @@ impl AgentPolicy {
         debug!(
             "get_container_process: returning: User = {:?}",
             &process.User
+        );
+        self.exit_if_guest_pull_needs_security_context(
+            resource,
+            yaml_container,
+            is_pause_container,
+            &process,
         );
         process
     }

@@ -316,7 +316,9 @@ assert_rootfs_count() {
 # Parameters:
 #	$1 - the container image.
 #	$2 - the runtimeclass, is not optional.
-#	$3 - the specific node name, optional.
+#	$3 - runAsUser, optional.
+#	$4 - runAsGroup, optional.
+#	$5 - supplementalGroups, optional.
 #
 # Return:
 # 	the path to the configuration file. The caller should not care about
@@ -329,6 +331,9 @@ new_pod_config() {
 	local base_config="${FIXTURES_DIR}/pod-config.yaml.in"
 	local image="${1}"
 	local runtimeclass="${2}"
+	local run_as_user="${3:-}"
+	local run_as_group="${4:-}"
+	local supplemental_groups="${5:-}"
 	local new_config
 
 	[[ -n "${runtimeclass}" ]] || return 1
@@ -337,7 +342,40 @@ new_pod_config() {
 	new_config=$(mktemp "${BATS_FILE_TMPDIR}/pod-config.XXXXXX.yaml")
 	IMAGE="${image}" RUNTIMECLASS="${runtimeclass}" envsubst < "${base_config}" > "${new_config}"
 
+	if [[ -n "${run_as_user}${run_as_group}${supplemental_groups}" ]]; then
+		set_pod_spec_security_context "${new_config}" ".spec" "${run_as_user}" "${run_as_group}" "${supplemental_groups}"
+	fi
+
 	echo "${new_config}"
+}
+
+set_pod_spec_security_context() {
+	local yaml="${1}"
+	local spec_path="${2}"
+	local run_as_user="${3}"
+	local run_as_group="${4}"
+	local supplemental_groups="${5:-}"
+	local expression
+
+	expression=""
+
+	if [[ -n "${run_as_user}" ]]; then
+		expression+="${spec_path}.securityContext.runAsUser = ${run_as_user}"
+	fi
+
+	if [[ -n "${run_as_group}" ]]; then
+		[[ -n "${expression}" ]] && expression+=" | "
+		expression+="${spec_path}.securityContext.runAsGroup = ${run_as_group}"
+	fi
+
+	if [[ -n "${supplemental_groups}" ]]; then
+		[[ -n "${expression}" ]] && expression+=" | "
+		expression+="${spec_path}.securityContext.supplementalGroups = [${supplemental_groups}]"
+	fi
+
+	[[ -n "${expression}" ]] || return 0
+
+	yq -i "${expression}" "${yaml}"
 }
 
 # Set an annotation on configuration metadata.

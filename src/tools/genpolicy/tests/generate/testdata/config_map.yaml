@@ -23,6 +23,11 @@ metadata:
 spec:
   restartPolicy: Never
   runtimeClassName: kata-cc
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    supplementalGroups:
+      - 10
   containers:
     - name: busybox
       image: "quay.io/prometheus/busybox:latest"

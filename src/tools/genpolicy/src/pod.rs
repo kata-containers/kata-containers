@@ -690,11 +690,9 @@ struct TopologySpreadConstraint {
 }
 
 impl Container {
-    pub async fn init(&mut self, config: &Config, is_pause_container: bool) {
+    pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
-        self.registry = registry::get_container(config, &self.image, is_pause_container)
-            .await
-            .unwrap();
+        self.registry = registry::get_container(config, &self.image).await.unwrap();
     }
 
     pub fn get_env_variables(
@@ -1216,6 +1214,18 @@ impl Container {
         }
     }
 
+    pub fn run_as_user(&self) -> Option<i64> {
+        self.securityContext
+            .as_ref()
+            .and_then(|context| context.runAsUser)
+    }
+
+    pub fn run_as_group(&self) -> Option<i64> {
+        self.securityContext
+            .as_ref()
+            .and_then(|context| context.runAsGroup)
+    }
+
     // Count NVIDIA passthrough GPU requests using an explicit allowlist of resource keys.
     pub fn get_nvidia_pgpu_count(&self, pgpu_resource_keys: &[String]) -> Option<usize> {
         let limits = self.resources.as_ref()?.limits.as_ref()?;
@@ -1267,8 +1277,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
         }),
         ..Default::default()
     };
-    let is_pause_container = true;
-    pause_container.init(config, is_pause_container).await;
+    pause_container.init(config).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }

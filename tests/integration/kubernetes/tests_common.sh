@@ -762,6 +762,17 @@ set_nginx_image() {
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	NGINX_IMAGE="${nginx_image}" envsubst < "${input_yaml}" > "${output_yaml}"
+
+	auto_generate_policy_enabled || return 0
+
+	case "$(yq -r 'select(documentIndex == 0) | .kind' "${output_yaml}")" in
+		Pod)
+			set_pod_spec_security_context "${output_yaml}" ".spec" "" "" "1, 2, 3, 4, 6, 10, 11, 20, 26, 27"
+			;;
+		Deployment|ReplicationController)
+			set_pod_spec_security_context "${output_yaml}" ".spec.template.spec" "" "" "1, 2, 3, 4, 6, 10, 11, 20, 26, 27"
+			;;
+	esac
 }
 
 print_node_journal_since_test_start() {

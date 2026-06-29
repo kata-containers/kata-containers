@@ -9,6 +9,8 @@ metadata:
   name: test-file-volume
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   restartPolicy: Never
   nodeName: NODE
   volumes:

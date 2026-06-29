@@ -278,7 +278,8 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              0,
+              10
             ],
             "GID": 0,
             "UID": 0,
@@ -581,7 +582,8 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              0,
+              10
             ],
             "GID": 0,
             "UID": 0,
@@ -630,7 +632,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -665,7 +668,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -700,7 +704,8 @@
         "Terminal": true,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -743,7 +748,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -778,7 +784,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -813,7 +820,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -883,7 +891,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -918,7 +927,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -1041,7 +1051,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -1076,7 +1087,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,
@@ -1120,7 +1132,8 @@
         "Terminal": false,
         "User": {
           "AdditionalGids": [
-            0
+            0,
+            10
           ],
           "GID": 0,
           "UID": 0,

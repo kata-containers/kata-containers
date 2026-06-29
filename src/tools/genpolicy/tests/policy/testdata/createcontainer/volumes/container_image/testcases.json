@@ -108,9 +108,9 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              1000
             ],
-            "GID": 0,
+            "GID": 1000,
             "UID": 1000,
             "Username": ""
           }
