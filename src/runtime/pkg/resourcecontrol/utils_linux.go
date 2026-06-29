@@ -14,7 +14,7 @@ import (
 	"github.com/containerd/cgroups"
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
-	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
+	"github.com/opencontainers/cgroups/systemd"
 	"golang.org/x/sys/unix"
 )
 
