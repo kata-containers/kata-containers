@@ -1,5 +1,4 @@
-# Confines the kata-agent; the agent process keeps vsock, all exec'd children
-# (the `kata-agent init` helper and container entrypoints) transition to kata-container.
+# See datadog-files/README.md for rationale.
 
 #include <tunables/global>
 
@@ -14,13 +13,7 @@ profile usr.bin.kata-agent /usr/bin/kata-agent flags=(attach_disconnected) {
   signal,
   dbus,
 
-  # File access ("/{,**}" covers the root dir itself and all paths); exec handled below.
   /{,**} rwklm,
-
-  # Every exec'd process transitions to kata-container. The agent re-execs itself as
-  # "kata-agent init" (before no_new_privs is set), so container entrypoints then inherit
-  # kata-container via "ix" rather than needing a Px switch under no_new_privs (which the
-  # kernel blocks). Do not add an "ix" self-rule here: it would conflict with this glob.
   /** Px -> kata-container,
 
   deny /run/kata-containers/shared/containers/*/datadog-agent/auth/**  rwklmx,
