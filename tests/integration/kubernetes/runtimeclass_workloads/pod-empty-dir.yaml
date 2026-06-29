@@ -9,6 +9,7 @@ metadata:
   name: sharevol-kata
 spec:
   runtimeClassName: kata
+  restartPolicy: Never
   securityContext:
     supplementalGroups: [10]
   containers:
