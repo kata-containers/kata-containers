@@ -625,6 +625,10 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CUSTOM_RUNTIMES_ENABLED
   value: "true"
 {{- end }}
+{{- with .Values.startupTaints }}
+- name: STARTUP_TAINTS
+  value: {{ join "," . | quote }}
+{{- end }}
 {{- end -}}
 
 {{/*

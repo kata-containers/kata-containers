@@ -497,6 +497,13 @@ async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()>
 
 /// Install stage 3 (label): apply the kata-runtime node label. Unprivileged,
 /// Kubernetes API only. Skips re-applying when the label is already correct.
+///
+/// As the very last action, once the label is confirmed present, remove any
+/// configured startup taints (`STARTUP_TAINTS`). This is what makes the
+/// scheduling handshake safe: a node can be provisioned with a startup taint
+/// that keeps kata workloads off it until the runtime exists, and that taint is
+/// only lifted here, strictly after artifacts are installed, the CRI runtime is
+/// configured and restarted, and the node is labeled kata-capable.
 async fn install_stage_label(config: &config::Config) -> Result<()> {
     info!("install (label): applying node label");
 
@@ -506,16 +513,60 @@ async fn install_stage_label(config: &config::Config) -> Result<()> {
                 "install (label): node already labeled {}=true, skipping",
                 KATA_RUNTIME_LABEL
             );
-            return Ok(());
         }
         // Any other state (absent, different value, or a transient read error)
         // falls through to label_node_with_retry, which applies and verifies.
-        _ => {}
+        _ => {
+            label_node_with_retry(config, KATA_RUNTIME_LABEL, "true").await?;
+        }
     }
 
-    label_node_with_retry(config, KATA_RUNTIME_LABEL, "true").await?;
+    remove_startup_taints(config).await;
 
     Ok(())
+}
+
+/// Remove the configured startup taints from this node, if any.
+///
+/// Best-effort by design: failing to remove a taint must not fail the install
+/// (the runtime is already in place and the node is labeled). We log a warning
+/// and let the next reconcile/retry try again. Leaving the taint in place is the
+/// safe failure mode, since it only keeps workloads off the node rather than
+/// admitting them prematurely.
+async fn remove_startup_taints(config: &config::Config) {
+    if config.startup_taints.is_empty() {
+        return;
+    }
+
+    info!(
+        "install (label): removing startup taint(s): {}",
+        config.startup_taints.join(", ")
+    );
+
+    match k8s::remove_node_taints(config, &config.startup_taints).await {
+        Ok(removed) if removed.is_empty() => {
+            info!(
+                "install (label): no matching startup taint present on node {} (nothing to remove)",
+                config.node_name
+            );
+        }
+        Ok(removed) => {
+            info!(
+                "install (label): removed startup taint(s) [{}] from node {}",
+                removed.join(", "),
+                config.node_name
+            );
+        }
+        Err(e) => {
+            log::warn!(
+                "install (label): failed to remove startup taint(s) [{}] from node {}: {}; \
+                 leaving them in place (workloads stay gated). Will retry on next install run.",
+                config.startup_taints.join(", "),
+                config.node_name,
+                e
+            );
+        }
+    }
 }
 
 /// Label the node and verify the label sticks, retrying if necessary.
