@@ -263,7 +263,7 @@ with their documentation in the confidential-containers documentation.
 
 The requirements for the TEE scenario are:
 
-- Ubuntu 25.10 as host OS
+- Ubuntu 25.10 or 26.04 as host OS
 - CPU with AMD SEV-SNP or Intel TDX support with proper BIOS/UEFI version
 and settings
 - CC-capable Hopper/Blackwell GPU with proper VBIOS version.
@@ -281,7 +281,7 @@ selecting proper hardware and on properly configuring its firmware and OS.
 #### Containerd and Kubernetes
 
 First, set up your Kubernetes cluster. For instance, in Kata CI, our NVIDIA
-jobs use a single-node vanilla Kubernetes cluster with containerd v2.2
+jobs use a single-node vanilla Kubernetes cluster with containerd v2.3
 and Kata's current supported Kubernetes version. This cluster is
 being set up using the `deploy_k8s` function from the script file
 `tests/integration/kubernetes/gha-run.sh`. If you intend to run this script,
@@ -293,7 +293,7 @@ You can execute the function as follows:
 $ export GH_TOKEN="<your-gh-pat>"
 $ export KUBERNETES="vanilla"
 $ export CONTAINER_ENGINE="containerd"
-$ export CONTAINER_ENGINE_VERSION="v2.2"
+$ export CONTAINER_ENGINE_VERSION="v2.3"
 $ source tests/gha-run-k8s-common.sh
 $ deploy_k8s
 ```
@@ -434,9 +434,9 @@ mode.
 After deployment, you can transition your node(s) to the desired CC state,
 using either the `on`, `ppcie`, or `off` value, depending on your scenario.
 For the non-CC scenario, transition to the `off` state via:
-`kubectl label nodes --all nvidia.com/cc.mode=off` and wait until all pods
-are back running. When an actual change is exercised, various GPU Operator
-operands will be restarted.
+`kubectl label nodes --all nvidia.com/cc.mode=off --overwrite` and wait
+until all pods are back running. When an actual change is exercised, various
+GPU Operator operands will be restarted.
 
 Ensure all pods are running:
 
@@ -476,8 +476,8 @@ spec:
 EOF
 ```
 
-Depending on your scenario and on the CC state, export your desired runtime
-class name define the environment variable:
+Depending on your scenario and on the CC state, define the environment
+variable with your desired runtime class name:
 
 ```bash
 $ export GPU_RUNTIME_CLASS_NAME="kata-qemu-nvidia-gpu-snp"
@@ -487,7 +487,7 @@ Then, deploy the sample Kubernetes pod manifest and observe the pod logs:
 
 ```bash
 $ envsubst < ./cuda-vectoradd-kata.yaml.in | kubectl apply -f -
-$ kubectl wait --for=condition=Ready pod/cuda-vectoradd-kata --timeout=60s
+$ kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/cuda-vectoradd-kata --timeout=60s
 $ kubectl logs -n default cuda-vectoradd-kata
 ```
 
@@ -536,17 +536,65 @@ the CC and non-CC mode. In case of the non-CC mode, you can use the
 variable in the above CUDA vectorAdd sample. The `kata-qemu-nvidia-gpu-snp`
 runtime class will **NOT** work in this mode - and vice versa.
 
+#### Deploy pods with Kata agent security policies
+
+With GPU passthrough being supported by the
+[genpolicy tool](https://github.com/kata-containers/kata-containers/tree/main/src/tools/genpolicy),
+you can use the tool to create a Kata agent security policy. Our CI deploys
+all sample pod manifests with a Kata agent security policy.
+
+The `genpolicy` binary is shipped in the separate Kata tools archive and is
+not installed by the Kata Containers Helm chart. For evaluation on the
+single-node cluster described in this guide, install the Kata tools archive
+matching the Kata release selected by `VERSION`. For example, run the
+following commands from the root of the Kata Containers source tree:
+
+```bash
+$ mkdir -p kata-tools-artifacts
+$ curl -fsSL \
+    "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-tools-static-${VERSION}-amd64.tar.zst" \
+    --output kata-tools-artifacts/kata-tools-static.tar.zst
+$ bash tests/integration/kubernetes/gha-run.sh install-kata-tools
+$ test -x /opt/kata/bin/genpolicy
+$ rm -rf kata-tools-artifacts
+```
+
+These commands install `genpolicy` and its settings under `/opt/kata` on the
+same host that runs this single-node Kubernetes instance. This is intended
+for evaluation purposes and for reproducing Kata CI locally.
+
+Note that, in Kata CI, we use snippets such as the following to modify the
+genpolicy default settings:
+```bash
+[
+  {
+    "op": "replace",
+    "path": "/kata_config/oci_version",
+    "value": "1.3.0"
+  }
+]
+```
+This modification is applied via the genpolicy drop-in configuration file
+`src/tools/genpolicy/drop-in-examples/20-oci-1.3.0-drop-in.json`.
+When using a newer (or older) containerd version, the OCI version field
+may need to be adjusted accordingly.
+
 #### Run Kata CI tests locally
 
-Upstream Kata CI runs the CUDA vectorAdd test, a composite attestation test,
-and a basic NIM/RAG deployment. Running CI tests for the TEE GPU scenario
-requires KBS to be deployed (except for the CUDA vectorAdd test). The best
-place to get started running these tests locally is to look into our
+Upstream Kata CI runs the CUDA vectorAdd, NUMA, composite attestation,
+NIM/RAG, and NIMService tests. For TEE GPU scenarios, KBS is required for the
+attestation and NIM tests, but not for CUDA or NUMA. The best place to get
+started running these tests locally is to look into our
 [NVIDIA CI workflow manifest](https://github.com/kata-containers/kata-containers/blob/main/.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml)
 and into the underlying
 [run_kubernetes_nv_tests.sh](https://github.com/kata-containers/kata-containers/blob/main/tests/integration/kubernetes/run_kubernetes_nv_tests.sh)
 script. For example, to run the CUDA vectorAdd scenario against the TEE GPU
-runtime class use the following commands:
+runtime class use the following commands. These tests generate Kata agent
+security policies, so first install `genpolicy` as described in
+[Deploy pods with Kata agent security policies](#deploy-pods-with-kata-agent-security-policies).
+Run the tests from a Kata Containers source tree checked out at the tag
+matching `VERSION`. This keeps the deployed runtime, `genpolicy` binary and
+settings, and test scripts at the same release version.
 
 ```bash
 # create the kata runtime class the test framework uses
@@ -561,8 +609,8 @@ $ K8S_TEST_NV="k8s-nvidia-cuda.bats" ./gha-run.sh run-nv-tests
 
 > **Note:**
 >
-> The other scenarios require an NGC API key to run, i.e., to export the
-> `NGC_API_KEY` variable with a valid NGC API key.
+> The NIM and NIMService tests require `NGC_API_KEY` to contain a valid NGC
+> API key.
 
 #### Deploy pods using attestation
 
@@ -590,29 +638,6 @@ attestation) regardless of which image is being pulled.
 
 To deploy your own pods using authenticated container images, or secure key
 release for attestation, follow steps similar to our mentioned CI samples.
-
-#### Deploy pods with Kata agent security policies
-
-With GPU passthrough being supported by the
-[genpolicy tool](https://github.com/kata-containers/kata-containers/tree/main/src/tools/genpolicy),
-you can use the tool to create a Kata agent security policy. Our CI deploys
-all sample pod manifests with a Kata agent security policy.
-
-Note that, in Kata CI, we use snippets such as the following to modify the
-genpolicy default settings:
-```bash
-[
-  {
-    "op": "replace",
-    "path": "/kata_config/oci_version",
-    "value": "1.3.0"
-  }
-]
-```
-This modification is applied via the genpolicy drop-in configuration file
-`src/tools/genpolicy/drop-in-examples/20-oci-1.3.0-drop-in.json`.
-When using a newer (or older) containerd version, the OCI version field
-may need to be adjusted accordingly.
 
 #### Deploy pods using your own containers and manifests
 
