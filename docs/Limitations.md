@@ -158,6 +158,40 @@ containers) and those based on VMs.
 
 ## Storage limitations
 
+### Block-backed Kubernetes `emptyDir` volumes
+
+The `block-plain` and `block-encrypted` `emptydir_mode` variants do not
+currently use Kubernetes `emptyDir.sizeLimit` as the capacity of the block
+device presented to the guest. The shim does not receive that value through
+the current CRI mount information, so it sizes the sparse backing image to the
+total capacity of the host filesystem containing the `emptyDir`.
+
+On hosts with large filesystems, ext4 metadata initialization for this
+logically large image can allocate a significant amount of physical host
+storage. Kubelet accounts for those allocated blocks as `emptyDir` usage, so
+the metadata overhead can exceed a small `sizeLimit` and cause pod eviction
+even when the workload has written little or no data. When the overhead does
+not immediately exceed the limit, it still reduces the amount of application
+data that the workload can write before kubelet observes that the `sizeLimit`
+has been exceeded and evicts the pod.
+
+At the time of writing, the filesystem metadata allocation with the current
+`block-plain` ext4 formatting options is expected to be approximately 0.08% of
+the logical filesystem size. The exact value depends on the ext4 formatting
+options and `e2fsprogs` version. The `block-encrypted` variant can incur
+additional encryption and integrity metadata overhead. In testing with a
+2.9 TB logical filesystem, this additional overhead was approximately 50 MB,
+compared with approximately 2.5 GB of total metadata allocation.
+
+Current operational mitigations are to provide enough `sizeLimit` headroom for
+filesystem metadata  (i.e. such that `sizeLimit` is greater than 0.08% of the
+host filesystem size) or place kubelet's volume data on a smaller dedicated
+filesystem. There is currently no Kata configuration option that caps the
+block-backed `emptyDir` image size.
+
+Potential solutions and mitigations are tracked in Kata Containers
+[`emptyDir.sizeLimit` issue #2438](https://github.com/kata-containers/kata-containers/issues/2438).
+
 ### Kubernetes `volumeMounts.subPaths`
 
 Kubernetes `volumeMount.subPath` is not supported by Kata Containers at the
