@@ -8,6 +8,7 @@ Kata Containers design documents:
 - [VSocks](VSocks.md)
 - [VCPU handling(in runtime-go)](vcpu-handling-runtime-go.md)
 - [VCPU handling(in runtime-rs)](vcpu-handling-runtime-rs.md)
+- [Migrating configuration from the Go runtime to `runtime-rs`](migrating-config-go-runtime-to-runtime-rs.md)
 - [VCPU threads pinning](vcpu-threads-pinning.md)
 - [Host cgroups](host-cgroups.md)
 - [Agent systemd cgroup](agent-systemd-cgroup.md)

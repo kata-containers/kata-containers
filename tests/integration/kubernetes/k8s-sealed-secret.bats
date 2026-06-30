@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KBS="${KBS:-false}"
-export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {

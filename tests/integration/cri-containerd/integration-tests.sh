@@ -26,7 +26,7 @@ export PATH="${PATH}:/usr/local/go/bin"
 export CGROUP_DRIVER=""
 
 # Runtime to be used for testing
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
 ARCH=$(uname -m)

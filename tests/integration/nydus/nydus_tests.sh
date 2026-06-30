@@ -15,7 +15,7 @@ dir_path=$(dirname "$0")
 # shellcheck source=/dev/null
 source "${dir_path}/../../common.bash"
 source "/etc/os-release" || source "/usr/lib/os-release"
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 
 need_restore_kata_config=false
 kata_config_backup="/tmp/kata-configuration.toml"
