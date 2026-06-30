@@ -397,10 +397,8 @@ impl KataVirtualVolume {
                     }
                 }
             }
-            KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL => {
-                if self.source.is_empty() {
-                    return Err(anyhow!("missing image reference for guest pulling volume"));
-                }
+            KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL if self.source.is_empty() => {
+                return Err(anyhow!("missing image reference for guest pulling volume"));
             }
             _ => {}
         }
