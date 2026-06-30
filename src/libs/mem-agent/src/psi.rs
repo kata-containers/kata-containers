@@ -144,8 +144,8 @@ impl Period {
         if self.last_psi != 0 && self.last_psi < psi && self.last_update_time < now {
             let us = (now - self.last_update_time).num_milliseconds() as u64 * 1000;
 
-            if us != 0 {
-                percent = (psi - self.last_psi) * 100 / us;
+            if let Some(result) = ((psi - self.last_psi) * 100).checked_div(us) {
+                percent = result;
             }
         }
 
