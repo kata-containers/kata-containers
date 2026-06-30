@@ -75,7 +75,7 @@ jobs:
     name: kata-image
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push kata images to ghcr.io
     runs-on: ${{ inputs.runner }}
     strategy:
       matrix:

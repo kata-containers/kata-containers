@@ -14,9 +14,9 @@ jobs:
   build-assets-amd64:
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -29,9 +29,9 @@ jobs:
   build-assets-arm64:
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -44,9 +44,9 @@ jobs:
   build-assets-s390x:
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -58,7 +58,7 @@ jobs:
   build-assets-ppc64le:
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -71,7 +71,7 @@ jobs:
     needs: build-assets-amd64
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -89,7 +89,7 @@ jobs:
     needs: build-assets-arm64
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -107,7 +107,7 @@ jobs:
     needs: build-assets-s390x
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -125,7 +125,7 @@ jobs:
     needs: build-assets-ppc64le
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -143,7 +143,7 @@ jobs:
     needs: build-assets-amd64
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -161,7 +161,7 @@ jobs:
     needs: build-assets-arm64
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -179,7 +179,7 @@ jobs:
     needs: build-assets-s390x
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -197,7 +197,7 @@ jobs:
     needs: build-assets-ppc64le
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/publish-kata-images.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push manifest images to ghcr.io
     needs: [publish-kata-deploy-image-amd64, publish-kata-deploy-image-arm64, publish-kata-deploy-image-s390x, publish-kata-deploy-image-ppc64le]
     steps:
       - name: Checkout repository
@@ -243,7 +243,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push manifest images to ghcr.io
     needs: [publish-kata-monitor-image-amd64, publish-kata-monitor-image-arm64, publish-kata-monitor-image-s390x, publish-kata-monitor-image-ppc64le]
     steps:
       - name: Checkout repository

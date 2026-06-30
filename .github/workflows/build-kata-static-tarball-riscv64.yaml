@@ -33,9 +33,9 @@ jobs:
     runs-on: riscv-builder
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     strategy:
       matrix:
         asset:

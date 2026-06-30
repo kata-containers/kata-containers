@@ -25,9 +25,9 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
 
 
   kata-deploy:
@@ -35,7 +35,7 @@ jobs:
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     runs-on: ubuntu-24.04-s390x
     steps:
       - name: Login to Kata Containers ghcr.io
