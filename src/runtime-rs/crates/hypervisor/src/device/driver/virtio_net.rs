@@ -9,8 +9,8 @@ use std::fmt;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
-use crate::device::topology::PCIeTopology;
 use crate::device::pci_path::PciPath;
+use crate::device::topology::PCIeTopology;
 use crate::device::{Device, DeviceType};
 use crate::Hypervisor as hypervisor;
 

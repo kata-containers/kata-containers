@@ -175,11 +175,9 @@ impl InitialSizeManager {
                 info!(sl!(), "resource with memory {}", self.resource.mem_mb);
             }
 
-            hv.cpu_info.default_vcpus =
-                (hv.cpu_info.overhead_vcpus + self.resource.vcpu).max(1.0);
+            hv.cpu_info.default_vcpus = (hv.cpu_info.overhead_vcpus + self.resource.vcpu).max(1.0);
 
-            hv.memory_info.default_memory =
-                hv.memory_info.overhead_memory + self.resource.mem_mb;
+            hv.memory_info.default_memory = hv.memory_info.overhead_memory + self.resource.mem_mb;
             hv.memory_info.default_maxmemory = hv
                 .memory_info
                 .default_maxmemory

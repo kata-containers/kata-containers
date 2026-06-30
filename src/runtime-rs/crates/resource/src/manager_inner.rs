@@ -503,7 +503,11 @@ impl ResourceManagerInner {
             sid: &self.sid,
             agent: self.agent.clone(),
             emptydir_mode: &self.toml_config.runtime.emptydir_mode,
-            fs_sharing_supported: self.hypervisor.capabilities().await?.is_fs_sharing_supported(),
+            fs_sharing_supported: self
+                .hypervisor
+                .capabilities()
+                .await?
+                .is_fs_sharing_supported(),
         };
         self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }

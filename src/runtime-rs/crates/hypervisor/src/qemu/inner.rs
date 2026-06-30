@@ -234,7 +234,10 @@ impl QemuInner {
                         // s390x VFIO-AP: -device vfio-ap,sysfsdev=<path>
                         // No PCIe root port, no guest_pci_path.
                         cmdline.add_vfio_ap_device(&ap_sysfs_path)?;
-                        info!(sl!(), "Completed VFIOModern AP coldplug for sysfsdev: {}", ap_sysfs_path);
+                        info!(
+                            sl!(),
+                            "Completed VFIOModern AP coldplug for sysfsdev: {}", ap_sysfs_path
+                        );
                     } else {
                         // PCI cold plug devices
                         for dev in devices.iter() {
@@ -421,7 +424,8 @@ impl QemuInner {
                             self.config.memory_info.default_maxmemory,
                             &self.config.machine_info.machine_type,
                             self.config.shared_fs.shared_fs.as_deref(),
-                        ).context("Failed to setup virtio-mem during VM initialization")?;
+                        )
+                        .context("Failed to setup virtio-mem during VM initialization")?;
                     } else {
                         info!(
                             sl!(),
@@ -975,7 +979,9 @@ impl QemuInner {
 
         self.devices.retain(|d| match (d, &device) {
             (DeviceType::Block(a), DeviceType::Block(b)) => a.config.index != b.config.index,
-            (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => !std::sync::Arc::ptr_eq(a, b),
+            (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => {
+                !std::sync::Arc::ptr_eq(a, b)
+            }
             _ => true,
         });
 
@@ -1015,10 +1021,7 @@ impl QemuInner {
             | DeviceType::Vsock(_)
             | DeviceType::Protection(_)
             | DeviceType::PortDevice(_) => {
-                return Err(anyhow!(
-                    "hotunplug for {} is currently unsupported",
-                    device
-                ));
+                return Err(anyhow!("hotunplug for {} is currently unsupported", device));
             }
         }
         Ok(())
@@ -1235,7 +1238,14 @@ impl QemuInner {
                         (address, driver_type, bus)
                     };
 
-                    (hostdev_id, device_type, sysfs_path, address, driver_type, bus)
+                    (
+                        hostdev_id,
+                        device_type,
+                        sysfs_path,
+                        address,
+                        driver_type,
+                        bus,
+                    )
                 };
 
                 // Execute hotplug outside the lock.

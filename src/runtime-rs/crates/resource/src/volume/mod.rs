@@ -4,8 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-mod block_volume;
 pub(crate) mod block_emptydir_volume;
+mod block_volume;
 mod default_volume;
 mod ephemeral_volume;
 pub mod hugepage;

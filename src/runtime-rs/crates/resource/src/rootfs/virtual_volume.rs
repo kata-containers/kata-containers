@@ -93,7 +93,8 @@ pub fn get_image_reference(spec_annotations: &HashMap<String, String>) -> Result
     if let Some(image_name) = spec_annotations.get(KUBERNETES_CRIO_IMAGE_NAME) {
         info!(
             sl!(),
-            "Found CRI-O image name without container type annotation (SingleContainer): {}", image_name
+            "Found CRI-O image name without container type annotation (SingleContainer): {}",
+            image_name
         );
         return Ok(image_name.as_str());
     }
@@ -298,7 +299,10 @@ mod tests {
         );
         let image_ref_result_single_crio = get_image_reference(&annotations_single_crio);
         assert!(image_ref_result_single_crio.is_ok());
-        assert_eq!(image_ref_result_single_crio.unwrap(), "example-image-single-crio");
+        assert_eq!(
+            image_ref_result_single_crio.unwrap(),
+            "example-image-single-crio"
+        );
     }
 
     #[tokio::test]
