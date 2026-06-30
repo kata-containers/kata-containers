@@ -142,13 +142,13 @@ func TestQemuCreateVM(t *testing.T) {
 	config9.HugePages = false
 
 	config10 := newQemuConfig()
-	config10.BootToBeTemplate = true
+	config10.FileBackedMemory = &FileBackedMemoryConfig{Shared: true}
 
 	config11 := newQemuConfig()
-	config11.BootFromTemplate = true
+	config11.FileBackedMemory = &FileBackedMemoryConfig{Shared: false}
 
 	config12 := newQemuConfig()
-	config12.BootToBeTemplate = true
+	config12.FileBackedMemory = &FileBackedMemoryConfig{Shared: true}
 	config12.SharedFS = config.VirtioFS
 
 	config14 := newQemuConfig()
@@ -228,7 +228,7 @@ func TestQemuCreateVM(t *testing.T) {
 		err = q.setupVirtioMem(context.Background())
 		assert.Error(err)
 
-		err = q.SaveVM()
+		err = q.SaveVM("/tmp")
 		assert.Error(err)
 
 		err = q.StopVM(context.Background(), true)
@@ -633,9 +633,8 @@ func TestQemuFileBackedMem(t *testing.T) {
 			RunStorePath: sandbox.store.RunStoragePath(),
 		},
 	}
-	sandbox.config.HypervisorConfig.BootToBeTemplate = true
+	sandbox.config.HypervisorConfig.FileBackedMemory = &FileBackedMemoryConfig{Path: fallbackFileBackedMemDir, Shared: true}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
 
 	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 

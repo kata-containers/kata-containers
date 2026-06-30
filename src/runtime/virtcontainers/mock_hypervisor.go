@@ -61,7 +61,11 @@ func (m *mockHypervisor) ResumeVM(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockHypervisor) SaveVM() error {
+func (m *mockHypervisor) SaveVM(snapshotDir string) error {
+	return nil
+}
+
+func (m *mockHypervisor) RestoreVM(ctx context.Context, snapshotDir string) error {
 	return nil
 }
 

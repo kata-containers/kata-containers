@@ -947,7 +947,13 @@ func (fc *firecracker) PauseVM(ctx context.Context) error {
 	return nil
 }
 
-func (fc *firecracker) SaveVM() error {
+func (fc *firecracker) SaveVM(snapshotDir string) error {
+	// Firecracker does not support snapshot/restore in this implementation.
+	return nil
+}
+
+func (fc *firecracker) RestoreVM(ctx context.Context, snapshotDir string) error {
+	// Firecracker does not support snapshot/restore in this implementation.
 	return nil
 }
 

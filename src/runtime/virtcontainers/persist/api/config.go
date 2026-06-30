@@ -47,14 +47,6 @@ type HypervisorConfig struct {
 	// emulated.
 	HypervisorMachineType string
 
-	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	MemoryPath string
-
-	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	DevicesStatePath string
-
 	// EntropySource is the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
@@ -203,12 +195,6 @@ type HypervisorConfig struct {
 
 	// PCIeSwitchPort is the number of ports needed in the hypvervisor
 	PCIeSwitchPort uint32
-
-	// BootToBeTemplate used to indicate if the VM is created to be a template VM
-	BootToBeTemplate bool
-
-	// BootFromTemplate used to indicate if the VM should be created from a template VM
-	BootFromTemplate bool
 
 	// DisableVhostNet is used to indicate if host supports vhost_net
 	DisableVhostNet bool

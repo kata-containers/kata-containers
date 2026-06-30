@@ -39,7 +39,11 @@ func (vfw *virtFramework) PauseVM(ctx context.Context) error {
 	return nil
 }
 
-func (vfw *virtFramework) SaveVM() error {
+func (vfw *virtFramework) SaveVM(snapshotDir string) error {
+	return nil
+}
+
+func (vfw *virtFramework) RestoreVM(ctx context.Context, snapshotDir string) error {
 	return nil
 }
 

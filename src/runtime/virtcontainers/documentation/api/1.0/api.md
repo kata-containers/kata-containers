@@ -28,6 +28,7 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
 * [`SandboxConfig`](#sandboxconfig)
   * [`HypervisorType`](#hypervisortype)
   * [`HypervisorConfig`](#hypervisorconfig)
+    * [`FileBackedMemoryConfig`](#filebackedmemoryconfig)
   * [`NetworkConfig`](#networkconfig)
     * [`NetInterworkingModel`](#netinterworkingmodel)
   * [`Volume`](#volume)
@@ -184,13 +185,12 @@ type HypervisorConfig struct {
 	// emulated.
 	HypervisorMachineType string
 
-	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	MemoryPath string
-
-	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	DevicesStatePath string
+	// FileBackedMemory describes file-backed guest memory. When non-nil the
+	// guest memory is backed by the file at Path and mapped either MAP_SHARED
+	// (Shared=true, e.g. a template source) or MAP_PRIVATE/Copy-On-Write
+	// (Shared=false, e.g. a clone restored from a template or a migration
+	// target). When nil the guest uses standard anonymous memory.
+	FileBackedMemory *FileBackedMemoryConfig
 
 	// EntropySource is the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
@@ -281,12 +281,6 @@ type HypervisorConfig struct {
 	// root port, switch, bridge or no port
 	ColdPlugVFIO hv.PCIePort
 
-	// BootToBeTemplate used to indicate if the VM is created to be a template VM
-	BootToBeTemplate bool
-
-	// BootFromTemplate used to indicate if the VM should be created from a template VM
-	BootFromTemplate bool
-
 	// DisableVhostNet is used to indicate if host supports vhost_net
 	DisableVhostNet bool
 
@@ -341,6 +335,25 @@ type HypervisorConfig struct {
 	// Enables SEV-SNP guests in case both AMD SEV and SNP are supported.
 	// SEV is default.
 	SevSnpGuest bool
+}
+```
+
+##### `FileBackedMemoryConfig`
+```Go
+// FileBackedMemoryConfig describes guest memory that is backed by a host file.
+// It is a generic primitive used by features such as VM templating, live
+// migration and checkpoint/restore. The hypervisor layer only needs to know
+// where the backing file lives and whether it should be mapped shared or
+// private; it does not need to know which higher-level feature requested it.
+type FileBackedMemoryConfig struct {
+	// Path is the host path of the memory backing file.
+	Path string
+
+	// Shared selects the mapping mode for the backing file: MAP_SHARED when
+	// true (e.g. a template source whose memory is shared with clones) and
+	// MAP_PRIVATE/Copy-On-Write when false (e.g. a clone restored from a
+	// template or a migration target that needs its own private memory).
+	Shared bool
 }
 ```
 

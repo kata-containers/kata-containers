@@ -27,8 +27,6 @@ type qemuAmd64 struct {
 
 	snpGuest bool
 
-	vmFactory bool
-
 	devLoadersCount uint32
 
 	sgxEPCSize int64
@@ -97,8 +95,6 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		return nil, fmt.Errorf("unrecognised machinetype: %v", machineType)
 	}
 
-	factory := config.BootToBeTemplate || config.BootFromTemplate
-
 	// IOMMU and Guest Protection require a split IRQ controller for handling interrupts
 	// otherwise QEMU won't be able to create the kernel irqchip
 	if config.IOMMU || config.ConfidentialGuest {
@@ -125,7 +121,6 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			protection:           noneProtection,
 			legacySerial:         config.LegacySerial,
 		},
-		vmFactory:      factory,
 		snpGuest:       config.SevSnpGuest,
 		qgsPort:        config.QgsPort,
 		snpIdBlock:     config.SnpIdBlock,

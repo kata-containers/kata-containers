@@ -1111,7 +1111,13 @@ func (s *stratovirt) PauseVM(ctx context.Context) error {
 	return nil
 }
 
-func (s *stratovirt) SaveVM() error {
+func (s *stratovirt) SaveVM(snapshotDir string) error {
+	// StratoVirt does not support snapshot/restore in this implementation.
+	return nil
+}
+
+func (s *stratovirt) RestoreVM(ctx context.Context, snapshotDir string) error {
+	// StratoVirt does not support snapshot/restore in this implementation.
 	return nil
 }
 

@@ -194,8 +194,12 @@ func (rh *remoteHypervisor) PauseVM(ctx context.Context) error {
 	return notImplemented("PauseVM")
 }
 
-func (rh *remoteHypervisor) SaveVM() error {
+func (rh *remoteHypervisor) SaveVM(snapshotDir string) error {
 	return notImplemented("SaveVM")
+}
+
+func (rh *remoteHypervisor) RestoreVM(ctx context.Context, snapshotDir string) error {
+	return notImplemented("RestoreVM")
 }
 
 func (rh *remoteHypervisor) ResumeVM(ctx context.Context) error {

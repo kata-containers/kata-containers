@@ -131,10 +131,13 @@ func (t *template) prepareTemplateFiles() error {
 func (t *template) createTemplateVM(ctx context.Context) error {
 	// create the template vm
 	config := t.config
-	config.HypervisorConfig.BootToBeTemplate = true
-	config.HypervisorConfig.BootFromTemplate = false
-	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.deviceStatePath()
+	// The template source VM is backed by a shared memory file so that clones
+	// can map the same file. The factory expresses this through the generic
+	// file-backed memory config rather than template-specific flags.
+	config.HypervisorConfig.FileBackedMemory = &vc.FileBackedMemoryConfig{
+		Path:   t.statePath + "/memory",
+		Shared: true,
+	}
 	config.HypervisorConfig.VMStorePath = t.statePath
 
 	vm, err := vc.NewVM(ctx, config)
@@ -160,8 +163,21 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 		return err
 	}
 
-	if err = vm.Save(); err != nil {
+	if err = vm.Save(t.statePath); err != nil {
 		return err
+	}
+
+	// The template source VM runs with shared memory so that clones can map
+	// the same backing file, but the snapshot must record the memory as
+	// private so that clones restored from it get Copy-On-Write memory. The
+	// factory owns this policy decision (when to make a snapshot private),
+	// while the CLH snapshot-format details live in
+	// vc.PatchCLHSnapshotMemoryPrivate. Only Cloud Hypervisor records a
+	// config.json that needs patching; QEMU's device-state file does not.
+	if t.config.HypervisorType == vc.ClhHypervisor {
+		if err = vc.PatchCLHSnapshotMemoryPrivate(t.statePath); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -169,15 +185,17 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 
 func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc.VM, error) {
 	config := t.config
-	config.HypervisorConfig.BootToBeTemplate = false
-	config.HypervisorConfig.BootFromTemplate = true
-	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.deviceStatePath()
+	// Clones restored from the template use private Copy-On-Write memory
+	// backed by the template's shared memory file.
+	config.HypervisorConfig.FileBackedMemory = &vc.FileBackedMemoryConfig{
+		Path:   t.statePath + "/memory",
+		Shared: false,
+	}
 	config.HypervisorConfig.SharedPath = c.HypervisorConfig.SharedPath
 	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
 	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
 
-	return vc.NewVM(ctx, config)
+	return vc.NewVMFromSnapshot(ctx, config, t.statePath)
 }
 
 func (t *template) checkTemplateVM() error {

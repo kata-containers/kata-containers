@@ -84,6 +84,21 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
+	return newVM(ctx, config, "")
+}
+
+// NewVMFromSnapshot creates a VM by restoring it from a snapshot previously
+// written to snapshotDir. The returned VM is in a paused state; the caller is
+// responsible for resuming it and performing any post-restore housekeeping
+// (e.g. reseeding the RNG, syncing the guest clock).
+func NewVMFromSnapshot(ctx context.Context, config VMConfig, snapshotDir string) (*VM, error) {
+	return newVM(ctx, config, snapshotDir)
+}
+
+// newVM creates a new VM based on the provided VMConfig. When
+// restoreSnapshotDir is non-empty the VM is restored from the snapshot in that
+// directory (and left paused) instead of being booted fresh.
+func newVM(ctx context.Context, config VMConfig, restoreSnapshotDir string) (*VM, error) {
 	// 1. setup hypervisor
 	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
@@ -134,9 +149,15 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		return nil, err
 	}
 
-	// 3. boot up guest vm
-	if err = hypervisor.StartVM(ctx, VmStartTimeout); err != nil {
-		return nil, err
+	// 3. boot up (or restore) the guest vm
+	if restoreSnapshotDir != "" {
+		if err = hypervisor.RestoreVM(ctx, restoreSnapshotDir); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = hypervisor.StartVM(ctx, VmStartTimeout); err != nil {
+			return nil, err
+		}
 	}
 
 	defer func() {
@@ -147,8 +168,8 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}()
 
 	// 4. Check agent aliveness
-	// VMs booted from template are paused, do not Check
-	if !config.HypervisorConfig.BootFromTemplate {
+	// Restored VMs (e.g. clones from a template) are paused, do not Check
+	if restoreSnapshotDir == "" {
 		virtLog.WithField("vm", id).Info("Check agent status")
 		err = agent.check(ctx)
 		if err != nil {
@@ -223,10 +244,10 @@ func (v *VM) Pause(ctx context.Context) error {
 	return v.hypervisor.PauseVM(ctx)
 }
 
-// Save saves a VM to persistent disk.
-func (v *VM) Save() error {
+// Save snapshots a VM into snapshotDir.
+func (v *VM) Save(snapshotDir string) error {
 	v.logger().Info("Save vm")
-	return v.hypervisor.SaveVM()
+	return v.hypervisor.SaveVM(snapshotDir)
 }
 
 // Resume resumes a paused VM.

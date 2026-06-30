@@ -69,7 +69,7 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 func TestMockHypervisorSaveSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	assert.NoError(t, m.SaveVM())
+	assert.NoError(t, m.SaveVM(t.TempDir()))
 }
 
 func TestMockHypervisorDisconnect(t *testing.T) {
