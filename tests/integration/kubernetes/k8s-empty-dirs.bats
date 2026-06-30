@@ -8,6 +8,7 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/emptydir_common.sh"
 
 assert_equal() {
 	local expected=$1
@@ -96,6 +97,14 @@ setup() {
 		gid=$(cat $pod_logs_file | grep 'owner GID of' | sed 's/.*:\s//')
 		assert_equal "123" "$gid"
 	done
+}
+
+@test "Empty dir volume sizeLimit evicts pod" {
+	volume_name="host-empty-vol"
+	mountpoint="/host/cache"
+	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"
+
+	run_emptydir_size_limit_eviction_test
 }
 
 teardown() {
