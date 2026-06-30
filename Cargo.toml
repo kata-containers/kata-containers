@@ -199,7 +199,7 @@ strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
 tdx = "0.1.1"
 tempfile = "3.19.1"
-thiserror = "1.0.26"
+thiserror = "2.0.18"
 tokio = "1.46.1"
 tokio-util = "0.7.17"
 tokio-vsock = "0.3.4"

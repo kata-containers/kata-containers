@@ -59,8 +59,8 @@ pub enum VmConfigError {
 
     /// The hotplug memory size is invalid. The memory can only be an unsigned integer.
     #[error(
-        "the hotplug memory size '{0}' (MiB) is invalid, must be multiple of {}",
-        MEMORY_HOTPLUG_ALIGHMENT
+        "the hotplug memory size '{0}' (MiB) is invalid, must be multiple of {alignment}",
+        alignment = MEMORY_HOTPLUG_ALIGHMENT
     )]
     InvalidHotplugMemorySize(usize),
 

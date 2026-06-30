@@ -1158,7 +1158,7 @@ dependencies = [
  "resource",
  "runtime-spec",
  "strum 0.24.1",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -1564,7 +1564,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "nix 0.31.3",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-memory",
  "vmm-sys-util 0.15.0",
 ]
@@ -1573,7 +1573,7 @@ dependencies = [
 name = "dbs-allocator"
 version = "0.1.1"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1586,7 +1586,7 @@ dependencies = [
  "memoffset 0.6.5",
  "nix 0.31.3",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-memory",
  "vmm-sys-util 0.15.0",
 ]
@@ -1604,7 +1604,7 @@ dependencies = [
  "libc",
  "nix 0.31.3",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vm-fdt",
  "vm-memory",
 ]
@@ -1613,7 +1613,7 @@ dependencies = [
 name = "dbs-device"
 version = "0.2.0"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1664,7 +1664,7 @@ dependencies = [
  "nix 0.31.3",
  "serde",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "vfio-bindings",
  "vfio-ioctls",
  "virtio-queue",
@@ -1678,7 +1678,7 @@ dependencies = [
  "dbs-utils",
  "dbs-virtio-devices",
  "log",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "timerfd",
 ]
 
@@ -1694,7 +1694,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "timerfd",
  "vmm-sys-util 0.15.0",
 ]
@@ -1727,7 +1727,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "threadpool",
  "timerfd",
  "vhost",
@@ -1948,7 +1948,7 @@ dependencies = [
  "slog-term",
  "tdx",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tracing",
  "vfio-bindings",
  "vfio-ioctls",
@@ -3045,7 +3045,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "tests_utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "ttrpc",
@@ -3632,7 +3632,7 @@ dependencies = [
  "strum_macros 0.26.4",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-vsock 0.3.4",
  "toml",
@@ -3731,7 +3731,7 @@ dependencies = [
  "sys-info",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "toml",
  "url",
@@ -3802,7 +3802,7 @@ dependencies = [
  "subprocess",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3857,7 +3857,7 @@ dependencies = [
  "sysinfo",
  "tempfile",
  "test-utils",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "toml",
 ]
@@ -5256,12 +5256,11 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "path-absolutize"
-version = "1.2.1"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceeedc827d9a758b4641457683ced2f02d4252cc1bd8794c415ed20256114290"
+checksum = "e4af381fe79fa195b4909485d99f73a80792331df0625188e707854f0b3383f5"
 dependencies = [
  "path-dedot",
- "slash-formatter",
 ]
 
 [[package]]
@@ -5272,11 +5271,11 @@ checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
 
 [[package]]
 name = "path-dedot"
-version = "1.2.4"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45c58ab1edb03f77d0bb3f08e4a179dd43ce9bc8eab9867ec53a78285ea3039b"
+checksum = "07ba0ad7e047712414213ff67533e6dd477af0a4e1d14fb52343e53d30ea9397"
 dependencies = [
- "lazy_static",
+ "once_cell",
 ]
 
 [[package]]
@@ -5573,7 +5572,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "059a34f111a9dee2ce1ac2826a68b24601c4298cfeb1a587c3cb493d5ab46f52"
 dependencies = [
  "libc",
- "nix 0.30.1",
+ "nix 0.31.3",
 ]
 
 [[package]]
@@ -7397,7 +7396,7 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "unix_socket2",
 ]
@@ -7501,12 +7500,6 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
-
-[[package]]
-name = "slash-formatter"
-version = "2.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f7fb98e76e2022054673f3ebc43a4e12890ec6272530629df6237cafbb70569"
 
 [[package]]
 name = "slog"
@@ -8932,7 +8925,7 @@ dependencies = [
  "opentelemetry 0.17.0",
  "serde_json",
  "slog",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-vsock 0.3.4",
 ]

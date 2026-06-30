@@ -16,7 +16,7 @@ kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
 kvm-ioctls = {workspace = true}
 lazy_static = "1"
 libc = "0.2.39"
-thiserror = "1"
+thiserror = { workspace = true }
 vm-memory = {workspace = true}
 vm-fdt = {workspace= true}
 
