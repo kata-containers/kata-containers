@@ -21,7 +21,7 @@ print(f"Cleanup time delta: {cleanup_after}")
 print(f"Will clean up resources created before {cleanup_cutoff_time}")
 
 credential = AzureCliCredential()
-subscription_id = os.environ['AZ_SUBSCRIPTION_ID']
+subscription_id = os.environ['AZ_SUBSCRIPTION_ID2']
 client = ResourceManagementClient(credential, subscription_id)
 resources = client.resources.list(expand='createdTime')
 
