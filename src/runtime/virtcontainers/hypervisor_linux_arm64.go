@@ -4,15 +4,19 @@
 
 package virtcontainers
 
-/*
-#include <linux/kvm.h>
-*/
-import "C"
-
 import (
 	"github.com/sirupsen/logrus"
 	"syscall"
 )
+
+// kvmCheckExtension is the KVM_CHECK_EXTENSION ioctl request number.
+//
+// It was previously obtained from <linux/kvm.h> via cgo. It is declared
+// here as a plain Go constant so virtcontainers can be built without cgo
+// (CGO_ENABLED=0), which is required to produce static binaries that run
+// on libc-agnostic and musl-only hosts. arm64 uses the asm-generic ioctl
+// encoding, so _IO(KVMIO, 0x03) with KVMIO == 0xAE is (0xAE << 8) | 0x03.
+const kvmCheckExtension = 0xAE03
 
 // variables rather than consts to allow tests to modify them
 var (
@@ -55,7 +59,7 @@ func checkKVMExtensionsRME() (bool, error) {
 	})
 	ret, _, errno := syscallSyscall(syscall.SYS_IOCTL,
 		uintptr(kvm),
-		uintptr(C.KVM_CHECK_EXTENSION),
+		uintptr(kvmCheckExtension),
 		uintptr(KVM_ARM_CAP_RME_ID))
 
 	// Generally return value(ret) 0 means no and 1 means yes,

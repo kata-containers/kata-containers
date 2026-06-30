@@ -7,14 +7,6 @@
 
 package main
 
-/*
-#include <linux/kvm.h>
-
-const int ioctl_KVM_CREATE_VM = KVM_CREATE_VM;
-const int ioctl_KVM_CHECK_EXTENSION = KVM_CHECK_EXTENSION;
-*/
-import "C"
-
 import (
 	"errors"
 	"fmt"
@@ -484,7 +476,7 @@ func genericKvmIsUsable() error {
 
 	vm, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
 		uintptr(f),
-		uintptr(C.ioctl_KVM_CREATE_VM),
+		uintptr(ioctlKVMCreateVM),
 		0)
 	if errno != 0 {
 		if errno == syscall.EBUSY {
@@ -522,7 +514,7 @@ func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]i
 
 		ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
 			uintptr(kvm),
-			uintptr(C.ioctl_KVM_CHECK_EXTENSION),
+			uintptr(ioctlKVMCheckExtension),
 			uintptr(extension.id))
 
 		// Generally return value(ret) 0 means no and 1 means yes,
