@@ -198,6 +198,45 @@ tolerations: []
 #     - "katacontainers.io/kata-runtime:NoSchedule"
 startupTaints: []
 
+# Extra labels for the kata-deploy DaemonSet pods (in addition to the
+# required "name: kata-deploy" label used by the chart).
+# Examples:
+# podLabels:
+#   team: platform
+podLabels: {}
+
+# Annotations for the kata-deploy DaemonSet pods.
+# Examples:
+# podAnnotations:
+#   prometheus.io/scrape: "false"
+podAnnotations: {}
+
+# Affinity rules for the kata-deploy DaemonSet.
+# nodeSelector matches exact key/value pairs; affinity supports matchExpressions
+# and rules about other pods on the same node (e.g. podAntiAffinity).
+# When node-feature-discovery.enabled=true, the chart merges in a virtualization
+# nodeAffinity rule; user affinity.nodeAffinity required terms are combined with it.
+# Examples:
+# affinity:
+#   nodeAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       nodeSelectorTerms:
+#         - matchExpressions:
+#             - key: node.cloud/reserved
+#               operator: In
+#               values:
+#                 - platform-team
+#   podAntiAffinity:
+#     requiredDuringSchedulingIgnoredDuringExecution:
+#       - labelSelector:
+#           matchExpressions:
+#             - key: app
+#               operator: In
+#               values:
+#                 - gpu-operator
+#         topologyKey: kubernetes.io/hostname
+affinity: {}
+
 # Priority class name for the kata-deploy DaemonSet pods.
 #
 # kata-deploy is an infrastructure DaemonSet that installs Kata runtime
