@@ -66,6 +66,14 @@ impl CgroupsResource {
         let mut inner = self.inner.write().await;
         inner.setup_after_start_vm(hypervisor).await
     }
+
+    /// Absolute path to the sandbox cgroup's `cgroup.procs` file for cgroup
+    /// v2, used to place the VMM into the pod cgroup before the guest boots.
+    /// Returns `None` for cgroup v1.
+    pub async fn sandbox_cgroup_procs_path(&self) -> Option<String> {
+        let inner = self.inner.read().await;
+        inner.sandbox_cgroup_procs_path()
+    }
 }
 
 #[async_trait]
