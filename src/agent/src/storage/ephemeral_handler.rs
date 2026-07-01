@@ -63,6 +63,16 @@ impl StorageHandler for EphemeralHandler {
             // do mount.
             let opts = parse_options(&storage.options);
             storage.options = Default::default();
+
+            // add support for size option to ephemeral_storage
+            // if cid is set, meaning it's created for a container
+            if !ctx.cid.is_none() {
+                if let Some(size_opt) = opts.get("size") {
+                    info!(ctx.logger, "set ephemeral size: {}", size_opt);
+                    storage.options.push(format!("size={}", size_opt));
+                }
+            }
+
             common_storage_handler(ctx.logger, &storage)?;
 
             // ephemeral_storage didn't support mount options except fsGroup.
