@@ -56,6 +56,7 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 		if err != nil {
 			return err
 		}
+		defer n.Close()
 
 		config.NetworkID = n.Path()
 		config.NetworkCreated = true
