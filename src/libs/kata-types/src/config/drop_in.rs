@@ -240,7 +240,8 @@ mod drop_in_directory_handling {
             ));
         }
         let dropin_contents = fs::read_to_string(dropin_file.path())?;
-        let dropin_config: toml::Value = toml::from_str(&dropin_contents)?;
+        let dropin_config: toml::Value =
+            toml::from_str(&dropin_contents).map_err(std::io::Error::other)?;
         super::toml_tree_ops::merge(base_config, dropin_config);
         Ok(())
     }
@@ -267,12 +268,13 @@ mod drop_in_directory_handling {
 
     pub fn load(base_cfg_file_path: &Path) -> Result<TomlConfig> {
         let base_toml_str = fs::read_to_string(base_cfg_file_path)?;
-        let mut base_config: toml::Value = toml::from_str(&base_toml_str)?;
+        let mut base_config: toml::Value =
+            toml::from_str(&base_toml_str).map_err(std::io::Error::other)?;
         let dropin_dir = get_dropin_dir_path(base_cfg_file_path)?;
 
         update_from_dropins(&mut base_config, &dropin_dir)?;
 
-        let config: TomlConfig = base_config.try_into()?;
+        let config: TomlConfig = base_config.try_into().map_err(std::io::Error::other)?;
         Ok(config)
     }
 
