@@ -2173,15 +2173,6 @@ dependencies = [
 
 [[package]]
 name = "fluent-uri"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17c704e9dbe1ddd863da1e6ff3567795087b1eb201ce80d8fa81162e1516500d"
-dependencies = [
- "bitflags 1.3.2",
-]
-
-[[package]]
-name = "fluent-uri"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1918b65d96df47d3591bed19c5cca17e3fa5d0707318e4b5ef2eae01764df7e5"
@@ -2441,7 +2432,7 @@ dependencies = [
  "env_logger 0.10.2",
  "flate2",
  "fs2",
- "json-patch 4.2.0",
+ "json-patch",
  "k8s-cri",
  "kata-agent-policy",
  "kata-types",
@@ -3390,23 +3381,11 @@ dependencies = [
 
 [[package]]
 name = "json-patch"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b1fb8864823fad91877e6caea0baca82e49e8db50f8e5c9f9a453e27d3330fc"
-dependencies = [
- "jsonptr 0.4.7",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "json-patch"
 version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7421438de105a0827e44fadd05377727847d717c80ce29a229f85fd04c427b72"
 dependencies = [
- "jsonptr 0.7.1",
+ "jsonptr",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -3423,17 +3402,6 @@ dependencies = [
  "regex",
  "serde_json",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "jsonptr"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c6e529149475ca0b2820835d3dce8fcc41c6b943ca608d32f35b449255e4627"
-dependencies = [
- "fluent-uri 0.1.4",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -3615,7 +3583,7 @@ name = "kata-agent-policy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "json-patch 2.0.0",
+ "json-patch",
  "libc",
  "protocols",
  "regorus",
@@ -6237,7 +6205,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9c261f7ce75418b3beadfb3f0eb1299fe8eb9640deba45ffa2cb783098697d"
 dependencies = [
  "ahash 0.8.12",
- "fluent-uri 0.3.2",
+ "fluent-uri",
  "once_cell",
  "parking_lot",
  "percent-encoding",
