@@ -399,6 +399,38 @@ func vfioHostNUMANodes(devices []config.DeviceInfo, log *logrus.Entry) map[int]s
 	return nodes
 }
 
+// vfioGuestNUMANodesFromHostSet maps VFIO-bearing host NUMA nodes to the
+// guest NUMA node indices that cover them.
+func vfioGuestNUMANodesFromHostSet(covered map[int]uint32, vfioHostSet map[int]struct{}) map[uint32]struct{} {
+	guestNodes := make(map[uint32]struct{})
+	for hostNode := range vfioHostSet {
+		if guestIdx, ok := covered[hostNode]; ok {
+			guestNodes[guestIdx] = struct{}{}
+		}
+	}
+	return guestNodes
+}
+
+// vfioSpansMultipleGuestNUMANodes reports whether attached VFIO devices
+// reside on host NUMA nodes mapped to more than one guest NUMA node.
+func vfioSpansMultipleGuestNUMANodes(numaNodes []types.GuestNUMANode, vfioDevices []config.DeviceInfo, log *logrus.Entry) bool {
+	covered := buildCoveredHostNodes(numaNodes)
+	vfioHostSet := vfioHostNUMANodes(vfioDevices, log)
+	return len(vfioGuestNUMANodesFromHostSet(covered, vfioHostSet)) > 1
+}
+
+// numaMemoryOnlyTopologyNeeded reports whether the guest must expose multiple
+// NUMA nodes with memory but fewer vCPUs than nodes because VFIO devices
+// span more than one guest node.
+func numaMemoryOnlyTopologyNeeded(numaNodes []types.GuestNUMANode, vcpus uint32, vfioHostSet map[int]struct{}) bool {
+	numNodes := uint32(len(numaNodes))
+	if numNodes <= 1 || len(vfioHostSet) == 0 || vcpus >= numNodes {
+		return false
+	}
+	covered := buildCoveredHostNodes(numaNodes)
+	return len(vfioGuestNUMANodesFromHostSet(covered, vfioHostSet)) > 1
+}
+
 // guestNodeCoversAny reports whether the HostNodes of guestNode references
 // any host NUMA ID present in the given set.
 func guestNodeCoversAny(guestNode types.GuestNUMANode, hostSet map[int]struct{}) bool {
@@ -578,6 +610,11 @@ func maybeRightSizeAutoNUMA(hc *HypervisorConfig, log *logrus.Entry) {
 }
 
 func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
+	vfioHostSet := vfioHostNUMANodes(q.config.VFIODevices, q.Logger())
+	return q.buildNUMATopologyForVFIOHostSet(vfioHostSet)
+}
+
+func (q *qemu) buildNUMATopologyForVFIOHostSet(vfioHostSet map[int]struct{}) ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
 	// q.config.GuestNUMANodes has already been right-sized (when applicable)
 	// by maybeRightSizeAutoNUMA() at hypervisor setup time.  Empty means
 	// no NUMA topology; a single node may still carry a HostNodes binding
@@ -609,24 +646,43 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	// skip the ceiling and distribute exactly DefaultMaxVCPUs. An uneven vCPU
 	// count simply means one node gets one fewer CPU — no hotplug slot needed.
 	numNodes := uint32(len(numaNodes))
-	if q.config.DefaultMaxVCPUs < numNodes {
+	memoryOnlyNodes := numaMemoryOnlyTopologyNeeded(numaNodes, q.config.DefaultMaxVCPUs, vfioHostSet)
+
+	if q.config.DefaultMaxVCPUs < numNodes && !memoryOnlyNodes {
 		hvLogger.WithFields(logrus.Fields{
 			"vcpus":      q.config.DefaultMaxVCPUs,
 			"numa-nodes": numNodes,
 		}).Warn("DefaultMaxVCPUs < NUMA node count; skipping multi-NUMA topology")
 		return nil, nil, nil
 	}
-	var maxVCPUs uint32
-	if q.config.ConfidentialGuest {
-		maxVCPUs = q.config.DefaultMaxVCPUs
-	} else {
-		coresPerSocket := (q.config.DefaultMaxVCPUs + numNodes - 1) / numNodes
-		maxVCPUs = numNodes * coresPerSocket
+	if memoryOnlyNodes {
+		q.Logger().WithFields(logrus.Fields{
+			"vcpus":      q.config.DefaultMaxVCPUs,
+			"numa-nodes": numNodes,
+		}).Info("VFIO devices span multiple guest NUMA nodes; emitting memory-only NUMA nodes for pxb-pcie placement")
 	}
 
-	vcpusPerNode, err := utils.DistributeVCPUsProportionally(numaNodes, maxVCPUs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to distribute vCPUs across NUMA nodes: %w", err)
+	var maxVCPUs uint32
+	var vcpusPerNode []uint32
+	var err error
+	if memoryOnlyNodes {
+		maxVCPUs = q.config.DefaultMaxVCPUs
+		vcpusPerNode = make([]uint32, numNodes)
+		if maxVCPUs > 0 {
+			vcpusPerNode[0] = maxVCPUs
+		}
+	} else {
+		if q.config.ConfidentialGuest {
+			maxVCPUs = q.config.DefaultMaxVCPUs
+		} else {
+			coresPerSocket := (q.config.DefaultMaxVCPUs + numNodes - 1) / numNodes
+			maxVCPUs = numNodes * coresPerSocket
+		}
+
+		vcpusPerNode, err = utils.DistributeVCPUsProportionally(numaNodes, maxVCPUs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to distribute vCPUs across NUMA nodes: %w", err)
+		}
 	}
 
 	memMb := uint64(q.config.MemorySize)
@@ -651,16 +707,29 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 		}
 	}
 
-	// Distribute memory proportionally to vCPU counts, aligned to memAlign.
+	// Distribute memory across nodes. When vCPUs cannot cover every node
+	// but VFIO devices require multi-node pxb-pcie placement, split memory
+	// evenly so each guest NUMA node exists for GPU affinity.
 	memPerNode := make([]uint64, numNodes)
 	var memAssigned uint64
-	for i := uint32(0); i < numNodes; i++ {
-		raw := memMb * uint64(vcpusPerNode[i]) / uint64(maxVCPUs)
-		memPerNode[i] = (raw / memAlign) * memAlign
-		if memPerNode[i] == 0 {
-			memPerNode[i] = memAlign
+	if memoryOnlyNodes {
+		baseMem := (memMb / uint64(numNodes) / memAlign) * memAlign
+		if baseMem == 0 {
+			baseMem = memAlign
 		}
-		memAssigned += memPerNode[i]
+		for i := uint32(0); i < numNodes; i++ {
+			memPerNode[i] = baseMem
+			memAssigned += baseMem
+		}
+	} else {
+		for i := uint32(0); i < numNodes; i++ {
+			raw := memMb * uint64(vcpusPerNode[i]) / uint64(maxVCPUs)
+			memPerNode[i] = (raw / memAlign) * memAlign
+			if memPerNode[i] == 0 {
+				memPerNode[i] = memAlign
+			}
+			memAssigned += memPerNode[i]
+		}
 	}
 	// Give the remainder to the last node (must also be aligned).
 	if memAssigned < memMb {
@@ -678,10 +747,13 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	var nodes []govmmQemu.NUMANode
 	var cpuOffset uint32
 	for i, gn := range numaNodes {
-		startCPU := cpuOffset
-		endCPU := startCPU + vcpusPerNode[i] - 1
-		cpuOffset = endCPU + 1
-		cpuRange := fmt.Sprintf("%d-%d", startCPU, endCPU)
+		var cpuRange string
+		if vcpusPerNode[i] > 0 {
+			startCPU := cpuOffset
+			endCPU := startCPU + vcpusPerNode[i] - 1
+			cpuOffset = endCPU + 1
+			cpuRange = fmt.Sprintf("%d-%d", startCPU, endCPU)
+		}
 
 		nodes = append(nodes, govmmQemu.NUMANode{
 			NodeID:         uint32(i),
