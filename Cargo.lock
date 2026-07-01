@@ -2817,9 +2817,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.9.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6299f016b246a94207e63da54dbe807655bf9e00044f73ded42c3ac5305fbcca"
+checksum = "55281c53a1894c864990125767da440a4e630446785086f52523b20033b74498"
 dependencies = [
  "atomic-waker",
  "bytes 1.11.1",
@@ -2844,7 +2844,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33ca68d021ef39cf6463ab54c1d0f5daf03377b70561305bb89a8f83aab66e0f"
 dependencies = [
  "http 1.4.0",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-util",
  "log",
  "rustls",
@@ -2873,7 +2873,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b90d566bffbce6a75bd8b09a05aa8c2cb1fabb6cb348f8840c9e4c90a0d83b0"
 dependencies = [
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-util",
  "pin-project-lite",
  "tokio",
@@ -2888,7 +2888,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes 1.11.1",
  "http-body-util",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-util",
  "native-tls",
  "tokio",
@@ -2908,7 +2908,7 @@ dependencies = [
  "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "ipnet",
  "libc",
  "percent-encoding",
@@ -2923,15 +2923,17 @@ dependencies = [
 
 [[package]]
 name = "hyperlocal"
-version = "0.8.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fafdf7b2b2de7c9784f76e02c0935e65a8117ec3b768644379983ab333ac98c"
+checksum = "986c5ce3b994526b3cd75578e62554abd09f0899d6206de48b3e96ab34ccc8c7"
 dependencies = [
- "futures-util",
  "hex",
- "hyper 0.14.32",
- "pin-project",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
+ "pin-project-lite",
  "tokio",
+ "tower-service",
 ]
 
 [[package]]
@@ -2941,13 +2943,16 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "async-trait",
+ "bytes 1.11.1",
  "ch-config",
  "crossbeam-channel",
  "dbs-utils",
  "dragonball",
  "futures",
  "go-flag",
- "hyper 0.14.32",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "hyperlocal",
  "hypervisor",
  "kata-sys-util",
@@ -3628,12 +3633,15 @@ dependencies = [
  "agent",
  "anyhow",
  "base64 0.13.1",
+ "bytes 1.11.1",
  "chrono",
  "clap",
  "csv",
  "epoll",
  "futures",
- "hyper 0.14.32",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "kata-sys-util",
  "kata-types",
  "lazy_static",
@@ -3854,7 +3862,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-rustls",
  "hyper-timeout 0.5.2",
  "hyper-util",
@@ -6315,7 +6323,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-rustls",
  "hyper-tls",
  "hyper-util",
@@ -6359,7 +6367,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-rustls",
  "hyper-util",
  "js-sys",
@@ -6397,12 +6405,15 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "byte-unit",
+ "bytes 1.11.1",
  "cgroups-rs 0.5.0",
  "flate2",
  "futures",
  "futures-lite 2.6.1",
  "hex",
- "hyper 0.14.32",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "hyperlocal",
  "hypervisor",
  "inotify 0.11.1",
@@ -6636,9 +6647,12 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
+ "bytes 1.11.1",
  "common",
  "containerd-shim-protos",
- "hyper 0.14.32",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "hypervisor",
  "kata-sys-util",
  "kata-types",
@@ -7345,7 +7359,10 @@ name = "shim-interface"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "hyper 0.14.32",
+ "bytes 1.11.1",
+ "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "hyperlocal",
  "kata-sys-util",
  "kata-types",
@@ -8205,7 +8222,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.9.0",
+ "hyper 1.10.1",
  "hyper-timeout 0.5.2",
  "hyper-util",
  "percent-encoding",

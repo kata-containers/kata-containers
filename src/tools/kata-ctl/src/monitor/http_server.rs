@@ -8,18 +8,28 @@ use crate::sl;
 use crate::utils::TIMEOUT;
 
 use anyhow::{anyhow, Context, Result};
-use hyper::body;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use bytes::Bytes;
+use http_body_util::{BodyExt, Full};
+use hyper::body::Body;
+use hyper::service::service_fn;
+use hyper::{Method, Request, Response, StatusCode};
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as AutoBuilder;
 use shim_interface::shim_mgmt::client::MgmtClient;
 use slog::{self, info};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use tokio::net::TcpListener;
 
 const ROOT_URI: &str = "/";
 const METRICS_URI: &str = "/metrics";
 
-async fn handler_mux(req: Request<Body>) -> Result<Response<Body>> {
+async fn handler_mux<B>(req: Request<B>) -> Result<Response<Full<Bytes>>>
+where
+    B: Body + Send + 'static,
+    B::Data: Send,
+    B::Error: std::error::Error + Send + Sync,
+{
     info!(
         sl!(),
         "mgmt-svr(mux): recv req, method: {}, uri: {}",
@@ -36,7 +46,7 @@ async fn handler_mux(req: Request<Body>) -> Result<Response<Body>> {
         |e| {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from(format!("{e:?}\n")))
+                .body(Full::new(Bytes::from(format!("{e:?}\n"))))
                 .map_err(|e| anyhow!("Failed to Build Response {:?}", e))
         },
         Ok,
@@ -48,26 +58,39 @@ pub async fn http_server_setup(socket_addr: &str) -> Result<()> {
         .parse()
         .context("failed to parse http socket address")?;
 
-    let make_svc =
-        make_service_fn(|_conn| async { Ok::<_, anyhow::Error>(service_fn(handler_mux)) });
+    let listener = TcpListener::bind(addr)
+        .await
+        .context("failed to bind TCP listener")?;
 
-    Server::bind(&addr).serve(make_svc).await?;
+    let builder = AutoBuilder::new(TokioExecutor::new());
 
-    Ok(())
+    loop {
+        let (stream, _) = listener
+            .accept()
+            .await
+            .context("failed to accept connection")?;
+        let io = TokioIo::new(stream);
+        let builder = builder.clone();
+        tokio::spawn(async move {
+            if let Err(e) = builder.serve_connection(io, service_fn(handler_mux)).await {
+                info!(sl!(), "http server connection error: {:?}", e);
+            }
+        });
+    }
 }
 
-async fn root_uri_handler(_req: Request<Body>) -> Result<Response<Body>> {
+async fn root_uri_handler<B>(_req: Request<B>) -> Result<Response<Full<Bytes>>> {
     Response::builder()
         .status(StatusCode::OK)
-        .body(Body::from(
+        .body(Full::new(Bytes::from(
             r#"Available HTTP endpoints:
     /metrics : Get metrics from sandboxes.
 "#,
-        ))
+        )))
         .map_err(|e| anyhow!("Failed to Build Response {:?}", e))
 }
 
-async fn metrics_uri_handler(req: Request<Body>) -> Result<Response<Body>> {
+async fn metrics_uri_handler<B>(req: Request<B>) -> Result<Response<Full<Bytes>>> {
     let mut response_body = String::new();
 
     response_body += &get_monitor_metrics().context("Failed to Get Monitor Metrics")?;
@@ -82,7 +105,7 @@ async fn metrics_uri_handler(req: Request<Body>) -> Result<Response<Body>> {
 
     Response::builder()
         .status(StatusCode::OK)
-        .body(Body::from(response_body))
+        .body(Full::new(Bytes::from(response_body)))
         .map_err(|e| anyhow!("Failed to Build Response {:?}", e))
 }
 
@@ -98,16 +121,23 @@ async fn get_runtime_metrics(sandbox_id: &str) -> Result<String> {
         .context("failed to get METRICS_URI")?;
 
     // get runtime_metrics
-    let runtime_metrics = String::from_utf8(body::to_bytes(shim_response).await?.to_vec())
-        .context("failed to get runtime_metrics")?;
+    let runtime_metrics = String::from_utf8(
+        shim_response
+            .into_body()
+            .collect()
+            .await?
+            .to_bytes()
+            .to_vec(),
+    )
+    .context("failed to get runtime_metrics")?;
 
     Ok(runtime_metrics)
 }
 
-async fn not_found_uri_handler(_req: Request<Body>) -> Result<Response<Body>> {
+async fn not_found_uri_handler<B>(_req: Request<B>) -> Result<Response<Full<Bytes>>> {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
-        .body(Body::from("NOT FOUND"))
+        .body(Full::new(Bytes::from("NOT FOUND")))
         .map_err(|e| anyhow!("Failed to Build Response {:?}", e))
 }
 
@@ -140,7 +170,7 @@ mod tests {
             Request::builder()
                 .method("GET")
                 .uri("/")
-                .body(hyper::Body::from(""))
+                .body(Full::new(Bytes::new()))
                 .unwrap(),
         )
         .await
@@ -155,7 +185,7 @@ mod tests {
             Request::builder()
                 .method("GET")
                 .uri("/metrics?sandbox=demo_sandbox")
-                .body(hyper::Body::from(""))
+                .body(Full::new(Bytes::new()))
                 .unwrap(),
         )
         .await
@@ -170,7 +200,7 @@ mod tests {
             Request::builder()
                 .method("POST")
                 .uri("/metrics?sandbox=demo_sandbox")
-                .body(hyper::Body::from(""))
+                .body(Full::new(Bytes::new()))
                 .unwrap(),
         )
         .await

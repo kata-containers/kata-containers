@@ -15,7 +15,9 @@ use std::{fs, path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
 use common::Sandbox;
-use hyper::{server::conn::Http, service::service_fn};
+use hyper::server::conn::http1;
+use hyper::service::service_fn;
+use hyper_util::rt::TokioIo;
 use shim_interface::{sb_storage_path, SHIM_MGMT_SOCK_NAME};
 use tokio::net::UnixListener;
 
@@ -52,12 +54,13 @@ impl MgmtServer {
         // start an infinite loop, which serves the incomming uds stream
         loop {
             let (stream, _) = listener.accept().await.unwrap();
+            let io = TokioIo::new(stream);
             let me = self.clone();
             // spawn a light weight thread to multiplex to the handler
             tokio::task::spawn(async move {
-                if let Err(err) = Http::new()
+                if let Err(err) = http1::Builder::new()
                     .serve_connection(
-                        stream,
+                        io,
                         service_fn(|request| handler_mux(me.sandbox.clone(), request)),
                     )
                     .await

@@ -164,8 +164,11 @@ containerd-shim-protos = { version = "0.10.0", features = ["async"] }
 derivative = "2.2.0"
 futures = "0.3.30"
 go-flag = "0.1.0"
-hyper = "0.14.20"
-hyperlocal = "0.8.0"
+bytes = "1.0"
+http-body-util = "0.1"
+hyper = { version = "1.10.1", features = ["http1", "server", "client"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto", "server-graceful", "client-legacy"] }
+hyperlocal = "0.9.1"
 ipnetwork = "0.17.0"
 lazy_static = "1.4"
 libc = "0.2.94"
