@@ -13,6 +13,22 @@ on:
       - edited
       - labeled
       - unlabeled
+  workflow_dispatch:
+    inputs:
+      review-pr:
+        description: 'PR number to review (target-branch and pr-head-sha are fetched automatically)'
+        required: true
+        type: string
+      gatekeeper-ref:
+        description: 'Branch/ref to use for gatekeeper scripts (optional, use gatekeeper-pr for PRs)'
+        required: false
+        type: string
+        default: ''
+      gatekeeper-pr:
+        description: 'PR number containing gatekeeper changes (used if gatekeeper-ref is not set)'
+        required: false
+        type: string
+        default: ''
 
 permissions: {}
 
@@ -30,26 +46,60 @@ jobs:
       issues: read
       pull-requests: read
     steps:
+      # For workflow_dispatch: fetch review PR details and determine gatekeeper ref
+      # Skip for pull_request_target (use github.event.pull_request directly)
+      - name: Fetch PR details
+        id: pr-details
+        if: ${{ github.event.pull_request == null }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATEKEEPER_REF: ${{ inputs.gatekeeper-ref }}
+          GATEKEEPER_PR: ${{ inputs.gatekeeper-pr }}
+          REVIEW_PR: ${{ inputs.review-pr }}
+        run: |
+          pr_json=$(gh api "repos/${{ github.repository }}/pulls/${REVIEW_PR}")
+          echo "head-sha=$(echo "$pr_json" | jq -r .head.sha)" >> "$GITHUB_OUTPUT"
+          base_ref=$(echo "$pr_json" | jq -r .base.ref)
+          echo "base-ref=${base_ref}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$GATEKEEPER_REF" ]]; then
+            echo "gatekeeper-ref=${GATEKEEPER_REF}" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$GATEKEEPER_PR" ]]; then
+            echo "gatekeeper-ref=refs/pull/${GATEKEEPER_PR}/head" >> "$GITHUB_OUTPUT"
+          else
+            echo "gatekeeper-ref=${base_ref}" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || steps.pr-details.outputs.head-sha }}
           fetch-depth: 0
+          persist-credentials: false
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref || steps.pr-details.outputs.base-ref }}
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.base.ref || steps.pr-details.outputs.gatekeeper-ref }}
+          sparse-checkout: tools/testing/gatekeeper
+          path: LATEST_KATA_SOURCES
+          fetch-depth: 1
           persist-credentials: false
       - id: gatekeeper
         env:
-          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref || steps.pr-details.outputs.base-ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
-          GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha || steps.pr-details.outputs.head-sha }}
+          GH_PR_NUMBER: ${{ github.event.pull_request.number || inputs.review-pr }}
         run: |
           #!/usr/bin/env bash -x
-          mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t)
+          mapfile -t lines < <(python3 LATEST_KATA_SOURCES/tools/testing/gatekeeper/skips.py -t)
           export REQUIRED_JOBS="${lines[0]}"
           export REQUIRED_REGEXPS="${lines[1]}"
           export REQUIRED_LABELS="${lines[2]}"
           echo "REQUIRED_JOBS: $REQUIRED_JOBS"
           echo "REQUIRED_REGEXPS: $REQUIRED_REGEXPS"
           echo "REQUIRED_LABELS: $REQUIRED_LABELS"
-          python3 tools/testing/gatekeeper/jobs.py
+          python3 LATEST_KATA_SOURCES/tools/testing/gatekeeper/jobs.py
           exit $?
         shell: /usr/bin/bash -x {0}
