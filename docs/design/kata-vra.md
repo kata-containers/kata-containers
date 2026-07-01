@@ -138,17 +138,10 @@ user to be in full control of the topology.
 ```toml
 # /etc/kata-containers/configuration.toml
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hot-plugging on the root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hot-plugging on
-# a bridge.
-# Default “bridge-port”
-hotplug_vfio = "root-port"
-
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as NVIDIA GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_root_port = 8
 ```
@@ -284,17 +277,10 @@ PCI Express switch ports to hotplug the devices.
 ```toml
 # /etc/kata-containers/configuration.toml
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hot plugging on the root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hot plugging on
-# a bridge.
-# Default “bridge-port”
-hotplug_vfio = "switch-port"
-
-# Before hot plugging a PCIe device, you need to add a pcie_root_port device.
-# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
-# The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# Before hot plugging a PCIe device via a PCI Express switch, you need to add
+# pcie_switch_port devices. Use this parameter when replicating host PCIe switch
+# topology inside the VM. The value means the number of pcie_switch_port
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_switch_port = 8
 ```

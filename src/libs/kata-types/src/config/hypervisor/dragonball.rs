@@ -157,8 +157,7 @@ impl ConfigPlugin for DragonballConfig {
                     "dragonball hypervisor does not support vIOMMU",
                 ));
             }
-            if db.device_info.hotplug_vfio_on_root_bus
-                || db.device_info.default_bridges > 0
+            if db.device_info.default_bridges > 0
                 || db.device_info.pcie_root_port > 0
                 || db.device_info.pcie_switch_port > 0
             {

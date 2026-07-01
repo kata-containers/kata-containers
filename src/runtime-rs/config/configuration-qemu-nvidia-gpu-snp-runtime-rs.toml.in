@@ -423,13 +423,6 @@ disable_nesting_checks = true
 # Default is false
 disable_image_nvdimm = true
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-hotplug_vfio_on_root_bus = false
-
 # Enable cold-plugging of VFIO devices to a PCIe port type.
 # Accepted values: "no-port" (default, disabled), "root-port".
 # When set to "root-port", devices discovered via CDI / Pod Resources
@@ -439,14 +432,14 @@ cold_plug_vfio = "root-port"
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_root_port = @DEFAULTPCIEROOTPORT_NV@
 
 # Before hot plugging a PCIe device onto a switch port, you need add a pcie_switch_port device fist.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means how many devices attached onto pcie_switch_port will be created.
-# This value is valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35"
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_switch_port = 0
 

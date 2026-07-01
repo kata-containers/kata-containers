@@ -313,7 +313,6 @@ pub struct PCIeTopology {
     pub cold_plug: bool,
     pub pcie_root_ports: u32,
     pub pcie_switch_ports: u32,
-    pub hotplug_vfio_on_root_bus: bool,
     // pcie_port_devices keeps track of the devices attached to different types of PCI ports.
     pub pcie_port_devices: HashMap<u32, TopologyPortDevice>,
     // device_id -> (bus, bus_slot, port_id)
@@ -353,7 +352,6 @@ impl PCIeTopology {
             cold_plug: true,
             pcie_root_ports: total_rp,
             pcie_switch_ports: total_swp,
-            hotplug_vfio_on_root_bus: topo_config.device_info.hotplug_vfio_on_root_bus,
             pcie_port_devices: HashMap::new(),
             mode,
             reserved_bus: HashMap::new(),
