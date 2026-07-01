@@ -16,8 +16,8 @@ jobs:
     name: Build docs
     permissions:
       contents: read
-      pages: write
-      id-token: write
+      pages: write # needed to build GitHub Pages artifacts
+      id-token: write # needed for OIDC authentication with GitHub Pages
     steps:
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -42,8 +42,8 @@ jobs:
     runs-on: ubuntu-24.04
     name: Deploy docs
     permissions:
-      pages: write
-      id-token: write
+      pages: write # needed to deploy to GitHub Pages
+      id-token: write # needed for OIDC authentication with GitHub Pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
