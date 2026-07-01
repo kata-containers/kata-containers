@@ -17,6 +17,7 @@ Kata Containers design documents:
 - [Metrics in Rust Runtime(runtime-rs)](kata-metrics-in-runtime-rs.md)
 - [Design for Kata Containers `Lazyload` ability with `nydus`](kata-nydus-design.md)
 - [Design for direct-assigned volume](direct-blk-device-assignment.md)
+- [Design for block volume passthrough via admission webhook](block-volume-passthrough-webhook.md)
 - [Design for core-scheduling](core-scheduling.md)
 - [Virtualization Reference Architecture](kata-vra.md)
 ---
