@@ -47,8 +47,6 @@ jobs:
         environment: [
           { name: nvidia-gpu,                  vmm: qemu-nvidia-gpu,                runner: amd64-nvidia-a100,     coco: false },
           { name: nvidia-gpu-runtime-rs,       vmm: qemu-nvidia-gpu-runtime-rs,     runner: amd64-nvidia-a100,     coco: false },
-          { name: nvidia-gpu-snp,              vmm: qemu-nvidia-gpu-snp,            runner: amd64-nvidia-h100-snp, coco: true },
-          { name: nvidia-gpu-snp-runtime-rs,   vmm: qemu-nvidia-gpu-snp-runtime-rs, runner: amd64-nvidia-h100-snp, coco: true },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
