@@ -179,6 +179,7 @@ build_with_container() {
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env SKIP_DAX_HEADER="${SKIP_DAX_HEADER}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+		   --env SKIP_ROOTFS_CHECK="${SKIP_ROOTFS_CHECK:-no}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -456,6 +457,12 @@ setup_selinux() {
 }
 
 setup_systemd() {
+		# Extension content images (e.g. the gpu extension) carry no /etc and are not
+		# bootable systemd rootfses, so there is nothing to set up here.
+		if [[ ! -d "${mount_dir}/etc" ]]; then
+			info "No /etc in rootfs; skipping systemd machine-id setup"
+			return 0
+		fi
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
 }
@@ -715,8 +722,10 @@ main() {
 		exit $?
 	fi
 
-	if ! check_rootfs "${rootfs}" ; then
-		die "Invalid rootfs"
+	if [[ "${SKIP_ROOTFS_CHECK:-no}" != "yes" ]]; then
+		if ! check_rootfs "${rootfs}" ; then
+			die "Invalid rootfs"
+		fi
 	fi
 
 	local skip_dax="${SKIP_DAX_HEADER:-no}"

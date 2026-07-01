@@ -445,6 +445,25 @@ pub fn validate_block_device_sector_size(size: u32) -> Result<()> {
     Ok(())
 }
 
+/// Extra block device image to attach to the VM (e.g. CoCo extension, GPU extension).
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct GuestExtensionImage {
+    /// Short name for this extension (e.g. "coco", "gpu"). Used as the virtio-blk
+    /// serial so the guest can discover the device via
+    /// `/dev/disk/by-id/virtio-extension-<name>` and match kernel cmdline verity
+    /// params `kata.extension.<name>.verity_params=...`.
+    pub name: String,
+
+    /// Path to the extension image file on the host.
+    #[serde(default)]
+    pub path: String,
+
+    /// DM-verity parameters for this extension image (root_hash, salt, etc.).
+    /// Populated at install time from the image build artifacts.
+    #[serde(default)]
+    pub verity_params: String,
+}
+
 /// Guest kernel boot information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BootInfo {
@@ -1732,6 +1751,11 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub boot_info: BootInfo,
 
+    /// Additional block device images to attach to the VM (e.g. CoCo extension).
+    /// Each image is cold-plugged as a read-only virtio-blk device.
+    #[serde(default)]
+    pub guest_extension_images: Vec<GuestExtensionImage>,
+
     /// Guest virtual CPU configuration information.
     #[serde(default, flatten)]
     pub cpu_info: CpuInfo,
@@ -1841,6 +1865,9 @@ impl ConfigOps for Hypervisor {
                 })?;
                 hv.blockdev_info.adjust_config()?;
                 hv.boot_info.adjust_config()?;
+                for extra in &mut hv.guest_extension_images {
+                    resolve_path!(extra.path, "extra image file {} is invalid: {}")?;
+                }
                 hv.cpu_info.adjust_config()?;
                 hv.debug_info.adjust_config()?;
                 hv.device_info.adjust_config()?;
@@ -1881,6 +1908,35 @@ impl ConfigOps for Hypervisor {
                 let hv = conf.hypervisor.get(hypervisor).unwrap();
                 hv.blockdev_info.validate()?;
                 hv.boot_info.validate()?;
+                for extra in &hv.guest_extension_images {
+                    validate_path!(extra.path, "extra image file {} is invalid: {}")?;
+                    if extra.name.is_empty() {
+                        return Err(std::io::Error::other(
+                            "guest_extension_images entry is missing required 'name' field",
+                        ));
+                    }
+                    if !extra
+                        .name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    {
+                        return Err(std::io::Error::other(format!(
+                            "guest_extension_images '{}' has an invalid name: only ASCII \
+                             alphanumerics, '-' and '_' are allowed (the name is used in the \
+                             virtio-blk serial and in the kata.extension.<name>.verity_params \
+                             kernel parameter)",
+                            extra.name
+                        )));
+                    }
+                    if !extra.verity_params.trim().is_empty() {
+                        parse_kernel_verity_params(&extra.verity_params).map_err(|e| {
+                            std::io::Error::other(format!(
+                                "guest_extension_images '{}' has invalid verity_params: {}",
+                                extra.name, e
+                            ))
+                        })?;
+                    }
+                }
                 hv.cpu_info.validate()?;
                 hv.debug_info.validate()?;
                 hv.device_info.validate()?;

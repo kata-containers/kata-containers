@@ -209,6 +209,18 @@ impl Kernel {
             if config.disable_guest_selinux { 0 } else { 1 }
         )));
 
+        // Emit one kata.extension.<name>.verity_params entry per configured
+        // extension. This is also the activation signal the guest-side systemd
+        // generator and unit key on, so it must be emitted even when
+        // verity_params is empty (e.g. an unmeasured extension on s390x): an
+        // empty value renders as a bare key, which still activates the mount.
+        for extra in &config.guest_extension_images {
+            kernel_params.append(&mut KernelParams::from_string(&format!(
+                "kata.extension.{}.verity_params={}",
+                extra.name, extra.verity_params
+            )));
+        }
+
         Ok(Kernel {
             path: config.boot_info.kernel.clone(),
             initrd_path: config.boot_info.initrd.clone(),
@@ -1083,6 +1095,7 @@ struct DeviceVirtioBlk {
     share_rw: bool,
     discard: bool,
     devno: Option<String>,
+    serial_override: Option<String>,
 }
 
 impl DeviceVirtioBlk {
@@ -1094,6 +1107,7 @@ impl DeviceVirtioBlk {
             share_rw: true,
             discard: false,
             devno,
+            serial_override: None,
         }
     }
 
@@ -1112,6 +1126,11 @@ impl DeviceVirtioBlk {
     #[allow(dead_code)]
     fn set_discard(&mut self, discard: bool) -> &mut Self {
         self.discard = discard;
+        self
+    }
+
+    fn set_serial_override(&mut self, serial: String) -> &mut Self {
+        self.serial_override = Some(serial);
         self
     }
 }
@@ -1135,7 +1154,11 @@ impl ToQemuParams for DeviceVirtioBlk {
         if self.discard {
             params.push("discard=on".to_owned());
         }
-        params.push(format!("serial=image-{}", self.id));
+        let serial = match &self.serial_override {
+            Some(s) => s.clone(),
+            None => format!("image-{}", self.id),
+        };
+        params.push(format!("serial={serial}"));
         if let Some(devno) = &self.devno {
             params.push(format!("devno={devno}"));
         }
@@ -2908,6 +2931,7 @@ impl<'a> QemuCmdLine<'a> {
         is_direct: bool,
         is_scsi: bool,
         discard_unmap: bool,
+        serial_override: Option<&str>,
     ) -> Result<()> {
         let mut backend = BlockBackend::new(device_id, path, is_direct);
         backend.set_discard_unmap(discard_unmap);
@@ -2919,6 +2943,9 @@ impl<'a> QemuCmdLine<'a> {
         } else {
             let mut device = DeviceVirtioBlk::new(device_id, bus_type(), devno);
             device.set_discard(discard_unmap);
+            if let Some(serial) = serial_override {
+                device.set_serial_override(serial.to_string());
+            }
             self.devices.push(Box::new(device));
         }
 

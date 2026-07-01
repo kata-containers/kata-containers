@@ -43,6 +43,7 @@ mod config;
 mod console;
 mod device;
 mod features;
+mod guest_extension_image;
 mod initdata;
 mod linux_abi;
 mod metrics;
@@ -96,6 +97,9 @@ const NAME: &str = "kata-agent";
 
 const UNIX_SOCKET_PREFIX: &str = "unix://";
 
+// Legacy (non-extension) rootfs locations for the CoCo guest components. They are
+// used to build the built-in launch plan when no CoCo extension image is mounted,
+// keeping monolithic / non-confidential images working unchanged.
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
 const AA_ATTESTATION_SOCKET: &str =
     "/run/confidential-containers/attestation-agent/attestation-agent.sock";
@@ -107,8 +111,6 @@ const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
-/// Path of ocicrypt config file. This is used by CDH when decrypting image.
-/// TODO: remove this when we move the launch of CDH out of the kata-agent.
 const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
 
 lazy_static! {
@@ -412,13 +414,14 @@ async fn start_sandbox(
     let initdata_return_value = initdata::initialize_initdata(logger).await?;
 
     let gc_procs = config.guest_components_procs;
-    if !attestation_binaries_available(logger, &gc_procs) {
+    let launch_plan = build_coco_launch_plan(config, &initdata_return_value, gc_procs)?;
+    if !attestation_components_available(logger, &launch_plan) {
         warn!(
             logger,
             "attestation binaries requested for launch not available"
         );
     } else {
-        init_attestation_components(logger, config, &initdata_return_value).await?;
+        init_attestation_components(logger, &launch_plan).await?;
     }
 
     // if policy is given via initdata, use it
@@ -461,26 +464,192 @@ async fn start_sandbox(
     Ok(())
 }
 
-// Check if required attestation binaries are available on the rootfs.
-fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs) -> bool {
-    let binaries = match procs {
-        GuestComponentsProcs::AttestationAgent => vec![AA_PATH],
-        GuestComponentsProcs::ConfidentialDataHub => vec![AA_PATH, CDH_PATH],
-        GuestComponentsProcs::ApiServerRest => vec![AA_PATH, CDH_PATH, API_SERVER_PATH],
-        _ => vec![],
+// Map the requested guest-components level to the numeric gating level used by
+// extension manifests. A process is launched only when its declared `level` is
+// <= this value. The ordering mirrors the implications documented on
+// `GuestComponentsProcs` (ApiServerRest implies CDH implies AttestationAgent).
+fn guest_components_max_level(procs: GuestComponentsProcs) -> u32 {
+    match procs {
+        GuestComponentsProcs::None => 0,
+        GuestComponentsProcs::AttestationAgent => 1,
+        GuestComponentsProcs::ConfidentialDataHub => 2,
+        GuestComponentsProcs::ApiServerRest => 3,
+    }
+}
+
+// Build the substitution context exposed to extension manifests. New extension bundles
+// can rely on these variables without requiring agent code changes; introducing
+// a brand new variable is the only case that needs touching the agent.
+fn build_substitution_ctx(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+) -> Result<std::collections::HashMap<String, String>> {
+    let ocicrypt_config_path = guest_extension_image::resolve_component_path(
+        guest_extension_image::COCO_EXTENSION_NAME,
+        guest_extension_image::COCO_COMPONENT_OCICRYPT_CONFIG,
+        OCICRYPT_CONFIG_PATH,
+    )?;
+
+    let initdata_toml_path = if initdata_return_value.is_some() {
+        initdata::INITDATA_TOML_PATH.to_string()
+    } else {
+        String::new()
     };
-    for binary in binaries.iter() {
-        let exists = Path::new(binary)
+
+    let extension_root =
+        guest_extension_image::extension_mount_root(guest_extension_image::COCO_EXTENSION_NAME)?;
+
+    let mut ctx = std::collections::HashMap::new();
+    ctx.insert(
+        "aa_attestation_uri".to_string(),
+        AA_ATTESTATION_URI.to_string(),
+    );
+    ctx.insert(
+        "aa_attestation_socket".to_string(),
+        AA_ATTESTATION_SOCKET.to_string(),
+    );
+    ctx.insert("aa_config_path".to_string(), AA_CONFIG_PATH.to_string());
+    ctx.insert("cdh_config_path".to_string(), CDH_CONFIG_PATH.to_string());
+    ctx.insert("cdh_socket".to_string(), CDH_SOCKET.to_string());
+    ctx.insert(
+        "ocicrypt_config_path".to_string(),
+        ocicrypt_config_path.to_string_lossy().into_owned(),
+    );
+    ctx.insert(
+        "rest_api_features".to_string(),
+        config.guest_components_rest_api.to_string(),
+    );
+    ctx.insert(
+        "launch_process_timeout".to_string(),
+        config.launch_process_timeout.as_secs().to_string(),
+    );
+    ctx.insert("initdata_toml_path".to_string(), initdata_toml_path);
+    ctx.insert(
+        "extension_root".to_string(),
+        extension_root.to_string_lossy().into_owned(),
+    );
+    // The CoCo extension ships several attestation-agent flavours and selects one
+    // via the manifest's "attester_variant". The guest init (NVRC) owns that
+    // decision: with a GPU present it sets KATA_ATTESTER_VARIANT=nvidia so the
+    // NVIDIA-attester build launches (it emits the GPU evidence a KBS GPU
+    // policy requires). Absent that signal we fall back to the stock attester.
+    // Cross-component contract: the env var name and "nvidia" value are set by
+    // NVRC (src/kata_agent.rs, src/gpu.rs); keep them in sync.
+    let attester_variant = env::var("KATA_ATTESTER_VARIANT")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "default".to_string());
+    ctx.insert("attester_variant".to_string(), attester_variant);
+
+    Ok(ctx)
+}
+
+// Built-in launch plan used when no CoCo extension image is mounted. It reproduces
+// the legacy behaviour of launching the guest components from the rootfs
+// (`/usr/local/bin/...`), so monolithic and non-confidential images are
+// unaffected by the extension machinery.
+fn builtin_coco_plan(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+    max_level: u32,
+) -> Vec<guest_extension_image::LaunchSpec> {
+    let mut plan = Vec::new();
+
+    if max_level >= 1 {
+        let mut args = vec![
+            "--attestation_sock".to_string(),
+            AA_ATTESTATION_URI.to_string(),
+        ];
+        if initdata_return_value.is_some() {
+            args.push("--initdata-toml".to_string());
+            args.push(initdata::INITDATA_TOML_PATH.to_string());
+        }
+        plan.push(guest_extension_image::LaunchSpec {
+            id: "attestation-agent".to_string(),
+            path: Path::new(AA_PATH).to_path_buf(),
+            args,
+            config: Some(AA_CONFIG_PATH.to_string()),
+            env: vec![],
+            wait_socket: Some(AA_ATTESTATION_SOCKET.to_string()),
+            timeout_secs: config.launch_process_timeout.as_secs(),
+        });
+    }
+
+    if max_level >= 2 {
+        plan.push(guest_extension_image::LaunchSpec {
+            id: "confidential-data-hub".to_string(),
+            path: Path::new(CDH_PATH).to_path_buf(),
+            args: vec![],
+            config: Some(CDH_CONFIG_PATH.to_string()),
+            env: vec![(
+                "OCICRYPT_KEYPROVIDER_CONFIG".to_string(),
+                OCICRYPT_CONFIG_PATH.to_string(),
+            )],
+            wait_socket: Some(CDH_SOCKET.to_string()),
+            timeout_secs: config.launch_process_timeout.as_secs(),
+        });
+    }
+
+    if max_level >= 3 {
+        plan.push(guest_extension_image::LaunchSpec {
+            id: "api-server-rest".to_string(),
+            path: Path::new(API_SERVER_PATH).to_path_buf(),
+            args: vec![
+                "--features".to_string(),
+                config.guest_components_rest_api.to_string(),
+            ],
+            config: None,
+            env: vec![],
+            wait_socket: None,
+            timeout_secs: 0,
+        });
+    }
+
+    plan
+}
+
+// Build the ordered launch plan for the guest components. When a CoCo extension
+// image is mounted its manifest drives the plan (so new bundles need no agent
+// changes); otherwise the built-in legacy plan is used.
+fn build_coco_launch_plan(
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+    procs: GuestComponentsProcs,
+) -> Result<Vec<guest_extension_image::LaunchSpec>> {
+    let max_level = guest_components_max_level(procs);
+    let ctx = build_substitution_ctx(config, initdata_return_value)?;
+    match guest_extension_image::launch_plan(
+        guest_extension_image::COCO_EXTENSION_NAME,
+        max_level,
+        &ctx,
+    )? {
+        Some(plan) => Ok(plan),
+        None => Ok(builtin_coco_plan(config, initdata_return_value, max_level)),
+    }
+}
+
+// Check that every process in the launch plan is present on disk. A missing
+// binary means the components were not provisioned (e.g. a non-confidential
+// rootfs), in which case launching is skipped.
+fn attestation_components_available(
+    logger: &Logger,
+    plan: &[guest_extension_image::LaunchSpec],
+) -> bool {
+    for spec in plan {
+        let exists = spec
+            .path
             .try_exists()
             .unwrap_or_else(|error| match error.kind() {
-                ErrorKind::NotFound => {
-                    warn!(logger, "{} not found", binary);
-                    false
-                }
-                _ => panic!("Path existence check failed for '{}': {}", binary, error),
+                ErrorKind::NotFound => false,
+                _ => panic!(
+                    "Path existence check failed for '{}': {}",
+                    spec.path.display(),
+                    error
+                ),
             });
 
         if !exists {
+            warn!(logger, "{} not found", spec.path.display());
             return false;
         }
     }
@@ -489,75 +658,34 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
 
 async fn launch_guest_component_procs(
     logger: &Logger,
-    config: &AgentConfig,
-    initdata_return_value: &Option<InitdataReturnValue>,
+    plan: &[guest_extension_image::LaunchSpec],
 ) -> Result<()> {
-    if config.guest_components_procs == GuestComponentsProcs::None {
-        return Ok(());
+    for spec in plan {
+        let path = spec
+            .path
+            .to_str()
+            .ok_or_else(|| anyhow!("non-utf8 component path {}", spec.path.display()))?;
+        debug!(logger, "spawning extension component process {}", spec.id);
+
+        let args: Vec<&str> = spec.args.iter().map(String::as_str).collect();
+        let envs: Vec<(&str, &str)> = spec
+            .env
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+
+        launch_process(
+            logger,
+            path,
+            args,
+            spec.config.as_deref(),
+            spec.wait_socket.as_deref().unwrap_or(""),
+            spec.timeout_secs,
+            &envs,
+        )
+        .await
+        .map_err(|e| anyhow!("launch_process {} failed: {:?}", path, e))?;
     }
-
-    debug!(logger, "spawning attestation-agent process {}", AA_PATH);
-    let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
-    if initdata_return_value.is_some() {
-        aa_args.push("--initdata-toml");
-        aa_args.push(initdata::INITDATA_TOML_PATH);
-    }
-
-    launch_process(
-        logger,
-        AA_PATH,
-        aa_args,
-        Some(AA_CONFIG_PATH),
-        AA_ATTESTATION_SOCKET,
-        config.launch_process_timeout.as_secs(),
-        &[],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
-
-    // skip launch of confidential-data-hub and api-server-rest
-    if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
-        return Ok(());
-    }
-
-    debug!(
-        logger,
-        "spawning confidential-data-hub process {}", CDH_PATH
-    );
-
-    launch_process(
-        logger,
-        CDH_PATH,
-        vec![],
-        Some(CDH_CONFIG_PATH),
-        CDH_SOCKET,
-        config.launch_process_timeout.as_secs(),
-        &[("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH)],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
-
-    // skip launch of api-server-rest
-    if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
-        return Ok(());
-    }
-
-    let features = config.guest_components_rest_api;
-    debug!(
-        logger,
-        "spawning api-server-rest process {} --features {}", API_SERVER_PATH, features
-    );
-    launch_process(
-        logger,
-        API_SERVER_PATH,
-        vec!["--features", &features.to_string()],
-        None,
-        "",
-        0,
-        &[],
-    )
-    .await
-    .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
     Ok(())
 }
@@ -568,10 +696,9 @@ async fn launch_guest_component_procs(
 // If the CDH is started, a CDH client will be instantiated and returned.
 async fn init_attestation_components(
     logger: &Logger,
-    config: &AgentConfig,
-    initdata_return_value: &Option<InitdataReturnValue>,
+    plan: &[guest_extension_image::LaunchSpec],
 ) -> Result<()> {
-    launch_guest_component_procs(logger, config, initdata_return_value).await?;
+    launch_guest_component_procs(logger, plan).await?;
 
     // If a CDH socket exists, initialize the CDH client and enable ocicrypt
     match tokio::fs::metadata(CDH_SOCKET).await {
