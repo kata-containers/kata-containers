@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use http_body_util::BodyExt;
 use hyper::StatusCode;
 use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
 use slog::{debug, error, o};
@@ -342,7 +343,7 @@ async fn get_agent_socket(sandbox_id: &str) -> anyhow::Result<String> {
         return Err(anyhow!("shim client get connection failed: {:?} ", status));
     }
 
-    let body = hyper::body::to_bytes(response.into_body()).await?;
+    let body = response.into_body().collect().await?.to_bytes();
     let agent_sock = String::from_utf8(body.to_vec())?;
 
     Ok(agent_sock)

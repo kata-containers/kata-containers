@@ -179,7 +179,7 @@ impl TomlConfig {
     /// This function only works with `configuration.toml` and does not handle
     /// drop-in config file fragments in config.d/.
     pub fn load(content: &str) -> Result<TomlConfig> {
-        let mut config: TomlConfig = toml::from_str(content)?;
+        let mut config: TomlConfig = toml::from_str(content).map_err(std::io::Error::other)?;
         config.adjust_config()?;
         info!(sl!(), "get kata config: {:?}", config);
         Ok(config)

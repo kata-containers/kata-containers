@@ -39,7 +39,10 @@ flate2 = "1.1"
 tempfile = "3.19.1"
 hex = "0.4"
 base64 = { workspace = true }
-hyper = { workspace = true, features = ["client", "http1"] }
+bytes = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 hyperlocal = { workspace = true }
 
 ## Dependencies from `rust-netlink`

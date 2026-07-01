@@ -41,7 +41,10 @@ libc.workspace = true
 logging.workspace = true
 slog.workspace = true
 slog-scope.workspace = true
-hyper.workspace = true
+bytes = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 
 prometheus.workspace = true

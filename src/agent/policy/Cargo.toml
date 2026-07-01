@@ -34,7 +34,7 @@ regorus = { git = "https://github.com/microsoft/regorus", rev = "898643129e3652e
     "regex",
     "std",
 ] }
-json-patch = "2.0.0"
+json-patch = "4.2.0"
 
 # POSIX
 libc.workspace = true

@@ -12,8 +12,10 @@ use crate::{
     NetworkConfig, Param,
 };
 use anyhow::{anyhow, Context, Result};
+use bytes::Bytes;
 use dbs_utils::net::MacAddr;
-use hyper::{Body, Method, Request, Response};
+use http_body_util::{BodyExt, Full};
+use hyper::{body::Incoming, Method, Request, Response};
 use hyperlocal::Uri;
 use kata_sys_util::mount;
 use kata_types::config::hypervisor::RateLimiterConfig;
@@ -256,7 +258,7 @@ impl FcInner {
                 .uri(uri.clone())
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
-                .body(Body::from(data.clone()))?;
+                .body(Full::new(Bytes::from(data.clone())))?;
 
             match self.send_request(req).await {
                 Ok(resp) => {
@@ -276,7 +278,10 @@ impl FcInner {
         ))
     }
 
-    pub(crate) async fn send_request(&self, req: Request<Body>) -> Result<Response<Body>> {
+    pub(crate) async fn send_request(
+        &self,
+        req: Request<Full<Bytes>>,
+    ) -> Result<Response<Incoming>> {
         let resp = self.client.request(req).await?;
 
         let status = resp.status();
@@ -284,7 +289,7 @@ impl FcInner {
         if status.is_success() {
             return Ok(resp);
         } else {
-            let body = hyper::body::to_bytes(resp.into_body()).await?;
+            let body = resp.into_body().collect().await?.to_bytes();
             if body.is_empty() {
                 debug!(sl(), "Request FAILED WITH STATUS: {:?}", status);
                 None

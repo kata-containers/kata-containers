@@ -7,11 +7,11 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
-use std::io::{self, Read, Result};
+use std::io::{self, Result};
 use std::time::Duration;
 
 use oci_spec::runtime as oci;
-use subprocess::{ExitStatus, Popen, PopenConfig, PopenError, Redirection};
+use subprocess::{Exec, ExitStatus, Job, Redirection};
 
 use crate::sl;
 use crate::validate::valid_env;
@@ -130,34 +130,37 @@ impl HookStates {
 
         self.states.insert(hook.into(), HookState::Pending);
 
-        let mut executor = HookExecutor::new(hook)?;
-        let stdin = if state.is_some() {
-            Redirection::Pipe
-        } else {
-            Redirection::None
-        };
-        let mut popen = Popen::create(
-            &executor.args,
-            PopenConfig {
-                stdin,
-                stdout: Redirection::Pipe,
-                stderr: Redirection::Pipe,
-                executable: executor.executable.to_owned(),
-                detached: true,
-                env: Some(executor.envs.clone()),
-                ..Default::default()
-            },
-        )
-        .map_err(|e| {
-            std::io::Error::other(format!(
-                "failed to create subprocess for hook {hook:?}: {e}"
-            ))
-        })?;
+        let executor = HookExecutor::new(hook)?;
+        let mut job = executor.spawn(state.as_ref())?;
 
-        if let Some(state) = state {
-            executor.execute_with_input(&mut popen, state)?;
+        let communicate_result = job
+            .communicate()?
+            .limit_time(Duration::from_secs(executor.timeout))
+            .read_string();
+
+        match communicate_result {
+            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => {
+                error!(sl!(), "hook poll failed, kill it");
+                let _ = job.kill();
+                let _ = job.wait();
+                return Err(io::Error::from(io::ErrorKind::TimedOut));
+            }
+            Err(e) => {
+                return Err(std::io::Error::other(format!(
+                    "communicate hook {hook:?}: {e}"
+                )));
+            }
+            Ok((ref stdout, ref stderr)) => {
+                if !stderr.is_empty() {
+                    error!(sl!(), "hook {} stderr: {}", hook.path().display(), stderr);
+                }
+                if !stdout.is_empty() {
+                    info!(sl!(), "hook {} stdout: {}", hook.path().display(), stdout);
+                }
+            }
         }
-        executor.execute_and_wait(&mut popen)?;
+
+        executor.wait_and_check(&mut job)?;
         info!(sl!(), "hook {} finished", hook.path().display());
         self.states.insert(hook.into(), HookState::Done);
 
@@ -191,8 +194,8 @@ impl HookStates {
 
 struct HookExecutor<'a> {
     hook: &'a oci::Hook,
-    executable: Option<OsString>,
-    args: Vec<String>,
+    executable: OsString,
+    args: Vec<OsString>,
     envs: Vec<(OsString, OsString)>,
     timeout: u64,
 }
@@ -200,24 +203,23 @@ struct HookExecutor<'a> {
 impl<'a> HookExecutor<'a> {
     fn new(hook: &'a oci::Hook) -> Result<Self> {
         // Ensure Hook.path is present and is an absolute path.
-        let executable = if !hook.path().exists() {
+        let path = hook.path();
+        if !path.exists() {
             return Err(std::io::Error::other(format!(
                 "path of hook {hook:?} is empty"
             )));
-        } else {
-            let path = hook.path();
-            if !path.is_absolute() {
-                return Err(std::io::Error::other(format!(
-                    "path of hook {hook:?} is not absolute"
-                )));
-            }
-            Some(path.as_os_str().to_os_string())
-        };
+        }
+        if !path.is_absolute() {
+            return Err(std::io::Error::other(format!(
+                "path of hook {hook:?} is not absolute"
+            )));
+        }
+        let executable = path.as_os_str().to_os_string();
 
         // Hook.args is optional, use Hook.path as arg0 if Hook.args is empty.
-        let args = match hook.args() {
-            Some(args) => args.clone(),
-            None => vec![hook.path().display().to_string()],
+        let args: Vec<OsString> = match hook.args() {
+            Some(args) => args.iter().map(OsString::from).collect(),
+            None => vec![OsString::from(hook.path())],
         };
 
         let mut envs: Vec<(OsString, OsString)> = Vec::new();
@@ -246,110 +248,85 @@ impl<'a> HookExecutor<'a> {
         })
     }
 
-    fn execute_with_input(&mut self, popen: &mut Popen, state: runtime_spec::State) -> Result<()> {
-        let st = serde_json::to_string(&state)?;
-        let (stdout, stderr) = popen
-            .communicate_start(Some(st.as_bytes().to_vec()))
-            .limit_time(Duration::from_secs(self.timeout))
-            .read_string()
-            .map_err(|e| e.error)?;
-        if let Some(err) = stderr {
-            if !err.is_empty() {
-                error!(
-                    sl!(),
-                    "hook {} exec failed: {}",
-                    self.hook.path().display(),
-                    err
-                );
-            }
+    /// Spawn the subprocess, optionally feeding `state` to its stdin.
+    fn spawn(&self, state: Option<&runtime_spec::State>) -> Result<Job> {
+        let mut exec = Exec::cmd(&self.args[0])
+            .args(&self.args[1..])
+            .arg0(&self.executable)
+            .env_clear()
+            .env_extend(
+                self.envs
+                    .iter()
+                    .map(|(k, v)| (k.as_os_str(), v.as_os_str())),
+            )
+            .detached()
+            .stdout(Redirection::Pipe)
+            .stderr(Redirection::Pipe);
+
+        if let Some(st) = state {
+            let json = serde_json::to_string(st)?;
+            exec = exec.stdin(json.into_bytes());
+        } else {
+            exec = exec.stdin(Redirection::None);
         }
-        if let Some(out) = stdout {
-            if !out.is_empty() {
+
+        exec.start().map_err(|e| {
+            std::io::Error::other(format!(
+                "failed to create subprocess for hook {:?}: {e}",
+                self.hook
+            ))
+        })
+    }
+
+    /// Wait for the process to finish and check its exit status.
+    fn wait_and_check(&self, job: &mut Job) -> Result<()> {
+        match job.wait_timeout(Duration::from_secs(1)) {
+            Ok(Some(exit_status)) => {
                 info!(
                     sl!(),
-                    "hook {} exec stdout: {}",
-                    self.hook.path().display(),
-                    out
+                    "exit status of hook {:?} : {:?}", self.hook, exit_status
                 );
+                self.check_exit_status(exit_status)
+            }
+            Ok(None) => {
+                // Timeout — kill the process.
+                error!(sl!(), "hook poll failed, kill it");
+                let _ = job.kill();
+                let _ = job.wait();
+                Err(io::Error::from(io::ErrorKind::TimedOut))
+            }
+            Err(e) => {
+                error!(sl!(), "wait_timeout for hook {:?} failed: {}", self.hook, e);
+                Err(std::io::Error::other(format!(
+                    "wait_timeout for hook {:?} failed: {}",
+                    self.hook, e,
+                )))
             }
         }
-        // Give a grace period for `execute_and_wait()`.
-        self.timeout = 1;
-        Ok(())
     }
 
-    fn execute_and_wait(&mut self, popen: &mut Popen) -> Result<()> {
-        match popen.wait_timeout(Duration::from_secs(self.timeout)) {
-            Ok(v) => self.handle_exit_status(v, popen),
-            Err(e) => self.handle_popen_wait_error(e, popen),
-        }
-    }
-
-    fn handle_exit_status(&mut self, result: Option<ExitStatus>, popen: &mut Popen) -> Result<()> {
-        if let Some(exit_status) = result {
-            // the process has finished
-            info!(
-                sl!(),
-                "exit status of hook {:?} : {:?}", self.hook, exit_status
-            );
-            self.print_result(popen);
-            match exit_status {
-                subprocess::ExitStatus::Exited(code) => {
-                    if code == 0 {
-                        info!(sl!(), "hook {:?} succeeds", self.hook);
-                        Ok(())
-                    } else {
-                        warn!(sl!(), "hook {:?} exit status with {}", self.hook, code,);
-                        Err(std::io::Error::other(format!(
-                            "hook {:?} exit status with {}",
-                            self.hook, code,
-                        )))
-                    }
-                }
-                _ => {
-                    error!(
-                        sl!(),
-                        "no exit code for hook {:?}: {:?}", self.hook, exit_status
-                    );
-                    Err(std::io::Error::other(format!(
-                        "no exit code for hook {:?}: {:?}",
-                        self.hook, exit_status,
-                    )))
-                }
+    fn check_exit_status(&self, exit_status: ExitStatus) -> Result<()> {
+        match exit_status.code() {
+            Some(0) => {
+                info!(sl!(), "hook {:?} succeeds", self.hook);
+                Ok(())
             }
-        } else {
-            // may be timeout
-            error!(sl!(), "hook poll failed, kill it");
-            // it is still running, kill it
-            popen.kill()?;
-            let _ = popen.wait();
-            self.print_result(popen);
-            Err(io::Error::from(io::ErrorKind::TimedOut))
-        }
-    }
-
-    fn handle_popen_wait_error(&mut self, e: PopenError, popen: &mut Popen) -> Result<()> {
-        self.print_result(popen);
-        error!(sl!(), "wait_timeout for hook {:?} failed: {}", self.hook, e);
-        Err(std::io::Error::other(format!(
-            "wait_timeout for hook {:?} failed: {}",
-            self.hook, e,
-        )))
-    }
-
-    fn print_result(&mut self, popen: &mut Popen) {
-        if let Some(file) = popen.stdout.as_mut() {
-            let mut buffer = String::new();
-            file.read_to_string(&mut buffer).ok();
-            if !buffer.is_empty() {
-                info!(sl!(), "hook stdout: {}", buffer);
+            Some(code) => {
+                warn!(sl!(), "hook {:?} exit status with {}", self.hook, code);
+                Err(std::io::Error::other(format!(
+                    "hook {:?} exit status with {}",
+                    self.hook, code,
+                )))
             }
-        }
-        if let Some(file) = popen.stderr.as_mut() {
-            let mut buffer = String::new();
-            file.read_to_string(&mut buffer).ok();
-            if !buffer.is_empty() {
-                info!(sl!(), "hook stderr: {}", buffer);
+            None => {
+                error!(
+                    sl!(),
+                    "no exit code for hook {:?}: {:?}", self.hook, exit_status
+                );
+                Err(std::io::Error::other(format!(
+                    "no exit code for hook {:?}: {:?}",
+                    self.hook, exit_status,
+                )))
             }
         }
     }

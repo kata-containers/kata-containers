@@ -10,7 +10,9 @@ use crate::{device::DeviceType, VmmState};
 use crate::{selinux, HypervisorState};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hyper::Client;
+use bytes::Bytes;
+use http_body_util::Full;
+use hyper_util::client::legacy::Client;
 use hyperlocal::{UnixClientExt, UnixConnector};
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -37,7 +39,7 @@ pub struct FcInner {
     pub(crate) pid: Option<u32>,
     pub(crate) vm_path: String,
     pub(crate) netns: Option<String>,
-    pub(crate) client: Client<UnixConnector>,
+    pub(crate) client: Client<UnixConnector, Full<Bytes>>,
     pub(crate) jailer_root: String,
     pub(crate) jailed: bool,
     pub(crate) run_dir: String,

@@ -26,7 +26,10 @@ opentelemetry-jaeger = { version = "0.17.0", features = [
     "collector_client",
 ] }
 tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
-hyper = { workspace = true, features = ["stream", "server", "http1"] }
+bytes = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 serde_json = { workspace = true }
 nix = { workspace = true }
 url = { workspace = true }

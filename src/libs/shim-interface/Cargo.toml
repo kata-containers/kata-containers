@@ -15,8 +15,11 @@ edition = "2018"
 anyhow = "^1.0"
 nix = { workspace = true }
 tokio = { version = "1.44.2", features = ["rt-multi-thread"] }
-hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
-hyperlocal = "0.8"
+bytes = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+hyperlocal = { workspace = true }
 kata-types = { path = "../kata-types" }
 kata-sys-util = { path = "../kata-sys-util" }
 

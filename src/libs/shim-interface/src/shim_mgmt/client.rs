@@ -13,7 +13,10 @@ use std::{path::Path, path::PathBuf, time::Duration};
 
 use crate::mgmt_socket_addr;
 use anyhow::{anyhow, Context, Result};
-use hyper::{Body, Client, Method, Request, Response};
+use bytes::Bytes;
+use http_body_util::Full;
+use hyper::{body::Incoming, Method, Request, Response};
+use hyper_util::client::legacy::Client;
 use hyperlocal::{UnixClientExt, UnixConnector, Uri};
 
 /// Shim management client with timeout
@@ -22,7 +25,7 @@ pub struct MgmtClient {
     sock_path: PathBuf,
 
     /// The http client connect to the long standing shim mgmt server
-    client: Client<UnixConnector, Body>,
+    client: Client<UnixConnector, Full<Bytes>>,
 
     /// Timeout value for each dial, usually 200ms will be enough
     /// For heavier workload, you may want longer timeout
@@ -47,12 +50,12 @@ impl MgmtClient {
 
     /// The http GET method for client, return a raw response. Further handling should be done by caller.
     /// Parameter uri should be like "/agent-url" etc.
-    pub async fn get(&self, uri: &str) -> Result<Response<Body>> {
+    pub async fn get(&self, uri: &str) -> Result<Response<Incoming>> {
         let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
         let req = Request::builder()
             .method(Method::GET)
             .uri(url)
-            .body(Body::empty())?;
+            .body(Full::new(Bytes::new()))?;
         self.send_request(req).await
     }
 
@@ -62,11 +65,11 @@ impl MgmtClient {
         uri: &str,
         content_type: &str,
         content: &str,
-    ) -> Result<Response<Body>> {
+    ) -> Result<Response<Incoming>> {
         let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
 
         // build body from content
-        let body = Body::from(content.to_string());
+        let body = Full::new(Bytes::from(content.to_string()));
         let req = Request::builder()
             .method(Method::POST)
             .uri(url)
@@ -76,16 +79,16 @@ impl MgmtClient {
     }
 
     /// The http PUT method for client
-    pub async fn put(&self, uri: &str, data: Vec<u8>) -> Result<Response<Body>> {
+    pub async fn put(&self, uri: &str, data: Vec<u8>) -> Result<Response<Incoming>> {
         let url: hyper::Uri = Uri::new(&self.sock_path, uri).into();
         let req = Request::builder()
             .method(Method::PUT)
             .uri(url)
-            .body(Body::from(data))?;
+            .body(Full::new(Bytes::from(data)))?;
         self.send_request(req).await
     }
 
-    async fn send_request(&self, req: Request<Body>) -> Result<Response<Body>> {
+    async fn send_request(&self, req: Request<Full<Bytes>>) -> Result<Response<Incoming>> {
         let msg = format!("Request ({:?}) to uri {:?}", req.method(), req.uri());
         let resp = self.client.request(req);
         match self.timeout {
