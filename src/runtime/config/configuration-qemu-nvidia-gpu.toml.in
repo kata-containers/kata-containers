@@ -778,6 +778,24 @@ dan_conf = "@DEFDANCONF@"
 # (e.g. k0s: /var/lib/k0s/kubelet).
 kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 
+# Expose a host unix socket to the guest as a vsock.
+# When enabled, the shim will dial the guest vsock at guestCID:port.
+# The guest or a sidecar must listen on that port.
+# Once the guest accepts the connection, the workload
+# can send data back to the host which will be forwarded to the
+# host unix socket.
+# When the connection ends, the vsock is torn down and another is created.
+# The guest can continue listening to make more requests.
+# Today, only one port/socket pair is supported.
+# Simultaneous connections on the guest vsock are collapsed into one
+# connection to the host unix socket.
+#
+# Format: ["port:/absolute/unix/socket/path"] (port must be > 1024).
+# Empty list disables the feature.
+# Entries beyond the first one will be ignored.
+# Example: vsock_uds_forward = ["15001:/var/run/server.sock"]
+vsock_uds_forward = []
+
 # pod_resource_api_sock specifies the unix socket for the Kubelet's
 # PodResource API endpoint. If empty, kubernetes based cold plug
 # will not be attempted. In order for this feature to work, the

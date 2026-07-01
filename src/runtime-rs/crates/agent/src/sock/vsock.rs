@@ -23,12 +23,41 @@ impl Vsock {
     pub fn new(vsock_cid: u32, port: u32) -> Self {
         Self { vsock_cid, port }
     }
+
+    pub async fn connect_once(&self) -> Result<UnixStream> {
+        let sock_addr = VsockAddr::new(self.vsock_cid, self.port);
+        tokio::task::spawn_blocking(move || -> Result<UnixStream> {
+            // Create socket fd
+            let fd = socket(
+                AddressFamily::Vsock,
+                SockType::Stream,
+                SockFlag::empty(),
+                None,
+            )
+            .context("failed to create vsock socket")?;
+
+            // Blocking connect (usually returns quickly for vsock)
+            connect(fd.as_raw_fd(), &sock_addr)
+                .with_context(|| format!("failed to connect to {sock_addr}"))?;
+
+            // Wrap fd so it closes on error
+            let socket = std::os::unix::net::UnixStream::from(fd);
+
+            // Tokio requires non-blocking std socket before from_std()
+            socket
+                .set_nonblocking(true)
+                .context("failed to set non-blocking")?;
+
+            UnixStream::from_std(socket).context("from_std")
+        })
+        .await
+        .context("vsock: connect task join failed")?
+    }
 }
 
 #[async_trait]
 impl Sock for Vsock {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
-        let sock_addr = VsockAddr::new(self.vsock_cid, self.port);
         let deadline = Instant::now() + Duration::from_millis(config.reconnect_timeout_ms);
 
         let mut backoff = Duration::from_millis(config.dial_timeout_ms);
@@ -47,36 +76,7 @@ impl Sock for Vsock {
         while Instant::now() < deadline {
             attempts += 1;
 
-            let sa = sock_addr;
-            let res: Result<UnixStream> =
-                tokio::task::spawn_blocking(move || -> Result<UnixStream> {
-                    // Create socket fd
-                    let fd = socket(
-                        AddressFamily::Vsock,
-                        SockType::Stream,
-                        SockFlag::empty(),
-                        None,
-                    )
-                    .context("failed to create vsock socket")?;
-
-                    // Blocking connect (usually returns quickly for vsock)
-                    connect(fd.as_raw_fd(), &sa)
-                        .with_context(|| format!("failed to connect to {sa}"))?;
-
-                    // Wrap fd so it closes on error
-                    let socket = std::os::unix::net::UnixStream::from(fd);
-
-                    // Tokio requires non-blocking std socket before from_std()
-                    socket
-                        .set_nonblocking(true)
-                        .context("failed to set non-blocking")?;
-
-                    UnixStream::from_std(socket).context("from_std")
-                })
-                .await
-                .context("vsock: connect task join failed")?;
-
-            match res {
+            match self.connect_once().await {
                 Ok(stream) => {
                     info!(
                         sl!(),

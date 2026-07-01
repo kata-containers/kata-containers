@@ -108,6 +108,7 @@ else
 		"k8s-volume.bats" \
 		"k8s-vm-templating.bats" \
 		"k8s-nginx-connectivity.bats" \
+		"k8s-vsock-uds-forward.bats" \
 	)
 
 	K8S_TEST_NORMAL_HOST_UNION=( \
