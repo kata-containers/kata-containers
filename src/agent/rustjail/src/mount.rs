@@ -974,12 +974,21 @@ fn mknod_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
         x => x,
     };
 
-    stat::mknod(
+    // mknod fails with EEXIST when the target node was already created by
+    // devtmpfs (e.g. /dev/full, /dev/null). Privileged Docker containers
+    // routinely pass these pre-existing nodes in the OCI spec, so we treat
+    // EEXIST as success and let the chown below enforce the expected
+    // ownership.
+    match stat::mknod(
         relpath,
         *f,
         Mode::from_bits_truncate(file_mode),
         nix::sys::stat::makedev(dev.major() as u64, dev.minor() as u64),
-    )?;
+    ) {
+        Ok(()) => {}
+        Err(Errno::EEXIST) => {}
+        Err(e) => return Err(e.into()),
+    }
 
     unistd::chown(
         relpath,
@@ -1422,6 +1431,41 @@ mod tests {
         // clear test device node
         let ret = remove_file(path);
         assert!(ret.is_ok(), "Should pass, Got: {:?}", ret);
+    }
+
+    #[test]
+    #[serial(chdir)]
+    fn test_mknod_dev_existing_device() {
+        skip_if_not_root!();
+
+        let path = "/dev/fifo-eexist-test";
+        let dev = oci::LinuxDeviceBuilder::default()
+            .path(PathBuf::from(path))
+            .typ(oci::LinuxDeviceType::C)
+            .major(0)
+            .minor(0)
+            .file_mode(0o660_u32)
+            .uid(unistd::getuid().as_raw())
+            .gid(unistd::getgid().as_raw())
+            .build()
+            .unwrap();
+
+        // First call creates the node.
+        let ret = mknod_dev(&dev, Path::new(path));
+        assert!(ret.is_ok(), "First mknod_dev should pass. Got: {:?}", ret);
+
+        // Second call on the same path must succeed instead of returning
+        // EEXIST. Regression guard for privileged containers where Docker
+        // passes pre-existing devtmpfs nodes in the OCI spec.
+        let ret = mknod_dev(&dev, Path::new(path));
+        assert!(
+            ret.is_ok(),
+            "mknod_dev on an existing device should pass. Got: {:?}",
+            ret
+        );
+
+        let ret = remove_file(path);
+        assert!(ret.is_ok(), "Cleanup should pass. Got: {:?}", ret);
     }
 
     #[test]
