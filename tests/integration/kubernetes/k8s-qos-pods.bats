@@ -16,11 +16,6 @@ setup() {
 }
 
 @test "Guaranteed QoS" {
-	# Skip for SNP/TDX runtime-rs until podOverhead issue is resolved
-	# See: https://github.com/kata-containers/kata-containers/pull/13228
-	[ "${KATA_HYPERVISOR}" == "qemu-snp-runtime-rs" ] && skip "Skipping Guaranteed QoS test for SNP runtime-rs - podOverhead needs adjustment"
-	[ "${KATA_HYPERVISOR}" == "qemu-tdx-runtime-rs" ] && skip "Skipping Guaranteed QoS test for TDX runtime-rs - podOverhead needs adjustment"
-
 	pod_name="qos-test"
 	yaml_file="${pod_config_dir}/pod-guaranteed.yaml"
 	# Add policy to the yaml file

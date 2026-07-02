@@ -100,26 +100,40 @@ instructions](../install/README.md) to install the latest version of Kata.
 To use large BARs devices (for example, NVIDIA Tesla P100), you need Kata
 version 1.11.0 or above.
 
-The following configuration in the Kata `configuration.toml` file as shown below
-can work:
+The following configuration in the Kata `configuration.toml` file can work.
 
-Hotplug for PCI devices with small BARs by `acpi_pcihp` (Linux's ACPI PCI
-Hotplug driver):
+For the Go runtime, hotplug for PCI devices with small BARs by `acpi_pcihp`
+(Linux's ACPI PCI Hotplug driver):
 
 ```sh
 machine_type = "q35"
 
-hotplug_vfio_on_root_bus = false
+hot_plug_vfio = "bridge-port"
 ```
 
-Hotplug for PCIe devices with large BARs by `pciehp` (Linux's PCIe Hotplug
-driver):
+For the Go runtime, hotplug for PCIe devices with large BARs by `pciehp`
+(Linux's PCIe Hotplug driver):
 
 ```sh
 machine_type = "q35"
 
-hotplug_vfio_on_root_bus = true
+hot_plug_vfio = "root-port"
 pcie_root_port = 1
+```
+
+For `runtime-rs`, hotplug for PCIe devices with large BARs by `pciehp`
+requires pre-creating PCIe ports with `pcie_root_port` or `pcie_switch_port`:
+
+```sh
+machine_type = "q35"
+
+pcie_root_port = 1
+```
+
+```sh
+machine_type = "q35"
+
+pcie_switch_port = 1
 ```
 
 ### Build guest kernel with GPU support

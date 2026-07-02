@@ -106,6 +106,7 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
 
     let mut extracted: HashSet<String> = HashSet::new();
     extract_component_tarballs(config, &mut extracted)?;
+    install_versions_yaml(config)?;
 
     set_executable_permissions(&config.host_install_dir)?;
 
@@ -435,6 +436,9 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
     Ok(())
 }
 
+/// Path to the versions.yaml file inside the kata-deploy container image.
+const VERSIONS_YAML_PATH: &str = "/opt/kata-artifacts/versions.yaml";
+
 /// Path to the shim-components.json manifest inside the kata-deploy container image.
 const SHIM_COMPONENTS_PATH: &str = "/opt/kata-artifacts/shim-components.json";
 
@@ -642,6 +646,32 @@ fn extract_tarball(tarball_path: &Path, dest_dir: &str) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Copy versions.yaml from the kata-deploy image into the host installation directory.
+///
+/// versions.yaml was previously included in the merged kata-static.tar.zst tarball.
+/// After the switch to per-component tarballs, it must be copied explicitly.
+fn install_versions_yaml(config: &Config) -> Result<()> {
+    let src = Path::new(VERSIONS_YAML_PATH);
+    if !src.exists() {
+        log::warn!(
+            "versions.yaml not found at {}; skipping installation",
+            VERSIONS_YAML_PATH
+        );
+        return Ok(());
+    }
+
+    let dest = Path::new(&config.host_install_dir).join("versions.yaml");
+    fs::copy(src, &dest).with_context(|| {
+        format!(
+            "Failed to copy versions.yaml from {} to {}",
+            src.display(),
+            dest.display()
+        )
+    })?;
+    info!("Installed versions.yaml to {}", dest.display());
     Ok(())
 }
 

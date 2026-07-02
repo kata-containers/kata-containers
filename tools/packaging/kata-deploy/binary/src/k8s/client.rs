@@ -116,6 +116,60 @@ impl K8sClient {
         Ok(())
     }
 
+    /// Remove taints from the bound node.
+    ///
+    /// `matchers` is a list of `key` or `key:effect` entries. A bare key removes
+    /// every taint with that key regardless of effect; `key:effect` removes only
+    /// the taint matching both. Taints not matched are left untouched.
+    ///
+    /// Returns the matcher labels that matched and were removed. A matcher that
+    /// matches nothing is not an error: the node simply had no such taint, which
+    /// is the expected steady state on re-runs and pod restarts.
+    pub async fn remove_node_taints(&self, matchers: &[String]) -> Result<Vec<String>> {
+        if matchers.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let node = self.get_node().await?;
+        let current = node
+            .spec
+            .as_ref()
+            .and_then(|s| s.taints.clone())
+            .unwrap_or_default();
+
+        if current.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let (retained, removed) = partition_taints(current, matchers);
+
+        if removed.is_empty() {
+            return Ok(removed);
+        }
+
+        for label in &removed {
+            info!("Removing taint {} from node {}", label, self.node_name);
+        }
+
+        // `.spec.taints` is an atomic list server-side, so we replace it wholesale
+        // with the retained set. A JSON-merge patch on the whole array is
+        // equivalent here; we use a merge patch for consistency with label_node
+        // and to avoid resourceVersion juggling.
+        let patch = Patch::Merge(json!({
+            "spec": {
+                "taints": retained,
+            }
+        }));
+
+        let pp = PatchParams::default();
+        self.node_api
+            .patch(&self.node_name, &pp, &patch)
+            .await
+            .with_context(|| format!("Failed to patch node {} to remove taints", self.node_name))?;
+
+        Ok(removed)
+    }
+
     /// Returns whether a non-terminating DaemonSet with this exact name
     /// exists in the current namespace. Used to decide whether this pod is
     /// being restarted (true) or uninstalled (false).
@@ -504,6 +558,49 @@ impl K8sClient {
     }
 }
 
+/// Split `taints` into (retained, removed-labels) according to `matchers`.
+///
+/// Each matcher is `key` (matches any effect) or `key:effect` (matches only that
+/// effect). Pure and cluster-free so the matching rules can be unit-tested; the
+/// async `remove_node_taints` method wraps this with the apiserver read/patch.
+fn partition_taints(
+    taints: Vec<k8s_openapi::api::core::v1::Taint>,
+    matchers: &[String],
+) -> (Vec<k8s_openapi::api::core::v1::Taint>, Vec<String>) {
+    // Split each matcher into (key, optional effect) once up front.
+    let parsed: Vec<(&str, Option<&str>)> = matchers
+        .iter()
+        .map(|m| match m.split_once(':') {
+            Some((k, e)) => (k.trim(), Some(e.trim())),
+            None => (m.trim(), None),
+        })
+        .filter(|(k, _)| !k.is_empty())
+        .collect();
+
+    let mut removed = Vec::new();
+    let retained = taints
+        .into_iter()
+        .filter(|taint| {
+            let hit = parsed.iter().find(|(key, effect)| {
+                taint.key == *key && effect.map(|e| e == taint.effect).unwrap_or(true)
+            });
+            match hit {
+                Some((key, effect)) => {
+                    let label = match effect {
+                        Some(e) => format!("{key}:{e}"),
+                        None => (*key).to_string(),
+                    };
+                    removed.push(label);
+                    false
+                }
+                None => true,
+            }
+        })
+        .collect();
+
+    (retained, removed)
+}
+
 // Public API functions that use the client
 pub async fn get_container_runtime_version(config: &Config) -> Result<String> {
     let client = K8sClient::new(&config.node_name).await?;
@@ -540,6 +637,11 @@ pub async fn label_node(
 ) -> Result<()> {
     let client = K8sClient::new(&config.node_name).await?;
     client.label_node(label_key, label_value, overwrite).await
+}
+
+pub async fn remove_node_taints(config: &Config, matchers: &[String]) -> Result<Vec<String>> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client.remove_node_taints(matchers).await
 }
 
 pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
@@ -584,4 +686,104 @@ pub async fn update_runtimeclass(
 ) -> Result<()> {
     let client = K8sClient::new(&config.node_name).await?;
     client.update_runtimeclass(runtimeclass).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::partition_taints;
+    use k8s_openapi::api::core::v1::Taint;
+    use rstest::rstest;
+
+    fn taint(key: &str, effect: &str) -> Taint {
+        Taint {
+            key: key.to_string(),
+            effect: effect.to_string(),
+            value: None,
+            time_added: None,
+        }
+    }
+
+    fn build(pairs: &[(&str, &str)]) -> Vec<Taint> {
+        pairs.iter().map(|(k, e)| taint(k, e)).collect()
+    }
+
+    fn keys(taints: &[Taint]) -> Vec<(String, String)> {
+        taints
+            .iter()
+            .map(|t| (t.key.clone(), t.effect.clone()))
+            .collect()
+    }
+
+    /// `partition_taints` keeps every taint except those matched by a matcher.
+    /// A bare key matches any effect; `key:effect` matches only that effect;
+    /// matchers are trimmed; blank matchers and non-matches remove nothing.
+    #[rstest]
+    // bare key removes every effect for that key, leaving others untouched
+    #[case::bare_key_removes_all_effects(
+        &[("kata.io/not-ready", "NoSchedule"), ("kata.io/not-ready", "NoExecute"), ("other", "NoSchedule")],
+        &["kata.io/not-ready"],
+        &[("other", "NoSchedule")],
+        &["kata.io/not-ready", "kata.io/not-ready"],
+    )]
+    // key:effect removes only the matching effect
+    #[case::key_effect_removes_only_matching_effect(
+        &[("kata.io/not-ready", "NoSchedule"), ("kata.io/not-ready", "NoExecute")],
+        &["kata.io/not-ready:NoSchedule"],
+        &[("kata.io/not-ready", "NoExecute")],
+        &["kata.io/not-ready:NoSchedule"],
+    )]
+    // no matcher matches: everything retained, nothing removed
+    #[case::no_match_retains_everything(
+        &[("some-other-taint", "NoSchedule")],
+        &["kata.io/not-ready"],
+        &[("some-other-taint", "NoSchedule")],
+        &[],
+    )]
+    // key matches but effect differs: not removed
+    #[case::effect_mismatch_is_not_removed(
+        &[("kata.io/not-ready", "NoExecute")],
+        &["kata.io/not-ready:NoSchedule"],
+        &[("kata.io/not-ready", "NoExecute")],
+        &[],
+    )]
+    // empty / whitespace-only matchers remove nothing
+    #[case::blank_matchers_remove_nothing(
+        &[("kata.io/not-ready", "NoSchedule")],
+        &["", "   "],
+        &[("kata.io/not-ready", "NoSchedule")],
+        &[],
+    )]
+    // surrounding whitespace in a key:effect matcher is trimmed before matching
+    #[case::whitespace_around_matcher_is_trimmed(
+        &[("kata.io/not-ready", "NoSchedule")],
+        &["  kata.io/not-ready : NoSchedule "],
+        &[],
+        &["kata.io/not-ready:NoSchedule"],
+    )]
+    fn test_partition_taints(
+        #[case] taints: &[(&str, &str)],
+        #[case] matchers: &[&str],
+        #[case] expected_retained: &[(&str, &str)],
+        #[case] expected_removed: &[&str],
+    ) {
+        let matchers: Vec<String> = matchers.iter().map(|s| s.to_string()).collect();
+        let (retained, removed) = partition_taints(build(taints), &matchers);
+
+        assert_eq!(
+            keys(&retained),
+            build(expected_retained)
+                .iter()
+                .map(|t| (t.key.clone(), t.effect.clone()))
+                .collect::<Vec<_>>(),
+            "retained taints mismatch",
+        );
+        assert_eq!(
+            removed,
+            expected_removed
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+            "removed labels mismatch",
+        );
+    }
 }

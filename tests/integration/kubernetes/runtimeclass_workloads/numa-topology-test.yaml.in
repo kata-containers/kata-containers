@@ -11,6 +11,8 @@ metadata:
     app: ${POD_NAME_NUMA}
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
   containers:
   - name: numa-check
     image: "quay.io/kata-containers/numa:2026-05-15@sha256:a863fcf95fcbbf63352b0555a61a62537f74399dc4bca826a2e42d001e26accb"

@@ -8,3 +8,6 @@ spec:
   containers:
     - name: redis
       image: quay.io/opstree/redis
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000

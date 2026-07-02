@@ -1660,6 +1660,11 @@ func TestCheckEmptyDirMode(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(vc.EmptyDirModeVirtioBlkEncrypted, mode)
 
+	r = runtime{EmptyDirMode: vc.EmptyDirModeVirtioBlkPlain}
+	mode, err = r.emptyDirMode()
+	assert.NoError(err)
+	assert.Equal(vc.EmptyDirModeVirtioBlkPlain, mode)
+
 	r = runtime{}
 	mode, err = r.emptyDirMode()
 	assert.NoError(err)
@@ -1675,6 +1680,10 @@ func TestCheckEmptyDirMode(t *testing.T) {
 	assert.Error(err)
 
 	r = runtime{EmptyDirMode: "block_encrypted"}
+	_, err = r.emptyDirMode()
+	assert.Error(err)
+
+	r = runtime{EmptyDirMode: "block_plain"}
 	_, err = r.emptyDirMode()
 	assert.Error(err)
 }

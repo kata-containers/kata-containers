@@ -170,12 +170,28 @@
             "mount_type": "bind",
             "driver": "",
             "driver_options": [
-                "encryption_key=ephemeral"
+                "encryption_key=ephemeral",
+                "create_filesystem"
             ],
             "source": "",
             "mount_point": "$(spath)/$(b64_device_id)",
             "fstype": "ext4",
             "options": [],
+            "shared": true
+        },
+        "emptyDir_plain": {
+            "mount_source": "",
+            "mount_type": "bind",
+            "driver": "",
+            "driver_options": [
+                "create_filesystem"
+            ],
+            "source": "",
+            "mount_point": "$(spath)/$(b64_device_id)",
+            "fstype": "ext4",
+            "options": [
+                "discard"
+            ],
             "shared": true
         },
         "emptyDir_memory": {
@@ -335,7 +351,7 @@
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
         "guest_pull": true,
         "pause_container_id_policy": "v1",
-        "encrypted_emptydir": true,
+        "emptydir_type": "block-encrypted",
         "cgroup_mount_extras_allowed": [
             "nsdelegate",
             "memory_recursiveprot"

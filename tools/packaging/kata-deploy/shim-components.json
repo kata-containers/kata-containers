@@ -19,13 +19,13 @@
       "x86_64": ["shim-v2-go", "qemu-snp-experimental", "kernel", "rootfs-image-confidential", "ovmf-sev"]
     },
     "qemu-snp-runtime-rs": {
-      "x86_64": ["shim-v2-rust", "qemu-snp-experimental", "kernel", "rootfs-image-confidential", "ovmf-sev"]
+      "x86_64": ["shim-v2-rust", "qemu-snp-experimental", "kernel", "rootfs-image", "rootfs-image-coco-extension", "ovmf-sev"]
     },
     "qemu-tdx": {
       "x86_64": ["shim-v2-go", "qemu-tdx-experimental", "kernel", "rootfs-image-confidential", "ovmf-tdx"]
     },
     "qemu-tdx-runtime-rs": {
-      "x86_64": ["shim-v2-rust", "qemu-tdx-experimental", "virtiofsd", "kernel", "rootfs-image-confidential", "ovmf-tdx"]
+      "x86_64": ["shim-v2-rust", "qemu-tdx-experimental", "virtiofsd", "kernel", "rootfs-image", "rootfs-image-coco-extension", "ovmf-tdx"]
     },
     "qemu-se": {
       "s390x": ["shim-v2-go", "qemu", "virtiofsd", "kernel", "rootfs-initrd-confidential", "boot-image-se"]
@@ -56,9 +56,9 @@
       "s390x":  ["shim-v2-go", "qemu", "kernel", "rootfs-image-confidential"]
     },
     "qemu-coco-dev-runtime-rs": {
-      "x86_64":  ["shim-v2-rust", "qemu", "kernel", "kernel-debug", "rootfs-image-confidential"],
-      "aarch64": ["shim-v2-rust", "qemu", "kernel", "kernel-debug", "rootfs-image-confidential", "ovmf"],
-      "s390x":   ["shim-v2-rust", "qemu", "kernel", "rootfs-image-confidential"]
+      "x86_64":  ["shim-v2-rust", "qemu", "kernel", "kernel-debug", "rootfs-image", "rootfs-image-coco-extension"],
+      "aarch64": ["shim-v2-rust", "qemu", "kernel", "kernel-debug", "rootfs-image", "rootfs-image-coco-extension", "ovmf"],
+      "s390x":   ["shim-v2-rust", "qemu", "kernel", "rootfs-image", "rootfs-image-coco-extension"]
     },
     "clh": {
       "x86_64":  ["shim-v2-go", "cloud-hypervisor", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"],

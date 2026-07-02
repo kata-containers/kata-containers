@@ -290,6 +290,9 @@ type DeviceInfo struct {
 	// If applicable, should this device be considered RO
 	ReadOnly bool
 
+	// DiscardUnmap enables discard/unmap support for this block device.
+	DiscardUnmap bool
+
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
@@ -337,6 +340,9 @@ type BlockDrive struct {
 
 	// ReadOnly sets the device file readonly
 	ReadOnly bool
+
+	// DiscardUnmap enables discard/unmap support for this block device.
+	DiscardUnmap bool
 
 	// Pmem enables persistent memory. Use File as backing file
 	// for a nvdimm device in the guest

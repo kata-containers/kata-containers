@@ -709,6 +709,9 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
 #
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
+#
 emptydir_mode = "@DEFEMPTYDIRMODE@"
 
 # Enabled experimental feature list, format: ["a", "b"].

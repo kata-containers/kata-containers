@@ -11,3 +11,6 @@ spec:
   containers:
   - name: redis
     image: registry.k8s.io/pause:3.6@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db
+    securityContext:
+      runAsUser: 65535
+      runAsGroup: 0

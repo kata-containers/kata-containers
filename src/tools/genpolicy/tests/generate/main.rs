@@ -70,6 +70,226 @@ fn secret_in_separate_file() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn guest_pull_missing_supplemental_groups_exits() -> Result<(), Box<dyn std::error::Error>> {
+    let test_case_dir = "guest_pull_missing_supplemental_groups";
+    let workdir = prepare_workdir(test_case_dir, &[]);
+    let pod_yaml_path = workdir.join("missing_supplemental_groups.yaml");
+    fs::write(
+        &pod_yaml_path,
+        r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: missing-supplemental-groups
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+"#,
+    )?;
+
+    let mut cmd = Command::cargo_bin("genpolicy")?;
+    cmd.arg("--yaml-file").arg(&pod_yaml_path);
+
+    let output = cmd.output()?;
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("ERROR: guest_pull is enabled"));
+    assert!(stderr.contains("Set explicit Kubernetes securityContext values"));
+    assert!(!stderr.contains("      runAsUser: 0"), "{stderr}");
+    assert!(!stderr.contains("      runAsGroup: 0"), "{stderr}");
+    assert!(stderr.contains("supplementalGroups: [10]"));
+
+    Ok(())
+}
+
+#[test]
+fn guest_pull_run_as_user_requires_non_default_group() -> Result<(), Box<dyn std::error::Error>> {
+    let test_case_dir = "guest_pull_run_as_user_requires_non_default_group";
+    let workdir = prepare_workdir(test_case_dir, &[]);
+    let pod_yaml_path = workdir.join("run_as_user_requires_non_default_group.yaml");
+    fs::write(
+        &pod_yaml_path,
+        r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: run-as-user-requires-non-default-group
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  securityContext:
+    runAsUser: 33
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+"#,
+    )?;
+
+    let mut cmd = Command::cargo_bin("genpolicy")?;
+    cmd.arg("--yaml-file").arg(&pod_yaml_path);
+
+    let output = cmd.output()?;
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("ERROR: guest_pull is enabled"));
+    assert!(stderr.contains("      runAsUser: 33"), "{stderr}");
+    assert!(stderr.contains("      runAsGroup: 33"), "{stderr}");
+    assert!(!stderr.contains("supplementalGroups:"), "{stderr}");
+
+    Ok(())
+}
+
+#[test]
+fn guest_pull_default_zero_values_are_optional() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = &[
+        (
+            "run_as_user_without_run_as_group",
+            r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: run-as-user
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  securityContext:
+    runAsUser: 1000
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+"#,
+        ),
+        (
+            "supplemental_groups_without_run_as_user_or_group",
+            r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: run-supplemental
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  securityContext:
+    supplementalGroups:
+      - 10
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+"#,
+        ),
+    ];
+
+    for (name, yaml) in cases {
+        let test_case_dir = format!("guest_pull_default_security_context_values_{name}");
+        let workdir = prepare_workdir(&test_case_dir, &[]);
+        let pod_yaml_path = workdir.join(format!("{name}.yaml"));
+        fs::write(&pod_yaml_path, yaml)?;
+
+        let mut cmd = Command::cargo_bin("genpolicy")?;
+        cmd.arg("--yaml-file").arg(&pod_yaml_path);
+        cmd.assert().success();
+    }
+
+    Ok(())
+}
+
+#[test]
+fn guest_pull_split_security_context_succeeds() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = &[
+        (
+            "split_user_group_security_context",
+            r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: split-user-group-security-context
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  securityContext:
+    runAsUser: 0
+    supplementalGroups:
+      - 10
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+      securityContext:
+        runAsGroup: 0
+"#,
+        ),
+        (
+            "split_security_context",
+            r#"---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: split-security-context
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  securityContext:
+    supplementalGroups:
+      - 10
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+"#,
+        ),
+    ];
+
+    for (name, yaml) in cases {
+        let test_case_dir = format!("guest_pull_{name}");
+        let workdir = prepare_workdir(&test_case_dir, &[]);
+        let pod_yaml_path = workdir.join(format!("{name}.yaml"));
+        fs::write(&pod_yaml_path, yaml)?;
+
+        let mut cmd = Command::cargo_bin("genpolicy")?;
+        cmd.arg("--yaml-file").arg(&pod_yaml_path);
+        cmd.assert().success();
+    }
+
+    Ok(())
+}
+
+#[test]
 fn output_behavior() -> Result<(), Box<dyn std::error::Error>> {
     struct TestCase {
         name: &'static str,

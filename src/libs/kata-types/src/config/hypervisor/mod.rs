@@ -445,6 +445,25 @@ pub fn validate_block_device_sector_size(size: u32) -> Result<()> {
     Ok(())
 }
 
+/// Extra block device image to attach to the VM (e.g. CoCo extension, GPU extension).
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct GuestExtensionImage {
+    /// Short name for this extension (e.g. "coco", "gpu"). Used as the virtio-blk
+    /// serial so the guest can discover the device via
+    /// `/dev/disk/by-id/virtio-extension-<name>` and match kernel cmdline verity
+    /// params `kata.extension.<name>.verity_params=...`.
+    pub name: String,
+
+    /// Path to the extension image file on the host.
+    #[serde(default)]
+    pub path: String,
+
+    /// DM-verity parameters for this extension image (root_hash, salt, etc.).
+    /// Populated at install time from the image build artifacts.
+    #[serde(default)]
+    pub verity_params: String,
+}
+
 /// Guest kernel boot information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BootInfo {
@@ -641,6 +660,13 @@ pub struct CpuInfo {
     /// - `> number of physical cores`: Set to actual number of physical cores
     #[serde(default)]
     pub default_vcpus: f32,
+    /// vCPU overhead to be added when sandbox/container CPU limits are provided.
+    ///
+    /// This value is used by runtime-rs static sandbox sizing as:
+    /// - if no CPU limits are provided: use `default_vcpus`
+    /// - if CPU limits are provided: use `overhead_vcpus + workload_vcpus`
+    #[serde(default)]
+    pub overhead_vcpus: f32,
 
     /// Default maximum number of vCPUs per SB/VM:
     /// - Unspecified or `0`: Set to actual number of physical cores or
@@ -784,10 +810,6 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub default_bridges: u32,
 
-    /// Enable hotplugging on root bus for devices with large PCI bars.
-    #[serde(default)]
-    pub hotplug_vfio_on_root_bus: bool,
-
     /// Cold-plug VFIO devices to a PCIe port type.
     ///
     /// Accepted values: `"no-port"` (default, disabled), `"root-port"`.
@@ -798,13 +820,13 @@ pub struct DeviceInfo {
 
     /// Number of PCIe root ports to create during VM creation.
     ///
-    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
+    /// Valid when `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_root_port: u32,
 
     /// Number of PCIe switch ports to create during VM creation.
     ///
-    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
+    /// Valid when `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_switch_port: u32,
 
@@ -973,6 +995,14 @@ pub struct MemoryInfo {
     /// Default memory size in MiB for SB/VM.
     #[serde(default)]
     pub default_memory: u32,
+    /// Memory overhead in MiB to be added when sandbox/container memory
+    /// limits are provided.
+    ///
+    /// This value is used by runtime-rs static sandbox sizing as:
+    /// - if no memory limits are provided: use `default_memory`
+    /// - if memory limits are provided: use `overhead_memory + workload_memory`
+    #[serde(default)]
+    pub overhead_memory: u32,
 
     /// Default maximum memory in MiB per SB/VM:
     /// - Unspecified or `0`: Set to actual physical RAM
@@ -1717,6 +1747,11 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub boot_info: BootInfo,
 
+    /// Additional block device images to attach to the VM (e.g. CoCo extension).
+    /// Each image is cold-plugged as a read-only virtio-blk device.
+    #[serde(default)]
+    pub guest_extension_images: Vec<GuestExtensionImage>,
+
     /// Guest virtual CPU configuration information.
     #[serde(default, flatten)]
     pub cpu_info: CpuInfo,
@@ -1826,6 +1861,9 @@ impl ConfigOps for Hypervisor {
                 })?;
                 hv.blockdev_info.adjust_config()?;
                 hv.boot_info.adjust_config()?;
+                for extra in &mut hv.guest_extension_images {
+                    resolve_path!(extra.path, "extra image file {} is invalid: {}")?;
+                }
                 hv.cpu_info.adjust_config()?;
                 hv.debug_info.adjust_config()?;
                 hv.device_info.adjust_config()?;
@@ -1866,6 +1904,35 @@ impl ConfigOps for Hypervisor {
                 let hv = conf.hypervisor.get(hypervisor).unwrap();
                 hv.blockdev_info.validate()?;
                 hv.boot_info.validate()?;
+                for extra in &hv.guest_extension_images {
+                    validate_path!(extra.path, "extra image file {} is invalid: {}")?;
+                    if extra.name.is_empty() {
+                        return Err(std::io::Error::other(
+                            "guest_extension_images entry is missing required 'name' field",
+                        ));
+                    }
+                    if !extra
+                        .name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    {
+                        return Err(std::io::Error::other(format!(
+                            "guest_extension_images '{}' has an invalid name: only ASCII \
+                             alphanumerics, '-' and '_' are allowed (the name is used in the \
+                             virtio-blk serial and in the kata.extension.<name>.verity_params \
+                             kernel parameter)",
+                            extra.name
+                        )));
+                    }
+                    if !extra.verity_params.trim().is_empty() {
+                        parse_kernel_verity_params(&extra.verity_params).map_err(|e| {
+                            std::io::Error::other(format!(
+                                "guest_extension_images '{}' has invalid verity_params: {}",
+                                extra.name, e
+                            ))
+                        })?;
+                    }
+                }
                 hv.cpu_info.validate()?;
                 hv.debug_info.validate()?;
                 hv.device_info.validate()?;
@@ -1974,11 +2041,13 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus: 0.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                 },
             },
@@ -1987,11 +2056,13 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 9999999.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: node_cpus,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                 },
             },
@@ -2000,12 +2071,29 @@ mod tests {
                 input: &mut CpuInfo {
                     cpu_features: "a, b ,c".to_string(),
                     default_vcpus: -1.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 1.0,
+                    overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
+                },
+            },
+            TestData {
+                desc: "overhead_vcpus explicitly set keeps value",
+                input: &mut CpuInfo {
+                    cpu_features: "x, y".to_string(),
+                    default_vcpus: 0.0,
+                    overhead_vcpus: 0.5,
+                    default_maxvcpus: 2,
+                },
+                output: CpuInfo {
+                    cpu_features: "x,y".to_string(),
+                    default_vcpus,
+                    overhead_vcpus: 0.5,
+                    default_maxvcpus: 2,
                 },
             },
         ];
@@ -2029,7 +2117,28 @@ mod tests {
                 "test[{}] default_maxvcpus",
                 tc.desc
             );
+            assert_eq!(
+                tc.input.overhead_vcpus, tc.output.overhead_vcpus,
+                "test[{}] overhead_vcpus",
+                tc.desc
+            );
         }
+    }
+
+    #[test]
+    fn test_memory_info_adjust_config_keeps_explicit_overhead_memory() {
+        let mut mem = MemoryInfo {
+            default_memory: 1024,
+            overhead_memory: 512,
+            default_maxmemory: 4096,
+            ..Default::default()
+        };
+
+        mem.adjust_config().unwrap();
+
+        assert_eq!(mem.overhead_memory, 512);
+        assert_eq!(mem.default_memory, 1024);
+        assert_eq!(mem.default_maxmemory, 4096);
     }
 
     #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]

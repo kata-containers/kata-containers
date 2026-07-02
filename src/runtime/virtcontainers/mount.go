@@ -278,6 +278,10 @@ type Mount struct {
 	// to instruct the agent to generate a one-time key.
 	EncryptionKey string
 
+	// BlockDeviceCreateFs requests filesystem creation before mounting a
+	// fresh block volume. The filesystem type comes from the Storage Fstype.
+	BlockDeviceCreateFs bool
+
 	// Shared indicates whether the mount is shared across containers.
 	Shared bool
 }

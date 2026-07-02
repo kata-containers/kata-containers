@@ -10,6 +10,8 @@ metadata:
 spec:
   runtimeClassName: kata
   shareProcessNamespace: true
+  securityContext:
+    supplementalGroups: [10]
   containers:
   - name: CTR_NAME
     image: quay.io/prometheus/busybox:latest

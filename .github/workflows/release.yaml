@@ -31,9 +31,9 @@ jobs:
     needs: release
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/release-amd64.yaml
     with:
       target-arch: amd64
@@ -45,9 +45,9 @@ jobs:
     needs: release
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/release-arm64.yaml
     with:
       target-arch: arm64
@@ -59,9 +59,9 @@ jobs:
     needs: release
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/release-s390x.yaml
     with:
       target-arch: s390x
@@ -72,9 +72,9 @@ jobs:
     needs: release
     permissions:
       contents: read
-      packages: write
-      id-token: write
-      attestations: write
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le
@@ -86,7 +86,7 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     uses: ./.github/workflows/release-kata-images.yaml
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}

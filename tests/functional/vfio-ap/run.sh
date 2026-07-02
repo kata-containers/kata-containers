@@ -63,6 +63,7 @@ setup_hotplug() {
         show_config_file
     elif [[ "${runtime}" == "runtime-rs" ]]; then
         setup_config_file "vfio_mode" "replace" "vfio" "runtime-rs"
+        setup_config_file "cold_plug_vfio" "replace" "no-port" "runtime-rs"
         show_config_file "runtime-rs"
     else
         echo "Invalid runtime: ${runtime}" >&2
@@ -79,8 +80,9 @@ setup_coldplug() {
         setup_config_file "cold_plug_vfio" "replace" "bridge-port"
         show_config_file
     elif [[ "${runtime}" == "runtime-rs" ]]; then
-        echo "Coldplug is not supported for runtime-rs" >&2
-        exit 1
+        setup_config_file "vfio_mode" "replace" "vfio" "runtime-rs"
+        setup_config_file "cold_plug_vfio" "replace" "root-port" "runtime-rs"
+        show_config_file "runtime-rs"
     else
         echo "Invalid runtime: ${runtime}" >&2
         exit 1
@@ -296,6 +298,9 @@ run_tests() {
 
     setup_hotplug "runtime-rs"
     run_test "3" "runtime-rs" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
+
+    setup_coldplug "runtime-rs"
+    run_test "4" "runtime-rs" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug" "&& zcrypttest -a -v"
 }
 
 main() {

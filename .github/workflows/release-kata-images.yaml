@@ -44,7 +44,7 @@ jobs:
     needs: resolve-tags
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     strategy:
       matrix:
         include:
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

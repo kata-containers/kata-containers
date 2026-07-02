@@ -35,7 +35,7 @@ jobs:
     name: build-asset
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     runs-on: ubuntu-24.04-ppc64le
     strategy:
       matrix:
@@ -141,7 +141,7 @@ jobs:
     needs: build-asset
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     strategy:
       matrix:
         asset:
@@ -228,7 +228,7 @@ jobs:
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     strategy:
       matrix:
         asset:
@@ -297,7 +297,7 @@ jobs:
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:
       contents: read
-      packages: write
+      packages: write # needed to push build artifacts to ghcr.io
     steps:
       - name: Adjust a permission for repo
         run: |

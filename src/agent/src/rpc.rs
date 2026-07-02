@@ -38,8 +38,8 @@ use protobuf::MessageField;
 use protocols::agent::{
     AddSwapPathRequest, AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest,
     GetIPTablesResponse, GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse,
-    Routes, SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
-    WaitProcessResponse, WriteStreamResponse,
+    ResizeVolumeRequest, Routes, SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse,
+    VolumeStatsRequest, WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::csi::{
     volume_usage::Unit as VolumeUsage_Unit, VolumeCondition, VolumeStatsResponse, VolumeUsage,
@@ -92,6 +92,8 @@ use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 use crate::{confidential_data_hub, linux_abi::*};
+#[cfg(feature = "devicemapper")]
+use kata_types::dmverity::cleanup_dmverity_devices;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -1741,6 +1743,20 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(resp)
     }
 
+    async fn resize_volume(
+        &self,
+        ctx: &TtrpcContext,
+        req: ResizeVolumeRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "resize_volume", req);
+        is_allowed(&req).await?;
+
+        Err(ttrpc_error(
+            ttrpc::Code::UNIMPLEMENTED,
+            "resize_volume is not implemented in kata-agent",
+        ))
+    }
+
     async fn add_swap(
         &self,
         ctx: &TtrpcContext,
@@ -1805,6 +1821,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &::ttrpc::r#async::TtrpcContext,
         config: protocols::agent::MemAgentMemcgConfig,
     ) -> ::ttrpc::Result<Empty> {
+        is_allowed(&config).await?;
         if let Some(ma) = &self.oma {
             ma.memcg_set_config_async(mem_agent_memcgconfig_to_memcg_optionconfig(&config))
                 .await
@@ -1829,6 +1846,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &::ttrpc::r#async::TtrpcContext,
         config: protocols::agent::MemAgentCompactConfig,
     ) -> ::ttrpc::Result<Empty> {
+        is_allowed(&config).await?;
         if let Some(ma) = &self.oma {
             ma.compact_set_config_async(mem_agent_compactconfig_to_compact_optionconfig(&config))
                 .await
@@ -2095,6 +2113,15 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
                 err
             );
         }
+    }
+
+    // Cleanup dm-verity devices for this container (after all mounts are unmounted)
+    if let Some(verity_devices) = sandbox.container_verity_devices.remove(cid) {
+        #[cfg(feature = "devicemapper")]
+        if !verity_devices.is_empty() {
+            cleanup_dmverity_devices(&verity_devices, &sandbox.logger);
+        }
+        let _ = verity_devices;
     }
 
     sandbox.container_mounts.remove(cid);

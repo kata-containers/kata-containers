@@ -11,4 +11,4 @@ keywords = ["dragonball", "secure-sandbox", "device", "resource"]
 readme = "README.md"
 
 [dependencies]
-thiserror = "1"
+thiserror = { workspace = true }

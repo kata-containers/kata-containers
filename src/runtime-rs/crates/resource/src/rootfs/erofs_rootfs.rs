@@ -28,11 +28,13 @@ use kata_types::device::{
     DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
 };
 use kata_types::gpt_disk::{
-    extract_snapshot_id, generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
-    ErofsLayer, GptDiskLayout, GptMetadataFiles,
+    extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
+    generate_gpt_metadata, generate_padding_file, get_erofs_layer_size,
+    parse_dmverity_metadata_file, ErofsLayer, GptDiskLayout, GptMetadataFiles,
 };
 use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
+use std::collections::HashMap;
 use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Component, Path, PathBuf};
@@ -682,8 +684,10 @@ impl ErofsMultiLayerRootfs {
                         );
 
                         let mut erofs_layers = Vec::new();
+                        // Map: layer source path -> original mount index (for dm-verity lookup)
+                        let mut layer_source_to_mount_idx: HashMap<String, usize> = HashMap::new();
 
-                        for (_mount_idx, erofs_mount) in &erofs_mounts_indexed {
+                        for (mount_idx, erofs_mount) in &erofs_mounts_indexed {
                             let layer_path = erofs_mount.source.clone();
                             let size_bytes = get_erofs_layer_size(&layer_path).context(format!(
                                 "gptdisk: failed to get size of EROFS layer: {}",
@@ -701,6 +705,7 @@ impl ErofsMultiLayerRootfs {
                             let size_sectors = size_bytes.div_ceil(512);
                             let snapshot_id = extract_snapshot_id(&layer_path);
 
+                            layer_source_to_mount_idx.insert(layer_path.clone(), *mount_idx);
                             erofs_layers.push(ErofsLayer {
                                 path: layer_path,
                                 size_sectors,
@@ -725,6 +730,19 @@ impl ErofsMultiLayerRootfs {
                         // Track GPT metadata files (head + padding) for cleanup
                         gpt_metadata_paths.push(gpt_files.head_path.clone());
                         gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+                        for idx in 0..layout.partitions.len() {
+                            if idx > 0 {
+                                // Check for padding files (only created when there are gaps)
+                                let pad_path = gpt_files
+                                    .head_path
+                                    .parent()
+                                    .unwrap()
+                                    .join(format!("pad-{}.img", idx));
+                                if pad_path.exists() {
+                                    gpt_metadata_paths.push(pad_path);
+                                }
+                            }
+                        }
 
                         info!(
                             sl!(),
@@ -762,14 +780,77 @@ impl ErofsMultiLayerRootfs {
                         device_ids.push(device_id);
 
                         // Create a storage entry for each GPT partition.
+                        //
+                        // Ordering guarantee: partitions in `layout` follow the same
+                        // order as `erofs_layers`, which was collected by iterating
+                        // `rootfs_mounts`. We use source path as the key to look up
+                        // the original mount (for dm-verity annotations), so even if
+                        // the mount array is reordered in the future, the mapping
+                        // remains correct.
                         for (idx, part) in layout.partitions.iter().enumerate() {
+                            // Find the original mount by source path (not by index)
+                            let original_mount_idx = layer_source_to_mount_idx
+                                .get(&part.layer.path)
+                                .ok_or_else(|| {
+                                    anyhow!(
+                                        "gptdisk: internal error — partition {} source path '{}' \
+                                         not found in mount-to-layer map",
+                                        idx,
+                                        part.layer.path
+                                    )
+                                })?;
+                            let original_mount = &rootfs_mounts[*original_mount_idx];
+
                             let mut rolayer = base_device.clone();
-                            let options: Vec<String> = vec![
+                            let mut options: Vec<String> = vec![
                                 "X-kata.overlay-lower".to_string(),
                                 "X-kata.multi-layer=true".to_string(),
                                 "X-kata.gpt-partitioned=true".to_string(),
                                 format!("X-kata.partition-number={}", part.partition_number),
                             ];
+
+                            // Look up dm-verity annotation from the original mount
+                            let options_map: HashMap<String, String> = original_mount
+                                .options
+                                .iter()
+                                .filter_map(|opt| {
+                                    opt.split_once('=')
+                                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                                })
+                                .collect();
+
+                            if let Some(dmverity_path) = extract_dmverity_annotation(&options_map) {
+                                info!(
+                                    sl!(),
+                                    "Found dm-verity annotation for partition {} from {}",
+                                    idx,
+                                    dmverity_path
+                                );
+
+                                let metadata = parse_dmverity_metadata_file(dmverity_path)
+                                    .context(format!(
+                                    "failed to parse dm-verity metadata file {} for partition {}",
+                                    dmverity_path, idx
+                                ))?;
+
+                                info!(
+                                    sl!(),
+                                    "Parsed dm-verity meta for partition {} roothash={}, hashoffset={}",
+                                    idx,
+                                    metadata.roothash,
+                                    metadata.hashoffset
+                                );
+
+                                let dmverity_opts =
+                                    generate_dmverity_options(&metadata, Some(&part.layer.path));
+                                info!(
+                                    sl!(),
+                                    "Added dm-verity options to partition {}: {:?}",
+                                    idx,
+                                    dmverity_opts
+                                );
+                                options.extend(dmverity_opts);
+                            }
 
                             rolayer.fs_type = EROFS_ROOTFS_TYPE.to_string();
                             rolayer.mount_point = container_path.clone();

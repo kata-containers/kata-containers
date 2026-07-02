@@ -15,6 +15,6 @@ arc-swap = ">=0.4.8"
 libc = "0.2.39"
 nix = { workspace = true }
 lazy_static = "1"
-thiserror = "1"
+thiserror = { workspace = true }
 vmm-sys-util = { workspace = true }
 vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }

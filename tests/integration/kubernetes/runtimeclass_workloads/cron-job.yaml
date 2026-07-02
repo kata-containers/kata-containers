@@ -9,6 +9,8 @@ spec:
       template:
         spec:
           runtimeClassName: kata
+          securityContext:
+            supplementalGroups: [10]
           containers:
           - name: pi
             image: quay.io/prometheus/busybox:latest

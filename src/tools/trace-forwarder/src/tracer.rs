@@ -6,13 +6,13 @@
 
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::Resource;
 
 pub fn create_otlp_trace_exporter(
     service_name: String,
     otlp_endpoint: String,
-) -> Result<TracerProvider, std::io::Error> {
+) -> Result<SdkTracerProvider, std::io::Error> {
     let exporter_type = "otlp";
 
     // Create OTLP exporter
@@ -31,12 +31,15 @@ pub fn create_otlp_trace_exporter(
     };
 
     // Create tracer provider with resource attributes
-    let provider = TracerProvider::builder()
-        .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-        .with_resource(Resource::new(vec![
+    let resource = Resource::builder_empty()
+        .with_attributes([
             KeyValue::new("service.name", service_name),
             KeyValue::new("exporter", exporter_type),
-        ]))
+        ])
+        .build();
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(resource)
         .build();
 
     Ok(provider)

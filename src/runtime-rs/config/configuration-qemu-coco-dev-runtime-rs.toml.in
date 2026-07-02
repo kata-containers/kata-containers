@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_COCO@"
-image = "@IMAGECONFIDENTIALPATH@"
+image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -107,6 +107,15 @@ cpu_features = "@CPUFEATURES@"
 # > number of physical cores      --> will be set to the actual number of physical cores
 default_vcpus = @DEFVCPUS_QEMU@
 
+# Guest-side vCPU overhead budget (fractional) used with static_sandbox_resource_mgmt.
+# When workload limits are present, vm_vcpus = requested_vcpus + overhead_vcpus
+# (rounded up at boot). If a workload limit is set on another dimension (for example
+# memory) but CPU is missing, requested_vcpus is treated as 0 and vm_vcpus equals
+# overhead_vcpus (minimum 1 at boot). When no workload limits are present,
+# default_vcpus is used instead.
+# See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
+overhead_vcpus = @DEFOVERHEADVCPUS_TEE@
+
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
 #                                     of vCPUs supported by KVM if that number is exceeded
@@ -149,6 +158,14 @@ reclaim_guest_freed_memory = false
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
+
+# Guest-side memory overhead budget (MiB) used with static_sandbox_resource_mgmt.
+# When workload limits are present, vm_memory = requested_memory + overhead_memory.
+# If a workload limit is set on another dimension (for example CPU) but memory is
+# missing, requested_memory is treated as 0, so vm_memory equals overhead_memory.
+# When no workload limits are present, default_memory is used instead.
+# See docs/how-to/how-to-size-sandbox-overhead-runtime-rs.md
+overhead_memory = @DEFOVERHEADMEMSZ_TEE@
 #
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
@@ -367,24 +384,17 @@ disable_nesting_checks = false
 # Default is false
 disable_image_nvdimm = false
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-hotplug_vfio_on_root_bus = false
-
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_root_port = 0
 
 # Before hot plugging a PCIe device onto a switch port, you need add a pcie_switch_port device fist.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means how many devices attached onto pcie_switch_port will be created.
-# This value is valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35"
+# This value is valid when machine_type is "q35"
 # Default 0
 pcie_switch_port = 0
 
@@ -679,10 +689,6 @@ sandbox_bind_mounts = @DEFBINDMOUNTS@
 #
 vfio_mode = "@DEFVFIOMODE@"
 
-# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
-# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
-disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
-
 # Specifies how Kubernetes emptyDir volumes are handled.
 # Options:
 #
@@ -692,6 +698,9 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
+#
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
 #
 emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 
@@ -717,3 +726,8 @@ enable_pprof = false
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"

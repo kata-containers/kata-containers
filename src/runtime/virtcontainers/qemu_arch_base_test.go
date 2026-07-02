@@ -526,6 +526,21 @@ func TestQemuArchBaseAppendBlockDevice(t *testing.T) {
 	testQemuArchBaseAppend(t, drive, expectedOut)
 }
 
+func TestGenericBlockDeviceDiscardUnmap(t *testing.T) {
+	assert := assert.New(t)
+
+	drive := config.BlockDrive{
+		File:         "/root",
+		Format:       "raw",
+		ID:           "blockDevTest",
+		DiscardUnmap: true,
+	}
+
+	blockDevice, err := genericBlockDevice(drive, false)
+	assert.NoError(err)
+	assert.True(blockDevice.DiscardUnmap)
+}
+
 func TestQemuArchBaseAppendVhostUserDevice(t *testing.T) {
 	socketPath := "nonexistentpath.sock"
 	macAddress := "00:11:22:33:44:55:66"

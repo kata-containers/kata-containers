@@ -203,13 +203,6 @@ enable_debug = false
 # Default false
 disable_nesting_checks = false
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-hotplug_vfio_on_root_bus = false
-
 #
 # Default entropy source.
 # The path to a host source of entropy (including a real hardware RNG)
@@ -403,10 +396,6 @@ sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY_FC@
 # - When running single containers using a tool like ctr, container sizing information will be available.
 static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_FC@
 
-# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
-# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
-disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
-
 # Specifies how Kubernetes emptyDir volumes are handled.
 # Options:
 #
@@ -416,6 +405,9 @@ disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 #
 #   - block-encrypted
 #     Plugs a block device to be encrypted in the guest.
+#
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
 #
 emptydir_mode = "@DEFEMPTYDIRMODE@"
 

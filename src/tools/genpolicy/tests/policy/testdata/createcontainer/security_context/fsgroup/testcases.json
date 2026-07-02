@@ -343,7 +343,8 @@
         {
           "driver": "blk",
           "driver_options": [
-            "encryption_key=ephemeral"
+            "encryption_key=ephemeral",
+            "create_filesystem"
           ],
           "fs_group": {
             "group_id": 1000

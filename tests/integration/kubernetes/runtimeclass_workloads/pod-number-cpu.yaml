@@ -9,6 +9,8 @@ metadata:
   name: cpu-test
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   containers:
   - name: c1
     image: quay.io/prometheus/busybox:latest
@@ -16,6 +18,7 @@ spec:
     resources:
       limits:
         cpu: "500m"
+        memory: "128Mi"
   - name: c2
     image: quay.io/prometheus/busybox:latest
     command:
@@ -24,3 +27,4 @@ spec:
     resources:
       limits:
         cpu: "500m"
+        memory: "128Mi"

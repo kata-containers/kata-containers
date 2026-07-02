@@ -9,6 +9,8 @@ metadata:
   name: pv-pod
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   nodeName: NODE
   volumes:
     - name: pv-storage

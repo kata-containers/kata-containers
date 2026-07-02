@@ -49,6 +49,15 @@ ifeq ($(INIT_DATA),yes)
     override EXTRA_RUSTFEATURES += init-data
 endif
 
+##VAR USE_DEVMAPPER=yes|no define if agent enables dm-verity (devicemapper) support
+USE_DEVMAPPER ?= no
+
+# Enable the devicemapper feature (links libdevmapper for dm-verity) with GNU libc
+ifeq ($(USE_DEVMAPPER),yes)
+    override EXTRA_RUSTFEATURES += devicemapper
+    override LIBC = gnu
+endif
+
 include ../../utils.mk
 
 ifneq ($(EXTRA_RUSTFEATURES),)
@@ -67,6 +76,8 @@ INIT := no
 
 # Path to systemd unit directory if installed as not init.
 UNIT_DIR := /usr/lib/systemd/system
+# Path to systemd system generator directory.
+GENERATOR_DIR := /usr/lib/systemd/system-generators
 
 GENERATED_CODE = src/version.rs
 
@@ -91,6 +102,13 @@ ifeq ($(INIT),no)
     GENERATED_FILES += $(UNIT_FILES)
     # Target to be reached in systemd services
     UNIT_FILES += kata-containers.target
+    # Template unit for mounting extension block devices (CoCo, GPU, etc.)
+    UNIT_FILES += kata-extension-mount@.service
+    # Helper scripts for extension mount/umount
+    EXTENSION_SCRIPTS = kata-extension-mount.sh kata-extension-umount.sh
+    # systemd generator that enables the mount template per extension declared
+    # on the kernel command line, so new extensions need no rootfs build change
+    EXTENSION_GENERATOR = kata-extension-mount-generator.sh
 endif
 
 # Display name of command and it's version (or a message if not available).
@@ -154,6 +172,10 @@ install-services: $(GENERATED_FILES)
 ifeq ($(INIT),no)
 	@echo "Installing systemd unit files..."
 	$(foreach f,$(UNIT_FILES),$(call INSTALL_FILE,$f,$(UNIT_DIR)))
+	@echo "Installing extension helper scripts..."
+	$(foreach f,$(EXTENSION_SCRIPTS),install -D -m 755 $f $(DESTDIR)/usr/libexec/$f || exit 1;)
+	@echo "Installing extension mount generator..."
+	@install -D -m 755 $(EXTENSION_GENERATOR) $(DESTDIR)$(GENERATOR_DIR)/kata-extension-mount-generator
 endif
 
 show-header:

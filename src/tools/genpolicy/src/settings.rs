@@ -35,6 +35,7 @@ pub struct Settings {
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
     pub emptyDir_encrypted: EmptyDirVolume,
+    pub emptyDir_plain: EmptyDirVolume,
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,

@@ -296,3 +296,17 @@ jobs:
 
           echo "::error::Go modules are not up-to-date (see Github step summary for diff)."
           exit 1
+
+  check-agent-policy-coverage:
+    name: check-agent-policy-coverage
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check agent policy coverage
+        run: bash ci/check_agent_policy_coverage.sh

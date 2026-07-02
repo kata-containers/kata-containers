@@ -1680,17 +1680,31 @@ func TestSandboxHugepageLimit(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestCheckVCPUsPinningNUMATooFewVCPUs(t *testing.T) {
+// TestCheckVCPUsPinningNUMAMemoryOnly verifies that when vCPUs < NUMA nodes
+// (memory-only topology for pxb-pcie GPU placement), the function does not
+// return a vCPU-distribution error — the single vCPU is assigned to the first
+// node, memory-only nodes receive 0 vCPUs and are skipped in the pinning loop.
+// SetThreadAffinity may fail in the test environment (no real thread to pin),
+// so we accept any low-level affinity error but must not see a topology error.
+func TestCheckVCPUsPinningNUMAMemoryOnly(t *testing.T) {
 	assert := assert.New(t)
 	s := &Sandbox{}
+	// 1 vCPU, 2 NUMA nodes — simulates memory-only node 1 for pxb-pcie.
 	vCPUThreadsMap := VcpuThreadIDs{vcpus: map[int]int{0: 100}}
 	numaNodes := []types.GuestNUMANode{
 		{HostNodes: "0", HostCPUs: "0-3"},
 		{HostNodes: "1", HostCPUs: "4-7"},
 	}
 	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7})
-	assert.Error(err)
-	assert.Contains(err.Error(), "must be >= NUMA node count")
+	if err != nil {
+		// The only permissible failure here is a low-level affinity syscall
+		// error (no real thread in the test process).  A NUMA-topology error
+		// — "no NUMA nodes", "HostCPUs … must not be empty", or a vCPU
+		// distribution failure — must never be returned.
+		assert.NotContains(err.Error(), "no NUMA nodes")
+		assert.NotContains(err.Error(), "HostCPUs")
+		assert.NotContains(err.Error(), "failed to compute NUMA vCPU distribution")
+	}
 }
 
 func TestCheckVCPUsPinningNUMABadHostCPUs(t *testing.T) {

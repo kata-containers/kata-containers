@@ -75,6 +75,7 @@ else
 		"k8s-custom-dns.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
+		"k8s-erofs-dmverity.bats" \
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-hostname.bats" \
@@ -93,6 +94,7 @@ else
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
+		"k8s-plain-ephemeral-data-storage.bats" \
 		"k8s-pod-quota.bats" \
 		"k8s-port-forward.bats" \
 		"k8s-privileged.bats" \

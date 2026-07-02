@@ -268,10 +268,20 @@ static_sandbox_resource_mgmt = true
 #
 vfio_mode = "@DEFVFIOMODE@"
 
-# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
-# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
-# Note: remote hypervisor has no sharing of emptydir mounts from host to guest
-disable_guest_empty_dir = false
+# Specifies how Kubernetes emptyDir volumes are handled.
+# Options:
+#
+#   - shared-fs (default)
+#     Shares the emptyDir folder with the guest using the method given
+#     by the `shared_fs` setting.
+#
+#   - block-encrypted
+#     Plugs a block device to be encrypted in the guest.
+#
+#   - block-plain
+#     Plugs a block device to be mounted directly in the guest.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,

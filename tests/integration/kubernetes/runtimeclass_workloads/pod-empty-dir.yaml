@@ -9,6 +9,9 @@ metadata:
   name: sharevol-kata
 spec:
   runtimeClassName: kata
+  restartPolicy: Never
+  securityContext:
+    supplementalGroups: [10]
   containers:
   - name: test
     image: quay.io/prometheus/busybox:latest

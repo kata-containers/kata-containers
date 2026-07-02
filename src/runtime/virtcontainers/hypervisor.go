@@ -463,6 +463,22 @@ type Param struct {
 	Value string
 }
 
+// GuestExtensionImage represents an additional block device image to attach to the VM
+// (e.g. CoCo extension, GPU extension).
+type GuestExtensionImage struct {
+	// Name is a short identifier for this extension (e.g. "coco", "gpu").
+	// Used as the virtio-blk serial so the guest can discover the device
+	// via /dev/disk/by-id/virtio-extension-<name> and match verity params
+	// from kernel cmdline kata.extension.<name>.verity_params=...
+	Name string
+
+	// Path is the host path to the extension image file.
+	Path string
+
+	// VerityParams contains dm-verity parameters for this extension image.
+	VerityParams string
+}
+
 // HypervisorConfig is the hypervisor configuration.
 // nolint: govet
 type HypervisorConfig struct {
@@ -484,6 +500,9 @@ type HypervisorConfig struct {
 	// InitrdPath is the guest initrd image host path.
 	// ImagePath and InitrdPath cannot be set at the same time.
 	InitrdPath string
+
+	// GuestExtensionImages lists additional block device images to attach to the VM.
+	GuestExtensionImages []GuestExtensionImage
 
 	// RootfsType is filesystem type of rootfs.
 	RootfsType string

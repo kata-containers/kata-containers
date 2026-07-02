@@ -191,10 +191,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MAX_VCPUS: &str =
     "io.katacontainers.config.hypervisor.default_max_vcpus";
 
 // Hypervisor Device related annotations
-/// A sandbox annotation used to indicate if devices need to be hotplugged on the root bus instead
-/// of a bridge.
-pub const KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS: &str =
-    "io.katacontainers.config.hypervisor.hotplug_vfio_on_root_bus";
 /// PCIeRootPort is used to indicate the number of PCIe Root Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_root_port";
@@ -323,9 +319,6 @@ pub const KATA_ANNO_CFG_RUNTIME_AGENT: &str = "io.katacontainers.config.runtime.
 /// A sandbox annotation that determines if seccomp should be applied inside guest.
 pub const KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP: &str =
     "io.katacontainers.config.runtime.disable_guest_seccomp";
-/// A sandbox annotation that determines if it should create Kubernetes emptyDir mounts on the guest filesystem.
-pub const KATA_ANNO_CFG_DISABLE_GUEST_EMPTY_DIR: &str =
-    "io.katacontainers.config.runtime.disable_guest_empty_dir";
 
 /// A sandbox annotation that determines if pprof enabled.
 pub const KATA_ANNO_CFG_ENABLE_PPROF: &str = "io.katacontainers.config.runtime.enable_pprof";
@@ -721,16 +714,6 @@ impl Annotation {
                         }
                     }
                     // Hypervisor Device related annotations
-                    KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS => {
-                        match self.get_value::<bool>(key) {
-                            Ok(r) => {
-                                hv.device_info.hotplug_vfio_on_root_bus = r.unwrap_or_default();
-                            }
-                            Err(_e) => {
-                                return Err(bool_err);
-                            }
-                        }
-                    }
                     // Limitations documents aligned with runtime-go:
                     // If number of PCIe root ports > 16 then bail out otherwise we may
                     // use up all slots or IO memory on the root bus and vfio-XXX-pci devices
@@ -1118,14 +1101,6 @@ impl Annotation {
                     KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.disable_guest_seccomp = r.unwrap_or_default();
-                        }
-                        Err(_e) => {
-                            return Err(bool_err);
-                        }
-                    },
-                    KATA_ANNO_CFG_DISABLE_GUEST_EMPTY_DIR => match self.get_value::<bool>(key) {
-                        Ok(r) => {
-                            config.runtime.disable_guest_empty_dir = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);

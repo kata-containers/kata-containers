@@ -184,7 +184,7 @@ type SandboxConfig struct {
 	DisableGuestSeccomp bool
 
 	// EmptyDirMode specifies how Kubernetes emptyDir volumes are handled.
-	// Valid values are "shared-fs" (default) or "block-encrypted".
+	// Valid values are "shared-fs" (default), "block-encrypted", or "block-plain".
 	EmptyDirMode string
 
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
@@ -1129,7 +1129,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 // cleanupEphemeralDisks removes ephemeral disk images and their mount info.
 func (s *Sandbox) cleanupEphemeralDisks() error {
-	if s.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+	if !isBlockEmptyDirMode(s.config.EmptyDirMode) {
 		return nil
 	}
 
@@ -1143,6 +1143,10 @@ func (s *Sandbox) cleanupEphemeralDisks() error {
 	}
 
 	return nil
+}
+
+func isBlockEmptyDirMode(mode string) bool {
+	return mode == EmptyDirModeVirtioBlkEncrypted || mode == EmptyDirModeVirtioBlkPlain
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {
@@ -3096,13 +3100,29 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 func (s *Sandbox) checkVCPUsPinningNUMA(ctx context.Context, vCPUThreadsMap VcpuThreadIDs, numaNodes []types.GuestNUMANode, cpuSetSlice []int) error {
 	numVCPUs := uint32(len(vCPUThreadsMap.vcpus))
 	numNodes := uint32(len(numaNodes))
-	if numVCPUs < numNodes {
-		return fmt.Errorf("number of vCPUs (%d) must be >= NUMA node count (%d) for NUMA pinning", numVCPUs, numNodes)
-	}
 
-	vcpusPerNode, err := utils.DistributeVCPUsProportionally(numaNodes, numVCPUs)
-	if err != nil {
-		return fmt.Errorf("failed to compute NUMA vCPU distribution for pinning: %v", err)
+	var vcpusPerNode []uint32
+	if numVCPUs >= numNodes {
+		var err error
+		vcpusPerNode, err = utils.DistributeVCPUsProportionally(numaNodes, numVCPUs)
+		if err != nil {
+			return fmt.Errorf("failed to compute NUMA vCPU distribution for pinning: %v", err)
+		}
+	} else {
+		// Fewer vCPUs than NUMA nodes.  This is expected when a memory-only
+		// NUMA topology is emitted to enable multi-node pxb-pcie placement
+		// for VFIO GPUs (e.g. default_vcpus=1 on a dual-socket DGX).  Give
+		// 1 vCPU to each of the first numVCPUs nodes and 0 to the rest; the
+		// loop below skips nodes with 0 vCPUs so no pinning is attempted for
+		// memory-only nodes.
+		s.Logger().WithFields(logrus.Fields{
+			"vcpus":      numVCPUs,
+			"numa-nodes": numNodes,
+		}).Warn("fewer vCPUs than NUMA nodes (memory-only topology); pinning available vCPU(s) to first node(s)")
+		vcpusPerNode = make([]uint32, numNodes)
+		for i := uint32(0); i < numVCPUs; i++ {
+			vcpusPerNode[i] = 1
+		}
 	}
 
 	cpuSetAll := cpuset.NewCPUSet(cpuSetSlice...)

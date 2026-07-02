@@ -179,7 +179,6 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Write;
-    use std::path::PathBuf;
 
     // domain number
     const TEST_PCI_DEV_DOMAIN: &str = "0000";

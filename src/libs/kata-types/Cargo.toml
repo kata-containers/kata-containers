@@ -23,7 +23,7 @@ serde = { version = "1.0.100", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
 serde_json = "1.0.73"
-thiserror = "1.0"
+thiserror = { workspace = true }
 toml = "0.5.8"
 serde-enum-str = "0.5"
 sysinfo = "0.34.2"
@@ -35,7 +35,8 @@ gpt = "4.1.0"
 scopeguard = "1.0.0"
 crc = "3.4.0"
 safe-path = { path = "../safe-path", optional = true }
-
+devicemapper = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["time", "rt"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 sysctl = "0.7.1"
 
@@ -49,3 +50,4 @@ rstest = "0.18"
 default = []
 enable-vendor = []
 safe-path = ["dep:safe-path"] # safe-path is platform-specific
+devicemapper = ["dep:devicemapper", "dep:tokio"]

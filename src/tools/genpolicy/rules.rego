@@ -14,6 +14,7 @@ default GetDiagnosticDataRequest := false
 
 # Default values, returned by OPA when rules cannot be evaluated to true.
 default AddARPNeighborsRequest := false
+default AddSwapPathRequest := false
 default AddSwapRequest := false
 default CloseStdinRequest := false
 default CopyFileRequest := false
@@ -21,10 +22,14 @@ default CreateContainerRequest := false
 default CreateSandboxRequest := false
 default DestroySandboxRequest := true
 default ExecProcessRequest := false
+default GetIPTablesRequest := false
+default GetMetricsRequest := false
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
 default ListInterfacesRequest := false
 default ListRoutesRequest := false
+default MemAgentCompactConfig := false
+default MemAgentMemcgConfig := false
 default MemHotplugByProbeRequest := false
 default OnlineCPUMemRequest := true
 default PauseContainerRequest := false
@@ -32,8 +37,10 @@ default ReadStreamRequest := false
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
 default ReseedRandomDevRequest := false
+default ResizeVolumeRequest := false
 default ResumeContainerRequest := false
 default SetGuestDateTimeRequest := false
+default SetIPTablesRequest := false
 default SetPolicyRequest := false
 default SignalProcessRequest := true
 default StartContainerRequest := true
@@ -45,6 +52,7 @@ default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := false
 default UpdateRoutesRequest := false
+default VolumeStatsRequest := false
 default WaitProcessRequest := true
 default WriteStreamRequest := false
 
@@ -1274,7 +1282,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with blk: start")
 
     i_storage.driver == "blk"
-    regex.match("^[0-9]{2}/[0-9]{2}$", i_storage.source)
+    regex.match("^[0-9a-f]{2}(/[0-9a-f]{2})?$", i_storage.source)
 
     allow_block_storage(p_storages, i_storage, bundle_id, sandbox_id)
 

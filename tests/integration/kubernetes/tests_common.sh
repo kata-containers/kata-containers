@@ -223,7 +223,7 @@ remove_kata_runtime_config_dropin_file() {
 }
 
 is_runtime_rs() {
-	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
 }
 
 # Copy the right combination of drop-ins from drop-in-examples/ into
@@ -393,6 +393,30 @@ add_requests_to_policy_settings() {
 		jq --arg req "${request}" '. + [{"op":"replace","path":("/request_defaults/" + $req),"value":true}]' \
 			"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
 	done
+}
+
+# Change genpolicy settings to use the requested emptyDir storage type.
+# Appends a "replace" op to 99-test-overrides.json.
+set_genpolicy_emptydir_type() {
+	declare -r settings_dir="$1"
+	declare -r emptydir_type="$2"
+
+	auto_generate_policy_enabled || return 0
+
+	case "${emptydir_type}" in
+		shared-fs|block-encrypted|block-plain) ;;
+		*) die "Unsupported genpolicy emptydir_type ${emptydir_type}" ;;
+	esac
+
+	local drop_in_dir="${settings_dir}/genpolicy-settings.d"
+	mkdir -p "${drop_in_dir}"
+	local overrides_file="${drop_in_dir}/99-test-overrides.json"
+	[[ -f "${overrides_file}" ]] || echo '[]' > "${overrides_file}"
+
+	info "Setting genpolicy emptydir_type to ${emptydir_type} in ${overrides_file}"
+	jq --arg emptydir_type "${emptydir_type}" \
+		'. + [{"op":"replace","path":"/cluster_config/emptydir_type","value":$emptydir_type}]' \
+		"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
 }
 
 # Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
@@ -738,6 +762,17 @@ set_nginx_image() {
 	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	NGINX_IMAGE="${nginx_image}" envsubst < "${input_yaml}" > "${output_yaml}"
+
+	auto_generate_policy_enabled || return 0
+
+	case "$(yq -r 'select(documentIndex == 0) | .kind' "${output_yaml}")" in
+		Pod)
+			set_pod_spec_security_context "${output_yaml}" ".spec" "" "" "1, 2, 3, 4, 6, 10, 11, 20, 26, 27"
+			;;
+		Deployment|ReplicationController)
+			set_pod_spec_security_context "${output_yaml}" ".spec.template.spec" "" "" "1, 2, 3, 4, 6, 10, 11, 20, 26, 27"
+			;;
+	esac
 }
 
 print_node_journal_since_test_start() {

@@ -51,6 +51,7 @@
 - [How to use mem-agent to decrease the memory usage of Kata container](how-to-use-memory-agent.md)
 - [How to use seccomp with runtime-rs](how-to-use-seccomp-with-runtime-rs.md)
 - [How to use passthroughfd-IO with runtime-rs and Dragonball](how-to-use-passthroughfd-io-within-runtime-rs.md)
+- [How to size sandbox overhead in runtime-rs](how-to-size-sandbox-overhead-runtime-rs.md)
 - [How to use EROFS snapshotter with Kata Containers](how-to-use-erofs-snapshotter-with-kata.md)
 - [How to use NUMA with Kata Containers](how-to-use-numa-with-kata.md)
 

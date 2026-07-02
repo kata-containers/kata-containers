@@ -1,5 +1,12 @@
 {{- /*
   Common RuntimeClass overhead defaults keyed by shim/baseConfig.
+
+  NOTE: the QEMU shims use 320Mi rather than 160Mi. On aarch64 the VMM host
+  footprint is larger (QEMU's own anon RSS is ~160Mi+ before any guest RAM),
+  and with sandbox_cgroup_only the VMM runs inside the pod cgroup, so a 160Mi
+  overhead lets the VMM get OOM-killed for small-memory-limit pods. 320Mi keeps
+  it comfortably within the cgroup. It is applied on all arches for simplicity
+  (x86 is over-provisioned by ~160Mi, which is acceptable).
 */ -}}
 {{- define "kata-deploy.runtimeClassConfigs" -}}
 {{- toYaml (dict
@@ -9,10 +16,10 @@
   "clh-azure-runtime-rs" (dict "memory" "130Mi" "cpu" "250m")
   "dragonball" (dict "memory" "130Mi" "cpu" "250m")
   "fc" (dict "memory" "130Mi" "cpu" "250m")
-  "qemu" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu" (dict "memory" "320Mi" "cpu" "250m")
   "qemu-coco-dev" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-coco-dev-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
-  "qemu-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-coco-dev-runtime-rs" (dict "memory" "320Mi" "cpu" "250m")
+  "qemu-runtime-rs" (dict "memory" "320Mi" "cpu" "250m")
   "qemu-se-runtime-rs" (dict "memory" "1024Mi" "cpu" "1.0")
   "qemu-se" (dict "memory" "1024Mi" "cpu" "1.0")
   "qemu-snp" (dict "memory" "2048Mi" "cpu" "1.0")

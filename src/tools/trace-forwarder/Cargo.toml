@@ -19,9 +19,9 @@ libc.workspace = true
 bincode = "1.3.3"
 byteorder = "1.4.3"
 anyhow.workspace = true
-opentelemetry = { version = "0.27.0", features = ["trace"] }
-opentelemetry-otlp = { version = "0.27.0", features = ["trace", "grpc-tonic"] }
-opentelemetry_sdk = { version = "0.27.0", features = ["rt-tokio"] }
+opentelemetry = { version = "0.32.0", features = ["trace"] }
+opentelemetry-otlp = { version = "0.32.0", features = ["trace", "grpc-tonic"] }
+opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 
 # Note: this crate sets the slog 'max_*' features which allows the log level

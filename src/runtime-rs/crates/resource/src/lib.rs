@@ -37,6 +37,7 @@ pub enum ResourceConfig {
     Network(NetworkConfig),
     ShareFs(SharedFsInfo),
     VmRootfs(BlockConfig),
+    GuestExtensionImage(BlockConfig),
     HybridVsock(HybridVsockConfig),
     Vsock(VsockConfig),
     Protection(ProtectionDeviceConfig),

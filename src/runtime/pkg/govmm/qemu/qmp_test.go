@@ -508,6 +508,25 @@ func TestQMPBlockdevAddWithCache(t *testing.T) {
 	<-disconnectedCh
 }
 
+func TestQMPBlockdevAddDiscardUnmapArgs(t *testing.T) {
+	q := &QMP{}
+	dev := BlockDevice{
+		ID:           fmt.Sprintf("drive_%s", volumeUUID),
+		File:         "/tmp/disk.img",
+		AIO:          Native,
+		DiscardUnmap: true,
+	}
+
+	args := q.blockdevAddBaseArgs("file", &dev)
+	if got := args["discard"]; got != "unmap" {
+		t.Fatalf("unexpected discard option: got %v, expecting unmap", got)
+	}
+	fileArgs := args["file"].(map[string]interface{})
+	if got := fileArgs["discard"]; got != "unmap" {
+		t.Fatalf("unexpected file discard option: got %v, expecting unmap", got)
+	}
+}
+
 // Checks that the netdev_add command is correctly sent.
 //
 // We start a QMPLoop, send the netdev_add command and stop the loop.

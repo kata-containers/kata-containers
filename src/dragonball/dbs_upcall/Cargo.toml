@@ -12,7 +12,7 @@ readme = "README.md"
 
 [dependencies]
 log = "0.4.14"
-thiserror = "1"
+thiserror = { workspace = true }
 timerfd = "1.2.0"
 
 dbs-utils = { workspace = true }

@@ -42,30 +42,51 @@ esac
 [[ "${CROSS_BUILD}" == "true" ]] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 
 # Variants (targets) that build a measured rootfs as of now are:
-# - rootfs-image-confidential
+# - rootfs-image (the base image, measured; root hash labelled "base")
+# - rootfs-image-confidential (monolithic CoCo image, root hash "confidential")
+# - rootfs-image-coco-extension
 # - rootfs-image-nvidia-gpu
 # - rootfs-image-nvidia-gpu-confidential
 #
+# The CoCo configs come in two flavours during the transition to split images:
+# - runtime-rs (Rust) uses the split layout: the measured base image
+#   (@KERNELVERITYPARAMS@) plus the CoCo extension (@COCOVERITYPARAMS@).
+# - runtime (Go) still uses the monolithic confidential image, whose dm-verity
+#   hash is carried by @KERNELVERITYPARAMS@.
+# Because the two runtimes are built in separate `make` invocations, each gets
+# its own @KERNELVERITYPARAMS@ value (base hash for Rust, confidential hash for
+# Go).  The NVIDIA GPU verity params are shared by both runtimes.
+#
 # shellcheck disable=SC2154
 root_hash_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
-verity_variants=(
-	"confidential:KERNELVERITYPARAMS"
-	"nvidia-gpu:KERNELVERITYPARAMS_NV"
-	"nvidia-gpu-confidential:KERNELVERITYPARAMS_CONFIDENTIAL_NV"
-)
-for entry in "${verity_variants[@]}"; do
-	variant="${entry%%:*}"
-	param_var="${entry#*:}"
-	root_hash_file="${root_hash_dir}/root_hash_${variant}.txt"
-	[[ -f "${root_hash_file}" ]] || continue
+
+# read_verity_param <variant-label> <make-var-name>
+# Emits " VAR=value" if the matching root_hash_<variant>.txt exists, else nothing.
+read_verity_param() {
+	local variant="$1"
+	local param_var="$2"
+	local root_hash_file="${root_hash_dir}/root_hash_${variant}.txt"
+	[[ -f "${root_hash_file}" ]] || return 0
 
 	# root_hash_*.txt contains a single kernel_verity_params line.
+	local root_measure_config
 	IFS= read -r root_measure_config < "${root_hash_file}"
 	root_measure_config="${root_measure_config%$'\r'}"
 	[[ -n "${root_measure_config}" ]] || die "Empty kernel verity params in ${root_hash_file}"
 
-	EXTRA_OPTS+=" ${param_var}=${root_measure_config}"
-done
+	printf ' %s=%s' "${param_var}" "${root_measure_config}"
+}
+
+# Shared by both runtimes (NVIDIA GPU variants).
+EXTRA_OPTS+="$(read_verity_param "nvidia-gpu" "KERNELVERITYPARAMS_NV")"
+EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-confidential" "KERNELVERITYPARAMS_CONFIDENTIAL_NV")"
+
+# runtime-rs (Rust): split image -> base hash + CoCo extension hash.
+RUST_EXTRA_OPTS="$(read_verity_param "base" "KERNELVERITYPARAMS")"
+RUST_EXTRA_OPTS+="$(read_verity_param "coco-extension" "COCOVERITYPARAMS")"
+
+# runtime (Go): monolithic confidential image -> confidential hash.
+GO_EXTRA_OPTS="$(read_verity_param "confidential" "KERNELVERITYPARAMS")"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
@@ -95,7 +116,7 @@ case "${RUNTIME_CHOICE}" in
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
-			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
+			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}${RUST_EXTRA_OPTS}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			--env CROSS_BUILD="${CROSS_BUILD}" \
@@ -104,7 +125,7 @@ case "${RUNTIME_CHOICE}" in
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
-			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS} install"
+			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS}${RUST_EXTRA_OPTS} install"
 		;;
 esac
 
@@ -117,14 +138,14 @@ case "${RUNTIME_CHOICE}" in
 			--user "$(id -u)":"$(id -g)" \
 			--env GOMODCACHE=/opt/.cache/gomod \
 			"${container_image}" \
-			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
+			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}${GO_EXTRA_OPTS}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			-w "${repo_root_dir}/src/runtime" \
 			--user "$(id -u)":"$(id -g)" \
 			--env GOMODCACHE=/opt/.cache/gomod \
 			"${container_image}" \
-			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS} install"
+			bash -c "make PREFIX='${PREFIX}' DESTDIR='${DESTDIR}' ${EXTRA_OPTS}${GO_EXTRA_OPTS} install"
 		;;
 esac
 

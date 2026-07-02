@@ -170,6 +170,34 @@ containerd:
 nodeSelector: {}
 tolerations: []
 
+# Startup taints to remove from a node once Kata is installed on it and the node
+# has been labeled katacontainers.io/kata-runtime=true (the final install step).
+#
+# This closes a scheduling race: kata-deploy installs the runtime asynchronously
+# via a DaemonSet (or per-node Jobs), so on a freshly provisioned node a pod that
+# requests a Kata RuntimeClass can be scheduled before the runtime binaries exist
+# and fail to start. Provision such nodes with a startup taint that keeps Kata
+# workloads off them, list that taint here, and kata-deploy will remove it only
+# after the runtime is ready, at which point the scheduler admits the workloads.
+#
+# Each entry is either a bare taint key (removes that key for ANY effect) or
+# "key:effect" (removes only the taint with that key AND effect). Removal is
+# best-effort and idempotent: a taint that is already absent is simply skipped,
+# and a failure to remove leaves the taint in place (workloads stay gated) rather
+# than admitting them prematurely.
+#
+# For this to work, kata-deploy itself must tolerate the taint so its own pods can
+# land on the node. Add a matching entry under `tolerations` above.
+#
+# Example (pairs with a Karpenter NodePool `startupTaints` entry of the same key):
+#   tolerations:
+#     - key: "katacontainers.io/kata-runtime"
+#       operator: "Exists"
+#       effect: "NoSchedule"
+#   startupTaints:
+#     - "katacontainers.io/kata-runtime:NoSchedule"
+startupTaints: []
+
 # Priority class name for the kata-deploy DaemonSet pods.
 #
 # kata-deploy is an infrastructure DaemonSet that installs Kata runtime
@@ -283,6 +311,12 @@ snapshotter:
   # erofs snapshotter. When empty, kata-deploy uses its built-in default
   # (merged).
   erofsMergeMode: ""
+  # EROFS snapshotter mode. Controls the rw-layer backing strategy.
+  # Valid values: "" (default), "disk", or "memory".
+  erofsSnapshotterMode: ""
+  # Enable dm-verity integrity verification for EROFS lower layers.
+  # Independent of erofsSnapshotterMode — works with both disk and memory.
+  erofsDmverity: false
 
 # Shim configuration
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.

@@ -10,6 +10,8 @@ metadata:
   name: hostpath-kmsg
 spec:
   runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
   restartPolicy: Never
   volumes:
   - name: dev-kmsg

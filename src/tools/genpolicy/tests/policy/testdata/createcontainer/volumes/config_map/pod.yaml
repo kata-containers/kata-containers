@@ -12,6 +12,9 @@ spec:
         - name: config
           mountPath: /config
           readOnly: true
+      securityContext:
+        runAsUser: 65535
+        runAsGroup: 0
   volumes:
     - name: config
       configMap:
