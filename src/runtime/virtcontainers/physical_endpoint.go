@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
@@ -32,6 +33,7 @@ var physicalTrace = getNetworkTrace(PhysicalEndpointType)
 // PhysicalEndpoint gathers a physical network interface and its properties
 type PhysicalEndpoint struct {
 	IfaceName          string
+	IsVFIO             bool
 	HardAddr           string
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
@@ -40,6 +42,10 @@ type PhysicalEndpoint struct {
 	VendorDeviceID     string
 	PCIPath            vcTypes.PciPath
 	CCWDevice          *vcTypes.CcwDevice
+	NetPair            NetworkInterfacePair
+	BusType            string
+	RxRateLimiter      bool
+	TxRateLimiter      bool
 }
 
 // Properties returns the properties of the physical interface.
@@ -89,7 +95,7 @@ func (endpoint *PhysicalEndpoint) SetProperties(properties NetworkInfo) {
 
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
-	return nil
+	return &endpoint.NetPair
 }
 
 // Attach for physical endpoint binds the physical network interface to
@@ -97,54 +103,57 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 	span, ctx := physicalTrace(ctx, "Attach", endpoint)
 	defer span.End()
-
-	// Push the desired netdev MAC down to the VF as an "admin MAC" via the
-	// PF before we rebind to vfio-pci. Without this the guest's mlx5_core
-	// inherits whatever firmware-default MAC the VF was created with, the
-	// guest netdev MAC ends up different from the IB port's HCA MAC, and
-	// `mlx5_ib`'s GID cache refuses to populate
-	// `/sys/class/infiniband/mlx5_*/ports/N/gids/*`. RoCE then looks like
-	// it works (port = ACTIVE, link_layer = Ethernet) but every actual
-	// verb that needs a GID — RoCEv2 packets, address handles, librdmacm
-	// bind — fails. The bind-to-vfio-pci step is the VF's reset, so the
-	// firmware applies the admin MAC during that transition; the guest
-	// then sees a single consistent MAC across netdev / IB port / HCA.
-	// Best-effort: any failure here is logged and the fallback (agent-side
-	// MAC reconciliation, see rpc.rs::update_interface) still keeps L2/L3
-	// working.
-	if endpoint.HardAddr != "" && endpoint.BDF != "" {
-		if err := setVfAdminMAC(endpoint.BDF, endpoint.HardAddr); err != nil {
-			networkLogger().WithFields(logrus.Fields{
-				"bdf":    endpoint.BDF,
-				"netdev": endpoint.IfaceName,
-				"hwAddr": endpoint.HardAddr,
-			}).WithError(err).Warn("setVfAdminMAC: skipped, falling back to in-guest MAC reconciliation")
+	if endpoint.IsVFIO {
+		// Push the desired netdev MAC down to the VF as an "admin MAC" via the
+		// PF before we rebind to vfio-pci. Without this the guest's mlx5_core
+		// inherits whatever firmware-default MAC the VF was created with, the
+		// guest netdev MAC ends up different from the IB port's HCA MAC, and
+		// `mlx5_ib`'s GID cache refuses to populate
+		// `/sys/class/infiniband/mlx5_*/ports/N/gids/*`. RoCE then looks like
+		// it works (port = ACTIVE, link_layer = Ethernet) but every actual
+		// verb that needs a GID — RoCEv2 packets, address handles, librdmacm
+		// bind — fails. The bind-to-vfio-pci step is the VF's reset, so the
+		// firmware applies the admin MAC during that transition; the guest
+		// then sees a single consistent MAC across netdev / IB port / HCA.
+		// Best-effort: any failure here is logged and the fallback (agent-side
+		// MAC reconciliation, see rpc.rs::update_interface) still keeps L2/L3
+		// working.
+		if endpoint.HardAddr != "" && endpoint.BDF != "" {
+			if err := setVfAdminMAC(endpoint.BDF, endpoint.HardAddr); err != nil {
+				networkLogger().WithFields(logrus.Fields{
+					"bdf":    endpoint.BDF,
+					"netdev": endpoint.IfaceName,
+					"hwAddr": endpoint.HardAddr,
+				}).WithError(err).Warn("setVfAdminMAC: skipped, falling back to in-guest MAC reconciliation")
+			}
 		}
-	}
-
-	// Unbind physical interface from host driver and bind to vfio
-	// so that it can be passed to qemu.
-	vfioPath, err := bindNICToVFIO(endpoint)
-	if err != nil {
+		// Unbind physical interface from host driver and bind to vfio
+		// so that it can be passed to qemu.
+		vfioPath, err := bindNICToVFIO(endpoint)
+		if err != nil {
+			return err
+		}
+		c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+		if err != nil {
+			return err
+		}
+		d := config.DeviceInfo{
+			ContainerPath: vfioPath,
+			DevType:       string(c.Type),
+			Major:         c.Major,
+			Minor:         c.Minor,
+			ColdPlug:      true,
+			Port:          s.config.HypervisorConfig.ColdPlugVFIO,
+		}
+		_, err = s.AddDevice(ctx, d)
 		return err
+	} else {
+		h := s.hypervisor
+		if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
+			return err
+		}
+		return h.AddDevice(ctx, endpoint, NetDev)
 	}
-
-	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
-	if err != nil {
-		return err
-	}
-
-	d := config.DeviceInfo{
-		ContainerPath: vfioPath,
-		DevType:       string(c.Type),
-		Major:         c.Major,
-		Minor:         c.Minor,
-		ColdPlug:      true,
-		Port:          s.config.HypervisorConfig.ColdPlugVFIO,
-	}
-
-	_, err = s.AddDevice(ctx, d)
-	return err
 }
 
 // Detach for physical endpoint unbinds the physical network interface from vfio-pci
@@ -152,167 +161,216 @@ func (endpoint *PhysicalEndpoint) Attach(ctx context.Context, s *Sandbox) error 
 func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool, netNsPath string) error {
 	span, _ := physicalTrace(ctx, "Detach", endpoint)
 	defer span.End()
-
-	// Bind back the physical network interface to host.
-	// We need to do this even if a new network namespace has not
-	// been created by virtcontainers.
-
-	// We do not need to enter the network namespace to bind back the
-	// physical interface to host driver.
-	return bindNICToHost(endpoint)
+	if endpoint.IsVFIO {
+		// Bind back the physical network interface to host.
+		// We need to do this even if a new network namespace has not
+		// been created by virtcontainers.
+		// We do not need to enter the network namespace to bind back the
+		// physical interface to host driver.
+		return bindNICToHost(endpoint)
+	} else {
+		// The network namespace would have been deleted at this point
+		// if it has not been created by virtcontainers.
+		if !netNsCreated {
+			return nil
+		}
+		return doNetNS(netNsPath, func(_ ns.NetNS) error {
+			return xDisconnectVMNetwork(ctx, endpoint)
+		})
+	}
 }
 
 // HotAttach for physical endpoint not supported yet
 func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 	span, ctx := physicalTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
-
-	// Unbind physical interface from host driver and bind to vfio
-	// so that it can be passed to the hypervisor.
-	vfioPath, err := bindNICToVFIO(endpoint)
-	if err != nil {
+	if endpoint.IsVFIO {
+		// Unbind physical interface from host driver and bind to vfio
+		// so that it can be passed to the hypervisor.
+		vfioPath, err := bindNICToVFIO(endpoint)
+		if err != nil {
+			return err
+		}
+		c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+		if err != nil {
+			return err
+		}
+		d := config.DeviceInfo{
+			ContainerPath: vfioPath,
+			DevType:       string(c.Type),
+			Major:         c.Major,
+			Minor:         c.Minor,
+			ColdPlug:      false,
+		}
+		_, err = s.AddDevice(ctx, d)
 		return err
+	} else {
+		h := s.hypervisor
+		if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
+			return err
+		}
+		if _, err := h.HotplugAddDevice(ctx, endpoint, NetDev); err != nil {
+			return err
+		}
+		return nil
 	}
-
-	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
-	if err != nil {
-		return err
-	}
-
-	d := config.DeviceInfo{
-		ContainerPath: vfioPath,
-		DevType:       string(c.Type),
-		Major:         c.Major,
-		Minor:         c.Minor,
-		ColdPlug:      false,
-	}
-
-	_, err = s.AddDevice(ctx, d)
-	return err
 }
 
 // HotDetach for physical endpoint not supported yet
 func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
-	span, _ := physicalTrace(ctx, "HotDetach", endpoint)
+	span, ctx := physicalTrace(ctx, "HotDetach", endpoint)
 	defer span.End()
-
 	var vfioPath string
 	var err error
-
-	if vfioPath, err = drivers.GetVFIODevPath(endpoint.BDF); err != nil {
-		return err
+	if endpoint.IsVFIO {
+		if vfioPath, err = drivers.GetVFIODevPath(endpoint.BDF); err != nil {
+			return err
+		}
+		c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+		if err != nil {
+			return err
+		}
+		d := config.DeviceInfo{
+			ContainerPath: vfioPath,
+			DevType:       string(c.Type),
+			Major:         c.Major,
+			Minor:         c.Minor,
+			ColdPlug:      false,
+		}
+		device := s.devManager.FindDevice(&d)
+		if device == nil {
+			return fmt.Errorf("failed to find VFIO device for %s during hot detach", endpoint.BDF)
+		}
+		s.devManager.RemoveDevice(device.DeviceID())
+		// We do not need to enter the network namespace to bind back the
+		// physical interface to host driver.
+		return bindNICToHost(endpoint)
+	} else {
+		if !netNsCreated {
+			return nil
+		}
+		if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
+			return xDisconnectVMNetwork(ctx, endpoint)
+		}); err != nil {
+			networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
+		}
+		h := s.hypervisor
+		if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
+			return err
+		}
+		return nil
 	}
-
-	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
-	if err != nil {
-		return err
-	}
-
-	d := config.DeviceInfo{
-		ContainerPath: vfioPath,
-		DevType:       string(c.Type),
-		Major:         c.Major,
-		Minor:         c.Minor,
-		ColdPlug:      false,
-	}
-
-	device := s.devManager.FindDevice(&d)
-	s.devManager.RemoveDevice(device.DeviceID())
-
-	// We do not need to enter the network namespace to bind back the
-	// physical interface to host driver.
-	return bindNICToHost(endpoint)
 }
 
-// isPhysicalIface checks if an interface is a physical device.
-// We use ethtool here to not rely on device sysfs inside the network namespace.
-func isPhysicalIface(ifaceName string) (bool, error) {
-	if ifaceName == "lo" {
-		return false, nil
-	}
-
-	ethHandle, err := ethtool.NewEthtool()
-	if err != nil {
-		return false, err
-	}
-	defer ethHandle.Close()
-
-	bus, err := ethHandle.BusInfo(ifaceName)
-	if err != nil {
-		return false, nil
-	}
-
-	// Check for a pci bus format
-	tokens := strings.Split(bus, ":")
-	if len(tokens) != 3 {
-		return false, nil
-	}
-
-	return true, nil
+// isPhysicalIface checks if an interface is a physical device by inspecting
+// the link's ParentDevBus attribute. Returns true when the bus is "pci" or
+// "vmbus". ParentDevBus is populated by the kernel via netlink
+// and does not require sysfs access inside the network namespace.
+func isPhysicalIface(link netlink.Link) bool {
+	isParent := (link.Attrs().ParentDevBus == "pci" || link.Attrs().ParentDevBus == "vmbus")
+	return isParent
 }
 
-var sysPCIDevicesPath = "/sys/bus/pci/devices"
+var sysBusPath = "/sys/bus/"
 
-func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
-	// Get ethtool handle to derive driver and bus
-	ethHandle, err := ethtool.NewEthtool()
+// Get vendor and device id from pci space (sys/bus/pci/devices, or sys/bus/vmbus/devices, ...)
+func getDevicesPath(link netlink.Link) string {
+	return filepath.Join(sysBusPath, link.Attrs().ParentDevBus, "devices")
+}
+
+// Get vendor and device id from pci space (sys/bus/pci/devices/$BusDeviceInfo)
+func getIfaceDevicePath(link netlink.Link, deviceInterfaceName string) (string, string, error) {
+	if link.Attrs().ParentDevBus == "pci" {
+		// Get ethtool handle to derive driver and bus
+		ethHandle, err := ethtool.NewEthtool()
+		if err != nil {
+			return "", "", err
+		}
+		defer ethHandle.Close()
+		// Get Bus info
+		bdf, err := ethHandle.BusInfo(deviceInterfaceName)
+		if err != nil {
+			return "", "", err
+		}
+		// Get device by following symlink /sys/bus/pci/devices/$bdf
+		return filepath.Join(getDevicesPath(link), bdf), bdf, nil
+	} else if link.Attrs().ParentDevBus == "vmbus" {
+		parentDev := link.Attrs().ParentDev
+		if parentDev == "" {
+			return "", "", fmt.Errorf("vmbus interface %q has empty ParentDev; cannot resolve sysfs device path", deviceInterfaceName)
+		}
+		return filepath.Join(getDevicesPath(link), parentDev), parentDev, nil
+	} else {
+		return "", "", fmt.Errorf("unsupported ParentDevBus: %s", link.Attrs().ParentDevBus)
+	}
+}
+func createPhysicalEndpoint(idx int, netInfo NetworkInfo, isVFIODisabled bool, interworkingModel NetInterworkingModel) (*PhysicalEndpoint, error) {
+	sysIfaceDevicePath, bdf, err := getIfaceDevicePath(netInfo.Link, netInfo.Iface.Name)
 	if err != nil {
 		return nil, err
 	}
-	defer ethHandle.Close()
-
-	// Get BDF
-	bdf, err := ethHandle.BusInfo(netInfo.Iface.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get driver by following symlink /sys/bus/pci/devices/$bdf/driver
-	driverPath := filepath.Join(sysPCIDevicesPath, bdf, "driver")
+	// Get driver by following symlink /sys/bus/pci/devices/$bdf/driver or /sys/bus/vmbus/devices/$guid/driver
+	driverPath := filepath.Join(sysIfaceDevicePath, "driver")
 	link, err := os.Readlink(driverPath)
 	if err != nil {
 		return nil, err
 	}
-
 	driver := filepath.Base(link)
-
-	// Get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
-
-	ifaceDevicePath := filepath.Join(sysPCIDevicesPath, bdf, "device")
+	// Get device by following symlink /sys/bus/pci/devices/$bdf/device or /sys/bus/vmbus/devices/$guid/device
+	ifaceDevicePath := filepath.Join(sysIfaceDevicePath, "device")
 	contents, err := os.ReadFile(ifaceDevicePath)
 	if err != nil {
 		return nil, err
 	}
-
 	deviceID := strings.TrimSpace(string(contents))
-
-	// Vendor id
-	ifaceVendorPath := filepath.Join(sysPCIDevicesPath, bdf, "vendor")
+	// Vendor id (/sys/bus/pci/devices/$bdf/vendor or /sys/bus/vmbus/devices/$guid/vendor)
+	ifaceVendorPath := filepath.Join(sysIfaceDevicePath, "vendor")
 	contents, err = os.ReadFile(ifaceVendorPath)
 	if err != nil {
 		return nil, err
 	}
-
+	// Determine whether to use VFIO passthrough based on bus type:
+	// PCI devices are passed through via VFIO.
+	// VMBus devices use a network pair (tap/bridge).
+	isVFIO := (netInfo.Link.Attrs().ParentDevBus == "pci")
+	netPair := NetworkInterfacePair{}
+	if isVFIO {
+		if isVFIODisabled {
+			// When `cold_plug_vfio` is set to "no-port", the PhysicalEndpoint's VFIO device cannot be attached to the guest VM.
+			// Fail early to prevent the interface from being unbound and rebound to the VFIO driver.
+			return nil, fmt.Errorf("unable to add physical endpoint %s: cold_plug_vfio is disabled", netInfo.Iface.Name)
+		}
+	} else {
+		if idx < 0 {
+			return nil, fmt.Errorf("invalid network endpoint index: %d", idx)
+		}
+		netPair, err = createNetworkInterfacePair(idx, netInfo.Iface.Name, interworkingModel)
+		if err != nil {
+			return nil, err
+		}
+		if netInfo.Iface.Name != "" {
+			netPair.VirtIface.Name = netInfo.Iface.Name
+		}
+	}
 	vendorID := strings.TrimSpace(string(contents))
 	vendorDeviceID := fmt.Sprintf("%s %s", vendorID, deviceID)
 	vendorDeviceID = strings.TrimSpace(vendorDeviceID)
-
 	physicalEndpoint := &PhysicalEndpoint{
 		IfaceName:      netInfo.Iface.Name,
+		IsVFIO:         isVFIO,
 		HardAddr:       netInfo.Iface.HardwareAddr.String(),
 		VendorDeviceID: vendorDeviceID,
 		EndpointType:   PhysicalEndpointType,
 		Driver:         driver,
 		BDF:            bdf,
+		NetPair:        netPair,
+		BusType:        netInfo.Link.Attrs().ParentDevBus,
 	}
-
 	return physicalEndpoint, nil
 }
-
 func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
 	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver)
 }
-
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
 	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver)
 }
@@ -431,41 +489,64 @@ func pfNetdevName(pfBDF string) (string, error) {
 }
 
 func (endpoint *PhysicalEndpoint) save() persistapi.NetworkEndpoint {
+	// saveNetIfPair returns a non-nil pair when given a non-nil input. For VFIO
+	// physical endpoints the pair is intentionally empty; persist it as-is
+	// without warning.
+	savedPair := *saveNetIfPair(&endpoint.NetPair)
 	return persistapi.NetworkEndpoint{
 		Type: string(endpoint.Type()),
-
 		Physical: &persistapi.PhysicalEndpoint{
 			BDF:            endpoint.BDF,
 			Driver:         endpoint.Driver,
 			VendorDeviceID: endpoint.VendorDeviceID,
+			NetPair:        savedPair,
+			BusType:        endpoint.BusType,
+			IsVFIO:         endpoint.IsVFIO,
 		},
 	}
 }
-
 func (endpoint *PhysicalEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = PhysicalEndpointType
-
 	if s.Physical != nil {
+		if netpair := loadNetIfPair(&s.Physical.NetPair); netpair != nil {
+			endpoint.NetPair = *netpair
+		}
 		endpoint.BDF = s.Physical.BDF
 		endpoint.Driver = s.Physical.Driver
 		endpoint.VendorDeviceID = s.Physical.VendorDeviceID
+		endpoint.BusType = s.Physical.BusType
+		endpoint.IsVFIO = s.Physical.IsVFIO
 	}
 }
 
-// unsupported
 func (endpoint *PhysicalEndpoint) GetRxRateLimiter() bool {
-	return false
+	return endpoint.RxRateLimiter
 }
-
 func (endpoint *PhysicalEndpoint) SetRxRateLimiter() error {
-	return fmt.Errorf("rx rate limiter is unsupported for physical endpoint")
+	if endpoint.IsVFIO {
+		// VFIO endpoints use VFIO passthrough; the runtime has no dataplane in
+		// which to enforce rate limiting. Leave the flag unset so callers can
+		// observe the actual runtime behavior via GetRxRateLimiter().
+		networkLogger().WithField("endpoint", endpoint.Name()).
+			Debug("ignoring SetRxRateLimiter on VFIO physical endpoint")
+		return nil
+	}
+	endpoint.RxRateLimiter = true
+	return nil
 }
 
-// unsupported
 func (endpoint *PhysicalEndpoint) GetTxRateLimiter() bool {
-	return false
+	return endpoint.TxRateLimiter
 }
-
 func (endpoint *PhysicalEndpoint) SetTxRateLimiter() error {
-	return fmt.Errorf("tx rate limiter is unsupported for physical endpoint")
+	if endpoint.IsVFIO {
+		// VFIO endpoints use VFIO passthrough; the runtime has no dataplane in
+		// which to enforce rate limiting. Leave the flag unset so callers can
+		// observe the actual runtime behavior via GetTxRateLimiter().
+		networkLogger().WithField("endpoint", endpoint.Name()).
+			Debug("ignoring SetTxRateLimiter on VFIO physical endpoint")
+		return nil
+	}
+	endpoint.TxRateLimiter = true
+	return nil
 }
