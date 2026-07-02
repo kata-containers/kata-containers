@@ -165,3 +165,22 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 
 	return nil
 }
+
+// FetchSandbox fetches an existing sandbox by ID and returns it.
+// The caller is responsible for calling Release() on the returned sandbox.
+func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := katatrace.Trace(ctx, virtLog, "FetchSandbox", apiTracingTags)
+	defer span.End()
+
+	if sandboxID == "" {
+		return nil, vcTypes.ErrNeedSandboxID
+	}
+
+	unlock, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
+	return fetchSandbox(ctx, sandboxID)
+}
