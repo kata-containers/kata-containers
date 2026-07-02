@@ -1,0 +1,32 @@
+#
+# Copyright (c) 2026 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Privileged runc pod that serves the host UDS endpoint for vsock_uds_forward tests.
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vsock-uds-forward-echo-pod
+spec:
+  restartPolicy: Never
+  containers:
+    - name: vsock-uds-forward-echo
+      image: quay.io/kata-containers/alpine:3.22.0
+      securityContext:
+        privileged: true
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          apk add --no-cache socat
+          rm -f /var/run/kata-vsock-uds-test/fwd.sock
+          exec socat -v -v -d -d UNIX-LISTEN:/var/run/kata-vsock-uds-test/fwd.sock,fork,reuseaddr SYSTEM:'read -r req && echo kata-vsock-uds-forward-ok && sleep 10'
+      volumeMounts:
+        - name: uds-dir
+          mountPath: /var/run/kata-vsock-uds-test
+  volumes:
+    - name: uds-dir
+      hostPath:
+        path: /var/run/kata-vsock-uds-test
+        type: DirectoryOrCreate

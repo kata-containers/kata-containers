@@ -15,6 +15,8 @@ use crate::validate_path;
 pub mod shared_mount;
 pub use shared_mount::SharedMount;
 
+use super::vsock_uds_forward::parse_vsock_uds_forward_list;
+
 /// Type of runtime VirtContainer.
 pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
 
@@ -223,6 +225,10 @@ pub struct Runtime {
     ///              based cold plug.
     #[serde(default)]
     pub pod_resource_api_sock: String,
+
+    /// Bridge guest vsock listeners to host unix sockets (`["port:/absolute/unix/path"]`).
+    #[serde(default)]
+    pub vsock_uds_forward: Vec<String>,
 }
 
 fn default_passfd_listener_port() -> u32 {
@@ -299,6 +305,13 @@ impl ConfigOps for Runtime {
                 real_path.to_owned(),
                 "sandbox bind mount `{}` is invalid: {}"
             )?;
+        }
+
+        if let Err(err) = parse_vsock_uds_forward_list(&conf.runtime.vsock_uds_forward) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("runtime.vsock_uds_forward: {err}"),
+            ));
         }
 
         Ok(())

@@ -20,6 +20,7 @@ pub mod default;
 mod agent;
 mod drop_in;
 pub mod hypervisor;
+mod vsock_uds_forward;
 
 pub use self::agent::Agent;
 use self::default::DEFAULT_AGENT_DBG_CONSOLE_PORT;
@@ -34,6 +35,7 @@ pub use self::runtime::{
     Runtime, RuntimeVendor, EMPTYDIR_MODE_BLOCK_ENCRYPTED, EMPTYDIR_MODE_BLOCK_PLAIN,
     EMPTYDIR_MODE_SHARED_FS, RUNTIME_NAME_VIRTCONTAINER,
 };
+pub use self::vsock_uds_forward::{parse_vsock_uds_forward, parse_vsock_uds_forward_list};
 
 pub use self::agent::AGENT_NAME_KATA;
 

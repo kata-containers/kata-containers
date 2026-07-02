@@ -411,10 +411,8 @@ function deploy_microk8s() {
 }
 
 function install_system_dependencies() {
-	dependencies="${1}"
-
 	sudo apt-get update
-	sudo apt-get -y install "${dependencies}"
+	sudo apt-get -y install "$@"
 }
 
 function load_k8s_needed_modules() {
@@ -537,7 +535,7 @@ function deploy_vanilla_k8s() {
 		*) ;;
 	esac
 
-	install_system_dependencies "runc"
+	install_system_dependencies runc
 	load_k8s_needed_modules
 	set_k8s_network_parameters
 	disable_swap

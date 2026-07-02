@@ -202,6 +202,8 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			defaultStartManagementServerFunc(s, ctx, ociSpec)
 		}
 
+		s.tryStartVsockUDSForwardFromConfig()
+
 	case virtcontainers.PodContainer:
 		span, ctx := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
 		defer span.End()
