@@ -473,15 +473,9 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
     Ok(())
 }
 
-fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool) -> Result<()> {
+fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, _update: bool) -> Result<()> {
     info!(sl(), "cgroup manager set memory");
     let mem_controller: &MemController = cg.controller_of().unwrap();
-
-    if !update {
-        // initialize kmem limits for accounting
-        mem_controller.set_kmem_limit(1)?;
-        mem_controller.set_kmem_limit(-1)?;
-    }
 
     // If the memory update is set to -1 we should also
     // set swap to -1, it means unlimited memory.
