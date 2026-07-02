@@ -75,7 +75,7 @@ func copyLayersToMounts(rootFs *virtcontainers.RootFs, spec *specs.Spec) error {
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := virtcontainers.RootFs{}
-	if len(r.Rootfs) == 1 {
+	if len(r.Rootfs) >= 1 {
 		m := r.Rootfs[0]
 		rootFs.Source = m.Source
 		rootFs.Type = m.Type
@@ -308,7 +308,7 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 }
 
 func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
-	if len(r.Rootfs) == 1 {
+	if len(r.Rootfs) >= 1 {
 		m := r.Rootfs[0]
 
 		// Plug the block backed rootfs directly instead of mounting it.
@@ -350,6 +350,7 @@ func doMount(mounts []*containerd_types.Mount, rootfs string) error {
 	for _, rm := range mounts {
 		m := &mount.Mount{
 			Type:    rm.Type,
+			Target:  rm.Target,
 			Source:  rm.Source,
 			Options: rm.Options,
 		}
