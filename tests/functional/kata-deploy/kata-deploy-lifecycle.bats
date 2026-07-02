@@ -200,8 +200,8 @@ EOF
 	echo "# Uninstall complete, verifying cleanup..." >&3
 
 	# Wait for node to recover — containerd restart during cleanup may
-	# cause brief unavailability (especially on k3s/rke2).
-	kubectl wait nodes --timeout=120s --all --for condition=Ready=True
+	# cause brief unavailability (especially on k3s/rke2/microk8s).
+	kubectl wait nodes --timeout=300s --all --for condition=Ready=True
 
 	# RuntimeClasses must be gone (filter out AKS-managed ones)
 	local rc_count
@@ -242,7 +242,7 @@ EOF
 
 teardown() {
 	if [[ "${BATS_TEST_NAME}" == *"restart"* ]]; then
-		kubectl delete pod "${LIFECYCLE_POD_NAME}" --ignore-not-found=true --wait=false 2>/dev/null || true
+		kubectl delete pod "${LIFECYCLE_POD_NAME}" --ignore-not-found=true --timeout=120s 2>/dev/null || true
 	fi
 }
 
