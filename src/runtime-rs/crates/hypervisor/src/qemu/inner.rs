@@ -986,10 +986,12 @@ impl QemuInner {
                 qmp.hotunplug_block_device(&driver, index)
                     .context("hotunplug block device")?;
             }
+            DeviceType::VhostUserBlk(vhu_blk_dev) => {
+                qmp.hotunplug_vhost_user_blk_device(&vhu_blk_dev.device_id)?;
+            }
             DeviceType::Network(_)
             | DeviceType::Vfio(_)
             | DeviceType::VfioModern(_)
-            | DeviceType::VhostUserBlk(_)
             | DeviceType::VhostUserNetwork(_)
             | DeviceType::ShareFs(_)
             | DeviceType::HybridVsock(_)
@@ -1226,6 +1228,17 @@ impl QemuInner {
                         "Completed VFIOModern hotplug for device ID: {}", hostdev_id
                     );
                 }
+            }
+            DeviceType::VhostUserBlk(mut vhu_blk_dev) => {
+                let pci_path = qmp.hotplug_vhost_user_blk_device(
+                    &vhu_blk_dev.device_id,
+                    &vhu_blk_dev.config.socket_path,
+                    vhu_blk_dev.config.num_queues,
+                    vhu_blk_dev.config.queue_size,
+                    vhu_blk_dev.config.reconnect_time,
+                )?;
+                vhu_blk_dev.config.pci_path = Some(pci_path);
+                return Ok(DeviceType::VhostUserBlk(vhu_blk_dev));
             }
             _ => info!(
                 sl!(),

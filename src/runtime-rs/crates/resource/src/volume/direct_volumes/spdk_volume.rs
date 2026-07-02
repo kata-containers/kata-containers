@@ -74,12 +74,13 @@ impl SPDKVolume {
             }
         }
 
-        let block_driver = get_block_device_info(d).await.block_device_driver;
+        let block_dev_info = get_block_device_info(d).await;
 
         let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
             device_type: VhostUserType::Blk,
-            driver_option: block_driver,
+            driver_option: block_dev_info.block_device_driver,
+            reconnect_time: block_dev_info.vhost_user_reconnect_timeout_sec,
             ..Default::default()
         };
 
@@ -112,10 +113,14 @@ impl SPDKVolume {
 
         let mut device_id = String::new();
         if let DeviceType::VhostUserBlk(device) = device_info {
-            // blk, mmioblk
-            storage.driver = device.config.driver_option;
-            // /dev/vdX
-            storage.source = device.config.virt_path;
+            storage.driver = device.config.driver_option.clone();
+            // Use PCI path so the agent can wait for the device to appear,
+            // falling back to virt_path (/dev/vdX) for non-PCI transports.
+            storage.source = if let Some(ref pci_path) = device.config.pci_path {
+                pci_path.to_string()
+            } else {
+                device.config.virt_path.clone()
+            };
             device_id = device.device_id;
         }
 

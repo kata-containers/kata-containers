@@ -306,6 +306,11 @@ pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_QUEUE_SIZE: &str =
     "io.katacontainers.config.hypervisor.block_device_queue_size";
 
+/// It is a sandbox annotation to specify the timeout for reconnecting on
+/// non-server sockets when the remote end goes away.
+pub const KATA_ANNO_CFG_HYPERVISOR_VHOST_USER_RECONNECT_TIMEOUT: &str =
+    "io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec";
+
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
@@ -1026,6 +1031,16 @@ impl Annotation {
                         match self.get_value::<u32>(key) {
                             Ok(v) => {
                                 hv.blockdev_info.queue_size = v.unwrap_or_default();
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
+                        }
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_VHOST_USER_RECONNECT_TIMEOUT => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                hv.blockdev_info.vhost_user_reconnect_timeout_sec = v.unwrap_or_default();
                             }
                             Err(_e) => {
                                 return Err(u32_err);
