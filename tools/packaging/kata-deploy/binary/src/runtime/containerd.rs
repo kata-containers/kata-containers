@@ -691,14 +691,12 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             }
             fs::File::create(drop_in_file_path)?;
         }
-        "containerd" => {
-            if !Path::new(&config.containerd_conf_file).exists() {
-                if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
-                    if parent.exists() {
-                        // Write output to file
-                        let output = utils::host_exec(&["containerd", "config", "default"])?;
-                        fs::write(&config.containerd_conf_file, output)?;
-                    }
+        "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
+            if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
+                if parent.exists() {
+                    // Write output to file
+                    let output = utils::host_exec(&["containerd", "config", "default"])?;
+                    fs::write(&config.containerd_conf_file, output)?;
                 }
             }
         }

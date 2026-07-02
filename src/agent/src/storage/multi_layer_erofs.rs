@@ -319,7 +319,7 @@ pub async fn handle_multi_layer_erofs_group(
     let futures: Vec<_> = erofs_storages
         .iter()
         .enumerate()
-        .zip(resolved_base_devs.into_iter())
+        .zip(resolved_base_devs)
         .map(|((index, erofs), base_dev_path)| {
             let lower_mount = lower_mount_paths[index].clone();
             let sandbox = Arc::clone(sandbox);

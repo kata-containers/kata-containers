@@ -33,7 +33,6 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
-use hypervisor::{is_vfio_ap_device, VfioDeviceBase};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -43,6 +42,7 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
+use hypervisor::{is_vfio_ap_device, VfioDeviceBase};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
@@ -287,7 +287,9 @@ impl VirtSandbox {
         // avoiding unnecessary file I/O and OCI spec parsing in the common K8s case.
         let mut vfio_devices = self.prepare_coldplug_cdi_devices(sandbox_config).await?;
         if vfio_devices.is_empty() {
-            let raw_vfio = self.prepare_coldplug_raw_vfio_devices(sandbox_config).await?;
+            let raw_vfio = self
+                .prepare_coldplug_raw_vfio_devices(sandbox_config)
+                .await?;
             vfio_devices.extend(raw_vfio);
         }
         if !vfio_devices.is_empty() {
@@ -473,7 +475,9 @@ impl VirtSandbox {
                 Err(e) => {
                     warn!(
                         sl!(),
-                        "failed to resolve host path for {:?}: {:?}", d.path(), e
+                        "failed to resolve host path for {:?}: {:?}",
+                        d.path(),
+                        e
                     );
                     continue;
                 }

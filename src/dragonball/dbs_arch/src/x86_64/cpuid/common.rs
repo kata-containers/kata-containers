@@ -1,7 +1,7 @@
 // Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::arch::x86_64::{CpuidResult, __cpuid_count, __get_cpuid_max};
+use std::arch::x86_64::{__cpuid_count, __get_cpuid_max, CpuidResult};
 
 use super::cpu_leaf::*;
 

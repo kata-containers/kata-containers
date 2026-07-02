@@ -990,9 +990,7 @@ impl Qmp {
             }) {
                 warn!(
                     sl!(),
-                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
-                    node_name,
-                    e
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}", node_name, e
                 );
             }
             return Err(anyhow!("device_add {:?}", e));
@@ -1011,12 +1009,7 @@ impl Qmp {
 
         let result = loop {
             if let Err(e) = self.qmp.nop() {
-                warn!(
-                    sl!(),
-                    "The QMP nop() failed for {}: {:?}",
-                    device_id,
-                    e
-                );
+                warn!(sl!(), "The QMP nop() failed for {}: {:?}", device_id, e);
             }
 
             let found = self.qmp.events().any(|event| {
@@ -1026,8 +1019,7 @@ impl Qmp {
             if found {
                 info!(
                     sl!(),
-                    "The QMP received DEVICE_DELETED event for {}",
-                    device_id
+                    "The QMP received DEVICE_DELETED event for {}", device_id
                 );
                 break Ok(());
             }
@@ -1046,13 +1038,13 @@ impl Qmp {
         // Reset the default read timeout for subsequent QMP operations.
         // Failure here is non-fatal — a stale timeout only affects the next
         // QMP read, not the already-completed device removal.
-        if let Err(e) = self.qmp.inner_mut().get_mut_write().set_read_timeout(Some(
-            Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT),
-        )) {
-            warn!(
-                sl!(),
-                "Failed to reset read timeout: {:?}", e
-            );
+        if let Err(e) = self
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
+        {
+            warn!(sl!(), "Failed to reset read timeout: {:?}", e);
         }
 
         result
@@ -1308,12 +1300,9 @@ impl Qmp {
                 blkdev_add_args,
                 ccw_addr
             );
-            if let Err(e) = self.device_add_with_rollback(
-                &node_name,
-                None,
-                block_driver,
-                blkdev_add_args,
-            ) {
+            if let Err(e) =
+                self.device_add_with_rollback(&node_name, None, block_driver, blkdev_add_args)
+            {
                 if let Some(ref mut sub) = self.ccw_subchannel {
                     // Roll back CCW subchannel state if QMP device_add fails
                     let _ = sub.remove_device(&node_name);
@@ -1352,12 +1341,7 @@ impl Qmp {
                 blkdev_add_args
             );
 
-            self.device_add_with_rollback(
-                &node_name,
-                Some(bus),
-                block_driver,
-                blkdev_add_args,
-            )?;
+            self.device_add_with_rollback(&node_name, Some(bus), block_driver, blkdev_add_args)?;
 
             let pci_path = self
                 .get_device_by_qdev_id(&node_name)
@@ -1372,11 +1356,7 @@ impl Qmp {
     }
 
     /// Hotunplug block device.
-    pub fn hotunplug_block_device(
-        &mut self,
-        block_driver: &str,
-        index: u64,
-    ) -> Result<()> {
+    pub fn hotunplug_block_device(&mut self, block_driver: &str, index: u64) -> Result<()> {
         let node_name = block_node_name(index);
 
         let result = (|| -> Result<()> {
@@ -1398,9 +1378,7 @@ impl Qmp {
                 .execute(&qapi_qmp::blockdev_del {
                     node_name: node_name.clone(),
                 })
-                .map_err(|e| {
-                    anyhow!("blockdev_del for block device {}: {:?}", node_name, e)
-                })?;
+                .map_err(|e| anyhow!("blockdev_del for block device {}: {:?}", node_name, e))?;
 
             Ok(())
         })();

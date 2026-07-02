@@ -334,9 +334,9 @@ pub struct TokenBucketConfigInfo {
 
 impl TokenBucketConfigInfo {
     fn resize(&mut self, n: u64) {
-        if n != 0 {
-            self.size /= n;
-            self.one_time_burst /= n;
+        if let Some(size) = self.size.checked_div(n) {
+            self.size = size;
+            self.one_time_burst = self.one_time_burst.checked_div(n).unwrap_or(0);
         }
     }
 }
