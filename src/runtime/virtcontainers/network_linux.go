@@ -726,26 +726,21 @@ func (n *LinuxNetwork) SetEndpoints(endpoints []Endpoint) {
 	n.eps = endpoints
 }
 
-func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
+func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, multiQueueSupported bool, queues int) (netlink.Link, []*os.File, error) {
 	var newLink netlink.Link
 	var fds []*os.File
+
+	if queues > 1 && !multiQueueSupported {
+		return nil, fds, fmt.Errorf("queues = %d but multiple queues are not supported", queues)
+	}
 
 	switch expectedLink.Type() {
 	case (&netlink.Tuntap{}).Type():
 		flags := netlink.TUNTAP_VNET_HDR | netlink.TUNTAP_NO_PI
-		if queues > 0 {
+		if multiQueueSupported {
 			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
-		} else {
-			// We need to enforce `queues = 1` here in case
-			// multi-queue is *not* supported, the reason being
-			// `linkModify()`, a method called by `LinkAdd()`, only
-			// returning the file descriptor of the opened tuntap
-			// device when the queues are set to *non zero*.
-			//
-			// Please, for more information, refer to:
-			// https://github.com/kata-containers/kata-containers/blob/e6e5d2593ac319329269d7b58c30f99ba7b2bf5a/src/runtime/vendor/github.com/vishvananda/netlink/link_linux.go#L1164-L1316
-			queues = 1
 		}
+
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},
 			Mode:      netlink.TUNTAP_MODE_TAP,
@@ -856,25 +851,23 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 
 	netPair := endpoint.NetworkPair()
 
-	queues := 0
-	caps := h.Capabilities(ctx)
-	if caps.IsMultiQueueSupported() {
-		queues = int(h.HypervisorConfig().NumVCPUs())
-	}
-
 	disableVhostNet := h.HypervisorConfig().DisableVhostNet
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
 
+	caps := h.Capabilities(ctx)
+	multiQueueSupported := caps.IsMultiQueueSupported()
+	numVCPUs := h.HypervisorConfig().NumVCPUs()
+
 	switch netPair.NetInterworkingModel {
 	case NetXConnectMacVtapModel:
 		networkLogger().Info("connect macvtap to VM network")
-		err = tapNetworkPair(ctx, endpoint, queues, disableVhostNet)
+		err = tapNetworkPair(ctx, endpoint, multiQueueSupported, numVCPUs, disableVhostNet)
 	case NetXConnectTCFilterModel:
 		networkLogger().Info("connect TCFilter to VM network")
-		err = setupTCFiltering(ctx, endpoint, queues, disableVhostNet)
+		err = setupTCFiltering(ctx, endpoint, multiQueueSupported, numVCPUs, disableVhostNet)
 	default:
 		err = fmt.Errorf("Invalid internetworking model")
 	}
@@ -945,10 +938,10 @@ const linkRange = 0xFFFF    // This will allow upto 2^16 containers
 const linkRetries = 128     // The numbers of time we try to find a non conflicting index
 const macvtapWorkaround = true
 
-func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, queues int) (taplink netlink.Link, err error) {
+func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, multiQueueSupported bool, queues int) (taplink netlink.Link, err error) {
 
 	if !macvtapWorkaround {
-		taplink, _, err = createLink(netHandle, name, link, queues)
+		taplink, _, err = createLink(netHandle, name, link, multiQueueSupported, queues)
 		return
 	}
 
@@ -957,7 +950,7 @@ func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, qu
 	for i := 0; i < linkRetries; i++ {
 		index := hostLinkOffset + (r.Int() & linkRange)
 		link.Attrs().Index = index
-		taplink, _, err = createLink(netHandle, name, link, queues)
+		taplink, _, err = createLink(netHandle, name, link, multiQueueSupported, queues)
 		if err == nil {
 			break
 		}
@@ -984,7 +977,7 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableVhostNet bool) error {
+func tapNetworkPair(ctx context.Context, endpoint Endpoint, multiQueueSupported bool, numVCPUs uint32, disableVhostNet bool) error {
 	span, _ := networkTrace(ctx, "tapNetworkPair", endpoint)
 	defer span.End()
 
@@ -1001,6 +994,11 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 		return err
 	}
 
+	queues := 1
+	if multiQueueSupported {
+		queues = int(numVCPUs)
+	}
+
 	attrs := link.Attrs()
 
 	// Attach the macvtap interface to the underlying container
@@ -1013,7 +1011,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 					ParentIndex: attrs.Index,
 				},
 			},
-		}, queues)
+		}, multiQueueSupported, queues)
 
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
@@ -1081,7 +1079,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	return nil
 }
 
-func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disableVhostNet bool) error {
+func setupTCFiltering(ctx context.Context, endpoint Endpoint, multiQueueSupported bool, numVCPUs uint32, disableVhostNet bool) error {
 	span, _ := networkTrace(ctx, "setupTCFiltering", endpoint)
 	defer span.End()
 
@@ -1093,7 +1091,20 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 
 	netPair := endpoint.NetworkPair()
 
-	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, queues)
+	// The default value is `queues = 1` here in case
+	// multi-queue is *not* supported, the reason being
+	// `linkModify()`, a method called by `LinkAdd()`, only
+	// returning the file descriptor of the opened tuntap
+	// device when the queues are set to *non zero*.
+	//
+	// Please, for more information, refer to:
+	// https://github.com/kata-containers/kata-containers/blob/e6e5d2593ac319329269d7b58c30f99ba7b2bf5a/src/runtime/vendor/github.com/vishvananda/netlink/link_linux.go#L1164-L1316
+	queues := 1
+	if multiQueueSupported {
+		queues = int(numVCPUs)
+	}
+
+	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, multiQueueSupported, queues)
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
 	}
