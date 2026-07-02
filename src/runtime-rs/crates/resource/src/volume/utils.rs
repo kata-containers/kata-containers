@@ -12,15 +12,12 @@ use std::{
 };
 
 use crate::{
+    block_device::agent_storage_source_from_block_config,
     share_fs::{do_get_guest_path, do_get_host_path},
     volume::share_fs_volume::generate_mount_path,
 };
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{get_mount_options, get_mount_path};
-use kata_types::device::{
-    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
-    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
-};
 use oci_spec::runtime as oci;
 
 use hypervisor::device::DeviceType;
@@ -93,44 +90,6 @@ pub(crate) async fn generate_shared_path(
     Ok(guest_path)
 }
 
-/// Extract storage source information from block device configuration.
-/// This helper function handles the common logic for determining the storage source
-/// based on the driver type (BLK/SCSI/CCW).
-fn extract_storage_source(
-    driver_option: &str,
-    pci_path: Option<&hypervisor::device::pci_path::PciPath>,
-    scsi_addr: Option<&str>,
-    ccw_addr: Option<&str>,
-    virt_path: &str,
-) -> Result<String> {
-    let source = match driver_option {
-        KATA_BLK_DEV_TYPE => {
-            if let Some(pci_path) = pci_path {
-                pci_path.to_string()
-            } else {
-                return Err(anyhow!("block driver is blk but no pci path exists"));
-            }
-        }
-        KATA_SCSI_DEV_TYPE => {
-            if let Some(scsi_addr) = scsi_addr {
-                scsi_addr.to_string()
-            } else {
-                return Err(anyhow!("block driver is scsi but no scsi address exists"));
-            }
-        }
-        KATA_CCW_DEV_TYPE => {
-            if let Some(ccw_addr) = ccw_addr {
-                ccw_addr.to_string()
-            } else {
-                return Err(anyhow!("block driver is ccw but no ccw address exists"));
-            }
-        }
-        _ => virt_path.to_string(),
-    };
-
-    Ok(source)
-}
-
 pub async fn handle_block_volume(
     device_info: DeviceType,
     m: &oci::Mount,
@@ -157,25 +116,13 @@ pub async fn handle_block_volume(
     if let DeviceType::BlockModern(device_mod) = device_info.clone() {
         let device = &device_mod.lock().await;
         storage.driver = device.config.driver_option.clone();
-        storage.source = extract_storage_source(
-            &device.config.driver_option,
-            device.config.pci_path.as_ref(),
-            device.config.scsi_addr.as_deref(),
-            device.config.ccw_addr.as_deref(),
-            &device.config.virt_path,
-        )?;
+        storage.source = agent_storage_source_from_block_config(&device.config)?;
         device_id = device.device_id.clone();
     }
 
     if let DeviceType::Block(device) = device_info {
         storage.driver = device.config.driver_option.clone();
-        storage.source = extract_storage_source(
-            &device.config.driver_option,
-            device.config.pci_path.as_ref(),
-            device.config.scsi_addr.as_deref(),
-            device.config.ccw_addr.as_deref(),
-            &device.config.virt_path,
-        )?;
+        storage.source = agent_storage_source_from_block_config(&device.config)?;
         device_id = device.device_id;
     }
 
