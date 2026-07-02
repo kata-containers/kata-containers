@@ -343,49 +343,63 @@ impl CgroupsResourceInner {
         let num_vcpus = thread_ids.vcpus.len();
         let num_cpus = cpuset_slice.len();
 
-        if num_vcpus == 0 || num_cpus == 0 || num_vcpus != num_cpus {
-            if num_vcpus == 0 {
-                info!(sl!(), "vCPU pinning: no vCPU threads found, skipping");
-            } else if num_cpus == 0 {
-                info!(sl!(), "vCPU pinning: no cpuset configured, skipping");
-            } else {
-                info!(
-                    sl!(),
-                    "vCPU pinning: vCPU count ({}) != cpuset size ({}), pinning not possible",
-                    num_vcpus,
-                    num_cpus
-                );
+        // The pinning decision (which vCPU pins to which host CPU, and which
+        // overhead vCPUs float) is computed by `plan_vcpus_pinning` so it can
+        // be unit-tested without issuing real `sched_setaffinity` syscalls.
+        match plan_vcpus_pinning(&thread_ids.vcpus, &cpuset_slice) {
+            VcpuPinningPlan::Skip => {
+                if num_vcpus == 0 {
+                    info!(sl!(), "vCPU pinning: no vCPU threads found, skipping");
+                } else if num_cpus == 0 {
+                    info!(sl!(), "vCPU pinning: no cpuset configured, skipping");
+                } else {
+                    info!(
+                        sl!(),
+                        "vCPU pinning: vCPU count ({}) < cpuset size ({}), pinning not possible",
+                        num_vcpus,
+                        num_cpus
+                    );
+                }
+                if self.is_vcpus_pinning_on && num_vcpus > 0 {
+                    info!(sl!(), "vCPU pinning: resetting previous pinning");
+                    self.reset_vcpus_pinning(&thread_ids.vcpus, &cpuset_slice)?;
+                    self.is_vcpus_pinning_on = false;
+                }
+                Ok(())
             }
-            if self.is_vcpus_pinning_on && num_vcpus > 0 {
-                info!(sl!(), "vCPU pinning: resetting previous pinning");
-                self.reset_vcpus_pinning(&thread_ids.vcpus, &cpuset_slice)?;
-                self.is_vcpus_pinning_on = false;
+            VcpuPinningPlan::Pin {
+                assignments,
+                floating,
+            } => {
+                for (tid, cpu) in &assignments {
+                    if let Err(e) = Self::set_thread_affinity(*tid, std::slice::from_ref(cpu)) {
+                        // On failure, reset all pinning and propagate the error
+                        let _ = self.reset_vcpus_pinning(&thread_ids.vcpus, &cpuset_slice);
+                        return Err(e)
+                            .context(format!("failed to pin vCPU thread {} to CPU {}", tid, cpu));
+                    }
+                }
+
+                self.is_vcpus_pinning_on = true;
+                if floating.is_empty() {
+                    info!(
+                        sl!(),
+                        "vCPU pinning: pinned {} vCPU threads to cpuset {:?}",
+                        assignments.len(),
+                        cpuset_slice
+                    );
+                } else {
+                    info!(
+                        sl!(),
+                        "vCPU pinning: pinned {} workload vCPU threads to cpuset {:?} ({} overhead vCPU(s) left floating)",
+                        assignments.len(),
+                        cpuset_slice,
+                        floating.len(),
+                    );
+                }
+                Ok(())
             }
-            return Ok(());
         }
-
-        // Pin vCPU i to cpuset_slice[i] (both sorted by index)
-        let mut sorted_vcpus: Vec<(u32, u32)> = thread_ids.vcpus.into_iter().collect();
-        sorted_vcpus.sort_by_key(|(idx, _)| *idx);
-
-        for (i, (_vcpu_idx, tid)) in sorted_vcpus.iter().enumerate() {
-            if let Err(e) = Self::set_thread_affinity(*tid, &cpuset_slice[i..i + 1]) {
-                // On failure, reset all pinning and propagate the error
-                let all_vcpus: HashMap<u32, u32> = sorted_vcpus.iter().copied().collect();
-                let _ = self.reset_vcpus_pinning(&all_vcpus, &cpuset_slice);
-                return Err(e).context(format!(
-                    "failed to pin vCPU thread {} to CPU {}",
-                    tid, cpuset_slice[i]
-                ));
-            }
-        }
-
-        self.is_vcpus_pinning_on = true;
-        info!(
-            sl!(),
-            "vCPU pinning: pinned {} vCPU threads to cpuset {:?}", num_vcpus, cpuset_slice
-        );
-        Ok(())
     }
 
     fn reset_vcpus_pinning(&self, vcpus: &HashMap<u32, u32>, cpuset_slice: &[u32]) -> Result<()> {
@@ -478,6 +492,72 @@ impl CgroupsResourceInner {
         }
 
         Ok(())
+    }
+}
+
+/// The decision produced by [`plan_vcpus_pinning`]: either skip pinning
+/// entirely, or pin a set of vCPU threads 1:1 to host CPUs while leaving any
+/// overhead vCPU threads floating.
+///
+/// Keeping this decision separate from the `sched_setaffinity` syscalls lets
+/// it be unit-tested deterministically — it is the part of the logic that
+/// regressed when `overhead_vcpus > 0` made `num_vcpus > num_cpus`.
+#[derive(Debug, PartialEq, Eq)]
+enum VcpuPinningPlan {
+    /// Pinning is not possible/needed: no vCPU threads, no cpuset, or fewer
+    /// vCPU threads than CPUs in the sandbox cpuset (no 1:1 mapping).
+    Skip,
+    /// Pin each `(tid, host_cpu)` 1:1, ordered by ascending vCPU index, and
+    /// leave the `floating` thread ids unpinned (overhead vCPUs).
+    Pin {
+        assignments: Vec<(u32, u32)>,
+        floating: Vec<u32>,
+    },
+}
+
+/// Decide how to pin vCPU threads to a sandbox cpuset.
+///
+/// `vcpus` maps vCPU index -> host thread id; `cpuset_slice` is the list of
+/// host CPUs in the sandbox cpuset.
+///
+/// Rules:
+/// * Skip when there are no vCPU threads, no cpuset, or fewer vCPU threads
+///   than cpuset CPUs (a 1:1 mapping is impossible).
+/// * Otherwise pin the first `num_cpus` vCPUs — by ascending index, i.e. the
+///   workload vCPUs — 1:1 to `cpuset_slice`, and leave any remaining vCPUs
+///   (overhead, e.g. from `overhead_vcpus > 0`) floating. This is the case
+///   that previously regressed: a strict `num_vcpus == num_cpus` guard turned
+///   it into a Skip, silently disabling pinning for every Guaranteed pod on
+///   configs with a fractional `overhead_vcpus`.
+fn plan_vcpus_pinning(vcpus: &HashMap<u32, u32>, cpuset_slice: &[u32]) -> VcpuPinningPlan {
+    let num_vcpus = vcpus.len();
+    let num_cpus = cpuset_slice.len();
+
+    if num_vcpus == 0 || num_cpus == 0 || num_vcpus < num_cpus {
+        return VcpuPinningPlan::Skip;
+    }
+
+    // Sort by vCPU index so workload vCPUs (lower indices) pin first and any
+    // overhead vCPUs (higher indices) are the ones left floating.
+    let mut sorted_vcpus: Vec<(u32, u32)> =
+        vcpus.iter().map(|(idx, tid)| (*idx, *tid)).collect();
+    sorted_vcpus.sort_by_key(|(idx, _)| *idx);
+
+    let assignments = sorted_vcpus
+        .iter()
+        .take(num_cpus)
+        .enumerate()
+        .map(|(i, (_idx, tid))| (*tid, cpuset_slice[i]))
+        .collect();
+    let floating = sorted_vcpus
+        .iter()
+        .skip(num_cpus)
+        .map(|(_idx, tid)| *tid)
+        .collect();
+
+    VcpuPinningPlan::Pin {
+        assignments,
+        floating,
     }
 }
 
@@ -615,5 +695,121 @@ mod tests {
         let inner = make_inner_for_test(enable);
         assert_eq!(inner.enable_vcpus_pinning, enable);
         assert_eq!(inner.is_vcpus_pinning_on, expected_on);
+    }
+
+    /// Build a VcpuThreadIds with the given (vcpu_index, thread_id) pairs.
+    fn make_thread_ids(pairs: &[(u32, u32)]) -> VcpuThreadIds {
+        let vcpus: HashMap<u32, u32> = pairs.iter().copied().collect();
+        VcpuThreadIds { vcpus }
+    }
+
+    /// check_vcpus_pinning must be a no-op when the feature is disabled.
+    #[test]
+    fn test_check_vcpus_pinning_disabled() {
+        let mut inner = make_inner_for_test(false);
+        inner
+            .resources
+            .insert("c1".to_string(), make_resources_with_cpus("0-3"));
+        let tids = make_thread_ids(&[(0, 1), (1, 2), (2, 3), (3, 4)]);
+        inner.check_vcpus_pinning(tids).unwrap();
+        assert!(!inner.is_vcpus_pinning_on);
+    }
+
+    /// Pinning must be skipped when no cpuset has been configured yet (e.g.
+    /// when setup_after_start_vm fires before any container is added).
+    #[test]
+    fn test_check_vcpus_pinning_no_cpuset_skips() {
+        let mut inner = make_inner_for_test(true);
+        // No resources inserted -> cpuset is empty.
+        let tids = make_thread_ids(&[(0, 1), (1, 2)]);
+        inner.check_vcpus_pinning(tids).unwrap();
+        assert!(!inner.is_vcpus_pinning_on);
+    }
+
+    /// Pinning must be skipped when the vCPU count is less than the cpuset
+    /// size (can't do 1:1 pinning when there are too few vCPUs).
+    #[rstest]
+    #[case::two_vcpus_four_cpus(&[(0, 1), (1, 2)], "0-3")]
+    #[case::one_vcpu_two_cpus(&[(0, 1)], "0,1")]
+    fn test_check_vcpus_pinning_skip_when_fewer_vcpus_than_cpus(
+        #[case] vcpus: &[(u32, u32)],
+        #[case] cpuset: &str,
+    ) {
+        let mut inner = make_inner_for_test(true);
+        inner
+            .resources
+            .insert("c1".to_string(), make_resources_with_cpus(cpuset));
+        let tids = make_thread_ids(vcpus);
+        inner.check_vcpus_pinning(tids).unwrap();
+        assert!(!inner.is_vcpus_pinning_on);
+    }
+
+    /// Deterministic coverage of the pinning *decision* (which vCPU maps to
+    /// which host CPU, and which overhead vCPUs float) without issuing any
+    /// real sched_setaffinity syscalls.
+    ///
+    /// `overhead_one` is the regression case for this fix: 3 vCPU threads
+    /// (e.g. workload 2 + overhead_vcpus 0.5 rounded up) against a 2-CPU
+    /// cpuset must pin vCPU 0 and 1 to the two pod CPUs 1:1 and leave the
+    /// highest-index (overhead) vCPU floating. Before the fix this returned
+    /// Skip, silently disabling pinning.
+    #[rstest]
+    #[case::overhead_one(
+        vec![(0, 100), (1, 101), (2, 102)],
+        vec![4, 6],
+        vec![(100, 4), (101, 6)],
+        vec![102]
+    )]
+    #[case::exact_match(
+        vec![(0, 100), (1, 101)],
+        vec![4, 6],
+        vec![(100, 4), (101, 6)],
+        vec![]
+    )]
+    #[case::unsorted_indices_pin_by_ascending_index(
+        vec![(2, 102), (0, 100), (1, 101)],
+        vec![5, 7],
+        vec![(100, 5), (101, 7)],
+        vec![102]
+    )]
+    #[case::two_overhead(
+        vec![(0, 100), (1, 101), (2, 102), (3, 103)],
+        vec![8, 9],
+        vec![(100, 8), (101, 9)],
+        vec![102, 103]
+    )]
+    fn test_plan_vcpus_pinning_pins(
+        #[case] vcpus: Vec<(u32, u32)>,
+        #[case] cpuset: Vec<u32>,
+        #[case] expected_assignments: Vec<(u32, u32)>,
+        #[case] expected_floating: Vec<u32>,
+    ) {
+        let map: HashMap<u32, u32> = vcpus.into_iter().collect();
+        match plan_vcpus_pinning(&map, &cpuset) {
+            VcpuPinningPlan::Pin {
+                assignments,
+                mut floating,
+            } => {
+                assert_eq!(
+                    assignments, expected_assignments,
+                    "1:1 assignments must follow ascending vCPU index"
+                );
+                floating.sort_unstable();
+                let mut expected = expected_floating.clone();
+                expected.sort_unstable();
+                assert_eq!(floating, expected, "overhead vCPUs left floating");
+            }
+            VcpuPinningPlan::Skip => panic!("expected Pin, got Skip"),
+        }
+    }
+
+    #[rstest]
+    #[case::no_vcpus(vec![], vec![0, 1])]
+    #[case::no_cpuset(vec![(0, 100)], vec![])]
+    #[case::fewer_vcpus_than_cpus(vec![(0, 100)], vec![0, 1, 2])]
+    #[case::both_empty(vec![], vec![])]
+    fn test_plan_vcpus_pinning_skips(#[case] vcpus: Vec<(u32, u32)>, #[case] cpuset: Vec<u32>) {
+        let map: HashMap<u32, u32> = vcpus.into_iter().collect();
+        assert_eq!(plan_vcpus_pinning(&map, &cpuset), VcpuPinningPlan::Skip);
     }
 }
