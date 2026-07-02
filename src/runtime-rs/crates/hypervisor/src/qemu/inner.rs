@@ -405,6 +405,15 @@ impl QemuInner {
                 if let Some(subchannel) = cmdline.take_ccw_subchannel() {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                // Setup virtio-mem device if enabled
+                if self.config.memory_info.enable_virtio_mem {
+                    qmp.setup_virtio_mem(
+                        self.config.memory_info.default_memory,
+                        self.config.memory_info.default_maxmemory,
+                        &self.config.machine_info.machine_type,
+                        self.config.shared_fs.shared_fs.as_deref(),
+                    ).context("Failed to setup virtio-mem during VM initialization")?;
+                }
                 self.qmp = Some(qmp);
             }
             Err(e) => {

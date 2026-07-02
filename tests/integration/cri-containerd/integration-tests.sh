@@ -384,12 +384,14 @@ function TestContainerMemoryUpdate() {
 	fi
 
 	if [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ]]; then
-		# Remove TestContainerMemoryUpdate from passing_test
-		info "TestContainerMemoryUpdate skipped for qemu with runtime-rs"
-		info "Please check out https://github.com/kata-containers/kata-containers/issues/9375"
-		return
+	    if [[ "${ARCH}" != "s390x" ]]; then
+			# Remove TestContainerMemoryUpdate from passing_test
+			info "Currently TestContainerMemoryUpdate is only supported on s390x for runtime-rs"
+			info "For other architectures, please check out https://github.com/kata-containers/kata-containers/issues/9375"
+			return
+		fi
 	elif [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]]; then
-		return
+	    return
 	fi
 
 	for virtio_mem_enabled in 1 0; do
@@ -413,6 +415,8 @@ function PrepareContainerMemoryUpdate() {
 
 		# Handle both commented and uncommented enable_virtio_mem
 		sudo sed -i -e 's/^#\?enable_virtio_mem.*$/enable_virtio_mem = true/g' "${kata_config}"
+		# Handle both commented and uncommented static_sandbox_resource_mgmt, set to false
+		sudo sed -i -e 's/^#\?\s*static_sandbox_resource_mgmt.*$/static_sandbox_resource_mgmt = false/g' "${kata_config}"
 	else
 		info "Test container memory update without virtio-mem"
 
