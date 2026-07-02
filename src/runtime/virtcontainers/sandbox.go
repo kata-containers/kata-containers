@@ -50,6 +50,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 )
@@ -264,11 +265,6 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
-
-	// hotplugNetworkConfigApplied prevents network config API being called
-	// multiple times for hot-plugged network device when Sandbox has multiple
-	// containers.
-	hotplugNetworkConfigApplied bool
 }
 
 // ID returns the sandbox identifier string.
@@ -2382,6 +2378,65 @@ func (s *Sandbox) GetVfioDeviceGuestPciPath(hostBDF string) types.PciPath {
 	}
 
 	return types.PciPath{}
+}
+
+// hotplugVfioNetworkDevice hotplugs the VFIO device backing a DAN network
+// endpoint into the VM and records its guest PCI path on the endpoint.
+//
+// The device is attached at sandbox scope so that it is available before any
+// container is created -- in particular before init containers, which do not
+// reference the device in their spec. When a workload container later
+// references the same VFIO group through a device plugin, the device manager
+// finds the existing device by major:minor and only bumps its reference
+// counts, so the device is neither plugged twice nor unplugged when that
+// container exits.
+func (s *Sandbox) hotplugVfioNetworkDevice(ctx context.Context, ep *VfioEndpoint) error {
+	if !ep.PciPath().IsNil() {
+		// The device is already attached and configured.
+		return nil
+	}
+
+	if s.config.HypervisorConfig.HotPlugVFIO == config.NoPort {
+		return fmt.Errorf("cannot attach VFIO network interface %q (BDF %s): hot_plug_vfio port is not configured", ep.Name(), ep.HostBDF)
+	}
+
+	devPath, err := drivers.GetVFIODevPath(ep.HostBDF)
+	if err != nil {
+		return fmt.Errorf("failed to resolve VFIO device path for network interface %q (BDF %s): %v", ep.Name(), ep.HostBDF, err)
+	}
+
+	var stat unix.Stat_t
+	if err := unix.Stat(devPath, &stat); err != nil {
+		return fmt.Errorf("stat %q failed for network interface %q: %v", devPath, ep.Name(), err)
+	}
+
+	devInfo := config.DeviceInfo{
+		HostPath:      devPath,
+		ContainerPath: devPath,
+		DevType:       "c",
+		Major:         int64(unix.Major(uint64(stat.Rdev))),
+		Minor:         int64(unix.Minor(uint64(stat.Rdev))),
+		Port:          s.config.HypervisorConfig.HotPlugVFIO,
+	}
+
+	if _, err := s.AddDevice(ctx, devInfo); err != nil {
+		return fmt.Errorf("failed to hotplug VFIO device %q for network interface %q: %v", devPath, ep.Name(), err)
+	}
+
+	pciPath := s.GetVfioDeviceGuestPciPath(ep.HostBDF)
+	if pciPath.IsNil() {
+		return fmt.Errorf("PCI path for VFIO interface %q (BDF %s) not found after hotplug", ep.Name(), ep.HostBDF)
+	}
+	ep.SetPciPath(pciPath)
+
+	s.Logger().WithFields(logrus.Fields{
+		"interface": ep.Name(),
+		"host-bdf":  ep.HostBDF,
+		"device":    devPath,
+		"pci-path":  pciPath.String(),
+	}).Info("VFIO network device hotplugged")
+
+	return nil
 }
 
 // updateResources will:
