@@ -6,11 +6,13 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	goruntime "runtime"
+	"strings"
 	"text/template"
 	"time"
 
@@ -23,6 +25,10 @@ const defaultListenAddress = "127.0.0.1:8090"
 var monitorListenAddr = flag.String("listen-address", defaultListenAddress, "The address to listen on for HTTP requests.")
 var runtimeEndpoint = flag.String("runtime-endpoint", "/run/containerd/containerd.sock", "Endpoint of CRI container runtime service.")
 var logLevel = flag.String("log-level", "info", "Log level of logrus(trace/debug/info/warn/error/fatal/panic).")
+var tlsCertFile = flag.String("tls-cert-file", "", "Path to TLS certificate file. Enables TLS when set (requires --tls-key-file).")
+var tlsKeyFile = flag.String("tls-key-file", "", "Path to TLS private key file. Enables TLS when set (requires --tls-cert-file).")
+var tlsMinVersion = flag.String("tls-min-version", "", "Minimum TLS version (VersionTLS12, VersionTLS13). Defaults to VersionTLS12 when TLS is enabled.")
+var tlsCipherSuites = flag.String("tls-cipher-suites", "", "Comma-separated list of TLS cipher suite names (IANA format). Applies to TLS 1.2 and below.")
 
 // These values are overridden via ldflags
 var (
@@ -83,6 +89,10 @@ func main() {
 
 	flag.Parse()
 
+	if (*tlsCertFile == "") != (*tlsKeyFile == "") {
+		logrus.Fatal("--tls-cert-file and --tls-key-file must be set together")
+	}
+
 	// init logrus
 	initLog()
 
@@ -96,9 +106,12 @@ func main() {
 		"git-commit": ver.GitCommit,
 
 		// properties from command-line options
-		"listen-address":   *monitorListenAddr,
-		"runtime-endpoint": *runtimeEndpoint,
-		"log-level":        *logLevel,
+		"listen-address":    *monitorListenAddr,
+		"runtime-endpoint":  *runtimeEndpoint,
+		"log-level":         *logLevel,
+		"tls-cert-file":     *tlsCertFile,
+		"tls-min-version":   *tlsMinVersion,
+		"tls-cipher-suites": *tlsCipherSuites,
 	}
 
 	logrus.WithFields(announceFields).Info("announce")
@@ -171,7 +184,86 @@ func main() {
 		Handler: m,
 		Addr:    *monitorListenAddr,
 	}
-	logrus.Fatal(svr.ListenAndServe())
+
+	if *tlsCertFile != "" {
+		tlsConfig, err := buildTLSConfig(*tlsMinVersion, *tlsCipherSuites)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to build TLS config")
+		}
+		svr.TLSConfig = tlsConfig
+		logrus.Fatal(svr.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile))
+	} else {
+		logrus.Fatal(svr.ListenAndServe())
+	}
+}
+
+// buildTLSConfig constructs a tls.Config from the given version string and
+// comma-separated IANA cipher suite names. Both arguments are optional; when
+// empty the function returns a config with secure defaults (TLS 1.2 minimum).
+func buildTLSConfig(minVersion, cipherSuites string) (*tls.Config, error) {
+	cfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	if minVersion != "" {
+		v, err := parseTLSVersion(minVersion)
+		if err != nil {
+			return nil, err
+		}
+		cfg.MinVersion = v
+	}
+
+	if cipherSuites != "" {
+		ids, err := parseCipherSuites(cipherSuites)
+		if err != nil {
+			return nil, err
+		}
+		cfg.CipherSuites = ids
+	}
+
+	return cfg, nil
+}
+
+func parseTLSVersion(s string) (uint16, error) {
+	switch s {
+	case "VersionTLS12":
+		return tls.VersionTLS12, nil
+	case "VersionTLS13":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unsupported TLS version %q (supported: VersionTLS12, VersionTLS13)", s)
+	}
+}
+
+func parseCipherSuites(s string) ([]uint16, error) {
+	known := make(map[string]uint16)
+	for _, cs := range tls.CipherSuites() {
+		known[cs.Name] = cs.ID
+	}
+
+	// Build a set of insecure names for a better error message.
+	insecure := make(map[string]struct{})
+	for _, cs := range tls.InsecureCipherSuites() {
+		insecure[cs.Name] = struct{}{}
+	}
+
+	names := strings.Split(s, ",")
+	ids := make([]uint16, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, bad := insecure[name]; bad {
+			return nil, fmt.Errorf("cipher suite %q is insecure and not allowed", name)
+		}
+		id, ok := known[name]
+		if !ok {
+			return nil, fmt.Errorf("unknown cipher suite %q", name)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func indexPage(w http.ResponseWriter, r *http.Request) {
