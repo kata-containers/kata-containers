@@ -119,6 +119,7 @@ mod tests {
                                 },
                                 model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                                 network_qos: false,
+                                queues: 5,
                             },
                         };
 
@@ -250,6 +251,7 @@ mod tests {
                                 model: network_model::new(model_str)
                                     .expect("failed to create new network model"),
                                 network_qos: false,
+                                queues: 5,
                             },
                         };
 
@@ -355,6 +357,7 @@ mod tests {
                             },
                             model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                             network_qos: false,
+                            queues: 5,
                         },
                     };
 

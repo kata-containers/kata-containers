@@ -36,6 +36,9 @@ pub struct NetworkPair {
     pub virt_iface: NetworkInterface,
     pub model: Arc<dyn network_model::NetworkModel>,
     pub network_qos: bool,
+    /// Number of virtio queue pairs (each pair = 1 RX + 1 TX).
+    /// Derived from `network_queues` in the hypervisor TOML config.
+    pub queues: usize,
 }
 
 impl NetworkPair {
@@ -127,6 +130,7 @@ impl NetworkPair {
             },
             model,
             network_qos: false,
+            queues,
         };
 
         Ok(net_pair)
