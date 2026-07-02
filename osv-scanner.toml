@@ -12,6 +12,7 @@ reason = "No alternative currently supports 'yes' strings correctly; genpolicy p
 # for string constants. The vulnerable code (UnMountPodLogs, LinkContainerLogs) is not
 # imported or used.
 id = "GO-2025-3426"
+ignoreUntil = 2026-10-01
 reason = "False positive: only imports pkg/annotations for constants, not vulnerable log management code"
 
 [[IgnoredVulns]]
@@ -20,4 +21,5 @@ reason = "False positive: only imports pkg/annotations for constants, not vulner
 # for string constants. The vulnerable code (user creation, /etc/passwd reading) is not
 # imported or used.
 id = "GO-2025-3897"
+ignoreUntil = 2026-10-01
 reason = "False positive: only imports pkg/annotations for constants, not vulnerable user creation code"
