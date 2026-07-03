@@ -171,6 +171,7 @@ impl QemuInner {
                     cmdline.add_network_device(
                         &network.config.host_dev_name,
                         network.config.guest_mac.clone().unwrap(),
+                        network.config.queue_num.max(1) as u32,
                     )?;
                 }
                 DeviceType::Protection(prot_dev) => match &prot_dev.config {
@@ -1040,6 +1041,7 @@ impl QemuInner {
                     &network_device.config.host_dev_name,
                     network_device.config.guest_mac.clone().unwrap(),
                     &mut None,
+                    network_device.config.queue_num.max(1) as u32,
                 )?;
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?;
 
