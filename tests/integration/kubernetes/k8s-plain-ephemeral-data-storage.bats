@@ -12,18 +12,6 @@ load "${BATS_TEST_DIRNAME}/emptydir_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-skip_unsupported_runtime() {
-	# The runtime-rs block emptyDir path uses BlockModern, inherited from the
-	# older block-encrypted implementation. The encrypted test is CoCo-only, so
-	# it never reached clh-runtime-rs or dragonball in CI; this generic
-	# block-plain test would, so skip those unsupported VMM paths explicitly.
-	case "${KATA_HYPERVISOR}" in
-		clh-runtime-rs|clh-azure-runtime-rs|dragonball)
-			skip "block-plain emptyDir uses runtime-rs BlockModern, whose VMM glue is missing for ${KATA_HYPERVISOR}"
-			;;
-	esac
-}
-
 # Return the full mountinfo row whose field 5 is the tested mount point.
 mountinfo_for_mountpoint() {
 	pod_exec "${pod_name}" sh -c \
@@ -59,7 +47,6 @@ guest_discard_max_bytes() {
 setup() {
 	local runtime_config_dropin_file
 
-	skip_unsupported_runtime
 	setup_common || die "setup_common failed"
 
 	pod_name="plain-ephemeral-data-storage"
@@ -175,8 +162,6 @@ EOF
 }
 
 teardown() {
-	skip_unsupported_runtime
-
 	echo "=== Plain ephemeral data storage pod describe ==="
 	kubectl describe pod "${pod_name:-plain-ephemeral-data-storage}" || true
 
