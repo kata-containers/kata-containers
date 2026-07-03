@@ -119,6 +119,7 @@ mod tests {
                                 },
                                 model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                                 network_qos: false,
+                                network_queues: 5,
                             },
                         };
 
@@ -159,6 +160,7 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                     }
                     assert!(delete_link(&handle, manual_vlan_iface_name.as_str())
                         .await
@@ -250,6 +252,7 @@ mod tests {
                                 model: network_model::new(model_str)
                                     .expect("failed to create new network model"),
                                 network_qos: false,
+                                network_queues: 5,
                             },
                         };
 
@@ -291,6 +294,7 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                     }
                     // delete the manually created links
                     assert!(delete_link(&handle, manual_macvlan_iface_name.as_str())
@@ -333,7 +337,8 @@ mod tests {
                 .await
                 .context("failed to create manual veth pair")
             {
-                if let Ok(mut result) = IPVlanEndpoint::new(&d, &handle, "", idx, 5)
+                // Test with 0 and fallback default behaviour with 1
+                if let Ok(mut result) = IPVlanEndpoint::new(&d, &handle, "", idx, 0)
                     .await
                     .context("failed to create new ipvlan endpoint")
                 {
@@ -355,6 +360,7 @@ mod tests {
                             },
                             model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                             network_qos: false,
+                            network_queues: 1,
                         },
                     };
 
@@ -395,6 +401,7 @@ mod tests {
                         _ => unreachable!(),
                     }
                     assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                    assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                 }
                 assert!(delete_link(&handle, manual_virt_iface_name.as_str())
                     .await
