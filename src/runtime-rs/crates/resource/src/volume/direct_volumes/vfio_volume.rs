@@ -15,13 +15,16 @@ use hypervisor::{
     },
     get_vfio_device, VfioConfig,
 };
-use kata_sys_util::mount::get_mount_type;
+use kata_sys_util::mount::{get_mount_options, get_mount_type};
 use kata_types::mount::DirectVolumeMountInfo;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
 use crate::volume::{
-    utils::{generate_shared_path, DEFAULT_VOLUME_FS_TYPE},
+    utils::{
+        build_bind_mount_options, filter_block_storage_options, generate_shared_path,
+        KATA_MOUNT_BIND_TYPE, DEFAULT_VOLUME_FS_TYPE,
+    },
     Volume,
 };
 
@@ -55,11 +58,17 @@ impl VfioVolume {
             .await
             .context("do handle device failed.")?;
 
-        let storage_options = if read_only {
-            vec!["ro".to_string()]
-        } else {
-            Vec::new()
-        };
+        let oci_opts = get_mount_options(m.options());
+        let mut storage_options: Vec<String> = filter_block_storage_options(
+            if !mount_info.options.is_empty() {
+                &mount_info.options
+            } else {
+                &oci_opts
+            },
+        );
+        if read_only && !storage_options.iter().any(|o| o == "ro") {
+            storage_options.push("ro".to_string());
+        }
 
         let mut storage = agent::Storage {
             options: storage_options,
@@ -88,9 +97,12 @@ impl VfioVolume {
 
         let mut oci_mount = oci::Mount::default();
         oci_mount.set_destination(m.destination().clone());
-        oci_mount.set_typ(Some(mount_info.fs_type.clone()));
+        oci_mount.set_typ(Some(KATA_MOUNT_BIND_TYPE.to_string()));
         oci_mount.set_source(Some(PathBuf::from(&guest_path)));
-        oci_mount.set_options(m.options().clone());
+        oci_mount.set_options(Some(build_bind_mount_options(
+            &mount_info.options,
+            m.options(),
+        )));
 
         Ok(Self {
             storage: Some(storage),
