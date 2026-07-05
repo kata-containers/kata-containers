@@ -35,7 +35,7 @@ jobs:
       packages: write # needed to push build artifacts to ghcr.io
       id-token: write # needed to sign images and generate attestations
       attestations: write # needed to generate artifact attestations
-    uses: ./.github/workflows/ci.yaml
+    uses: ./.github/workflows/ci-ppc64le-only.yaml
     with:
       commit-hash: ${{ github.event.pull_request.head.sha }}
       pr-number: ${{ github.event.pull_request.number }}
