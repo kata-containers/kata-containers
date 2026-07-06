@@ -93,7 +93,7 @@ impl InitData {
 
     /// serialize it to Vec<u8>
     pub fn to_vec(&self) -> Result<Vec<u8>> {
-        Ok(toml::to_vec(&self)?)
+        Ok(toml::to_string(&self)?.into_bytes())
     }
 
     /// serialize config to TOML string
@@ -411,8 +411,8 @@ key = "value"
 
         // Test TOML serialization
         let toml_str = init_data.to_string().unwrap();
-        assert!(toml_str.contains("initdata_key = 'initdata_value'\n"));
-        assert!(toml_str.starts_with("version = '0.1.0'"));
+        assert!(toml_str.contains("initdata_key = \"initdata_value\"\n"));
+        assert!(toml_str.starts_with("version = \"0.1.0\""));
     }
 
     /// Test calculate_digest with different algorithms
@@ -481,8 +481,8 @@ key = "value"
 
         // Test processing
         let result = add_hypervisor_initdata_overrides(&b64_annotation).unwrap();
-        assert!(result.contains("hypervisor_key = 'config_value'\n"));
-        assert!(result.contains("algorithm = 'sha512'\n"));
+        assert!(result.contains("hypervisor_key = \"config_value\"\n"));
+        assert!(result.contains("algorithm = \"sha512\"\n"));
     }
 
     /// Test input validation

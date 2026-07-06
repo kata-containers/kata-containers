@@ -6,8 +6,11 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
-use hyper::{body::to_bytes, Body, Client, Method, Request, StatusCode};
-use hyperlocal::{UnixClientExt, Uri};
+use bytes::Bytes;
+use http_body_util::{BodyExt, Full};
+use hyper::{Method, Request, StatusCode};
+use hyper_util::client::legacy::Client;
+use hyperlocal::{UnixClientExt, UnixConnector, Uri};
 use serde::{Deserialize, Serialize};
 use tokio::time::{timeout, Duration};
 
@@ -54,7 +57,7 @@ pub struct ErrorMessage {
 
 pub struct NydusClient {
     sock_path: PathBuf,
-    client: Client<hyperlocal::UnixConnector>,
+    client: Client<UnixConnector, Full<Bytes>>,
 }
 
 impl NydusClient {
@@ -91,10 +94,10 @@ impl NydusClient {
 
         let req = match body {
             Some(b) => request_builder
-                .body(Body::from(b.to_string()))
+                .body(Full::new(Bytes::from(b.to_string())))
                 .context("failed to build HTTP request with body")?,
             None => request_builder
-                .body(Body::empty())
+                .body(Full::new(Bytes::new()))
                 .context("failed to build HTTP request")?,
         };
 
@@ -104,9 +107,7 @@ impl NydusClient {
             .context("failed to send HTTP request")?;
 
         let status = response.status();
-        let body_bytes = to_bytes(response.into_body())
-            .await
-            .context("failed to read response body")?;
+        let body_bytes = response.into_body().collect().await?.to_bytes();
 
         Ok((status, body_bytes.to_vec()))
     }
