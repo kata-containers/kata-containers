@@ -81,8 +81,15 @@ build_kata_deploy_job_dispatcher() {
 }
 
 build_nydus_snapshotter_for_coco_guest_pull() {
+	# STATIC_RUNTIME=yes is the umbrella flag for a musl-compatible payload: it
+	# builds the kata Go host binaries static (see static-build/shim-v2) and here
+	# pulls the statically linked nydus-snapshotter binaries instead of the
+	# glibc-linked per-arch ones.
+	local static_nydus_snapshotter="${STATIC_RUNTIME:-}"
+
 	docker buildx build \
 		--target nydus-binary-downloader \
+		--build-arg "STATIC_NYDUS_SNAPSHOTTER=${static_nydus_snapshotter}" \
 		--output "type=local,dest=${build_dir}/nydus-snapshotter-out" \
 		-f "${repo_root_dir}/tools/packaging/kata-deploy/Dockerfile.components" \
 		"${repo_root_dir}"

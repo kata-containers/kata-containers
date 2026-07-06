@@ -129,6 +129,14 @@ case "${RUNTIME_CHOICE}" in
 		;;
 esac
 
+# When STATIC_RUNTIME=yes the Go host binaries (kata-runtime,
+# containerd-shim-kata-v2 and kata-monitor) are built as fully static,
+# cgo-free executables so the payload runs on musl-only hosts that have no
+# glibc dynamic loader. Default builds are unchanged.
+if [[ "${STATIC_RUNTIME:-}" == "yes" ]]; then
+	GO_EXTRA_OPTS+=" STATIC=yes"
+fi
+
 case "${RUNTIME_CHOICE}" in
 	"go"|"both")
 		[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image_bk}-cross-build"
