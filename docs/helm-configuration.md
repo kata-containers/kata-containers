@@ -424,10 +424,24 @@ affinity:
 ```
 
 When `node-feature-discovery.enabled=true`, the chart also merges in a
-`nodeAffinity` rule that requires hardware virtualization support. If you set
-`affinity.nodeAffinity` yourself, your required `nodeSelectorTerms` are
-combined with the built-in virtualization terms. Other affinity fields
-(`podAffinity`, `podAntiAffinity`, and so on) are passed through as-is.
+`nodeAffinity` rule that requires hardware virtualization support.
+
+!!! note "How NFD and user nodeAffinity are combined"
+    Within a single `nodeSelectorTerm`, `matchExpressions` and `matchFields` are
+    **AND**-ed (all must match). Across `nodeSelectorTerms`, terms are **OR**-ed
+    (any one term may match).
+
+    If you set `affinity.nodeAffinity` yourself, only your **required**
+    `nodeSelectorTerms` participate in the merge. They are combined with the
+    built-in virtualization terms as **(NFD OR-group) AND (user OR-group)**:
+    each built-in term is AND-ed with each of your required terms. Multiple
+    user required terms remain OR among themselves. NFD virtualization
+    requirements cannot be bypassed by user affinity.
+
+    If you set `nodeAffinity` without `requiredDuringSchedulingIgnoredDuringExecution`,
+    the built-in NFD required terms are still applied. Other affinity fields
+    (`podAffinity`, `podAntiAffinity`, and `preferredDuringSchedulingIgnoredDuringExecution`)
+    are passed through unchanged.
 
 ### Multiple Kata installations on the Same Node
 

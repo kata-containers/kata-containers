@@ -993,8 +993,13 @@ nodeAffinity:
 {{/*
 Merged affinity for the kata-deploy DaemonSet.
 When NFD is enabled, the built-in virtualization nodeAffinity is always applied.
+Kubernetes semantics:
+  - nodeSelectorTerms are OR within a group (match any one term)
+  - matchExpressions and matchFields are AND within a term (all must match)
 If the user sets affinity.nodeAffinity, their required nodeSelectorTerms are
-merged with the NFD terms (each NFD term is AND-ed with each user term).
+combined with the NFD terms as (NFD OR-group) AND (user OR-group) via cross-
+product: each NFD term is AND-ed with each user term. NFD virtualization
+requirements cannot be bypassed by user affinity.
 */}}
 {{- define "kata-deploy.daemonsetAffinity" -}}
 {{- $affinity := .Values.affinity | default dict | deepCopy -}}
@@ -1013,9 +1018,15 @@ merged with the NFD terms (each NFD term is AND-ed with each user term).
 {{- if $userTerms -}}
 {{- range $nfdTerm := $nfdTerms -}}
 {{- range $userTerm := $userTerms -}}
-{{- $mergedTerm := merge (deepCopy $nfdTerm) (deepCopy $userTerm) -}}
-{{- $_ := set $mergedTerm "matchExpressions" (concat ($nfdTerm.matchExpressions | default list) ($userTerm.matchExpressions | default list)) -}}
-{{- $_ := set $mergedTerm "matchFields" (concat ($nfdTerm.matchFields | default list) ($userTerm.matchFields | default list)) -}}
+{{- $mergedTerm := dict -}}
+{{- $exprs := concat ($nfdTerm.matchExpressions | default list) ($userTerm.matchExpressions | default list) -}}
+{{- $fields := concat ($nfdTerm.matchFields | default list) ($userTerm.matchFields | default list) -}}
+{{- if $exprs -}}
+{{- $_ := set $mergedTerm "matchExpressions" $exprs -}}
+{{- end -}}
+{{- if $fields -}}
+{{- $_ := set $mergedTerm "matchFields" $fields -}}
+{{- end -}}
 {{- $mergedTerms = append $mergedTerms $mergedTerm -}}
 {{- end -}}
 {{- end -}}

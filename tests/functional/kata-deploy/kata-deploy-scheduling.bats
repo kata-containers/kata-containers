@@ -37,6 +37,18 @@ extract_kata_deploy_ds() {
 	' "${RENDERED}"
 }
 
+# Count nodeSelectorTerms under requiredDuringSchedulingIgnoredDuringExecution in a manifest.
+count_required_node_selector_terms() {
+	local manifest="${1}"
+	echo "${manifest}" | awk '
+		/requiredDuringSchedulingIgnoredDuringExecution:/ { in_req = 1; next }
+		in_req && /preferredDuringSchedulingIgnoredDuringExecution:/ { exit }
+		in_req && /^        [a-zA-Z]/ { exit }
+		in_req && /- match(Expressions|Fields):/ { count++ }
+		END { print count + 0 }
+	'
+}
+
 # =============================================================================
 # Template Rendering Tests (no cluster required)
 # =============================================================================
@@ -150,13 +162,64 @@ EOF
 	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
 	rm -f "${values_file}"
 
-	local ds
+	local ds term_count
 	ds=$(extract_kata_deploy_ds)
+	term_count=$(count_required_node_selector_terms "${ds}")
 
+	[[ "${term_count}" -eq 6 ]]
 	echo "${ds}" | grep -q "node.cloud/reserved"
 	echo "${ds}" | grep -q "platform-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM"
+}
+
+@test "Helm template: NFD enabled applies virtualization nodeAffinity when user sets no affinity" {
+	render_chart --set node-feature-discovery.enabled=true
+
+	local ds term_count
+	ds=$(extract_kata_deploy_ds)
+	term_count=$(count_required_node_selector_terms "${ds}")
+
+	[[ "${term_count}" -eq 6 ]]
+	echo "${ds}" | grep -q "affinity:"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.SVM"
+}
+
+@test "Helm template: NFD merge preserves podAntiAffinity" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - gpu-operator
+        topologyKey: kubernetes.io/hostname
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	echo "${ds}" | grep -q "podAntiAffinity:"
+	echo "${ds}" | grep -q "gpu-operator"
+	echo "${ds}" | grep -q "platform-team"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 }
 
 @test "Helm template: NFD merge preserves matchFields in nodeSelectorTerms" {
@@ -183,5 +246,129 @@ EOF
 	echo "${ds}" | grep -q "matchFields:"
 	echo "${ds}" | grep -q "metadata.name"
 	echo "${ds}" | grep -q "worker-node-1"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+}
+
+@test "Helm template: NFD merge cross-products multiple user OR terms" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - gpu-team
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds term_count
+	ds=$(extract_kata_deploy_ds)
+	term_count=$(count_required_node_selector_terms "${ds}")
+
+	[[ "${term_count}" -eq 12 ]]
+	echo "${ds}" | grep -q "platform-team"
+	echo "${ds}" | grep -q "gpu-team"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+}
+
+@test "Helm template: NFD merge omits empty matchFields" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	echo "${ds}" | grep -q "node.cloud/reserved"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+	! echo "${ds}" | grep -q 'matchFields: \[\]'
+}
+
+@test "Helm template: NFD merge preserves preferredDuringSchedulingIgnoredDuringExecution" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - preferred-team
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds
+	ds=$(extract_kata_deploy_ds)
+
+	echo "${ds}" | grep -q "preferredDuringSchedulingIgnoredDuringExecution:"
+	echo "${ds}" | grep -q "preferred-team"
+	echo "${ds}" | grep -q "weight: 100"
+	echo "${ds}" | grep -q "platform-team"
+	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+}
+
+@test "Helm template: NFD required applied when user has no required terms" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        preference:
+          matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - preferred-team
+EOF
+
+	render_chart -f "${values_file}" --set node-feature-discovery.enabled=true
+	rm -f "${values_file}"
+
+	local ds term_count
+	ds=$(extract_kata_deploy_ds)
+	term_count=$(count_required_node_selector_terms "${ds}")
+
+	[[ "${term_count}" -eq 6 ]]
+	echo "${ds}" | grep -q "preferredDuringSchedulingIgnoredDuringExecution:"
+	echo "${ds}" | grep -q "preferred-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 }
