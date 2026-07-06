@@ -405,14 +405,29 @@ impl QemuInner {
                 if let Some(subchannel) = cmdline.take_ccw_subchannel() {
                     qmp.set_ccw_subchannel(subchannel);
                 }
-                // Setup virtio-mem device if enabled
+                // Setup virtio-mem device if enabled.  It requires a memory
+                // hotplug region (maxmem) on the QEMU command line; that region
+                // is not reserved for every configuration (e.g. on s390x the
+                // shared memory-backend used with a virtio-blk-ccw rootfs zeroes
+                // maxmem/slots, and static resource management sizes the VM
+                // upfront).  Skip the setup in that case -- like other static
+                // sizing arches (e.g. arm64) the guest simply runs with its
+                // boot memory -- instead of failing VM start with
+                // "the configuration is not prepared for memory devices".
                 if self.config.memory_info.enable_virtio_mem {
-                    qmp.setup_virtio_mem(
-                        self.config.memory_info.default_memory,
-                        self.config.memory_info.default_maxmemory,
-                        &self.config.machine_info.machine_type,
-                        self.config.shared_fs.shared_fs.as_deref(),
-                    ).context("Failed to setup virtio-mem during VM initialization")?;
+                    if cmdline.has_memory_hotplug_region() {
+                        qmp.setup_virtio_mem(
+                            self.config.memory_info.default_memory,
+                            self.config.memory_info.default_maxmemory,
+                            &self.config.machine_info.machine_type,
+                            self.config.shared_fs.shared_fs.as_deref(),
+                        ).context("Failed to setup virtio-mem during VM initialization")?;
+                    } else {
+                        info!(
+                            sl!(),
+                            "virtio-mem enabled but no memory hotplug region (maxmem) was reserved; skipping virtio-mem setup"
+                        );
+                    }
                 }
                 let bridge_count = self.config.device_info.default_bridges;
                 if bridge_count > 0 {

@@ -2977,8 +2977,16 @@ impl<'a> QemuCmdLine<'a> {
         // Keep memory hotplug slots when rootfs itself uses nvdimm, otherwise
         // add_nvdimm() for the rootfs image fails at startup because it
         // requires maxmem and slots to be set.
+        //
+        // Also keep the hotplug region when virtio-mem is enabled (s390x):
+        // the virtio-mem-ccw device set up during VM initialization requires
+        // a non-zero maxmem, and memory resize goes through virtio-mem rather
+        // than pc-dimm (which is not a valid device model on s390x).  This
+        // mirrors the Go runtime, which reserves maxmem and hotplugs via
+        // virtio-mem-ccw on s390x.
         if self.config.boot_info.vm_rootfs_driver != "nvdimm"
             && self.config.boot_info.vm_rootfs_driver != "virtio-pmem"
+            && !self.config.memory_info.enable_virtio_mem
         {
             self.memory.set_maxmem_size(0).set_num_slots(0);
         }
@@ -3001,6 +3009,15 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(vhost_vsock_pci));
         Ok(())
+    }
+
+    /// Returns whether the guest was given a memory-hotplug region (i.e. the
+    /// generated `-m` includes a non-zero `maxmem`).  This region can be zeroed
+    /// out depending on the rootfs driver / memory backend (see `add_pmem` /
+    /// `set_memory_backend`), in which case features that rely on it -- such as
+    /// virtio-mem -- must not be set up.
+    pub fn has_memory_hotplug_region(&self) -> bool {
+        self.memory.max_size != 0 && self.memory.num_slots != 0
     }
 
     pub fn add_nvdimm(&mut self, path: &str, is_readonly: bool) -> Result<()> {
