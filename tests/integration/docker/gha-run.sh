@@ -32,6 +32,19 @@ function enable_kata_debug() {
 	sudo sed -i -e 's/^#\?[[:space:]]*enable_debug[[:space:]]*=.*/enable_debug = true/g' "${cfg}"
 }
 
+function configure_docker_nvidia_runtime_rs() {
+	[[ "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-runtime-rs" ]] || return 0
+
+	local -r cfg="${KATA_CONFIG_PATH:-}"
+	[[ -z "${cfg}" || ! -e "${cfg}" ]] && return 0
+
+	info "Configuring NVIDIA runtime-rs for docker smoke test in ${cfg}"
+	sudo sed -i \
+		-e 's/^#\?[[:space:]]*shared_fs[[:space:]]*=.*/shared_fs = "virtio-fs"/g' \
+		-e 's/^#\?[[:space:]]*emptydir_mode[[:space:]]*=.*/emptydir_mode = "shared-fs"/g' \
+		"${cfg}"
+}
+
 function dump_kata_debug() {
 	local -r kata_runtime="$1"
 
@@ -92,6 +105,7 @@ function run() {
 	info "Running docker smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
+	configure_docker_nvidia_runtime_rs
 	enable_kata_debug
 
 	info "Running docker with runc"
