@@ -21,7 +21,12 @@ use oci_client::{
     Client, Reference,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io::Read, io::Write, path::Path};
+use std::{
+    collections::BTreeMap,
+    io::Read,
+    io::Write,
+    path::{Component, Path},
+};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
@@ -620,7 +625,9 @@ pub fn get_users_from_decompressed_layer(path: &Path) -> Result<(String, String)
     for entry_wrap in tar::Archive::new(file).entries()? {
         let mut entry = entry_wrap?;
         let entry_path = entry.header().path()?;
-        let path_str = entry_path.to_str().unwrap();
+        let Some(path_str) = normalized_layer_path(&entry_path) else {
+            continue;
+        };
         if path_str == PASSWD_FILE_TAR_PATH {
             entry.read_to_string(&mut passwd)?;
             found_passwd = true;
@@ -649,6 +656,24 @@ pub fn get_users_from_decompressed_layer(path: &Path) -> Result<(String, String)
     }
 
     Ok((passwd, group))
+}
+
+fn normalized_layer_path(path: &Path) -> Option<String> {
+    let mut components = Vec::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(part) => components.push(part.to_str()?),
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+
+    if components.is_empty() {
+        return None;
+    }
+
+    Some(components.join("/"))
 }
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
@@ -764,6 +789,7 @@ fn parse_group_file(group: &str) -> Result<Vec<GroupRecord>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     fn container_with_image_user(user: &str) -> Container {
         Container {
@@ -780,6 +806,23 @@ mod tests {
                     .to_string(),
             group: "root:x:0:\nwww-data:x:33:\nstaff:x:50:\nwheel:x:10:\n".to_string(),
         }
+    }
+
+    fn create_tar_layer(path: &Path, entries: &[(&str, &str)]) {
+        let layer_file = std::fs::File::create(path).unwrap();
+        let mut archive = tar::Builder::new(layer_file);
+
+        for (entry_path, content) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(content.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, entry_path, Cursor::new(content.as_bytes()))
+                .unwrap();
+        }
+
+        archive.finish().unwrap();
     }
 
     #[test]
@@ -811,5 +854,65 @@ mod tests {
                 "image user: {image_user}"
             );
         }
+    }
+
+    #[test]
+    fn reads_passwd_and_group_with_dot_slash_tar_paths() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let layer_path = temp_dir.path().join("layer.tar");
+        let passwd = "root:x:0:0:root:/root:/bin/sh\n";
+        let group = "root:x:0:\n";
+
+        create_tar_layer(
+            &layer_path,
+            &[("./etc/passwd", passwd), ("./etc/group", group)],
+        );
+
+        assert_eq!(
+            get_users_from_decompressed_layer(&layer_path).unwrap(),
+            (passwd.to_string(), group.to_string())
+        );
+    }
+
+    #[test]
+    fn normalizes_layer_paths_with_curdir_components() {
+        let cases = [
+            ("etc/passwd", Some(PASSWD_FILE_TAR_PATH)),
+            ("./etc/passwd", Some(PASSWD_FILE_TAR_PATH)),
+            ("././etc/passwd", Some(PASSWD_FILE_TAR_PATH)),
+            ("etc/./passwd", Some(PASSWD_FILE_TAR_PATH)),
+            ("./etc/./passwd", Some(PASSWD_FILE_TAR_PATH)),
+            ("etc/.wh.passwd", Some(PASSWD_FILE_WHITEOUT_TAR_PATH)),
+            ("./etc/.wh.passwd", Some(PASSWD_FILE_WHITEOUT_TAR_PATH)),
+            (".", None),
+            ("./", None),
+            ("../etc/passwd", None),
+            ("etc/../passwd", None),
+            ("/etc/passwd", None),
+        ];
+
+        for (path, expected) in cases {
+            assert_eq!(
+                normalized_layer_path(Path::new(path)),
+                expected.map(str::to_string),
+                "path: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn reads_whiteout_with_dot_slash_tar_path() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let layer_path = temp_dir.path().join("layer.tar");
+
+        create_tar_layer(
+            &layer_path,
+            &[("./etc/.wh.passwd", ""), ("./etc/.wh.group", "")],
+        );
+
+        assert_eq!(
+            get_users_from_decompressed_layer(&layer_path).unwrap(),
+            (WHITEOUT_MARKER.to_string(), WHITEOUT_MARKER.to_string())
+        );
     }
 }
