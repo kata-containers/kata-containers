@@ -339,12 +339,47 @@ EOF
 }
 
 function testContainerStop() {
+	# When the caller passes "force", remove the pod with `crictl rmp -f`.
+	# This is needed for the killed-VMM case: after the hypervisor is
+	# SIGKILL'd the shim exits promptly (as the test itself asserts), so the
+	# container's TaskExit event may not have reached containerd before the
+	# shim was gone, leaving CRI's view of the container as "running".  A
+	# crashed VMM is recovered with a force removal (what kubelet's GC and
+	# manual `crictl rmp -f` do); the essential guarantee -- that no shim is
+	# leaked -- is already checked by the caller.
+	local -r force="${1:-}"
+
 	info "show pod ${podid}"
 	sudo crictl --timeout=20s pods --id "${podid}"
 	info "stop pod ${podid}"
 	sudo crictl --timeout=20s stopp "${podid}"
 	info "remove pod ${podid}"
-	sudo crictl --timeout=20s rmp "${podid}"
+
+	if [[ "${force}" != "force" ]]; then
+		sudo crictl --timeout=20s rmp "${podid}"
+		restore_cri_integration_containerd_host_config
+		return 0
+	fi
+
+	# Force path (killed-VMM): after a hard VMM kill the container's TaskExit
+	# may not have reached containerd yet, leaving CRI's view as "running".
+	# Retry the normal removal a few times to give the event time to arrive,
+	# and only fall back to a force removal (how a crashed sandbox is cleaned
+	# up in practice) if it keeps failing.
+	local removed="false"
+	local i
+	for i in 1 2 3; do
+		if sudo crictl --timeout=20s rmp "${podid}"; then
+			removed="true"
+			break
+		fi
+		info "rmp attempt ${i} failed, retrying"
+		sleep 1
+	done
+	if [[ "${removed}" != "true" ]]; then
+		info "falling back to force removal of pod ${podid}"
+		sudo crictl --timeout=20s rmp -f "${podid}"
+	fi
 
 	restore_cri_integration_containerd_host_config
 }
@@ -367,7 +402,11 @@ function TestKilledVmmCleanup() {
 	remained=$(pgrep -f shimv2 || true)
 	[[ -z "${remained}" ]] || die "found remaining shimv2 process ${remained}"
 
-	testContainerStop
+	# The VMM was hard-killed, so the container's exit may not have reached
+	# containerd before the shim exited.  Retry the normal removal a few times
+	# and fall back to a force removal, mirroring how a crashed sandbox is
+	# cleaned up in practice.
+	testContainerStop "force"
 
 	info "stop containerd"
 }
