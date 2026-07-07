@@ -10,16 +10,11 @@ use agent::{types::Device, ARPNeighbor, Agent, OnlineCPUMemRequest, Storage};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    device::{
-        device_manager::{
-            do_handle_device, find_cold_plugged_vfio_ap, get_block_device_info, DeviceManager,
-        },
-        util::{get_host_path, DEVICE_TYPE_BLOCK, DEVICE_TYPE_CHAR},
-        DeviceConfig, DeviceType,
-    },
-    utils::uses_native_ccw_bus,
-    vfio_device::is_vfio_ap_device,
-    BlockConfig, BlockDeviceAio, Hypervisor, VfioConfig,
+    BlockConfigModern, BlockDeviceAio, Hypervisor, VfioConfig, device::{
+        DeviceConfig, DeviceType, device_manager::{
+            DeviceManager, do_handle_device, find_cold_plugged_vfio_ap, get_block_device_info,
+        }, util::{DEVICE_TYPE_BLOCK, DEVICE_TYPE_CHAR, get_host_path},
+    }, utils::uses_native_ccw_bus, vfio_device::is_vfio_ap_device,
 };
 use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
@@ -560,7 +555,7 @@ impl ResourceManagerInner {
                         d.major(),
                         d.minor(),
                     ) || block_device_node_is_readonly(d.major(), d.minor());
-                    let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+                    let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
                         major: d.major(),
                         minor: d.minor(),
                         is_readonly,
@@ -580,7 +575,8 @@ impl ResourceManagerInner {
                     // create block device for kata agent.
                     // The device ID is derived from the available address: PCI, SCSI,
                     // CCW, or virtual path, depending on the driver and configuration.
-                    if let DeviceType::Block(device) = device_info {
+                    if let DeviceType::BlockModern(device_mod) = device_info {
+                        let device = device_mod.lock().await.clone();
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
                         } else if let Some(scsi_address) = device.config.scsi_addr {
