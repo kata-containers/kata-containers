@@ -190,7 +190,7 @@ impl ResourceManagerInner {
                         .context("do handle device failed.")?;
                 }
                 ResourceConfig::GuestExtensionImage(r) => {
-                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
+                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(r))
                         .await
                         .context("do handle extra image device failed.")?;
                 }
@@ -218,7 +218,7 @@ impl ResourceManagerInner {
                     .context("do handle port device failed.")?;
                 }
                 ResourceConfig::InitData(id) => {
-                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(id))
+                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfgModern(id))
                         .await
                         .context("do handle initdata block device failed.")?;
                 }
