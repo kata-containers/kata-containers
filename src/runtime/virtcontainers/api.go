@@ -141,6 +141,18 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 	}
 	defer s.Release(ctx)
 
+	// If the hypervisor process is already gone -- e.g. the sandbox was torn
+	// down by the main shim and this is containerd invoking the `delete`
+	// binary (cleanupAfterDeadShim) for a `docker run --rm` -- any agent RPC
+	// below would block on a dead vsock connection until the caller times out
+	// and SIGKILLs us, which surfaces as a failed container removal.  Mark the
+	// agent dead so those calls fail fast; the force path then only performs
+	// host-side cleanup.
+	if !IsHypervisorRunning(s.hypervisor) {
+		s.Logger().Info("hypervisor is not running, marking agent dead before cleanup")
+		s.agent.markDead(ctx)
+	}
+
 	_, err = s.StopContainer(ctx, containerID, force)
 	if err != nil && !force {
 		return err
