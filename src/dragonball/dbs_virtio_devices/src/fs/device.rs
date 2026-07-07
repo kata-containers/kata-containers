@@ -190,6 +190,19 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let vfs_opts = VfsOptions {
             no_writeback: !writeback_cache,
             no_open,
+            // Must be false: when no_opendir is enabled, the VFS advertises
+            // ZERO_MESSAGE_OPENDIR to the kernel, which then skips
+            // FUSE_OPENDIR/FUSE_RELEASEDIR. The passthroughfs backend is
+            // forced (via do_import=false in init()) to open the directory
+            // by inode on every FUSE_READDIR, creating a new file descriptor
+            // each time. Directory offsets (cookies) returned by the first
+            // batch are invalid for the new fd, causing getdents64 to return
+            // ENODATA on the second batch. Additionally, inodes may be
+            // forgotten via FUSE_FORGET between readdir calls, causing
+            // open_inode() to fail with ENOENT. Both errors are intermittent
+            // and occur primarily during container startup when many
+            // directories are read concurrently.
+            no_opendir: false,
             killpriv_v2,
             no_readdir,
             ..VfsOptions::default()
