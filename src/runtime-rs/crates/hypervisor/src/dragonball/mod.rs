@@ -295,8 +295,11 @@ pub(crate) fn build_dragonball_network_config(
         DragonballBackend::Vhost(virtio_config)
     };
 
+    // `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
+    // Convert pairs into the actual queue count.
+    let num_queues = nconfig.queue_num.max(1) * 2;
     DragonballNetworkConfig {
-        num_queues: Some(nconfig.queue_num),
+        num_queues: Some(num_queues),
         queue_size: Some(nconfig.queue_size as u16),
         backend,
         guest_mac: nconfig.guest_mac.clone().map(|mac| {
