@@ -557,3 +557,166 @@ impl AsyncWrite for ShimIoWrite {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    //! Unit tests focused on the `unsafe` FFI paths added for the
+    //! `binary://` logger backend: the readiness handshake in
+    //! [`wait_logger_ready`] and the fd-ownership guarantees of
+    //! [`PipeFd`]. End-to-end tests that actually spawn a logger process
+    //! live in the integration test suite instead.
+    use super::*;
+    use std::io::Write;
+    use std::time::Instant;
+
+    /// Create a `pipe2(O_CLOEXEC)` pair for use in tests.
+    ///
+    /// This keeps the `libc::pipe2` `unsafe` block contained to a single
+    /// helper so each test case reads clean.
+    fn make_pipe() -> (RawFd, RawFd) {
+        let mut fds = [0 as libc::c_int; 2];
+        // SAFETY: `fds` is a valid stack array of length 2; `pipe2` only
+        // writes into those two slots.
+        let ret = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
+        assert_eq!(ret, 0, "pipe2 failed: {}", std::io::Error::last_os_error());
+        (fds[0], fds[1])
+    }
+
+    /// Close an fd, ignoring any error. Used at test tear-down.
+    fn close_fd(fd: RawFd) {
+        // SAFETY: called at most once per fd from a single test thread.
+        unsafe {
+            libc::close(fd);
+        }
+    }
+
+    #[test]
+    fn wait_logger_ready_returns_when_byte_written() {
+        let (r, w) = make_pipe();
+
+        // Take ownership of the write end via std::fs::File; writing +
+        // dropping closes it.
+        // SAFETY: `w` is owned by us and handed off to `File` exactly once.
+        let mut wf = unsafe { std::fs::File::from_raw_fd(w) };
+        wf.write_all(b"x").expect("write readiness byte");
+        drop(wf);
+
+        let start = Instant::now();
+        wait_logger_ready(r, Duration::from_secs(5));
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "should return promptly, took {:?}",
+            start.elapsed()
+        );
+
+        close_fd(r);
+    }
+
+    #[test]
+    fn wait_logger_ready_returns_on_eof() {
+        let (r, w) = make_pipe();
+
+        // Close the write end to signal EOF; poll must treat this as readable.
+        close_fd(w);
+
+        let start = Instant::now();
+        wait_logger_ready(r, Duration::from_secs(5));
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "should return on EOF, took {:?}",
+            start.elapsed()
+        );
+
+        close_fd(r);
+    }
+
+    #[test]
+    fn wait_logger_ready_times_out() {
+        let (r, w) = make_pipe();
+
+        // Neither write nor close: force the timeout branch. Use a small
+        // timeout so the test stays fast, but assert a reasonable upper
+        // bound so a regression that ignores the timeout is caught.
+        let start = Instant::now();
+        wait_logger_ready(r, Duration::from_millis(200));
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed >= Duration::from_millis(150),
+            "returned too early: {:?}",
+            elapsed
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "must not hang, took {:?}",
+            elapsed
+        );
+
+        close_fd(w);
+        close_fd(r);
+    }
+
+    #[test]
+    fn wait_logger_ready_handles_bad_fd() {
+        // -1 is guaranteed invalid: poll returns -1 with errno=EBADF. The
+        // function must log and return, not panic or hang.
+        let start = Instant::now();
+        wait_logger_ready(-1, Duration::from_millis(500));
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "bad-fd path must return promptly, took {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// Returns true if `libc::fcntl(fd, F_GETFD) < 0 && errno == EBADF`,
+    /// i.e. the fd is no longer valid in the current process.
+    fn fd_is_closed(fd: RawFd) -> bool {
+        // SAFETY: F_GETFD is a pure read of the fd's flags; safe with any
+        // integer, including a stale value.
+        let ret = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        ret < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EBADF)
+    }
+
+    #[test]
+    fn pipefd_closes_on_drop() {
+        let (r, w) = make_pipe();
+
+        {
+            // Move ownership into the guard; scope end triggers Drop.
+            let _guard = PipeFd(w);
+        }
+
+        assert!(fd_is_closed(w), "PipeFd::drop should have closed fd {}", w);
+
+        close_fd(r);
+    }
+
+    #[test]
+    fn pipefd_into_raw_disarms_close() {
+        let (r, w) = make_pipe();
+
+        let guard = PipeFd(w);
+        let raw = guard.into_raw();
+        // Drop of `guard` at end of statement above must NOT close the fd.
+
+        assert_eq!(raw, w, "into_raw should return the same fd");
+        assert!(
+            !fd_is_closed(raw),
+            "into_raw must disarm the destructor; fd {} was closed",
+            raw
+        );
+
+        // We are now the owner and must close it ourselves.
+        close_fd(raw);
+        close_fd(r);
+    }
+
+    #[test]
+    fn pipefd_negative_sentinel_is_not_closed() {
+        // A guard whose slot has been zeroed out (via `into_raw` semantics)
+        // must be a no-op on drop; constructing one with -1 is the direct
+        // way to exercise that branch.
+        let guard = PipeFd(-1);
+        drop(guard); // must not attempt libc::close(-1)
+    }
+}
