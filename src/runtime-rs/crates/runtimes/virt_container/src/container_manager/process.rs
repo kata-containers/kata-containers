@@ -97,6 +97,18 @@ fn open_fifo_write(path: &str) -> Result<File> {
     open_fifo(path, false, true)
 }
 
+/// Whether the given stdio value should be treated as a host FIFO path.
+fn is_fifo_stdio(value: &str) -> bool {
+    match url::Url::parse(value) {
+        // No scheme -> it is a bare FIFO path.
+        Err(url::ParseError::RelativeUrlWithoutBase) => true,
+        // Parsed with a scheme: only `fifo://` denotes a real FIFO.
+        Ok(u) => u.scheme() == "fifo",
+        // Anything else: leave it to ShimIo, don't pre-open.
+        Err(_) => false,
+    }
+}
+
 impl Process {
     pub fn new(
         process: &ContainerProcess,
@@ -133,12 +145,26 @@ impl Process {
 
     pub fn pre_fifos_open(&mut self) -> Result<()> {
         if let Some(ref stdout) = self.stdout {
-            self.stdout_r = Some(open_fifo_read(stdout).context("open stdout")?);
+            if is_fifo_stdio(stdout) {
+                self.stdout_r = Some(open_fifo_read(stdout).context("open stdout")?);
+            } else {
+                info!(
+                    self.logger,
+                    "stdout is not a fifo, skip pre-open (handled by ShimIo): {}", stdout
+                );
+            }
         }
 
         if !self.terminal {
             if let Some(ref stderr) = self.stderr {
-                self.stderr_r = Some(open_fifo_read(stderr).context("open stderr")?);
+                if is_fifo_stdio(stderr) {
+                    self.stderr_r = Some(open_fifo_read(stderr).context("open stderr")?);
+                } else {
+                    info!(
+                        self.logger,
+                        "stderr is not a fifo, skip pre-open (handled by ShimIo): {}", stderr
+                    );
+                }
             }
         }
 
@@ -147,7 +173,14 @@ impl Process {
 
     pub fn post_fifos_open(&mut self) -> Result<()> {
         if let Some(ref stdin) = self.stdin {
-            self.stdin_w = Some(open_fifo_write(stdin)?);
+            if is_fifo_stdio(stdin) {
+                self.stdin_w = Some(open_fifo_write(stdin)?);
+            } else {
+                info!(
+                    self.logger,
+                    "stdin is not a fifo, skip pre-open (handled by ShimIo): {}", stdin
+                );
+            }
         }
         Ok(())
     }
@@ -248,10 +281,18 @@ impl Process {
         info!(self.logger, "start io and wait");
 
         self.pre_fifos_open()?;
-        // new shim io
-        let shim_io = ShimIo::new(&self.stdin, &self.stdout, &self.stderr)
-            .await
-            .context("new shim io")?;
+        let container_id = self.process.container_id().to_string();
+        // NAMESPACE is set by containerd when spawning the shim.
+        let namespace = std::env::var("NAMESPACE").unwrap_or_default();
+        let shim_io = ShimIo::new(
+            &self.stdin,
+            &self.stdout,
+            &self.stderr,
+            &container_id,
+            &namespace,
+        )
+        .await
+        .context("new shim io")?;
         self.post_fifos_open()?;
 
         // start io copy for stdin

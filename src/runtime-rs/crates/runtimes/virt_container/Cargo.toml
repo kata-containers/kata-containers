@@ -18,7 +18,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["process", "time"] }
 tokio-util = { workspace = true }
 url = { workspace = true }
 tracing = { workspace = true }
