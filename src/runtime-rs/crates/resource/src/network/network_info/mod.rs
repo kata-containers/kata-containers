@@ -16,4 +16,7 @@ pub trait NetworkInfo: std::fmt::Debug + Send + Sync {
     async fn interface(&self) -> Result<Interface>;
     async fn routes(&self) -> Result<Vec<Route>>;
     async fn neighs(&self) -> Result<Vec<ARPNeighbor>>;
+    async fn set_device_path(&self, _path: String) -> Result<()> {
+        Ok(())
+    }
 }

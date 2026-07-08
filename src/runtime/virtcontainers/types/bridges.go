@@ -39,11 +39,27 @@ type Bridge struct {
 	// Type is the type of the bridge (pci, pcie, etc)
 	Type Type
 
-	// Addr is the slot of the bridge
+	// Addr is the slot of the bridge on its parent's bus. For a bridge plugged
+	// directly on pcie.0/pci.0 this is the slot on the root bus. For a bridge
+	// nested under another device (e.g. a pcie-pci-bridge sitting on top of a
+	// pcie-root-port), this is the slot on that parent device's secondary bus
+	// (typically 0, since pcie-root-ports expose a single slot).
 	Addr int
 
 	// MaxCapacity is the max capacity of the bridge
 	MaxCapacity uint32
+
+	// ParentID, when non-empty, is the QEMU ID of the device on whose bus this
+	// bridge is plugged (e.g. a pcie-root-port). When set, the bridge is
+	// emitted with "bus=<ParentID>" instead of pcie.0/pci.0. An empty
+	// ParentID means the bridge sits directly on the root bus.
+	ParentID string
+
+	// ParentAddr is the slot of the parent device (referenced by ParentID) on
+	// the root bus (pcie.0/pci.0). It is only meaningful when ParentID is set
+	// and is used to construct multi-level guest PCI paths for devices that
+	// end up nested under this bridge.
+	ParentAddr int
 }
 
 func NewBridge(bt Type, id string, devices map[uint32]string, addr int) Bridge {
@@ -65,6 +81,24 @@ func NewBridge(bt Type, id string, devices map[uint32]string, addr int) Bridge {
 		Type:        bt,
 		MaxCapacity: maxCapacity,
 	}
+}
+
+// NewNestedBridge returns a Bridge that sits behind another device on the root
+// bus (e.g. a pcie-pci-bridge cold-plugged onto a pcie-root-port). The bridge
+// will be emitted on the QEMU command line with "bus=<parentID>", and the
+// resulting guest PCI path for any device hot-plugged underneath will include
+// the parent's slot on the root bus.
+func NewNestedBridge(bt Type, id string, devices map[uint32]string, addr int, parentID string, parentAddr int) Bridge {
+	b := NewBridge(bt, id, devices, addr)
+	b.ParentID = parentID
+	b.ParentAddr = parentAddr
+	return b
+}
+
+// HasParent returns true when the bridge sits behind another bus device on the
+// root complex (i.e. its bus= is not pcie.0/pci.0).
+func (b *Bridge) HasParent() bool {
+	return b.ParentID != ""
 }
 
 func (b *Bridge) AddDevice(ctx context.Context, ID string) (uint32, error) {

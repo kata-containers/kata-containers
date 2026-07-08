@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/pkg/errors"
 
@@ -1250,6 +1251,20 @@ func GetHypervisorPid(h Hypervisor) int {
 		return 0
 	}
 	return pids[0]
+}
+
+// IsHypervisorRunning reports whether the hypervisor process backing the
+// sandbox is still alive.  It is best-effort: a missing pidfile or a pid that
+// no longer maps to a live process is treated as "not running".
+func IsHypervisorRunning(h Hypervisor) bool {
+	pid := GetHypervisorPid(h)
+	if pid <= 0 {
+		return false
+	}
+	// Signal 0 performs error checking without sending a signal: nil means
+	// the process exists, EPERM means it exists but we may not signal it.
+	err := syscall.Kill(pid, 0)
+	return err == nil || err == syscall.EPERM
 }
 
 // Kind of guest protection

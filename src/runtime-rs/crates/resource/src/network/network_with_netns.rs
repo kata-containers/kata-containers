@@ -93,7 +93,12 @@ impl Network for NetworkWithNetns {
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
         for e in &inner.entity_list {
-            e.endpoint.attach().await.context("attach")?;
+            if let Some(device_path) = e.endpoint.attach().await.context("attach")? {
+                e.network_info
+                    .set_device_path(device_path)
+                    .await
+                    .context("set device path")?;
+            }
         }
         Ok(())
     }

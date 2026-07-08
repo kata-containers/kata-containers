@@ -9,14 +9,14 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
+use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::device::driver::NetworkConfig;
-use hypervisor::device::{DeviceConfig, DeviceType};
+use hypervisor::device::DeviceType;
 use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::{EndpointState, VethEndpointState};
-use super::Endpoint;
+use super::{attach_network_device, Endpoint};
 use crate::network::{utils, NetworkPair};
 
 #[derive(Debug)]
@@ -72,18 +72,16 @@ impl Endpoint for VethEndpoint {
         self.net_pair.tap.tap_iface.hard_addr.clone()
     }
 
-    async fn attach(&self) -> Result<()> {
+    async fn attach(&self) -> Result<Option<String>> {
         self.net_pair
             .add_network_model()
             .await
             .context("add network model")?;
 
         let config = self.get_network_config().context("get network config")?;
-        do_handle_device(&self.d, &DeviceConfig::NetworkCfg(config))
+        attach_network_device(&self.d, config)
             .await
-            .context("do handle network Veth endpoint device failed.")?;
-
-        Ok(())
+            .context("do handle network Veth endpoint device failed.")
     }
 
     async fn detach(&self, h: &dyn Hypervisor) -> Result<()> {

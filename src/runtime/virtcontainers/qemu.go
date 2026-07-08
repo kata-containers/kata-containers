@@ -2238,15 +2238,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
-		if err != nil {
-			return err
-		}
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		drive.PCIPath, err = types.PciPathFromSlots(bridgeSlot, devSlot)
+		drive.PCIPath, err = bridgePciPath(bridge, addr)
 		if err != nil {
 			return err
 		}
@@ -2361,16 +2353,10 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
+		vAttr.PCIPath, err = bridgePciPath(bridge, addr)
 		if err != nil {
 			return err
 		}
-
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		vAttr.PCIPath, err = types.PciPathFromSlots(bridgeSlot, devSlot)
 
 		if err = q.qmpMonitorCh.qmp.ExecutePCIVhostUserDevAdd(q.qmpMonitorCh.ctx, driver, devID, vAttr.DevID, addr, bridge.ID); err != nil {
 			return err
@@ -2607,7 +2593,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		q.arch.setEndpointDevicePath(endpoint, bridge.Addr, addr)
+		q.arch.setEndpointDevicePath(endpoint, bridge, addr)
 
 		var machine govmmQemu.Machine
 		machine, err = q.getQemuMachine()
@@ -3145,13 +3131,70 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 		bus = defaultBridgeBus
 	}
 
+	// nestedRootPortChassisBase is the chassis number used for the
+	// per-bridge pcie-root-ports that host nested pcie-pci-bridges. We pick
+	// a value far above what genericAppendPCIeRootPort uses for its VFIO
+	// cold/hot-plug root ports (those use chassis=0, slot=0..N) so the
+	// (chassis, slot) pairs cannot collide.
+	const nestedRootPortChassisBase = 16
+
 	for idx, b := range bridges {
+		if b.Type == types.CCW {
+			continue
+		}
+
+		if b.HasParent() {
+			// Place the per-bridge pcie-root-port at the slot the
+			// legacy bridge would have used on pcie.0, then nest
+			// the pcie-pci-bridge at slot 0 of its secondary bus.
+			parentAddr := bridgePCIStartAddr + idx
+			bridges[idx].Addr = 0
+			bridges[idx].ParentAddr = parentAddr
+
+			devices = append(devices,
+				govmmQemu.PCIeRootPortDevice{
+					ID:      b.ParentID,
+					Bus:     bus,
+					Chassis: strconv.Itoa(nestedRootPortChassisBase + idx),
+					Slot:    "0",
+					Addr:    strconv.Itoa(parentAddr),
+					// Tell OVMF (via the PCI Firmware
+					// Spec resource-reservation hints) to
+					// reserve a bus number and IO/MMIO/
+					// pref64 windows on this root port.
+					// The pcie-pci-bridge that we cold-
+					// plug under it inherits these
+					// windows, which is what makes ACPI
+					// hot-plug of children actually work
+					// under OVMF on Q35.
+					BusReserve:    "0x1",
+					IOReserve:     "4k",
+					MemReserve:    "1m",
+					Pref64Reserve: "1m",
+				},
+			)
+
+			// The bridge sitting on top of the root port must be a
+			// pcie-pci-bridge: that is the device that exposes a
+			// conventional PCI secondary bus (so the rest of our
+			// PCI hot-plug code keeps working) while still being
+			// hot-plug-friendly under OVMF, which only honours
+			// PCI Firmware Spec window reservations on PCIe ports.
+			devices = append(devices,
+				govmmQemu.BridgeDevice{
+					Type:    govmmQemu.PCIEBridge,
+					Bus:     b.ParentID,
+					ID:      b.ID,
+					Chassis: idx + 1,
+					SHPC:    false,
+				},
+			)
+			continue
+		}
+
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
-		}
-		if b.Type == types.CCW {
-			continue
 		}
 
 		bridges[idx].Addr = bridgePCIStartAddr + idx
@@ -3339,19 +3382,20 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 		bus           string
 		chassis       string
 		multiFunction bool
-		addr          string
 	)
 	switch machineType {
 	case QemuQ35, QemuVirt:
 		bus = defaultBridgeBus
 		chassis = "0"
 		multiFunction = false
-		addr = "0"
 	default:
 		return devices
 	}
 
 	for i := uint32(0); i < number; i++ {
+		// Leave Addr empty so QEMU auto-assigns the PCI slot on
+		// pcie.0. Pinning addr=0 here would collide with the Q35 host
+		// bridge (mch) which already occupies 0000:00:00.0.
 		devices = append(devices,
 			govmmQemu.PCIeRootPortDevice{
 				ID:            fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, i),
@@ -3359,7 +3403,6 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 				Chassis:       chassis,
 				Slot:          strconv.FormatUint(uint64(i), 10),
 				Multifunction: multiFunction,
-				Addr:          addr,
 			},
 		)
 	}
@@ -3397,14 +3440,15 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 	}
 
 	// Using an own ID for the root port, so we do not clash with already
-	// existing root ports adding "s" for switch prefix
+	// existing root ports adding "s" for switch prefix. Leave Addr unset
+	// so QEMU auto-assigns the PCI slot on pcie.0 (pinning addr=0 would
+	// collide with the Q35 mch host bridge at 0000:00:00.0).
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
 		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
 		Bus:           defaultBridgeBus,
 		Chassis:       "1",
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,
-		Addr:          "0",
 	}
 
 	devices = append(devices, pcieRootPort)
@@ -3617,6 +3661,8 @@ func (q *qemu) Save() (s hv.HypervisorState) {
 			Type:       string(bridge.Type),
 			ID:         bridge.ID,
 			Addr:       bridge.Addr,
+			ParentID:   bridge.ParentID,
+			ParentAddr: bridge.ParentAddr,
 		})
 	}
 
@@ -3634,7 +3680,11 @@ func (q *qemu) Load(s hv.HypervisorState) {
 	q.state.VirtiofsDaemonPid = s.VirtiofsDaemonPid
 
 	for _, bridge := range s.Bridges {
-		q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
+		if bridge.ParentID != "" {
+			q.state.Bridges = append(q.state.Bridges, types.NewNestedBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr, bridge.ParentID, bridge.ParentAddr))
+		} else {
+			q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
+		}
 	}
 
 	for _, cpu := range s.HotpluggedVCPUs {

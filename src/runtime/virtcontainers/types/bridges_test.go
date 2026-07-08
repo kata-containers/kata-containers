@@ -96,7 +96,7 @@ func TestNewBridge(t *testing.T) {
 func TestAddRemoveDevicePCI(t *testing.T) {
 
 	// create a pci bridge
-	bridges := []*Bridge{{make(map[uint32]string), "rgb123", PCI, 5, PCIBridgeMaxCapacity}}
+	bridges := []*Bridge{{make(map[uint32]string), "rgb123", PCI, 5, PCIBridgeMaxCapacity, "", 0}}
 
 	testAddRemoveDevice(t, bridges[0])
 }
@@ -104,7 +104,7 @@ func TestAddRemoveDevicePCI(t *testing.T) {
 func TestAddRemoveDeviceCCW(t *testing.T) {
 
 	// create a CCW bridge
-	bridges := []*Bridge{{make(map[uint32]string), "rgb123", CCW, 5, CCWBridgeMaxCapacity}}
+	bridges := []*Bridge{{make(map[uint32]string), "rgb123", CCW, 5, CCWBridgeMaxCapacity, "", 0}}
 
 	testAddRemoveDevice(t, bridges[0])
 }

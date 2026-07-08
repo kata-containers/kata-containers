@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use crate::device::topology::PCIeTopology;
+use crate::device::pci_path::PciPath;
 use crate::device::{Device, DeviceType};
 use crate::Hypervisor as hypervisor;
 
@@ -48,6 +49,8 @@ pub struct NetworkConfig {
     pub use_generic_irq: Option<bool>,
     /// Allow duplicate mac
     pub allow_duplicate_mac: bool,
+    /// Guest PCI path after hot-plug (used by the agent to wait for uevents).
+    pub pci_path: Option<PciPath>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -76,11 +79,16 @@ impl Device for NetworkDevice {
         _pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn hypervisor,
     ) -> Result<()> {
-        h.add_device(DeviceType::Network(self.clone()))
+        let updated = h
+            .add_device(DeviceType::Network(self.clone()))
             .await
             .context("add network device.")?;
 
-        return Ok(());
+        if let DeviceType::Network(net) = updated {
+            self.config = net.config;
+        }
+
+        Ok(())
     }
 
     async fn detach(

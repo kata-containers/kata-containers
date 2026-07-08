@@ -40,6 +40,13 @@ type qemuAmd64 struct {
 	snpIdAuth string
 
 	snpGuestPolicy *uint64
+
+	// firmwarePath is the host path to the guest firmware blob (OVMF). When
+	// non-empty on Q35, hot-pluggable PCI bridges are emitted as
+	// pcie-pci-bridge devices behind a dedicated pcie-root-port so that OVMF
+	// reserves the required bus/IO/MMIO/pref64 windows. SeaBIOS (empty
+	// firmwarePath) keeps the legacy conventional pci-bridge topology.
+	firmwarePath string
 }
 
 const (
@@ -131,6 +138,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		snpIdBlock:     config.SnpIdBlock,
 		snpIdAuth:      config.SnpIdAuth,
 		snpGuestPolicy: config.SnpGuestPolicy,
+		firmwarePath:   config.FirmwarePath,
 	}
 
 	if config.ConfidentialGuest {
@@ -179,7 +187,51 @@ func (q *qemuAmd64) capabilities(hConfig HypervisorConfig) types.Capabilities {
 }
 
 func (q *qemuAmd64) bridges(number uint32) {
+	// On Q35 + OVMF, the conventional pci-bridge does not get its IO/MMIO/
+	// pref64 hot-plug windows reserved by the firmware (OVMF only honours
+	// the PCI Firmware Spec resource-reservation hints on PCIe root/
+	// downstream ports). Devices hot-plugged behind it therefore have no
+	// usable resource window and the guest kernel never sees them, which
+	// breaks network (and any other) PCI hot-plug.
+	//
+	// Emit a pcie-pci-bridge sitting behind a dedicated pcie-root-port
+	// instead: OVMF reserves the windows on the root port, the
+	// pcie-pci-bridge inherits them, and the existing PCI hot-plug code
+	// path keeps working (just with one extra level in the guest PCI
+	// path).
+	if q.qemuMachine.Type == QemuQ35 && q.firmwarePath != "" {
+		q.Bridges = nestedPCIeBridges(number)
+		return
+	}
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
+}
+
+// nestedPCIeBridges builds hot-plug-capable PCI bridges that sit behind a
+// per-bridge pcie-root-port. From the guest's point of view the bridge's
+// secondary bus is still a conventional PCI bus (so we keep types.PCI for the
+// hot-plug bookkeeping), but it is emitted on the QEMU command line as a
+// pcie-pci-bridge cold-plugged onto a pcie-root-port so OVMF reserves the
+// required bus/IO/MMIO/pref64 windows. The "this is nested" signal is the
+// ParentID/ParentAddr pair carried by the bridge itself.
+func nestedPCIeBridges(number uint32) []types.Bridge {
+	var bridges []types.Bridge
+	for i := uint32(0); i < number; i++ {
+		bridgeID := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
+		parentID := fmt.Sprintf("rp-%s", bridgeID)
+		// Addr/ParentAddr will be assigned by genericAppendBridges when
+		// the QEMU command line is built; we leave Addr=0 because the
+		// pcie-pci-bridge sits at slot 0 of its root port's downstream
+		// bus.
+		bridges = append(bridges, types.NewNestedBridge(
+			types.PCI,
+			bridgeID,
+			make(map[uint32]string),
+			0, /* Addr: slot 0 on root-port's secondary bus */
+			parentID,
+			0, /* ParentAddr: filled in by genericAppendBridges */
+		))
+	}
+	return bridges
 }
 
 func (q *qemuAmd64) cpuModel() string {
