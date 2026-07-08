@@ -6,6 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
+fn default_is_vfio() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct PhysicalEndpointState {
     pub bdf: String,
@@ -13,6 +17,13 @@ pub struct PhysicalEndpointState {
     pub vendor_id: String,
     pub device_id: String,
     pub hard_addr: String,
+    #[serde(default = "default_is_vfio")]
+    pub is_vfio: bool,
+    #[serde(default)]
+    pub iface_name: String,
+    /// "pci" or "vmbus"
+    #[serde(default)]
+    pub bus_type: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]

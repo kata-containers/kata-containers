@@ -39,6 +39,35 @@ pub struct NetworkPair {
 }
 
 impl NetworkPair {
+    pub(crate) fn new_for_physical(name: &str, hardware_addr: &[u8], is_vfio: bool) -> Result<Self> {
+        let unique_id = kata_sys_util::rand::UUID::new();
+        let model = network_model::new("none").context("new none model")?;
+        let hard_addr = utils::get_mac_addr(hardware_addr).context("get mac addr")?;
+
+        Ok(Self {
+            tap: TapInterface {
+                id: String::from(&unique_id),
+                name: String::new(),
+                tap_iface: NetworkInterface {
+                    name: if is_vfio {
+                        String::new()
+                    } else {
+                        name.to_string()
+                    },
+                    hard_addr: hard_addr.clone(),
+                    ..Default::default()
+                },
+            },
+            virt_iface: NetworkInterface {
+                name: name.to_string(),
+                hard_addr,
+                ..Default::default()
+            },
+            model,
+            network_qos: false,
+        })
+    }
+
     pub(crate) async fn new(
         handle: &rtnetlink::Handle,
         idx: u32,
@@ -265,5 +294,34 @@ mod tests {
                 assert!(delete_link(&handle, tap_name.as_str()).await.is_ok());
             }
         }
+    }
+
+    #[test]
+    fn test_new_for_physical_vfio() {
+        let name = "enp3s0f1";
+        let hardware_addr = &[0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff];
+        let pair = NetworkPair::new_for_physical(name, hardware_addr, true).unwrap();
+
+        // VFIO: tap_iface.name should be empty (VFIO passthrough, no tap needed)
+        assert!(pair.tap.tap_iface.name.is_empty());
+        // virt_iface should still carry the interface name
+        assert_eq!(pair.virt_iface.name, name);
+        // MAC addresses should be set on both sides
+        assert!(!pair.tap.tap_iface.hard_addr.is_empty());
+        assert_eq!(pair.tap.tap_iface.hard_addr, pair.virt_iface.hard_addr);
+        assert!(!pair.network_qos);
+    }
+
+    #[test]
+    fn test_new_for_physical_non_vfio() {
+        let name = "enp4s0";
+        let hardware_addr = &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+        let pair = NetworkPair::new_for_physical(name, hardware_addr, false).unwrap();
+
+        // Non-VFIO: tap_iface.name should be the interface name (used by hypervisor)
+        assert_eq!(pair.tap.tap_iface.name, name);
+        assert_eq!(pair.virt_iface.name, name);
+        assert!(!pair.tap.tap_iface.hard_addr.is_empty());
+        assert_eq!(pair.tap.tap_iface.hard_addr, pair.virt_iface.hard_addr);
     }
 }
