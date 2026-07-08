@@ -1719,3 +1719,80 @@ func TestCheckVCPUsPinningNUMABadHostCPUs(t *testing.T) {
 	assert.Error(err)
 	assert.Contains(err.Error(), "failed to parse HostCPUs")
 }
+
+func TestHotplugVfioNetworkDeviceAlreadyAttached(t *testing.T) {
+	assert := assert.New(t)
+
+	pciPath, err := types.PciPathFromString("02")
+	assert.NoError(err)
+
+	s := &Sandbox{
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				HotPlugVFIO: config.NoPort,
+			},
+		},
+	}
+
+	// An endpoint whose guest PCI path is already known has been hotplugged
+	// before: the call must be a no-op, even when no hotplug port is
+	// configured.
+	ep := &VfioEndpoint{
+		EndpointType: VfioEndpointType,
+		HostBDF:      "0000:ff:1f.7",
+		PCIPath:      pciPath,
+		Iface:        NetworkInterface{Name: "eth1"},
+	}
+
+	assert.NoError(s.hotplugVfioNetworkDevice(context.Background(), ep))
+	assert.Equal(pciPath, ep.PciPath())
+}
+
+func TestHotplugVfioNetworkDeviceNoPort(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Sandbox{
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				HotPlugVFIO: config.NoPort,
+			},
+		},
+	}
+
+	ep := &VfioEndpoint{
+		EndpointType: VfioEndpointType,
+		HostBDF:      "0000:ff:1f.7",
+		Iface:        NetworkInterface{Name: "eth1"},
+	}
+
+	err := s.hotplugVfioNetworkDevice(context.Background(), ep)
+	assert.Error(err)
+	assert.Contains(err.Error(), "hot_plug_vfio")
+	assert.True(ep.PciPath().IsNil())
+}
+
+func TestHotplugVfioNetworkDevicePortConfigured(t *testing.T) {
+	assert := assert.New(t)
+
+	s := &Sandbox{
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				HotPlugVFIO: config.RootPort,
+			},
+		},
+	}
+
+	// With a hotplug port configured the guards are passed and the VFIO
+	// device path resolution is attempted. The malformed BDF cannot match
+	// any sysfs PCI device directory, so the resolution fails
+	// deterministically on every host.
+	ep := &VfioEndpoint{
+		EndpointType: VfioEndpointType,
+		HostBDF:      "not-a-bdf",
+		Iface:        NetworkInterface{Name: "eth1"},
+	}
+
+	err := s.hotplugVfioNetworkDevice(context.Background(), ep)
+	assert.Error(err)
+	assert.Contains(err.Error(), "failed to resolve VFIO device path")
+}

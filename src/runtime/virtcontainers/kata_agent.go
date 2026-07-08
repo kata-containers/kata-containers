@@ -861,7 +861,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if sandbox.config.HypervisorType != RemoteHypervisor {
 		// Setup network interfaces and routes
-		err = k.setupNetworks(ctx, sandbox, nil)
+		err = k.setupNetworks(ctx, sandbox)
 		if err != nil {
 			return err
 		}
@@ -1473,7 +1473,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 	}
 }
 
-func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Container) error {
+func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox) error {
 	if sandbox.network.NetworkID() == "" {
 		return nil
 	}
@@ -1503,62 +1503,44 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		}
 	}
 
-	var err error
-	var endpoints []Endpoint
-	if c == nil || c.id == sandbox.id {
-		// TODO: VFIO network device has not been hotplugged when creating the Sandbox,
-		// so need to skip VFIO endpoint here.
-		// After KEP #4113(https://github.com/kubernetes/enhancements/pull/4113)
-		// is implemented, the VFIO network devices will be attached before container
-		// creation, so no need to skip them here anymore.
-		for _, ep := range sandbox.network.Endpoints() {
-			if ep.Type() != VfioEndpointType {
-				// For cold-plugged SR-IOV VFs that appear as PhysicalEndpoints,
-				// the guest PCI path is known after resolveColdPlugVFIOGuestPciPaths
-				// has run (during createContainers). Look it up and stamp it on the
-				// endpoint so that generateVCNetworkStructures emits a non-empty
-				// devicePath in the agent Interface proto. Without this the agent
-				// receives devicePath="" and falls back to a by-MAC link lookup,
-				// which fails when the VF firmware MAC differs from the OVN MAC.
-				if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
-					if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
-						guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
-						if !guestPath.IsNil() {
-							ep.SetPciPath(guestPath)
-							k.Logger().WithFields(logrus.Fields{
-								"endpoint-name":  ep.Name(),
-								"host-bdf":       pe.BDF,
-								"guest-pci-path": guestPath.String(),
-							}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
-						}
-					}
-				}
-				endpoints = append(endpoints, ep)
-			}
-		}
-	} else if !sandbox.hotplugNetworkConfigApplied {
-		// Apply VFIO network devices' configuration after they are hot-plugged.
-		for _, ep := range sandbox.network.Endpoints() {
-			if ep.Type() == VfioEndpointType {
-				hostBDF := ep.(*VfioEndpoint).HostBDF
-				pciPath := sandbox.GetVfioDeviceGuestPciPath(hostBDF)
-				if pciPath.IsNil() {
-					return fmt.Errorf("PCI path for VFIO interface '%s' not found", ep.Name())
-				}
-				ep.SetPciPath(pciPath)
-				endpoints = append(endpoints, ep)
-			}
-		}
-
-		defer func() {
-			if err == nil {
-				sandbox.hotplugNetworkConfigApplied = true
-			}
-		}()
-	}
-
+	endpoints := sandbox.network.Endpoints()
 	if len(endpoints) == 0 {
 		return nil
+	}
+
+	// VFIO network devices (DAN) are not attached by the generic endpoint
+	// attach path. Hotplug them now, before any container is created, so
+	// that init containers that do not reference the device in their spec
+	// get working networking as well.
+	for _, ep := range endpoints {
+		if ep.Type() == VfioEndpointType {
+			if err := sandbox.hotplugVfioNetworkDevice(ctx, ep.(*VfioEndpoint)); err != nil {
+				return err
+			}
+		}
+	}
+
+	// For cold-plugged SR-IOV VFs that appear as PhysicalEndpoints, the
+	// guest PCI path is known after the ResolveColdPlugVFIOGuestPciPaths
+	// call above. Look it up and stamp it on the endpoint so that
+	// generateVCNetworkStructures emits a non-empty devicePath in the agent
+	// Interface proto. Without this the agent receives devicePath="" and
+	// falls back to a by-MAC link lookup, which fails when the VF firmware
+	// MAC differs from the OVN MAC.
+	for _, ep := range endpoints {
+		if ep.Type() == PhysicalEndpointType && ep.PciPath().IsNil() {
+			if pe, ok := ep.(*PhysicalEndpoint); ok && pe.BDF != "" {
+				guestPath := sandbox.GetVfioDeviceGuestPciPath(pe.BDF)
+				if !guestPath.IsNil() {
+					ep.SetPciPath(guestPath)
+					k.Logger().WithFields(logrus.Fields{
+						"endpoint-name":  ep.Name(),
+						"host-bdf":       pe.BDF,
+						"guest-pci-path": guestPath.String(),
+					}).Info("setupNetworks: filled guest PCI path for PhysicalEndpoint cold-plug")
+				}
+			}
+		}
 	}
 
 	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, endpoints)
@@ -1742,10 +1724,6 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		if err.Error() == context.DeadlineExceeded.Error() {
 			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "CreateContainerRequest timed out")
 		}
-		return nil, err
-	}
-
-	if err = k.setupNetworks(ctx, sandbox, c); err != nil {
 		return nil, err
 	}
 
