@@ -84,7 +84,7 @@ vsock-exporter.workspace = true
 
 # Initdata
 base64 = { workspace = true }
-sha2 = "0.10.8"
+sha2 = { workspace = true }
 async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
 
 container-device-interface = "0.1.1"
