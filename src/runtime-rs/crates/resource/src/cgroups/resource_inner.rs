@@ -72,6 +72,38 @@ impl CgroupsResourceInner {
         }
     }
 
+    /// Synchronously write the runtime's own pid into the sandbox cgroup's
+    /// `cgroup.procs` (cgroup v2 only; a no-op otherwise).
+    ///
+    /// `add_proc` already places the runtime, but on the systemd driver that
+    /// is an asynchronous call: the runtime may fork virtiofsd and the
+    /// VMM before systemd has moved it, so those children inherit its original
+    /// cgroup (e.g. `system.slice/containerd.service`). Under cgroup v2
+    /// first-touch accounting the guest RAM is then charged there, not to the
+    /// pod. A direct write is synchronous, so children forked afterwards
+    /// inherit the sandbox cgroup.
+    fn place_runtime_in_sandbox_cgroup_v2_sync(cgroup: &CgroupManager) -> Result<()> {
+        if !cgroup.v2() {
+            return Ok(());
+        }
+        let dir = cgroup
+            .cgroup_path(None)
+            .context("resolve sandbox cgroup path for runtime placement")?;
+        let procs_path = format!("{}/cgroup.procs", dir.trim_end_matches('/'));
+        let pid = process::id();
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&procs_path)
+            .with_context(|| format!("open sandbox cgroup.procs {procs_path}"))?;
+        std::io::Write::write_all(&mut file, format!("{pid}\n").as_bytes())
+            .with_context(|| format!("move runtime pid {pid} into sandbox cgroup {procs_path}"))?;
+        info!(
+            sl!(),
+            "synchronously placed runtime (pid {}) into sandbox cgroup: {}", pid, procs_path
+        );
+        Ok(())
+    }
+
     /// Create cgroup managers according to the cgroup configuration.
     ///
     /// # Returns
@@ -132,6 +164,10 @@ impl CgroupsResourceInner {
                 pid,
                 "add runtime to sandbox cgroup",
             )?;
+            // The systemd add_proc above is asynchronous; make sure we have
+            // really joined the sandbox cgroup before forking any child.
+            Self::place_runtime_in_sandbox_cgroup_v2_sync(&sandbox_cgroup)
+                .context("synchronously place runtime in sandbox cgroup")?;
         }
 
         Ok(Self {
