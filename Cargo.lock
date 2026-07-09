@@ -3570,7 +3570,7 @@ dependencies = [
  "protobuf",
  "protocols",
  "regex",
- "rstest 0.18.2",
+ "rstest",
  "rtnetlink 0.14.1",
  "runtime-spec",
  "rustjail",
@@ -3677,7 +3677,7 @@ dependencies = [
  "quick-xml",
  "reqwest 0.12.28",
  "ron",
- "rstest 0.26.1",
+ "rstest",
  "semver",
  "serde",
  "serde_json",
@@ -3712,7 +3712,7 @@ dependencies = [
  "libc",
  "log",
  "regex",
- "rstest 0.18.2",
+ "rstest",
  "serde_json",
  "serde_yaml 0.9.34+deprecated",
  "serial_test 0.10.0",
@@ -3734,7 +3734,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "log",
- "rstest 0.18.2",
+ "rstest",
  "serde_yaml 0.9.34+deprecated",
  "tokio",
 ]
@@ -3754,7 +3754,7 @@ dependencies = [
  "oci-spec 0.8.4",
  "pci-ids",
  "rand 0.10.1",
- "rstest 0.18.2",
+ "rstest",
  "runtime-spec",
  "serde",
  "serde_json",
@@ -3805,7 +3805,7 @@ dependencies = [
  "num_cpus",
  "oci-spec 0.8.4",
  "regex",
- "rstest 0.18.2",
+ "rstest",
  "safe-path",
  "scopeguard",
  "serde",
@@ -6499,7 +6499,7 @@ dependencies = [
  "oci-spec 0.8.4",
  "persist",
  "rand 0.10.1",
- "rstest 0.18.2",
+ "rstest",
  "rtnetlink 0.21.0",
  "scopeguard",
  "serde",
@@ -6596,42 +6596,13 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97eeab2f3c0a199bc4be135c36c924b6590b88c377d416494288c14f2db30199"
-dependencies = [
- "futures",
- "futures-timer",
- "rstest_macros 0.18.2",
- "rustc_version",
-]
-
-[[package]]
-name = "rstest"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5a3193c063baaa2a95a33f03035c8a72b83d97a54916055ba22d35ed3839d49"
 dependencies = [
  "futures-timer",
  "futures-util",
- "rstest_macros 0.26.1",
-]
-
-[[package]]
-name = "rstest_macros"
-version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d428f8247852f894ee1be110b375111b586d4fa431f6c46e64ba5a0dcccbe605"
-dependencies = [
- "cfg-if 1.0.4",
- "glob",
- "proc-macro2",
- "quote",
- "regex",
- "relative-path",
- "rustc_version",
- "syn 2.0.117",
- "unicode-ident",
+ "rstest_macros",
 ]
 
 [[package]]

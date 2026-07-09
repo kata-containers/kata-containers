@@ -187,7 +187,7 @@ prometheus = { version = "0.14.0", features = ["process"] }
 protobuf = "3.7.2"
 rand = "0.10.1"
 regex = "1.10.5"
-rstest = "0.18.0"
+rstest = "0.26.1"
 rtnetlink = "0.14.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"

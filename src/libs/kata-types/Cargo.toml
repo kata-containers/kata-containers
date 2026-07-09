@@ -44,7 +44,7 @@ sysctl = "0.7.1"
 tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
 nix = { workspace = true }
-rstest = "0.18"
+rstest = { workspace = true }
 
 [features]
 default = []
