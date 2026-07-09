@@ -5,6 +5,7 @@
 
 use crate::sl;
 use anyhow::{anyhow, Context, Result};
+use base64::Engine as _;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384, Sha512};
@@ -202,7 +203,7 @@ pub fn calculate_initdata_digest(
     let digest_platform = adjust_digest(&digest, platform);
 
     // 4. Encode digest with base64/Standard
-    let b64encoded_digest = base64::encode_config(digest_platform, base64::STANDARD);
+    let b64encoded_digest = base64::engine::general_purpose::STANDARD.encode(digest_platform);
 
     Ok(b64encoded_digest)
 }
@@ -216,8 +217,9 @@ pub fn encode_initdata(init_data: &InitData) -> String {
 /// Decodes a base64-encoded gzipped initdata document to its raw TOML representation.
 fn decode_raw_initdata(initdata_annotation: &str) -> Result<String> {
     // Base64 decode the annotation value
-    let b64_decoded =
-        base64::decode_config(initdata_annotation, base64::STANDARD).context("base64 decode")?;
+    let b64_decoded = base64::engine::general_purpose::STANDARD
+        .decode(initdata_annotation)
+        .context("base64 decode")?;
 
     // Gzip decompress the decoded data
     let mut gz_decoder = GzDecoder::new(&b64_decoded[..]);
@@ -256,7 +258,7 @@ fn create_encoded_input(content: &str) -> String {
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     encoder.write_all(content.as_bytes()).unwrap();
     let compressed = encoder.finish().unwrap();
-    base64::encode_config(&compressed, base64::STANDARD)
+    base64::engine::general_purpose::STANDARD.encode(&compressed)
 }
 
 #[cfg(test)]
@@ -344,7 +346,7 @@ url = 'http://kbs-service.xxx.cluster.local:8080'
     fn test_valid_base64_invalid_gzip() {
         // Test with valid base64 but invalid gzip content
         let not_gzipped = "This is not gzipped content";
-        let encoded = base64::encode_config(not_gzipped.as_bytes(), base64::STANDARD);
+        let encoded = base64::engine::general_purpose::STANDARD.encode(not_gzipped.as_bytes());
 
         let result = add_hypervisor_initdata_overrides(&encoded);
         assert!(result.is_err());
@@ -477,7 +479,7 @@ key = "value"
             .write_all(init_data.to_string().unwrap().as_bytes())
             .unwrap();
         let compressed = encoder.finish().unwrap();
-        let b64_annotation = base64::encode(compressed);
+        let b64_annotation = base64::engine::general_purpose::STANDARD.encode(compressed);
 
         // Test processing
         let result = add_hypervisor_initdata_overrides(&b64_annotation).unwrap();
