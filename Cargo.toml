@@ -2,7 +2,7 @@
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.94"
+rust-version = "1.95"
 
 [workspace]
 members = [
@@ -200,6 +200,7 @@ slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
+sysinfo = "0.39.5"
 tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "2.0.18"
