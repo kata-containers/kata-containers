@@ -47,7 +47,7 @@ dependencies = [
  "kata-types",
  "logging",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "protobuf",
  "protocols",
  "serde",
@@ -1092,7 +1092,7 @@ dependencies = [
  "kata-sys-util",
  "kata-types",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "protobuf",
  "protocols",
  "resource",
@@ -2483,7 +2483,7 @@ dependencies = [
  "kata-types",
  "log",
  "oci-client",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "openssl",
  "protobuf",
  "protocols",
@@ -3563,7 +3563,7 @@ dependencies = [
  "netlink-packet-route 0.19.0",
  "netlink-sys 0.7.0",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "opentelemetry 0.17.0",
  "procfs 0.12.0",
  "prometheus",
@@ -3619,7 +3619,7 @@ dependencies = [
  "libc",
  "logging",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "protobuf",
  "protocols",
  "rand 0.10.1",
@@ -3751,7 +3751,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "pci-ids",
  "rand 0.10.1",
  "rstest",
@@ -3803,7 +3803,7 @@ dependencies = [
  "lazy_static",
  "nix 0.31.3",
  "num_cpus",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "regex",
  "rstest",
  "safe-path",
@@ -4913,6 +4913,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "oci-spec"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3df6f876ad774d6a676f7e968f5c3edacc32f90e65fe680a8b686235396556fb"
+dependencies = [
+ "const_format",
+ "derive_builder",
+ "getset",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "olpc-cjson"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5503,7 +5520,7 @@ dependencies = [
  "anyhow",
  "container-device-interface",
  "hyper-util",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "prost 0.14.3",
  "serde",
  "serde_json",
@@ -5949,7 +5966,7 @@ name = "protocols"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "protobuf",
  "serde",
  "serde_json",
@@ -6496,7 +6513,7 @@ dependencies = [
  "netlink-packet-route 0.30.0",
  "netns-rs",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "persist",
  "rand 0.10.1",
  "rstest",
@@ -6702,7 +6719,7 @@ dependencies = [
  "logging",
  "netns-rs",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "opentelemetry 0.18.0",
  "opentelemetry-jaeger",
  "persist",
@@ -6832,7 +6849,7 @@ dependencies = [
  "libc",
  "libseccomp",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "path-absolutize",
  "protobuf",
  "protocols",
@@ -7389,7 +7406,7 @@ dependencies = [
  "log",
  "logging",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "protobuf",
  "runtime-spec",
  "serial_test 0.10.0",
@@ -8818,7 +8835,7 @@ dependencies = [
  "libc",
  "logging",
  "nix 0.31.3",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "persist",
  "pod-resources-rs",
  "protobuf",
