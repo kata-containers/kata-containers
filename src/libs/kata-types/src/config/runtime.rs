@@ -81,9 +81,7 @@ pub struct Runtime {
     /// This option may have some potential impacts to your host. It should only be used when you
     /// know what you're doing.
     ///
-    /// `disable_new_netns` conflicts with `internetworking_model=tcfilter`,
-    /// `internetworking_model=macvtap` and `internetworking_model=l3forwarding`.
-    /// It works only with `internetworking_model=none`.
+    /// `disable_new_netns` only works with `internetworking_model=none`.
     /// The tap device will be in the host network namespace and can connect to a bridge (like OVS)
     /// directly.
     ///

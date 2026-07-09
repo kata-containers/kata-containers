@@ -4,9 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-pub mod none_model;
-pub mod tc_filter_model;
 pub mod l3_forwarding_model;
+pub mod none_model;
+mod port_forwarding;
+pub mod tc_filter_model;
 pub mod test_network_model;
 use std::sync::Arc;
 

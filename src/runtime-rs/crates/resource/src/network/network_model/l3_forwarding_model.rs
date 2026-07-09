@@ -13,7 +13,10 @@ use netlink_packet_route::route::{RouteAddress, RouteAttribute, RouteScope};
 use rtnetlink::{Handle, RouteMessageBuilder};
 use scopeguard::defer;
 
-use super::{NetworkModel, NetworkModelType};
+use super::{
+    port_forwarding::{configure_port_forwarding, TAP_IPV4_ADDR},
+    NetworkModel, NetworkModelType,
+};
 use crate::network::NetworkPair;
 
 #[derive(Debug)]
@@ -46,20 +49,12 @@ impl NetworkModel for L3ForwardingModel {
             .await
             .context("fetch virt by index")?;
 
-        // This model currently only supports IPv4.
-        let mut pod_addrs = Vec::new();
-        for addr in &pair.virt_iface.addrs {
-            match addr.addr {
-                IpAddr::V4(v4) => pod_addrs.push(v4),
-                IpAddr::V6(v6) => anyhow::bail!(
-                    "l3forwarding does not support IPv6 yet, but the virt iface has {}",
-                    v6
-                ),
-            }
-        }
+        let pod_addrs =
+            ipv4_workload_addresses(pair.virt_iface.addrs.iter().map(|address| address.addr))?;
         if pod_addrs.is_empty() {
             anyhow::bail!("no IP addresses found on virt iface");
         }
+        let pod_ipv4 = pod_addrs.first().copied();
 
         // Enable proxy arp so we can respond to ARP requests using the tap and virt interfaces.
         fs::write(
@@ -83,12 +78,16 @@ impl NetworkModel for L3ForwardingModel {
         // ip. This is a gratuitous ARP request since the request and response address are the same,
         // and the guest will not respond.
         // This also allows for SNATing link local connections from the host.
-        let link_local_addr = Ipv4Addr::new(169, 254, 0, 1);
-        handle
-            .address()
-            .add(tap_index, IpAddr::V4(link_local_addr), 32)
-            .execute()
-            .await?;
+        // TODO: What if there are multiple tap interfaces? They would get the same address?
+        //  Maybe that's fine?
+        ignore_eexist(
+            handle
+                .address()
+                .add(tap_index, IpAddr::V4(TAP_IPV4_ADDR), 32)
+                .execute()
+                .await,
+        )
+        .context("add link-local address to tap")?;
 
         // Remove rules in the local route table that have to do with our pod ips.
         const ROUTE_TABLE_LOCAL: u8 = 255;
@@ -132,8 +131,11 @@ impl NetworkModel for L3ForwardingModel {
                 .output_interface(tap_index)
                 .scope(RouteScope::Link)
                 .build();
-            handle.route().add(route_msg).execute().await?;
+            ignore_eexist(handle.route().add(route_msg).execute().await)
+                .with_context(|| format!("add route for pod ip {pod_addr} via tap"))?;
         }
+
+        configure_port_forwarding(&pair.tap.tap_iface.name, pod_ipv4, TAP_IPV4_ADDR).await;
 
         Ok(())
     }
@@ -147,10 +149,65 @@ impl NetworkModel for L3ForwardingModel {
     }
 }
 
+fn ipv4_workload_addresses(addresses: impl IntoIterator<Item = IpAddr>) -> Result<Vec<Ipv4Addr>> {
+    let mut ipv4_addresses = Vec::new();
+    for address in addresses {
+        match address {
+            IpAddr::V4(address) => ipv4_addresses.push(address),
+            IpAddr::V6(address) if address.is_unicast_link_local() => {}
+            IpAddr::V6(address) => anyhow::bail!(
+                "l3forwarding does not support IPv6 yet, but the virt iface has {}",
+                address
+            ),
+        }
+    }
+    Ok(ipv4_addresses)
+}
+
+fn ignore_eexist(result: Result<(), rtnetlink::Error>) -> Result<(), rtnetlink::Error> {
+    match result {
+        Err(err) if is_eexist(&err) => Ok(()),
+        result => result,
+    }
+}
+
+fn is_eexist(err: &rtnetlink::Error) -> bool {
+    match err {
+        rtnetlink::Error::NetlinkError(message) => {
+            message.code.is_some_and(|code| code.get() == -libc::EEXIST)
+        }
+        _ => false,
+    }
+}
+
 pub async fn fetch_index(handle: &Handle, name: &str) -> Result<u32> {
     let link = crate::network::network_pair::get_link_by_name(handle, name)
         .await
         .context("get link by name")?;
     let base = link.attrs();
     Ok(base.index)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ignores_ipv6_link_local_addresses() {
+        let addresses =
+            ipv4_workload_addresses(["10.244.0.8".parse().unwrap(), "fe80::1234".parse().unwrap()])
+                .unwrap();
+
+        assert_eq!(addresses, vec!["10.244.0.8".parse::<Ipv4Addr>().unwrap()]);
+    }
+
+    #[test]
+    fn rejects_non_link_local_ipv6_addresses() {
+        let error = ipv4_workload_addresses(["fd00::8".parse().unwrap()]).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "l3forwarding does not support IPv6 yet, but the virt iface has fd00::8"
+        );
+    }
 }
