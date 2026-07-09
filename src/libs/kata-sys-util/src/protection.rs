@@ -120,13 +120,15 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
+    #[allow(unused_unsafe)]
     let retrieve_sev_params = || -> Result<(u32, u32), ProtectionError> {
         // The initial checks for AMD and SEV shouldn't be necessary due to
         // the context this function is currently called from, however it
         // shouldn't hurt to double-check and have better logging if anything
         // goes wrong.
 
-        let fn0 = x86_64::__cpuid(0);
+        // SAFETY: the host supports the `cpuid` instruction
+        let fn0 = unsafe { x86_64::__cpuid(0) };
         // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
         // interpreted byte-wise as ASCII.  No need to bother here with an
         // actual conversion to string though.
@@ -139,7 +141,8 @@ pub fn arch_guest_protection(
         }
 
         // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
-        let fn8000_001f = x86_64::__cpuid(0x8000_001f);
+        // SAFETY: the host supports the `cpuid` instruction
+        let fn8000_001f = unsafe { x86_64::__cpuid(0x8000_001f) };
         if fn8000_001f.eax & 0x10 == 0 {
             return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
         }
