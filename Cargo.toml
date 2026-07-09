@@ -150,6 +150,7 @@ vsock-exporter = { path = "src/agent/vsock-exporter" }
 # Outside dependencies
 actix-rt = "2.7.0"
 anyhow = "1.0"
+awaitgroup = "0.7.0"
 base64 = "0.22"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
