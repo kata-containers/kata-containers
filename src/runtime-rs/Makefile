@@ -603,6 +603,7 @@ endif
 # list of variables the user may wish to override
 USER_VARS += ARCH
 USER_VARS += BINDIR
+USER_VARS += CONFIG_CLH_IN
 USER_VARS += CONFIG_DB_IN
 USER_VARS += CONFIG_FC_IN
 USER_VARS += CONFIG_PATH
