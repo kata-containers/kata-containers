@@ -18,6 +18,20 @@ use crate::validate::valid_env;
 
 const DEFAULT_HOOK_TIMEOUT_SEC: i32 = 10;
 
+/// Mirror a hook *failure* to `/dev/kmsg`.
+///
+/// createContainer hooks run in the forked container child, where kata-agent's
+/// async slog drain (its background thread) doesn't exist, so `error!` here is
+/// silently dropped. `/dev/kmsg` is the one sink that survives the fork and
+/// reaches the guest console, so without this a failed hook (e.g. a CDI hook
+/// that can't be found or exits non-zero) leaves no trace at all. Failures only.
+fn log_hook_failure_to_kmsg(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open("/dev/kmsg") {
+        let _ = writeln!(f, "kata-agent: hook failed: {msg}");
+    }
+}
+
 /// A simple wrapper over `oci::Hook` to provide `Hash, Eq`.
 ///
 /// The `oci::Hook` is auto-generated from protobuf source file, which doesn't implement `Hash, Eq`.
@@ -185,6 +199,7 @@ impl HookStates {
             if let Err(e) = self.execute_hook(hook, state.clone()) {
                 // Ignore error and try next hook, the caller should retry.
                 error!(sl!(), "hook {} failed: {}", hook.path().display(), e);
+                log_hook_failure_to_kmsg(&format!("{}: {e}", hook.path().display()));
             }
         }
 
