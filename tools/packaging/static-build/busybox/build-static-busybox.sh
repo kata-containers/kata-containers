@@ -73,13 +73,22 @@ build_busybox_from_source()
 
 	cd busybox-"${BUSYBOX_VERSION:?}"
 
-	cp "${BUSYBOX_CONF_DIR:?}/${BUSYBOX_CONF_FILE:?}" .config
-
-	# shellcheck disable=SC2154
-	sed -i "s|CONFIG_PREFIX=\"./_install\"|CONFIG_PREFIX=\"${DESTDIR}\"|g" .config
+	# Regenerate the config from a small fragment instead of shipping a full,
+	# frozen .config. Start from allnoconfig, drop every symbol the fragment
+	# overrides (Kconfig keeps the first value it reads, so the baseline entries
+	# have to go), append the fragment and let silentoldconfig resolve the rest.
+	local fragment="${BUSYBOX_CONF_DIR:?}/${BUSYBOX_CONF_FILE:?}"
+	make allnoconfig
+	local sym
+	while read -r sym; do
+		sed -i -E "/^(${sym}=|# ${sym} is not set)/d" .config
+	done < <(grep -oE 'CONFIG_[A-Z0-9_]+' "${fragment}" | sort -u)
+	cat "${fragment}" >> .config
+	make silentoldconfig
 
 	make -j "$(nproc)"
-	make install
+	# shellcheck disable=SC2154
+	make CONFIG_PREFIX="${DESTDIR}" install
 
 }
 
