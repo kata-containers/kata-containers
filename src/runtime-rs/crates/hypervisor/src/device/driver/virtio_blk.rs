@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::BlockDeviceAio;
+use crate::BlockDeviceFormat;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIeTopology;
 use crate::device::util::do_decrease_count;
@@ -13,68 +15,6 @@ use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-pub use kata_types::device::{
-    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_MMIO_TYPE as KATA_MMIO_BLK_DEV_TYPE,
-    DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE, DRIVER_NVDIMM_TYPE as KATA_NVDIMM_DEV_TYPE,
-    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
-};
-
-/// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
-pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
-pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
-pub const VIRTIO_BLOCK_CCW: &str = "virtio-blk-ccw";
-pub const VIRTIO_PMEM: &str = "virtio-pmem";
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum BlockDeviceAio {
-    // IoUring is the Linux io_uring I/O implementation.
-    #[default]
-    IoUring,
-
-    // Native is the native Linux AIO implementation.
-    Native,
-
-    // Threads is the pthread asynchronous I/O implementation.
-    Threads,
-}
-
-impl BlockDeviceAio {
-    pub fn new(aio: &str) -> Self {
-        match aio {
-            "native" => BlockDeviceAio::Native,
-            "threads" => BlockDeviceAio::Threads,
-            _ => BlockDeviceAio::IoUring,
-        }
-    }
-}
-
-impl std::fmt::Display for BlockDeviceAio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceAio::Native => "native".to_string(),
-            BlockDeviceAio::Threads => "threads".to_string(),
-            _ => "iouring".to_string(),
-        };
-        write!(f, "{to_string}")
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum BlockDeviceFormat {
-    #[default]
-    Raw,
-    Vmdk,
-}
-
-impl std::fmt::Display for BlockDeviceFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceFormat::Raw => "raw".to_string(),
-            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
-        };
-        write!(f, "{to_string}")
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
