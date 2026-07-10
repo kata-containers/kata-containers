@@ -1350,10 +1350,20 @@ func TestBuildNUMATopologyHugePages(t *testing.T) {
 		t.Skip("skipping: /dev/hugepages not available")
 	}
 	assert := assert.New(t)
+	// Derive the expected per-node memory from the actual huge page size
+	// backing /dev/hugepages, so the test holds regardless of whether the
+	// host uses 2 MiB or 1 GiB huge pages.
+	hpBytes, err := hugepageSizeBytes(defaultHugepagesMountpoint)
+	assert.NoError(err)
+	alignMiB := hpBytes >> utils.MibToBytesShift
+	assert.NotZero(alignMiB)
+	// Give each of the two nodes two huge pages worth of memory so the total
+	// is evenly divisible and huge-page aligned on any host.
+	perNodeMiB := alignMiB * 2
 	q := &qemu{
 		config: HypervisorConfig{
 			DefaultMaxVCPUs: 4,
-			MemorySize:      1024,
+			MemorySize:      uint32(perNodeMiB * 2),
 			HugePages:       true,
 			GuestNUMANodes: []types.GuestNUMANode{
 				{HostNodes: "0", HostCPUs: "0-1"},
@@ -1366,7 +1376,7 @@ func TestBuildNUMATopologyHugePages(t *testing.T) {
 	assert.Len(nodes, 2)
 	assert.Equal("memory-backend-file", nodes[0].MemBackendType)
 	assert.Equal("/dev/hugepages", nodes[0].MemBackendPath)
-	assert.Equal("512M", nodes[0].MemSize)
+	assert.Equal(fmt.Sprintf("%dM", perNodeMiB), nodes[0].MemSize)
 }
 
 func TestBuildNUMATopologyVirtioFS(t *testing.T) {
