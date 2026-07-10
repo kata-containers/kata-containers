@@ -14,6 +14,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 clap.workspace = true
 env_logger = "0.10"
+humantime = "2.1.0"
 k8s-openapi = { version = "0.26", default-features = false, features = [
     "v1_33",
 ] }
@@ -32,6 +33,7 @@ kube = { version = "2.0", default-features = false, features = [
 libc.workspace = true
 log.workspace = true
 regex.workspace = true
+semver.workspace = true
 serde_json.workspace = true
 serde_yaml = "0.9"
 tar = "0.4.46"

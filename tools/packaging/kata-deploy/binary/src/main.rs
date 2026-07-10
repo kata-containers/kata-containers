@@ -13,6 +13,7 @@ mod utils;
 use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
+use semver::Version;
 
 /// Env var name used to thread the detected container runtime through the
 /// post-install re-exec. Avoids re-querying the apiserver after we've already
@@ -99,6 +100,8 @@ enum Action {
 /// Node label applied to mark a node as kata-capable. Shared across the
 /// install/cleanup label stages so the key stays consistent.
 const KATA_RUNTIME_LABEL: &str = "katacontainers.io/kata-runtime";
+const SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS: u64 = 10 * 60;
+const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
 
 // Cap the tokio runtime to a small fixed number of worker threads. The default
 // multi-thread runtime allocates `num_cpus()` workers (each with a ~2 MiB
@@ -429,8 +432,7 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
                 for s in &non_empty_snapshotters {
                     match s.as_str() {
                         "erofs" => {
-                            runtime::containerd::containerd_erofs_snapshotter_version_check(config)
-                                .await?;
+                            validate_erofs_prerequisites(config).await?;
                         }
                         "nydus" => {}
                         _ => {
@@ -446,6 +448,262 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
 
     info!("install (host-check): node prerequisites satisfied");
     Ok(())
+}
+
+async fn validate_erofs_prerequisites(config: &config::Config) -> Result<()> {
+    info!("Validating EROFS snapshotter prerequisites");
+
+    runtime::containerd::containerd_erofs_snapshotter_version_check(config).await?;
+
+    validate_host_kernel_feature_available(
+        HostKernelFeature::Erofs,
+        "Load or enable EROFS filesystem support before installing Kata and \
+         make it persistent across reboots.",
+    )?;
+
+    if config.erofs_dmverity {
+        validate_host_kernel_feature_available(
+            HostKernelFeature::DeviceMapper,
+            "Load or enable device-mapper support before installing Kata and \
+             make it persistent across reboots.",
+        )?;
+        validate_host_kernel_feature_available(
+            HostKernelFeature::DmVerity,
+            "Load or enable the dm-verity target before installing Kata and \
+             make it persistent across reboots.",
+        )?;
+    }
+
+    validate_mkfs_erofs_version()?;
+
+    // kata-deploy currently configures the EROFS snapshotter with
+    // enable_fsverity=true, but this host check does not know the final
+    // containerd configuration after user drop-ins, and it does not validate
+    // the backing filesystem's fs-verity feature. Keep this check warning-only.
+    warn_if_erofs_fsverity_may_be_unavailable();
+
+    validate_kubelet_runtime_request_timeout(config, "EROFS layer conversion").await?;
+
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum HostKernelFeature {
+    Erofs,
+    DeviceMapper,
+    DmVerity,
+    FsVerity,
+}
+
+impl HostKernelFeature {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Erofs => "erofs",
+            Self::DeviceMapper => "device-mapper",
+            Self::DmVerity => "dm-verity",
+            Self::FsVerity => "fs-verity",
+        }
+    }
+
+    fn module_name(self) -> &'static str {
+        match self {
+            Self::Erofs => "erofs",
+            Self::DeviceMapper => "dm_mod",
+            Self::DmVerity => "dm_verity",
+            Self::FsVerity => "fsverity",
+        }
+    }
+
+    fn config_symbol(self) -> &'static str {
+        match self {
+            Self::Erofs => "CONFIG_EROFS_FS",
+            Self::DeviceMapper => "CONFIG_BLK_DEV_DM",
+            Self::DmVerity => "CONFIG_DM_VERITY",
+            Self::FsVerity => "CONFIG_FS_VERITY",
+        }
+    }
+}
+
+fn validate_host_kernel_feature_available(
+    feature: HostKernelFeature,
+    remediation: &str,
+) -> Result<()> {
+    if host_module_visible(feature.module_name())
+        || host_proc_config_has_builtin_feature(feature.config_symbol())
+        || host_boot_config_has_builtin_feature(feature.config_symbol())
+    {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "Required host kernel feature `{}` is not available. {remediation}",
+        feature.name()
+    )
+}
+
+fn host_module_visible(module_name: &str) -> bool {
+    let sys_module_path = format!("/sys/module/{module_name}");
+    if utils::host_exec(&["test", "-d", &sys_module_path]).is_ok() {
+        return true;
+    }
+
+    let proc_modules_pattern = format!("^{module_name} ");
+    utils::host_exec(&["grep", "-q", &proc_modules_pattern, "/proc/modules"]).is_ok()
+}
+
+fn host_proc_config_has_builtin_feature(config_symbol: &str) -> bool {
+    let config_value = format!("{config_symbol}=y");
+
+    if utils::host_exec(&["test", "-r", "/proc/config.gz"]).is_err() {
+        return false;
+    }
+
+    let Ok(output) = utils::host_exec(&["gzip", "-dc", "/proc/config.gz"]) else {
+        return false;
+    };
+
+    output.lines().any(|line| line == config_value)
+}
+
+fn host_boot_config_has_builtin_feature(config_symbol: &str) -> bool {
+    let config_pattern = format!("^{config_symbol}=y");
+
+    let output = utils::host_exec(&["uname", "-r"]);
+    let Ok(kernel_release) = output else {
+        return false;
+    };
+
+    let kernel_config_path = format!("/boot/config-{}", kernel_release.trim());
+    utils::host_exec(&["grep", "-Eq", &config_pattern, &kernel_config_path]).is_ok()
+}
+
+fn validate_mkfs_erofs_version() -> Result<()> {
+    let output = utils::host_exec(&["mkfs.erofs", "--version"]).with_context(|| {
+        "Required host command `mkfs.erofs` is not available. Install \
+         erofs-utils >= 1.8.2 before enabling the EROFS snapshotter."
+    })?;
+
+    let version = parse_erofs_utils_version(&output).with_context(|| {
+        format!("Could not parse erofs-utils version from `mkfs.erofs --version`: {output}")
+    })?;
+    let minimum_version = Version::parse(MIN_EROFS_UTILS_VERSION)?;
+
+    if version < minimum_version {
+        anyhow::bail!(
+            "Host erofs-utils version {} is too old. kata-deploy configures \
+             EROFS fsmerge mkfs_options that require erofs-utils >= {}.",
+            version,
+            MIN_EROFS_UTILS_VERSION
+        );
+    }
+
+    info!(
+        "host erofs-utils version {} satisfies minimum {}",
+        version, MIN_EROFS_UTILS_VERSION
+    );
+
+    Ok(())
+}
+
+fn parse_erofs_utils_version(output: &str) -> Result<Version> {
+    let version_re = regex::Regex::new(r"([0-9]+)\.([0-9]+)(?:\.([0-9]+))?")?;
+    let captures = version_re
+        .captures(output)
+        .ok_or_else(|| anyhow::anyhow!("erofs-utils version not found"))?;
+
+    let major = captures[1].parse::<u64>()?;
+    let minor = captures[2].parse::<u64>()?;
+    let patch = captures
+        .get(3)
+        .map(|patch| patch.as_str().parse::<u64>())
+        .transpose()?
+        .unwrap_or(0);
+
+    Version::parse(&format!("{major}.{minor}.{patch}")).map_err(Into::into)
+}
+
+fn warn_if_erofs_fsverity_may_be_unavailable() {
+    if let Err(err) = validate_host_kernel_feature_available(
+        HostKernelFeature::FsVerity,
+        "Install, load, or enable fs-verity support if the final EROFS \
+         snapshotter configuration keeps enable_fsverity=true.",
+    ) {
+        log::warn!(
+            "kata-deploy's default EROFS snapshotter configuration sets \
+             enable_fsverity=true, but host fs-verity support was not detected \
+             ({err}). This is warning-only because the final containerd \
+             configuration may be changed by user drop-ins, and kata-deploy \
+             does not yet validate the backing filesystem's fs-verity feature."
+        );
+    } else {
+        log::warn!(
+            "kata-deploy's default EROFS snapshotter configuration sets \
+             enable_fsverity=true and host fs-verity support was detected, but \
+             kata-deploy does not yet validate the backing filesystem's \
+             fs-verity feature."
+        );
+    }
+}
+
+async fn validate_kubelet_runtime_request_timeout(
+    config: &config::Config,
+    operation: &str,
+) -> Result<()> {
+    let runtime_request_timeout = match k8s::get_kubelet_runtime_request_timeout(config).await {
+        Ok(Some(value)) => value,
+        Ok(None) => {
+            warn_runtime_request_timeout(
+                operation,
+                "kubelet /configz did not include runtimeRequestTimeout",
+            );
+            return Ok(());
+        }
+        Err(err) => {
+            warn_runtime_request_timeout(
+                operation,
+                &format!("could not query kubelet runtimeRequestTimeout from /configz: {err}"),
+            );
+            return Ok(());
+        }
+    };
+
+    let timeout_secs = match humantime::parse_duration(&runtime_request_timeout) {
+        Ok(timeout) => timeout.as_secs(),
+        Err(err) => {
+            warn_runtime_request_timeout(
+                operation,
+                &format!(
+                    "could not parse kubelet runtimeRequestTimeout value \
+                     `{runtime_request_timeout}` from /configz: {err}"
+                ),
+            );
+            return Ok(());
+        }
+    };
+
+    if timeout_secs < SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS {
+        warn_runtime_request_timeout(
+            operation,
+            &format!(
+                "kubelet runtimeRequestTimeout from /configz is \
+                 `{runtime_request_timeout}` ({timeout_secs}s)"
+            ),
+        );
+    }
+
+    info!(
+        "kubelet runtimeRequestTimeout from /configz is {runtime_request_timeout} ({timeout_secs}s)"
+    );
+    Ok(())
+}
+
+fn warn_runtime_request_timeout(operation: &str, detail: &str) {
+    log::warn!(
+        "{detail}. {operation} may run during CreateContainer; consider \
+         configuring kubelet runtimeRequestTimeout to at least {}s on nodes \
+         that run large images.",
+        SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS
+    );
 }
 
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
@@ -925,6 +1183,22 @@ mod tests {
             internal.is_hide_set(),
             "internal-post-install-wait should be hidden from --help",
         );
+    }
+
+    #[rstest]
+    #[case("mkfs.erofs (erofs-utils) 1.9\navailable compressors: lz4\n", "1.9.0")]
+    #[case("mkfs.erofs (erofs-utils) 1.8.2\n", "1.8.2")]
+    #[case("erofs-utils 1.8\n", "1.8.0")]
+    fn test_parse_erofs_utils_version(#[case] output: &str, #[case] expected: &str) {
+        assert_eq!(
+            parse_erofs_utils_version(output).unwrap(),
+            Version::parse(expected).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_erofs_utils_version_rejects_invalid_output() {
+        assert!(parse_erofs_utils_version("mkfs.erofs unknown").is_err());
     }
 
     /// All non-internal staged actions remain visible in `--help` so operators
