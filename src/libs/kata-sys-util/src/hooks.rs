@@ -250,9 +250,15 @@ impl<'a> HookExecutor<'a> {
 
     /// Spawn the subprocess, optionally feeding `state` to its stdin.
     fn spawn(&self, state: Option<&runtime_spec::State>) -> Result<Job> {
-        let mut exec = Exec::cmd(&self.args[0])
+        // Execute the hook's `path` (an absolute path, validated in `new`) directly.
+        // Using `args[0]` as the command would PATH-search a bare program name, which
+        // only resolves when the binary lives in the compiled-in default PATH
+        // (/bin:/usr/bin) after `env_clear()` - so hooks outside it (e.g. a composable
+        // image extension under /run/kata-extensions/<name>/bin) fail with ENOENT.
+        // OCI semantics: run `path`, with `args` as argv (argv[0] = args[0]).
+        let mut exec = Exec::cmd(&self.executable)
             .args(&self.args[1..])
-            .arg0(&self.executable)
+            .arg0(&self.args[0])
             .env_clear()
             .env_extend(
                 self.envs
