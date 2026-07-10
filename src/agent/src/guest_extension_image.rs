@@ -21,7 +21,7 @@
 //!
 //! The manifest schema, the `${var}` substitution variables the agent publishes,
 //! and the attester-variant / NVRC contract are documented in
-//! `docs/design/proposals/composable-vm-images.md`, which is the source of
+//! `docs/design/composable-vm-images.md`, which is the source of
 //! truth; this module must stay consistent with it.
 
 use anyhow::{anyhow, bail, Context, Result};

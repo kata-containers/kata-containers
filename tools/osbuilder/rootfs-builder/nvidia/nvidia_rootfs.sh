@@ -546,7 +546,7 @@ partition_gpu_extension() {
 # This is subtractive on purpose while the monolith still exists: the base is
 # the monolith minus the GPU allow-list. The planned next step inverts this into
 # a purely additive base/extension assembly (monolith = base + extension); see
-# "Additive image assembly" in docs/design/proposals/composable-vm-images.md.
+# "Additive image assembly" in docs/design/composable-vm-images.md.
 partition_base() {
 	echo "nvidia: building driver-agnostic base layout"
 

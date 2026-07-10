@@ -918,7 +918,7 @@ install_image_nvidia_gpu_confidential() {
 }
 
 # Install the driver-agnostic nvidia base image: the NVRC-init half of the
-# chiseled NVIDIA tree (see docs/design/proposals/composable-vm-images.md).
+# chiseled NVIDIA tree (see docs/design/composable-vm-images.md).
 # The driver still has to be installed to build the shared stage-one (the GPU
 # files are carved out afterwards), so keep the same NVIDIA_GPU_STACK as the
 # monolith.
@@ -936,7 +936,7 @@ install_image_nvidia() {
 
 # Install the gpu extension image: the driver half of the chiseled NVIDIA tree,
 # laid out for /run/kata-extensions/gpu (see
-# docs/design/proposals/composable-vm-images.md).  It is an erofs+verity image
+# docs/design/composable-vm-images.md).  It is an erofs+verity image
 # (MEASURED_ROOTFS) and is driver-versioned, so multiple driver extensions can
 # coexist against a single nvidia base image.
 install_image_nvidia_gpu_extension() {

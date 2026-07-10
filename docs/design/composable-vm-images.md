@@ -1,9 +1,6 @@
 # Composable VM Images for Kata Containers
 
-> **Status**: Proposal
->
-> Once accepted and implemented, this document should be moved to
-> `docs/design/composable-vm-images.md`.
+> **Status**: Implemented
 
 ## Summary
 
