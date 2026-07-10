@@ -1749,8 +1749,7 @@ impl ToQemuParams for DeviceNestedPcieBridge {
             .with_mem_reserve("1m")
             .with_pref64_reserve("1m");
 
-        let pcie_pci_bridge =
-            DevicePciePciBridge::new(&self.root_port_id(), &self.bridge_id());
+        let pcie_pci_bridge = DevicePciePciBridge::new(&self.root_port_id(), &self.bridge_id());
 
         let mut params = root_port.qemu_params().await?;
         params.extend(pcie_pci_bridge.qemu_params().await?);

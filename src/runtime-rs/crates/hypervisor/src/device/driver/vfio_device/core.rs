@@ -852,8 +852,8 @@ pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
         }
     }
 
-    let sysfs_dev = ap_sysfs_path
-        .ok_or_else(|| anyhow!("No VFIO-AP device found in IOMMU group {}", gid))?;
+    let sysfs_dev =
+        ap_sysfs_path.ok_or_else(|| anyhow!("No VFIO-AP device found in IOMMU group {}", gid))?;
 
     // Read APQNs from the `matrix` sysfs attribute (one APQN per line, e.g. "0a.0001").
     let matrix_path = sysfs_dev.join("matrix");

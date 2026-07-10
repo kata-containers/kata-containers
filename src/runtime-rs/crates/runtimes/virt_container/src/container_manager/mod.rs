@@ -43,10 +43,8 @@ pub fn convert_agent_error(err: anyhow::Error) -> anyhow::Error {
                 return Error::AgentConnectionClosed.into();
             }
             // Handle errors returned by the agent (RPC status errors)
-            ttrpc::error::Error::RpcStatus(status) => {
-                if status.code() == ttrpc::Code::NOT_FOUND {
-                    return Error::ProcessAlreadyTerminated.into();
-                }
+            ttrpc::error::Error::RpcStatus(status) if status.code() == ttrpc::Code::NOT_FOUND => {
+                return Error::ProcessAlreadyTerminated.into();
             }
             _ => {}
         }

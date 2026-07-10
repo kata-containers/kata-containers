@@ -469,14 +469,14 @@ impl Qmp {
         // Calculate virtio-mem size: (default_maxmemory - default_memory) aligned to 4MB
         // default_maxmemory is already validated during sandbox initialization
         let diff_mb = default_maxmemory
-             .checked_sub(default_memory)
-             .ok_or_else(|| {
-                 anyhow!(
-                     "default_maxmemory ({}) must be >= default_memory ({}) for virtio-mem setup",
-                     default_maxmemory,
-                     default_memory
-                 )
-             })?;
+            .checked_sub(default_memory)
+            .ok_or_else(|| {
+                anyhow!(
+                    "default_maxmemory ({}) must be >= default_memory ({}) for virtio-mem setup",
+                    default_maxmemory,
+                    default_memory
+                )
+            })?;
         let size_mb = u64::from(diff_mb & !3u32);
 
         if size_mb == 0 {
@@ -755,11 +755,8 @@ impl Qmp {
 
     fn find_free_slot(&mut self) -> Result<(String, i64)> {
         // Prefer in-memory bridge state (matches Go virtcontainers/types/bridges.go).
-        let mut bridge_ids: Vec<&str> = self
-            .pci_bridge_devices
-            .keys()
-            .map(String::as_str)
-            .collect();
+        let mut bridge_ids: Vec<&str> =
+            self.pci_bridge_devices.keys().map(String::as_str).collect();
         bridge_ids.sort_by(|a, b| {
             let parse_idx = |id: &str| {
                 id.strip_prefix("pci-bridge-")
@@ -775,10 +772,7 @@ impl Qmp {
             let occupied = self.pci_bridge_devices.get(bridge_id).unwrap();
             for slot in PCI_BRIDGE_FIRST_HOTPLUG_SLOT..=PCI_BRIDGE_MAX_CAPACITY {
                 if !occupied.contains_key(&slot) {
-                    info!(
-                        sl!(),
-                        "found free slot on bridge {}: {}", bridge_id, slot
-                    );
+                    info!(sl!(), "found free slot on bridge {}: {}", bridge_id, slot);
                     return Ok((bridge_id.to_string(), slot));
                 }
             }
@@ -1034,9 +1028,7 @@ impl Qmp {
             }) {
                 warn!(
                     sl!(),
-                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
-                    node_name,
-                    e
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}", node_name, e
                 );
             }
             return Err(anyhow!("device_add {:?}", e));
@@ -1055,12 +1047,7 @@ impl Qmp {
 
         let result = loop {
             if let Err(e) = self.qmp.nop() {
-                warn!(
-                    sl!(),
-                    "The QMP nop() failed for {}: {:?}",
-                    device_id,
-                    e
-                );
+                warn!(sl!(), "The QMP nop() failed for {}: {:?}", device_id, e);
             }
 
             let found = self.qmp.events().any(|event| {
@@ -1070,8 +1057,7 @@ impl Qmp {
             if found {
                 info!(
                     sl!(),
-                    "The QMP received DEVICE_DELETED event for {}",
-                    device_id
+                    "The QMP received DEVICE_DELETED event for {}", device_id
                 );
                 break Ok(());
             }
@@ -1090,13 +1076,13 @@ impl Qmp {
         // Reset the default read timeout for subsequent QMP operations.
         // Failure here is non-fatal — a stale timeout only affects the next
         // QMP read, not the already-completed device removal.
-        if let Err(e) = self.qmp.inner_mut().get_mut_write().set_read_timeout(Some(
-            Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT),
-        )) {
-            warn!(
-                sl!(),
-                "Failed to reset read timeout: {:?}", e
-            );
+        if let Err(e) = self
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
+        {
+            warn!(sl!(), "Failed to reset read timeout: {:?}", e);
         }
 
         result
@@ -1352,12 +1338,9 @@ impl Qmp {
                 blkdev_add_args,
                 ccw_addr
             );
-            if let Err(e) = self.device_add_with_rollback(
-                &node_name,
-                None,
-                block_driver,
-                blkdev_add_args,
-            ) {
+            if let Err(e) =
+                self.device_add_with_rollback(&node_name, None, block_driver, blkdev_add_args)
+            {
                 if let Some(ref mut sub) = self.ccw_subchannel {
                     // Roll back CCW subchannel state if QMP device_add fails
                     let _ = sub.remove_device(&node_name);
@@ -1417,11 +1400,7 @@ impl Qmp {
     }
 
     /// Hotunplug block device.
-    pub fn hotunplug_block_device(
-        &mut self,
-        block_driver: &str,
-        index: u64,
-    ) -> Result<()> {
+    pub fn hotunplug_block_device(&mut self, block_driver: &str, index: u64) -> Result<()> {
         let node_name = block_node_name(index);
 
         let result = (|| -> Result<()> {
@@ -1443,9 +1422,7 @@ impl Qmp {
                 .execute(&qapi_qmp::blockdev_del {
                     node_name: node_name.clone(),
                 })
-                .map_err(|e| {
-                    anyhow!("blockdev_del for block device {}: {:?}", node_name, e)
-                })?;
+                .map_err(|e| anyhow!("blockdev_del for block device {}: {:?}", node_name, e))?;
 
             Ok(())
         })();

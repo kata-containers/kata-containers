@@ -163,7 +163,7 @@ impl FcInner {
         pids.insert(self.pid.unwrap());
 
         debug!(sl(), "PIDs: {:?}", pids);
-        Ok(Vec::from_iter(pids.into_iter()))
+        Ok(Vec::from_iter(pids))
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {

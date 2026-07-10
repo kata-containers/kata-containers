@@ -145,7 +145,7 @@ impl DragonballInner {
         }
 
         info!(sl!(), "get pids {:?}", pids);
-        Ok(Vec::from_iter(pids.into_iter()))
+        Ok(Vec::from_iter(pids))
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
