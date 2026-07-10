@@ -1038,7 +1038,6 @@ impl QemuInner {
             | DeviceType::HybridVsock(_)
             | DeviceType::Vsock(_)
             | DeviceType::Protection(_)
-            | DeviceType::Block(_)
             | DeviceType::PortDevice(_) => {
                 return Err(anyhow!("hotunplug for {} is currently unsupported", device));
             }

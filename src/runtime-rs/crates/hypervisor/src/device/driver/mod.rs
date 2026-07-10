@@ -11,7 +11,6 @@ pub mod vfio_device;
 mod vhost_user;
 pub mod vhost_user_blk;
 mod vhost_user_net;
-mod virtio_blk;
 pub mod virtio_blk_modern;
 mod virtio_fs;
 mod virtio_net;
@@ -28,7 +27,6 @@ pub use vfio_device::{
 };
 pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};
 pub use vhost_user_net::VhostUserNetDevice;
-pub use virtio_blk::{BlockConfig, BlockDevice,};
 pub use virtio_blk_modern::{BlockConfigModern, BlockDeviceFormat, BlockDeviceAio, BlockDeviceModern, BlockDeviceModernHandle, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,};
 pub use virtio_fs::{
     ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,
