@@ -18,11 +18,9 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    device::{
-        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
-        DeviceConfig, DeviceType,
+    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, KATA_SCSI_DEV_TYPE, device::{
+        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
     },
-    BlockConfig, BlockDeviceAio, BlockDeviceFormat, KATA_SCSI_DEV_TYPE,
 };
 use kata_types::device::{
     DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
@@ -458,7 +456,7 @@ fn create_gpt_vmdk_descriptor(
     Ok(pad_paths)
 }
 
-fn extract_block_device_info(
+async fn extract_block_device_info(
     device_info: &DeviceType,
     read_only: bool,
 ) -> Result<(agent::Storage, String)> {
@@ -472,7 +470,8 @@ fn extract_block_device_info(
         ..Default::default()
     };
     let mut device_id = String::new();
-    if let DeviceType::Block(device) = device_info.clone() {
+    if let DeviceType::BlockModern(device_mod) = device_info.clone() {
+        let device = device_mod.lock().await.clone();
         let blk_driver = device.config.driver_option;
         // blk, mmioblk
         storage.driver = blk_driver.clone();
@@ -601,7 +600,7 @@ impl ErofsMultiLayerRootfs {
                         "multi-layer erofs: adding rw layer: {}", mount.source
                     );
 
-                    let device_config = &mut BlockConfig {
+                    let device_config = &mut BlockConfigModern {
                         driver_option: block_driver.clone(),
                         format: BlockDeviceFormat::Raw, // rw layer should be raw format
                         path_on_host: mount.source.clone(),
@@ -611,13 +610,14 @@ impl ErofsMultiLayerRootfs {
 
                     let device_info = do_handle_device(
                         device_manager,
-                        &DeviceConfig::BlockCfg(device_config.clone()),
+                        &DeviceConfig::BlockCfgModern(device_config.clone()),
                     )
                     .await
                     .context("failed to attach rw block device")?;
 
                     let (mut rwlayer, device_id) =
                         extract_block_device_info(&device_info, false)
+                            .await
                             .context("failed to get block device for rw layer")?;
                     info!(
                         sl!(),
@@ -752,7 +752,7 @@ impl ErofsMultiLayerRootfs {
                             layout.partitions.len()
                         );
 
-                        let device_config = &mut BlockConfig {
+                        let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
                             format: erofs_format,
                             path_on_host: erofs_path,
@@ -763,13 +763,13 @@ impl ErofsMultiLayerRootfs {
 
                         let device_info = do_handle_device(
                             device_manager,
-                            &DeviceConfig::BlockCfg(device_config.clone()),
+                            &DeviceConfig::BlockCfgModern(device_config.clone()),
                         )
                         .await
                         .context("failed to attach GPT VMDK block device")?;
 
                         let (base_device, device_id) =
-                            extract_block_device_info(&device_info, true)?;
+                            extract_block_device_info(&device_info, true).await?;
                         info!(
                             sl!(),
                             "GPT VMDK device attached - device_id: {} guest_path: {}",
@@ -907,7 +907,7 @@ impl ErofsMultiLayerRootfs {
                             erofs_format
                         );
 
-                        let device_config = &mut BlockConfig {
+                        let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
                             format: erofs_format, // Vmdk for multiple devices, Raw for single device
                             path_on_host: erofs_path,
@@ -918,13 +918,13 @@ impl ErofsMultiLayerRootfs {
 
                         let device_info = do_handle_device(
                             device_manager,
-                            &DeviceConfig::BlockCfg(device_config.clone()),
+                            &DeviceConfig::BlockCfgModern(device_config.clone()),
                         )
                         .await
                         .context("failed to attach erofs block device")?;
 
                         let (mut rolayer, device_id) =
-                            extract_block_device_info(&device_info, true)?;
+                            extract_block_device_info(&device_info, true).await?;
                         info!(
                             sl!(),
                             "erofs device attached - device_id: {} guest_path: {}",
