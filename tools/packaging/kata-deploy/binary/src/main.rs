@@ -446,6 +446,10 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
         }
     }
 
+    if config_uses_guest_pull(config) {
+        validate_kubelet_runtime_request_timeout(config, "guest pull").await?;
+    }
+
     info!("install (host-check): node prerequisites satisfied");
     Ok(())
 }
@@ -704,6 +708,28 @@ fn warn_runtime_request_timeout(operation: &str, detail: &str) {
          that run large images.",
         SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS
     );
+}
+
+fn config_uses_guest_pull(config: &config::Config) -> bool {
+    !config.experimental_force_guest_pull_for_arch.is_empty()
+        || mapping_contains_value(config.pull_type_mapping_for_arch.as_deref(), "guest-pull")
+        || config
+            .custom_runtimes
+            .iter()
+            .any(|runtime| runtime.crio_pull_type.as_deref() == Some("guest-pull"))
+}
+
+fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
+    mapping.is_some_and(|mapping| {
+        mapping.split(',').any(|entry| {
+            let value = entry
+                .split_once(':')
+                .map(|(_, value)| value)
+                .unwrap_or(entry)
+                .trim();
+            value == expected_value
+        })
+    })
 }
 
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
