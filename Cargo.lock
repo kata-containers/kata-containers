@@ -3018,6 +3018,7 @@ dependencies = [
  "once_cell",
  "path-clean",
  "persist",
+ "protobuf",
  "protocols",
  "qapi",
  "qapi-qmp",

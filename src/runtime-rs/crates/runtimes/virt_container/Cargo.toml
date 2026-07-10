@@ -47,6 +47,8 @@ cloud-hypervisor = ["hypervisor/cloud-hypervisor"]
 # Enable the build-in VMM Dragtonball
 dragonball = ["hypervisor/dragonball"]
 
+# Enable the OpenVMM driver
+openvmm = ["hypervisor/openvmm"]
 
 [package.metadata.cargo-machete]
 ignored = ["slog-scope"]
