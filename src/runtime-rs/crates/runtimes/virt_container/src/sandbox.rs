@@ -33,6 +33,7 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
+use hypervisor::{BlockConfigModern, VfioDeviceBase, is_vfio_ap_device};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -643,7 +644,7 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
+    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfigModern>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
         let security_info = self.hypervisor.hypervisor_config().await.security_info;
 
@@ -663,7 +664,7 @@ impl VirtSandbox {
             }
         }
 
-        Ok(Some(BlockConfig {
+        Ok(Some(BlockConfigModern {
             path_on_host: boot_info.image.clone(),
             is_readonly: true,
             driver_option: boot_info.vm_rootfs_driver,
