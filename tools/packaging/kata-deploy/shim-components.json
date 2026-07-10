@@ -82,6 +82,9 @@
     "clh-azure-runtime-rs": {
       "x86_64": ["shim-v2-rust", "cloud-hypervisor", "virtiofsd", "kernel", "kernel-debug", "rootfs-image-mariner"]
     },
+    "openvmm-azure-runtime-rs": {
+      "x86_64": ["shim-v2-rust", "openvmm", "virtiofsd", "kernel", "kernel-debug", "rootfs-image-mariner"]
+    },
     "dragonball": {
       "x86_64":  ["shim-v2-rust", "virtiofsd", "nydus", "kernel-dragonball-experimental", "rootfs-image", "rootfs-initrd"],
       "aarch64": ["shim-v2-rust", "virtiofsd", "nydus", "kernel-dragonball-experimental", "rootfs-image", "rootfs-initrd"]

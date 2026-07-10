@@ -10,6 +10,7 @@ pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
     "clh-runtime-rs",
     "dragonball",
+    "openvmm-azure-runtime-rs",
     "qemu-runtime-rs",
     "qemu-nvidia-cpu-runtime-rs",
     "qemu-nvidia-gpu-runtime-rs",

@@ -727,6 +727,14 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
+  openvmm-azure-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
 # Default shim per architecture
 #
 # Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
