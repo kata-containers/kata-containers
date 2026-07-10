@@ -19,6 +19,7 @@ path = "crates/shim-ctl/src/main.rs"
 [features]
 dragonball = ["runtimes/dragonball"]
 cloud-hypervisor = ["runtimes/cloud-hypervisor"]
+openvmm = ["runtimes/openvmm"]
 
 [dependencies]
 anyhow = { workspace = true }
