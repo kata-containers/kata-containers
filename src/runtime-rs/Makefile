@@ -122,8 +122,6 @@ FCVALIDHYPERVISORPATHS := [\"$(FCPATH)\"]
 FCJAILERPATH = $(FCBINDIR)/$(FCJAILERCMD)
 FCVALIDJAILERPATHS = [\"$(FCJAILERPATH)\"]
 
-PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
-
 # EDK2 firmware names per architecture
 ifeq ($(ARCH), x86_64)
     EDK2_NAME := ovmf
@@ -685,7 +683,6 @@ USER_VARS += KERNELPARAMS_FC
 USER_VARS += LIBEXECDIR
 USER_VARS += LOCALSTATEDIR
 USER_VARS += PKGDATADIR
-USER_VARS += PKGLIBEXECDIR
 USER_VARS += PKGRUNDIR
 USER_VARS += PREFIX
 USER_VARS += PROJECT_BUG_URL
@@ -1013,7 +1010,6 @@ ifneq (,$(findstring $(HYPERVISOR_FC),$(KNOWN_HYPERVISORS)))
 	@printf "\t$(HYPERVISOR_FC) hypervisor path (FCPATH) : %s\n" $(abspath $(FCPATH))
 endif
 	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
-	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
 	@printf "\n"
 ##TARGET help: Show help comments that start with `##VAR` and `##TARGET` in runtime-rs makefile
 help: Makefile show-summary
