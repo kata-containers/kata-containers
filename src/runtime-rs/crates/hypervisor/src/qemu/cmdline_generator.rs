@@ -269,7 +269,7 @@ struct Memory {
     size: u64,
     num_slots: u32,
     max_size: u64,
-    memory_backend_file: Option<MemoryBackendFile>,
+    memory_backend: Option<MemoryBackend>,
 }
 
 impl Memory {
@@ -294,18 +294,18 @@ impl Memory {
             size: mem_size * MI_B,
             num_slots,
             max_size: max_mem_size * MI_B,
-            memory_backend_file: None,
+            memory_backend: None,
         }
     }
 
-    fn set_memory_backend_file(&mut self, mem_file: &MemoryBackendFile) -> &mut Self {
-        if let Some(existing) = &self.memory_backend_file {
-            if *existing != *mem_file {
-                warn!(sl!(), "Memory: memory backend file already exists ({:?}) while trying to set a different one ({:?}), ignoring", existing, mem_file);
+    fn set_memory_backend(&mut self, backend: &MemoryBackend) -> &mut Self {
+        if let Some(existing) = &self.memory_backend {
+            if existing != backend {
+                warn!(sl!(), "Memory: memory backend already exists ({:?}) while trying to set a different one ({:?}), ignoring", existing, backend);
                 return self;
             }
         }
-        self.memory_backend_file = Some(mem_file.clone());
+        self.memory_backend = Some(backend.clone());
         self
     }
 
@@ -344,8 +344,8 @@ impl ToQemuParams for Memory {
 
         let mut retval = vec!["-m".to_owned(), params.join(",")];
 
-        if let Some(mem_file) = &self.memory_backend_file {
-            retval.append(&mut mem_file.qemu_params().await?);
+        if let Some(backend) = &self.memory_backend {
+            retval.append(&mut backend.qemu_params().await?);
         }
         Ok(retval)
     }
@@ -672,6 +672,43 @@ impl ToQemuParams for Knobs {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct MemoryBackendRam {
+    id: String,
+    size: u64,
+    prealloc: bool,
+}
+
+impl MemoryBackendRam {
+    fn new(id: &str, size: u64) -> MemoryBackendRam {
+        MemoryBackendRam {
+            id: id.to_string(),
+            size,
+            prealloc: false,
+        }
+    }
+
+    fn set_prealloc(&mut self, prealloc: bool) -> &mut Self {
+        self.prealloc = prealloc;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for MemoryBackendRam {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("memory-backend-ram".to_owned());
+        params.push(format!("id={}", self.id));
+        params.push(format!("size={}", format_memory(self.size)));
+        if self.prealloc {
+            params.push("prealloc=on".to_owned());
+        }
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct MemoryBackendFile {
     id: String,
     mem_path: String,
@@ -728,6 +765,31 @@ impl ToQemuParams for MemoryBackendFile {
         ));
 
         Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum MemoryBackend {
+    Ram(MemoryBackendRam),
+    File(MemoryBackendFile),
+}
+
+impl MemoryBackend {
+    fn id(&self) -> &str {
+        match self {
+            MemoryBackend::Ram(backend) => &backend.id,
+            MemoryBackend::File(backend) => &backend.id,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for MemoryBackend {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        match self {
+            MemoryBackend::Ram(backend) => backend.qemu_params().await,
+            MemoryBackend::File(backend) => backend.qemu_params().await,
+        }
     }
 }
 
@@ -2774,6 +2836,12 @@ impl<'a> QemuCmdLine<'a> {
             ccw_subchannel,
         };
 
+        // add_virtiofs_share() installs the file-backed memory backend when
+        // filesystem sharing is enabled.
+        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+            qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
+        }
+
         if config.device_info.enable_iommu {
             qemu_cmd_line.add_iommu();
         }
@@ -2931,6 +2999,54 @@ impl<'a> QemuCmdLine<'a> {
         }
     }
 
+    fn add_ram_memory_backend(&mut self, prealloc: bool) {
+        let mut mem_ram = MemoryBackendRam::new("entire-guest-memory", self.memory.size);
+        mem_ram.set_prealloc(prealloc);
+
+        let backend = MemoryBackend::Ram(mem_ram);
+        self.memory.set_memory_backend(&backend);
+        self.machine.set_memory_backend(backend.id());
+    }
+
+    fn add_file_memory_backend(
+        &mut self,
+        id: &str,
+        mem_path: &str,
+        share: bool,
+        readonly: bool,
+        prealloc: bool,
+    ) {
+        let mut mem_file = MemoryBackendFile::new(id, mem_path, self.memory.size);
+        mem_file.set_share(share);
+        mem_file.set_readonly(readonly);
+        mem_file.set_prealloc(prealloc);
+
+        let backend = MemoryBackend::File(mem_file);
+        self.memory.set_memory_backend(&backend);
+
+        // runtime-rs does not implement guest NUMA topology (Go's enable_numa /
+        // buildNUMATopology).  Bind shared guest RAM via -machine
+        // memory-backend=, not nvdimm=on plus a lone -numa node.
+        //
+        // Keep memory hotplug slots when rootfs itself uses nvdimm, otherwise
+        // add_nvdimm() for the rootfs image fails at startup because it
+        // requires maxmem and slots to be set.
+        //
+        // Also keep the hotplug region when virtio-mem is enabled (s390x):
+        // the virtio-mem-ccw device set up during VM initialization requires
+        // a non-zero maxmem, and memory resize goes through virtio-mem rather
+        // than pc-dimm (which is not a valid device model on s390x).  This
+        // mirrors the Go runtime, which reserves maxmem and hotplugs via
+        // virtio-mem-ccw on s390x.
+        if self.config.boot_info.vm_rootfs_driver != "nvdimm"
+            && self.config.boot_info.vm_rootfs_driver != "virtio-pmem"
+            && !self.config.memory_info.enable_virtio_mem
+        {
+            self.memory.set_maxmem_size(0).set_num_slots(0);
+        }
+        self.machine.set_memory_backend(backend.id());
+    }
+
     pub fn add_virtiofs_share(
         &mut self,
         virtiofsd_socket_path: &str,
@@ -2956,40 +3072,15 @@ impl<'a> QemuCmdLine<'a> {
         }
         self.devices.push(Box::new(virtiofs_device));
 
-        let mut mem_file =
-            MemoryBackendFile::new("entire-guest-memory-share", "/dev/shm", self.memory.size);
-        mem_file.set_share(true);
-
-        if self.config.memory_info.enable_mem_prealloc {
-            mem_file.set_prealloc(true);
-        }
-
         // don't put the /dev/shm memory backend file into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
-        //self.devices.push(Box::new(mem_file));
-        self.memory.set_memory_backend_file(&mem_file);
-
-        // runtime-rs does not implement guest NUMA topology (Go's enable_numa /
-        // buildNUMATopology).  Bind shared guest RAM via -machine
-        // memory-backend=, not nvdimm=on plus a lone -numa node.
-        //
-        // Keep memory hotplug slots when rootfs itself uses nvdimm, otherwise
-        // add_nvdimm() for the rootfs image fails at startup because it
-        // requires maxmem and slots to be set.
-        //
-        // Also keep the hotplug region when virtio-mem is enabled (s390x):
-        // the virtio-mem-ccw device set up during VM initialization requires
-        // a non-zero maxmem, and memory resize goes through virtio-mem rather
-        // than pc-dimm (which is not a valid device model on s390x).  This
-        // mirrors the Go runtime, which reserves maxmem and hotplugs via
-        // virtio-mem-ccw on s390x.
-        if self.config.boot_info.vm_rootfs_driver != "nvdimm"
-            && self.config.boot_info.vm_rootfs_driver != "virtio-pmem"
-            && !self.config.memory_info.enable_virtio_mem
-        {
-            self.memory.set_maxmem_size(0).set_num_slots(0);
-        }
-        self.machine.set_memory_backend(&mem_file.id);
+        self.add_file_memory_backend(
+            "entire-guest-memory-share",
+            "/dev/shm",
+            true,
+            false,
+            self.config.memory_info.enable_mem_prealloc,
+        );
     }
 
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
@@ -3681,12 +3772,78 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn contains_param(params: &[String], expected: &str) -> bool {
         params
             .iter()
             .flat_map(|param| param.split(','))
             .any(|param| param == expected)
+    }
+
+    fn test_qemu_config(shared_fs: Option<&str>, enable_mem_prealloc: bool) -> HypervisorConfig {
+        let mut config = HypervisorConfig::default();
+        config.boot_info.vm_rootfs_driver = VIRTIO_BLK_PCI.to_owned();
+        config.boot_info.rootfs_type = "ext4".to_owned();
+        config.cpu_info.default_vcpus = 1.0;
+        config.cpu_info.default_maxvcpus = 1;
+        config.machine_info.machine_type = "q35".to_owned();
+        config.memory_info.default_memory = 2048;
+        config.memory_info.enable_mem_prealloc = enable_mem_prealloc;
+        config.shared_fs.shared_fs = shared_fs.map(str::to_owned);
+        config
+    }
+
+    fn has_qemu_arg(params: &[String], option: &str, value: &str) -> bool {
+        params
+            .windows(2)
+            .any(|args| args[0] == option && args[1] == value)
+    }
+
+    async fn build_test_cmdline(id: &str, config: &HypervisorConfig) -> Vec<String> {
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let cmdline = QemuCmdLine::new(id, config).unwrap();
+        let params = cmdline.build().await.unwrap();
+        drop(cmdline);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        params
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_ram_prealloc_without_shared_fs() {
+        let config = test_qemu_config(Some("none"), true);
+        let params = build_test_cmdline("ram-prealloc", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-ram,id=entire-guest-memory,size=2G,prealloc=on"
+        ));
+
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-machine"
+                && contains_param(&args[1..2], "memory-backend=entire-guest-memory")
+        }));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_ram_backend_without_shared_fs_and_without_prealloc() {
+        let config = test_qemu_config(Some("none"), false);
+        let params = build_test_cmdline("ram-no-prealloc", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-ram,id=entire-guest-memory,size=2G"
+        ));
+        assert!(!params.iter().any(|arg| arg.contains("prealloc=")));
+
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-machine"
+                && contains_param(&args[1..2], "memory-backend=entire-guest-memory")
+        }));
     }
 
     #[actix_rt::test]
