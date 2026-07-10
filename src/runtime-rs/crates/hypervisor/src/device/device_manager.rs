@@ -148,12 +148,6 @@ impl DeviceManager {
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
-                DeviceType::Block(device) => {
-                    self.shared_info.release_device_index(
-                        device.config.index,
-                        device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
-                    );
-                }
                 DeviceType::Vfio(device) => {
                     // safe here:
                     // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
@@ -199,9 +193,6 @@ impl DeviceManager {
                     if let Some(i) = index {
                         // release the declared device index
                         let is_pmem = match device_guard.get_device_info().await {
-                            DeviceType::Block(blk) => {
-                                blk.config.driver_option == *KATA_NVDIMM_DEV_TYPE
-                            }
                             DeviceType::BlockModern(dev) => {
                                 dev.lock().await.config.driver_option == *KATA_NVDIMM_DEV_TYPE
                             }
@@ -243,11 +234,6 @@ impl DeviceManager {
     async fn find_device(&self, host_path: String) -> Option<String> {
         for (device_id, dev) in &self.devices {
             match dev.lock().await.get_device_info().await {
-                DeviceType::Block(device) => {
-                    if device.config.path_on_host == host_path {
-                        return Some(device_id.to_string());
-                    }
-                }
                 DeviceType::Vfio(device) => {
                     if device.config.host_path == host_path {
                         return Some(device_id.to_string());
@@ -285,6 +271,7 @@ impl DeviceManager {
                 }
                 DeviceType::HybridVsock(_)
                 | DeviceType::Vsock(_)
+                | DeviceType::Block(_)
                 | DeviceType::Protection(_)
                 | DeviceType::PortDevice(_) => {
                     continue;
@@ -769,9 +756,7 @@ pub async fn find_cold_plugged_vfio_ap(
 mod tests {
     use super::DeviceManager;
     use crate::{
-        device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
-        qemu::Qemu,
-        BlockConfig, KATA_BLK_DEV_TYPE,
+        BlockConfigModern, KATA_BLK_DEV_TYPE, device::{DeviceConfig, DeviceType, device_manager::get_block_device_info}, qemu::Qemu,
     };
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
@@ -809,7 +794,7 @@ mod tests {
 
         let d = dm.unwrap();
         let block_driver = get_block_device_info(&d).await.block_device_driver;
-        let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
             path_on_host: "/dev/dddzzz".to_string(),
             driver_option: block_driver,
             ..Default::default()
@@ -822,7 +807,8 @@ mod tests {
         assert!(devices_info_result.is_ok());
 
         let device_info = devices_info_result.unwrap();
-        if let DeviceType::Block(device) = device_info {
+        if let DeviceType::BlockModern(device_lock) = device_info {
+            let device = device_lock.lock().await;
             assert_eq!(device.config.driver_option, KATA_BLK_DEV_TYPE);
         } else {
             assert_eq!(1, 0)
