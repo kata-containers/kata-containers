@@ -39,6 +39,14 @@
     "qemu-nvidia-gpu-runtime-rs": {
       "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "ovmf"]
     },
+    "qemu-nvidia-cpu": {
+      "x86_64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
+      "aarch64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "ovmf"]
+    },
+    "qemu-nvidia-cpu-runtime-rs": {
+      "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
+      "aarch64": ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "ovmf"]
+    },
     "qemu-nvidia-gpu-snp": {
       "x86_64": ["shim-v2-go", "qemu-snp-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia-gpu-confidential", "ovmf-sev"]
     },

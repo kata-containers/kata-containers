@@ -98,6 +98,10 @@ RUST_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-extension" "NVIDIAGPUEXTENSION
 GO_EXTRA_OPTS="$(read_verity_param "confidential" "KERNELVERITYPARAMS")"
 GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu" "KERNELVERITYPARAMS_NV")"
 GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-confidential" "KERNELVERITYPARAMS_CONFIDENTIAL_NV")"
+# qemu-nvidia-cpu (Go) boots the driver-agnostic nvidia base image verity-backed;
+# it needs the "nvidia" base hash in its own var since KERNELVERITYPARAMS_NV
+# above is the monolithic nvidia-gpu hash.
+GO_EXTRA_OPTS+="$(read_verity_param "nvidia" "KERNELVERITYPARAMS_NV_BASE")"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
