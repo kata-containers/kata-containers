@@ -47,9 +47,21 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu-snp}"
 
 # Hypervisors where NUMA is configured and supported by default.
-# Only qemu-nvidia-gpu variants ship enable_numa=true in their base config.
-# runtime-rs does not yet implement NUMA; non-QEMU hypervisors lack support.
+# qemu-nvidia-cpu and the qemu-nvidia-gpu variants ship enable_numa=true in their
+# base config.  runtime-rs does not yet implement NUMA; non-QEMU hypervisors
+# lack support.
 NUMA_CONFIGURED_SUPPORTED_BY_DEFAULT=(
+    "qemu-nvidia-cpu"
+    "qemu-nvidia-gpu"
+    "qemu-nvidia-gpu-snp"
+    "qemu-nvidia-gpu-tdx"
+)
+
+# Hypervisors that support GPU passthrough (VFIO).  qemu-nvidia-cpu is a CPU-only
+# NVIDIA class that deliberately disables passthrough, so the GPU NUMA tests
+# must skip there even on a GPU-equipped host (they'd otherwise fail rather
+# than skip once nvidia.com/pgpu resources are present).
+NUMA_GPU_SUPPORTED=(
     "qemu-nvidia-gpu"
     "qemu-nvidia-gpu-snp"
     "qemu-nvidia-gpu-tdx"
@@ -105,7 +117,7 @@ setup() {
 numa_skip_reason() {
     # shellcheck disable=SC2076
     if [[ ! " ${NUMA_CONFIGURED_SUPPORTED_BY_DEFAULT[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
-        echo "NUMA not configured by default on ${KATA_HYPERVISOR} (only qemu-nvidia-gpu variants)"
+        echo "NUMA not configured by default on ${KATA_HYPERVISOR}"
         return 0
     fi
     local nodes
@@ -260,6 +272,11 @@ gpu_numa_skip_reason() {
     reason=$(numa_skip_reason)
     if [[ -n "${reason}" ]]; then
         echo "${reason}"
+        return 0
+    fi
+    # shellcheck disable=SC2076
+    if [[ ! " ${NUMA_GPU_SUPPORTED[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+        echo "GPU passthrough not supported on ${KATA_HYPERVISOR} (CPU-only NVIDIA class)"
         return 0
     fi
     if ! host_has_pgpu; then

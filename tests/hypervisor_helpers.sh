@@ -12,6 +12,10 @@ GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gp
 TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${CCA_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
 NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 FIRECRACKER_HYPERVISORS=("firecracker" "fc")
+# CPU-only NVIDIA classes: boot the verity-backed nvidia base image, no GPU.
+NVIDIA_CPU_HYPERVISORS=("qemu-nvidia-cpu" "qemu-nvidia-cpu-runtime-rs")
+# All non-confidential NVIDIA classes (CPU-only + plain GPU passthrough).
+NVIDIA_HYPERVISORS=("${NVIDIA_CPU_HYPERVISORS[@]}" "qemu-nvidia-gpu" "qemu-nvidia-gpu-runtime-rs")
 
 ALL_HYPERVISORS=(
 	"clh"
@@ -21,6 +25,8 @@ ALL_HYPERVISORS=(
 	"dragonball"
 	"qemu"
 	"qemu-runtime-rs"
+	"qemu-nvidia-cpu"
+	"qemu-nvidia-cpu-runtime-rs"
 	"qemu-nvidia-gpu"
 	"qemu-nvidia-gpu-runtime-rs"
 	"${TEE_HYPERVISORS[@]}"
@@ -77,6 +83,16 @@ function is_firecracker_hypervisor() {
 	return 1
 }
 
+# Common check for the non-confidential NVIDIA runtime classes (CPU-only and
+# plain GPU passthrough).  The confidential GPU classes are matched by
+# is_confidential_gpu_hypervisor instead.
+function is_nvidia_hypervisor() {
+	local hypervisor="${1:-${KATA_HYPERVISOR}}"
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	[[ " ${NVIDIA_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
+	return 1
+}
+
 function is_supported_hypervisor() {
 	local hypervisor="${1:-${KATA_HYPERVISOR}}"
 	# shellcheck disable=SC2076 # intentionally use literal string matching
@@ -104,6 +120,19 @@ function is_confidential_runtime_class() {
 	else
 		return 1
 	fi
+}
+
+# Runtime classes that boot a measured (dm-verity) rootfs: the confidential
+# classes plus the CPU-only NVIDIA classes, which boot the verity-backed
+# nvidia base image without being confidential.
+function is_verity_enabled_runtime_class() {
+	local hypervisor="${1:-${KATA_HYPERVISOR}}"
+	if is_confidential_runtime_class "${hypervisor}"; then
+		return 0
+	fi
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	[[ " ${NVIDIA_CPU_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
+	return 1
 }
 
 is_hotplug_supported() {

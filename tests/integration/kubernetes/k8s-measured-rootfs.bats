@@ -19,14 +19,17 @@ case "${KATA_HYPERVISOR}" in
 esac
 
 check_and_skip() {
-	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+	# The CPU-only NVIDIA classes are not confidential, but they still boot
+	# the verity-backed nvidia base image, so measured rootfs applies to them
+	# just like it does to the confidential classes.
+	if is_verity_enabled_runtime_class "${KATA_HYPERVISOR}"; then
 		if [[ "$(uname -m)" == "s390x" ]]; then
 			skip "measured rootfs tests not implemented for s390x"
 		fi
 		return
-	else
-		skip "measured rootfs tests not implemented for hypervisor: ${KATA_HYPERVISOR}"
 	fi
+
+	skip "measured rootfs tests not implemented for hypervisor: ${KATA_HYPERVISOR}"
 }
 
 setup() {

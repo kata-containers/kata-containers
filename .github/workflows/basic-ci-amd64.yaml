@@ -197,6 +197,8 @@ jobs:
         vmm:
           - qemu
           - qemu-runtime-rs
+          - qemu-nvidia-cpu
+          - qemu-nvidia-cpu-runtime-rs
           - qemu-nvidia-gpu
           - qemu-nvidia-gpu-runtime-rs
     runs-on: ubuntu-22.04
@@ -247,6 +249,8 @@ jobs:
           - qemu
           - clh-runtime-rs
           - qemu-runtime-rs
+          - qemu-nvidia-cpu
+          - qemu-nvidia-cpu-runtime-rs
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-nerdctl-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true

@@ -400,6 +400,21 @@ jobs:
     secrets:
       NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
+  run-k8s-tests-on-nvidia-cpu-arm64:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: publish-kata-deploy-image-arm64
+    permissions:
+      contents: read
+    uses: ./.github/workflows/run-k8s-tests-on-nvidia-cpu-arm64.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-arm64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+
 
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
