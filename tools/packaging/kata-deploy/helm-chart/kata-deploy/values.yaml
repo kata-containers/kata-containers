@@ -464,6 +464,24 @@ shims:
     containerd:
       snapshotter: ""
 
+  qemu-nvidia-cpu:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  qemu-nvidia-cpu-runtime-rs:
+    enabled: ~
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
   qemu-nvidia-gpu:
     enabled: ~
     supportedArches:

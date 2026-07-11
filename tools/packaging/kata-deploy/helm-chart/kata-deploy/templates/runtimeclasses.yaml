@@ -26,6 +26,8 @@
   "qemu-snp-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-nvidia-cpu" (dict "memory" "320Mi" "cpu" "250m")
+  "qemu-nvidia-cpu-runtime-rs" (dict "memory" "320Mi" "cpu" "250m")
   "qemu-nvidia-gpu" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-nvidia-gpu-runtime-rs" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
