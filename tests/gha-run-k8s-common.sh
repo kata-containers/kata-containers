@@ -276,8 +276,17 @@ function deploy_k0s() {
 }
 
 function deploy_k3s() {
-	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
-	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
+	# Configure the k3s server:
+	# - Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and
+	#   long-running create requests.
+	# - Disable the bundled add-ons that our tests don't rely on, to reduce the
+	#   CPU/memory footprint on the free GitHub runners.
+	curl -sfL https://get.k3s.io | sh -s - \
+		--write-kubeconfig-mode 644 \
+		--kubelet-arg runtime-request-timeout=600s \
+		--disable traefik \
+		--disable servicelb \
+		--disable metrics-server
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
@@ -342,9 +351,61 @@ function create_cluster_kcli() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
-	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	sudo mkdir -p /etc/rancher/rke2
-	printf '%s\n' 'kubelet-arg:' '  - --runtime-request-timeout=600s' | sudo tee /etc/rancher/rke2/config.yaml
+	# Configure the RKE2 server:
+	# - Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and
+	#   long-running create requests.
+	# - Disable the bundled add-ons that our tests don't rely on, to reduce the
+	#   CPU/memory footprint on the free GitHub runners. We keep CoreDNS (DNS)
+	#   and a CNI, which are required for pods to schedule, network, and resolve
+	#   names.
+	# - Prefer flannel over the default canal (calico+flannel) CNI purely to save
+	#   host resources on the free runners. Canal is not broken with Kata; it is
+	#   simply heavier, and matching the lighter k3s flannel setup frees enough
+	#   schedulable CPU/memory for Guaranteed 2-CPU test workloads.
+	# - Disable the cloud-controller-manager; our CI clusters don't use cloud LBs
+	#   and the CCM pod reserves schedulable CPU on the single-node runners.
+	# - Shrink control-plane static-pod CPU requests so Guaranteed 2-CPU test
+	#   workloads (which Kata sizes from limits, not requests) can schedule.
+	sudo tee /etc/rancher/rke2/config.yaml > /dev/null <<-'EOF'
+		cni: flannel
+		disable-cloud-controller: true
+		kubelet-arg:
+		  - --runtime-request-timeout=600s
+		disable:
+		  - rke2-ingress-nginx
+		  - rke2-metrics-server
+		  - rke2-snapshot-controller
+		  - rke2-snapshot-controller-crd
+		  - rke2-snapshot-validation-webhook
+		control-plane-resource-requests:
+		  - kube-apiserver-cpu=200m
+		  - kube-apiserver-memory=256M
+		  - kube-scheduler-cpu=100m
+		  - kube-scheduler-memory=128M
+		  - kube-controller-manager-cpu=100m
+		  - kube-controller-manager-memory=128M
+		  - kube-proxy-cpu=100m
+		  - etcd-cpu=100m
+		  - etcd-memory=256M
+	EOF
+
+	# Trim CoreDNS CPU requests via HelmChartConfig. The manifests directory must
+	# exist before the first rke2-server start.
+	sudo mkdir -p /var/lib/rancher/rke2/server/manifests
+	sudo tee /var/lib/rancher/rke2/server/manifests/rke2-coredns-config.yaml > /dev/null <<-'EOF'
+		apiVersion: helm.cattle.io/v1
+		kind: HelmChartConfig
+		metadata:
+		  name: rke2-coredns
+		  namespace: kube-system
+		spec:
+		  valuesContent: |-
+		    resources:
+		      requests:
+		        cpu: 50m
+		        memory: 64Mi
+	EOF
 
 	sudo systemctl enable --now rke2-server.service
 
