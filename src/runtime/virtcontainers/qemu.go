@@ -599,11 +599,25 @@ func maybeRightSizeAutoNUMA(hc *HypervisorConfig, log *logrus.Entry) {
 	if hc == nil || len(hc.NUMAMapping) > 0 || len(hc.GuestNUMANodes) <= 1 {
 		return
 	}
+	vfioHostSet := vfioHostNUMANodes(hc.VFIODevices, log)
+
+	// Drop CPU-less host NUMA nodes from the auto-derived topology so the
+	// guest CPU topology only spans nodes that can actually host vCPUs.
+	// Keep them when a VFIO device is attached: a passed-through device may
+	// live on a CPU-less node (e.g. a GPU's memory node on GH200) that still
+	// needs a guest NUMA node for pxb-pcie placement.
+	if len(vfioHostSet) == 0 {
+		hc.GuestNUMANodes = utils.FilterCPUBearingNUMANodes(hc.GuestNUMANodes)
+		if len(hc.GuestNUMANodes) <= 1 {
+			return
+		}
+	}
+
 	hc.GuestNUMANodes = selectNUMANodes(
 		hc.GuestNUMANodes,
 		hc.DefaultMaxVCPUs,
 		uint64(hc.MemorySize),
-		vfioHostNUMANodes(hc.VFIODevices, log),
+		vfioHostSet,
 		realHostNUMACapFn,
 		log,
 	)
