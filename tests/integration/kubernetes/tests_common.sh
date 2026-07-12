@@ -108,7 +108,7 @@ is_aks_cluster() {
 
 is_k3s_or_rke2() {
 	case "${KUBERNETES:-}" in
-		k3s|rke2) return 0 ;;
+		k0s|k3s|rke2) return 0 ;;
 		*) return 1 ;;
 	esac
 }
