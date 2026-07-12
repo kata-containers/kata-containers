@@ -24,7 +24,7 @@ Drop-ins are layered: `10-*` files set the platform base, `20-*` files overlay O
 | `10-non-coco-aks-drop-in.json` | Non-confidential guest on AKS |
 | `10-non-coco-aks-cbl-mariner-drop-in.json` | Non-confidential guest on AKS with CBL-Mariner host |
 | `20-oci-1.2.0-drop-in.json` | OCI bundle version 1.2.0 |
-| `20-oci-1.2.1-drop-in.json` | OCI bundle version 1.2.1 (e.g. k3s, rke2, NVIDIA GPU, CBL-Mariner) |
+| `20-oci-1.2.1-drop-in.json` | OCI bundle version 1.2.1 (e.g. microk8s, CBL-Mariner) |
 | `20-oci-1.3.0-drop-in.json` | OCI bundle version 1.3.0 (e.g. containerd 2.2.x) |
 | `20-experimental-force-guest-pull-drop-in.json` | Disable guest pull |
 

@@ -109,6 +109,7 @@ cgroupsv1
 coredump
 CPUSET
 crio
+microk8s
 nerdctl
 crictl
 dockershim
