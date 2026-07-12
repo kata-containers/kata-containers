@@ -434,6 +434,29 @@ function deploy_rke2() {
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+
+	# Wait for the default (dqlite + Calico) bring-up before reconfiguring it.
+	sudo microk8s status --wait-ready --timeout 300
+
+	# Trim the microk8s footprint on the free GitHub runners.
+	#
+	# microk8s ships only the "ha-cluster" addon enabled by default, which pulls
+	# in dqlite *and* Calico. Calico (Felix/BIRD/Typha on every node) is markedly
+	# heavier than the flannel CNI that k3s/rke2/k0s use, and on the shared
+	# runners that extra baseline leaves too little host memory for the large
+	# in-guest image-pull test: the ~4GB Kata QEMU gets OOM-killed mid-pull,
+	# surfacing as "QEMU exited ... signal: killed" / "ttrpc: closed". The same
+	# test passes on the flannel-based distros on the very same runner.
+	#
+	# Disabling ha-cluster reverts microk8s to the lighter etcd + flannel setup,
+	# matching the CNI the other distros already use. This is destructive (it
+	# wipes cluster resources), so it must run on the fresh cluster before we
+	# deploy anything; the dns (CoreDNS) addon, auto-enabled by the default
+	# launch config, is wiped along with it and has to be re-enabled afterwards.
+	sudo microk8s disable ha-cluster --force
+	sudo microk8s status --wait-ready --timeout 300
+	sudo microk8s enable dns
+
 	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	echo '--runtime-request-timeout=600s' | sudo tee -a /var/snap/microk8s/current/args/kubelet
 	sudo microk8s stop
