@@ -227,10 +227,22 @@ function deploy_k0s() {
 		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
 	fi
 
+	# Disable the k0s components our tests don't rely on, to reduce the host
+	# memory footprint on the free GitHub runners. Unlike k3s/rke2, k0s ships
+	# its full default stack; without trimming it, the extra control-plane
+	# footprint leaves too little headroom and the host OOM-kills the 4GB Kata
+	# QEMU while it pulls a large image in-guest (test #5), showing up as
+	# "ttrpc: closed" / "QEMU exited ... signal: killed".
+	# - metrics-server: not needed by the tests (matches k3s/rke2).
+	# - autopilot: k0s self-update controller, pointless in CI.
+	# We keep coredns (DNS), kube-proxy/network-provider (networking) and
+	# konnectivity-server (apiserver<->kubelet), which pods rely on.
+	k0s_disable_components="metrics-server,autopilot"
+
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
 	# shellcheck disable=SC2086
-	sudo k0s install controller --single --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
+	sudo k0s install controller --single --disable-components "${k0s_disable_components}" --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
 
 	# kube-router decided to use :8080 for its metrics, and this seems
 	# to be a change that affected k0s 1.30.0+, leading to kube-router
