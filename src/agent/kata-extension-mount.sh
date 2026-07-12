@@ -94,7 +94,7 @@ HASH_DEV="${REAL_DEV}${PART_SEP}2"
 #   NO hash device + NO params -> raw mount (genuinely unmeasured extension)
 #
 # See "Integrity policy: measured vs. unmeasured, and failing closed" in
-# docs/design/proposals/composable-vm-images.md for the rationale.
+# docs/design/composable-vm-images.md for the rationale.
 if [[ -b "${HASH_DEV}" ]]; then
 	if [[ -z "${VERITY_PARAMS}" ]]; then
 		echo "ERROR: extension ${EXTENSION_NAME} ships a dm-verity hash device but no verity params were provided on the kernel command line; refusing to mount it unverified" >&2

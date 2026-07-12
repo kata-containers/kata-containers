@@ -1,0 +1,16 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+CONFIG_STATIC=y
+CONFIG_SELINUX=y
+CONFIG_NTPD=y
+CONFIG_FEATURE_NTPD_CONF=y
+CONFIG_FEATURE_NTP_AUTH=y
+# CONFIG_SH_IS_ASH is not set
+# CONFIG_SH_IS_HUSH is not set
+CONFIG_SH_IS_NONE=y
+# CONFIG_BASH_IS_ASH is not set
+# CONFIG_BASH_IS_HUSH is not set
+CONFIG_BASH_IS_NONE=y
+# CONFIG_SHELL_ASH is not set

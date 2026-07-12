@@ -74,6 +74,13 @@ install_userspace_components() {
 
 	apt-mark hold cryptsetup-bin dmsetup libargon2-1     \
 		e2fsprogs libxml2
+
+	# NVRC loads the NVIDIA driver modules from the gpu extension's self-contained
+	# module tree via `modprobe --dirname <extension>`, a kmod feature the base
+	# busybox lacks. Install the real kmod here so the nvidia base chisel can
+	# pull /usr/bin/kmod (and its libzstd/liblzma deps) from this stage.
+	eval "${APT_INSTALL}" kmod
+	apt-mark hold kmod
 }
 
 setup_apt_repositories() {

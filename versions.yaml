@@ -137,6 +137,12 @@ assets:
         nvidia-gpu-confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
+        nvidia:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia-gpu-extension:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
       ppc64le:
         name: "ubuntu"
         version: "noble"  # 24.04 LTS
@@ -159,6 +165,12 @@ assets:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        nvidia-gpu-extension:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
 
@@ -234,7 +246,7 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.1.4"
+    version: "v0.1.5"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   nvidia:

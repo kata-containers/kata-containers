@@ -123,6 +123,8 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-virtiofsd.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu-confidential.tar.zst \
+	kata-static-rootfs-image-nvidia.tar.zst \
+	kata-static-rootfs-image-nvidia-gpu-extension.tar.zst \
 	kata-static-shim-v2-go.tar.zst \
 	kata-static-shim-v2-rust.tar.zst
 
@@ -131,7 +133,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
@@ -184,7 +186,7 @@ agent-tarball: copy-scripts-for-the-agent-build
 agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
-BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
+BUSYBOX_CONF_FILE ?= busybox.nvidia.fragment
 busybox-tarball:
 	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
 
@@ -297,6 +299,17 @@ rootfs-image-nvidia-gpu-tarball: $(DEPS)
 
 DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-confidential-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# Composable NVIDIA stack: the driver-agnostic nvidia boot image and the
+# driver-versioned gpu extension are both carved out of the same chiseled tree, so
+# they share the monolith's (non-confidential) build dependencies.
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+rootfs-image-nvidia-tarball: $(DEPS)
+	${MAKE} $@-build
+
+DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball

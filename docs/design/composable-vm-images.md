@@ -1,9 +1,6 @@
 # Composable VM Images for Kata Containers
 
-> **Status**: Proposal
->
-> Once accepted and implemented, this document should be moved to
-> `docs/design/composable-vm-images.md`.
+> **Status**: Implemented
 
 ## Summary
 
@@ -537,7 +534,7 @@ how tooling is provisioned and who mounts the extensions:
   dedicated early-boot component takes over the responsibilities systemd would
   otherwise have (extension discovery and mounting, attester selection,
   orchestration), and any tooling must be placed into the image deliberately
-  rather than pulled in as packages. The chiseled `base-nvidia` driven by
+  rather than pulled in as packages. The chiseled `nvidia` base driven by
   **NVRC** is today's instance.
 
 These are the only two flavours today and no others are planned, but a new base
@@ -565,7 +562,7 @@ ocicrypt config, pause bundle). It includes:
   "Runtime dependencies" for why the encrypted-storage `cryptsetup` lives in
   the extension instead.
 
-The **distroless base** (`base-nvidia`, driven by NVRC) is a chiseled,
+The **distroless base** (`nvidia`, driven by NVRC) is a chiseled,
 driver-agnostic image rather than a full distro, so the items above do not
 arrive as packages — they are copied into the base layout explicitly:
 `veritysetup` and its library closure unconditionally, and the
@@ -703,7 +700,7 @@ The architecture is designed to support multiple guest extension images:
 - **GPU extension** — the NVIDIA GPU userspace (driver libraries, NVML, the
   container-toolkit binaries, kernel modules) lives in a `gpu-extension` image
   mounted at `/run/kata-extensions/gpu`, carved out of the same build as the
-  driver-agnostic `base-nvidia` image. NVRC orchestrates early boot, loads the
+  driver-agnostic `nvidia` base image. NVRC orchestrates early boot, loads the
   modules from the extension, and composes the GPU extension with the CoCo extension on
   confidential GPU guests. This extension is implemented; its interplay with the
   CoCo extension (NVML resolution, attester selection) is covered in
@@ -711,6 +708,29 @@ The architecture is designed to support multiple guest extension images:
 
 - **Custom extensions** — users can build their own guest extension images for
   workload-specific libraries, models, or configurations.
+
+### Additive image assembly
+
+Today the NVIDIA images are carved out of a single chiseled monolith tree: the
+`gpu-extension` is assembled additively (an allow-list of GPU userspace is copied
+into a fresh tree), while the `nvidia` base is produced *subtractively* — the same
+allow-list is deleted from the full tree. This keeps the monolith byte-identical
+during the transition, but it means the base build describes what it does *not*
+want rather than what it does.
+
+The intended next step is to invert this into a purely additive flow, so nothing
+is ever subtracted:
+
+1. Build the shared driver `stage-one` (always required).
+2. Assemble the `nvidia` base additively from `stage-one`.
+3. Assemble the `gpu-extension` additively from `stage-one`.
+4. Compose the monolith by combining the base and the extension.
+
+This requires splitting the interleaved `chisseled_*` producers (which today copy
+base runtime libraries and GPU userspace in the same pass) into base and GPU
+halves. It is best done together with the removal of the Go-runtime monolith, so
+that only a single, additive code path remains rather than maintaining both the
+monolith and the split builds.
 
 ### Extension ordering
 

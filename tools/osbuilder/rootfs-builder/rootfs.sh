@@ -64,8 +64,13 @@ KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
 BUILD_VARIANT=${BUILD_VARIANT:-""}
 
+# All NVIDIA build variants (nvidia, nvidia-gpu, nvidia-gpu-confidential,
+# nvidia-gpu-extension) are handled by the NVIDIA rootfs builder.
+is_nvidia_variant() { [[ "${BUILD_VARIANT}" == "nvidia" || "${BUILD_VARIANT}" == "nvidia-"* ]]; }
+is_nvidia_confidential_variant() { [[ "${BUILD_VARIANT}" == "nvidia-gpu-confidential" ]]; }
+
 # shellcheck source=/dev/null
-[[ "${BUILD_VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
+is_nvidia_variant && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -932,15 +937,16 @@ main()
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
 
-	if [[ "${BUILD_VARIANT}" = "nvidia-gpu" ]]; then
-		setup_nvidia_gpu_rootfs_stage_one
-		setup_nvidia_gpu_rootfs_stage_two
-		return $?
-	fi
-
-	if [[ "${BUILD_VARIANT}" = "nvidia-gpu-confidential" ]]; then
-		setup_nvidia_gpu_rootfs_stage_one "confidential"
-		setup_nvidia_gpu_rootfs_stage_two "confidential"
+	# The nvidia base and nvidia-gpu-extension layouts are carved from the same
+	# chiseled tree as the monolith (sharing its driver stage-one); confidential
+	# only differs in the rootfs type passed down. They all drive the same
+	# stage-one/two and differ in the final partition step (see
+	# nvidia_image_layout in nvidia_rootfs.sh).
+	if is_nvidia_variant; then
+		local rootfs_type=""
+		is_nvidia_confidential_variant && rootfs_type="confidential"
+		setup_nvidia_gpu_rootfs_stage_one "${rootfs_type}"
+		setup_nvidia_gpu_rootfs_stage_two "${rootfs_type}"
 		return $?
 	fi
 }

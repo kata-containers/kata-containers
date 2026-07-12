@@ -18,6 +18,20 @@ use crate::validate::valid_env;
 
 const DEFAULT_HOOK_TIMEOUT_SEC: i32 = 10;
 
+/// Mirror a hook *failure* to `/dev/kmsg`.
+///
+/// createContainer hooks run in the forked container child, where kata-agent's
+/// async slog drain (its background thread) doesn't exist, so `error!` here is
+/// silently dropped. `/dev/kmsg` is the one sink that survives the fork and
+/// reaches the guest console, so without this a failed hook (e.g. a CDI hook
+/// that can't be found or exits non-zero) leaves no trace at all. Failures only.
+fn log_hook_failure_to_kmsg(msg: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open("/dev/kmsg") {
+        let _ = writeln!(f, "kata-agent: hook failed: {msg}");
+    }
+}
+
 /// A simple wrapper over `oci::Hook` to provide `Hash, Eq`.
 ///
 /// The `oci::Hook` is auto-generated from protobuf source file, which doesn't implement `Hash, Eq`.
@@ -185,6 +199,7 @@ impl HookStates {
             if let Err(e) = self.execute_hook(hook, state.clone()) {
                 // Ignore error and try next hook, the caller should retry.
                 error!(sl!(), "hook {} failed: {}", hook.path().display(), e);
+                log_hook_failure_to_kmsg(&format!("{}: {e}", hook.path().display()));
             }
         }
 
@@ -250,9 +265,15 @@ impl<'a> HookExecutor<'a> {
 
     /// Spawn the subprocess, optionally feeding `state` to its stdin.
     fn spawn(&self, state: Option<&runtime_spec::State>) -> Result<Job> {
-        let mut exec = Exec::cmd(&self.args[0])
+        // Execute the hook's `path` (an absolute path, validated in `new`) directly.
+        // Using `args[0]` as the command would PATH-search a bare program name, which
+        // only resolves when the binary lives in the compiled-in default PATH
+        // (/bin:/usr/bin) after `env_clear()` - so hooks outside it (e.g. a composable
+        // image extension under /run/kata-extensions/<name>/bin) fail with ENOENT.
+        // OCI semantics: run `path`, with `args` as argv (argv[0] = args[0]).
+        let mut exec = Exec::cmd(&self.executable)
             .args(&self.args[1..])
-            .arg0(&self.executable)
+            .arg0(&self.args[0])
             .env_clear()
             .env_extend(
                 self.envs

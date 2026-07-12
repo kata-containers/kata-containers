@@ -45,17 +45,20 @@ esac
 # - rootfs-image (the base image, measured; root hash labelled "base")
 # - rootfs-image-confidential (monolithic CoCo image, root hash "confidential")
 # - rootfs-image-coco-extension
-# - rootfs-image-nvidia-gpu
-# - rootfs-image-nvidia-gpu-confidential
+# - rootfs-image-nvidia-gpu / rootfs-image-nvidia-gpu-confidential (monolithic)
+# - rootfs-image-nvidia (the driver-agnostic NVIDIA boot image)
+# - rootfs-image-nvidia-gpu-extension (the driver-versioned gpu extension)
 #
-# The CoCo configs come in two flavours during the transition to split images:
+# Both the CoCo and the NVIDIA GPU configs come in two flavours during the
+# transition to split images, and the two runtimes are built in separate `make`
+# invocations so each maps the same make var to a different root hash:
 # - runtime-rs (Rust) uses the split layout: the measured base image
-#   (@KERNELVERITYPARAMS@) plus the CoCo extension (@COCOVERITYPARAMS@).
-# - runtime (Go) still uses the monolithic confidential image, whose dm-verity
-#   hash is carried by @KERNELVERITYPARAMS@.
-# Because the two runtimes are built in separate `make` invocations, each gets
-# its own @KERNELVERITYPARAMS@ value (base hash for Rust, confidential hash for
-# Go).  The NVIDIA GPU verity params are shared by both runtimes.
+#   (@KERNELVERITYPARAMS@) plus the CoCo extension (@COCOVERITYPARAMS@), and for
+#   NVIDIA the nvidia base image (@KERNELVERITYPARAMS_NV@) plus the gpu extension
+#   (@NVIDIAGPUEXTENSIONVERITYPARAMS@).
+# - runtime (Go) still uses the monolithic images: the confidential image
+#   (@KERNELVERITYPARAMS@) and, for NVIDIA, nvidia-gpu (@KERNELVERITYPARAMS_NV@)
+#   and nvidia-gpu-confidential (@KERNELVERITYPARAMS_CONFIDENTIAL_NV@).
 #
 # shellcheck disable=SC2154
 root_hash_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
@@ -77,16 +80,24 @@ read_verity_param() {
 	printf ' %s=%s' "${param_var}" "${root_measure_config}"
 }
 
-# Shared by both runtimes (NVIDIA GPU variants).
-EXTRA_OPTS+="$(read_verity_param "nvidia-gpu" "KERNELVERITYPARAMS_NV")"
-EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-confidential" "KERNELVERITYPARAMS_CONFIDENTIAL_NV")"
+# The NVIDIA GPU verity params differ per runtime: runtime-rs boots the
+# composable split layout (nvidia base + gpu extension) while the Go runtime
+# still boots the monolithic nvidia-gpu / nvidia-gpu-confidential images.  Since
+# both runtimes reuse KERNELVERITYPARAMS_NV but map it to different root hashes,
+# the reads live in each runtime's own EXTRA_OPTS rather than the shared one.
 
-# runtime-rs (Rust): split image -> base hash + CoCo extension hash.
+# runtime-rs (Rust): split images -> base hash + CoCo extension hash, plus the
+# nvidia base and gpu extension hashes for the NVIDIA GPU configs.
 RUST_EXTRA_OPTS="$(read_verity_param "base" "KERNELVERITYPARAMS")"
 RUST_EXTRA_OPTS+="$(read_verity_param "coco-extension" "COCOVERITYPARAMS")"
+RUST_EXTRA_OPTS+="$(read_verity_param "nvidia" "KERNELVERITYPARAMS_NV")"
+RUST_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-extension" "NVIDIAGPUEXTENSIONVERITYPARAMS")"
 
-# runtime (Go): monolithic confidential image -> confidential hash.
+# runtime (Go): monolithic confidential image -> confidential hash, plus the
+# monolithic nvidia-gpu / nvidia-gpu-confidential hashes for the NVIDIA configs.
 GO_EXTRA_OPTS="$(read_verity_param "confidential" "KERNELVERITYPARAMS")"
+GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu" "KERNELVERITYPARAMS_NV")"
+GO_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-confidential" "KERNELVERITYPARAMS_CONFIDENTIAL_NV")"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
