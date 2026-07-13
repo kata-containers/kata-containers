@@ -150,7 +150,7 @@ function create_cluster() {
 		-n "${rg}"
 
 	# Required by e.g. AKS App Routing for KBS installation.
-	az extension add --name aks-preview
+	az extension add --name aks-preview --version 21.0.0b8
 
 	# Create the cluster.
 	aks_create=(az aks create
