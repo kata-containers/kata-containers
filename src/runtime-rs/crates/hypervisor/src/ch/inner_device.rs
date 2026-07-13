@@ -522,6 +522,7 @@ impl TryFrom<BlockConfigModern> for DiskConfig {
             readonly: blkcfg.is_readonly,
             num_queues: blkcfg.num_queues,
             queue_size: blkcfg.queue_size as u16,
+            sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
             ..Default::default()
         };
