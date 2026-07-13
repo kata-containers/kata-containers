@@ -21,6 +21,8 @@ pub enum CapabilityBits {
     HybridVsockSupport,
     /// hypervisor supports memory hotplug probe interface
     GuestMemoryProbe,
+    /// hypervisor supports exposing block discard/unmap to the guest
+    BlockDeviceDiscardSupport,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -83,6 +85,12 @@ impl Capabilities {
     pub fn is_mem_hotplug_probe_supported(&self) -> bool {
         self.flags.and(CapabilityBits::GuestMemoryProbe) != 0
     }
+
+    /// is_block_device_discard_supported tells if the hypervisor exposes
+    /// block discard/unmap support to the guest.
+    pub fn is_block_device_discard_supported(&self) -> bool {
+        self.flags.and(CapabilityBits::BlockDeviceDiscardSupport) != 0
+    }
 }
 
 #[cfg(test)]
@@ -133,5 +141,8 @@ mod tests {
         cap.add(CapabilityBits::GuestMemoryProbe);
         assert!(cap.is_mem_hotplug_probe_supported());
         assert!(cap.is_fs_sharing_supported());
+        // test block discard capability
+        cap.add(CapabilityBits::BlockDeviceDiscardSupport);
+        assert!(cap.is_block_device_discard_supported());
     }
 }
