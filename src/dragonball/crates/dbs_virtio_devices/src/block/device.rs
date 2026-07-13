@@ -700,6 +700,10 @@ mod tests {
             let mut q = vq.create_queue();
             data_descs.clear();
             // status desc read only
+            m.write_obj::<u32>(VIRTIO_BLK_T_GET_ID, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1)
+                .set(0x2000, 0x40, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
             vq.dtable(2).flags().store(0);
             assert!(matches!(
                 Request::parse(&mut q.pop_descriptor_chain(m).unwrap(), &mut data_descs, 32),
@@ -711,6 +715,10 @@ mod tests {
             let mut q = vq.create_queue();
             data_descs.clear();
             // status desc too small
+            m.write_obj::<u32>(VIRTIO_BLK_T_GET_ID, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1)
+                .set(0x2000, 0x40, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
             vq.dtable(2).flags().store(VIRTQ_DESC_F_WRITE);
             vq.dtable(2).len().store(0);
             assert!(matches!(
@@ -1032,6 +1040,7 @@ mod tests {
             let mut dev = Block::<Arc<GuestMemoryMmap<()>>>::new(
                 vec![disk_image],
                 true,
+                false,
                 Arc::new(vec![128]),
                 epoll_mgr.clone(),
                 vec![],
@@ -1146,6 +1155,7 @@ mod tests {
         let mut dev = Block::<Arc<GuestMemoryMmap>>::new(
             vec![disk_image],
             true,
+            false,
             Arc::new(vec![128]),
             epoll_mgr,
             vec![],

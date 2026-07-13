@@ -70,6 +70,7 @@ impl DragonballInner {
                     no_drop,
                     is_direct,
                     driver_option,
+                    sparse,
                 ) = {
                     let dev = block_device.lock().await;
                     let cfg = &dev.config;
@@ -80,6 +81,7 @@ impl DragonballInner {
                         cfg.no_drop,
                         cfg.is_direct,
                         cfg.driver_option.clone(),
+                        cfg.discard_unmap,
                     )
                 };
 
@@ -106,13 +108,15 @@ impl DragonballInner {
                         no_drop,
                         is_direct,
                         use_pci_bus,
+                        sparse,
                     )
                     .context("add block modern device")?;
 
                 info!(
                     sl!(),
                     "BlockModern hotplug result: device_id={}, guest_device_id={:?}",
-                    device_id, guest_device_id
+                    device_id,
+                    guest_device_id
                 );
 
                 if let Some(slot) = guest_device_id {
@@ -132,6 +136,7 @@ impl DragonballInner {
                     block.no_drop,
                     None,
                     None,
+                    false,
                 )
                 .context("add vhost user based block device")?;
                 Ok(DeviceType::VhostUserBlk(block))
@@ -253,6 +258,7 @@ impl DragonballInner {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_block_device(
         &mut self,
         path: &str,
@@ -261,6 +267,7 @@ impl DragonballInner {
         no_drop: bool,
         is_direct: Option<bool>,
         use_pci_bus: Option<bool>,
+        sparse: bool,
     ) -> Result<Option<i32>> {
         let jailed_drive = self.get_resource(path, id).context("get resource")?;
         self.cached_block_devices.insert(id.to_string());
@@ -294,6 +301,7 @@ impl DragonballInner {
             no_drop,
             is_read_only: read_only,
             use_pci_bus,
+            sparse,
             rate_limiter: Some(block_rate_limit),
             ..Default::default()
         };
@@ -311,7 +319,10 @@ impl DragonballInner {
             .insert_block_device(blk_cfg, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
             .context("insert block device");
         match &result {
-            Ok(guest_id) => info!(sl!(), "add_block_device success: id={}, guest_id={:?}", id, guest_id),
+            Ok(guest_id) => info!(
+                sl!(),
+                "add_block_device success: id={}, guest_id={:?}", id, guest_id
+            ),
             Err(e) => error!(sl!(), "add_block_device failed: id={}, error={:?}", id, e),
         }
         result
