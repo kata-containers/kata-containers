@@ -807,10 +807,12 @@ impl CloudHypervisorInner {
             // TDX does not permit the use of virtio-fs.
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::HybridVsockSupport
         } else {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
                 | CapabilityBits::HybridVsockSupport
         };

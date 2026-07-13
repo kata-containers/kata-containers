@@ -763,10 +763,13 @@ impl QemuInner {
         let flags = if self.hypervisor_config().security_info.confidential_guest
             || self.hypervisor_config().shared_fs.shared_fs.is_none()
         {
-            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
         } else {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
         };
         caps.set(flags);
