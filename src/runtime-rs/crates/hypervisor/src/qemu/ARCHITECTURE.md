@@ -299,10 +299,6 @@ generic-initiator NUMA nodes regardless of whether MIG is in use.  The GPU
 driver (CUDA) uses these nodes to online GPU memory to the guest kernel.  Total
 node count with 4 GPUs on a single-socket host: 1 CpuMem + 4 × 8 = 33 nodes.
 
-**Memory hotplug placeholder:** QEMU assigns the last-defined NUMA node to the
-hotplug region.  When DIMM/NVDIMM hotplug is enabled, always append one empty
-NUMA node after all real nodes so hotplug memory does not overlap GPU nodes.
-
 **GPU memory spill prevention:** GPU NUMA nodes may attract page migration from
 `autonuma` or systemd NUMA policies.  Mitigate with explicit NUMA distances:
 
