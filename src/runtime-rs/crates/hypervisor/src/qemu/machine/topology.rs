@@ -41,6 +41,7 @@ pub(crate) enum BusIommu {
 }
 
 pub(crate) struct SmmuV3Config {
+    pub id: String,
     pub accel: bool,
     pub ats: bool,
     /// Substream ID width in bits, written as `ssidsize=`; 0 turns PASID off.
@@ -56,6 +57,7 @@ pub(crate) struct SmmuV3Config {
 impl Default for SmmuV3Config {
     fn default() -> Self {
         Self {
+            id: String::new(),
             accel: true,
             ats: true,
             ssidsize: 16,
