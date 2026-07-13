@@ -149,9 +149,17 @@ impl Platform {
         Self::build(&config.machine_info.machine_type, memory_size)
     }
 
+    // Grace test helper: sets virt defaults matching the Grace fixture topology.
+    // Production callers use from_config, which reads these from HypervisorConfig.
     #[cfg(test)]
     pub(crate) fn from_config_defaults(memory_size: u64) -> Result<Self> {
-        Self::build("virt", memory_size)
+        let mut p = Self::build("virt", memory_size)?;
+        if let Machine::Virt(ref mut v) = p.machine {
+            v.gic_version = Some(3);
+            v.ras = true;
+            v.highmem_mmio_size = Some(4 << 40);
+        }
+        Ok(p)
     }
 
     fn build(machine_type: &str, memory_size: u64) -> Result<Self> {
