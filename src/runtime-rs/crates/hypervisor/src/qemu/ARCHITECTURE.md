@@ -644,6 +644,11 @@ Final PR in Phase 2: remove all remaining `#[cfg(target_arch)]` blocks from
   `MemoryBackend::File`.
 - Wire hugepages via `Platform::with_hugepages`.
 - Lift `ObjectIoThread` / `ObjectRngRandom` into `Objects`.
+- Consider wiring `seccompsandbox` (QEMU `-sandbox`) through `Platform`:
+  the config field `seccomp_sandbox: Option<String>` already maps to
+  `-sandbox` in `cmdline_generator.rs`, but the new path needs a typed
+  `Objects::seccomp_sandbox: Option<SeccompSandbox>` so the emission
+  is controlled by `Platform` rather than the legacy generator.
 
 This is the phase that enables hugepages for `runtime-rs` (issue #12125).
 
