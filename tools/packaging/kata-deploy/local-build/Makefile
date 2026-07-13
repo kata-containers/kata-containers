@@ -77,7 +77,6 @@ NVGPU_BASE_TARBALLS = \
 	ovmf-sev-tarball \
 	ovmf-tdx-tarball \
 	ovmf-tarball \
-	pause-image-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tdx-experimental-tarball \
 	qemu-tarball \
@@ -91,7 +90,6 @@ NVGPU_BASE_TARBALLS = \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
 	ovmf-tarball \
-	pause-image-tarball \
 	qemu-tarball \
 	virtiofsd-tarball \
 	serial-targets
@@ -254,19 +252,18 @@ DEPS := agent-tarball
 rootfs-image-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+DEPS := agent-tarball coco-guest-components-tarball kernel-tarball
 rootfs-image-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := pause-image-tarball coco-guest-components-tarball
-rootfs-image-coco-extension-tarball: $(DEPS)
+rootfs-image-coco-extension-tarball:
 	${MAKE} $@-build
 
 DEPS := agent-tarball
 rootfs-image-mariner-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
+DEPS := agent-tarball coco-guest-components-tarball kernel-tarball
 rootfs-initrd-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
@@ -278,7 +275,7 @@ DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
+DEPS := agent-tarball busybox-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
