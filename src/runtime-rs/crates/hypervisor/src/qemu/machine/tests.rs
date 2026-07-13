@@ -195,6 +195,29 @@ fn grace_7_vegm_2_per_socket() {
     );
 }
 
+// ---- Q35 CoCo (SEV-SNP) + single GPU — AMD EPYC host, H100 80GB ----
+//
+// Production capture: AMD EPYC host, 2026-07-13.  17 vCPUs, 57344M, single
+// NUMA node pinned to host-node 1 via memory-backend-ram (not file-backed).
+// sev-snp-guest object emitted before -machine.  iommufd is per-device.
+// vfio-pci (not nohotplug); x-pci-vendor-id/device-id for CoCo attestation.
+//
+// Blocked on Phase 3:
+//   - Objects::protection for sev-snp-guest / tdx-guest
+//   - Q35::kernel_irqchip and confidential_guest_support typed fields
+//   - MemoryBackend::Ram { host_nodes, policy } for NUMA pinning
+//   - Per-device iommufd (not shared iommufd0)
+//   - VfioDevice vendor_id / device_id overrides
+
+#[test]
+#[ignore = "Phase 3: CoCo protection object + Q35 confidential-guest-support not yet implemented"]
+fn q35_coco_snp_single_gpu() {
+    // HostTopology shape TBD in Phase 3.
+    // 1 socket, cpus 0-16, host-node 1; GPU 0000:e1:00.0 on pxb-pcie bus_nr=32.
+    // sev-snp-guest: cbitpos=51, reduced-phys-bits=1, kernel-hashes=on, policy=196608.
+    todo!("Phase 3")
+}
+
 // ---- Q35 x86_64: vanilla kata, 2-socket NUMA, 8 cold-plug root ports ----
 //
 // Production capture: DGX x86 host, 2026-07-07.  65 vCPUs, 73728M total,
