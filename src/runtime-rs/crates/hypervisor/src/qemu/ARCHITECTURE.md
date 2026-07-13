@@ -704,20 +704,36 @@ New Platform fields required (Phase 3):
 
 ### CoCo + GPU passthrough (SEV-SNP or TDX)
 
-Confidential compute requires:
-- A protection object (`sev-snp-guest` or `tdx-guest`) before the machine line
-- `confidential-guest-support=<id>` on the `-machine` line
-- `kernel-irqchip=split` instead of `on` (TDX/SNP requirement)
-- OVMF firmware path instead of the standard BIOS (`-bios/-pflash`)
-- Memory hotplug disabled (confidential memory cannot be hot-added)
+**SEV-SNP production data captured** (AMD EPYC host, 2026-07-13).
+Fixture: `q35_coco_snp_single_gpu.args`.  Test: `q35_coco_snp_single_gpu` (ignored, Phase 3).
 
-CoCo + GPU passthrough combines these with the VFIO topology from the Grace
-configs.  The `ProtectionDeviceConfig::SevSnp` and `::Tdx` paths exist in
-`cmdline_generator.rs` (`add_sev_snp_protection_device` / `add_tdx_protection_device`);
-Platform needs a typed `Objects::protection` field to carry these through.
+Key observations from the SEV-SNP + GPU invocation:
 
-**Data needed:** capture from a CoCo-enabled kata pod with at least one GPU
-passed through on both an AMD (SEV-SNP) and Intel (TDX) host.
+- `-object sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on,policy=196608,host-data=...`
+  emitted BEFORE the `-machine` line (QEMU requires the protection object first)
+- `-machine q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=snp`
+  (underscore in `kernel_irqchip`; `split` is required for SNP/TDX, not `on`)
+- Memory: `memory-backend-ram` with `host-nodes=N,policy=bind` for NUMA pinning;
+  CoCo uses RAM backend (not file-backed `/dev/shm`) — single NUMA node
+- GPU passthrough via `pxb-pcie + pcie-root-port + vfio-pci` (same shape as Grace
+  but `vfio-pci` NOT `vfio-pci-nohotplug`, no `arm-smmuv3` — x86 uses global IOMMU)
+- iommufd is **per-device** (`id=iommufdvfio-<uuid>`), NOT the shared `iommufd0`
+  used on Grace; one iommufd object per GPU
+- `x-pci-vendor-id=0x10de,x-pci-device-id=0x2321` overrides required so the guest
+  sees the correct device IDs for measured boot / attestation
+- `pxb-pcie bus_nr=32` (not the Grace 1-indexed cumulative formula)
+- BIOS: `AMDSEV.fd` (AMD-specific OVMF build, not generic `OVMF.fd`)
+- Binary: `qemu-system-x86_64-snp-experimental` (patched QEMU for SNP support)
+
+New Platform fields required (Phase 3):
+- `Objects::protection: Option<ProtectionDevice>` (`sev-snp-guest` / `tdx-guest`)
+- `Q35::kernel_irqchip: Option<String>` typed field (`"split"` for CoCo, absent for vanilla)
+- `Q35::confidential_guest_support: Option<String>` referencing the protection object id
+- `MemoryBackend::Ram { host_nodes: Option<u32>, policy: Option<String> }` for NUMA pinning
+- Per-device iommufd: `PciRootComplex::iommufd: Option<IommufdRef>` (not shared)
+- `VfioDevice::pci_vendor_id / pci_device_id: Option<u16>` for CoCo attestation overrides
+
+**TDX data still needed:** capture from a CoCo + GPU pod on an Intel TDX host.
 
 ### 8 GPUs + 4 NVSwitches (DGX/HGX topology)
 

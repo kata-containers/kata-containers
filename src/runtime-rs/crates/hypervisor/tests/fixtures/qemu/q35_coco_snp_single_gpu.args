@@ -1,0 +1,44 @@
+# Q35 CoCo (SEV-SNP) + single GPU — x86_64, single NUMA node, 17 vCPUs
+# Source: production kata-containers log, July 2026 (AMD EPYC host, H100 80GB GPU)
+# Binary: qemu-system-x86_64-snp-experimental
+#
+# Platform scope: sev-snp-guest object + machine line + NUMA RAM backend +
+#   NUMA node + pxb-pcie + pcie-root-port + per-device iommufd + vfio-pci.
+# NOT included here (legacy generator): -name, -uuid, -cpu, -m, -smp,
+#   pcie-root-port+pcie-pci-bridge for legacy device compat, virtio devices,
+#   -netdev, -kernel, -append, -bios (AMDSEV.fd), -rtc, -pidfile, etc.
+#
+# HostTopology: 1 socket, cpus 0-16, host-node 1
+# Memory: 57344M, single NUMA node, memory-backend-ram with host-nodes=1,policy=bind
+#   (NOT file-backed; CoCo uses memory-backend-ram for NUMA pinning)
+# GPU: 0000:e1:00.0 (NVIDIA H100 80GB, 0x10de:0x2321)
+#   pxb-pcie bus_nr=32, chassis=10 (different from Grace 1-indexed formula)
+#   vfio-pci (NOT vfio-pci-nohotplug — x86 CoCo uses standard vfio-pci)
+#   x-pci-vendor-id/x-pci-device-id required for CoCo measured boot attestation
+#   iommufd is PER-DEVICE (not shared iommufd0): id=iommufdvfio-<device-uuid>
+#   No arm-smmuv3: x86 uses global AMD/Intel IOMMU, not per-bus SMMU
+# BIOS: /opt/kata/share/ovmf/AMDSEV.fd (AMD-specific OVMF, not generic OVMF.fd)
+#
+# New Platform fields required (Phase 3):
+#   Objects::protection: Option<ProtectionDevice>  (sev-snp-guest or tdx-guest)
+#   Q35::kernel_irqchip: String  ("split" for CoCo, "on" for plain Q35, absent otherwise)
+#   Q35::confidential_guest_support: Option<String>  (references protection object id)
+#   MemoryBackend::Ram { host_nodes: Option<u32>, policy: Option<String> }
+#   PciRootComplex::iommufd: Option<IommufdRef>  (per-device iommufd, not shared)
+#   VfioDevice::vendor_id / device_id overrides  (required for CoCo attestation)
+-object
+sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on,policy=196608,host-data=CexG7r8OExqKVdTzwFteO3U9GZRYx7lslmObi8SdcVA=
+-machine
+q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=snp
+-object
+memory-backend-ram,id=numa-mem0,size=57344M,host-nodes=1,policy=bind
+-numa
+node,nodeid=0,memdev=numa-mem0,cpus=0-16
+-device
+pxb-pcie,id=pxb-numa0,bus=pcie.0,bus_nr=32,numa_node=0
+-device
+pcie-root-port,id=rp-numa0-0,bus=pxb-numa0,chassis=10,slot=0,multifunction=off
+-object
+iommufd,id=iommufdvfio-ab57592a4d2482201
+-device
+vfio-pci,host=0000:e1:00.0,id=vfio-ab57592a4d2482201,x-pci-vendor-id=0x10de,x-pci-device-id=0x2321,bus=rp-numa0-0,iommufd=iommufdvfio-ab57592a4d2482201
