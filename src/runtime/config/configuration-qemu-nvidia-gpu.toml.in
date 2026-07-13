@@ -78,7 +78,7 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 # Recommended value when enabling: "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
-seccompsandbox = "@DEFSECCOMPSANDBOXPARAM@"
+seccompsandbox = "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
