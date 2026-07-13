@@ -1,4 +1,4 @@
-// Copyright (c) 2025 NVIDIA Corporation
+// Copyright (c) NVIDIA Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 

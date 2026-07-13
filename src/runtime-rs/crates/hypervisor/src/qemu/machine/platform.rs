@@ -1,4 +1,4 @@
-// Copyright (c) 2025 NVIDIA Corporation
+// Copyright (c) NVIDIA Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -30,7 +30,6 @@ pub(crate) enum Machine {
 /// Fields common to all machine types.
 pub(crate) struct BaseMachine {
     pub accel: String,
-    pub nvdimm: bool,
     /// ID of the primary memory backend, written as `-machine memory-backend=<id>`.
     pub memory_backend: Option<String>,
 }
