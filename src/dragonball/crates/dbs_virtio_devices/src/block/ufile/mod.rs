@@ -44,6 +44,9 @@ pub trait Ufile: Read + Write + Seek + Send {
         user_data: u16,
     ) -> io::Result<usize>;
 
+    /// Punch a hole in the backend file while keeping its apparent size.
+    fn punch_hole(&mut self, offset: u64, length: u64) -> io::Result<()>;
+
     /// Poll for completed asynchronous IO requests.
     ///
     /// For currently supported LocalFile backend, it must not return temporary errors

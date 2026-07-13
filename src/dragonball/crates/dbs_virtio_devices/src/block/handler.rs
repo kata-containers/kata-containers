@@ -219,6 +219,10 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         warn!("virtio-blk: Failed to execute GetDeviceID request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
+                    ExecuteError::Discard(e) => {
+                        warn!("virtio-blk: Failed to execute discard request: {e:?}");
+                        VIRTIO_BLK_S_IOERR
+                    }
                     ExecuteError::Unsupported(e) => {
                         // It's caused by invalid request from guest, simple...
                         warn!("virtio-blk: Failed to execute request: {e:?}");

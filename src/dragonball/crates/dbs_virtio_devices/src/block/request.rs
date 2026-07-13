@@ -7,6 +7,7 @@ use std::ops::Deref;
 use std::result;
 
 use log::error;
+use std::convert::TryInto;
 use virtio_bindings::bindings::virtio_blk::*;
 use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemory, GuestMemoryError};
@@ -15,6 +16,8 @@ use crate::{
     block::{ufile::Ufile, SECTOR_SHIFT, SECTOR_SIZE},
     Error, Result,
 };
+
+const DISCARD_SEGMENT_SIZE: usize = 16;
 
 /// Error executing request.
 #[derive(Debug)]
@@ -25,6 +28,7 @@ pub(crate) enum ExecuteError {
     Seek(io::Error),
     Write(GuestMemoryError),
     GetDeviceID(GuestMemoryError),
+    Discard(io::Error),
     Unsupported(u32),
 }
 
@@ -39,6 +43,8 @@ pub(crate) enum RequestType {
     Flush,
     /// Get device ID request.
     GetDeviceID,
+    /// Discard request.
+    Discard,
     /// Unsupported request.
     Unsupported(u32),
 }
@@ -50,6 +56,7 @@ impl From<u32> for RequestType {
             VIRTIO_BLK_T_OUT => RequestType::Out,
             VIRTIO_BLK_T_FLUSH => RequestType::Flush,
             VIRTIO_BLK_T_GET_ID => RequestType::GetDeviceID,
+            VIRTIO_BLK_T_DISCARD => RequestType::Discard,
             t => RequestType::Unsupported(t),
         }
     }
@@ -212,6 +219,16 @@ impl Request {
                 );
                 return Err(Error::UnexpectedReadOnlyDescriptor);
             }
+            RequestType::Discard => {
+                if desc.is_write_only() {
+                    error!("virtio-blk: Request {self:?} sees unexpected write-only descriptor for discard");
+                    return Err(Error::UnexpectedWriteOnlyDescriptor);
+                } else if desc.len() < DISCARD_SEGMENT_SIZE as u32 {
+                    return Err(Error::DescriptorLengthTooSmall);
+                } else if desc.len() > DISCARD_SEGMENT_SIZE as u32 {
+                    return Err(Error::DescriptorLengthTooBig);
+                }
+            }
             _ => {}
         }
         Ok(())
@@ -224,6 +241,10 @@ impl Request {
         data_descs: &[IoDataDesc],
         disk_id: &[u8],
     ) -> result::Result<u32, ExecuteError> {
+        if self.request_type == RequestType::Discard {
+            return self.execute_discard(disk, mem, data_descs);
+        }
+
         self.check_capacity(disk, data_descs)?;
         disk.seek(SeekFrom::Start(self.sector << SECTOR_SHIFT))
             .map_err(ExecuteError::Seek)?;
@@ -258,11 +279,65 @@ impl Request {
                     // TODO: dragonball returns 0 here, check which value to return?
                     return Ok(disk_id.len() as u32);
                 }
+                RequestType::Discard => unreachable!(),
                 RequestType::Unsupported(t) => return Err(ExecuteError::Unsupported(t)),
             };
         }
 
         Ok(len as u32)
+    }
+
+    fn execute_discard<M: GuestMemory + ?Sized>(
+        &self,
+        disk: &mut Box<dyn Ufile>,
+        mem: &M,
+        data_descs: &[IoDataDesc],
+    ) -> result::Result<u32, ExecuteError> {
+        if data_descs.len() != 1 {
+            return Err(ExecuteError::BadRequest(if data_descs.is_empty() {
+                Error::DescriptorChainTooShort
+            } else {
+                Error::DescriptorLengthTooBig
+            }));
+        }
+
+        let io = &data_descs[0];
+        if io.data_len != DISCARD_SEGMENT_SIZE {
+            return Err(ExecuteError::BadRequest(
+                if io.data_len < DISCARD_SEGMENT_SIZE {
+                    Error::DescriptorLengthTooSmall
+                } else {
+                    Error::DescriptorLengthTooBig
+                },
+            ));
+        }
+
+        let mut discard_segment = [0u8; DISCARD_SEGMENT_SIZE];
+        mem.read_slice(&mut discard_segment, GuestAddress(io.data_addr))
+            .map_err(ExecuteError::Read)?;
+
+        let sector = u64::from_le_bytes(discard_segment[0..8].try_into().unwrap());
+        let num_sectors = u32::from_le_bytes(discard_segment[8..12].try_into().unwrap());
+        let offset = sector
+            .checked_mul(SECTOR_SIZE)
+            .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
+        let length = (num_sectors as u64)
+            .checked_mul(SECTOR_SIZE)
+            .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
+        let end = offset
+            .checked_add(length)
+            .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
+        if end > disk.get_capacity() {
+            return Err(ExecuteError::BadRequest(Error::InvalidOffset));
+        }
+        if length == 0 {
+            return Ok(0);
+        }
+
+        disk.punch_hole(offset, length)
+            .map_err(ExecuteError::Discard)?;
+
+        Ok(0)
     }
 
     pub(crate) fn check_capacity(
