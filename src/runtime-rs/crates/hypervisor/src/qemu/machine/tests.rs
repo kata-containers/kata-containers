@@ -196,7 +196,7 @@ fn with_hugepages_preserves_egm_backends() {
 //
 // Production capture: DGX x86 host, 2026-07-07.  65 vCPUs, 73728M total,
 // 36864M per socket pinned to host NUMA node via /dev/shm.  8 pcie-root-ports
-// pre-provisioned on pcie.0 for GPU hotplug.
+// pre-provisioned on pcie.0 for GPU cold-plug (hot_plug_vfio=no-port).
 //
 // Blocked on Phase 3:
 //   - Q35 machine in Platform::to_qemu_args (no gic-version, no highmem-mmio-size)
@@ -210,7 +210,8 @@ fn q35_vanilla_kata_x86() {
     // HostTopology shape TBD in Phase 3.
     // 2 sockets: socket 0 cpus 0-32 (host-node 0), socket 1 cpus 33-65 (host-node 1).
     // No gpu_smmu_groups, no egm_sockets.
-    // 8 pre-provisioned root ports on pcie.0; NUMA distance 20 between the two nodes.
+    // 8 cold-plug root ports on pcie.0 (cold_plug_vfio=root-port, pcie_root_port=8);
+    // NUMA distance 20 between the two nodes.
     todo!("Phase 3")
 }
 
@@ -445,25 +446,3 @@ fn q35_coco_snp_single_gpu() {
     todo!("Phase 3")
 }
 
-// ---- Q35 x86_64: vanilla kata, 2-socket NUMA, 8 cold-plug root ports ----
-//
-// Production capture: DGX x86 host, 2026-07-07.  65 vCPUs, 73728M total,
-// 36864M per socket pinned to host NUMA node via /dev/shm.  8 pcie-root-ports
-// pre-provisioned on pcie.0 for GPU cold-plug (hot_plug_vfio=no-port).
-//
-// Blocked on Phase 3:
-//   - Q35 machine in Platform::to_qemu_args (no gic-version, no highmem-mmio-size)
-//   - MemoryBackend::File { host_nodes, policy } fields for NUMA SHM pinning
-//   - Objects::numa_distances for -numa dist entries
-//   - HostTopology fields for NUMA node + SHM path per socket
-
-#[test]
-#[ignore = "Phase 3: Q35 machine + NUMA SHM memory model not yet implemented"]
-fn q35_vanilla_kata_x86() {
-    // HostTopology shape TBD in Phase 3.
-    // 2 sockets: socket 0 cpus 0-32 (host-node 0), socket 1 cpus 33-65 (host-node 1).
-    // No gpu_smmu_groups, no egm_sockets.
-    // 8 cold-plug root ports on pcie.0 (cold_plug_vfio=root-port, pcie_root_port=8);
-    // NUMA distance 20 between the two nodes.
-    todo!("Phase 3")
-}
