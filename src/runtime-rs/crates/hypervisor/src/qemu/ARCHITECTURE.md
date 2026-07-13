@@ -84,6 +84,10 @@ they no longer branch on architecture.
 
 ### Module layout (target)
 
+Phase 0 introduces the `machine/` directory with all files below.
+`platform.rs` and `topology.rs` contain stubs only; `probe.rs` defines
+`HostTopology` but not `PlatformProbe` (that trait lands in Phase 1).
+
 ```
 src/runtime-rs/crates/hypervisor/src/qemu/
 ├── ARCHITECTURE.md        ← this file
@@ -91,13 +95,16 @@ src/runtime-rs/crates/hypervisor/src/qemu/
 ├── inner.rs
 ├── mod.rs
 ├── qmp.rs
-└── machine/               ← new; introduced in Phase 0
-    ├── mod.rs             (Machine enum + Platform + PciTopology)
+└── machine/               ← Phase 0: all files below introduced here
+    ├── mod.rs
+    ├── platform.rs        (Platform, Machine, Objects — stubs in Phase 0)
+    ├── topology.rs        (PciTopology, PciRootComplex — stubs in Phase 0)
+    ├── probe.rs           (HostTopology; PlatformProbe trait is Phase 1)
     ├── q35.rs
     ├── virt.rs
     ├── pseries.rs
     ├── s390x.rs
-    └── probe.rs           (PlatformProbe trait + HostTopology)
+    └── tests.rs
 ```
 
 ### Core types
@@ -119,7 +126,7 @@ pub struct Q35 {
     /// Global IOMMU device for Q35.  Emitted as a top-level -device intel-iommu,
     /// not attached to any pxb-pcie.  Contrast with SmmuV3 on PciRootComplex.
     pub intel_iommu: Option<IntelIommuConfig>,
-    pub runtime: RuntimeFeatures,
+    // pub runtime: RuntimeFeatures,  -- Phase 3+
 }
 
 pub struct IntelIommuConfig {
@@ -134,8 +141,9 @@ pub struct Virt {
     pub ras: bool,
     /// Required for Grace GPU passthrough; must be a power of 2.
     /// 4T for GH200/GB200 (≤4 GPUs), 8T for GB300 NVL72 (4 GPUs).
+    /// bytes.
     pub highmem_mmio_size: Option<u64>,
-    pub runtime: RuntimeFeatures,
+    // pub runtime: RuntimeFeatures,  -- Phase 3+
 }
 ```
 
