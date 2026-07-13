@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use super::platform::Platform;
+use super::platform::{AcpiPciNodeLink, Machine, MemoryBackend, Platform};
 use super::probe::{EgmSocketInfo, GpuSmmuGroup, HostTopology, SocketInfo};
 
 // Each fixture file contains one Vec<String> element per line.
@@ -46,6 +46,150 @@ fn smmu_groups(addrs: &[&[&str]], socket: u32) -> Vec<GpuSmmuGroup> {
             socket,
         })
         .collect()
+}
+
+// ---- Phase 1: structural unit tests (not ignored) ----
+
+#[test]
+fn from_config_defaults_produces_virt_with_ram() {
+    let p = Platform::from_config_defaults(16 << 30).expect("build");
+    assert!(matches!(p.machine, Machine::Virt(_)));
+    assert_eq!(p.objects.memory_backends.len(), 1);
+    assert!(matches!(
+        p.objects.memory_backends[0],
+        MemoryBackend::Ram { size: s, .. } if s == 16 << 30
+    ));
+    assert!(p.pci.roots.is_empty());
+    assert!(p.objects.iommufd.is_none());
+}
+
+#[test]
+fn apply_host_defaults_single_gpu() {
+    let mut p = Platform::from_config_defaults(16 << 30).unwrap();
+    p.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        egm_sockets: vec![],
+    });
+
+    assert!(p.objects.iommufd.is_some());
+    assert_eq!(p.pci.roots.len(), 1);
+    assert_eq!(p.pci.roots[0].root_ports.len(), 1);
+    // 8 GenericInitiator NUMA nodes for 1 GPU
+    let gi_count = p
+        .objects
+        .acpi_links
+        .iter()
+        .filter(|l| matches!(l, AcpiPciNodeLink::GenericInitiator { .. }))
+        .count();
+    assert_eq!(gi_count, 8);
+    // No EGM links when egm_sockets is empty
+    let egm_count = p
+        .objects
+        .acpi_links
+        .iter()
+        .filter(|l| matches!(l, AcpiPciNodeLink::EgmMemory { .. }))
+        .count();
+    assert_eq!(egm_count, 0);
+}
+
+#[test]
+fn apply_host_defaults_four_gpus_two_per_smmu() {
+    let mut p = Platform::from_config_defaults(16 << 30).unwrap();
+    p.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(
+            &[
+                &["0008:06:00.0", "0009:06:00.0"],
+                &["0010:06:00.0", "0011:06:00.0"],
+            ],
+            0,
+        ),
+        egm_sockets: vec![],
+    });
+
+    // 2 PciRootComplexes, each with 2 ports
+    assert_eq!(p.pci.roots.len(), 2);
+    assert_eq!(p.pci.roots[0].root_ports.len(), 2);
+    assert_eq!(p.pci.roots[1].root_ports.len(), 2);
+    // 4 GPUs × 8 = 32 GenericInitiator nodes
+    let gi_count = p
+        .objects
+        .acpi_links
+        .iter()
+        .filter(|l| matches!(l, AcpiPciNodeLink::GenericInitiator { .. }))
+        .count();
+    assert_eq!(gi_count, 32);
+}
+
+#[test]
+fn apply_host_defaults_egm_adds_backends_and_links() {
+    let mut p = Platform::from_config_defaults(16 << 30).unwrap();
+    p.apply_host_defaults(&HostTopology {
+        sockets: vec![
+            SocketInfo { id: 0, cpu_range: 0..1 },
+            SocketInfo { id: 1, cpu_range: 1..2 },
+        ],
+        gpu_smmu_groups: vec![
+            GpuSmmuGroup { pci_bus_addrs: vec!["0008:06:00.0".into()], socket: 0 },
+            GpuSmmuGroup { pci_bus_addrs: vec!["0009:06:00.0".into()], socket: 1 },
+        ],
+        egm_sockets: vec![
+            EgmSocketInfo { path: "/dev/egm4".into(), socket: 0, total_size: 56896 << 20 },
+            EgmSocketInfo { path: "/dev/egm5".into(), socket: 1, total_size: 56896 << 20 },
+        ],
+    });
+
+    // Primary RAM + 2 EGM file backends
+    assert_eq!(p.objects.memory_backends.len(), 3);
+    assert!(matches!(p.objects.memory_backends[1], MemoryBackend::File { ref path, .. } if path == "/dev/egm4"));
+    assert!(matches!(p.objects.memory_backends[2], MemoryBackend::File { ref path, .. } if path == "/dev/egm5"));
+
+    // 2 GPUs × 1 EgmMemory link each
+    let egm_count = p
+        .objects
+        .acpi_links
+        .iter()
+        .filter(|l| matches!(l, AcpiPciNodeLink::EgmMemory { .. }))
+        .count();
+    assert_eq!(egm_count, 2);
+}
+
+#[test]
+fn with_hugepages_replaces_ram_backend() {
+    let p = Platform::from_config_defaults(16 << 30).unwrap();
+    let p = p.with_hugepages("/dev/hugepages");
+    assert_eq!(p.objects.memory_backends.len(), 1);
+    assert!(matches!(
+        p.objects.memory_backends[0],
+        MemoryBackend::File { ref path, prealloc: true, .. } if path == "/dev/hugepages"
+    ));
+}
+
+#[test]
+fn with_hugepages_preserves_egm_backends() {
+    let mut p = Platform::from_config_defaults(16 << 30).unwrap();
+    p.apply_host_defaults(&HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        egm_sockets: vec![EgmSocketInfo {
+            path: "/dev/egm4".into(),
+            socket: 0,
+            total_size: 56896 << 20,
+        }],
+    });
+    let p = p.with_hugepages("/dev/hugepages");
+
+    // RAM backend swapped, EGM file backend preserved
+    assert_eq!(p.objects.memory_backends.len(), 2);
+    assert!(matches!(
+        p.objects.memory_backends[0],
+        MemoryBackend::File { ref path, prealloc: true, .. } if path == "/dev/hugepages"
+    ));
+    assert!(matches!(
+        p.objects.memory_backends[1],
+        MemoryBackend::File { ref path, .. } if path == "/dev/egm4"
+    ));
 }
 
 // ---- Grace Config 1: single GPU, 1 SMMU, 9 NUMA nodes ----
