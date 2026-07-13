@@ -606,6 +606,192 @@ This is the phase that enables hugepages for `runtime-rs` (issue #12125).
 
 ---
 
+## Platform Parity
+
+The `Platform` type must generate correct QEMU command lines for every supported
+machine type, not just Grace/virt.  The legacy `Machine` struct carried two raw
+string fields that have no typed home yet:
+
+| Field                        | Legacy value                         | Machine types     |
+|------------------------------|--------------------------------------|-------------------|
+| `accel`                      | `"kvm"`, `"tcg"`, `"kvm:tcg"`       | all               |
+| `options`                    | raw KVM accelerator options          | x86/arm           |
+| `kernel_irqchip`             | `"on"`, `"split"`, `"off"`           | Q35 only          |
+| `confidential_guest_support` | `"sev-snp0"`, `"tdx0"`, `""`        | Q35 / virt        |
+| `memory_backend`             | e.g. `"m0"`                          | virt (NUMA/EGM)   |
+
+These are preserved as raw strings in `BaseMachine` for now.  Phase 3 will
+introduce typed representations.
+
+### Baseline `-machine` output per type
+
+The examples below show the minimum expected output for vanilla (no GPU) configs
+derived from tested deployments.  They anchor the per-machine fixture set.
+
+**virt (aarch64 — vanilla kata)**
+```text
+-machine virt,accel=kvm,gic-version=3,ras=on
+```
+
+**Q35 (x86_64 — vanilla kata)**
+```text
+-machine q35,accel=kvm
+```
+(`kernel-irqchip` is absent on vanilla Q35; it is only required for CoCo.)
+
+**Q35 + TDX (x86_64 — CoCo)**
+```text
+-object tdx-guest,id=tdx,...
+-machine q35,accel=kvm,kernel-irqchip=split,confidential-guest-support=tdx
+```
+
+**Q35 + SEV-SNP (x86_64 — CoCo)**
+```text
+-object sev-snp-guest,id=sev-snp,...
+-machine q35,accel=kvm,kernel-irqchip=split,confidential-guest-support=sev-snp
+```
+
+**s390-ccw-virtio (s390x)**
+```text
+-machine s390-ccw-virtio,accel=kvm
+```
+
+Both `machine_accelerators` (the raw KVM option string) and
+`confidential_guest_support` need typed representations before the legacy
+`Machine` struct can be deleted.  Tracked in Phase 3.
+
+---
+
+## Planned Fixture Configurations
+
+The 7 Grace fixtures cover Grace GPU passthrough thoroughly.  The configurations
+below must also be captured as golden fixtures before Phase 6 closes.  Each
+entry notes the data source required: fixture content must come from actual
+production QEMU invocations, not from documentation.
+
+### Vanilla kata — virt (aarch64)
+
+Basic `virt` machine with no GPU passthrough, no NUMA, no hugepages.
+Represents the common ARM64 kata use-case.
+
+**Data needed:** capture `qemu-system-aarch64` invocation from a running
+non-GPU kata pod on an ARM64 host.
+
+### Vanilla kata — Q35 (x86_64)
+
+**Production data captured** (DGX x86 host, 2026-07-07).
+Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (ignored, Phase 3).
+
+Key observations from the production invocation:
+
+- `-machine q35,accel=kvm` — no `kernel-irqchip` on vanilla; only required for CoCo
+- NUMA memory model differs from Grace: total memory via `-m 73728M,slots=10,maxmem=127052M`;
+  NUMA pinning via separate `memory-backend-file` objects with `host-nodes=N,policy=bind`
+  backed by `/dev/shm` (not `/dev/hugepages` or `/dev/egm*`)
+- Two NUMA nodes: socket 0 cpus 0-32 / 36864M, socket 1 cpus 33-65 / 36864M;
+  distance 20 between them
+- 8 `pcie-root-port` pre-provisioned on `pcie.0` (slots 0-7) for GPU cold-plug
+  (`cold_plug_vfio=root-port`, `pcie_root_port=8`, `hot_plug_vfio=no-port` in
+  `configuration-qemu-nvidia-gpu.toml.in`); GPU VFIO devices are added to the
+  static QEMU command line before the VM boots, not via QMP after boot
+- No `pxb-pcie`, no `arm-smmuv3` — Q35 GPU passthrough uses cold-plug onto `pcie.0`
+  root ports, not the static vfio-pci-nohotplug topology used on Grace
+
+New Platform fields required (Phase 3):
+- `MemoryBackend::File { host_nodes: Option<u32>, policy: Option<String> }` for NUMA SHM
+- `Objects::numa_distances: Vec<(u32, u32, u32)>` for `-numa dist` entries
+- `HostTopology` additions for NUMA SHM paths and distances
+
+### CoCo + GPU passthrough (SEV-SNP or TDX)
+
+Confidential compute requires:
+- A protection object (`sev-snp-guest` or `tdx-guest`) before the machine line
+- `confidential-guest-support=<id>` on the `-machine` line
+- `kernel-irqchip=split` instead of `on` (TDX/SNP requirement)
+- OVMF firmware path instead of the standard BIOS (`-bios/-pflash`)
+- Memory hotplug disabled (confidential memory cannot be hot-added)
+
+CoCo + GPU passthrough combines these with the VFIO topology from the Grace
+configs.  The `ProtectionDeviceConfig::SevSnp` and `::Tdx` paths exist in
+`cmdline_generator.rs` (`add_sev_snp_protection_device` / `add_tdx_protection_device`);
+Platform needs a typed `Objects::protection` field to carry these through.
+
+**Data needed:** capture from a CoCo-enabled kata pod with at least one GPU
+passed through on both an AMD (SEV-SNP) and Intel (TDX) host.
+
+### 8 GPUs + 4 NVSwitches (DGX/HGX topology)
+
+NVSwitch passthrough adds a new device kind and a multi-level PCIe hierarchy
+not present in the Grace configs:
+
+- `VfioDeviceKind::NvSwitch` is not yet defined in `topology.rs` (only `Gpu`
+  and `Nic` exist).
+- NVSwitches currently use `VfioDeviceConfig` (not `VfioDeviceGroup`) in the
+  legacy path (`add_gpu_nvswitch_setup` at cmdline_generator.rs:3373).
+- PCIe hierarchy: root port → `x3130-upstream` → `xio3130-downstream` →
+  device (three levels vs. the two levels used for GPU direct attachment).
+- `add_pcie_switch_ports` (cmdline_generator.rs:3508) emits this hierarchy;
+  `PciTopology` has no equivalent typed representation yet.
+
+New types needed before a fixture can be written:
+- `VfioDeviceKind::NvSwitch`
+- `PciSwitchPort { upstream: PcieUpstreamPort, downstream: Vec<PcieDownstreamPort> }` on `PciRootComplex`
+- `HostTopology::nvswitch_addrs` or equivalent probe field
+
+**Data needed:** capture from a DGX/HGX or GB200 NVL system with 8 GPUs and
+4 NVSwitches passed through.  Exact bus_nr arithmetic and PCIe address
+assignments must come from a live invocation, not from inference.
+
+---
+
+## Known Issues and Follow-up Items
+
+Misconfiguration and known defects in the current runtime-rs/QEMU path that
+are related to this refactor.  Items marked **post-refactor** require the new
+`Platform` emission path to be wired end-to-end before they can be addressed
+cleanly.
+
+### QMP startup timeout is hard-coded and ignores the caller's deadline (#13343)
+
+`QemuInner::start_vm(_timeout)` accepts the timeout argument from the
+`Hypervisor` trait but silently ignores it.  QMP initialisation instead uses
+two independent hard-coded values:
+
+- 5 s per-read socket timeout (`QMP_SOCKET_TIMEOUT`)
+- 50 s overall connect/init deadline (`QMP_INIT_TIMEOUT`)
+
+Under large-memory / VFIO / GPU passthrough conditions QEMU can take longer
+than 50 s before QMP is fully responsive, causing a spurious timeout failure
+even though the higher-level `start_vm` caller's intended budget was never
+applied.
+
+The `Hypervisor::start_vm(timeout: i32)` contract is also inconsistently
+interpreted across backends: QEMU and Firecracker ignore it, Dragonball
+treats it as milliseconds (despite comments saying seconds), Cloud Hypervisor
+treats it as seconds, and Remote treats it as seconds for the RPC deadline.
+
+**Minimum fix for GPU passthrough (pre-refactor):** make `QMP_INIT_TIMEOUT`
+configurable via `HypervisorConfig` (e.g. `qmp_init_timeout_secs`) so
+operators can raise it without patching.
+
+**Post-refactor:** once `Platform::to_qemu_args` drives QEMU startup, wire
+the QMP connect/init step to consume the caller's remaining `start_vm` budget
+rather than maintaining an independent fixed deadline.
+
+### `seccomp_sandbox` (-sandbox) not plumbed through Platform
+
+Pre-refactor the option works via the legacy `cmdline_generator.rs` path.
+Post-refactor it needs a typed `Objects::seccomp_sandbox` field so the legacy
+generator can be removed.  Tracked in Phase 3.
+
+### `machine_accelerators` and `confidential_guest_support` have no typed home
+
+Tracked in the Platform Parity section.  Both are passed as raw strings
+through `BaseMachine` today; they need typed representations before the
+legacy `Machine` struct can be deleted.
+
+---
+
 ## Design Principles
 
 1. **Machine decisions stay in `Machine` and `PciTopology`.**
