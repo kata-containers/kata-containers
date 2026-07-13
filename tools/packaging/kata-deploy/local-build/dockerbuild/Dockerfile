@@ -11,10 +11,11 @@ ARG ARCH
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 COPY install_oras.sh /usr/bin/install_oras.sh
+COPY install_gh.sh /usr/bin/install_gh.sh
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install yq, oras, and docker
+# Install yq, oras, gh, and docker
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -26,7 +27,8 @@ RUN apt-get update && \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
-    install_oras.sh
+    install_oras.sh && \
+    install_gh.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000

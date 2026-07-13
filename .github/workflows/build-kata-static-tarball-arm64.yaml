@@ -56,7 +56,6 @@ jobs:
           - kernel-cca-confidential
           - nydus
           - ovmf
-          - pause-image
           - qemu
           - virtiofsd
     concurrency:
@@ -102,6 +101,8 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
           USE_DEVMAPPER: ${{ matrix.asset == 'agent' && 'yes' || 'no' }}
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_COCO_EXTENSION_PROVENANCE: "yes"
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
@@ -256,6 +257,8 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
           KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_COCO_EXTENSION_PROVENANCE: "yes"
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -276,7 +279,6 @@ jobs:
           - busybox
           - coco-guest-components
           - kernel-nvidia-gpu-modules
-          - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
       cancel-in-progress: true

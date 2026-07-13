@@ -29,7 +29,6 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly busybox_builder="${static_build_dir}/busybox/build.sh"
 readonly agent_builder="${static_build_dir}/agent/build.sh"
-readonly coco_guest_components_builder="${static_build_dir}/coco-guest-components/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
@@ -355,15 +354,144 @@ get_coco_guest_components_tarball_path() {
 }
 
 get_latest_coco_guest_components_artefact_and_builder_image_version() {
-	local coco_guest_components_version
-	coco_guest_components_version=$(get_from_kata_deps ".externals.coco-guest-components.version")
-	local coco_guest_components_toolchain
-	coco_guest_components_toolchain=$(get_from_kata_deps ".externals.coco-guest-components.toolchain")
-	local latest_coco_guest_components_artefact="${coco_guest_components_version}-${coco_guest_components_toolchain}"
-	local latest_coco_guest_components_builder_image
-	latest_coco_guest_components_builder_image="$(get_coco_guest_components_image_name)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+}
 
-	echo "${latest_coco_guest_components_artefact}-${latest_coco_guest_components_builder_image}"
+get_coco_extension_oci_arch() {
+	arch_to_golang "$(uname -m)"
+}
+
+# Multi-arch scratch OCI container image from guest-components' "Publish OCI
+# container image" step (coco-extension-image.yml). This is the assembled guest
+# components rootfs as a container, not the EROFS disk image (extension_image).
+get_coco_guest_components_container_image_ref() {
+	local version image
+	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
+	image="$(get_from_kata_deps ".externals.coco-guest-components.container_image")"
+	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
+	[[ -n "${image}" ]] || die "Failed to get coco-guest-components container_image from versions.yaml"
+
+	echo "${image}:${version}"
+}
+
+# The extension disk image is published as a multi-arch OCI index tagged with the
+# guest-components commit; the per-arch selection happens at pull time.
+get_coco_extension_disk_image_ref() {
+	local version image
+	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
+	image="$(get_from_kata_deps ".externals.coco-guest-components.extension_image")"
+	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
+	[[ -n "${image}" ]] || die "Failed to get coco-guest-components extension_image from versions.yaml"
+
+	echo "${image}:${version}"
+}
+
+# GitHub "owner/repo" that owns the provenance attestation, derived from the
+# guest-components URL so it never drifts from the pinned source.
+get_coco_extension_provenance_repo() {
+	local url
+	url="$(get_from_kata_deps ".externals.coco-guest-components.url")"
+	url="${url%/}"
+	echo "${url#https://github.com/}"
+}
+
+get_latest_coco_extension_artefact_version() {
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+}
+
+ensure_oras_installed() {
+	if command -v oras &>/dev/null; then
+		return 0
+	fi
+
+	local install_oras_script="${repo_root_dir}/tools/packaging/kata-deploy/local-build/dockerbuild/install_oras.sh"
+	[[ -f "${install_oras_script}" ]] || die "oras is required to pull the CoCo extension image"
+	"${install_oras_script}"
+}
+
+ensure_gh_installed() {
+	if command -v gh &>/dev/null; then
+		return 0
+	fi
+
+	local install_gh_script="${repo_root_dir}/tools/packaging/kata-deploy/local-build/dockerbuild/install_gh.sh"
+	[[ -f "${install_gh_script}" ]] || return 1
+	"${install_gh_script}" || return 1
+	command -v gh &>/dev/null
+}
+
+# Verify the guest-components provenance attestation bound to a per-arch OCI
+# manifest digest (container or disk image).
+#
+# Verification policy:
+#   VERIFY_COCO_EXTENSION_PROVENANCE=no  — always skip
+#   VERIFY_COCO_EXTENSION_PROVENANCE=yes — always verify (CI); fail if gh/token missing
+#   unset (default)                      — verify when GH_TOKEN/GITHUB_TOKEN is set,
+#                                          otherwise skip with a warning (local builds)
+verify_guest_components_oci_provenance() {
+	local image="$1"
+	local digest="$2"
+	local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
+	if [[ "${VERIFY_COCO_EXTENSION_PROVENANCE:-}" == "no" ]]; then
+		warn "guest-components provenance verification disabled (VERIFY_COCO_EXTENSION_PROVENANCE=no)"
+		return 0
+	fi
+
+	# The GitHub CLI has no s390x build; provenance cannot be verified there even
+	# when CI sets VERIFY_COCO_EXTENSION_PROVENANCE=yes.
+	if [[ "$(uname -m)" == "s390x" ]]; then
+		warn "skipping guest-components provenance verification on s390x for ${image}@${digest}"
+		return 0
+	fi
+
+	if [[ -z "${token}" ]]; then
+		if [[ "${VERIFY_COCO_EXTENSION_PROVENANCE:-}" == "yes" ]]; then
+			die "VERIFY_COCO_EXTENSION_PROVENANCE=yes requires GH_TOKEN or GITHUB_TOKEN"
+		fi
+		warn "No GH_TOKEN/GITHUB_TOKEN set; skipping guest-components provenance verification for ${image}@${digest}"
+		return 0
+	fi
+
+	if ! ensure_gh_installed; then
+		die "gh CLI is required to verify guest-components provenance (set VERIFY_COCO_EXTENSION_PROVENANCE=no to bypass)"
+	fi
+
+	local repo
+	repo="$(get_coco_extension_provenance_repo)"
+	info "Verifying provenance of ${image}@${digest} against ${repo}"
+	export GH_TOKEN="${token}"
+	# --bundle-from-oci reads the attestation guest-components pushed alongside the
+	# image (actions/attest push-to-registry) instead of the GitHub API.
+	gh attestation verify "oci://${image}@${digest}" \
+		--repo "${repo}" \
+		--bundle-from-oci \
+		|| die "Provenance verification failed for ${image}@${digest}"
+}
+
+# Pull the published scratch OCI container image (coco-extension), verify its
+# provenance, and export the rootfs into destdir for monolithic confidential images.
+install_coco_guest_components_from_oci() {
+	ensure_oras_installed
+
+	local image_ref image go_arch digest cid
+	image_ref="$(get_coco_guest_components_container_image_ref)"
+	image="${image_ref%%:*}"
+	go_arch="$(get_coco_extension_oci_arch)"
+
+	digest="$(oras resolve --platform "linux/${go_arch}" "${image_ref}")" \
+		|| die "Failed to resolve ${image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
+
+	verify_guest_components_oci_provenance "${image}" "${digest}"
+
+	info "Pull and extract CoCo guest components from ${image}@${digest} (linux/${go_arch})"
+
+	docker pull "${image}@${digest}"
+	# coco-extension is FROM scratch with no CMD/ENTRYPOINT; docker create needs
+	# an executable that exists in the image rootfs (we never run the container).
+	cid="$(docker create "${image}@${digest}" /usr/local/bin/attestation-agent --help)"
+	docker export "${cid}" | tar -xf - -C "${destdir}"
+	docker rm -f "${cid}" >/dev/null
 }
 
 get_pause_image_tarball_path() {
@@ -484,10 +612,8 @@ install_image() {
 		fi
 
 		# Both the standard and NVIDIA confidential images bake the CoCo
-		# guest components + pause image into the rootfs, so factor them
-		# into the cache key.
+		# guest components (including the pause bundle) into the rootfs.
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" || "${variant}" == "nvidia-gpu-extension" ]]; then
@@ -537,15 +663,13 @@ install_image() {
 
 	if [[ -n "${variant}" ]]; then
 		# Both the standard confidential image and the NVIDIA confidential
-		# image bake the CoCo guest components + pause image into the
-		# rootfs, so each stays a usable standalone monolithic CoCo image.
-		# The runtime-rs split path instead ships these in the separate
+		# image bake the CoCo guest components (including the pause bundle)
+		# into the rootfs, so each stays a usable standalone monolithic CoCo image.
+		# The runtime-rs split path instead ships these in the separately published
 		# CoCo extension image (rootfs-image-coco-extension).
 		if [[ "${variant}" == *confidential ]]; then
 			COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export COCO_GUEST_COMPONENTS_TARBALL
-			PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
-			export PAUSE_IMAGE_TARBALL
 		fi
 	fi
 
@@ -614,15 +738,15 @@ install_image_confidential() {
 }
 
 #Install CoCo extension image (erofs+verity, contains CoCo guest components + pause)
+#
+# The disk image is built and published by guest-components
+# (ghcr.io/confidential-containers/guest-components/coco-extension-disk) as a
+# multi-arch OCI index. Kata resolves the per-arch manifest digest, verifies its
+# provenance attestation, and pulls exactly that digest into kata-static.
 install_image_coco_extension() {
 	local component="rootfs-image-coco-extension"
 
-	local coco_last_commit
-	coco_last_commit="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-	local pause_last_commit
-	pause_last_commit="$(get_latest_pause_image_artefact_and_builder_image_version)"
-
-	latest_artefact="$(get_kata_version)-coco-extension-${coco_last_commit}-${pause_last_commit}"
+	latest_artefact="$(get_kata_version)-coco-extension-$(get_latest_coco_extension_artefact_version)"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
@@ -633,114 +757,50 @@ install_image_coco_extension() {
 		"${final_tarball_path}" \
 		&& return 0
 
-	info "Create CoCo extension image"
+	ensure_oras_installed
 
-	# Use a temp dir under the repo root so the path is valid both inside
-	# the outer build-kata-deploy container and in the nested image-builder
-	# container (Docker-in-Docker mounts use host paths).
-	local extension_rootfs
-	extension_rootfs="$(mktemp -d "${repo_root_dir}/.coco-extension-rootfs.XXXX")"
+	local disk_image_ref image go_arch
+	disk_image_ref="$(get_coco_extension_disk_image_ref)"
+	image="${disk_image_ref%%:*}"
+	go_arch="$(get_coco_extension_oci_arch)"
 
-	COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
-	PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
+	# Resolve the per-arch manifest digest out of the multi-arch index. This is the
+	# subject guest-components' provenance attestation is bound to, so we verify it
+	# and then pull that exact digest (avoiding a resolve/pull TOCTOU window).
+	local digest
+	digest="$(oras resolve --platform "linux/${go_arch}" "${disk_image_ref}")" \
+		|| die "Failed to resolve ${disk_image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
 
-	info "Unpacking CoCo guest components into extension rootfs"
-	tar --zstd -xvf "${COCO_GUEST_COMPONENTS_TARBALL}" -C "${extension_rootfs}"
+	verify_guest_components_oci_provenance "${image}" "${digest}"
 
-	info "Unpacking pause image into extension rootfs"
-	tar --zstd -xvf "${PAUSE_IMAGE_TARBALL}" -C "${extension_rootfs}"
+	info "Pull CoCo extension disk image from ${image}@${digest} (linux/${go_arch})"
 
-	# Data-driven extension manifest consumed by kata-agent. It describes the
-	# components shipped in this extension so the agent needs no per-bundle code
-	# changes. All paths are relative to the extension mount point
-	# (/run/kata-extensions/coco). The "${var}" tokens in the [[process]] entries are
-	# substituted by kata-agent from its runtime context.
-	info "Writing CoCo extension component manifest"
-	local manifest_dir="${extension_rootfs}/etc/kata-extensions"
-	mkdir -p "${manifest_dir}"
-	cat > "${manifest_dir}/components.toml" <<'EOF'
-schema_version = 1
+	local pull_dir
+	pull_dir="$(mktemp -d)"
+	pushd "${pull_dir}" >/dev/null
+	if ! oras pull "${image}@${digest}" --no-tty; then
+		popd >/dev/null
+		rm -rf "${pull_dir}"
+		die "Failed to pull CoCo extension image ${image}@${digest}"
+	fi
 
-[paths]
-"ocicrypt-config" = "etc/ocicrypt_config.json"
-"pause-bundle"    = "pause_bundle"
-
-[[process]]
-id            = "attestation-agent"
-level         = 1
-args          = ["--attestation_sock", "${aa_attestation_uri}"]
-optional_args = [{ when = "initdata_toml_path", args = ["--initdata-toml", "${initdata_toml_path}"] }]
-config        = "${aa_config_path}"
-wait_socket   = "${aa_attestation_socket}"
-timeout_secs  = "${launch_process_timeout}"
-# The extension ships both the stock attestation-agent and the NVIDIA-attester
-# build; the consumer selects one via the "attester_variant" context value
-# (kata-agent uses "default", NVRC uses "nvidia").
-select        = "${attester_variant}"
-
-  [process.variants.default]
-  path = "usr/local/bin/attestation-agent"
-
-  [process.variants.nvidia]
-  path = "usr/local/bin/attestation-agent-nv"
-  # attestation-agent-nv links libnvat.so (bundled in this CoCo extension under
-  # usr/local/lib), which dlopens libnvidia-ml.so.1 for GPU attestation evidence.
-  # Only NVAT's own libs need LD_LIBRARY_PATH: NVML lives in the GPU extension,
-  # which NVRC folds into the guest loader cache before starting kata-agent, so it
-  # resolves without a path here (see NVRC gpu::setup).
-  env  = { LD_LIBRARY_PATH = "${extension_root}/usr/local/lib" }
-
-[[process]]
-id           = "confidential-data-hub"
-level        = 2
-path         = "usr/local/bin/confidential-data-hub"
-config       = "${cdh_config_path}"
-# CDH's secure_mount shells out (by PATH lookup) to cryptsetup for encrypted
-# storage and to mke2fs/mkfs.ext4/dd for the filesystem. cryptsetup is CoCo-only
-# and ships in this extension under usr/sbin (see
-# build-static-coco-guest-components.sh); the plain mkfs/dd tooling lives in the
-# nvidia base image's /sbin and /bin. The agent launches CDH with
-# PATH=/bin:/sbin:/usr/bin:/usr/sbin, but setting any env here overrides it
-# wholesale, so prepend the extension's usr/sbin and restore the base dirs.
-env          = { OCICRYPT_KEYPROVIDER_CONFIG = "${ocicrypt_config_path}", PATH = "${extension_root}/usr/sbin:/bin:/sbin:/usr/bin:/usr/sbin" }
-wait_socket  = "${cdh_socket}"
-timeout_secs = "${launch_process_timeout}"
-
-[[process]]
-id           = "api-server-rest"
-level        = 3
-path         = "usr/local/bin/api-server-rest"
-args         = ["--features", "${rest_api_features}"]
-timeout_secs = "0"
-EOF
+	[[ -f kata-containers-coco-extension.img ]] || die "CoCo extension pull did not contain kata-containers-coco-extension.img"
 
 	local install_dir="${destdir}/${prefix}/share/kata-containers/"
 	mkdir -p "${install_dir}"
+	install -D --mode 0644 kata-containers-coco-extension.img \
+		"${install_dir}/kata-containers-coco-extension.img"
 
-	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
-
-	export USE_DOCKER="1"
-	export BUILD_VARIANT="coco-extension"
-	export FS_TYPE="erofs"
-	# Mirror the base/confidential images: s390x does not use a measured rootfs
-	# (Secure Execution measures the guest through a different mechanism), so the
-	# extension carries no dm-verity hash there and is mounted off its raw
-	# partition instead.
-	if [[ "${ARCH}" == "s390x" ]]; then
-		export MEASURED_ROOTFS="no"
-	else
-		export MEASURED_ROOTFS="yes"
-	fi
-	export SKIP_DAX_HEADER="yes"
-	export SKIP_ROOTFS_CHECK="yes"
-
-	"${image_builder}" -o "${install_dir}/kata-containers-coco-extension.img" "${extension_rootfs}"
-
-	if [[ -e "${install_dir}/root_hash_coco-extension.txt" ]]; then
+	if [[ -f root_hash_coco-extension.txt ]]; then
+		install -D --mode 0644 root_hash_coco-extension.txt \
+			"${install_dir}/root_hash_coco-extension.txt"
 		info "Root hash file: ${install_dir}/root_hash_coco-extension.txt"
+	elif [[ "${ARCH}" != "s390x" ]]; then
+		die "Expected root_hash_coco-extension.txt in ${disk_image_ref}"
 	fi
 
-	rm -rf "${extension_rootfs}"
+	popd >/dev/null
+	rm -rf "${pull_dir}"
 }
 
 #Install cbl-mariner guest image
@@ -795,7 +855,6 @@ install_initrd() {
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -825,8 +884,6 @@ install_initrd() {
 		if [[ "${variant}" == *confidential ]]; then
 			COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export COCO_GUEST_COMPONENTS_TARBALL
-			PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
-			export PAUSE_IMAGE_TARBALL
 		fi
 	else
 		# No variant is passed, it means vanilla kata containers
@@ -1481,9 +1538,9 @@ install_agent() {
 }
 
 install_coco_guest_components() {
-	latest_artefact="$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_from_kata_deps ".externals.coco-guest-components.toolchain")"
+	latest_artefact="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")"
-	latest_builder_image="$(get_coco_guest_components_image_name)"
+	latest_builder_image=""
 
 	install_cached_tarball_component \
 		"${build_target}" \
@@ -1493,8 +1550,8 @@ install_coco_guest_components() {
 		"${final_tarball_path}" \
 		&& return 0
 
-	info "build static coco-guest-components"
-	DESTDIR="${destdir}" "${coco_guest_components_builder}"
+	info "Pull published CoCo guest components OCI container image"
+	install_coco_guest_components_from_oci
 }
 
 install_pause_image() {
