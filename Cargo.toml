@@ -2,7 +2,7 @@
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.94"
+rust-version = "1.95"
 
 [workspace]
 members = [
@@ -149,7 +149,8 @@ vsock-exporter = { path = "src/agent/vsock-exporter" }
 
 # Outside dependencies
 actix-rt = "2.7.0"
-anyhow = "1.0"
+anyhow = "1.0.103"
+awaitgroup = "0.7.0"
 base64 = "0.22"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
@@ -186,20 +187,21 @@ prometheus = { version = "0.14.0", features = ["process"] }
 protobuf = "3.7.2"
 rand = "0.10.1"
 regex = "1.10.5"
-rstest = "0.18.0"
+rstest = "0.26.1"
 rtnetlink = "0.14.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.91"
 serial_test = "0.10.0"
-sha2 = "0.10.9"
+sha2 = "0.11.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
+sysinfo = "0.39.5"
 tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "2.0.18"

@@ -5,6 +5,7 @@
 //
 
 use anyhow::{anyhow, Context, Error, Result};
+use base64::Engine as _;
 use std::convert::TryFrom;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -174,8 +175,9 @@ impl NydusExtraOptions {
             ));
         }
         let config_raw_data = options[0].trim_start_matches("extraoption=");
-        let extra_options_buf =
-            base64::decode(config_raw_data).context("decode the nydus's base64 extraoption")?;
+        let extra_options_buf = base64::engine::general_purpose::STANDARD
+            .decode(config_raw_data)
+            .context("decode the nydus's base64 extraoption")?;
 
         serde_json::from_slice(&extra_options_buf).context("deserialize nydus's extraoption")
     }
@@ -421,12 +423,12 @@ impl KataVirtualVolume {
     /// Serializes the virtual volume object to a JSON string and encodes the string with base64.
     pub fn to_base64(&self) -> Result<String> {
         let json = self.to_json()?;
-        Ok(base64::encode(json))
+        Ok(base64::engine::general_purpose::STANDARD.encode(json))
     }
 
     /// Decodes and deserializes a virtual volume object from a base64 encoded JSON string.
     pub fn from_base64(value: &str) -> Result<Self> {
-        let json = base64::decode(value)?;
+        let json = base64::engine::general_purpose::STANDARD.decode(value)?;
         let volume: KataVirtualVolume = serde_json::from_slice(&json)?;
 
         Ok(volume)
@@ -512,7 +514,8 @@ pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!(std::io::ErrorKind::NotFound));
     }
-    let b64_url_encoded_path = base64::encode_config(volume_path.as_bytes(), base64::URL_SAFE);
+    let b64_url_encoded_path =
+        base64::engine::general_purpose::URL_SAFE.encode(volume_path.as_bytes());
 
     Ok(safe_path::scoped_join(prefix, b64_url_encoded_path)?)
 }

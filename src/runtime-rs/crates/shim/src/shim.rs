@@ -72,9 +72,13 @@ impl ShimExecutor {
         // https://github.com/containerd/containerd/blob/v1.6.8/runtime/v2/shim/util_unix.go#L68 to
         // generate a shim socket path.
         Ok(PathBuf::from(format!(
-            "unix://{}/s/{:X}",
+            "unix://{}/s/{}",
             SOCKET_ROOT,
-            hasher.finalize()
+            hasher
+                .finalize()
+                .iter()
+                .map(|b| format!("{b:02X}"))
+                .collect::<String>()
         )))
     }
 }

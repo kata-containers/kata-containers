@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-awaitgroup = "0.6.0"
+awaitgroup = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 
