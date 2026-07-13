@@ -272,8 +272,15 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "da8d93f2797088a5f0636c8c1eeb31da73784fe8"
-    toolchain: "1.90.0"
+    version: "fff3a966b7b1d1654d172a7cd81c0f563721ff0b"
+    # Scratch OCI container image (guest-components "Publish OCI container image"
+    # step). Consumed by monolithic confidential rootfs builds.
+    # yamllint disable-line rule:line-length
+    container_image: "ghcr.io/confidential-containers/guest-components/coco-extension"
+    # EROFS + dm-verity disk image (guest-components "Publish disk image with ORAS"
+    # step). Consumed by the runtime-rs composable extension path.
+    # yamllint disable-line rule:line-length
+    extension_image: "ghcr.io/confidential-containers/guest-components/coco-extension-disk"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"

@@ -568,27 +568,61 @@ arrive as packages — they are copied into the base layout explicitly:
 `veritysetup` and its library closure unconditionally, and the
 `mke2fs`/`mkfs.ext4`/`dd`/`mke2fs.conf` plain-storage tooling alongside it.
 
+#### CoCo guest components (monolithic confidential images)
+
+The Go runtime still boots a **monolithic** confidential image that bakes the
+CoCo guest components directly into the rootfs. Rather than compiling
+guest-components on the kata side, `install_coco_guest_components` pulls the
+scratch OCI **container** image guest-components publishes in the
+`coco-extension-image` workflow ("Publish OCI container image" step) at
+`ghcr.io/confidential-containers/guest-components/coco-extension`
+(`.externals.coco-guest-components.container_image`), verifies its provenance,
+and exports the filesystem into `kata-static-coco-guest-components.tar.zst`.
+This is distinct from the EROFS disk image (`extension_image`) used by the
+runtime-rs composable extension path. The container payload includes the
+guest-component binaries, `cryptsetup`, the pause bundle, and
+`etc/ocicrypt_config.json`, so confidential rootfs builds no longer need a
+separate `pause-image` tarball or a local guest-components compile.
+
 #### CoCo guest extension image
 
-The `kata-containers-coco-extension.img` is built by:
+The `kata-containers-coco-extension.img` is built and published by
+[guest-components](https://github.com/confidential-containers/guest-components)
+(`tools/coco-extension/`) as a multi-arch OCI index at
+`ghcr.io/confidential-containers/guest-components/coco-extension-disk`. Kata pins
+the guest-components revision in `versions.yaml` under
+`.externals.coco-guest-components` (`version`, `container_image`, and
+`extension_image` must stay in sync) and, at build time, `install_image_coco_extension`:
 
-1. Unpacking the CoCo guest components tarball into a temporary rootfs. Besides
-   the agent-launched binaries (attestation-agent, attestation-agent-nv,
-   confidential-data-hub, api-server-rest) this tarball also carries:
-   - `cryptsetup` under `usr/sbin` — the encrypted-storage binary for CDH
-     `secure_mount` (its shared libraries are resolved against the base; see
-     "Runtime dependencies").
-   - the NVIDIA attester libraries under `usr/local/lib` — `libnvat.so` plus its
-     non-glibc transitive closure (libxml2, zlib, lzma, the C++ runtime).
-2. Unpacking the pause image tarball into the same rootfs.
-3. Writing the component manifest to `etc/kata-extensions/components.toml`.
-4. Running the image builder with:
-   - `FS_TYPE=erofs` — EROFS filesystem for compact, read-only storage.
-   - `MEASURED_ROOTFS=yes` — creates a dm-verity hash partition.
-   - `SKIP_DAX_HEADER=yes` — no DAX header (virtio-blk, not NVDIMM).
-   - `SKIP_ROOTFS_CHECK=yes` — the extension has no `/sbin/init`.
-   - `BUILD_VARIANT=coco-extension` — produces a correctly named root hash file
-     (`root_hash_coco-extension.txt`).
+1. Resolves the per-architecture manifest digest from the index
+   (`oras resolve --platform linux/<arch>`).
+2. Verifies the provenance attestation guest-components published for that digest
+   (`gh attestation verify --repo confidential-containers/guest-components
+   --bundle-from-oci`). On amd64/arm64 CI sets
+   `VERIFY_COCO_EXTENSION_PROVENANCE=yes` to require it when `GH_TOKEN` is
+   available; locally it is skipped when no GitHub token is set. s390x always
+   skips because the GitHub CLI ships no s390x build.
+3. Pulls that exact digest (`oras pull`) so the installed image is byte-for-byte
+   the artefact whose provenance was verified.
+
+!!! note
+    Provenance verification runs when `GH_TOKEN` or `GITHUB_TOKEN` is available
+    (CI forwards the runner token automatically). Local builds without a token
+    skip verification with a warning. Set `VERIFY_COCO_EXTENSION_PROVENANCE=yes`
+    to require it, or `no` to disable it explicitly.
+
+The guest-components build assembles a rootfs that carries the agent-launched
+binaries (attestation-agent, attestation-agent-nv, confidential-data-hub,
+api-server-rest), `cryptsetup` under `usr/sbin`, the NVIDIA attester libraries
+under `usr/local/lib`, the pause bundle, and the component manifest at
+`etc/kata-extensions/components.toml`, then formats it as:
+
+- `FS_TYPE=erofs` — EROFS filesystem for compact, read-only storage.
+- `MEASURED_ROOTFS=yes` — creates a dm-verity hash partition (except on s390x).
+- `SKIP_DAX_HEADER=yes` — no DAX header (virtio-blk, not NVDIMM).
+- `SKIP_ROOTFS_CHECK=yes` — the extension has no `/sbin/init`.
+- `BUILD_VARIANT=coco-extension` — produces a correctly named root hash file
+  (`root_hash_coco-extension.txt`).
 
 The resulting image is a two-partition disk:
 
