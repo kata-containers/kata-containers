@@ -15,7 +15,7 @@ tonic = "0.14"
 prost = "0.14"
 tonic-prost = "0.14"
 oci-spec = { workspace = true }
-container-device-interface = "0.1.2"
+container-device-interface.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
