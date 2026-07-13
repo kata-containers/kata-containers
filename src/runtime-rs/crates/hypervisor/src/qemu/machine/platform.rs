@@ -6,11 +6,7 @@ use anyhow::Result;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use super::{
-    probe::HostTopology,
-    pseries::Pseries,
-    q35::Q35,
-    s390x::S390xCcwVirtio,
-    topology::PciTopology,
+    probe::HostTopology, pseries::Pseries, q35::Q35, s390x::S390xCcwVirtio, topology::PciTopology,
     virt::Virt,
 };
 
@@ -31,6 +27,8 @@ pub(crate) enum Machine {
 pub(crate) struct BaseMachine {
     pub accel: String,
     /// ID of the primary memory backend, written as `-machine memory-backend=<id>`.
+    /// `None` for topologies that supply memory per NUMA node via `-numa node,memdev=`
+    /// rather than a single machine-wide backend (e.g. multi-socket vEGM).
     pub memory_backend: Option<String>,
 }
 
@@ -47,19 +45,36 @@ pub(crate) struct IommufdBackend {
 }
 
 pub(crate) enum MemoryBackend {
-    Ram { id: String, size: u64 },
+    Ram {
+        id: String,
+        size: u64,
+    },
     /// File-backed memory.
     ///   path = "/dev/hugepages/" -- hugepages-backed guest RAM (vCMDQ)
     ///   path = "/dev/egmN"      -- per-socket EGM region (vEGM)
-    File { id: String, size: u64, path: String, prealloc: bool, share: bool },
+    File {
+        id: String,
+        size: u64,
+        path: String,
+        prealloc: bool,
+        share: bool,
+    },
 }
 
 pub(crate) enum AcpiPciNodeLink {
     /// Emitted 8x per GPU; the GPU driver uses these to online GPU memory.
-    GenericInitiator { id: String, pci_dev: String, node: u32 },
+    GenericInitiator {
+        id: String,
+        pci_dev: String,
+        node: u32,
+    },
     /// Emitted 1x per GPU; links the GPU to the per-socket EGM backend.
     /// `node` is the CpuMem NUMA node of the socket, not a GPU initiator node.
-    EgmMemory { id: String, pci_dev: String, node: u32 },
+    EgmMemory {
+        id: String,
+        pci_dev: String,
+        node: u32,
+    },
 }
 
 pub(crate) struct ThreadContext {
