@@ -39,6 +39,7 @@ pub struct VolumeContext<'a> {
     pub agent: Arc<dyn Agent>,
     pub emptydir_mode: &'a str,
     pub fs_sharing_supported: bool,
+    pub block_device_discard_supported: bool,
 }
 
 #[async_trait]
@@ -101,9 +102,15 @@ impl VolumeResource {
                         .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
             } else if block_emptydir_volume::is_block_emptydir_volume(m, emptydir_mode) {
-                let vol = block_emptydir_volume::BlockEmptyDirVolume::new(d, m, sid, emptydir_mode)
-                    .await
-                    .with_context(|| format!("new block emptydir volume {m:?}"))?;
+                let vol = block_emptydir_volume::BlockEmptyDirVolume::new(
+                    d,
+                    m,
+                    sid,
+                    emptydir_mode,
+                    ctx.block_device_discard_supported,
+                )
+                .await
+                .with_context(|| format!("new block emptydir volume {m:?}"))?;
                 let vol_arc: Arc<dyn Volume> = Arc::new(vol.clone());
                 let mut inner = self.inner.write().await;
                 inner.ephemeral_disks.push(vol.disk_info);

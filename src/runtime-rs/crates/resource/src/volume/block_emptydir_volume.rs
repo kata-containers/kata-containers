@@ -60,9 +60,11 @@ impl BlockEmptyDirVolume {
         m: &oci::Mount,
         sid: &str,
         emptydir_mode: &str,
+        block_device_discard_supported: bool,
     ) -> Result<Self> {
         let encrypted = emptydir_mode == EMPTYDIR_MODE_BLOCK_ENCRYPTED;
-        let discard_unmap = emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN;
+        let discard_unmap =
+            emptydir_mode == EMPTYDIR_MODE_BLOCK_PLAIN && block_device_discard_supported;
         let source = m
             .source()
             .as_ref()
@@ -127,7 +129,7 @@ impl BlockEmptyDirVolume {
         mount.set_typ(Some("bind".to_string()));
 
         let mut storage = storage;
-        configure_block_emptydir_storage(&mut storage, encrypted);
+        configure_block_emptydir_storage(&mut storage, encrypted, discard_unmap);
 
         // Mirror the Go runtime's handleBlkOCIMounts: the agent mounts the
         // block device at $(spath)/$(b64_device_id) which genpolicy expands to
@@ -188,7 +190,11 @@ fn block_emptydir_mount_options(discard_unmap: bool) -> Vec<String> {
     }
 }
 
-fn configure_block_emptydir_storage(storage: &mut agent::Storage, encrypted: bool) {
+fn configure_block_emptydir_storage(
+    storage: &mut agent::Storage,
+    encrypted: bool,
+    discard_unmap: bool,
+) {
     if encrypted {
         storage.driver_options.push(format!(
             "{}={}",
@@ -198,7 +204,7 @@ fn configure_block_emptydir_storage(storage: &mut agent::Storage, encrypted: boo
     storage
         .driver_options
         .push(KATA_BLOCK_VOLUME_CREATE_FS.to_string());
-    if !encrypted {
+    if discard_unmap {
         storage.options.push(DISCARD_MOUNT_OPTION.to_string());
     }
     storage.shared = true;
@@ -283,13 +289,29 @@ mod tests {
 
         let mut storage = agent::Storage::default();
 
-        configure_block_emptydir_storage(&mut storage, false);
+        configure_block_emptydir_storage(&mut storage, false, true);
 
         assert_eq!(
             storage.driver_options,
             vec![KATA_BLOCK_VOLUME_CREATE_FS.to_string()]
         );
         assert_eq!(storage.options, vec![DISCARD_MOUNT_OPTION.to_string()]);
+        assert!(storage.shared);
+    }
+
+    #[test]
+    fn block_plain_emptydir_skips_discard_when_hypervisor_cannot_expose_it() {
+        assert!(block_emptydir_mount_options(false).is_empty());
+
+        let mut storage = agent::Storage::default();
+
+        configure_block_emptydir_storage(&mut storage, false, false);
+
+        assert_eq!(
+            storage.driver_options,
+            vec![KATA_BLOCK_VOLUME_CREATE_FS.to_string()]
+        );
+        assert!(storage.options.is_empty());
         assert!(storage.shared);
     }
 
@@ -310,7 +332,7 @@ mod tests {
 
         let mut storage = agent::Storage::default();
 
-        configure_block_emptydir_storage(&mut storage, true);
+        configure_block_emptydir_storage(&mut storage, true, false);
 
         assert_eq!(
             storage.driver_options,
