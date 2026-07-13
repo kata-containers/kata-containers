@@ -23,7 +23,8 @@ fn load_fixture(name: &str) -> Vec<String> {
 }
 
 fn check(topo: HostTopology, fixture: &str) {
-    let mut platform = Platform::from_config_defaults(16 << 30).expect("Platform::from_config_defaults");
+    let mut platform =
+        Platform::from_config_defaults(16 << 30).expect("Platform::from_config_defaults");
     platform.apply_host_defaults(&topo);
     let got = platform.to_qemu_args().expect("to_qemu_args");
     let want = load_fixture(fixture);
@@ -31,7 +32,10 @@ fn check(topo: HostTopology, fixture: &str) {
 }
 
 fn single_socket(cpus: std::ops::Range<u32>) -> Vec<SocketInfo> {
-    vec![SocketInfo { id: 0, cpu_range: cpus }]
+    vec![SocketInfo {
+        id: 0,
+        cpu_range: cpus,
+    }]
 }
 
 fn smmu_groups(addrs: &[&[&str]], socket: u32) -> Vec<GpuSmmuGroup> {
@@ -143,22 +147,62 @@ fn grace_6_vegm_1_per_socket() {
     check(
         HostTopology {
             sockets: vec![
-                SocketInfo { id: 0, cpu_range: 0..1 },
-                SocketInfo { id: 1, cpu_range: 1..2 },
-                SocketInfo { id: 2, cpu_range: 2..3 },
-                SocketInfo { id: 3, cpu_range: 3..4 },
+                SocketInfo {
+                    id: 0,
+                    cpu_range: 0..1,
+                },
+                SocketInfo {
+                    id: 1,
+                    cpu_range: 1..2,
+                },
+                SocketInfo {
+                    id: 2,
+                    cpu_range: 2..3,
+                },
+                SocketInfo {
+                    id: 3,
+                    cpu_range: 3..4,
+                },
             ],
             gpu_smmu_groups: vec![
-                GpuSmmuGroup { pci_bus_addrs: vec!["0008:06:00.0".into()], socket: 0 },
-                GpuSmmuGroup { pci_bus_addrs: vec!["0009:06:00.0".into()], socket: 1 },
-                GpuSmmuGroup { pci_bus_addrs: vec!["0010:06:00.0".into()], socket: 2 },
-                GpuSmmuGroup { pci_bus_addrs: vec!["0011:06:00.0".into()], socket: 3 },
+                GpuSmmuGroup {
+                    pci_bus_addrs: vec!["0008:06:00.0".into()],
+                    socket: 0,
+                },
+                GpuSmmuGroup {
+                    pci_bus_addrs: vec!["0009:06:00.0".into()],
+                    socket: 1,
+                },
+                GpuSmmuGroup {
+                    pci_bus_addrs: vec!["0010:06:00.0".into()],
+                    socket: 2,
+                },
+                GpuSmmuGroup {
+                    pci_bus_addrs: vec!["0011:06:00.0".into()],
+                    socket: 3,
+                },
             ],
             egm_sockets: vec![
-                EgmSocketInfo { path: "/dev/egm4".into(), socket: 0, total_size: 56896 << 20 },
-                EgmSocketInfo { path: "/dev/egm5".into(), socket: 1, total_size: 56896 << 20 },
-                EgmSocketInfo { path: "/dev/egm6".into(), socket: 2, total_size: 56896 << 20 },
-                EgmSocketInfo { path: "/dev/egm7".into(), socket: 3, total_size: 56896 << 20 },
+                EgmSocketInfo {
+                    path: "/dev/egm4".into(),
+                    socket: 0,
+                    total_size: 56896 << 20,
+                },
+                EgmSocketInfo {
+                    path: "/dev/egm5".into(),
+                    socket: 1,
+                    total_size: 56896 << 20,
+                },
+                EgmSocketInfo {
+                    path: "/dev/egm6".into(),
+                    socket: 2,
+                    total_size: 56896 << 20,
+                },
+                EgmSocketInfo {
+                    path: "/dev/egm7".into(),
+                    socket: 3,
+                    total_size: 56896 << 20,
+                },
             ],
         },
         "grace_6_vegm_1_per_socket.args",
@@ -173,8 +217,14 @@ fn grace_7_vegm_2_per_socket() {
     check(
         HostTopology {
             sockets: vec![
-                SocketInfo { id: 0, cpu_range: 0..2 },
-                SocketInfo { id: 1, cpu_range: 2..4 },
+                SocketInfo {
+                    id: 0,
+                    cpu_range: 0..2,
+                },
+                SocketInfo {
+                    id: 1,
+                    cpu_range: 2..4,
+                },
             ],
             gpu_smmu_groups: vec![
                 GpuSmmuGroup {
@@ -187,8 +237,16 @@ fn grace_7_vegm_2_per_socket() {
                 },
             ],
             egm_sockets: vec![
-                EgmSocketInfo { path: "/dev/egm4".into(), socket: 0, total_size: 56896 << 20 },
-                EgmSocketInfo { path: "/dev/egm5".into(), socket: 1, total_size: 56896 << 20 },
+                EgmSocketInfo {
+                    path: "/dev/egm4".into(),
+                    socket: 0,
+                    total_size: 56896 << 20,
+                },
+                EgmSocketInfo {
+                    path: "/dev/egm5".into(),
+                    socket: 1,
+                    total_size: 56896 << 20,
+                },
             ],
         },
         "grace_7_vegm_2_per_socket.args",
