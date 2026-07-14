@@ -30,6 +30,16 @@ GENERATED_REPLACEMENTS= \
 
 GENERATED_FILES := $(GENERATED_CODE)
 
+EXTRA_RUSTFEATURES :=
+
+ifeq ($(USE_BUILTIN_DB),true)
+    EXTRA_RUSTFEATURES += dragonball
+endif
+
+ifneq ($(EXTRA_RUSTFEATURES),)
+    override EXTRA_RUSTFEATURES := --features $(EXTRA_RUSTFEATURES)
+endif
+
 .DEFAULT_GOAL := default
 
 ifeq ($(ARCH), ppc64le)

@@ -30,6 +30,7 @@ shim-interface.workspace = true
 kata-types.workspace = true
 kata-sys-util.workspace = true
 agent.workspace = true
+common.workspace = true
 virt_container.workspace = true
 serial_test.workspace = true
 vmm-sys-util.workspace = true
@@ -80,6 +81,11 @@ tempfile.workspace = true
 nix = { workspace = true }
 test-utils.workspace = true
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
+
+[features]
+default = ["cloud-hypervisor"]
+cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+dragonball = ["virt_container/dragonball"]
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]

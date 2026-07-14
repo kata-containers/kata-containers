@@ -4,12 +4,15 @@
 //
 
 use anyhow::{Context, Result};
+use common::RuntimeHandler;
 use tokio::runtime::Runtime;
-use virt_container::factory;
+use virt_container::{factory, VirtContainer};
 
 use crate::args::{FactoryArgs, FactorySubCommand};
 
 pub fn handle_factory(factory_args: FactoryArgs) -> Result<()> {
+    VirtContainer::init().context("initialize virtual-container runtime")?;
+
     let rt = Runtime::new().context("failed to create Tokio runtime")?;
     rt.block_on(async {
         match &factory_args.command {
