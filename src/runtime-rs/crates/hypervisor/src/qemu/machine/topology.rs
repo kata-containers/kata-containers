@@ -5,9 +5,11 @@
 pub(crate) struct PciTopology {
     pub default_bus: Option<String>,
     pub roots: Vec<PciRootComplex>,
-    /// Pre-provisioned root ports emitted on the default bus (Q35 cold-plug topology).
-    /// Contrast with `roots`, which are pxb-pcie complexes for GPU passthrough.
-    pub cold_plug_ports: Vec<PciRootPort>,
+    /// Pre-provisioned root ports emitted on the default bus at VM creation time.
+    /// Empty at boot; filled cold (static cmdline) or hot (QMP `device_add`).
+    /// Driven by `HostTopology::pcie_root_port`.  Contrast with `roots`, which
+    /// are pxb-pcie complexes for static GPU passthrough (cold-plug root-port).
+    pub pcie_root_port: Vec<PciRootPort>,
 }
 
 pub(crate) struct PciRootComplex {
