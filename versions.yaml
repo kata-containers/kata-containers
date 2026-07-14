@@ -294,16 +294,12 @@ externals:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
     version: "258ea4acb7b9bd865fce5c63a539f2120dba8298"
-    # image and image_tag must be in sync
-    image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "258ea4acb7b9bd865fce5c63a539f2120dba8298"
     toolchain: "1.90.0"
-    # Helm chart deploys three separate images (kbs, as, rvps)
-    # yamllint disable rule:line-length
-    image_kbs: "ghcr.io/confidential-containers/staged-images/kbs-grpc-as:258ea4acb7b9bd865fce5c63a539f2120dba8298"
-    image_as: "ghcr.io/confidential-containers/staged-images/coco-as-grpc:258ea4acb7b9bd865fce5c63a539f2120dba8298"
-    image_rvps: "ghcr.io/confidential-containers/staged-images/rvps:258ea4acb7b9bd865fce5c63a539f2120dba8298"
-    # yamllint enable rule:line-length
+    # Helm chart deploys three separate images; tags match version.
+    images:
+      kbs: "ghcr.io/confidential-containers/staged-images/kbs-grpc-as"
+      as: "ghcr.io/confidential-containers/staged-images/coco-as-grpc"
+      rvps: "ghcr.io/confidential-containers/staged-images/rvps"
 
   containerd:
     description: |

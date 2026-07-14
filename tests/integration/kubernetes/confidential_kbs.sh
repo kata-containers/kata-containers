@@ -407,9 +407,9 @@ function kbs_k8s_deploy() {
 	# Read from versions.yaml
 	repo=$(get_from_kata_deps ".externals.coco-trustee.url")
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
-	image_kbs=$(get_from_kata_deps ".externals.coco-trustee.image_kbs")
-	image_as=$(get_from_kata_deps ".externals.coco-trustee.image_as")
-	image_rvps=$(get_from_kata_deps ".externals.coco-trustee.image_rvps")
+	image_kbs=$(get_from_kata_deps ".externals.coco-trustee.images.kbs")
+	image_as=$(get_from_kata_deps ".externals.coco-trustee.images.as")
+	image_rvps=$(get_from_kata_deps ".externals.coco-trustee.images.rvps")
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -432,14 +432,13 @@ function kbs_k8s_deploy() {
 	popd
 	echo "::endgroup::"
 
-	# Split image references into repository and tag.
-	# Format is "repo:tag" (e.g. "ghcr.io/confidential-containers/staged-images/kbs-grpc-as:<sha>")
-	local kbs_repo="${image_kbs%:*}"
-	local kbs_tag="${image_kbs##*:}"
-	local as_repo="${image_as%:*}"
-	local as_tag="${image_as##*:}"
-	local rvps_repo="${image_rvps%:*}"
-	local rvps_tag="${image_rvps##*:}"
+	# Image tags match the trustee source version.
+	local kbs_repo="${image_kbs}"
+	local kbs_tag="${version}"
+	local as_repo="${image_as}"
+	local as_tag="${version}"
+	local rvps_repo="${image_rvps}"
+	local rvps_tag="${version}"
 
 	# Build Helm --set arguments for verifier configuration.
 	# These supplement the values file and avoid embedding YAML inside the heredoc.
