@@ -3,6 +3,7 @@ nav:
   - Home:
     - index.md
     - Getting Started:
+      - Quick Start Guide: quick-start-guide.md
       - prerequisites.md
       - installation.md
     - Configuration:
@@ -22,4 +23,4 @@ nav:
     - Contributing:
       - Documentation: doc-contributing.md
   - Misc:
-    - Architecture: design/architecture/
+    - Architecture: design/architecture_4.0/
