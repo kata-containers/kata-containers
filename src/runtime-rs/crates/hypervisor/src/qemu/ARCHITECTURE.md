@@ -775,6 +775,23 @@ are related to this refactor.  Items marked **post-refactor** require the new
 `Platform` emission path to be wired end-to-end before they can be addressed
 cleanly.
 
+### 4+ Blackwell (B200/B300) GPU passthrough fails due to 40-bit GPA cap (#13270)
+
+`-cpu host` without `host-phys-bits=on` limits the guest physical address space
+to ~40 bits (~1 TiB).  Each B200/B300 GPU has a 128 GiB 64-bit prefetchable BAR;
+three GPUs (384 GiB) fit within 1 TiB, but four GPUs (512 GiB) do not, causing
+the fourth GPU to fail PCIe BAR assignment at VM boot.
+
+**Fix:** set `cpu_features = "pmu=off,host-phys-bits=on"` in
+`configuration-qemu-nvidia-gpu*.toml.in`.  The `Makefile` now defaults
+`CPUFEATURES` and `TDXCPUFEATURES` to `pmu=off,host-phys-bits=on` for `amd64`
+builds so operator installs that regenerate configs from source pick up the fix;
+existing installed configs must be updated manually.
+
+**Post-refactor:** the `Platform` Q35 builder should emit `host-phys-bits=on`
+unconditionally for x86_64/KVM so the fix is durable even if the config file
+is overwritten by `kata-deploy`.
+
 ### QMP startup timeout is hard-coded and ignores the caller's deadline (#13343)
 
 `QemuInner::start_vm(_timeout)` accepts the timeout argument from the
