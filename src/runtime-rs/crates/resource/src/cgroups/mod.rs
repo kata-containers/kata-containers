@@ -11,7 +11,7 @@ mod resource_inner;
 mod utils;
 
 use anyhow::{anyhow, Result};
-use cgroups_rs::manager::is_systemd_cgroup;
+use cgroups::manager::is_systemd_cgroup;
 use hypervisor::HYPERVISOR_DRAGONBALL;
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::config::TomlConfig;

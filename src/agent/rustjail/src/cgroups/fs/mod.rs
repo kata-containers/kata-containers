@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::cgroups_rs as cgroups;
 use cgroups::blkio::{BlkIoController, BlkIoData, IoService};
 use cgroups::cpu::CpuController;
 use cgroups::cpuacct::CpuAcctController;
@@ -1418,6 +1419,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use crate::cgroups_rs as cgroups;
     use cgroups::devices::{DevicePermissions, DeviceType};
     use oci::{
         LinuxBuilder, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder, LinuxDeviceType,

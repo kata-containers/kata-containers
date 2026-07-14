@@ -157,7 +157,7 @@ async-trait = "0.1.48"
 bilge = "0.3.0"
 capctl = "0.2.0"
 cfg-if = "1.0.0"
-cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
+cgroups = { package = "cgroups-rs", version = "0.5.1", features = ["oci"] }
 clap = { version = "4.5.40", features = ["derive"] }
 const_format = "0.2.30"
 container-device-interface = "1.1.1"

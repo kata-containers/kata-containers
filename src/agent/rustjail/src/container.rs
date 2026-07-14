@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs::File;
 
+use crate::cgroups_rs as cgroups;
 use cgroups::freezer::FreezerState;
 
 use crate::capabilities;

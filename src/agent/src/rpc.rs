@@ -29,7 +29,7 @@ use ttrpc::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use cgroups::freezer::FreezerState;
+use cgroups::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 #[cfg(feature = "agent-policy")]

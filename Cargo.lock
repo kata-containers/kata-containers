@@ -946,27 +946,15 @@ dependencies = [
 
 [[package]]
 name = "cgroups-rs"
-version = "0.3.5"
-source = "git+https://github.com/kata-containers/cgroups-rs?rev=v0.3.5#de9625ff57d156967b5b2a637c2c41bb2366e39b"
-dependencies = [
- "libc",
- "log",
- "nix 0.25.1",
- "regex",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "cgroups-rs"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efc46cf39fc5922b840030e0e5b378ce5caa9a824a675a95c6dec2c2c9ce9468"
+checksum = "25ae79ba89081d30804e3312bb1163ab82cc8dca0a1b16275e55fb19fce4e89b"
 dependencies = [
  "bit-vec 0.6.3",
  "libc",
  "log",
  "nix 0.25.1",
- "oci-spec 0.8.4",
+ "oci-spec 0.10.0",
  "thiserror 1.0.69",
  "zbus 5.15.0",
 ]
@@ -3566,7 +3554,7 @@ dependencies = [
  "base64 0.22.1",
  "capctl",
  "cfg-if 1.0.4",
- "cgroups-rs 0.3.5",
+ "cgroups-rs 0.5.1",
  "clap",
  "const_format",
  "container-device-interface",
@@ -4856,23 +4844,6 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "oci-spec"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3da52b83ce3258fbf29f66ac784b279453c2ac3c22c5805371b921ede0d308"
-dependencies = [
- "const_format",
- "derive_builder",
- "getset",
- "regex",
- "serde",
- "serde_json",
- "strum 0.27.2",
- "strum_macros 0.27.2",
  "thiserror 2.0.18",
 ]
 
@@ -6478,7 +6449,7 @@ dependencies = [
  "base64 0.22.1",
  "byte-unit",
  "bytes 1.11.1",
- "cgroups-rs 0.5.0",
+ "cgroups-rs 0.5.1",
  "flate2",
  "futures",
  "futures-lite 2.6.1",
@@ -6826,7 +6797,7 @@ dependencies = [
  "capctl",
  "caps",
  "cfg-if 1.0.4",
- "cgroups-rs 0.3.5",
+ "cgroups-rs 0.5.1",
  "futures",
  "inotify 0.9.6",
  "kata-sys-util",

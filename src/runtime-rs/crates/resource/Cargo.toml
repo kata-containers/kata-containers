@@ -17,7 +17,7 @@ actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 byte-unit = "5.1.6"
-cgroups-rs = { version = "0.5.0", features = ["oci"] }
+cgroups.workspace = true
 futures = "0.3.11"
 lazy_static = { workspace = true }
 libc = { workspace = true }
