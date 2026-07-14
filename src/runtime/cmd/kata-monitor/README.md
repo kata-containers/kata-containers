@@ -30,14 +30,61 @@ Each `kata-monitor` instance detects and monitors the Kata Container workloads r
 The `kata-monitor` binary accepts the following arguments:
 
 * `--listen-address` _IP:PORT_
-* `--runtime-enpoint` _PATH_TO_THE_CONTAINER_MANAGER_CRI_INTERFACE_
+* `--runtime-endpoint` _PATH_TO_THE_CONTAINER_MANAGER_CRI_INTERFACE_
 * `--log-level` _[ trace | debug | info | warn | error | fatal | panic ]_
+* `--tls-cert-file` _PATH_TO_TLS_CERTIFICATE_ (enables TLS when set, requires `--tls-key-file`)
+* `--tls-key-file` _PATH_TO_TLS_PRIVATE_KEY_ (requires `--tls-cert-file`)
+* `--tls-min-version` _[ VersionTLS12 | VersionTLS13 ]_ (minimum TLS version, defaults to `VersionTLS12` when TLS is enabled)
+* `--tls-cipher-suites` _COMMA_SEPARATED_IANA_CIPHER_NAMES_ (restricts cipher suites for TLS 1.2 and below; must not be set when `--tls-min-version=VersionTLS13` since Go's `crypto/tls` does not allow configuring TLS 1.3 cipher suites)
 
-The **listen-address** specifies the IP and TCP port where the kata-monitor HTTP endpoints will be exposed. It defaults to `127.0.0.1:8090`.
+The **listen-address** specifies the IP and TCP port where the kata-monitor endpoints will be exposed. It defaults to `127.0.0.1:8090`.
 
 The **runtime-endpoint** is the CRI of a CRI compliant container manager: it will be used to retrieve the CRI `PodSandboxMetadata` (`uid`, `name` and `namespace`) which will be attached to the Kata metrics through the labels `cri_uid`, `cri_name` and `cri_namespace`. It defaults to the containerd socket: `/run/containerd/containerd.sock`.
 
 The **log-level** allows the chose how verbose the logs should be. The default is `info`.
+
+### TLS
+
+When `--tls-cert-file` and `--tls-key-file` are both provided, kata-monitor serves over HTTPS instead of plain HTTP.
+
+#### Generating certificates for development/testing
+
+```bash
+# Generate a self-signed CA
+openssl genrsa -out monitorCA.key 2048
+openssl req -x509 -new -nodes -key monitorCA.key \
+  -subj "/CN=Kata Monitor CA" -days 365 -out monitorCA.crt
+
+# Generate the server key and a certificate signed by the CA
+openssl genrsa -out monitor.key 2048
+openssl req -new -key monitor.key -out monitor.csr \
+  -subj "/CN=kata-monitor.kata-system.svc" \
+  -addext "subjectAltName=DNS:kata-monitor.kata-system.svc,DNS:kata-monitor.kata-system.svc.cluster.local"
+openssl x509 -req -in monitor.csr -CA monitorCA.crt -CAkey monitorCA.key \
+  -CAcreateserial -out monitor.crt -days 365 \
+  -extfile <(echo "subjectAltName=DNS:kata-monitor.kata-system.svc,DNS:kata-monitor.kata-system.svc.cluster.local")
+
+# Store the cert and key in a Kubernetes Secret
+kubectl create secret generic kata-monitor-certs \
+  --namespace kata-system \
+  --from-file=cert.pem=./monitor.crt \
+  --from-file=key.pem=./monitor.key
+```
+
+Then deploy using the manifest in [`docs/how-to/data/kata-monitor-daemonset.yml`](../../../../docs/how-to/data/kata-monitor-daemonset.yml) which mounts the secret and passes the `--tls-cert-file`/`--tls-key-file` flags automatically.
+
+#### Verifying TLS
+
+Use `kubectl port-forward` to reach the HTTPS endpoint from your local machine (replace `<pod-name>` and `kata-system` with your values):
+
+```bash
+kubectl -n kata-system port-forward <pod-name> 18443:8443 &
+curl -sk https://localhost:18443/sandboxes
+curl -sk https://localhost:18443/metrics | head -5
+```
+
+The `-s` flag silences progress output and `-k` skips certificate verification (appropriate when using a self-signed cert for testing). In production, pass `--cacert monitorCA.crt` instead of `-k`.
+
 ### Kata monitor HTTP endpoints
 `kata-monitor` exposes the following endpoints:
   * `/metrics`             : get Kata sandboxes metrics.

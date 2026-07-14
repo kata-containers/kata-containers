@@ -5,6 +5,23 @@ metadata:
 
 ---
 
+apiVersion: v1
+kind: Service
+metadata:
+  name: kata-monitor
+  namespace: kata-system
+  labels:
+    app.kubernetes.io/name: kata-monitor
+spec:
+  ports:
+  - name: https
+    port: 8443
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: kata-monitor
+
+---
+
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -22,6 +39,8 @@ spec:
         app.kubernetes.io/name: kata-monitor
       annotations:
         prometheus.io/scrape: "true"
+        prometheus.io/scheme: "https"
+        prometheus.io/port: "8443"
     spec:
       containers:
       - name: kata-monitor
@@ -33,11 +52,13 @@ spec:
         # tip of `main`.
         image: quay.io/kata-containers/kata-monitor:latest
         args:
-          - -listen-address=0.0.0.0:8090
+          - -listen-address=0.0.0.0:8443
           - -log-level=debug
           - -runtime-endpoint=unix:///run/containerd/containerd.sock
+          - -tls-cert-file=/etc/kata-monitor/certs/cert.pem
+          - -tls-key-file=/etc/kata-monitor/certs/key.pem
         ports:
-          - containerPort: 8090
+          - containerPort: 8443
         resources:
           limits:
             cpu: 200m
@@ -52,6 +73,9 @@ spec:
         - name: sbs
           mountPath: /run/vc/sbs/
           readOnly: true
+        - name: certs
+          mountPath: /etc/kata-monitor/certs
+          readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
       - name: containerd-sock
@@ -62,3 +86,6 @@ spec:
         hostPath:
           path: /run/vc/sbs/
           type: DirectoryOrCreate
+      - name: certs
+        secret:
+          secretName: kata-monitor-certs
