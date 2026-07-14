@@ -27,8 +27,9 @@ dbs-virtio-devices = { workspace = true, optional = true, features = [
   "virtio-mmio",
 ] }
 dbs-pci = { workspace = true, optional = true }
+dbs-snapshot = { workspace = true }
 derivative = "2.2.0"
-kvm-bindings = { workspace = true }
+kvm-bindings = { workspace = true, features = ["fam-wrappers", "serde"] }
 kvm-ioctls = { workspace = true }
 lazy_static = "1.2"
 libc = "0.2.39"
@@ -45,7 +46,7 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = { workspace = true }
 tracing = "0.1.41"
-vmm-sys-util = { workspace = true }
+vmm-sys-util = { workspace = true, features = ["with-serde"] }
 virtio-queue = { workspace = true, optional = true }
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
@@ -57,6 +58,7 @@ kata-sys-util = { path = "../libs/kata-sys-util" }
 tdx = { workspace = true }
 
 [dev-dependencies]
+serial_test = { workspace = true }
 slog-async = "2.7.0"
 slog-term = "2.9.0"
 test-utils = { workspace = true }
