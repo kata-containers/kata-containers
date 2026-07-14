@@ -1942,6 +1942,24 @@ func TestExecQomGet(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that a command not in the allowlist is rejected before it reaches QEMU.
+func TestQMPAllowlistRejectsUnknownCommand(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+
+	_, err := q.executeCommandWithResponse(context.Background(), "human-monitor-command", nil, nil, nil)
+	if err == nil {
+		t.Fatal("expected error for non-allowlisted QMP command, got nil")
+	}
+
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks dump-guest-memory
 func TestExecuteDumpGuestMemory(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)

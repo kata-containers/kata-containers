@@ -625,8 +625,63 @@ func startQMPLoop(conn io.ReadWriteCloser, cfg QMPConfig,
 	return q
 }
 
+// allowedQMPCommands is the complete set of QMP commands the Kata runtime
+// issues to QEMU.  Any command not in this set is rejected before it reaches
+// the socket, reducing the exploitable surface if the runtime is compromised.
+//
+// Migration commands (migrate, migrate-incoming, migrate-set-capabilities,
+// query-migrate) are retained pending investigation of CRIU interaction.
+var allowedQMPCommands = map[string]struct{}{
+	// Lifecycle
+	"qmp_capabilities":  {},
+	"quit":              {},
+	"stop":              {},
+	"cont":              {},
+	"system_powerdown":  {},
+	// Block devices
+	"blockdev-add": {},
+	"blockdev-del": {},
+	// Character devices
+	"chardev-add":    {},
+	"chardev-remove": {},
+	// Device hotplug
+	"device_add": {},
+	"device_del": {},
+	// Network devices
+	"netdev_add": {},
+	"netdev_del": {},
+	// QEMU objects (memory backends, iommufd, …)
+	"object-add": {},
+	"object-del": {},
+	// Memory balloon
+	"balloon": {},
+	// FD passing over the QMP socket (SCM_RIGHTS)
+	"getfd": {},
+	// QOM introspection/control
+	"qom-get": {},
+	"qom-set": {},
+	// Query commands
+	"query-cpus":             {},
+	"query-cpus-fast":        {},
+	"query-hotpluggable-cpus": {},
+	"query-memory-devices":   {},
+	"query-status":           {},
+	"query-qmp-schema":       {},
+	// Migration (kept for CRIU investigation)
+	"migrate":                  {},
+	"migrate-incoming":         {},
+	"migrate-set-capabilities": {},
+	"query-migrate":            {},
+	// Memory dump
+	"dump-guest-memory": {},
+}
+
 func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args map[string]interface{},
 	oob []byte, filter *qmpEventFilter) (interface{}, error) {
+	if _, ok := allowedQMPCommands[name]; !ok {
+		return nil, fmt.Errorf("QMP command %q not in allowlist", name)
+	}
+
 	var err error
 	var response interface{}
 	resCh := make(chan qmpResult)
