@@ -30,9 +30,45 @@ use std::path::Path;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestMemoryState;
+#[cfg(feature = "virtio-blk")]
+use crate::device_manager::blk_dev_mgr::BlockDeviceMgrState;
+#[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+use crate::device_manager::fs_dev_mgr::FsDeviceMgrState;
+#[cfg(feature = "virtio-net")]
+use crate::device_manager::net_dev_mgr::NetworkDeviceMgrState;
+#[cfg(feature = "virtio-vsock")]
+use crate::device_manager::vsock_dev_mgr::VsockDeviceMgrState;
 use crate::vcpu::VcpuState;
 
 pub use dbs_snapshot::{check_epoch, PersistError};
+
+/// Aggregated snapshot state of the device manager.
+///
+/// Device classes are added progressively; a class whose snapshot support is
+/// not implemented yet is simply absent (`None`).
+#[derive(Default, Deserialize, Serialize)]
+pub struct DeviceManagerState {
+    /// State of the block device manager.
+    #[cfg(feature = "virtio-blk")]
+    #[serde(default)]
+    pub block: Option<BlockDeviceMgrState>,
+    /// State of the virtio-net device manager.
+    #[cfg(feature = "virtio-net")]
+    #[serde(default)]
+    pub virtio_net: Option<NetworkDeviceMgrState>,
+    /// State of the vsock device manager.
+    #[cfg(feature = "virtio-vsock")]
+    #[serde(default)]
+    pub vsock: Option<VsockDeviceMgrState>,
+    /// State of the virtio-fs device manager.
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+    #[serde(default)]
+    pub fs: Option<FsDeviceMgrState>,
+    // TODO: balloon, virtio-mem, vhost-net and vhost-user-net are not yet
+    // snapshotted. kata-dragonball does not instantiate them, so template
+    // save/restore currently covers block, virtio-net, vsock and virtio-fs
+    // only; add the remaining device classes here as they are needed.
+}
 
 /// Current snapshot format epoch.
 ///
@@ -77,6 +113,9 @@ pub struct MicrovmState {
     /// Guest RAM contents state, present once memory has been saved.
     #[serde(default)]
     pub memory_state: Option<GuestMemoryState>,
+    /// Device manager state.
+    #[serde(default)]
+    pub device_states: DeviceManagerState,
 }
 
 impl MicrovmState {
