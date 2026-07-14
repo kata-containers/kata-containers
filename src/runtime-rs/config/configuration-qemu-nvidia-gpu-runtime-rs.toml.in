@@ -816,7 +816,7 @@ vfio_mode = "@DEFVFIOMODE_NV@"
 #   - block-plain
 #     Plugs a block device to be mounted directly in the guest.
 #
-emptydir_mode = "@DEFEMPTYDIRMODE@"
+emptydir_mode = "@DEFEMPTYDIRMODE_NV@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
