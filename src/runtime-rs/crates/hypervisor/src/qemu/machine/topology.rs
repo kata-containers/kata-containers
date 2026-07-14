@@ -5,6 +5,9 @@
 pub(crate) struct PciTopology {
     pub default_bus: Option<String>,
     pub roots: Vec<PciRootComplex>,
+    /// Pre-provisioned root ports emitted on the default bus (Q35 cold-plug topology).
+    /// Contrast with `roots`, which are pxb-pcie complexes for GPU passthrough.
+    pub cold_plug_ports: Vec<PciRootPort>,
 }
 
 pub(crate) struct PciRootComplex {
@@ -20,18 +23,35 @@ pub(crate) struct PciRootComplex {
 pub(crate) struct PciRootPort {
     pub id: String,
     pub chassis: u8,
+    /// `slot=N` — required for Q35 root ports; absent on aarch64 Grace ports.
+    pub slot: Option<u8>,
+    /// `multifunction=on/off` — required for Q35; absent on Grace.
+    pub multifunction: Option<bool>,
+    /// `io-reserve=N` — required for aarch64 Grace ports; absent on Q35.
+    pub io_reserve: Option<u32>,
     pub device: Option<VfioDevice>,
 }
 
 pub(crate) struct VfioDevice {
     pub id: String,
     pub host: String,
-    pub rombar: bool,
+    pub rombar: Option<bool>,
     pub kind: VfioDeviceKind,
+    /// When set, an `-object iommufd,id=<iommufd_id>` is emitted immediately before
+    /// this device and referenced in the device string.  Used for CoCo x86 passthrough;
+    /// Grace uses a single shared `iommufd0` in `Objects::iommufd` instead.
+    pub iommufd_id: Option<String>,
+    /// `x-pci-vendor-id` override required for CoCo measured-boot attestation (#12329).
+    pub pci_vendor_id: Option<u16>,
+    /// `x-pci-device-id` override required for CoCo measured-boot attestation (#12329).
+    pub pci_device_id: Option<u16>,
 }
 
 pub(crate) enum VfioDeviceKind {
+    /// `vfio-pci-nohotplug` — aarch64 Grace static binding.
     Gpu,
+    /// `vfio-pci` — x86 Q35 / CoCo passthrough and NIC.
+    GpuPci,
     Nic,
 }
 
