@@ -1679,6 +1679,7 @@ dependencies = [
  "dbs-boot",
  "dbs-device",
  "dbs-interrupt",
+ "dbs-snapshot",
  "dbs-utils",
  "epoll",
  "fuse-backend-rs",

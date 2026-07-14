@@ -18,6 +18,8 @@ pub use self::device::*;
 mod notifier;
 pub use self::notifier::*;
 
+pub mod persist;
+
 pub mod epoll_helper;
 
 #[cfg(feature = "virtio-mmio")]

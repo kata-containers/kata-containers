@@ -29,7 +29,7 @@ use crate::config_manager::{ConfigItem, DeviceConfigInfos, RateLimiterConfigInfo
 use crate::device_manager::{DbsVirtioDevice, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
 
-use super::DbsMmioV2Device;
+use super::{persist, DbsMmioV2Device};
 
 /// Default number of virtio queues, one rx/tx pair.
 pub const DEFAULT_NUM_QUEUES: usize = 2;
@@ -690,6 +690,109 @@ impl NetworkDeviceMgr {
                     );
                 }
             }
+        }
+        Ok(())
+    }
+}
+
+/// Snapshot state of one network device (config + guest-negotiated device
+/// state + transport state); see [`persist::VirtioDevState`].
+///
+/// Only virtio-net devices are captured; see the [`Persist`] impl below.
+#[cfg(feature = "virtio-net")]
+pub type NetworkDevState = persist::VirtioDevState<NetworkInterfaceConfig>;
+
+/// Snapshot state of the network device manager.
+#[cfg(feature = "virtio-net")]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct NetworkDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<NetworkDevState>,
+}
+
+/// Only the in-VMM virtio-net backend is snapshotted. vhost-net keeps its
+/// state in the kernel vhost driver and vhost-user-net in the backend
+/// process, so neither can be captured here; both are refused rather than
+/// silently skipped, so a template that includes one fails loudly instead of
+/// restoring a guest with a missing interface.
+#[cfg(feature = "virtio-net")]
+impl<'a> dbs_snapshot::Persist<'a> for NetworkDeviceMgr {
+    type State = NetworkDeviceMgrState;
+    type SaveArgs = ();
+    type RestoreArgs = ();
+    type Error = NetworkDeviceError;
+
+    /// Capture the state of all virtio-net devices.
+    ///
+    /// The virtual machine must be paused when this is called.
+    fn save_state(&mut self, _args: ()) -> std::result::Result<Self::State, Self::Error> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            #[allow(unreachable_patterns)]
+            match &info.config.backend {
+                Backend::Virtio(_) => {}
+                other => {
+                    return Err(NetworkDeviceError::UnsupportedBackend {
+                        iface_id: info.config.id().to_owned(),
+                        backend: other.name(),
+                    });
+                }
+            }
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(NetworkDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_info, transport) =
+                persist::save_device_state::<virtio::net::Net<GuestAddressSpaceImpl>>(device, ())
+                    .map_err(NetworkDeviceError::Virtio)?;
+            devices.push(persist::VirtioDevState {
+                config: info.config.clone(),
+                device_info,
+                transport,
+            });
+        }
+        Ok(NetworkDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all virtio-net devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by interface id) and must not have been activated yet.
+    /// Must be called before the guest vCPUs resume.
+    fn restore_state(
+        &mut self,
+        state: &Self::State,
+        _args: (),
+    ) -> std::result::Result<(), Self::Error> {
+        for dev_state in &state.devices {
+            #[allow(unreachable_patterns)]
+            match &dev_state.config.backend {
+                Backend::Virtio(_) => {}
+                other => {
+                    return Err(NetworkDeviceError::UnsupportedBackend {
+                        iface_id: dev_state.config.id().to_owned(),
+                        backend: other.name(),
+                    });
+                }
+            }
+            let info = self
+                .info_list
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or_else(|| {
+                    NetworkDeviceError::InvalidIfaceId(dev_state.config.id().to_owned())
+                })?;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(NetworkDeviceError::Virtio(VirtioError::InvalidInput))?;
+            persist::restore_device_state::<virtio::net::Net<GuestAddressSpaceImpl>>(
+                device,
+                &dev_state.device_info,
+                &dev_state.transport,
+                (),
+            )
+            .map_err(NetworkDeviceError::Virtio)?;
         }
         Ok(())
     }
