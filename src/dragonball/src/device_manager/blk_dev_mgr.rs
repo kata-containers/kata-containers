@@ -24,6 +24,7 @@ use dbs_pci::VirtioPciDevice;
 use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use dbs_virtio_devices as virtio;
 use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, Ufile};
+use dbs_virtio_devices::persist::{MmioV2TransportState, VirtioDeviceInfoState};
 #[cfg(feature = "vhost-user-blk")]
 use dbs_virtio_devices::vhost::vhost_user::block::VhostUserBlock;
 use serde_derive::{Deserialize, Serialize};
@@ -960,6 +961,116 @@ impl BlockDeviceMgr {
             None => Err(BlockDeviceError::InvalidDeviceId(new_cfg.drive_id)),
         }
     }
+
+    /// Capture the state of all block devices.
+    ///
+    /// The virtual machine must be paused when this is called. Only MMIO
+    /// virtio-blk devices are supported; vhost-user/PCI block devices are
+    /// refused.
+    pub fn save_states(&self) -> std::result::Result<BlockDeviceMgrState, BlockDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or_else(|| InvalidDeviceId(info.config.drive_id.clone()))?;
+            let mmio_dev = device
+                .as_any()
+                .downcast_ref::<DbsMmioV2Device>()
+                .ok_or(BlockDeviceError::InvalidBlockDeviceType)?;
+            let transport = mmio_dev.persist_state();
+            let guard = mmio_dev.state();
+            let block_dev = guard
+                .get_inner_device()
+                .as_any()
+                .downcast_ref::<Block<GuestAddressSpaceImpl>>()
+                .ok_or(BlockDeviceError::InvalidBlockDeviceType)?;
+            devices.push(BlockDevState {
+                config: info.config.clone(),
+                device_info: block_dev.persist_state(),
+                transport,
+            });
+        }
+        Ok(BlockDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all block devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by drive id) and must not have been activated yet. Replays
+    /// device activation for devices the guest had activated. Must be called
+    /// before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &BlockDeviceMgrState,
+    ) -> std::result::Result<(), BlockDeviceError> {
+        for (pos, dev_state) in state.devices.iter().enumerate() {
+            // Drive ids may be generated per-run (e.g. the VM rootfs drive
+            // id), so an id miss is expected across template create/restore
+            // boundaries. Fall back to positional matching when the device
+            // sets align; the transport/device state validation still
+            // refuses incompatible devices.
+            let index = match self.get_index_of_drive_id(&dev_state.config.drive_id) {
+                Some(index) => index,
+                None if self.info_list.len() == state.devices.len() => {
+                    log::warn!(
+                        "block device id '{}' not found, matching by position {}",
+                        dev_state.config.drive_id,
+                        pos
+                    );
+                    pos
+                }
+                None => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
+            };
+            let device = self.info_list[index]
+                .device
+                .as_ref()
+                .ok_or_else(|| InvalidDeviceId(dev_state.config.drive_id.clone()))?;
+            let mmio_dev = device
+                .as_any()
+                .downcast_ref::<DbsMmioV2Device>()
+                .ok_or(BlockDeviceError::InvalidBlockDeviceType)?;
+            {
+                let mut guard = mmio_dev.state();
+                let block_dev = guard
+                    .get_inner_device_mut()
+                    .as_any_mut()
+                    .downcast_mut::<Block<GuestAddressSpaceImpl>>()
+                    .ok_or(BlockDeviceError::InvalidBlockDeviceType)?;
+                // Restore the guest-negotiated device state before the
+                // transport state: activation replay reads it.
+                block_dev
+                    .restore_from_state(&dev_state.device_info)
+                    .map_err(BlockDeviceError::Virtio)?;
+            }
+            mmio_dev
+                .restore_from_state(&dev_state.transport)
+                .map_err(BlockDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+/// Snapshot state of one block device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BlockDevState {
+    /// Static configuration of the device.
+    pub config: BlockDeviceConfigInfo,
+    /// Guest-negotiated virtio device state.
+    pub device_info: VirtioDeviceInfoState,
+    /// MMIO transport state.
+    pub transport: MmioV2TransportState,
+}
+
+/// Snapshot state of the block device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct BlockDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<BlockDevState>,
 }
 
 impl Default for BlockDeviceMgr {

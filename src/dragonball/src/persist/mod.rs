@@ -30,7 +30,21 @@ use std::path::Path;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestMemoryState;
+#[cfg(feature = "virtio-blk")]
+use crate::device_manager::blk_dev_mgr::BlockDeviceMgrState;
 use crate::vcpu::VcpuState;
+
+/// Aggregated snapshot state of the device manager.
+///
+/// Device classes are added progressively; a class whose snapshot support is
+/// not implemented yet is simply absent (`None`).
+#[derive(Default, Deserialize, Serialize)]
+pub struct DeviceManagerState {
+    /// State of the block device manager.
+    #[cfg(feature = "virtio-blk")]
+    #[serde(default)]
+    pub block: Option<BlockDeviceMgrState>,
+}
 
 /// Current snapshot format epoch.
 ///
@@ -129,6 +143,9 @@ pub struct MicrovmState {
     /// Guest RAM contents state, present once memory has been saved.
     #[serde(default)]
     pub memory_state: Option<GuestMemoryState>,
+    /// Device manager state.
+    #[serde(default)]
+    pub device_states: DeviceManagerState,
 }
 
 impl MicrovmState {

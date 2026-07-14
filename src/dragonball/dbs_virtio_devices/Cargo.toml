@@ -34,7 +34,7 @@ nydus-api = "0.4.1"
 nydus-rafs = "0.4.1"
 nydus-storage = "0.7.2"
 rlimit = "0.7.0"
-serde = "1.0.27"
+serde = { version = "1.0.27", features = ["derive"] }
 serde_json = "1.0.9"
 thiserror = { workspace = true }
 threadpool = "1"

@@ -342,6 +342,58 @@ where
     }
 
     #[inline]
+    pub(crate) fn msi_enabled(&self) -> bool {
+        self.msi.is_some()
+    }
+
+    /// Capture the per-vector MSI configuration programmed by the guest.
+    pub(crate) fn get_msi_vectors(&self) -> Vec<crate::persist::MsiVectorState> {
+        let mut vectors = Vec::new();
+        if self.msi.is_some() {
+            for index in 0..self.intr_mgr.msi_config_count() {
+                if let Ok((address_low, address_high, data)) = self.intr_mgr.get_msi_config(index)
+                {
+                    vectors.push(crate::persist::MsiVectorState {
+                        address_low,
+                        address_high,
+                        data,
+                    });
+                }
+            }
+        }
+        vectors
+    }
+
+    /// Replay the guest's MSI interrupt setup from a snapshot: switch the
+    /// interrupt manager to MSI mode and re-program every vector. Must run
+    /// before device activation is replayed (activation commits the
+    /// configuration when it enables the interrupt manager).
+    pub(crate) fn restore_msi(
+        &mut self,
+        vectors: &[crate::persist::MsiVectorState],
+    ) -> Result<()> {
+        self.intr_mgr
+            .set_working_mode(DeviceInterruptMode::GenericMsiIrq)
+            .map_err(Error::InterruptError)?;
+        if self.msi.is_none() {
+            self.msi = Some(Msi::default());
+        }
+        for (index, vector) in vectors.iter().enumerate() {
+            let index = index as u32;
+            self.intr_mgr
+                .set_msi_low_address(index, vector.address_low)
+                .map_err(Error::InterruptError)?;
+            self.intr_mgr
+                .set_msi_high_address(index, vector.address_high)
+                .map_err(Error::InterruptError)?;
+            self.intr_mgr
+                .set_msi_data(index, vector.data)
+                .map_err(Error::InterruptError)?;
+        }
+        Ok(())
+    }
+
+    #[inline]
     pub(crate) fn doorbell(&self) -> Option<&DoorBell> {
         self.doorbell.as_ref()
     }
