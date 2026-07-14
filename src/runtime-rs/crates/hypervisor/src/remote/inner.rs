@@ -75,7 +75,7 @@ impl RemoteInner {
         }
     }
 
-    fn get_ttrpc_client(&mut self) -> Result<HypervisorClient> {
+    async fn get_ttrpc_client(&mut self) -> Result<HypervisorClient> {
         match self.client {
             Some(ref c) => Ok(HypervisorClient::new(c.clone())),
             None => {
@@ -83,6 +83,7 @@ impl RemoteInner {
                     "unix://{}",
                     &self.config.remote_info.hypervisor_socket
                 ))
+                .await
                 .context("connect to ")?;
                 self.client = Some(c.clone());
                 Ok(HypervisorClient::new(c))
@@ -163,7 +164,7 @@ impl RemoteInner {
             std::fs::metadata(netns_path).context("check netns path")?;
         }
 
-        let client = self.get_ttrpc_client()?;
+        let client = self.get_ttrpc_client().await?;
 
         let ctx = context::Context::default();
         let req = CreateVMRequest {
@@ -192,7 +193,7 @@ impl RemoteInner {
         }
         let timeout = min_timeout;
 
-        let client = self.get_ttrpc_client()?;
+        let client = self.get_ttrpc_client().await?;
 
         let req = StartVMRequest {
             id: self.id.clone(),
@@ -208,7 +209,7 @@ impl RemoteInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping REMOTE VM");
 
-        let client = self.get_ttrpc_client()?;
+        let client = self.get_ttrpc_client().await?;
 
         let ctx = context::with_timeout(time::Duration::from_secs(1).as_nanos() as i64);
         let req = StopVMRequest {
