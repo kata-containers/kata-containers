@@ -489,6 +489,14 @@ impl AgentService {
     async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id;
         let eid = req.exec_id;
+        let mut sig: libc::c_int = req.signal as libc::c_int;
+
+        let all = eid.is_empty() && sig == libc::SIGKILL;
+        // NOTE: kata runtime encodes all = true by setting eid = "".
+        // However, containerd can send eid = "", sig = SIGTERM, all = false when deleting containers
+        // (and containerd will send eid = "", sig = SIGKILL, all = true when forcefully deleting containers)
+        // Luckily, containerd never sends eid = "", sig = SIGKILL, all = false outside of ctr
+        // So we can recover the original value of all here by checking eid and sig
 
         info!(
             sl(),
@@ -496,10 +504,10 @@ impl AgentService {
             "container-id" => &cid,
             "exec-id" => &eid,
             "signal" => req.signal,
+            "all" => all,
         );
 
-        let mut sig: libc::c_int = req.signal as libc::c_int;
-        {
+        if !all {
             let mut sandbox = self.sandbox.lock().await;
             let p = sandbox
                 .find_container_process(cid.as_str(), eid.as_str())
@@ -511,6 +519,15 @@ impl AgentService {
             if p.init && sig == libc::SIGTERM && !is_signal_handled(&proc_status_file, sig as u32) {
                 sig = libc::SIGKILL;
             }
+
+            debug!(
+                sl(),
+                "signaling a container process";
+                "container-id" => &cid,
+                "exec-id" => &eid,
+                "pid" => p.pid,
+                "signal" => sig,
+            );
 
             match p.signal(sig) {
                 Err(Errno::ESRCH) => {
@@ -526,10 +543,8 @@ impl AgentService {
                 Err(err) => return Err(anyhow!(err)),
                 Ok(()) => (),
             }
-        };
-
-        if eid.is_empty() {
-            // eid is empty, signal all the remaining processes in the container cgroup
+        } else {
+            // Signalling all processes in the cgroup
             info!(
                 sl(),
                 "signal all the remaining processes";
