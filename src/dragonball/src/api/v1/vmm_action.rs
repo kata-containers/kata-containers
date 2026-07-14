@@ -94,6 +94,11 @@ pub enum VmmActionError {
     #[error("failed to shutdown the VM: {0}")]
     StopMicrovm(#[source] StopMicrovmError),
 
+    /// The action `SaveMicrovm` failed either because of bad user input or an internal error.
+    #[cfg(target_arch = "x86_64")]
+    #[error("failed to save the VM snapshot: {0}")]
+    SaveMicrovm(#[source] crate::persist::SnapshotError),
+
     /// One of the actions `GetVmConfiguration` or `SetVmConfiguration` failed either because of bad
     /// input or an internal error.
     #[error("failed to set configuration for the VM: {0}")]
@@ -179,6 +184,30 @@ pub enum VmmAction {
     /// When vmm is used as the crate by the other process, which is need to
     /// shutdown the vcpu threads and destory all of the object.
     ShutdownMicroVm,
+
+    /// Save the microVM state into a snapshot: a state file (vCPU/device
+    /// metadata, JSON) plus a memory file (guest RAM contents). This action
+    /// can only be called after the microVM has booted; it pauses all vCPUs
+    /// and leaves them paused.
+    #[cfg(target_arch = "x86_64")]
+    SaveMicrovm {
+        /// Path of the snapshot state file to write.
+        state_path: String,
+        /// Path of the guest memory file to write.
+        mem_path: String,
+    },
+
+    /// Launch the microVM by restoring it from a snapshot instead of cold
+    /// booting. The microVM must have been configured with the same
+    /// configuration the snapshot was taken with. This action can only be
+    /// called before the microVM has booted.
+    #[cfg(target_arch = "x86_64")]
+    StartMicroVmFromSnapshot {
+        /// Path of the snapshot state file to read.
+        state_path: String,
+        /// Path of the guest memory file to read.
+        mem_path: String,
+    },
 
     /// Get the configuration of the microVM.
     GetVmConfiguration,
@@ -344,6 +373,16 @@ impl VmmService {
             }
             VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr),
             VmmAction::ShutdownMicroVm => self.shutdown_microvm(vmm),
+            #[cfg(target_arch = "x86_64")]
+            VmmAction::SaveMicrovm {
+                state_path,
+                mem_path,
+            } => self.save_microvm(vmm, state_path, mem_path),
+            #[cfg(target_arch = "x86_64")]
+            VmmAction::StartMicroVmFromSnapshot {
+                state_path,
+                mem_path,
+            } => self.start_microvm_from_snapshot(vmm, event_mgr, state_path, mem_path),
             VmmAction::GetVmConfiguration => Ok(VmmData::MachineConfiguration(Box::new(
                 self.machine_config.clone(),
             ))),
@@ -502,6 +541,51 @@ impl VmmService {
         vmm.event_ctx.exit_evt_triggered = true;
 
         Ok(VmmData::Empty)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[instrument(skip(self))]
+    fn save_microvm(
+        &mut self,
+        vmm: &mut Vmm,
+        state_path: String,
+        mem_path: String,
+    ) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+        vm.save_microvm(
+            std::path::Path::new(&state_path),
+            std::path::Path::new(&mem_path),
+        )
+        .map(|_| VmmData::Empty)
+        .map_err(VmmActionError::SaveMicrovm)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[instrument(skip(self, event_mgr))]
+    fn start_microvm_from_snapshot(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        state_path: String,
+        mem_path: String,
+    ) -> VmmRequestResult {
+        use self::StartMicroVmError::MicroVMAlreadyRunning;
+        use self::VmmActionError::StartMicroVm;
+
+        let seccomp_filters = vmm.seccomp_filters();
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+        if vm.is_vm_initialized() {
+            return Err(StartMicroVm(MicroVMAlreadyRunning));
+        }
+
+        vm.start_microvm_from_snapshot(
+            event_mgr,
+            seccomp_filters,
+            std::path::Path::new(&state_path),
+            std::path::Path::new(&mem_path),
+        )
+        .map(|_| VmmData::Empty)
+        .map_err(StartMicroVm)
     }
 
     /// Get prometheus metrics.

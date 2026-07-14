@@ -856,6 +856,101 @@ impl Vm {
         info!(self.logger, "VM started");
         Ok(())
     }
+
+    /// Start a microVM by restoring it from a snapshot (see
+    /// [`Vm::save_microvm`]) instead of cold booting.
+    ///
+    /// The VM must have been configured with the *same configuration*
+    /// (machine config, boot source, devices) the snapshot was taken with.
+    /// This mirrors [`Vm::start_microvm`] but skips the boot-time system
+    /// configuration and applies the snapshot before the vCPUs start:
+    /// guest memory contents, device runtime state (replaying virtio
+    /// activation) and vCPU register state.
+    #[cfg(target_arch = "x86_64")]
+    pub fn start_microvm_from_snapshot(
+        &mut self,
+        event_mgr: &mut EventManager,
+        seccomp_filters: HashMap<String, BpfProgram>,
+        state_path: &std::path::Path,
+        mem_path: &std::path::Path,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        info!(self.logger, "VM: received restore-from-snapshot command");
+
+        if let Some(process_seccomp_filter) = seccomp_filters.get(ALL_THREADS) {
+            if let Err(e) = apply_filter_all_threads(process_seccomp_filter) {
+                if !matches!(e, SecError::EmptyFilter) {
+                    error!(
+                        self.logger,
+                        "VM: failed to apply process-wide seccomp filters: {}", e
+                    );
+                    return Err(StartMicroVmError::SeccompFilters(e));
+                }
+            }
+        }
+
+        if self.is_vm_initialized() {
+            return Err(StartMicroVmError::MicroVMAlreadyRunning);
+        }
+
+        let request_ts = TimestampUs::default();
+        self.start_instance_request_ts = request_ts.time_us;
+        self.start_instance_request_cpu_ts = request_ts.cputime_us;
+
+        self.init_dmesg_logger();
+        self.check_health()?;
+
+        // Use expect() to crash if the other thread poisoned this lock.
+        self.shared_info
+            .write()
+            .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
+            .state = InstanceState::Starting;
+
+        self.init_guest_memory()?;
+        let vm_as = self
+            .vm_as()
+            .cloned()
+            .ok_or(StartMicroVmError::AddressManagerError(
+                AddressManagerError::GuestMemoryNotInitialized,
+            ))?;
+
+        self.init_vcpu_manager(
+            vm_as.clone(),
+            seccomp_filters
+                .get(VCPU_THREAD)
+                .cloned()
+                .unwrap_or_default(),
+        )
+        .map_err(StartMicroVmError::Vcpu)?;
+        // Creates devices and boot vCPUs. The boot-time vCPU register setup
+        // performed here is overwritten by the snapshot state below; the
+        // boot-time system configuration (`init_configure_system`) is
+        // skipped entirely since guest memory is reloaded from the snapshot.
+        self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
+        #[cfg(feature = "dbs-upcall")]
+        self.init_upcall()?;
+
+        info!(self.logger, "VM: restoring snapshot state");
+        self.restore_microvm(state_path, mem_path)
+            .map_err(|e| StartMicroVmError::RestoreMicroVm(e.to_string()))?;
+
+        info!(self.logger, "VM: register events");
+        self.register_events(event_mgr)?;
+
+        info!(self.logger, "VM: start vcpus");
+        self.vcpu_manager()
+            .map_err(StartMicroVmError::Vcpu)?
+            .start_boot_vcpus(seccomp_filters.get(VMM_THREAD).cloned().unwrap_or_default())
+            .map_err(StartMicroVmError::Vcpu)?;
+
+        // Use expect() to crash if the other thread poisoned this lock.
+        self.shared_info
+            .write()
+            .expect("Failed to start microVM because shared info couldn't be written due to poisoned lock")
+            .state = InstanceState::Running;
+
+        info!(self.logger, "VM restored from snapshot");
+        Ok(())
+    }
 }
 
 #[cfg(feature = "hotplug")]
@@ -965,6 +1060,253 @@ impl Vm {
         _epoll_mgr: Option<EpollManager>,
     ) -> std::result::Result<DeviceOpContext, StartMicroVmError> {
         Err(StartMicroVmError::MicroVMAlreadyRunning)
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+impl Vm {
+    /// Save the state of the running microVM into a snapshot: a state file
+    /// at `state_path` (vCPU/device metadata state, JSON) plus a memory file
+    /// at `mem_path` (guest RAM contents).
+    ///
+    /// All vCPUs are paused while the state is captured and resumed
+    /// afterwards (branch semantics): the snapshot is a consistent
+    /// point-in-time capture and the source VM keeps running. Exception:
+    /// saving stops in-kernel vhost rings on the source (a
+    /// VHOST_GET_VRING_BASE side effect), so its vhost devices stay
+    /// quiesced. The boot-to-be-template flow simply tears the source VM
+    /// down afterwards.
+    pub fn save_microvm(
+        &mut self,
+        state_path: &std::path::Path,
+        mem_path: &std::path::Path,
+    ) -> std::result::Result<(), crate::persist::SnapshotError> {
+        use crate::persist::SnapshotError;
+
+        let msr_list = self.kvm.supported_msrs(0).map_err(SnapshotError::Kvm)?;
+
+        self.vcpu_manager()?.pause_all_vcpus()?;
+        // Resume the vCPUs whether or not the capture succeeded: a failed
+        // snapshot must not leave the source VM frozen (there is no API
+        // action a caller could use to resume it).
+        let save_result = self.save_microvm_paused(state_path, mem_path, msr_list.as_slice());
+        let resume_result = self
+            .vcpu_manager()
+            .and_then(|mut mgr| mgr.resume_all_vcpus());
+        save_result?;
+        resume_result.map_err(SnapshotError::Vcpu)?;
+        Ok(())
+    }
+
+    /// Capture the microVM state while all vCPUs are paused.
+    ///
+    /// Device (queue) state is captured *before* guest memory: the vCPUs are
+    /// paused and userspace virtio backends run on the VMM event-loop thread
+    /// executing this action, so captured queue state cannot change
+    /// afterwards, and saving a vhost device stops its in-kernel rings (a
+    /// VHOST_GET_VRING_BASE side effect), so kernel backends stop writing
+    /// guest memory before the dump below. Backends processing queues on
+    /// other threads must be idle; the boot-to-be-template flow quiesces
+    /// guest I/O before saving.
+    fn save_microvm_paused(
+        &mut self,
+        state_path: &std::path::Path,
+        mem_path: &std::path::Path,
+        msr_list: &[u32],
+    ) -> std::result::Result<(), crate::persist::SnapshotError> {
+        use crate::persist::{DeviceManagerState, MicrovmState, SnapshotError};
+
+        let vcpu_states = self.vcpu_manager()?.save_vcpu_states(msr_list)?;
+
+        // VM-scoped KVM state, captured while the vCPUs are paused.
+        let vm_kvm_state = {
+            let vm_fd = self.vm_fd();
+            let pit = vm_fd.get_pit2().map_err(SnapshotError::Kvm)?;
+            let mut clock = vm_fd.get_clock().map_err(SnapshotError::Kvm)?;
+            // Per the KVM API, the KVM_CLOCK_TSC_STABLE flag returned by
+            // KVM_GET_CLOCK must not be fed back into KVM_SET_CLOCK.
+            clock.flags = 0;
+            let mut pic_master = kvm_bindings::kvm_irqchip {
+                chip_id: kvm_bindings::KVM_IRQCHIP_PIC_MASTER,
+                ..Default::default()
+            };
+            vm_fd
+                .get_irqchip(&mut pic_master)
+                .map_err(SnapshotError::Kvm)?;
+            let mut pic_slave = kvm_bindings::kvm_irqchip {
+                chip_id: kvm_bindings::KVM_IRQCHIP_PIC_SLAVE,
+                ..Default::default()
+            };
+            vm_fd
+                .get_irqchip(&mut pic_slave)
+                .map_err(SnapshotError::Kvm)?;
+            let mut ioapic = kvm_bindings::kvm_irqchip {
+                chip_id: kvm_bindings::KVM_IRQCHIP_IOAPIC,
+                ..Default::default()
+            };
+            vm_fd.get_irqchip(&mut ioapic).map_err(SnapshotError::Kvm)?;
+            crate::persist::VmKvmState {
+                pit,
+                clock,
+                pic_master,
+                pic_slave,
+                ioapic,
+            }
+        };
+
+        #[allow(unused_mut)]
+        let mut device_states = DeviceManagerState::default();
+        #[cfg(feature = "virtio-blk")]
+        {
+            device_states.block = Some(self.device_manager.block_manager.save_states()?);
+        }
+        #[cfg(feature = "virtio-net")]
+        {
+            device_states.virtio_net =
+                Some(self.device_manager.virtio_net_manager.save_states()?);
+        }
+        #[cfg(feature = "virtio-vsock")]
+        {
+            device_states.vsock = Some(self.device_manager.vsock_manager.save_states()?);
+        }
+        #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+        {
+            device_states.fs =
+                Some(self.device_manager.fs_manager.lock().unwrap().save_states()?);
+        }
+        #[cfg(feature = "virtio-balloon")]
+        {
+            device_states.balloon = Some(self.device_manager.balloon_manager.save_states()?);
+        }
+        #[cfg(feature = "virtio-mem")]
+        {
+            device_states.mem = Some(self.device_manager.mem_manager.save_states()?);
+        }
+        #[cfg(feature = "vhost-net")]
+        {
+            device_states.vhost_net =
+                Some(self.device_manager.vhost_net_manager.save_states()?);
+        }
+        #[cfg(feature = "vhost-user-net")]
+        {
+            device_states.vhost_user_net =
+                Some(self.device_manager.vhost_user_net_manager.save_states()?);
+        }
+
+        let mut mem_file = std::fs::File::create(mem_path)?;
+        let memory_state = self.address_space.save_memory(&mut mem_file)?;
+
+        let state = MicrovmState {
+            vm_kvm_state: Some(vm_kvm_state),
+            vcpu_states,
+            memory_state: Some(memory_state),
+            device_states,
+            ..Default::default()
+        };
+        state.save_to_file(state_path)?;
+        Ok(())
+    }
+
+    /// Restore the runtime state of a freshly built microVM from a snapshot.
+    ///
+    /// Expected calling sequence (mirroring the normal boot flow, driven by
+    /// the VMM/API layer):
+    /// 1. Create the VM from the *same configuration* the snapshot was taken
+    ///    with: address space, devices and vCPUs are created (but the vCPUs
+    ///    not yet started, and no boot code runs).
+    /// 2. Call this method: it loads guest RAM from `mem_path` and applies
+    ///    the vCPU and device states from `state_path`, replaying virtio
+    ///    device activation.
+    /// 3. Start the vCPU threads and resume execution.
+    pub fn restore_microvm(
+        &mut self,
+        state_path: &std::path::Path,
+        mem_path: &std::path::Path,
+    ) -> std::result::Result<(), crate::persist::SnapshotError> {
+        use crate::persist::MicrovmState;
+
+        let state = MicrovmState::load_from_file(state_path)?;
+
+        // Restore the VM-scoped KVM state first: interrupt delivery for
+        // everything below depends on the IOAPIC/PIC redirection tables the
+        // guest had programmed.
+        if let Some(kvm_state) = &state.vm_kvm_state {
+            let vm_fd = self.vm_fd();
+            vm_fd
+                .set_pit2(&kvm_state.pit)
+                .map_err(crate::persist::SnapshotError::Kvm)?;
+            vm_fd
+                .set_clock(&kvm_state.clock)
+                .map_err(crate::persist::SnapshotError::Kvm)?;
+            vm_fd
+                .set_irqchip(&kvm_state.pic_master)
+                .map_err(crate::persist::SnapshotError::Kvm)?;
+            vm_fd
+                .set_irqchip(&kvm_state.pic_slave)
+                .map_err(crate::persist::SnapshotError::Kvm)?;
+            vm_fd
+                .set_irqchip(&kvm_state.ioapic)
+                .map_err(crate::persist::SnapshotError::Kvm)?;
+        }
+
+        if let Some(memory_state) = &state.memory_state {
+            let mut mem_file = std::fs::File::open(mem_path)?;
+            self.address_space
+                .restore_memory(memory_state, &mut mem_file)?;
+        }
+
+        #[cfg(feature = "virtio-blk")]
+        if let Some(block_state) = &state.device_states.block {
+            self.device_manager
+                .block_manager
+                .restore_states(block_state)?;
+        }
+        #[cfg(feature = "virtio-net")]
+        if let Some(net_state) = &state.device_states.virtio_net {
+            self.device_manager
+                .virtio_net_manager
+                .restore_states(net_state)?;
+        }
+        #[cfg(feature = "virtio-vsock")]
+        if let Some(vsock_state) = &state.device_states.vsock {
+            self.device_manager
+                .vsock_manager
+                .restore_states(vsock_state)?;
+        }
+        #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+        if let Some(fs_state) = &state.device_states.fs {
+            self.device_manager
+                .fs_manager
+                .lock()
+                .unwrap()
+                .restore_states(fs_state)?;
+        }
+        #[cfg(feature = "virtio-balloon")]
+        if let Some(balloon_state) = &state.device_states.balloon {
+            self.device_manager
+                .balloon_manager
+                .restore_states(balloon_state)?;
+        }
+        #[cfg(feature = "virtio-mem")]
+        if let Some(mem_state) = &state.device_states.mem {
+            self.device_manager.mem_manager.restore_states(mem_state)?;
+        }
+        #[cfg(feature = "vhost-net")]
+        if let Some(vhost_net_state) = &state.device_states.vhost_net {
+            self.device_manager
+                .vhost_net_manager
+                .restore_states(vhost_net_state)?;
+        }
+        #[cfg(feature = "vhost-user-net")]
+        if let Some(vhost_user_net_state) = &state.device_states.vhost_user_net {
+            self.device_manager
+                .vhost_user_net_manager
+                .restore_states(vhost_user_net_state)?;
+        }
+
+        self.vcpu_manager()?
+            .restore_vcpu_states(&state.vcpu_states)?;
+        Ok(())
     }
 }
 
