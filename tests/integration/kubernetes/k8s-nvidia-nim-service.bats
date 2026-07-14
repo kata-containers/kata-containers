@@ -22,7 +22,9 @@ NIM_SERVICE_NAME="meta-llama-3-2-1b-instruct"
 export NIM_SERVICE_NAME
 
 POD_READY_TIMEOUT_LLAMA_3_2_1B_PREDEFINED=600s
-[[ "${TEE}" = "true" ]] && POD_READY_TIMEOUT_LLAMA_3_2_1B_PREDEFINED=1200s
+if [[ "${TEE}" = "true" ]] || is_runtime_rs; then
+    POD_READY_TIMEOUT_LLAMA_3_2_1B_PREDEFINED=1200s
+fi
 export POD_READY_TIMEOUT_LLAMA_3_2_1B=${POD_READY_TIMEOUT_LLAMA_3_2_1B:-${POD_READY_TIMEOUT_LLAMA_3_2_1B_PREDEFINED}}
 
 export LOCAL_NIM_CACHE_LLAMA_3_2_1B="${LOCAL_NIM_CACHE_LLAMA_3_2_1B:-${LOCAL_NIM_CACHE:-/opt/nim/.cache}-llama-3-2-1b}"
@@ -167,8 +169,12 @@ setup() {
     # Same pattern as k8s-nvidia-nim.bats: choose manifest by TEE; each YAML has literal secret names.
     local tee_suffix=""
     [[ "${TEE}" = "true" ]] && tee_suffix="-tee"
-    export NIM_YAML_IN="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}.yaml.in"
-    export NIM_YAML="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}.yaml"
+    local runtime_rs_suffix=""
+    if is_runtime_rs && [[ "${TEE}" != "true" ]]; then
+        runtime_rs_suffix="-runtime-rs"
+    fi
+    export NIM_YAML_IN="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}${runtime_rs_suffix}.yaml.in"
+    export NIM_YAML="${pod_config_dir}/nvidia-nim-llama-3-2-1b-instruct-service${tee_suffix}${runtime_rs_suffix}.yaml"
 
     if [[ "${TEE}" = "true" ]]; then
         setup_kbs_credentials

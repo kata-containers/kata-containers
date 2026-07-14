@@ -812,7 +812,7 @@ function enabling_hypervisor() {
 # shared_fs=none + EROFS snapshotter path is covered by Kubernetes CI instead.
 function configure_nvidia_runtime_rs_shared_fs_dropin() {
 	case "${KATA_HYPERVISOR:-}" in
-		qemu-nvidia-cpu-runtime-rs) ;;
+		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) ;;
 		*) return 0 ;;
 	esac
 
