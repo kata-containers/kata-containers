@@ -41,10 +41,9 @@ gen_version_file() {
 	fi
 
 	qemu_vanilla_branch=$(get_from_kata_deps ".assets.hypervisor.qemu.version")
-	# Check if qemu.version can be used to get the version and hash, otherwise use qemu.tag
+	# Use version as a branch ref when it exists, otherwise treat it as a tag.
 	qemu_vanilla_ref="refs/heads/${qemu_vanilla_branch}"
 	if ! (git ls-remote --heads "https://github.com/qemu/qemu.git" | grep -q "refs/heads/${qemu_vanilla_branch}"); then
-		qemu_vanilla_branch=$(get_from_kata_deps ".assets.hypervisor.qemu.tag")
 		qemu_vanilla_ref="refs/tags/${qemu_vanilla_branch}^{}"
 	fi
 	qemu_vanilla_version=$(curl -s -L "https://raw.githubusercontent.com/qemu/qemu/${qemu_vanilla_branch}/VERSION")

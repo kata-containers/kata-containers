@@ -73,31 +73,17 @@ assets:
     cloud_hypervisor:
       description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
-      uscan-url: >-
-        https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
       version: "v51.1"
 
     firecracker:
       description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"
-      uscan-url: >-
-        https://github.com/firecracker-microvm/firecracker/tags
-        .*/v?(\d\S+)\.tar\.gz
       version: "v1.12.1"
 
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
       version: "v11.0.1"
-      tag: "v11.0.1"
-      # Do not include any non-full release versions
-      # Break the line *without CR or space being appended*, to appease
-      # yamllint, and note the deliberate ' ' at the end of the expression.
-      uscan-opts: "opts=uversionmangle=s/(\\d)[_\\.\\-\\+]?\
-        ((RC|rc|pre|dev|beta|alpha)\\d*)$/$1~$2/ "
-      uscan-url: >-
-        https://github.com/qemu/qemu/tags
-        .*/v?(\d\S+)\.tar\.gz
 
     qemu-cca-experimental:
       description: "QEMU with experimental CCA support"
@@ -123,7 +109,6 @@ assets:
     description: |
       Root filesystem disk image used to boot the guest virtual
       machine.
-    url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
         name: "ubuntu"
@@ -178,7 +163,6 @@ assets:
     description: |
       Root filesystem initrd used to boot the guest virtual
       machine.
-    url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
         name: "ubuntu"
@@ -221,7 +205,6 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
     version: "v6.18.35"
     nvidia:
-      description: "Linux kernel optimised for virtual machines"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
       version: "v6.18.35"
 
