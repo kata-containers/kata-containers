@@ -495,11 +495,13 @@ jobs:
           { containerd_version: latest,    vmm: qemu             },
           { containerd_version: latest,    vmm: clh-runtime-rs   },
           { containerd_version: latest,    vmm: qemu-runtime-rs  },
+          { containerd_version: latest,    vmm: fc               },
           { containerd_version: minimum, vmm: clh              },
           { containerd_version: minimum, vmm: dragonball       },
           { containerd_version: minimum, vmm: qemu             },
           { containerd_version: minimum, vmm: clh-runtime-rs   },
           { containerd_version: minimum, vmm: qemu-runtime-rs  },
+          { containerd_version: minimum, vmm: fc               },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ toJSON(matrix) }}
