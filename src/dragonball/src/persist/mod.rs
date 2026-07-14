@@ -29,6 +29,7 @@ use std::path::Path;
 
 use serde_derive::{Deserialize, Serialize};
 
+use crate::address_space_manager::GuestMemoryState;
 use crate::vcpu::VcpuState;
 
 /// Current snapshot format epoch.
@@ -125,6 +126,9 @@ pub struct MicrovmState {
     /// Per-vCPU state, ordered by vCPU id.
     #[serde(default)]
     pub vcpu_states: Vec<VcpuState>,
+    /// Guest RAM contents state, present once memory has been saved.
+    #[serde(default)]
+    pub memory_state: Option<GuestMemoryState>,
 }
 
 impl MicrovmState {
