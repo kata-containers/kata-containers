@@ -15,7 +15,8 @@ use crate::config_manager::{
     ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
 use crate::device_manager::{
-    DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext, DeviceVirtioRegionHandler,
+    persist, DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext,
+    DeviceVirtioRegionHandler,
 };
 use crate::get_bucket_update;
 
@@ -35,9 +36,25 @@ const VIRTIO_FS_MODE: &str = "virtio";
 /// Errors associated with `FsDeviceConfig`.
 #[derive(Debug, thiserror::Error)]
 pub enum FsDeviceError {
+    /// Snapshotting this fs backend mode is not supported.
+    #[error(
+        "cannot snapshot fs device '{tag}': mode '{mode}' is not supported; \
+         only 'virtio' mode fs devices can be saved and restored"
+    )]
+    UnsupportedFsMode {
+        /// Tag of the offending fs device.
+        tag: String,
+        /// Backend mode that cannot be snapshotted.
+        mode: String,
+    },
+
     /// Invalid fs, "virtio" or "vhostuser" is allowed.
     #[error("the fs type is invalid, virtio or vhostuser is allowed")]
     InvalidFs,
+
+    /// Virtio device operation error.
+    #[error("virtio device operation error: {0}")]
+    Virtio(#[source] VirtioError),
 
     /// Cannot access address space.
     #[error("Cannot access address space.")]
@@ -547,6 +564,113 @@ impl FsDeviceMgr {
             None => Err(FsDeviceError::TagNotExists(new_cfg.tag)),
         }
     }
+}
+
+impl<'a> dbs_snapshot::Persist<'a> for FsDeviceMgr {
+    type State = FsDeviceMgrState;
+    type SaveArgs = ();
+    type RestoreArgs = ();
+    type Error = FsDeviceError;
+
+    /// Capture the state of all virtio-fs devices.
+    ///
+    /// The virtual machine must be paused when this is called. Backend
+    /// filesystem state (open handles, inodes, DAX mappings) is not
+    /// captured: snapshots must be taken at a clean quiesce point.
+    /// vhost-user-fs devices are refused.
+    fn save_state(&mut self, _args: ()) -> std::result::Result<Self::State, Self::Error> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(FsDeviceError::Virtio(VirtioError::InvalidInput))?;
+            // Dispatch on the backend mode rather than probing with a
+            // downcast: vhost-user-fs shares this info_list and this
+            // transport, but its state lives in the daemon process, so it is
+            // refused by name instead of failing opaquely.
+            if info.config.mode.as_str() != VIRTIO_FS_MODE {
+                return Err(FsDeviceError::UnsupportedFsMode {
+                    tag: info.config.tag.clone(),
+                    mode: info.config.mode.clone(),
+                });
+            }
+            let (device_info, transport) = persist::save_device_state::<
+                virtio::fs::VirtioFs<GuestAddressSpaceImpl>,
+            >(device, ())
+            .map_err(FsDeviceError::Virtio)?;
+            devices.push(persist::VirtioDevState {
+                config: info.config.clone(),
+                device_info: FsDeviceState::VirtioFs(device_info),
+                transport,
+            });
+        }
+        Ok(FsDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all virtio-fs devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by tag) and must not have been activated yet. Must be
+    /// called before the guest vCPUs resume.
+    fn restore_state(
+        &mut self,
+        state: &Self::State,
+        _args: (),
+    ) -> std::result::Result<(), Self::Error> {
+        for dev_state in &state.devices {
+            let info = self
+                .info_list
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or_else(|| FsDeviceError::TagNotExists(dev_state.config.id().to_owned()))?;
+            // The saved kind must match the device re-created from config,
+            // or the saved state belongs to a different device.
+            if info.config.mode != dev_state.config.mode {
+                return Err(FsDeviceError::UnsupportedFsMode {
+                    tag: dev_state.config.tag.clone(),
+                    mode: dev_state.config.mode.clone(),
+                });
+            }
+            let FsDeviceState::VirtioFs(device_info) = &dev_state.device_info;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(FsDeviceError::Virtio(VirtioError::InvalidInput))?;
+            persist::restore_device_state::<virtio::fs::VirtioFs<GuestAddressSpaceImpl>>(
+                device,
+                device_info,
+                &dev_state.transport,
+                (),
+            )
+            .map_err(FsDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+/// Snapshot state of one fs device, tagged by the backend mode.
+///
+/// Wired as an enum from the start so support for a further mode is an added
+/// variant rather than a change to [`persist::VirtioDevState`]'s shape. Only
+/// `virtio` mode can be snapshotted today: a vhost-user-fs daemon keeps its
+/// state in another process, so a `VhostUser` variant has to carry that too
+/// and is added with the support, not before.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum FsDeviceState {
+    /// State of an in-VMM virtio-fs device (`mode = "virtio"`).
+    VirtioFs(virtio::persist::VirtioDeviceInfoState),
+}
+
+/// Snapshot state of one fs device (config + device state + transport state);
+/// see [`persist::VirtioDevState`].
+pub type FsDevState = persist::VirtioDevState<FsDeviceConfigInfo, FsDeviceState>;
+
+/// Snapshot state of the virtio-fs device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct FsDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<FsDevState>,
 }
 
 impl Default for FsDeviceMgr {
