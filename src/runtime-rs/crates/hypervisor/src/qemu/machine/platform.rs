@@ -30,7 +30,59 @@ pub(crate) struct BaseMachine {
     /// `None` for topologies that supply memory per NUMA node via `-numa node,memdev=`
     /// rather than a single machine-wide backend (e.g. multi-socket vEGM).
     pub memory_backend: Option<String>,
+    pub cpu: CpuConfig,
 }
+
+/// CPU model selection and additive feature flags.
+///
+/// The model choice is an attestation identity for CoCo guests, not merely a
+/// performance knob.  See ARCHITECTURE.md §"CPU model and attestation identity"
+/// for the full rationale and the issues that drove this split (#12210, #12329,
+/// #12382).
+pub(crate) struct CpuConfig {
+    pub model: CpuModel,
+}
+
+pub(crate) enum CpuModel {
+    /// `-cpu host[,<extra_features>]`
+    ///
+    /// Exposes the full host CPU to the guest.  Correct for vanilla KVM and
+    /// TDX.  Not suitable for SNP: the guest CPUID family/model/stepping
+    /// changes per physical node, so attestation reference values differ
+    /// across a mixed Milan/Genoa/Turin fleet (#12329).
+    Host { extra_features: Vec<String> },
+
+    /// `-cpu EPYC-v4[,<extra_features>]`
+    ///
+    /// Pins the guest CPUID to a fixed AMD model, giving deterministic
+    /// attestation across all AMD nodes in the fleet regardless of actual
+    /// silicon generation.  `extra_features` re-enables the AVX-512 and
+    /// VAES extensions that EPYC-v4 strips by default, recovering ~2x
+    /// AES-GCM throughput without changing the attestation identity (#12382).
+    EpycV4 { extra_features: Vec<String> },
+}
+
+/// AVX-512 and vectorised-AES extensions stripped by EPYC-v4 that should be
+/// re-enabled for SNP guests to recover hardware crypto throughput.
+///
+/// Without these, AES-GCM throughput is ~4 GB/s; with them it returns to
+/// ~8 GB/s, which matters when an H100 GPU is the bottleneck (#12382).
+pub(crate) const SNP_CRYPTO_FEATURES: &[&str] = &[
+    "+vaes",
+    "+vpclmulqdq",
+    "+avx512f",
+    "+avx512dq",
+    "+avx512bw",
+    "+avx512vl",
+    "+avx512cd",
+    "+avx512ifma",
+    "+avx512vbmi",
+    "+avx512vbmi2",
+    "+avx512vnni",
+    "+avx512bitalg",
+    "+avx512-vpopcntdq",
+    "+avx512-bf16",
+];
 
 pub(crate) struct Objects {
     pub iommufd: Option<IommufdBackend>,
