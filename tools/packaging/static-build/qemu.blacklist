@@ -33,3 +33,97 @@ qemu_black_list=(
 */share/*/u-boot*
 */share/*/vgabios*
 )
+
+# Firmware files not needed for this architecture.
+# Each platform uses a different firmware, ship only what's required:
+#   x86_64  -> edk2-x86_64-*.fd (OVMF)
+#   aarch64 -> edk2-aarch64-*.fd (AAVMF)
+#   s390x   -> s390-ccw.img (CCW BIOS)
+#   ppc64le -> slof.bin / vof.bin (Open Firmware)
+ARCH=${ARCH:-$(uname -m)}
+case "${ARCH}" in
+x86_64)
+    qemu_black_list+=(
+        */share/*/edk2-aarch64*
+        */share/*/edk2-arm*
+        */share/*/edk2-i386*
+        */share/*/edk2-loongarch64*
+        */share/*/edk2-riscv*
+        */share/*/firmware/60-edk2-aarch64.json
+        */share/*/firmware/60-edk2-arm.json
+        */share/*/firmware/60-edk2-i386.json
+        */share/*/firmware/60-edk2-loongarch64.json
+        */share/*/firmware/60-edk2-riscv64.json
+        */share/*/hppa-firmware*
+        */share/*/pnv-pnor.bin
+        */share/*/s390-ccw.img
+        */share/*/slof.bin
+        */share/*/vof*.bin
+        */share/*/ast27x0_bootrom.bin
+        */share/*/npcm8xx_bootrom.bin
+    )
+    ;;
+aarch64)
+    qemu_black_list+=(
+        */share/*/edk2-arm-*
+        */share/*/edk2-i386*
+        */share/*/edk2-loongarch64*
+        */share/*/edk2-riscv*
+        */share/*/edk2-x86_64*
+        */share/*/firmware/50-edk2-*
+        */share/*/firmware/60-edk2-arm.json
+        */share/*/firmware/60-edk2-i386.json
+        */share/*/firmware/60-edk2-loongarch64.json
+        */share/*/firmware/60-edk2-riscv64.json
+        */share/*/firmware/60-edk2-x86_64.json
+        */share/*/hppa-firmware*
+        */share/*/pnv-pnor.bin
+        */share/*/s390-ccw.img
+        */share/*/slof.bin
+        */share/*/vof*.bin
+        */share/*/ast27x0_bootrom.bin
+        */share/*/npcm8xx_bootrom.bin
+        */share/*/bios*.bin
+        */share/*/kvmvapic.bin
+        */share/*/linuxboot_dma.bin
+        */share/*/multiboot_dma.bin
+        */share/*/pvh.bin
+        */share/*/qboot.rom
+    )
+    ;;
+s390x)
+    qemu_black_list+=(
+        */share/*/edk2-*
+        */share/*/firmware
+        */share/*/hppa-firmware*
+        */share/*/pnv-pnor.bin
+        */share/*/slof.bin
+        */share/*/vof*.bin
+        */share/*/ast27x0_bootrom.bin
+        */share/*/npcm8xx_bootrom.bin
+        */share/*/bios*.bin
+        */share/*/kvmvapic.bin
+        */share/*/linuxboot_dma.bin
+        */share/*/multiboot_dma.bin
+        */share/*/pvh.bin
+        */share/*/qboot.rom
+    )
+    ;;
+ppc64le)
+    qemu_black_list+=(
+        */share/*/edk2-*
+        */share/*/firmware
+        */share/*/hppa-firmware*
+        */share/*/pnv-pnor.bin
+        */share/*/s390-ccw.img
+        */share/*/ast27x0_bootrom.bin
+        */share/*/npcm8xx_bootrom.bin
+        */share/*/bios*.bin
+        */share/*/kvmvapic.bin
+        */share/*/linuxboot_dma.bin
+        */share/*/multiboot_dma.bin
+        */share/*/pvh.bin
+        */share/*/qboot.rom
+    )
+    ;;
+esac
