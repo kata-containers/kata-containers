@@ -241,7 +241,7 @@ impl Platform {
             pci: PciTopology {
                 default_bus: Some("pcie.0".to_owned()),
                 roots: vec![],
-                cold_plug_ports: vec![],
+                pcie_root_port: vec![],
             },
             objects: Objects {
                 iommufd: None,
@@ -261,7 +261,7 @@ impl Platform {
         })
     }
 
-    pub fn apply_host_defaults(&mut self, topo: &HostTopology) {
+    pub(crate) fn apply_host_defaults(&mut self, topo: &HostTopology) {
         // Protection device drives CoCo machine flags and the preamble object.
         if let Some(ref prot) = topo.protection {
             if let Machine::Q35(ref mut q) = self.machine {
@@ -317,7 +317,7 @@ impl Platform {
         self.objects.numa_distances = topo.numa_distances.clone();
 
         // Pre-provisioned cold-plug root ports on pcie.0.
-        self.pci.cold_plug_ports = (0..topo.cold_plug_ports)
+        self.pci.pcie_root_port = (0..topo.pcie_root_port)
             .map(|i| PciRootPort {
                 id: format!("rp{i}"),
                 chassis: 0,
@@ -502,7 +502,7 @@ impl Platform {
         }
     }
 
-    pub fn with_hugepages(self, path: &str) -> Self {
+    pub(crate) fn with_hugepages(self, path: &str) -> Self {
         let backends = self
             .objects
             .memory_backends
@@ -546,7 +546,7 @@ impl Platform {
     /// Dispatch by machine type: Q35 and virt/Grace have different emission
     /// ordering because virt requires `memory-backend=` on the machine line
     /// (backends must precede machine), whereas Q35 does not.
-    pub fn to_qemu_args(&self) -> Result<Vec<String>> {
+    pub(crate) fn to_qemu_args(&self) -> Result<Vec<String>> {
         match &self.machine {
             Machine::Q35(_) => self.emit_q35_args(),
             Machine::Virt(_) => self.emit_virt_args(),
@@ -607,7 +607,7 @@ impl Platform {
             }
         }
 
-        for port in &self.pci.cold_plug_ports {
+        for port in &self.pci.pcie_root_port {
             args.push("-device".to_owned());
             args.push(emit_root_port(port, default_bus));
         }

@@ -46,7 +46,7 @@ This pattern is duplicated across `DeviceVhostUserFs`, `DeviceVirtioBlk`,
 `VhostVsock`, `DeviceVirtioNet`, `DeviceVirtioSerial`, `DeviceVirtconsole`,
 `DeviceRng`, `DeviceIntelIommu`, and `DeviceVirtioScsi`.
 
-### 2. `Stringly-typed` flat `Machine` struct
+### 2. Stringly-typed flat `Machine` struct
 
 ```rust
 struct Machine {
@@ -187,7 +187,7 @@ re-scheduled Pods fail remote attestation (#12329).
 
 Pinning to `EPYC-v4` gives every SNP guest the same deterministic CPUID
 regardless of which silicon generation it lands on.  The tradeoff is that
-`EPYC-v4` strips AVX-512 and `VAES` extensions, cutting AES-GCM throughput
+`EPYC-v4` strips AVX-512 and VAES extensions, cutting AES-GCM throughput
 roughly in half (~4 GB/s instead of ~8 GB/s), which is measurable when an
 H100 GPU is the encryption bottleneck (#12382).
 
@@ -212,12 +212,15 @@ presentation, so `Host` is safe there.
 
 ```rust
 pub struct PciTopology {
-    pub default_bus: Option<String>,    // "pcie.0" when NUMA / multi-RC is active
-    pub roots: Vec<PciRootComplex>,
+    pub default_bus: Option<String>,      // "pcie.0" when NUMA / multi-RC is active
+    pub roots: Vec<PciRootComplex>,       // pxb-pcie GPU complexes (static passthrough)
+    /// Pre-provisioned empty slots on the default bus for cold/hot-plug.
+    /// See "VFIO Device Assignment Model" below.
+    pub pcie_root_port: Vec<PciRootPort>,
 }
 
 pub struct PciRootComplex {
-    pub id: String,              // "pcie.N"
+    pub id: String,
     pub bus_nr: u8,
     /// Maps to pxb-pcie `numa_node=N`.  Required on Grace; omitting it causes
     /// "Unknown NUMA node; performance will be reduced" in the guest kernel.
@@ -226,57 +229,91 @@ pub struct PciRootComplex {
     /// device on Q35 and lives on Machine::Q35, not here.
     pub iommu: Option<BusIommu>,
     /// One entry per passthrough device on this SMMU.
-    /// 1 root port = 1 GPU (1:1 SMMU mapping).
-    /// N root ports = N GPUs sharing the same physical SMMU.
     pub root_ports: Vec<PciRootPort>,
 }
 
 pub struct PciRootPort {
-    pub id: String,       // "pcie.portN"
+    pub id: String,
     pub chassis: u8,
+    pub slot: Option<u8>,            // Q35: Some(N); Grace: None
+    pub multifunction: Option<bool>, // Q35: Some(false); Grace: None
+    pub io_reserve: Option<u32>,     // Grace: Some(0); Q35: None
     pub device: Option<VfioDevice>,
+}
+
+pub struct VfioDevice {
+    pub id: String,
+    pub host: String,
+    pub rombar: Option<bool>,        // Grace: Some(false); Q35 CoCo: None
+    pub kind: VfioDeviceKind,
+    /// Per-device iommufd (CoCo x86); Grace uses shared iommufd0 in Objects.
+    pub iommufd_id: Option<String>,
+    pub pci_vendor_id: Option<u16>,  // CoCo attestation override
+    pub pci_device_id: Option<u16>,
+}
+
+pub enum VfioDeviceKind {
+    Gpu,    // vfio-pci-nohotplug (Grace aarch64)
+    GpuPci, // vfio-pci           (Q35 / CoCo x86)
+    Nic,    // vfio-pci
 }
 
 /// IOMMU that attaches to a specific PCIe expander bus (pxb-pcie).
 /// Intel IOMMU is a Q35-global device and is NOT represented here —
 /// see Machine::Q35::intel_iommu.
 pub enum BusIommu {
-    SmmuV3 {
-        accel: bool,
-        ats: bool,
-        pasid: bool,
-        oas: u8,
-        ril: bool,
-        /// Enable SMMU command-queue virtualisation (vCMDQ).  Requires
-        /// physically contiguous guest memory (hugepages or EGM).
-        cmdqv: bool,
-    },
+    SmmuV3(SmmuV3Config),
+}
+
+pub struct SmmuV3Config {
+    pub id: String,
+    pub accel: bool,
+    pub ats: bool,
+    pub pasid: bool,
+    pub oas: u8,
+    pub ril: bool,
+    pub cmdqv: bool, // vCMDQ: requires hugepages or EGM
 }
 ```
 
-**`SMMU` grouping rule:** GPUs that share a physical `SMMU` on the host **must** be
+**SMMU grouping rule:** GPUs that share a physical SMMU on the host **must** be
 placed on the same `PciRootComplex` in the guest (they share the same
 `arm-smmuv3` device).  The IOMMU group boundaries in host sysfs determine the
 grouping.  See [Config 3](#config-3--4-gpus-2-gpus-per-smmu-33-numa-nodes) for
-the `2-GPUs-per-SMMU` topology.
+the 2-GPUs-per-SMMU topology.
 
 #### `Objects` — shared QEMU `-object` backends
 
 ```rust
 pub struct Objects {
+    /// Shared iommufd (Grace); CoCo x86 uses per-device iommufd on VfioDevice.
     pub iommufd: Option<IommufdBackend>,
     pub memory_backends: Vec<MemoryBackend>,
+    pub numa_nodes: Vec<NumaNode>,
+    pub numa_distances: Vec<(u32, u32, u32)>, // (src, dst, val) for -numa dist
     pub thread_contexts: Vec<ThreadContext>,
     pub acpi_links: Vec<AcpiPciNodeLink>,
     pub rng: Option<ObjectRngRandom>,
+    /// CoCo protection object emitted before -machine (sev-snp-guest / tdx-guest).
+    pub protection: Option<ProtectionDevice>,
 }
 
 pub enum MemoryBackend {
-    Ram  { id: String, size: u64 },
-    /// File-backed memory.  Two uses:
-    ///   path = "/dev/hugepages/" → hugepages-backed guest RAM (vCMDQ)
-    ///   path = "/dev/egmN"      → per-socket EGM region (vEGM)
-    File { id: String, size: u64, path: String, prealloc: bool, share: bool },
+    Ram {
+        id: String, size: u64,
+        host_nodes: Option<u32>, // NUMA pinning (Q35 CoCo RAM-backed)
+        policy: Option<String>,  // "bind" when host_nodes is set
+    },
+    /// File-backed memory:
+    ///   mem-path="/dev/shm"        — NUMA-pinned SHM for vanilla Q35
+    ///   mem-path="/dev/hugepages/" — hugepages guest RAM (vCMDQ)
+    ///   mem-path="/dev/egmN"       — per-socket EGM region (vEGM)
+    File {
+        id: String, size: u64, path: String, prealloc: bool, share: bool,
+        host_nodes: Option<u32>,
+        policy: Option<String>,
+        is_egm: bool,
+    },
 }
 
 pub enum AcpiPciNodeLink {
@@ -287,7 +324,7 @@ pub enum AcpiPciNodeLink {
     /// Emitted 1× per passthrough GPU.  Links the GPU to the per-socket EGM
     /// memory-backend file.  `node` is the CpuMem NUMA node for the socket
     /// that holds this GPU's EGM device, not a GPU initiator node.
-    EgmMemory        { id: String, pci_dev: String, node: u32 },
+    EgmMemory { id: String, pci_dev: String, node: u32 },
 }
 ```
 
@@ -304,25 +341,42 @@ pub struct HostTopology {
     pub sockets: Vec<SocketInfo>,
     pub gpu_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
+    pub numa_distances: Vec<(u32, u32, u32)>, // (src, dst, val)
+    /// Minimum pre-provisioned empty root-port count on Q35 pcie.0.
+    /// Mirrors `pcie_root_port =` in kata config.  See "VFIO Device Assignment
+    /// Model" for the distinction between this and gpu_smmu_groups.
+    pub pcie_root_port: u32,
+    pub protection: Option<ProtectionDevice>,
 }
 
 pub struct SocketInfo {
     pub id: u32,
     pub cpu_range: std::ops::Range<u32>,
+    pub host_node: Option<u32>,   // NUMA pinning for Q35 memory backends
+    pub mem_path: Option<String>, // "/dev/shm" or EGM path; None = RAM backend
+    pub mem_size: Option<u64>,    // per-socket size; None = Platform default
 }
 
 /// All GPUs in this group share a physical SMMU and must be placed on the same
 /// pxb-pcie + arm-smmuv3 in the guest.  Derived from /sys/kernel/iommu_groups.
 pub struct GpuSmmuGroup {
-    pub pci_bus_addrs: Vec<String>,   // e.g. ["0008:06:00.0", "0009:06:00.0"]
+    pub pci_bus_addrs: Vec<String>,
     pub socket: u32,
 }
 
 /// One entry per /dev/egmN device (created by the nvgrace-egm kernel module).
 pub struct EgmSocketInfo {
-    pub path: String,    // "/dev/egm4"
+    pub path: String,
     pub socket: u32,
     pub total_size: u64,
+}
+
+/// CoCo hardware protection mode detected by host probe.
+/// Drives: protection object preamble, kernel_irqchip=split on Q35, CpuModel.
+pub enum ProtectionDevice {
+    SevSnp { id: String, cbitpos: u8, reduced_phys_bits: u8,
+             kernel_hashes: bool, policy: u64, host_data: Option<String> },
+    Tdx    { id: String },  // fields TBD — no production capture yet
 }
 ```
 
@@ -349,7 +403,7 @@ impl Platform {
 
 ### NUMA Layout Rules
 
-The guest Linux kernel processes ACPI `SRAT` entries in a fixed order:
+The guest Linux kernel processes ACPI SRAT entries in a fixed order:
 
 1. **CPU Affinity** — nodes with a `cpus=` range (CpuMem nodes, one per socket)
 2. **Generic Affinity** — initiator nodes for PCIe devices (8 per GPU for MIG)
@@ -401,28 +455,76 @@ caller checks `config.memory_info.enable_hugepages` and calls
 `Platform::with_hugepages("/dev/hugepages/")` once.  No device code changes.
 
 EGM memory is natively physically contiguous, so vEGM implicitly satisfies the
-`vCMDQ` contiguity requirement without hugepages.  `cmdqv=on` is still required
-in the `arm-smmuv3` device args when `vCMDQ` is enabled.
+vCMDQ contiguity requirement without hugepages.  `cmdqv=on` is still required
+in the `arm-smmuv3` device args when vCMDQ is enabled.
 
 ### Emission order
 
-`QemuCmdLine::build()` becomes a thin orchestrator:
+`Platform::to_qemu_args` dispatches by machine type because Q35 and virt require
+different argument ordering.
 
-1. Emit `-object iommufd,id=iommufd0` first (all vfio devices and `SMMU` SID
-   tables reference it).
-2. Emit remaining `Objects` — `memory_backends`, `thread_contexts`, `rng` —
-   all `-object` lines, IDs defined before any reference.
-3. Emit `Machine` — picks up `memory-backend=` from objects, `highmem-mmio-size`.
-4. Emit **CpuMem** `-numa node` entries: one per socket, with `cpus=` + `memdev=`.
-5. Emit **GPU initiator** `-numa node` entries: 8 per GPU, no `cpus`/`memdev`,
-   ordered by GPU index.
-6. Emit **EGM / hotplug** `-numa node` entries: memory-only nodes, no `cpus`.
-7. Emit `PciTopology` in bus-number order: `pxb-pcie` (with `numa_node=`),
-   `arm-smmuv3`, root ports, vfio devices per root complex.
-8. Emit `Objects.acpi_links`: `acpi-generic-initiator` (8 per GPU) then
-   `acpi-egm-memory` (1 per GPU).  These reference device IDs emitted in step 7.
+**virt / Grace (aarch64)** — backends must precede the machine line because virt
+carries `memory-backend=<id>` on the machine flag itself:
 
-Steps 4–6 must be in that order to match Linux ACPI `SRAT` processing.
+1. `-object iommufd,id=iommufd0`
+2. `Objects::memory_backends` (all `-object` lines)
+3. `-machine virt,...,memory-backend=m0`
+4. **CpuMem** `-numa node` entries: one per socket, `cpus=` + `memdev=`
+5. **GPU initiator** `-numa node` entries: 8 per GPU, no `cpus`/`memdev`
+6. **EGM / memory-only** `-numa node` entries
+7. `PciTopology::roots` — `pxb-pcie`, `arm-smmuv3`, root ports, vfio devices
+8. `Objects::acpi_links` — `acpi-generic-initiator` (8×GPU), `acpi-egm-memory` (1×GPU)
+
+Steps 4–6 must be in that order to match Linux ACPI SRAT processing.
+
+**Q35 (x86_64)** — machine line carries no memory-backend reference; backends
+follow the machine line, interleaved with their NUMA node:
+
+1. `Objects::protection` — `sev-snp-guest` or `tdx-guest` (must precede `-machine`)
+2. `-machine q35,...`
+3. Per socket: `-object memory-backend-{ram,file}` then `-numa node,memdev=,cpus=`
+4. `-numa dist` entries
+5. `PciTopology::roots` — `pxb-pcie`, root ports, per-device iommufd, `vfio-pci`
+6. `PciTopology::pcie_root_port` — pre-provisioned empty ports on `pcie.0`
+
+### VFIO Device Assignment Model
+
+QEMU VFIO passthrough uses two independent configuration axes.
+
+**When the device joins the VM** (kata config: `cold_plug_vfio` / `hot_plug_vfio`):
+- **Cold-plug**: device appears in the static QEMU command line before `qemu-system-*`
+  is exec'd; VM boots with the device already present.
+- **Hot-plug**: device is added to a running VM via QMP `device_add`; requires an
+  empty PCIe slot to have been pre-provisioned at boot.
+
+**What slot topology is used** (values of `cold_plug_vfio` / `hot_plug_vfio`):
+- **`no-port`**: no slot or device emitted; passthrough disabled for this plug type.
+- **`root-port`**: one `pcie-root-port` per device. For cold-plug the port and device
+  are emitted together; for hot-plug reservation N empty ports are emitted at boot.
+- **`switch-port`**: one `pcie-root-port` → one `x3130-upstream` → N `xio3130-downstream`,
+  one downstream port per device. Used for NVSwitch and DAN multi-device fan-out.
+- **`bridge-port`**: legacy PCI bridge (`i82801b11-bridge`). Non-PCIe devices or
+  backward compat.
+
+**Platform coverage by phase:**
+
+| | `no-port` | `root-port` | `switch-port` | `bridge-port` |
+|---|---|---|---|---|
+| **Cold-plug** | implicit (no fields set) | `gpu_smmu_groups` → port+device in static cmdline (Phase 3) | Phase 4+ | — |
+| **Hot-plug reservation** | implicit | `pcie_root_port: u32` → N empty ports at boot (Phase 3) | Phase 4+ | — |
+
+`HostTopology::gpu_smmu_groups` drives cold-plug `root-port`: one `pcie-root-port`
+and one `vfio-pci[/vfio-pci-nohotplug]` per device, emitted together in the static
+command line.  No empty pre-provisioned slots are used; device count is exact.
+
+`HostTopology::pcie_root_port` drives hot-plug slot reservation: N `pcie-root-port`
+devices emitted on `pcie.0` at VM creation, with no device attached.  At runtime,
+devices are plugged into available slots via QMP `device_add`.  DANs and dynamically
+assigned VFIO NICs use this path.  Mirrors the `pcie_root_port =` kata config field.
+
+Grace/aarch64 uses `vfio-pci-nohotplug` for cold-plug onto `pxb-pcie`-attached root
+ports with a per-bus `arm-smmuv3` — a distinct topology from Q35 `root-port` cold-plug
+even though both are classified as "cold-plug root-port" in kata config terms.
 
 ---
 
@@ -441,7 +543,7 @@ All Grace configurations share these constants:
 - Host kernel driver: `nvgrace-gpu-vfio-pci` (replaces standard `vfio-pci`)
 - EGM kernel module: `nvgrace-egm` (creates `/dev/egm*` character devices)
 
-### Config 1 — Single GPU, 1 `SMMU` (9 NUMA nodes)
+### Config 1 — Single GPU, 1 SMMU (9 NUMA nodes)
 
 ```text
 -object iommufd,id=iommufd0
@@ -462,10 +564,10 @@ All Grace configurations share these constants:
 
 `HostTopology`: 1 socket, 1 `GpuSmmuGroup { pci_bus_addrs: ["0008:06:00.0"], socket: 0 }`.
 
-### Config 2 — 4 GPUs, 1 GPU per `SMMU` (33 NUMA nodes)
+### Config 2 — 4 GPUs, 1 GPU per SMMU (33 NUMA nodes)
 
 Each GPU gets its own `PciRootComplex` (one `pxb-pcie` + one `arm-smmuv3` + one
-root port).  Repeat the pxb-pcie/`smmuv3`/root-port/vfio block 4 times:
+root port).  Repeat the pxb-pcie/smmuv3/root-port/vfio block 4 times:
 
 ```text
 -object iommufd,id=iommufd0
@@ -485,9 +587,9 @@ root port).  Repeat the pxb-pcie/`smmuv3`/root-port/vfio block 4 times:
 
 `HostTopology`: 1 socket, 4 `GpuSmmuGroup` each with 1 address.
 
-### Config 3 — 4 GPUs, 2 GPUs per `SMMU` (33 NUMA nodes)
+### Config 3 — 4 GPUs, 2 GPUs per SMMU (33 NUMA nodes)
 
-GPUs sharing a physical `SMMU` share one `PciRootComplex` with **2 root ports**.
+GPUs sharing a physical SMMU share one `PciRootComplex` with **2 root ports**.
 2 complexes × 2 GPUs each:
 
 ```text
@@ -523,13 +625,13 @@ with the NIC's PCI address).  That root port does **not** emit
 `acpi-generic-initiator` links — the NIC has no GPU memory to online.
 
 `VfioDevice` carries a `kind: VfioDeviceKind` field (enum `Gpu` / `Nic` / …)
-that gates initiator emission.  The NIC shares the host `SMMU` with no GPU on its
+that gates initiator emission.  The NIC shares the host SMMU with no GPU on its
 bus, so it gets its own `PciRootComplex`.
 
-### Config 5 — `vCMDQ` (hugepages + `SMMU` command-queue virtualisation)
+### Config 5 — vCMDQ (hugepages + SMMU command-queue virtualisation)
 
 Same PCIe topology as Config 1 or 2, but `MemoryBackend::Ram` is replaced with
-`MemoryBackend::File` for physically contiguous memory (required by the `vCMDQ`
+`MemoryBackend::File` for physically contiguous memory (required by the vCMDQ
 hardware for the queue base address), and `cmdqv=on` is added to `arm-smmuv3`:
 
 ```text
@@ -617,50 +719,43 @@ Nothing in the hot path calls them yet.  Tests assert construction succeeds for
 each supported machine type and that `HostTopology` round-trips through
 `apply_host_defaults` without panic.
 
-### Phase 2 — Strangle bus resolution (one device per PR)
+### Phase 2 — Platform emission for virt / Grace
 
-For each device listed below, pass a resolved `bus: String` instead of
-computing it inside `ToQemuParams`:
+- `Platform::to_qemu_args` implemented for `Machine::Virt`.
+- Emission order: iommufd → backends → machine → NUMA nodes → pxb+smmuv3+ports+vfio → acpi_links.
+- `Platform::with_hugepages` wires `memory-backend-file` + `cmdqv=on` on smmuv3.
+- All 7 Grace fixture tests written; ignored pending Phase 4 (apply_host_defaults).
+- Q35 and s390x/pseries emit `todo!()` — unblocked in Phase 3.
 
-- `DeviceVhostUserFs`
-- `DeviceVirtioBlk`
-- `VhostVsock`
-- `DeviceVirtioNet`
-- `DeviceVirtioSerial`
-- `DeviceVirtconsole`
-- `DeviceRng`
-- `DeviceIntelIommu`
-- `DeviceVirtioScsi`
+### Phase 3 — Q35 emission and CoCo support
 
-Each PR removes one `#[cfg(target_arch)]` block and one duplicated comment.
-The golden fixtures validate that the emitted command lines are unchanged.
-
-Final PR in Phase 2: remove all remaining `#[cfg(target_arch)]` blocks from
-`cmdline_generator.rs`.
-
-### Phase 3 — Objects registry
-
-- Lift `MemoryBackendFile` into `Objects::memory_backends` as
-  `MemoryBackend::File`.
-- Wire hugepages via `Platform::with_hugepages`.
-- Lift `ObjectIoThread` / `ObjectRngRandom` into `Objects`.
-- Consider wiring `seccompsandbox` (QEMU `-sandbox`) through `Platform`:
-  the config field `seccomp_sandbox: Option<String>` already maps to
-  `-sandbox` in `cmdline_generator.rs`, but the new path needs a typed
-  `Objects::seccomp_sandbox: Option<SeccompSandbox>` so the emission
-  is controlled by `Platform` rather than the legacy generator.
-
-This is the phase that enables hugepages for `runtime-rs` (issue #12125).
+- `Platform::to_qemu_args` dispatches by machine type; Q35 and virt require
+  different emission ordering (see "Emission order" above).
+- `apply_q35_defaults`: per-socket memory backends (RAM / SHM file), NUMA nodes,
+  NUMA distances, cold-plug GPU root ports + vfio devices, and pre-provisioned
+  empty hot-plug slots (`pcie_root_port`).
+- `HostTopology` extended: `numa_distances`, `pcie_root_port`, `protection`,
+  `SocketInfo::{host_node, mem_path, mem_size}`.
+- `ProtectionDevice` enum: `SevSnp` / `Tdx`; drives `kernel_irqchip=split` and
+  `confidential_guest_support` on Q35.
+- `VfioDevice` extended: `rombar: Option`, `iommufd_id` (per-device CoCo),
+  `pci_vendor_id/device_id` (CoCo attestation).
+- `VfioDeviceKind::GpuPci` added (`vfio-pci` for Q35; existing `Gpu` keeps
+  `vfio-pci-nohotplug` for Grace).
+- `PciRootPort` extended: `slot`, `multifunction`, `io_reserve` — all `Option`
+  to cover both Q35 cold-plug and Grace io-reserve formats.
+- Two Q35 fixture tests pass without `#[ignore]`:
+  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`.
 
 ### Phase 4 — Multi-RC PCIe and NUMA layout
 
 - Emit `pxb-pcie` (with `numa_node=`) + per-RC `arm-smmuv3` from `PciTopology`.
-- Support N root ports per `PciRootComplex` (Config 3 shape: 2 GPUs per `SMMU`).
+- Support N root ports per `PciRootComplex` (Config 3 shape: 2 GPUs per SMMU).
 - Add `VfioPciNoHotplug` with typed `IommufdRef` and `VfioDeviceKind`.
 - Emit NUMA nodes in the correct order (CpuMem → GPU initiators → memory-only).
 - `apply_host_defaults` wired end-to-end: Configs 1–4 golden fixtures pass.
 
-### Phase 5 — `vCMDQ` and vEGM
+### Phase 5 — vCMDQ and vEGM
 
 - `SmmuV3 { cmdqv: true }` + `MemoryBackend::File { path: "/dev/hugepages/", … }`.
 - `AcpiPciNodeLink::EgmMemory` + per-socket `MemoryBackend::File { path: "/dev/egmN", … }`.
@@ -727,8 +822,8 @@ derived from tested deployments.  They anchor the per-machine fixture set.
 ```
 
 Both `machine_accelerators` (the raw KVM option string) and
-`confidential_guest_support` need typed representations before the legacy
-`Machine` struct can be deleted.  Tracked in Phase 3.
+`confidential_guest_support` received typed representations in Phase 3.
+Full deletion of the legacy `Machine` struct is tracked in Phase 6.
 
 ---
 
@@ -750,7 +845,7 @@ non-GPU kata pod on an ARM64 host.
 ### Vanilla kata — Q35 (x86_64)
 
 **Production data captured** (DGX x86 host, 2026-07-07).
-Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (ignored, Phase 3).
+Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (passing, Phase 3).
 
 Key observations from the production invocation:
 
@@ -760,22 +855,22 @@ Key observations from the production invocation:
   backed by `/dev/shm` (not `/dev/hugepages` or `/dev/egm*`)
 - Two NUMA nodes: socket 0 cpus 0-32 / 36864M, socket 1 cpus 33-65 / 36864M;
   distance 20 between them
-- 8 `pcie-root-port` pre-provisioned on `pcie.0` (slots 0-7) for GPU cold-plug
-  (`cold_plug_vfio=root-port`, `pcie_root_port=8`, `hot_plug_vfio=no-port` in
-  `configuration-qemu-nvidia-gpu.toml.in`); GPU VFIO devices are added to the
-  static QEMU command line before the VM boots, not via QMP after boot
-- No `pxb-pcie`, no `arm-smmuv3` — Q35 GPU passthrough uses cold-plug onto `pcie.0`
-  root ports, not the static `vfio-pci-nohotplug` topology used on Grace
+- 8 `pcie-root-port` pre-provisioned on `pcie.0` (slots 0-7); `pcie_root_port=8`
+  in `configuration-qemu-nvidia-gpu.toml.in`; `hot_plug_vfio=no-port` (hotplug
+  disabled in this config).  These are legacy empty slots for static GPU assignment
+  by the Go runtime; the new Rust Platform models this via `HostTopology::pcie_root_port`
+- No `pxb-pcie`, no `arm-smmuv3` — Q35 GPU passthrough uses `root-port` topology
+  on `pcie.0`, not the `pxb-pcie + vfio-pci-nohotplug` topology used on Grace
 
-New Platform fields required (Phase 3):
+Platform fields added in Phase 3:
 - `MemoryBackend::File { host_nodes: Option<u32>, policy: Option<String> }` for NUMA SHM
 - `Objects::numa_distances: Vec<(u32, u32, u32)>` for `-numa dist` entries
-- `HostTopology` additions for NUMA SHM paths and distances
+- `SocketInfo::{host_node, mem_path, mem_size}` for per-socket NUMA pinning
 
 ### CoCo + GPU passthrough (SEV-SNP or TDX)
 
 **SEV-SNP production data captured** (AMD EPYC host, 2026-07-13).
-Fixture: `q35_coco_snp_single_gpu.args`.  Test: `q35_coco_snp_single_gpu` (ignored, Phase 3).
+Fixture: `q35_coco_snp_single_gpu.args`.  Test: `q35_coco_snp_single_gpu` (passing, Phase 3).
 
 Key observations from the SEV-SNP + GPU invocation:
 
@@ -787,21 +882,21 @@ Key observations from the SEV-SNP + GPU invocation:
   CoCo uses RAM backend (not file-backed `/dev/shm`) — single NUMA node
 - GPU passthrough via `pxb-pcie + pcie-root-port + vfio-pci` (same shape as Grace
   but `vfio-pci` NOT `vfio-pci-nohotplug`, no `arm-smmuv3` — x86 uses global IOMMU)
-- `iommufd` is **per-device** (`id=iommufdvfio-<uuid>`), NOT the shared `iommufd0`
-  used on Grace; one `iommufd` object per GPU
+- iommufd is **per-device** (`id=iommufdvfio-<uuid>`), NOT the shared `iommufd0`
+  used on Grace; one iommufd object per GPU
 - `x-pci-vendor-id=0x10de,x-pci-device-id=0x2321` overrides required so the guest
   sees the correct device IDs for measured boot / attestation
 - `pxb-pcie bus_nr=32` (not the Grace 1-indexed cumulative formula)
 - BIOS: `AMDSEV.fd` (AMD-specific OVMF build, not generic `OVMF.fd`)
 - Binary: `qemu-system-x86_64-snp-experimental` (patched QEMU for SNP support)
 
-New Platform fields required (Phase 3):
+Platform fields added in Phase 3:
 - `Objects::protection: Option<ProtectionDevice>` (`sev-snp-guest` / `tdx-guest`)
-- `Q35::kernel_irqchip: Option<String>` typed field (`"split"` for CoCo, absent for vanilla)
+- `Q35::kernel_irqchip: Option<String>` (`"split"` for CoCo, absent for vanilla)
 - `Q35::confidential_guest_support: Option<String>` referencing the protection object id
-- `MemoryBackend::Ram { host_nodes: Option<u32>, policy: Option<String> }` for NUMA pinning
-- Per-device `iommufd`: `PciRootComplex::iommufd: Option<IommufdRef>` (not shared)
-- `VfioDevice::pci_vendor_id / pci_device_id: Option<u16>` for CoCo attestation overrides
+- `MemoryBackend::Ram { host_nodes, policy }` for NUMA-pinned RAM backend
+- `VfioDevice::iommufd_id: Option<String>` — per-device iommufd for CoCo x86
+- `VfioDevice::pci_vendor_id / pci_device_id` for CoCo attestation overrides
 
 **TDX data still needed:** capture from a CoCo + GPU pod on an Intel TDX host.
 
@@ -840,7 +935,7 @@ cleanly.
 ### 4+ Blackwell (B200/B300) GPU passthrough fails due to 40-bit GPA cap (#13270)
 
 `-cpu host` without `host-phys-bits=on` limits the guest physical address space
-to ~40 bits (~1 TiB).  Each B200/B300 GPU has a 128 GiB 64-bit `prefetchable` BAR;
+to ~40 bits (~1 TiB).  Each B200/B300 GPU has a 128 GiB 64-bit prefetchable BAR;
 three GPUs (384 GiB) fit within 1 TiB, but four GPUs (512 GiB) do not, causing
 the fourth GPU to fail PCIe BAR assignment at VM boot.
 
@@ -903,7 +998,7 @@ legacy `Machine` struct can be deleted.
 
 2. **Singletons are first-class.**
    `iommufd0` is emitted once and referenced via `IommufdRef`.  No string
-   concatenation in device `impls`.
+   concatenation in device impls.
 
 3. **One location for host-specific wiring.**
    `Platform::apply_host_defaults` is the only place that knows about DGX,
@@ -913,8 +1008,8 @@ legacy `Machine` struct can be deleted.
    Bus-attached IOMMUs (`arm-smmuv3`) live on `PciRootComplex`.  Global IOMMUs
    (`intel-iommu`) live on the machine type (`Machine::Q35`).  These are
    different device placement models and must not share a field.
-   `SMMU` grouping: devices sharing a physical `SMMU` are placed on the same
-   `PciRootComplex`; devices on separate physical `SMMUs` get separate entries.
+   SMMU grouping: devices sharing a physical SMMU are placed on the same
+   `PciRootComplex`; devices on separate physical SMMUs get separate entries.
 
 5. **NUMA emission order is non-negotiable.**
    CpuMem → GenericInitiator → MemoryOnly.  The `Platform` builder enforces
@@ -936,5 +1031,5 @@ legacy `Machine` struct can be deleted.
 - [Issue #12125](https://github.com/kata-containers/kata-containers/issues/12125) — NUMA and hugepages roadmap
 - [Issue #12210](https://github.com/kata-containers/kata-containers/issues/12210) — make CPU model configurable for kata-qemu-snp (origin of the cpu=host discussion)
 - [PR #12329](https://github.com/kata-containers/kata-containers/pull/12329) — switch SNP to `cpu=host`; held on do-not-merge due to attestation portability concerns raised in review
-- [Issue #12382](https://github.com/kata-containers/kata-containers/issues/12382) — AVX-512/`VAES` stripped by EPYC-v4 halves AES-GCM throughput; motivates `SNP_CRYPTO_FEATURES`
+- [Issue #12382](https://github.com/kata-containers/kata-containers/issues/12382) — AVX-512/VAES stripped by EPYC-v4 halves AES-GCM throughput; motivates `SNP_CRYPTO_FEATURES`
 - [Issue #13270](https://github.com/kata-containers/kata-containers/issues/13270) — 4+ Blackwell GPU BAR mapping fails without `host-phys-bits=on`; motivates `Host::extra_features`
