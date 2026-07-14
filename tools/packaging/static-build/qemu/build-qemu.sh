@@ -26,11 +26,10 @@ HYPERVISOR_NAME="${HYPERVISOR_NAME:-}"
 PREFIX="${PREFIX:-}"
 PKGVERSION=${PKGVERSION:-}
 
-# This script always runs inside a dedicated build container (see
-# static-build/qemu/Dockerfile), so rm -rf of a relative path is safe.
-rm -rf qemu
-git clone --depth=1 "${QEMU_REPO}" qemu
-pushd qemu
+workdir="$(mktemp -d)"
+trap 'rm -rf "${workdir}"' EXIT
+git clone --depth=1 "${QEMU_REPO}" "${workdir}/qemu"
+pushd "${workdir}/qemu"
 git fetch --depth=1 origin "${QEMU_VERSION_NUM}"
 git checkout FETCH_HEAD
 scripts/git-submodule.sh update meson capstone
