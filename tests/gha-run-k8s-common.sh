@@ -812,7 +812,7 @@ function helm_helper() {
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
 				elif is_non_tee_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
-				elif [[ "${shim}" == "qemu-nvidia-gpu" ]]; then
+				elif is_nvidia_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\"]" "${values_yaml}"
 				else
 					# Default: support amd64, arm64, s390x, ppc64le

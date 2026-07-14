@@ -817,6 +817,30 @@ func TestDistributeVCPUsProportionallyTooFewVCPUs(t *testing.T) {
 	assert.Contains(err.Error(), "must be >= NUMA node count")
 }
 
+func TestFilterCPUBearingNUMANodes(t *testing.T) {
+	assert := assert.New(t)
+
+	// GH200-like topology: one CPU node plus several CPU-less memory nodes.
+	nodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-71"},
+		{HostNodes: "1", HostCPUs: ""},
+		{HostNodes: "2", HostCPUs: ""},
+	}
+	filtered := FilterCPUBearingNUMANodes(nodes)
+	assert.Equal([]types.GuestNUMANode{{HostNodes: "0", HostCPUs: "0-71"}}, filtered)
+
+	// All CPU-bearing nodes survive unchanged.
+	nodes = []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	assert.Equal(nodes, FilterCPUBearingNUMANodes(nodes))
+
+	// All CPU-less collapses to an empty (non-nil) slice.
+	filtered = FilterCPUBearingNUMANodes([]types.GuestNUMANode{{HostCPUs: ""}})
+	assert.Empty(filtered)
+}
+
 func TestFilterNUMANodesByCPUSet(t *testing.T) {
 	assert := assert.New(t)
 

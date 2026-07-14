@@ -625,6 +625,23 @@ func GetGuestNUMANodes(numaMapping []string) ([]types.GuestNUMANode, error) {
 	return numaNodes, nil
 }
 
+// FilterCPUBearingNUMANodes returns only the guest NUMA nodes that map to at
+// least one host CPU. CPU-less (memory-only) host NUMA nodes — GPU or CXL
+// memory nodes, as found e.g. on Grace-Hopper GH200 — cannot host vCPU
+// threads, and would make proportional vCPU distribution fail. They are
+// dropped so the CPU topology only spans CPU-bearing host nodes.
+func FilterCPUBearingNUMANodes(nodes []types.GuestNUMANode) []types.GuestNUMANode {
+	filtered := make([]types.GuestNUMANode, 0, len(nodes))
+	for _, n := range nodes {
+		hostCPUs, err := cpuset.Parse(n.HostCPUs)
+		if err != nil || hostCPUs.Size() == 0 {
+			continue
+		}
+		filtered = append(filtered, n)
+	}
+	return filtered
+}
+
 // FilterNUMANodesByCPUSet returns only those guest NUMA nodes whose HostCPUs
 // intersect with the given sandbox cpuset. If sandboxCPUs is empty (size 0),
 // no filtering is applied and the original slice is returned unchanged.

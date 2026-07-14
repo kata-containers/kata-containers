@@ -1344,6 +1344,16 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
+		// A sandbox sized to 0 vCPUs (e.g. default_vcpus=0 with no workload CPU
+		// limit) would collapse DefaultMaxVCPUs to 0, which the hypervisor later
+		// expands to the host maximum. That in turn drives the SMP topology to
+		// sockets=maxcpus=host_max, which fails to boot on hosts where KVM caps
+		// the recommended vCPU count. Floor it at the single vCPU the VM boots
+		// with instead.
+		if sandboxConfig.HypervisorConfig.DefaultMaxVCPUs == 0 {
+			sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = 1
+		}
+
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,
 			"default cpu":        sandboxConfig.SandboxResources.BaseCPUs,

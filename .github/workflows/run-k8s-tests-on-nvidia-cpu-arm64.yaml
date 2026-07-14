@@ -1,0 +1,109 @@
+name: CI | Run NVIDIA CPU kubernetes tests on arm64
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: true
+        type: string
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-nvidia-cpu-arm64
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  run-nvidia-cpu-tests-on-arm64:
+    name: run-${{ matrix.environment.name }}-tests-on-arm64
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [
+          { name: nvidia-cpu, vmm: qemu-nvidia-cpu, runner: arm64-nvidia-gh200 },
+          { name: nvidia-cpu-runtime-rs, vmm: qemu-nvidia-cpu-runtime-rs, runner: arm64-nvidia-gh200 },
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
+    runs-on: ${{ matrix.environment.runner }}
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
+      KUBERNETES: kubeadm
+      K8S_TEST_HOST_TYPE: baremetal
+      TARGET_ARCH: aarch64
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-tools-static-tarball-arm64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
+      - name: Deploy Kata
+        timeout-minutes: 20
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Run tests ${{ matrix.environment.vmm }}
+        timeout-minutes: 60
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Collect artifacts ${{ matrix.environment.vmm }}
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
+        continue-on-error: true
+
+      - name: Archive artifacts ${{ matrix.environment.vmm }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: k8s-tests-${{ matrix.environment.vmm }}-kubeadm-${{ inputs.tag }}
+          path: /tmp/artifacts
+          retention-days: 1
+
+      - name: Delete kata-deploy
+        if: always()
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup

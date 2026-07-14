@@ -52,6 +52,8 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
           { vmm: clh-runtime-rs, containerd_version: minimum },
+          { vmm: qemu-nvidia-cpu, containerd_version: latest },
+          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
