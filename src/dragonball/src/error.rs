@@ -112,6 +112,10 @@ pub enum StartMicroVmError {
     #[error("the virtual machine is already running")]
     MicroVMAlreadyRunning,
 
+    /// Failed to restore the virtual machine from a snapshot.
+    #[error("cannot restore the virtual machine from snapshot: {0}")]
+    RestoreMicroVm(String),
+
     /// Cannot start the VM because the kernel was not configured.
     #[error("cannot start the virtual machine without kernel configuration")]
     MissingKernelConfig,
