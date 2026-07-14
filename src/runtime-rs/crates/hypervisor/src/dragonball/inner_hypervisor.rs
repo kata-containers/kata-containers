@@ -82,8 +82,34 @@ impl DragonballInner {
         Ok(())
     }
 
+    /// Save the microVM state into the VM template files configured in
+    /// `[hypervisor].vm_template` (boot-to-be-template flow): guest memory
+    /// contents to `memory_path`, vCPU/device state to `device_state_path`.
+    /// All vCPUs are paused and left paused.
     pub(crate) async fn save_vm(&self) -> Result<()> {
-        todo!()
+        #[cfg(target_arch = "x86_64")]
+        {
+            let template = &self.config.vm_template;
+            if template.device_state_path.is_empty() || template.memory_path.is_empty() {
+                return Err(anyhow!(
+                    "vm_template memory_path/device_state_path are not configured"
+                ));
+            }
+            info!(
+                sl!(),
+                "saving microVM snapshot to template";
+                "device_state_path" => &template.device_state_path,
+                "memory_path" => &template.memory_path,
+            );
+            self.vmm_instance
+                .save_microvm(
+                    template.device_state_path.clone(),
+                    template.memory_path.clone(),
+                )
+                .context("save microvm")
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        Err(anyhow!("save_vm is not supported on this architecture"))
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {
