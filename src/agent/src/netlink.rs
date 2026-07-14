@@ -32,6 +32,7 @@ use std::ops::Deref;
 use std::str::{self, FromStr};
 
 /// Search criteria to use when looking for a link in `find_link`.
+#[derive(Clone, Copy)]
 pub enum LinkFilter<'a> {
     /// Find by link name.
     Name(&'a str),
@@ -113,7 +114,28 @@ impl Handle {
         // target link. filter using name or family is supported, but
         // we cannot use that to find target link.
         // let's try if hardware address filter works. -_-
-        let link = self.find_link(LinkFilter::Address(&iface.hwAddr)).await?;
+        //
+        // A NIC captured in a VM template is the exception. VMMs without
+        // device hot-plug -- e.g. Dragonball, whose virtio-mmio transport has
+        // no native hot-plug -- cannot attach a fresh NIC to the restored VM
+        // per pod, so the NIC is baked into the template. A pod restored from
+        // that template keeps the template creator's MAC, frozen in the
+        // snapshotted guest RAM, and can never be matched by this pod's MAC.
+        // Fall back to finding the interface by its (stable) name and
+        // retargeting it to the requested MAC, then look it up again. This
+        // assumes a deterministic interface name (true for a single-NIC pod,
+        // where both sides use "eth0").
+        let link = match self
+            .try_find_link(LinkFilter::Address(&iface.hwAddr))
+            .await?
+        {
+            Some(link) => link,
+            None => {
+                self.set_link_mac_by_name(&iface.name, &iface.hwAddr)
+                    .await?;
+                self.find_link(LinkFilter::Address(&iface.hwAddr)).await?
+            }
+        };
 
         // Bring down interface if it is UP
         if link.is_up() {
@@ -256,7 +278,6 @@ impl Handle {
         Ok(None)
     }
 
-    #[cfg(not(target_arch = "s390x"))]
     pub async fn set_link_mac_by_name(&self, ifname: &str, mac: &str) -> Result<String> {
         let link = self.find_link(LinkFilter::Name(ifname)).await?;
         let prev_mac = link.address();
@@ -315,6 +336,15 @@ impl Handle {
     }
 
     async fn find_link(&self, filter: LinkFilter<'_>) -> Result<Link> {
+        self.try_find_link(filter)
+            .await?
+            .ok_or_else(|| anyhow!("Link not found ({})", filter))
+    }
+
+    /// Like [`Self::find_link`], but returns `Ok(None)` when the link is not
+    /// found instead of an error, so callers can distinguish "not found" from
+    /// a genuine netlink/parse failure.
+    async fn try_find_link(&self, filter: LinkFilter<'_>) -> Result<Option<Link>> {
         let request = self.handle.link().get();
 
         let filtered = match filter {
@@ -348,8 +378,7 @@ impl Handle {
             stream.try_next().await?
         };
 
-        next.map(|msg| msg.into())
-            .ok_or_else(|| anyhow!("Link not found ({})", filter))
+        Ok(next.map(|msg| msg.into()))
     }
 
     async fn list_links(&self) -> Result<Vec<Link>> {
@@ -984,6 +1013,57 @@ mod tests {
             .expect("Failed to query link by address");
 
         assert_eq!(result.header.index, link.header.index);
+    }
+
+    #[tokio::test]
+    #[serial(template_mac_retarget)]
+    async fn update_interface_retargets_mac_by_name() {
+        skip_if_not_root!();
+
+        const LINK_NAME: &str = "tmpl-mac-test";
+        const OLD_MAC: &str = "02:00:00:00:00:01";
+        const NEW_MAC: &str = "02:00:00:00:00:02";
+
+        let _ = Command::new("ip")
+            .args(["link", "delete", LINK_NAME])
+            .output();
+        let add_result = Command::new("ip")
+            .args([
+                "link", "add", LINK_NAME, "address", OLD_MAC, "type", "dummy",
+            ])
+            .output()
+            .expect("failed to run ip link add");
+        if !add_result.status.success() {
+            println!(
+                "INFO: skipping test - cannot create dummy link: {}",
+                String::from_utf8_lossy(&add_result.stderr)
+            );
+            return;
+        }
+        struct LinkCleanup(&'static str);
+        impl Drop for LinkCleanup {
+            fn drop(&mut self) {
+                let _ = Command::new("ip").args(["link", "delete", self.0]).output();
+            }
+        }
+        let _link_cleanup = LinkCleanup(LINK_NAME);
+
+        let mut handle = Handle::new().unwrap();
+        let iface = Interface {
+            name: LINK_NAME.to_string(),
+            hwAddr: NEW_MAC.to_string(),
+            mtu: 1500,
+            ..Default::default()
+        };
+
+        let update_result = handle.update_interface(&iface).await;
+        let observed_mac = handle
+            .find_link(LinkFilter::Name(LINK_NAME))
+            .await
+            .map(|link| link.address());
+
+        update_result.expect("failed to update interface with a restored MAC");
+        assert_eq!(observed_mac.unwrap().to_lowercase(), NEW_MAC);
     }
 
     #[tokio::test]
