@@ -1066,6 +1066,41 @@ impl Sandbox for VirtSandbox {
             .context(format!("connect to address {:?}", &address))?;
         self.set_agent_policy().await.context("set agent policy")?;
 
+        // Boot-to-be-template: the sandbox VM has booted and the guest agent
+        // answered — dump the VM as a template now, BEFORE any guest sandbox
+        // is created (the restored VM must receive its first create_sandbox
+        // from the consuming pod). Mirrors the RunD/kata-go "template dumped
+        // at sandbox boot" semantics.
+        //
+        // The guest agent must not hold a live connection in the snapshot,
+        // otherwise the restored VM's agent never listens and the next shim
+        // cannot connect: disconnect first and give the agent time to clean
+        // up and return to listening (see factory/template.rs for the same
+        // dance in the VM factory). The template pod is a throwaway, so
+        // sandbox startup is aborted here with an explicit error once the
+        // snapshot is on disk; the caller is expected to remove the pod.
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        if hypervisor_config.vm_template.boot_to_be_template {
+            self.agent.stop().await;
+            self.agent
+                .disconnect()
+                .await
+                .context("disconnect agent before saving template")?;
+            // Give the guest agent time to notice the dropped connection, clean
+            // up and return to listening before the snapshot captures its state.
+            const WAIT_FOR_AGENT_CLEANUP: std::time::Duration = std::time::Duration::from_secs(2);
+            tokio::time::sleep(WAIT_FOR_AGENT_CLEANUP).await;
+            self.hypervisor
+                .save_vm()
+                .await
+                .context("save vm template (boot_to_be_template)")?;
+            info!(sl!(), "sandbox VM saved as template");
+            return Err(anyhow!(
+                "VM template saved; this boot_to_be_template sandbox is a \
+                 throwaway and was intentionally aborted"
+            ));
+        }
+
         self.resource_manager
             .setup_after_start_vm()
             .await
