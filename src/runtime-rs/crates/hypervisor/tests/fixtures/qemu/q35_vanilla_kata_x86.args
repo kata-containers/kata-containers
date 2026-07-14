@@ -1,4 +1,4 @@
-# Q35 vanilla kata — x86_64, 2-socket NUMA, 65 vCPUs, no GPU assigned
+# Q35 vanilla kata — x86_64, 2-socket NUMA, 66 vCPUs, no GPU assigned
 # Source: production kata-containers log, July 2026 (NVIDIA DGX x86 host)
 #
 # Platform scope: machine line + NUMA SHM memory backends + NUMA topology +
@@ -25,13 +25,13 @@
 -machine
 q35,accel=kvm
 -object
-memory-backend-file,id=numa-mem0,size=36864M,mem-path=/dev/shm,host-nodes=0,policy=bind,share=on
+memory-backend-file,id=numa-mem0,size=36G,mem-path=/dev/shm,host-nodes=0,policy=bind,share=on
 -numa
-node,nodeid=0,memdev=numa-mem0,cpus=0-32
+node,memdev=numa-mem0,cpus=0-32,nodeid=0
 -object
-memory-backend-file,id=numa-mem1,size=36864M,mem-path=/dev/shm,host-nodes=1,policy=bind,share=on
+memory-backend-file,id=numa-mem1,size=36G,mem-path=/dev/shm,host-nodes=1,policy=bind,share=on
 -numa
-node,nodeid=1,memdev=numa-mem1,cpus=33-65
+node,memdev=numa-mem1,cpus=33-65,nodeid=1
 -numa
 dist,src=0,dst=1,val=20
 -numa

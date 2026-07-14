@@ -31,9 +31,9 @@ sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on,policy=1966
 -machine
 q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=snp
 -object
-memory-backend-ram,id=numa-mem0,size=57344M,host-nodes=1,policy=bind
+memory-backend-ram,id=numa-mem0,size=56G,host-nodes=1,policy=bind
 -numa
-node,nodeid=0,memdev=numa-mem0,cpus=0-16
+node,memdev=numa-mem0,cpus=0-16,nodeid=0
 -device
 pxb-pcie,id=pxb-numa0,bus=pcie.0,bus_nr=32,numa_node=0
 -device
