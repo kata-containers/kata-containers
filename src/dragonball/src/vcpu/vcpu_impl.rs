@@ -36,9 +36,15 @@ use crate::IoManagerCached;
 #[path = "x86_64.rs"]
 mod x86_64;
 
+#[cfg(target_arch = "x86_64")]
+pub use self::x86_64::VcpuState;
+
 #[cfg(target_arch = "aarch64")]
 #[path = "aarch64.rs"]
 mod aarch64;
+
+#[cfg(target_arch = "aarch64")]
+pub use self::aarch64::VcpuState;
 
 #[cfg(target_arch = "x86_64")]
 const MAGIC_IOPORT_BASE: u16 = 0xdbdb;
@@ -119,6 +125,18 @@ pub enum VcpuError {
     /// The call to KVM_SET_CPUID2 failed on x86_64.
     #[error("failure while calling KVM_SET_CPUID2 on x86_64")]
     SetSupportedCpusFailed(#[source] kvm_ioctls::Error),
+
+    /// KVM processed fewer MSRs than requested while saving or restoring
+    /// vCPU state; continuing would silently corrupt the remaining MSRs.
+    #[error("vCPU {id}: KVM processed only {processed} of {requested} MSRs")]
+    MsrsIncomplete {
+        /// vCPU id.
+        id: u8,
+        /// Number of MSRs actually processed by KVM.
+        processed: usize,
+        /// Number of MSRs requested.
+        requested: usize,
+    },
 }
 
 #[cfg(target_arch = "aarch64")]
@@ -199,6 +217,11 @@ pub enum VcpuEvent {
 
     /// Event to revalidate vcpu IoManager cache
     RevalidateCache,
+
+    /// Event to save the vCPU state. The vCPU must be paused. Carries the
+    /// indices of the MSRs to save.
+    #[cfg(target_arch = "x86_64")]
+    SaveState(Vec<u32>),
 }
 
 /// List of responses that the Vcpu reports.
@@ -215,6 +238,9 @@ pub enum VcpuResponse {
     Error(VcpuError),
     /// Vcpu IoManager cache is revalidated
     CacheRevalidated,
+    /// Saved vCPU state.
+    #[cfg(target_arch = "x86_64")]
+    SavedState(Box<super::VcpuState>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -692,6 +718,13 @@ impl Vcpu {
                     .map_err(|e| self.response_sender.send(VcpuResponse::Error(e)))
                     .expect("failed to revalidate vcpu IoManager cache");
             }
+            // Saving state requires a paused vCPU.
+            #[cfg(target_arch = "x86_64")]
+            Ok(VcpuEvent::SaveState(_)) => {
+                self.response_sender
+                    .send(VcpuResponse::NotAllowed)
+                    .expect("failed to send save state status");
+            }
             // Unhandled exit of the other end.
             Err(TryRecvError::Disconnected) => {
                 // Move to 'exited' state.
@@ -743,6 +776,17 @@ impl Vcpu {
                     .map_err(|e| self.response_sender.send(VcpuResponse::Error(e)))
                     .expect("failed to revalidate vcpu IoManager cache");
 
+                StateMachine::next(Self::paused)
+            }
+            #[cfg(target_arch = "x86_64")]
+            Ok(VcpuEvent::SaveState(msr_index_list)) => {
+                let response = match self.save_state(&msr_index_list) {
+                    Ok(state) => VcpuResponse::SavedState(Box::new(state)),
+                    Err(e) => VcpuResponse::Error(e),
+                };
+                self.response_sender
+                    .send(response)
+                    .expect("failed to send saved vcpu state");
                 StateMachine::next(Self::paused)
             }
             // Unhandled exit of the other end.
@@ -815,6 +859,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     use dbs_interrupt::KvmIrqManager;
     use lazy_static::lazy_static;
+    use serial_test::serial;
     use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
@@ -928,6 +973,7 @@ pub mod tests {
     }
 
     #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_run_emulation() {
         skip_if_kvm_unaccessable!();
 

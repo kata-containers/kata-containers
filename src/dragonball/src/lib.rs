@@ -28,6 +28,8 @@ pub mod hypervisor_metrics;
 pub mod kvm_context;
 /// Metrics system.
 pub mod metric;
+/// Checkpoint/restore (snapshot) support.
+pub mod persist;
 /// Resource manager for virtual machines.
 pub mod resource_manager;
 /// Signal handler for virtual machines.
