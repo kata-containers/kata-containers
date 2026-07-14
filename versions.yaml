@@ -85,11 +85,6 @@ assets:
       url: "https://github.com/qemu/qemu"
       version: "v11.0.1"
 
-    qemu-cca-experimental:
-      description: "QEMU with experimental CCA support"
-      url: "https://git.codelinaro.org/linaro/dcap/qemu.git"
-      tag: "97345ddc501d3eb45bbbf15d97608fba0c2c0c7b"
-
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
@@ -207,16 +202,6 @@ assets:
     nvidia:
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
       version: "v6.18.35"
-
-  kernel-arm-experimental:
-    description: "Linux kernel with cpu/mem hotplug support on arm64"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.15.138"
-    confidential:
-      description: "Linux kernel with RME support on arm64"
-      url: "https://gitlab.arm.com/linux-arm/linux-cca"
-      version: "v6.15.0-rc1-916aeec68dd4500a1cdf4ebf214c5620955daf3f"
-      ref: "916aeec68dd4500a1cdf4ebf214c5620955daf3f"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
@@ -373,12 +358,6 @@ externals:
     arm64:
       description: "UEFI for arm64 virtual machines."
       version: "edk2-stable202508"
-      package: "ArmVirtPkg/ArmVirtQemu.dsc"
-      package_output_dir: "ArmVirtQemu-AARCH64"
-    cca:
-      description: "UEFI for arm64 CCA virtual machines."
-      version: "cca/2025-02-06"
-      url: "https://git.codelinaro.org/linaro/dcap/edk2"
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
       package_output_dir: "ArmVirtQemu-AARCH64"
 

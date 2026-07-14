@@ -42,8 +42,6 @@ function get_remote_command_per_hypervisor() {
 		echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 	elif is_tdx_hypervisor "${KATA_HYPERVISOR}"; then
 		echo "cpuid | grep TDX_GUEST"
-	elif is_cca_hypervisor "${KATA_HYPERVISOR}"; then
-		echo "echo 'Remote TEE verification is not implemented for qemu-cca' >&2; exit 1"
 	else
 		echo ""
 	fi
