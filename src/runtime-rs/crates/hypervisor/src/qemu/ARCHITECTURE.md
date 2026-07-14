@@ -151,6 +151,63 @@ pub struct Virt {
 `highmem_mmio_size` live exclusively on `Virt`.  The compiler enforces this —
 no runtime guards needed.
 
+#### `BaseMachine` and `CpuConfig` — CPU model is an attestation identity
+
+```rust
+pub struct BaseMachine {
+    pub accel: String,
+    pub memory_backend: Option<String>,
+    pub cpu: CpuConfig,
+}
+
+pub struct CpuConfig {
+    pub model: CpuModel,
+}
+
+pub enum CpuModel {
+    Host   { extra_features: Vec<String> },
+    EpycV4 { extra_features: Vec<String> },
+}
+
+// AVX-512 / VAES extensions stripped by EPYC-v4 that SNP guests re-enable.
+pub const SNP_CRYPTO_FEATURES: &[&str] = &[
+    "+vaes", "+vpclmulqdq",
+    "+avx512f", "+avx512dq", "+avx512bw", "+avx512vl", "+avx512cd",
+    "+avx512ifma", "+avx512vbmi", "+avx512vbmi2",
+    "+avx512vnni", "+avx512bitalg", "+avx512-vpopcntdq", "+avx512-bf16",
+];
+```
+
+**Why `CpuModel` is not a raw string.**
+For CoCo SNP the CPU model is part of the attestation identity, not merely a
+performance setting.  A K8s cluster can mix Milan, Genoa, Bergamo, and Turin
+nodes.  With `-cpu host` the guest CPUID family/model/stepping changes per
+physical node, so attestation reference values differ across the fleet and
+re-scheduled Pods fail remote attestation (#12329).
+
+Pinning to `EPYC-v4` gives every SNP guest the same deterministic CPUID
+regardless of which silicon generation it lands on.  The tradeoff is that
+`EPYC-v4` strips AVX-512 and VAES extensions, cutting AES-GCM throughput
+roughly in half (~4 GB/s instead of ~8 GB/s), which is measurable when an
+H100 GPU is the encryption bottleneck (#12382).
+
+`extra_features` on `EpycV4` resolves both constraints: the attestation
+identity stays fixed while the crypto extensions are explicitly re-enabled.
+`extra_features` on `Host` carries flags like `pmu=off` and `host-phys-bits=on`
+that must be set for all x86_64 KVM guests (#13270).
+
+Platform builder assigns models by topology:
+
+| Machine | CoCo mode | `CpuModel`                              |
+|---------|----------|-----------------------------------------|
+| virt    | none     | `Host { [] }`                           |
+| Q35     | none     | `Host { ["pmu=off", "host-phys-bits=on"] }` |
+| Q35     | TDX      | `Host { ["pmu=off", "host-phys-bits=on"] }` |
+| Q35     | SNP      | `EpycV4 { SNP_CRYPTO_FEATURES }`        |
+
+TDX attestation measures the TD configuration independently of the vCPU CPUID
+presentation, so `Host` is safe there.
+
 #### `PciTopology` — bus resolution moved here
 
 ```rust
@@ -872,3 +929,7 @@ legacy `Machine` struct can be deleted.
 
 - [Issue #12187](https://github.com/kata-containers/kata-containers/issues/12187) — full design spec with data-model definitions and worked examples
 - [Issue #12125](https://github.com/kata-containers/kata-containers/issues/12125) — NUMA and hugepages roadmap
+- [Issue #12210](https://github.com/kata-containers/kata-containers/issues/12210) — make CPU model configurable for kata-qemu-snp (origin of the cpu=host discussion)
+- [PR #12329](https://github.com/kata-containers/kata-containers/pull/12329) — switch SNP to `cpu=host`; held on do-not-merge due to attestation portability concerns raised in review
+- [Issue #12382](https://github.com/kata-containers/kata-containers/issues/12382) — AVX-512/VAES stripped by EPYC-v4 halves AES-GCM throughput; motivates `SNP_CRYPTO_FEATURES`
+- [Issue #13270](https://github.com/kata-containers/kata-containers/issues/13270) — 4+ Blackwell GPU BAR mapping fails without `host-phys-bits=on`; motivates `Host::extra_features`
