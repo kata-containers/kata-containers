@@ -77,6 +77,64 @@ pub struct DeviceManagerState {
 /// epoch mismatch causes the snapshot to be refused with a clear error.
 pub const FORMAT_EPOCH: u16 = 1;
 
+/// Errors from the top-level microVM save/restore orchestration.
+#[derive(Debug, thiserror::Error)]
+pub enum SnapshotError {
+    /// vCPU manager failure while saving/restoring vCPU state.
+    #[error("vcpu manager error: {0}")]
+    Vcpu(#[from] crate::vcpu::VcpuManagerError),
+
+    /// Address space manager failure while saving/restoring guest memory.
+    #[error("guest memory error: {0}")]
+    Memory(#[from] crate::address_space_manager::AddressManagerError),
+
+    /// Block device manager failure while saving/restoring device state.
+    #[cfg(feature = "virtio-blk")]
+    #[error("block device error: {0}")]
+    Block(#[from] crate::device_manager::blk_dev_mgr::BlockDeviceError),
+
+    /// Network device manager failure while saving/restoring device state.
+    #[cfg(any(
+        feature = "virtio-net",
+        feature = "vhost-net",
+        feature = "vhost-user-net"
+    ))]
+    #[error("network device error: {0}")]
+    Network(#[from] crate::device_manager::net_dev_mgr::NetworkDeviceError),
+
+    /// Vsock device manager failure while saving/restoring device state.
+    #[cfg(feature = "virtio-vsock")]
+    #[error("vsock device error: {0}")]
+    Vsock(#[from] crate::device_manager::vsock_dev_mgr::VsockDeviceError),
+
+    /// virtio-fs device manager failure while saving/restoring device state.
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+    #[error("virtio-fs device error: {0}")]
+    Fs(#[from] crate::device_manager::fs_dev_mgr::FsDeviceError),
+
+    /// Balloon device manager failure while saving/restoring device state.
+    #[cfg(feature = "virtio-balloon")]
+    #[error("virtio-balloon device error: {0}")]
+    Balloon(#[from] crate::device_manager::balloon_dev_mgr::BalloonDeviceError),
+
+    /// virtio-mem device manager failure while saving/restoring device state.
+    #[cfg(feature = "virtio-mem")]
+    #[error("virtio-mem device error: {0}")]
+    Mem(#[from] crate::device_manager::mem_dev_mgr::MemDeviceError),
+
+    /// State file (de)serialization failure.
+    #[error(transparent)]
+    Persist(#[from] PersistError),
+
+    /// Snapshot file I/O failure.
+    #[error("snapshot I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// KVM ioctl failure.
+    #[error("KVM error: {0}")]
+    Kvm(#[source] kvm_ioctls::Error),
+}
+
 /// Header identifying a snapshot state file.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SnapshotHeader {
@@ -97,6 +155,27 @@ impl Default for SnapshotHeader {
     }
 }
 
+/// VM-scoped KVM state (x86_64): PIT, kvmclock, the PIC pair and the IOAPIC.
+///
+/// Without restoring these, a restored guest never receives legacy IRQs (the
+/// fresh KVM IOAPIC/PIC come up with all lines masked, discarding the
+/// redirection tables the guest programmed at boot) and the guest clock is
+/// wrong.
+#[cfg(target_arch = "x86_64")]
+#[derive(Deserialize, Serialize)]
+pub struct VmKvmState {
+    /// PIT state.
+    pub pit: kvm_bindings::kvm_pit_state2,
+    /// kvmclock state.
+    pub clock: kvm_bindings::kvm_clock_data,
+    /// PIC master state.
+    pub pic_master: kvm_bindings::kvm_irqchip,
+    /// PIC slave state.
+    pub pic_slave: kvm_bindings::kvm_irqchip,
+    /// IOAPIC state.
+    pub ioapic: kvm_bindings::kvm_irqchip,
+}
+
 /// Aggregated state of a microVM.
 ///
 /// Components are added progressively: a component whose `Persist` support is
@@ -107,6 +186,10 @@ pub struct MicrovmState {
     /// Snapshot header.
     #[serde(default)]
     pub header: SnapshotHeader,
+    /// VM-scoped KVM state.
+    #[cfg(target_arch = "x86_64")]
+    #[serde(default)]
+    pub vm_kvm_state: Option<VmKvmState>,
     /// Per-vCPU state, ordered by vCPU id.
     #[serde(default)]
     pub vcpu_states: Vec<VcpuState>,
