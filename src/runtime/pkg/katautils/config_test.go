@@ -219,6 +219,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 
 		FactoryConfig: factoryConfig,
 		EmptyDirMode:  vc.EmptyDirModeSharedFs,
+
+		PodResourceDeviceSources: []string{oci.PodResourceDeviceSourceDevicePlugin},
 	}
 
 	err = SetKernelParams(&runtimeConfig)
@@ -601,6 +603,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 		FactoryConfig: expectedFactoryConfig,
 		EmptyDirMode:  vc.EmptyDirModeSharedFs,
+
+		PodResourceDeviceSources: []string{oci.PodResourceDeviceSourceDevicePlugin},
 	}
 	err = SetKernelParams(&expectedConfig)
 	if err != nil {
@@ -1686,6 +1690,65 @@ func TestCheckEmptyDirMode(t *testing.T) {
 	r = runtime{EmptyDirMode: "block_plain"}
 	_, err = r.emptyDirMode()
 	assert.Error(err)
+}
+
+func TestPodResourceDeviceSources(t *testing.T) {
+	assert := assert.New(t)
+
+	// nolint: govet
+	testCases := []struct {
+		name        string
+		sources     []string
+		expected    []string
+		expectError bool
+	}{
+		{
+			name:     "key absent defaults to device-plugin",
+			sources:  nil,
+			expected: []string{oci.PodResourceDeviceSourceDevicePlugin},
+		},
+		{
+			name:     "explicit device-plugin",
+			sources:  []string{oci.PodResourceDeviceSourceDevicePlugin},
+			expected: []string{oci.PodResourceDeviceSourceDevicePlugin},
+		},
+		{
+			name:     "explicit dra",
+			sources:  []string{oci.PodResourceDeviceSourceDRA},
+			expected: []string{oci.PodResourceDeviceSourceDRA},
+		},
+		{
+			name:     "both listed",
+			sources:  []string{oci.PodResourceDeviceSourceDevicePlugin, oci.PodResourceDeviceSourceDRA},
+			expected: []string{oci.PodResourceDeviceSourceDevicePlugin, oci.PodResourceDeviceSourceDRA},
+		},
+		{
+			name:        "empty slice is an error",
+			sources:     []string{},
+			expectError: true,
+		},
+		{
+			name:        "unknown token is an error",
+			sources:     []string{"bogus"},
+			expectError: true,
+		},
+		{
+			name:        "duplicate token is an error",
+			sources:     []string{oci.PodResourceDeviceSourceDRA, oci.PodResourceDeviceSourceDRA},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		r := runtime{PodResourceDeviceSources: tc.sources}
+		got, err := r.podResourceDeviceSources()
+		if tc.expectError {
+			assert.Error(err, tc.name)
+			continue
+		}
+		assert.NoError(err, tc.name)
+		assert.Equal(tc.expected, got, tc.name)
+	}
 }
 
 func TestCheckFactoryConfig(t *testing.T) {
