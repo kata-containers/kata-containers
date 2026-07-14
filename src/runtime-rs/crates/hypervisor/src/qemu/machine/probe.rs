@@ -10,9 +10,12 @@ pub(crate) struct HostTopology {
     pub egm_sockets: Vec<EgmSocketInfo>,
     /// `-numa dist` entries emitted after all NUMA nodes.  Each tuple is (src, dst, val).
     pub numa_distances: Vec<(u32, u32, u32)>,
-    /// Number of pre-provisioned `pcie-root-port` devices on the Q35 default bus
-    /// (cold-plug topology; `cold_plug_vfio=root-port` in kata config).
-    pub cold_plug_ports: u32,
+    /// Minimum number of `pcie-root-port` slots to pre-provision on the Q35 default
+    /// bus at VM creation time.  Mirrors the `pcie_root_port =` kata config field.
+    /// Slots are empty at boot; devices are plugged in cold (before boot, by the
+    /// legacy generator) or hot (via QMP `device_add` at runtime).
+    /// See "VFIO Device Assignment Model" in ARCHITECTURE.md.
+    pub pcie_root_port: u32,
     pub protection: Option<ProtectionDevice>,
 }
 

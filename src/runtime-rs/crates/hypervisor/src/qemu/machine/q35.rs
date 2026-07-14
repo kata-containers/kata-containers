@@ -13,7 +13,7 @@ pub(crate) struct Q35 {
     pub confidential_guest_support: Option<String>,
     /// Not bus-attached; contrast with BusIommu on PciRootComplex.
     pub intel_iommu: Option<IntelIommuConfig>,
-    // pub runtime: RuntimeFeatures,  -- Phase 3+
+    // pub runtime: RuntimeFeatures,  -- Phase 4+
 }
 
 pub(crate) struct IntelIommuConfig {
