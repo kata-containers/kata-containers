@@ -15,7 +15,8 @@ use crate::config_manager::{
     ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
 use crate::device_manager::{
-    DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext, DeviceVirtioRegionHandler,
+    virtio_persist, DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext,
+    DeviceVirtioRegionHandler,
 };
 use crate::get_bucket_update;
 
@@ -38,6 +39,10 @@ pub enum FsDeviceError {
     /// Invalid fs, "virtio" or "vhostuser" is allowed.
     #[error("the fs type is invalid, virtio or vhostuser is allowed")]
     InvalidFs,
+
+    /// Virtio device operation error.
+    #[error("virtio device operation error: {0}")]
+    Virtio(#[source] VirtioError),
 
     /// Cannot access address space.
     #[error("Cannot access address space.")]
@@ -547,6 +552,94 @@ impl FsDeviceMgr {
             None => Err(FsDeviceError::TagNotExists(new_cfg.tag)),
         }
     }
+
+    /// Capture the state of all virtio-fs devices.
+    ///
+    /// The virtual machine must be paused when this is called. Backend
+    /// filesystem state (open handles, inodes, DAX mappings) is not
+    /// captured: snapshots must be taken at a clean quiesce point.
+    /// vhost-user-fs devices are refused.
+    pub fn save_states(&self) -> std::result::Result<FsDeviceMgrState, FsDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(FsDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_info, transport) = virtio_persist::save_mmio_device_state::<
+                virtio::fs::VirtioFs<GuestAddressSpaceImpl>,
+            >(device)
+            .map_err(FsDeviceError::Virtio)?;
+            devices.push(FsDevState {
+                config: info.config.clone(),
+                device_info,
+                transport,
+            });
+        }
+        Ok(FsDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all virtio-fs devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by tag) and must not have been activated yet. Must be
+    /// called before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &FsDeviceMgrState,
+    ) -> std::result::Result<(), FsDeviceError> {
+        for dev_state in &state.devices {
+            let info = self
+                .info_list
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or_else(|| FsDeviceError::TagNotExists(dev_state.config.id().to_owned()))?;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(FsDeviceError::Virtio(VirtioError::InvalidInput))?;
+            virtio_persist::restore_mmio_device_state::<
+                virtio::fs::VirtioFs<GuestAddressSpaceImpl>,
+            >(device, &dev_state.device_info, &dev_state.transport)
+            .map_err(FsDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+impl virtio_persist::VirtioDevicePersist for virtio::fs::VirtioFs<GuestAddressSpaceImpl> {
+    fn persist_device_info(&self) -> virtio::persist::VirtioDeviceInfoState {
+        self.persist_state()
+    }
+
+    fn restore_device_info(
+        &mut self,
+        state: &virtio::persist::VirtioDeviceInfoState,
+    ) -> std::result::Result<(), VirtioError> {
+        self.restore_from_state(state)
+    }
+}
+
+/// Snapshot state of one virtio-fs device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FsDevState {
+    /// Static configuration of the device.
+    pub config: FsDeviceConfigInfo,
+    /// Guest-negotiated virtio device state.
+    pub device_info: virtio::persist::VirtioDeviceInfoState,
+    /// MMIO transport state.
+    pub transport: virtio::persist::MmioV2TransportState,
+}
+
+/// Snapshot state of the virtio-fs device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct FsDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<FsDevState>,
 }
 
 impl Default for FsDeviceMgr {

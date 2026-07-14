@@ -10,7 +10,7 @@ use dbs_virtio_devices::vhost::vhost_user::net::VhostUserNet;
 use dbs_virtio_devices::Error as VirtioError;
 use serde::{Deserialize, Serialize};
 
-use super::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use super::{virtio_persist, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfos};
 
@@ -204,6 +204,97 @@ impl VhostUserNetDeviceMgr {
         }
         Ok(())
     }
+
+    /// Capture the state of all vhost-user-net devices.
+    ///
+    /// The virtual machine must be paused when this is called. The
+    /// vhost-user backend connection is re-established and reconfigured
+    /// when device activation is replayed on restore.
+    pub fn save_states(
+        &self,
+    ) -> std::result::Result<VhostUserNetDeviceMgrState, VhostUserNetDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.configs.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(VhostUserNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_info, transport) = virtio_persist::save_mmio_device_state::<
+                VhostUserNet<GuestAddressSpaceImpl>,
+            >(device)
+            .map_err(VhostUserNetDeviceError::Virtio)?;
+            devices.push(VhostUserNetDevState {
+                config: info.config.clone(),
+                device_info,
+                transport,
+            });
+        }
+        Ok(VhostUserNetDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all vhost-user-net devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by interface id) and must not have been activated yet.
+    /// Must be called before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &VhostUserNetDeviceMgrState,
+    ) -> std::result::Result<(), VhostUserNetDeviceError> {
+        for dev_state in &state.devices {
+            let info = self
+                .configs
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or(VhostUserNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(VhostUserNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            virtio_persist::restore_mmio_device_state::<VhostUserNet<GuestAddressSpaceImpl>>(
+                device,
+                &dev_state.device_info,
+                &dev_state.transport,
+            )
+            .map_err(VhostUserNetDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+impl virtio_persist::VirtioDevicePersist for VhostUserNet<GuestAddressSpaceImpl> {
+    fn persist_device_info(&self) -> dbs_virtio_devices::persist::VirtioDeviceInfoState {
+        self.persist_state()
+    }
+
+    fn restore_device_info(
+        &mut self,
+        state: &dbs_virtio_devices::persist::VirtioDeviceInfoState,
+    ) -> std::result::Result<(), VirtioError> {
+        self.restore_from_state(state)
+    }
+}
+
+/// Snapshot state of one vhost-user-net device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct VhostUserNetDevState {
+    /// Static configuration of the device.
+    pub config: VhostUserNetDeviceConfigInfo,
+    /// Guest-negotiated virtio device state.
+    pub device_info: dbs_virtio_devices::persist::VirtioDeviceInfoState,
+    /// MMIO transport state.
+    pub transport: dbs_virtio_devices::persist::MmioV2TransportState,
+}
+
+/// Snapshot state of the vhost-user-net device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct VhostUserNetDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<VhostUserNetDevState>,
 }
 
 impl Default for VhostUserNetDeviceMgr {

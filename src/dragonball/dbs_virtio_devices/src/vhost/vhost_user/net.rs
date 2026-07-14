@@ -322,6 +322,29 @@ impl<AS> VhostUserNet<AS>
 where
     AS: DbsGuestAddressSpace,
 {
+    /// Capture the guest-negotiated state of this device.
+    ///
+    /// The vhost-user backend connection is re-established and reconfigured
+    /// when device activation is replayed on restore.
+    pub fn persist_state(&self) -> crate::persist::VirtioDeviceInfoState {
+        self.device.lock().unwrap().device_info.persist_state()
+    }
+
+    /// Restore the guest-negotiated state of this device.
+    ///
+    /// The device must have been re-created with the same configuration and
+    /// must not have been activated yet.
+    pub fn restore_from_state(
+        &mut self,
+        state: &crate::persist::VirtioDeviceInfoState,
+    ) -> crate::Result<()> {
+        self.device
+            .lock()
+            .unwrap()
+            .device_info
+            .restore_from_state(state)
+    }
+
     /// Create a new vhost-user net device.
     ///
     /// Create a Unix Domain Socket listener and wait until the the first incoming connection is

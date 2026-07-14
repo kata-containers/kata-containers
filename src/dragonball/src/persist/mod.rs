@@ -30,8 +30,22 @@ use std::path::Path;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestMemoryState;
+#[cfg(feature = "virtio-balloon")]
+use crate::device_manager::balloon_dev_mgr::BalloonDeviceMgrState;
 #[cfg(feature = "virtio-blk")]
 use crate::device_manager::blk_dev_mgr::BlockDeviceMgrState;
+#[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+use crate::device_manager::fs_dev_mgr::FsDeviceMgrState;
+#[cfg(feature = "virtio-mem")]
+use crate::device_manager::mem_dev_mgr::MemDeviceMgrState;
+#[cfg(feature = "vhost-net")]
+use crate::device_manager::vhost_net_dev_mgr::VhostNetDeviceMgrState;
+#[cfg(feature = "vhost-user-net")]
+use crate::device_manager::vhost_user_net_dev_mgr::VhostUserNetDeviceMgrState;
+#[cfg(feature = "virtio-net")]
+use crate::device_manager::virtio_net_dev_mgr::VirtioNetDeviceMgrState;
+#[cfg(feature = "virtio-vsock")]
+use crate::device_manager::vsock_dev_mgr::VsockDeviceMgrState;
 use crate::vcpu::VcpuState;
 
 /// Aggregated snapshot state of the device manager.
@@ -44,6 +58,34 @@ pub struct DeviceManagerState {
     #[cfg(feature = "virtio-blk")]
     #[serde(default)]
     pub block: Option<BlockDeviceMgrState>,
+    /// State of the virtio-net device manager.
+    #[cfg(feature = "virtio-net")]
+    #[serde(default)]
+    pub virtio_net: Option<VirtioNetDeviceMgrState>,
+    /// State of the vsock device manager.
+    #[cfg(feature = "virtio-vsock")]
+    #[serde(default)]
+    pub vsock: Option<VsockDeviceMgrState>,
+    /// State of the virtio-fs device manager.
+    #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
+    #[serde(default)]
+    pub fs: Option<FsDeviceMgrState>,
+    /// State of the virtio-balloon device manager.
+    #[cfg(feature = "virtio-balloon")]
+    #[serde(default)]
+    pub balloon: Option<BalloonDeviceMgrState>,
+    /// State of the virtio-mem device manager.
+    #[cfg(feature = "virtio-mem")]
+    #[serde(default)]
+    pub mem: Option<MemDeviceMgrState>,
+    /// State of the vhost-net device manager.
+    #[cfg(feature = "vhost-net")]
+    #[serde(default)]
+    pub vhost_net: Option<VhostNetDeviceMgrState>,
+    /// State of the vhost-user-net device manager.
+    #[cfg(feature = "vhost-user-net")]
+    #[serde(default)]
+    pub vhost_user_net: Option<VhostUserNetDeviceMgrState>,
 }
 
 /// Current snapshot format epoch.

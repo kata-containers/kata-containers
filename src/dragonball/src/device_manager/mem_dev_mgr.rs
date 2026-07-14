@@ -23,7 +23,7 @@ use vm_memory::{
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::DbsMmioV2Device;
-use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::device_manager::{virtio_persist, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::vm::VmConfigInfo;
 
 // The flag of whether to use the shared irq.
@@ -42,6 +42,10 @@ pub enum MemDeviceError {
     /// The mem device was already used.
     #[error("the virtio-mem ID was already added to a different device")]
     MemDeviceAlreadyExists,
+
+    /// Virtio device operation error.
+    #[error("virtio device operation error: {0}")]
+    Virtio(#[source] VirtioError),
 
     /// Cannot perform the requested operation after booting the microVM.
     #[error("the update operation is not allowed after boot")]
@@ -340,6 +344,95 @@ impl MemDeviceMgr {
         }
         Ok(())
     }
+
+    /// Capture the state of all virtio-mem devices.
+    ///
+    /// The virtual machine must be paused when this is called. The
+    /// plugged-memory-block runtime state is not captured: snapshots must
+    /// be taken before any virtio-mem resize request.
+    pub fn save_states(&self) -> std::result::Result<MemDeviceMgrState, MemDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(MemDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_info, transport) = virtio_persist::save_mmio_device_state::<
+                Mem<GuestAddressSpaceImpl>,
+            >(device)
+            .map_err(MemDeviceError::Virtio)?;
+            devices.push(MemDevState {
+                config: info.config.clone(),
+                device_info,
+                transport,
+            });
+        }
+        Ok(MemDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all virtio-mem devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by id) and must not have been activated yet. Must be called
+    /// before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &MemDeviceMgrState,
+    ) -> std::result::Result<(), MemDeviceError> {
+        for dev_state in &state.devices {
+            let info = self
+                .info_list
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or(MemDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(MemDeviceError::Virtio(VirtioError::InvalidInput))?;
+            virtio_persist::restore_mmio_device_state::<Mem<GuestAddressSpaceImpl>>(
+                device,
+                &dev_state.device_info,
+                &dev_state.transport,
+            )
+            .map_err(MemDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+impl virtio_persist::VirtioDevicePersist for Mem<GuestAddressSpaceImpl> {
+    fn persist_device_info(&self) -> virtio::persist::VirtioDeviceInfoState {
+        self.persist_state()
+    }
+
+    fn restore_device_info(
+        &mut self,
+        state: &virtio::persist::VirtioDeviceInfoState,
+    ) -> std::result::Result<(), VirtioError> {
+        self.restore_from_state(state)
+    }
+}
+
+/// Snapshot state of one virtio-mem device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct MemDevState {
+    /// Static configuration of the device.
+    pub config: MemDeviceConfigInfo,
+    /// Guest-negotiated virtio device state.
+    pub device_info: virtio::persist::VirtioDeviceInfoState,
+    /// MMIO transport state.
+    pub transport: virtio::persist::MmioV2TransportState,
+}
+
+/// Snapshot state of the virtio-mem device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct MemDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<MemDevState>,
 }
 
 impl Default for MemDeviceMgr {

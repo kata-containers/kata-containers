@@ -566,6 +566,24 @@ impl<AS: GuestAddressSpace> Balloon<AS> {
     }
 }
 
+impl<AS: GuestAddressSpace> Balloon<AS> {
+    /// Capture the guest-negotiated state of this device.
+    pub fn persist_state(&self) -> crate::persist::VirtioDeviceInfoState {
+        self.device_info.persist_state()
+    }
+
+    /// Restore the guest-negotiated state of this device.
+    ///
+    /// The device must have been re-created with the same configuration and
+    /// must not have been activated yet.
+    pub fn restore_from_state(
+        &mut self,
+        state: &crate::persist::VirtioDeviceInfoState,
+    ) -> crate::Result<()> {
+        self.device_info.restore_from_state(state)
+    }
+}
+
 impl<AS, Q, R> VirtioDevice<AS, Q, R> for Balloon<AS>
 where
     AS: DbsGuestAddressSpace,

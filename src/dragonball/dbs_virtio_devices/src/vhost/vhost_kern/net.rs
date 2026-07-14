@@ -18,6 +18,7 @@ use dbs_utils::epoll_manager::{
 use dbs_utils::metric::IncMetric;
 use dbs_utils::net::{net_gen, MacAddr, Tap};
 use log::{debug, error, info, trace, warn};
+use serde::{Deserialize, Serialize};
 #[cfg(not(test))]
 use vhost_rs::net::VhostNet as VhostNetTrait;
 #[cfg(not(test))]
@@ -56,6 +57,21 @@ pub enum Error {
     TapError(#[source] TapError),
     #[error("vhost error: {0}")]
     VhostError(#[source] vhost_rs::Error),
+}
+
+/// Snapshot state of a vhost-net device: guest-negotiated virtio state plus
+/// the vring bases read back from the in-kernel vhost backend.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VhostNetState {
+    /// Guest-negotiated virtio device state.
+    pub device_info: crate::persist::VirtioDeviceInfoState,
+    /// Per queue pair `(rx, tx)` vring bases fetched from the in-kernel
+    /// vhost backend at save time, `None` if the device had not been
+    /// activated.
+    pub kernel_vring_bases: Option<Vec<(u32, u32)>>,
 }
 
 /// Vhost-net device implementation
@@ -131,6 +147,51 @@ where
     Q: QueueT + Send + 'static,
     R: GuestMemoryRegion + Sync + Send + 'static,
 {
+    /// Capture the state of this device.
+    ///
+    /// If the device has been activated, the current vring base of each
+    /// queue is read back from the in-kernel vhost backend so that ring
+    /// progress survives restore. Note that `VHOST_GET_VRING_BASE` stops
+    /// the vring, so the virtual machine must be paused when this is
+    /// called.
+    pub fn persist_state(&self) -> VirtioResult<VhostNetState> {
+        let kernel_vring_bases = if self.handles.is_empty() {
+            // Never activated: the rings start at base 0 on restore.
+            None
+        } else {
+            let mut bases = Vec::with_capacity(self.handles.len());
+            for handle in self.handles.iter() {
+                // Fetch the bases in the same (rx, tx) order that
+                // `init_vhost_queues` programs them.
+                let rx = handle
+                    .get_vring_base(0)
+                    .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
+                let tx = handle
+                    .get_vring_base(1)
+                    .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
+                bases.push((rx, tx));
+            }
+            Some(bases)
+        };
+
+        Ok(VhostNetState {
+            device_info: self.device_info.persist_state(),
+            kernel_vring_bases,
+        })
+    }
+
+    /// Restore the state of this device.
+    ///
+    /// The device must have been re-created with the same configuration and
+    /// must not have been activated yet. The saved vring bases are
+    /// programmed into the in-kernel vhost backend when device activation
+    /// is replayed.
+    pub fn restore_from_state(&mut self, state: &VhostNetState) -> crate::Result<()> {
+        self.device_info.restore_from_state(&state.device_info)?;
+        self.kernel_vring_bases = state.kernel_vring_bases.clone();
+        Ok(())
+    }
+
     /// Create a new vhost-net device with a given tap interface.
     pub fn new_with_tap(
         tap: Tap,
@@ -242,9 +303,12 @@ where
             }
         }
 
-        if self.kernel_vring_bases.is_none() {
-            self.setup_vhost_backend(config, mem)?
-        }
+        // Always program the vhost backend: the vhost fds are freshly
+        // created, both on a cold boot and on snapshot restore. When
+        // `kernel_vring_bases` was populated from a restored state,
+        // `init_vhost_queues` replays the saved ring positions instead of
+        // starting from 0.
+        self.setup_vhost_backend(config, mem)?;
 
         Ok(())
     }

@@ -660,7 +660,7 @@ pub struct DeviceManager {
     pub(crate) virtio_net_manager: VirtioNetDeviceMgr,
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
-    fs_manager: Arc<Mutex<FsDeviceMgr>>,
+    pub(crate) fs_manager: Arc<Mutex<FsDeviceMgr>>,
 
     #[cfg(feature = "virtio-mem")]
     pub(crate) mem_manager: MemDeviceMgr,
@@ -669,10 +669,10 @@ pub struct DeviceManager {
     pub(crate) balloon_manager: BalloonDeviceMgr,
 
     #[cfg(feature = "vhost-net")]
-    vhost_net_manager: VhostNetDeviceMgr,
+    pub(crate) vhost_net_manager: VhostNetDeviceMgr,
 
     #[cfg(feature = "vhost-user-net")]
-    vhost_user_net_manager: VhostUserNetDeviceMgr,
+    pub(crate) vhost_user_net_manager: VhostUserNetDeviceMgr,
     #[cfg(feature = "host-device")]
     pub(crate) vfio_manager: Arc<Mutex<VfioDeviceMgr>>,
     #[cfg(feature = "host-device")]
@@ -1578,6 +1578,78 @@ impl DeviceManager {
         {
             return None;
         }
+    }
+}
+
+#[cfg(feature = "dbs-virtio-devices")]
+pub(crate) mod virtio_persist {
+    //! Helpers shared by the device managers to save/restore the state of
+    //! MMIO virtio devices (see `crate::persist`).
+
+    use std::sync::Arc;
+
+    use dbs_device::DeviceIo;
+    use dbs_virtio_devices::persist::{MmioV2TransportState, VirtioDeviceInfoState};
+    use dbs_virtio_devices::Error as VirtioError;
+
+    use super::DbsMmioV2Device;
+
+    /// A virtio device whose guest-negotiated state can be captured and
+    /// restored.
+    pub(crate) trait VirtioDevicePersist {
+        /// Capture the guest-negotiated device state.
+        fn persist_device_info(&self) -> VirtioDeviceInfoState;
+
+        /// Restore the guest-negotiated device state.
+        fn restore_device_info(
+            &mut self,
+            state: &VirtioDeviceInfoState,
+        ) -> std::result::Result<(), VirtioError>;
+    }
+
+    /// Capture the device and transport state of an MMIO virtio device of
+    /// concrete type `D`.
+    pub(crate) fn save_mmio_device_state<D: VirtioDevicePersist + 'static>(
+        device: &Arc<dyn DeviceIo>,
+    ) -> std::result::Result<(VirtioDeviceInfoState, MmioV2TransportState), VirtioError> {
+        let mmio_dev = device
+            .as_any()
+            .downcast_ref::<DbsMmioV2Device>()
+            .ok_or(VirtioError::InvalidInput)?;
+        let transport = mmio_dev.persist_state();
+        let guard = mmio_dev.state();
+        let inner = guard
+            .get_inner_device()
+            .as_any()
+            .downcast_ref::<D>()
+            .ok_or(VirtioError::InvalidInput)?;
+        Ok((inner.persist_device_info(), transport))
+    }
+
+    /// Restore the device and transport state of a freshly re-created MMIO
+    /// virtio device of concrete type `D`, replaying device activation if
+    /// the guest had activated it. Must be called before the vCPUs resume.
+    pub(crate) fn restore_mmio_device_state<D: VirtioDevicePersist + 'static>(
+        device: &Arc<dyn DeviceIo>,
+        device_info: &VirtioDeviceInfoState,
+        transport: &MmioV2TransportState,
+    ) -> std::result::Result<(), VirtioError> {
+        let mmio_dev = device
+            .as_any()
+            .downcast_ref::<DbsMmioV2Device>()
+            .ok_or(VirtioError::InvalidInput)?;
+        {
+            let mut guard = mmio_dev.state();
+            let inner = guard
+                .get_inner_device_mut()
+                .as_any_mut()
+                .downcast_mut::<D>()
+                .ok_or(VirtioError::InvalidInput)?;
+            // Restore the guest-negotiated device state before the
+            // transport state: activation replay reads it.
+            inner.restore_device_info(device_info)?;
+        }
+        mmio_dev.restore_from_state(transport)
     }
 }
 

@@ -52,7 +52,7 @@ pub trait MockVhostBackend: std::marker::Sized {
     fn set_vring_num(&mut self, queue_index: usize, num: u16) -> Result<()>;
     fn set_vring_addr(&mut self, queue_index: usize, config_data: &VringConfigData) -> Result<()>;
     fn set_vring_base(&mut self, queue_index: usize, base: u16) -> Result<()>;
-    fn get_vring_base(&mut self, queue_index: usize) -> Result<u32>;
+    fn get_vring_base(&self, queue_index: usize) -> Result<u32>;
     fn set_vring_call(&mut self, queue_index: usize, fd: &EventFd) -> Result<()>;
     fn set_vring_kick(&mut self, queue_index: usize, fd: &EventFd) -> Result<()>;
     fn set_vring_err(&mut self, queue_index: usize, fd: &EventFd) -> Result<()>;
@@ -103,7 +103,7 @@ impl<T: VhostKernBackend> MockVhostBackend for T {
         Ok(())
     }
 
-    fn get_vring_base(&mut self, _queue_index: usize) -> Result<u32> {
+    fn get_vring_base(&self, _queue_index: usize) -> Result<u32> {
         Ok(0)
     }
 

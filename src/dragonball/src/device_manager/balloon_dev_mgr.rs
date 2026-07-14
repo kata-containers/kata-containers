@@ -10,7 +10,7 @@ use virtio::Error as VirtioError;
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::DbsMmioV2Device;
-use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::device_manager::{virtio_persist, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::metric::METRICS;
 
 // The flag of whether to use the shared irq.
@@ -24,6 +24,10 @@ pub enum BalloonDeviceError {
     /// The balloon device was already used.
     #[error("the virtio-balloon ID was already added to a different device")]
     BalloonDeviceAlreadyExists,
+
+    /// Virtio device operation error.
+    #[error("virtio device operation error: {0}")]
+    Virtio(#[source] VirtioError),
 
     /// Cannot perform the requested operation after booting the microVM.
     #[error("the update operation is not allowed after boot")]
@@ -274,6 +278,91 @@ impl BalloonDeviceMgr {
             .iter()
             .position(|info| info.config.balloon_id.eq(balloon_id))
     }
+
+    /// Capture the state of all virtio-balloon devices.
+    ///
+    /// The virtual machine must be paused when this is called.
+    pub fn save_states(&self) -> std::result::Result<BalloonDeviceMgrState, BalloonDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(BalloonDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_info, transport) = virtio_persist::save_mmio_device_state::<
+                Balloon<GuestAddressSpaceImpl>,
+            >(device)
+            .map_err(BalloonDeviceError::Virtio)?;
+            devices.push(BalloonDevState {
+                config: info.config.clone(),
+                device_info,
+                transport,
+            });
+        }
+        Ok(BalloonDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all virtio-balloon devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by balloon id) and must not have been activated yet. Must
+    /// be called before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &BalloonDeviceMgrState,
+    ) -> std::result::Result<(), BalloonDeviceError> {
+        for dev_state in &state.devices {
+            let index = self
+                .get_index_of_balloon_dev(dev_state.config.id())
+                .ok_or(BalloonDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let device = self.info_list[index]
+                .device
+                .as_ref()
+                .ok_or(BalloonDeviceError::Virtio(VirtioError::InvalidInput))?;
+            virtio_persist::restore_mmio_device_state::<Balloon<GuestAddressSpaceImpl>>(
+                device,
+                &dev_state.device_info,
+                &dev_state.transport,
+            )
+            .map_err(BalloonDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+impl virtio_persist::VirtioDevicePersist for Balloon<GuestAddressSpaceImpl> {
+    fn persist_device_info(&self) -> virtio::persist::VirtioDeviceInfoState {
+        self.persist_state()
+    }
+
+    fn restore_device_info(
+        &mut self,
+        state: &virtio::persist::VirtioDeviceInfoState,
+    ) -> std::result::Result<(), VirtioError> {
+        self.restore_from_state(state)
+    }
+}
+
+/// Snapshot state of one virtio-balloon device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct BalloonDevState {
+    /// Static configuration of the device.
+    pub config: BalloonDeviceConfigInfo,
+    /// Guest-negotiated virtio device state.
+    pub device_info: virtio::persist::VirtioDeviceInfoState,
+    /// MMIO transport state.
+    pub transport: virtio::persist::MmioV2TransportState,
+}
+
+/// Snapshot state of the virtio-balloon device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct BalloonDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<BalloonDevState>,
 }
 
 impl Default for BalloonDeviceMgr {

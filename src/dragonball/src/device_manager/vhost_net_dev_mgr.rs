@@ -6,15 +6,20 @@
 use std::result::Result;
 use std::sync::Arc;
 
+use dbs_device::DeviceIo;
 use dbs_utils::net::MacAddr;
-use dbs_virtio_devices::vhost::vhost_kern::net::Net;
+use dbs_virtio_devices::persist::MmioV2TransportState;
+use dbs_virtio_devices::vhost::vhost_kern::net::{Net, VhostNetState};
 use dbs_virtio_devices::Error as VirtioError;
 use serde::{Deserialize, Serialize};
 use virtio_queue::QueueSync;
 
-use super::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use super::{DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestRegionImpl};
 use crate::config_manager::{ConfigItem, DeviceConfigInfos};
+
+/// Concrete vhost-net device type managed by this device manager.
+type VhostKernNet = Net<GuestAddressSpaceImpl, QueueSync, GuestRegionImpl>;
 
 /// Default number of virtio queues, one rx/tx pair.
 pub const DEFAULT_NUM_QUEUES: usize = 2;
@@ -146,7 +151,7 @@ impl VhostNetDeviceMgr {
     fn create_device(
         cfg: &VhostNetDeviceConfigInfo,
         ctx: &mut DeviceOpContext,
-    ) -> Result<Box<Net<GuestAddressSpaceImpl, QueueSync, GuestRegionImpl>>, VirtioError> {
+    ) -> Result<Box<VhostKernNet>, VirtioError> {
         slog::info!(
             ctx.logger(),
             "create a vhost-net device";
@@ -262,6 +267,130 @@ impl VhostNetDeviceMgr {
 
         Ok(())
     }
+
+    /// Capture the state of all vhost-net devices.
+    ///
+    /// The virtual machine must be paused when this is called. Beyond the
+    /// guest-negotiated state, the current vring bases are read back from
+    /// the in-kernel vhost backend (which stops the vrings) so that ring
+    /// progress survives restore.
+    pub fn save_states(&self) -> std::result::Result<VhostNetDeviceMgrState, VhostNetDeviceError> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(VhostNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let (device_state, transport) =
+                Self::save_device_state(device).map_err(VhostNetDeviceError::Virtio)?;
+            devices.push(VhostNetDevState {
+                config: info.config.clone(),
+                device_state,
+                transport,
+            });
+        }
+        Ok(VhostNetDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all vhost-net devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by interface id) and must not have been activated yet.
+    /// Must be called before the guest vCPUs resume.
+    pub fn restore_states(
+        &mut self,
+        state: &VhostNetDeviceMgrState,
+    ) -> std::result::Result<(), VhostNetDeviceError> {
+        for dev_state in &state.devices {
+            let info = self
+                .info_list
+                .iter()
+                .find(|info| info.config.id() == dev_state.config.id())
+                .ok_or(VhostNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            let device = info
+                .device
+                .as_ref()
+                .ok_or(VhostNetDeviceError::Virtio(VirtioError::InvalidInput))?;
+            Self::restore_device_state(device, &dev_state.device_state, &dev_state.transport)
+                .map_err(VhostNetDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+
+    /// Capture the device and transport state of one vhost-net MMIO device.
+    ///
+    /// This mirrors `virtio_persist::save_mmio_device_state`, but uses the
+    /// vhost-net specific `VhostNetState` which additionally carries the
+    /// kernel vring bases.
+    fn save_device_state(
+        device: &Arc<dyn DeviceIo>,
+    ) -> Result<(VhostNetState, MmioV2TransportState), VirtioError> {
+        let mmio_dev = device
+            .as_any()
+            .downcast_ref::<DbsMmioV2Device>()
+            .ok_or(VirtioError::InvalidInput)?;
+        let transport = mmio_dev.persist_state();
+        let guard = mmio_dev.state();
+        let inner = guard
+            .get_inner_device()
+            .as_any()
+            .downcast_ref::<VhostKernNet>()
+            .ok_or(VirtioError::InvalidInput)?;
+        Ok((inner.persist_state()?, transport))
+    }
+
+    /// Restore the device and transport state of a freshly re-created
+    /// vhost-net MMIO device, replaying device activation if the guest had
+    /// activated it. Must be called before the vCPUs resume.
+    ///
+    /// This mirrors `virtio_persist::restore_mmio_device_state`, but uses
+    /// the vhost-net specific `VhostNetState` which additionally carries
+    /// the kernel vring bases.
+    fn restore_device_state(
+        device: &Arc<dyn DeviceIo>,
+        state: &VhostNetState,
+        transport: &MmioV2TransportState,
+    ) -> Result<(), VirtioError> {
+        let mmio_dev = device
+            .as_any()
+            .downcast_ref::<DbsMmioV2Device>()
+            .ok_or(VirtioError::InvalidInput)?;
+        {
+            let mut guard = mmio_dev.state();
+            let inner = guard
+                .get_inner_device_mut()
+                .as_any_mut()
+                .downcast_mut::<VhostKernNet>()
+                .ok_or(VirtioError::InvalidInput)?;
+            // Restore the device state (including the kernel vring bases)
+            // before the transport state: activation replay reads it.
+            inner.restore_from_state(state)?;
+        }
+        mmio_dev.restore_from_state(transport)
+    }
+}
+
+/// Snapshot state of one vhost-net device: static configuration plus
+/// guest-negotiated runtime state.
+///
+/// Compatibility policy (see `crate::persist`): only append new fields, with
+/// `#[serde(default)]`; never remove or repurpose existing ones.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct VhostNetDevState {
+    /// Static configuration of the device.
+    pub config: VhostNetDeviceConfigInfo,
+    /// Guest-negotiated virtio device state plus the vring bases read back
+    /// from the in-kernel vhost backend.
+    pub device_state: VhostNetState,
+    /// MMIO transport state.
+    pub transport: MmioV2TransportState,
+}
+
+/// Snapshot state of the vhost-net device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct VhostNetDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<VhostNetDevState>,
 }
 
 impl Default for VhostNetDeviceMgr {
