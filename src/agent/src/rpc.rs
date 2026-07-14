@@ -29,7 +29,7 @@ use ttrpc::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use cgroups::freezer::FreezerState;
+use cgroups::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 #[cfg(feature = "agent-policy")]
@@ -2671,7 +2671,6 @@ mod tests {
 
     fn mk_ttrpc_context() -> TtrpcContext {
         TtrpcContext {
-            fd: -1,
             mh: MessageHeader::default(),
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,

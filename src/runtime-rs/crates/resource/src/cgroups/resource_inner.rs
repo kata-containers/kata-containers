@@ -11,8 +11,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
-use cgroups_rs::manager::is_systemd_cgroup;
-use cgroups_rs::{CgroupPid, FsManager, Manager, SystemdManager};
+use cgroups::manager::is_systemd_cgroup;
+use cgroups::{CgroupPid, FsManager, Manager, SystemdManager};
 use hypervisor::{Hypervisor, VcpuThreadIds};
 use kata_types::cpu::CpuSet;
 use nix::sched::{sched_setaffinity, CpuSet as NixCpuSet};
@@ -42,7 +42,7 @@ pub(crate) struct CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
-    fn is_already_exists_error(err: &cgroups_rs::manager::Error) -> bool {
+    fn is_already_exists_error(err: &cgroups::manager::Error) -> bool {
         let mut source = err.source();
 
         while let Some(inner_err) = source {

@@ -30,7 +30,7 @@ sysinfo = { workspace = true }
 sha2 = { workspace = true }
 flate2 = "1.1"
 nix = { workspace = true }
-oci-spec = { version = "0.8.1", features = ["runtime"] }
+oci-spec = { workspace = true }
 gpt = "4.1.0"
 scopeguard = "1.0.0"
 crc = "3.4.0"

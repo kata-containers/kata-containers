@@ -8,13 +8,12 @@ mod agent;
 mod trans;
 
 use std::{
-    os::unix::io::{IntoRawFd, RawFd},
+    os::unix::io::RawFd,
     sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;
-use nix::unistd;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use tokio::sync::RwLock;
 use ttrpc::asynchronous::Client;
@@ -114,17 +113,17 @@ impl KataAgent {
             sock::new(&inner.socket_address, inner.config.server_port).context("new sock")?;
         info!(sl!(), "try to connect agent server through {:?}", sock);
         let stream = sock.connect(&config).await.context("connect")?;
-        let fd = stream.into_raw_fd();
+        let client_fd = stream.raw_fd();
         info!(
             sl!(),
             "get stream raw fd {:?} with socket address: {:?} and server_port {:?}",
-            fd,
+            client_fd,
             &inner.socket_address,
             inner.config.server_port
         );
-        let c = Client::new(fd);
+        let c = Client::new(stream.into_ttrpc_socket());
         inner.client = Some(c);
-        inner.client_fd = fd;
+        inner.client_fd = client_fd;
         Ok(())
     }
 
@@ -168,14 +167,9 @@ impl KataAgent {
         let mut inner = self.inner.write().await;
         inner.log_forwarder.stop();
 
-        // If there is a valid client, drop it
+        // If there is a valid client, drop it (closes the connection).
         inner.client.take();
-
-        // If fd is valid (> 0), close it
-        if inner.client_fd >= 0 {
-            unistd::close(inner.client_fd).context("failed to close agent client fd")?;
-            inner.client_fd = -1;
-        }
+        inner.client_fd = -1;
 
         Ok(())
     }

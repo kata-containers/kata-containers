@@ -27,6 +27,7 @@ extern crate regex;
 
 pub mod capabilities;
 pub mod cgroups;
+pub mod cgroups_rs;
 pub mod container;
 pub mod mount;
 pub mod pipestream;

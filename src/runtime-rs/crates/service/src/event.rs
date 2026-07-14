@@ -12,10 +12,11 @@ use async_trait::async_trait;
 use common::message::Event;
 use containerd_shim::publisher::RemotePublisher;
 use containerd_shim::util::timestamp;
-use containerd_shim::TtrpcContext;
 use containerd_shim_protos::protobuf::well_known_types::any::Any;
+use containerd_shim_protos::shim::event::Envelope;
 use containerd_shim_protos::shim::events;
 use containerd_shim_protos::shim_async::Events;
+use ttrpc::r#async::TtrpcContext;
 use ttrpc::MessageHeader;
 
 // Ttrpc address passed from container runtime.
@@ -71,7 +72,7 @@ impl ContainerdForwarder {
         &self,
         event: &Arc<dyn Event + Send + Sync>,
     ) -> Result<events::ForwardRequest> {
-        let mut envelope = events::Envelope::new();
+        let mut envelope = Envelope::new();
         envelope.set_topic(event.r#type().clone());
         envelope.set_namespace(self.namespace.to_string());
         envelope.set_timestamp(
@@ -137,7 +138,6 @@ impl Forwarder for LogForwarder {
 #[inline]
 fn default_ttrpc_context() -> TtrpcContext {
     TtrpcContext {
-        fd: 0,
         mh: MessageHeader::default(),
         metadata: HashMap::default(),
         timeout_nano: 0,

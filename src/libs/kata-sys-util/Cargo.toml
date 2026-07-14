@@ -28,7 +28,7 @@ hex = "0.4.3"
 pci-ids = "0.2.6"
 
 kata-types = { path = "../kata-types" }
-oci-spec = { version = "0.8.1", features = ["runtime"] }
+oci-spec = { workspace = true }
 runtime-spec = { path = "../runtime-spec" }
 
 [dev-dependencies]
