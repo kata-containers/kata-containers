@@ -26,6 +26,8 @@ HYPERVISOR_NAME="${HYPERVISOR_NAME:-}"
 PREFIX="${PREFIX:-}"
 PKGVERSION=${PKGVERSION:-}
 
+# This script always runs inside a dedicated build container (see
+# static-build/qemu/Dockerfile), so rm -rf of a relative path is safe.
 rm -rf qemu
 git clone --depth=1 "${QEMU_REPO}" qemu
 pushd qemu
@@ -85,7 +87,7 @@ elif [[ "${ARCH}" == "aarch64" ]]; then
 elif [[ "${ARCH}" == "ppc64le" ]]; then
 	# VIRTIO_MEM depends on VIRTIO_MEM_SUPPORTED, which is only selected on
 	# arm/i386/s390x — ppc64 PSeries does not support virtio-mem.
-	_PPC64_DEVS=$(printf '%s' "${_COMMON_DEVS}" | grep -v 'VIRTIO_MEM\b')
+	_PPC64_DEVS=$(printf '%s' "${_COMMON_DEVS}" | grep -v 'CONFIG_VIRTIO_MEM=')
 	printf 'CONFIG_PSERIES=y\n%s\n' "${_PPC64_DEVS}" \
 		>> configs/devices/ppc64-softmmu/default.mak
 	unset _PPC64_DEVS
