@@ -23,3 +23,4 @@ site/
 opt/
 tools/packaging/kernel/configs/**/.config
 root_hash.txt
+containerd-shim-kata-v2.node
