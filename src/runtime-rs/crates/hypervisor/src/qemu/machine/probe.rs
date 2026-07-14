@@ -8,11 +8,23 @@ pub(crate) struct HostTopology {
     pub sockets: Vec<SocketInfo>,
     pub gpu_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
+    /// `-numa dist` entries emitted after all NUMA nodes.  Each tuple is (src, dst, val).
+    pub numa_distances: Vec<(u32, u32, u32)>,
+    /// Number of pre-provisioned `pcie-root-port` devices on the Q35 default bus
+    /// (cold-plug topology; `cold_plug_vfio=root-port` in kata config).
+    pub cold_plug_ports: u32,
+    pub protection: Option<ProtectionDevice>,
 }
 
 pub(crate) struct SocketInfo {
     pub id: u32,
     pub cpu_range: Range<u32>,
+    /// Host NUMA node to bind this socket's memory to via `policy=bind`.
+    pub host_node: Option<u32>,
+    /// File-backed memory path (e.g. `/dev/shm`).  `None` → `memory-backend-ram`.
+    pub mem_path: Option<String>,
+    /// Per-socket memory size in bytes.  `None` → use the Platform-level default.
+    pub mem_size: Option<u64>,
 }
 
 /// GPUs sharing a physical SMMU must be placed on the same pxb-pcie + arm-smmuv3.
@@ -25,4 +37,34 @@ pub(crate) struct EgmSocketInfo {
     pub path: String,
     pub socket: u32,
     pub total_size: u64,
+}
+
+/// CoCo hardware protection capability detected by the host probe.
+///
+/// Drives three platform decisions: the `-object <type>-guest` preamble, the
+/// `kernel_irqchip=split` machine flag, and the `CpuModel` (EpycV4 for SNP,
+/// Host for TDX).
+#[derive(Clone)]
+pub(crate) enum ProtectionDevice {
+    SevSnp {
+        id: String,
+        cbitpos: u8,
+        reduced_phys_bits: u8,
+        kernel_hashes: bool,
+        policy: u64,
+        host_data: Option<String>,
+    },
+    /// TDX — fields TBD when a production capture is available.
+    Tdx {
+        id: String,
+    },
+}
+
+impl ProtectionDevice {
+    pub(crate) fn id(&self) -> &str {
+        match self {
+            ProtectionDevice::SevSnp { id, .. } => id,
+            ProtectionDevice::Tdx { id } => id,
+        }
+    }
 }
