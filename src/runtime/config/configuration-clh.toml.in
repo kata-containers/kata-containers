@@ -539,3 +539,12 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 #      cold_plug_vfio != no_port AND pod_resource_api_sock != "" => kubelet
 #              based cold plug.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK@"
+
+# pod_resource_device_sources selects which kubelet PodResources sources feed
+# cold plug: "device-plugin" and/or "dra" (KEP-3695). Default ["device-plugin"]
+# preserves historical behavior; ["dra"] for DRA-only nodes. List both only for
+# DISJOINT device sets -- kubelet double-counts a device advertised via both at
+# scheduling (a same-device collision is caught at cold plug). Unlisted-source
+# cold-pluggable data fails sandbox creation rather than being silently dropped.
+# Requires cold_plug_vfio and pod_resource_api_sock.
+pod_resource_device_sources = @DEFPODRESOURCEDEVICESOURCES@
