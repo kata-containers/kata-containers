@@ -326,7 +326,6 @@ externals:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
     url: "github.com/containerd/containerd"
-    tarball_url: "https://github.com/containerd/containerd/releases/download"
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
@@ -338,11 +337,6 @@ externals:
     url: "https://github.com/opencontainers/runc"
     latest: "v1.2"
 
-  cryptsetup:
-    description: "A utility used to setup disk encryption, integrity protection"
-    url: "https://gitlab.com/cryptsetup/cryptsetup"
-    version: "v2.8.1"
-
   gperf:
     description: "GNU gperf is a perfect hash function generator"
     url: "https://ftp.gnu.org.uk/gnu/gperf/"
@@ -352,32 +346,6 @@ externals:
     description: "the dockerfile linter used by static-checks"
     url: "https://github.com/hadolint/hadolint"
     version: "2.12.0"
-
-  lvm2:
-    description: "LVM2 and device-mapper tools and libraries"
-    url: "https://github.com/lvmteam/lvm2"
-    version: "v2_03_38"
-
-  kubernetes:
-    description: "Kubernetes project container manager"
-    url: "https://github.com/kubernetes/kubernetes"
-    # regexp formed to match 'd.tar.gz', deliberately to not match any alpha or
-    # beta type releases
-    uscan-url: >-
-      https://github.com/kubernetes/kubernetes/tags
-      .*/v?([\d\.]+)\.tar\.gz
-    version: "1.23.1-00"
-
-  kustomize:
-    description: "Kubernetes native configuration management"
-    url: "https://github.com/kubernetes-sigs/kustomize"
-    version: "v5.3.0"
-    checksum:
-      amd64: "3ab32f92360d752a2a53e56be073b649abc1e7351b912c0fb32b960d1def854c"
-      arm64: "a1ec622d4adeb483e3cdabd70f0d66058b1e4bcec013c4f74f370666e1e045d8"
-      # yamllint disable-line rule:line-length
-      ppc64le: "946b1aa9325e7234157881fe2098e59c05c6834e56205bf6ec0a9a5fc83c9cc4"
-      s390x: "0b1a00f0e33efa2ecaa6cda9eeb63141ddccf97a912425974d6b65e66cf96cd4"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"
@@ -461,12 +429,6 @@ externals:
       #
       # yamllint disable-line rule:line-length
       binary: "https://gitlab.com/-/project/21523468/uploads/05d4925181301a59b8c322cd9f9d44a7/virtiofsd-v1.13.1.zip"
-
-  xurls:
-    description: |
-      Tool used by the CI to check URLs in documents and code comments.
-    url: "mvdan.cc/xurls/v2/cmd/xurls"
-    version: "v2.5.0"
 
 languages:
   description: |
