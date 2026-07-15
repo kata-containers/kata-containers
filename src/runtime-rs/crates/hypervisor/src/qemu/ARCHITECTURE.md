@@ -340,7 +340,13 @@ See [Config 7](#config-7--vegm-2-gpus-per-socket-4-gpus-2-sockets).
 /// Read from host sysfs and IOMMU group layout before constructing Platform.
 pub struct HostTopology {
     pub sockets: Vec<SocketInfo>,
+    /// GPU groups: each maps to one pxb+smmuv3; GPUs emit 8 acpi-generic-initiator nodes.
     pub gpu_smmu_groups: Vec<GpuSmmuGroup>,
+    /// NIC groups: each gets its own pxb+smmuv3 complex allocated after all GPU
+    /// complexes in bus_nr ordering.  NICs emit no acpi-generic-initiator links
+    /// and no NUMA initiator nodes.  Reuses GpuSmmuGroup struct for the same
+    /// socket-affinity semantics; differentiated by field name.
+    pub nic_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
     pub numa_distances: Vec<(u32, u32, u32)>, // (src, dst, val)
     /// Minimum pre-provisioned empty root-port count on Q35 pcie.0.
@@ -797,25 +803,53 @@ each supported machine type and that `HostTopology` round-trips through
   `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`,
   `q35_coco_tdx_8gpu_4nvswitch`, `q35_vanilla_8gpu_4nvswitch`.
 
-### Phase 4 — Multi-RC PCIe and NUMA layout
+### Phase 4 — Multi-RC PCIe and NUMA layout ✅
 
 - Emit `pxb-pcie` (with `numa_node=`) + per-RC `arm-smmuv3` from `PciTopology`.
 - Support N root ports per `PciRootComplex` (Config 3 shape: 2 GPUs per `SMMU`).
-- Add `VfioPciNoHotplug` with typed `IommufdRef` and `VfioDeviceKind`.
+- `VfioDeviceKind` enum drives device-type-specific emission (`vfio-pci-nohotplug`
+  for Grace GPUs, `vfio-pci` for NICs/NvSwitch/GpuPci).
 - Emit NUMA nodes in the correct order (CpuMem → GPU initiators → memory-only).
-- `apply_host_defaults` wired end-to-end: Configs 1–4 golden fixtures pass.
+- `HostTopology::nic_smmu_groups` added: NICs get their own pxb+`smmuv3` complex
+  but emit no `acpi-generic-initiator` links and no NUMA initiator nodes.
+- `apply_host_defaults` wired end-to-end: all 7 Grace configs pass.
+- `MemoryBackend::File { prealloc }` fixed: `prealloc=on` now emitted for hugepages.
+- GB300 dry-run fixture: `gb300_nvl_2gpu.args` — Grace + 2 B200 GPUs,
+  `highmem-mmio-size=8T` (B200 BARs exceed the 4T window).
+- All 12 fixture tests pass without `#[ignore]`:
+  `grace_1` through `grace_7`, `gb300_nvl_2gpu`, and 4 Q35 tests.
 
-### Phase 5 — `vCMDQ` and vEGM
+**`"auto"` mode (Phase 4+):** The kata config fields `cold_plug_vfio` and
+`hot_plug_vfio` currently require an explicit topology string (`"root-port"`,
+`"switch-port"`, etc.).  An `"auto"` value is the natural next step: once
+`PlatformProbe` is implemented to scan `/sys/bus/pci/devices/` and classify
+devices, `apply_host_defaults` already contains all the logic to derive the
+right topology automatically.  `"auto"` will call the prober and select:
+- `root-port` for GPU-only workloads
+- `root-port + NIC pxb` when NICs are in `nic_smmu_groups`
+- `switch-port` (Phase 6+) for NVSwitch/DAN fan-out
+The prober is not implemented yet; `"auto"` is reserved and will error until
+`PlatformProbe::probe()` lands.
+>>>>>>> 208b1c739 (qemu/machine: ARCHITECTURE.md Phase 4+5 status + auto mode note)
 
-- `SmmuV3 { cmdqv: true }` + `MemoryBackend::File { path: "/dev/hugepages/", … }`.
-- `AcpiPciNodeLink::EgmMemory` + per-socket `MemoryBackend::File { path: "/dev/egmN", … }`.
+### Phase 5 — `vCMDQ` and vEGM ✅
+
+- `SmmuV3 { cmdqv: true }` + `MemoryBackend::File { path: "/dev/hugepages/", prealloc: true }`.
+- `AcpiPciNodeLink::EgmMemory` + per-socket `MemoryBackend::File { path: "/dev/egmN", is_egm: true }`.
 - `EgmSocketInfo` probe wired into `apply_host_defaults`.
 - Configs 5–7 golden fixtures pass.
+- `with_hugepages()` correctly sets `prealloc=on` on the emitted backend line.
 
 ### Phase 6 — Cleanup
 
-- Delete dead code from `cmdline_generator.rs`.
+- Delete dead code from `cmdline_generator.rs` (strangle pattern: new Platform
+  takes over one device class at a time; old code deleted when test coverage
+  confirms parity).
 - Remove feature flags / compat shims introduced during migration.
+- Implement `PlatformProbe::probe()` and wire `"auto"` in `cold_plug_vfio` /
+  `hot_plug_vfio` to call `apply_host_defaults` without manual topology config.
+- Add `switch-port` topology for NVSwitch/DAN fan-out
+  (`pcie-root-port → x3130-upstream → N xio3130-downstream`).
 - Final golden-test sweep across all 7 Grace configs plus existing machine types.
 - Remove all TODOs and decision stubs from this document.
 
