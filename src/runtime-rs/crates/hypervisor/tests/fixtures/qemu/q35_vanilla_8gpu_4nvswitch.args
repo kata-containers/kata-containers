@@ -1,0 +1,107 @@
+# Q35 vanilla (non-CoCo) — HGX H100 PPCIE, 8 GPUs + 4 NVSwitches, 2-NUMA x86_64
+# Source: production kata-containers log, 2026-07-15
+# Binary: /opt/kata/bin/qemu-system-x86_64 (standard build, not TDX/SNP experimental)
+# BIOS: /opt/kata/share/ovmf/OVMF.fd (standard OVMF)
+#
+# Same physical topology as q35_coco_tdx_8gpu_4nvswitch; CoCo absent:
+# - No protection object, no kernel_irqchip, no confidential-guest-support
+# - Memory: memory-backend-file via /dev/shm with host-nodes pinning
+#   (same SHM pattern as q35_vanilla_kata_x86; not memory-backend-ram)
+# - iommufd is per-device even without CoCo (modern VFIO interface)
+# - x-pci-vendor-id/device-id present even without CoCo (kata always applies them)
+# - NUMA node 1 is memory-only: the single vCPU lives on node 0
+# - NUMA distance 21 between nodes 0 and 1
+#
+# Emission order differs from production log: our Platform iterates per-pxb then
+# per-port (port+iommufd+vfio interleaved).  The Go runtime batches all ports
+# first, then all iommufd+vfio pairs in a different cross-pxb order.
+-machine
+q35,accel=kvm
+-object
+memory-backend-file,id=numa-mem0,size=4G,mem-path=/dev/shm,host-nodes=0,policy=bind,share=on
+-numa
+node,memdev=numa-mem0,cpus=0,nodeid=0
+-object
+memory-backend-file,id=numa-mem1,size=4G,mem-path=/dev/shm,host-nodes=1,policy=bind,share=on
+-numa
+node,memdev=numa-mem1,nodeid=1
+-numa
+dist,src=0,dst=1,val=21
+-numa
+dist,src=1,dst=0,val=21
+-device
+pxb-pcie,id=pxb-numa0,bus=pcie.0,bus_nr=32,numa_node=0
+-device
+pcie-root-port,id=rp-numa0-0,bus=pxb-numa0,chassis=10,slot=0,multifunction=off
+-object
+iommufd,id=iommufdvfio-5c7a307d86e7ae830
+-device
+vfio-pci,host=0000:1b:00.0,id=vfio-5c7a307d86e7ae830,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa0-0,iommufd=iommufdvfio-5c7a307d86e7ae830
+-device
+pcie-root-port,id=rp-numa0-1,bus=pxb-numa0,chassis=10,slot=1,multifunction=off
+-object
+iommufd,id=iommufdvfio-98077fd3aa014b541
+-device
+vfio-pci,host=0000:43:00.0,id=vfio-98077fd3aa014b541,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa0-1,iommufd=iommufdvfio-98077fd3aa014b541
+-device
+pcie-root-port,id=rp-numa0-2,bus=pxb-numa0,chassis=10,slot=2,multifunction=off
+-object
+iommufd,id=iommufdvfio-35b65d16a30068022
+-device
+vfio-pci,host=0000:52:00.0,id=vfio-35b65d16a30068022,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa0-2,iommufd=iommufdvfio-35b65d16a30068022
+-device
+pcie-root-port,id=rp-numa0-3,bus=pxb-numa0,chassis=10,slot=3,multifunction=off
+-object
+iommufd,id=iommufdvfio-331446c1d73050393
+-device
+vfio-pci,host=0000:61:00.0,id=vfio-331446c1d73050393,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa0-3,iommufd=iommufdvfio-331446c1d73050393
+-device
+pcie-root-port,id=rp-numa0-4,bus=pxb-numa0,chassis=10,slot=4,multifunction=off
+-object
+iommufd,id=iommufdvfio-b91919c2fa001cd18
+-device
+vfio-pci,host=0000:07:00.0,id=vfio-b91919c2fa001cd18,x-pci-vendor-id=0x10de,x-pci-device-id=0x22a3,bus=rp-numa0-4,iommufd=iommufdvfio-b91919c2fa001cd18
+-device
+pcie-root-port,id=rp-numa0-5,bus=pxb-numa0,chassis=10,slot=5,multifunction=off
+-object
+iommufd,id=iommufdvfio-fab9e6a06185873e9
+-device
+vfio-pci,host=0000:08:00.0,id=vfio-fab9e6a06185873e9,x-pci-vendor-id=0x10de,x-pci-device-id=0x22a3,bus=rp-numa0-5,iommufd=iommufdvfio-fab9e6a06185873e9
+-device
+pcie-root-port,id=rp-numa0-6,bus=pxb-numa0,chassis=10,slot=6,multifunction=off
+-object
+iommufd,id=iommufdvfio-3a77ef115d3f0ab610
+-device
+vfio-pci,host=0000:09:00.0,id=vfio-3a77ef115d3f0ab610,x-pci-vendor-id=0x10de,x-pci-device-id=0x22a3,bus=rp-numa0-6,iommufd=iommufdvfio-3a77ef115d3f0ab610
+-device
+pcie-root-port,id=rp-numa0-7,bus=pxb-numa0,chassis=10,slot=7,multifunction=off
+-object
+iommufd,id=iommufdvfio-2e0a336d490089a111
+-device
+vfio-pci,host=0000:0a:00.0,id=vfio-2e0a336d490089a111,x-pci-vendor-id=0x10de,x-pci-device-id=0x22a3,bus=rp-numa0-7,iommufd=iommufdvfio-2e0a336d490089a111
+-device
+pxb-pcie,id=pxb-numa1,bus=pcie.0,bus_nr=64,numa_node=1
+-device
+pcie-root-port,id=rp-numa1-0,bus=pxb-numa1,chassis=11,slot=0,multifunction=off
+-object
+iommufd,id=iommufdvfio-7f57f8dea75cdeca4
+-device
+vfio-pci,host=0000:9d:00.0,id=vfio-7f57f8dea75cdeca4,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa1-0,iommufd=iommufdvfio-7f57f8dea75cdeca4
+-device
+pcie-root-port,id=rp-numa1-1,bus=pxb-numa1,chassis=11,slot=1,multifunction=off
+-object
+iommufd,id=iommufdvfio-4461976d3de811155
+-device
+vfio-pci,host=0000:c3:00.0,id=vfio-4461976d3de811155,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa1-1,iommufd=iommufdvfio-4461976d3de811155
+-device
+pcie-root-port,id=rp-numa1-2,bus=pxb-numa1,chassis=11,slot=2,multifunction=off
+-object
+iommufd,id=iommufdvfio-dc1944aed29728336
+-device
+vfio-pci,host=0000:d1:00.0,id=vfio-dc1944aed29728336,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa1-2,iommufd=iommufdvfio-dc1944aed29728336
+-device
+pcie-root-port,id=rp-numa1-3,bus=pxb-numa1,chassis=11,slot=3,multifunction=off
+-object
+iommufd,id=iommufdvfio-5c974cdc2dcfe4cb7
+-device
+vfio-pci,host=0000:df:00.0,id=vfio-5c974cdc2dcfe4cb7,x-pci-vendor-id=0x10de,x-pci-device-id=0x2330,bus=rp-numa1-3,iommufd=iommufdvfio-5c974cdc2dcfe4cb7
