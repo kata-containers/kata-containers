@@ -839,18 +839,32 @@ The prober is not implemented yet; `"auto"` is reserved and will error until
 - Configs 5–7 golden fixtures pass.
 - `with_hugepages()` correctly sets `prealloc=on` on the emitted backend line.
 
-### Phase 6 — Cleanup
+### Phase 6 — PlatformProbe + switch-port ✅ (2026-07-15)
 
-- Delete dead code from `cmdline_generator.rs` (strangle pattern: new Platform
-  takes over one device class at a time; old code deleted when test coverage
-  confirms parity).
-- Remove feature flags / compat shims introduced during migration.
-- Implement `PlatformProbe::probe()` and wire `"auto"` in `cold_plug_vfio` /
-  `hot_plug_vfio` to call `apply_host_defaults` without manual topology config.
-- Add `switch-port` topology for NVSwitch/DAN fan-out
-  (`pcie-root-port → x3130-upstream → N xio3130-downstream`).
-- Final golden-test sweep across all 7 Grace configs plus existing machine types.
-- Remove all TODOs and decision stubs from this document.
+**Delivered:**
+- `probe_host_topology()` in `probe.rs`: walks `/sys/bus/pci/devices/` to
+  discover NVIDIA GPUs (class 0x0302/0x0300) and NICs (0x0200/0x0207), groups
+  them by IOMMU group ID (one group = one SMMU on Grace), reads NUMA node
+  affinity, and detects EGM devices under `/dev/egmN`.
+- `probe_host_topology_at(pci, cpu, dev)`: test-injectable variant used by the
+  `probe_synthetic_sysfs` unit test.
+- `Platform::from_config_with_probe()`: builds Platform from kata config and
+  applies `probe_host_topology()` — the `"auto"` entry-point.
+- Switch-port topology (`x3130-upstream` + `N xio3130-downstream`):
+  `PciRootPort::switch_downstreams: Vec<VfioDevice>` drives `emit_switch_ports()`
+  called from both `emit_virt_args()` and `emit_q35_args()`.
+- `inner.rs` integration: `Platform::from_config_with_probe()` is called at VM
+  start; the resulting GPU-topology args are logged at INFO level alongside the
+  legacy cmdline args.  The legacy path is still used for the actual launch
+  (strangle pattern — Platform takes over one section at a time).
+- 14 golden tests passing (12 original + `probe_synthetic_sysfs` + `grace_switch_port_emission`).
+
+**Still open (next):**
+- Delete machine/memory/NUMA sections from `cmdline_generator.rs` (Platform now
+  owns them — pending parity confirmation on a real system).
+- Wire `"auto"` value in `cold_plug_vfio` / `hot_plug_vfio` kata config to
+  `Platform::from_config_with_probe()` instead of the static topology config.
+- Final golden-test sweep and removal of all TODOs from this document.
 
 ---
 

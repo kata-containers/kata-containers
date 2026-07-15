@@ -4,6 +4,7 @@
 //
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine};
+use super::machine::platform::Platform;
 use super::qmp::Qmp;
 use crate::device::driver::BlockDeviceFormat;
 use crate::device::pci_path::PciPath;
@@ -335,6 +336,21 @@ impl QemuInner {
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
+
+        // Probe host topology and log the machine-centric Platform args for
+        // comparison / dry-run inspection.  Errors are non-fatal: the legacy
+        // cmdline path is used regardless.
+        match Platform::from_config_with_probe(&self.config) {
+            Ok(platform) => match platform.to_qemu_args() {
+                Ok(platform_args) if !platform_args.is_empty() => {
+                    info!(sl!(), "platform args (GPU topology): {}", platform_args.join(" "));
+                }
+                Ok(_) => {}
+                Err(e) => info!(sl!(), "platform args error: {e}"),
+            },
+            Err(e) => info!(sl!(), "platform probe error: {e}"),
+        }
+
         let mut command = Command::new(&self.config.path);
         command.args(cmdline.build().await?);
 
