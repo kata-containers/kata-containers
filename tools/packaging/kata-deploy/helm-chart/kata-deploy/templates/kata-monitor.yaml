@@ -44,14 +44,14 @@ spec:
         args:
           - -listen-address={{ .Values.monitor.listenAddress }}
           - -log-level={{ .Values.monitor.logLevel }}
-          - -runtime-endpoint={{ .Values.monitor.runtimeEndpoint }}
+          - -runtime-endpoint={{ include "monitorRuntimeEndpoint" . }}
         ports:
           - containerPort: {{ .Values.monitor.port }}
         resources:
 {{- toYaml .Values.monitor.resources | nindent 10 }}
         volumeMounts:
         - name: containerd-sock
-          mountPath: /run/containerd
+          mountPath: {{ include "monitorRuntimeSocketDir" . }}
           readOnly: true
         - name: sbs
           mountPath: /run/vc/sbs/
@@ -60,7 +60,7 @@ spec:
       volumes:
       - name: containerd-sock
         hostPath:
-          path: /run/containerd
+          path: {{ include "monitorRuntimeSocketDir" . }}
           type: Directory
       - name: sbs
         hostPath:
