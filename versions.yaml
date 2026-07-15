@@ -181,8 +181,8 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: "alpine"
-        version: "3.22"
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -204,8 +204,8 @@ assets:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
       x86_64:
-        name: "alpine"
-        version: "3.22"
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS

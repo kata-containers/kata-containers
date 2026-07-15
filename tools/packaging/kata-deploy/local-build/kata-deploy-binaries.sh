@@ -829,10 +829,8 @@ install_initrd() {
 			export PAUSE_IMAGE_TARBALL
 		fi
 	else
-		# No variant is passed, it means vanilla kata containers
-		if [[ "${os_name}" = "alpine" ]]; then
-			export AGENT_INIT=yes
-		fi
+		# Vanilla initrd uses kata-agent as /sbin/init (no systemd).
+		export AGENT_INIT=yes
 	fi
 
 	AGENT_TARBALL=$(get_agent_tarball_path)
