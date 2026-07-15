@@ -360,6 +360,28 @@ function kbs_k8s_delete() {
 	kubectl delete ns "${KBS_NS}" --ignore-not-found --wait=false
 }
 
+# Drop optional Trustee subchart dependencies that kata CI never enables.
+#
+# The upstream chart pins postgresql to Bitnami's Docker Hub OCI registry. Helm
+# still requires `helm dependency build` even when postgresql.enabled=false.
+# Our tests always use LocalFs/Memory storage, so remove the unused dependency
+# and skip any remote chart fetch entirely.
+#
+# Parameters:
+#	$1 - Trustee Helm chart directory
+#
+strip_trustee_unused_chart_dependencies() {
+	local chart_dir=$1
+	local chart_yaml="${chart_dir}/Chart.yaml"
+	local chart_lock="${chart_dir}/Chart.lock"
+
+	[[ -f "${chart_yaml}" ]] || die "Trustee Chart.yaml not found at ${chart_yaml}"
+
+	ensure_yq
+	yq -i 'del(.dependencies)' "${chart_yaml}"
+	rm -f "${chart_lock}"
+}
+
 # Deploy the kbs on Kubernetes via the Trustee Helm chart.
 #
 # Parameters:
@@ -555,10 +577,10 @@ function kbs_k8s_deploy() {
 	fi
 
 	# The chart declares a (condition-gated, disabled-by-default) postgresql
-	# dependency, which helm still requires to be present under charts/ before
-	# install. Fetch it from the versions pinned in the chart's Chart.lock.
-	echo "::group::Build Helm chart dependencies"
-	helm dependency build "${COCO_HELM_CHART_DIR}"
+	# dependency pinned to Docker Hub OCI. CI never enables bundled Postgres, so
+	# drop the dependency and avoid `helm dependency build` entirely.
+	echo "::group::Prepare Trustee Helm chart"
+	strip_trustee_unused_chart_dependencies "${COCO_HELM_CHART_DIR}"
 	echo "::endgroup::"
 
 	echo "::group::Deploy Trustee via Helm"
