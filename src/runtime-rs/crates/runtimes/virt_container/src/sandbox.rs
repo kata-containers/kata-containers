@@ -549,6 +549,12 @@ impl VirtSandbox {
             Some(ResourceConfig::Network(NetworkConfig::Dan(
                 DanNetworkConfig {
                     dan_conf_path: dan_path,
+                    network_queues: self
+                        .hypervisor
+                        .hypervisor_config()
+                        .await
+                        .network_info
+                        .network_queues as usize,
                 },
             )))
         } else if let Some(netns_path) = network_env.netns.as_ref() {

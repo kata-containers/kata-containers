@@ -17,6 +17,7 @@ mod tests {
     use tokio::sync::RwLock;
 
     use crate::network::{
+        dan::Device,
         endpoint::{IPVlanEndpoint, MacVlanEndpoint, VlanEndpoint},
         network_model::{
             self,
@@ -119,6 +120,7 @@ mod tests {
                                 },
                                 model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                                 network_qos: false,
+                                network_queues: 5,
                             },
                         };
 
@@ -159,6 +161,7 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                     }
                     assert!(delete_link(&handle, manual_vlan_iface_name.as_str())
                         .await
@@ -250,6 +253,7 @@ mod tests {
                                 model: network_model::new(model_str)
                                     .expect("failed to create new network model"),
                                 network_qos: false,
+                                network_queues: 5,
                             },
                         };
 
@@ -291,6 +295,7 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                     }
                     // delete the manually created links
                     assert!(delete_link(&handle, manual_macvlan_iface_name.as_str())
@@ -333,7 +338,8 @@ mod tests {
                 .await
                 .context("failed to create manual veth pair")
             {
-                if let Ok(mut result) = IPVlanEndpoint::new(&d, &handle, "", idx, 5)
+                // Test with 0 and fallback default behaviour with 1
+                if let Ok(mut result) = IPVlanEndpoint::new(&d, &handle, "", idx, 0)
                     .await
                     .context("failed to create new ipvlan endpoint")
                 {
@@ -355,6 +361,7 @@ mod tests {
                             },
                             model: Arc::new(TcFilterModel::new().unwrap()), // impossible to panic
                             network_qos: false,
+                            network_queues: 1,
                         },
                     };
 
@@ -395,6 +402,7 @@ mod tests {
                         _ => unreachable!(),
                     }
                     assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
+                    assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
                 }
                 assert!(delete_link(&handle, manual_virt_iface_name.as_str())
                     .await
@@ -402,5 +410,56 @@ mod tests {
                 assert!(delete_link(&handle, tap_iface_name.as_str()).await.is_ok());
             }
         }
+    }
+
+    // DAN regression test for the minimum-of-1 requirement.
+    #[test]
+    fn test_dan_device_get_effective_queues_min_one() {
+        // Test `network_queues` of 0 to the minimum of 1.
+        let default_network_queues = 0_usize;
+
+        // VhostUser effective pair count falls back to default (1),
+        // queue size falls back to 256.
+        let vhost = Device::VhostUser {
+            path: "/tmp/test".to_owned(),
+            queue_num: 0,
+            queue_size: 0,
+        };
+        assert_eq!(
+            vhost.get_effective_queues(default_network_queues),
+            (1, 256)
+        );
+
+        // HostTap fallback default behaviour.
+        let tap = Device::HostTap {
+            tap_name: "tap0".to_owned(),
+            queue_num: 0,
+            queue_size: 0,
+        };
+        assert_eq!(tap.get_effective_queues(default_network_queues), (1, 256));
+
+        // This catches a regression that would always return 1.
+        let vhost_default4 = Device::VhostUser {
+            path: "/tmp/test".to_owned(),
+            queue_num: 0,
+            queue_size: 0,
+        };
+        assert_eq!(vhost_default4.get_effective_queues(4), (4, 256));
+
+        // A non-zero `queue_num` from the JSON always wins over the default,
+        // even when it equals the minimum — and is never reported as 0.
+        let vhost_nonzero = Device::VhostUser {
+            path: "/tmp/test".to_owned(),
+            queue_num: 1,
+            queue_size: 0,
+        };
+        assert_eq!(vhost_nonzero.get_effective_queues(default_network_queues), (1, 256));
+
+        let tap_explicit = Device::HostTap {
+            tap_name: "tap0".to_owned(),
+            queue_num: 7,
+            queue_size: 512,
+        };
+        assert_eq!(tap_explicit.get_effective_queues(default_network_queues), (7, 512));
     }
 }

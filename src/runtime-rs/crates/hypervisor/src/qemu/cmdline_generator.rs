@@ -3178,12 +3178,18 @@ impl<'a> QemuCmdLine<'a> {
         ));
     }
 
-    pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
+    pub fn add_network_device(
+        &mut self,
+        host_dev_name: &str,
+        guest_mac: Address,
+        num_queues: u32,
+    ) -> Result<()> {
         let (netdev, virtio_net_device) = get_network_device(
             self.config,
             host_dev_name,
             guest_mac,
             &mut self.ccw_subchannel,
+            num_queues,
         )?;
 
         self.devices.push(Box::new(netdev));
@@ -3692,11 +3698,12 @@ pub fn get_network_device(
     host_dev_name: &str,
     guest_mac: Address,
     ccw_subchannel: &mut Option<CcwSubChannel>,
+    num_queues: u32,
 ) -> Result<(Netdev, DeviceVirtioNet)> {
     let mut netdev = Netdev::new(
         &format!("network-{host_dev_name}"),
         host_dev_name,
-        config.network_info.network_queues,
+        num_queues,
     )?;
     if config.network_info.disable_vhost_net {
         netdev.set_disable_vhost_net(true);
@@ -3711,8 +3718,8 @@ pub fn get_network_device(
     if config.device_info.enable_iommu_platform && bus_type() == VirtioBusType::Ccw {
         virtio_net_device.set_iommu_platform(true);
     }
-    if config.network_info.network_queues > 1 {
-        virtio_net_device.set_num_queues(config.network_info.network_queues);
+    if num_queues > 1 {
+        virtio_net_device.set_num_queues(num_queues);
     }
 
     Ok((netdev, virtio_net_device))

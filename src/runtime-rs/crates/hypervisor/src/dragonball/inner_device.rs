@@ -287,8 +287,11 @@ impl DragonballInner {
     /// Add vhost-user-net device to Dragonball
     fn add_vhost_user_net_device(&mut self, config: &VhostUserConfig) -> Result<()> {
         let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
+        // `config.num_queues` is a queue *pair* count (1 RX + 1 TX per pair).
+        // Convert pairs into the actual queue count.
+        let num_queues = config.num_queues.max(1) * 2;
         let net_cfg = NetworkInterfaceConfig {
-            num_queues: Some(config.num_queues),
+            num_queues: Some(num_queues),
             queue_size: Some(config.queue_size as u16),
             backend: dragonball::api::v1::Backend::VhostUser(DragonballVhostUserConfig {
                 sock_path: config.socket_path.clone(),

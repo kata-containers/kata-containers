@@ -68,8 +68,8 @@ impl DanInner {
         let json_str = fs::read_to_string(&config.dan_conf_path)
             .await
             .context("Read DAN config from file")?;
-        let config: DanConfig = serde_json::from_str(&json_str).context("Invalid DAN config")?;
-        info!(sl!(), "Dan config is loaded = {:?}", config);
+        let dan_config: DanConfig = serde_json::from_str(&json_str).context("Invalid DAN config")?;
+        info!(sl!(), "Dan config is loaded = {:?}", dan_config);
 
         let (connection, handle, _) = rtnetlink::new_connection().context("New connection")?;
         let thread_handler = tokio::spawn(connection);
@@ -77,43 +77,45 @@ impl DanInner {
             thread_handler.abort();
         });
 
-        let mut entity_list = Vec::with_capacity(config.devices.len());
-        for (idx, device) in config.devices.iter().enumerate() {
+        let mut entity_list = Vec::with_capacity(dan_config.devices.len());
+        for (idx, device) in dan_config.devices.iter().enumerate() {
             let name = format!("eth{idx}");
+            // The `network_queues` is a queue *pair* count.
+            // Keep `queue_num` as a pair count and the hypervisor backend converts pairs into the actual virtqueue count.
+            // A JSON-provided non-zero `queue_num` (also a pair count) with a higher priority always wins.
+            let (qnum, qsize) = device
+                .device
+                .get_effective_queues(config.network_queues);
             let endpoint: Arc<dyn Endpoint> = match &device.device {
-                Device::VhostUser {
-                    path,
-                    queue_num,
-                    queue_size,
-                } => Arc::new(
-                    VhostUserEndpoint::new(
-                        dev_mgr,
-                        &name,
-                        &device.guest_mac,
-                        path,
-                        *queue_num,
-                        *queue_size,
+                Device::VhostUser { path, .. } => {
+                    Arc::new(
+                        VhostUserEndpoint::new(
+                            dev_mgr,
+                            &name,
+                            &device.guest_mac,
+                            path,
+                            qnum,
+                            qsize,
+                        )
+                        .await
+                        .with_context(|| format!("create a vhost user endpoint, path: {path}"))?,
                     )
-                    .await
-                    .with_context(|| format!("create a vhost user endpoint, path: {path}"))?,
-                ),
-                Device::HostTap {
-                    tap_name,
-                    queue_num,
-                    queue_size,
-                } => Arc::new(
-                    TapEndpoint::new(
-                        &handle,
-                        &name,
-                        tap_name,
-                        &device.guest_mac,
-                        *queue_num,
-                        *queue_size,
-                        dev_mgr,
+                }
+                Device::HostTap { tap_name, .. } => {
+                    Arc::new(
+                        TapEndpoint::new(
+                            &handle,
+                            &name,
+                            tap_name,
+                            &device.guest_mac,
+                            qnum,
+                            qsize,
+                            dev_mgr,
+                        )
+                        .await
+                        .with_context(|| format!("create a {tap_name} tap endpoint"))?,
                     )
-                    .await
-                    .with_context(|| format!("create a {tap_name} tap endpoint"))?,
-                ),
+                }
             };
 
             let network_info = Arc::new(
@@ -129,7 +131,7 @@ impl DanInner {
         }
 
         Ok(Self {
-            netns: config.netns,
+            netns: dan_config.netns,
             entity_list,
         })
     }
@@ -211,6 +213,9 @@ impl Network for Dan {
 #[derive(Debug)]
 pub struct DanNetworkConfig {
     pub dan_conf_path: PathBuf,
+    /// Number of virtio queue pairs (each pair = 1 RX + 1 TX).
+    /// Derived from `network_queues` in the hypervisor TOML config.
+    pub network_queues: usize,
 }
 
 /// Directly attachable network config written by CNI plugins
@@ -257,6 +262,34 @@ pub(crate) enum Device {
         #[serde(default)]
         queue_size: usize,
     },
+}
+
+impl Device {
+    /// get the effective queue-pair count and queue size.
+    pub(crate) fn get_effective_queues(&self, network_queues: usize) -> (usize, usize) {
+        // The `network_queues` comes from hypervisor configurations, and we need to ensure that it is at least 1,
+        // otherwise the network device will not work.
+        let network_queues = network_queues.max(1);
+        let (queue_num, queue_size) = match self {
+            Device::VhostUser {
+                queue_num,
+                queue_size,
+                ..
+            }
+            | Device::HostTap {
+                queue_num,
+                queue_size,
+                ..
+            } => (queue_num, queue_size),
+        };
+        let qnum = if *queue_num == 0 {
+            network_queues
+        } else {
+            *queue_num
+        };
+        let qsize = if *queue_size == 0 { 256 } else { *queue_size };
+        (qnum, qsize)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
