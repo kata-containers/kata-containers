@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Probe pod used by k8s-erofs-dmverity.bats.
-# The container command verifies that every EROFS layer was mounted through
-# a dm-verity device by checking dmesg for both dm-verity and erofs mount
-# records, then exits 0 on success or 1 on failure.
+# The container command verifies that every workload EROFS lower layer was
+# mounted through a dm-verity device by checking the root overlay lowerdirs and
+# their backing devices, then exits 0 on success or 1 on failure.
 
 apiVersion: v1
 kind: Pod
@@ -22,12 +22,48 @@ spec:
       - sh
       - -c
       - |-
-        log=$(dmesg 2>&1 | tail -n 100)
-        verity_lines=$(printf "%s\n" "$log" | grep -c "device-mapper: verity")
-        erofs_lines=$(printf "%s\n" "$log" | grep -cE "erofs \(device dm-[0-9]+\): mounted")
-        echo "verity_lines=${verity_lines} erofs_lines=${erofs_lines}"
-        if [ "${verity_lines}" -lt 1 ] || [ "${erofs_lines}" -lt 1 ]; then
-          echo "--- last 100 lines of dmesg ---"
-          printf "%s\n" "$log"
+        root_options=$(awk '$2 == "/" && $3 == "overlay" { print $4; exit }' /proc/mounts)
+        lowerdirs=${root_options#*lowerdir=}
+        lowerdirs=${lowerdirs%%,*}
+        if [ -z "${lowerdirs}" ] || [ "${lowerdirs}" = "${root_options}" ]; then
+          echo "unable to determine workload lower layers from the root overlay"
+          cat /proc/mounts
+          exit 1
+        fi
+
+        lower_count=$(printf "%s\n" "${lowerdirs}" | awk -F: '{ print NF }')
+        erofs_devices=$(dmesg 2>&1 |
+          sed -n 's/.*erofs (device \([^)]*\)): mounted.*/\1/p' |
+          sort -u)
+
+        verity_count=0
+        mounted_count=0
+        for dm_path in /sys/class/block/dm-*; do
+          [ -e "${dm_path}" ] || continue
+          dm_name=$(cat "${dm_path}/dm/name" 2>/dev/null || true)
+          case "${dm_name}" in
+            kata-verity-*)
+              verity_count=$((verity_count + 1))
+              dm_device=${dm_path##*/}
+              if printf "%s\n" "${erofs_devices}" | grep -qx "${dm_device}"; then
+                mounted_count=$((mounted_count + 1))
+              else
+                echo "dm-verity workload device ${dm_device} was not mounted as EROFS"
+              fi
+              ;;
+          esac
+        done
+
+        echo "workload_lower_layers=${lower_count} kata_verity_devices=${verity_count} dm_erofs_mounts=${mounted_count}"
+        if [ "${lower_count}" -ne "${verity_count}" ] ||
+          [ "${lower_count}" -ne "${mounted_count}" ]; then
+          echo "--- EROFS devices from dmesg ---"
+          printf "%s\n" "${erofs_devices}"
+          echo "--- device-mapper devices ---"
+          for dm_path in /sys/class/block/dm-*; do
+            [ -e "${dm_path}" ] || continue
+            printf "%s " "${dm_path##*/}"
+            cat "${dm_path}/dm/name" 2>/dev/null || true
+          done
           exit 1
         fi
