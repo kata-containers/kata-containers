@@ -79,7 +79,7 @@ node,nodeid=32
 -numa
 node,nodeid=33
 -device
-pxb-pcie,id=pcie.1,bus_nr=1,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.1,bus=pcie.0,bus_nr=1,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device
@@ -91,7 +91,7 @@ pcie-root-port,id=pcie.port2,bus=pcie.1,chassis=2,io-reserve=0
 -device
 vfio-pci-nohotplug,host=0009:06:00.0,bus=pcie.port2,rombar=0,id=dev1,iommufd=iommufd0
 -device
-pxb-pcie,id=pcie.2,bus_nr=9,bus=pcie.0,numa_node=1
+pxb-pcie,id=pcie.2,bus=pcie.0,bus_nr=9,numa_node=1
 -device
 arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device

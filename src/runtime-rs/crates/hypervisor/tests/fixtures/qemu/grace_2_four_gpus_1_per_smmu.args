@@ -3,7 +3,7 @@
 -object
 iommufd,id=iommufd0
 -object
-memory-backend-ram,size=16G,id=m0
+memory-backend-ram,id=m0,size=16G
 -machine
 virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T,memory-backend=m0
 -numa
@@ -73,7 +73,7 @@ node,nodeid=31
 -numa
 node,nodeid=32
 -device
-pxb-pcie,id=pcie.1,bus_nr=1,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.1,bus=pcie.0,bus_nr=1,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device
@@ -81,7 +81,7 @@ pcie-root-port,id=pcie.port1,bus=pcie.1,chassis=1,io-reserve=0
 -device
 vfio-pci-nohotplug,host=0008:06:00.0,bus=pcie.port1,rombar=0,id=dev0,iommufd=iommufd0
 -device
-pxb-pcie,id=pcie.2,bus_nr=2,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.2,bus=pcie.0,bus_nr=2,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.2,id=smmuv3.2,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device
@@ -89,7 +89,7 @@ pcie-root-port,id=pcie.port2,bus=pcie.2,chassis=2,io-reserve=0
 -device
 vfio-pci-nohotplug,host=0009:06:00.0,bus=pcie.port2,rombar=0,id=dev1,iommufd=iommufd0
 -device
-pxb-pcie,id=pcie.3,bus_nr=3,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.3,bus=pcie.0,bus_nr=3,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.3,id=smmuv3.3,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device
@@ -97,7 +97,7 @@ pcie-root-port,id=pcie.port3,bus=pcie.3,chassis=3,io-reserve=0
 -device
 vfio-pci-nohotplug,host=0010:06:00.0,bus=pcie.port3,rombar=0,id=dev2,iommufd=iommufd0
 -device
-pxb-pcie,id=pcie.4,bus_nr=4,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.4,bus=pcie.0,bus_nr=4,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.4,id=smmuv3.4,accel=on,ats=on,ril=off,pasid=on,oas=48
 -device
