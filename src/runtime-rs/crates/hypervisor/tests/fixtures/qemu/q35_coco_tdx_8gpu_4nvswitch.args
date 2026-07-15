@@ -1,5 +1,5 @@
 # Q35 CoCo (TDX) — HGX H100 PPCIE, 8 GPUs + 4 NVSwitches, 2-NUMA x86_64
-# Source: production kata-containers log, 2026-07-15 (Intel TDX host, viking-prod-243)
+# Source: production kata-containers log, 2026-07-15 (Intel TDX host)
 # Binary: qemu-system-x86_64-tdx-experimental
 #
 # HostTopology (logically — Platform built directly in the test):
