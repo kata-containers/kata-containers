@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use super::{
-    probe::{HostTopology, ProtectionDevice, SocketInfo},
+    probe::{probe_host_topology, HostTopology, ProtectionDevice, SocketInfo},
     pseries::Pseries,
     q35::Q35,
     s390x::S390xCcwVirtio,
@@ -197,6 +197,19 @@ impl Platform {
         Self::build(&config.machine_info.machine_type, memory_size)
     }
 
+    /// Build a Platform from config and apply real host topology via sysfs probe.
+    ///
+    /// This is the entry-point for "auto" mode: `cold_plug_vfio = "auto"` in the
+    /// kata config calls this instead of using a manually-specified topology.
+    /// Returns the Platform as-is (no GPU args emitted) when no NVIDIA devices
+    /// are found, which is correct for bare x86 CI runners.
+    pub fn from_config_with_probe(config: &HypervisorConfig) -> Result<Self> {
+        let mut platform = Self::from_config(config)?;
+        let topo = probe_host_topology()?;
+        platform.apply_host_defaults(&topo);
+        Ok(platform)
+    }
+
     #[cfg(test)]
     pub(crate) fn from_config_defaults(machine_type: &str, memory_size: u64) -> Result<Self> {
         Self::build(machine_type, memory_size)
@@ -325,6 +338,7 @@ impl Platform {
                 multifunction: Some(false),
                 io_reserve: None,
                 device: None,
+                switch_downstreams: vec![],
             })
             .collect();
 
@@ -363,6 +377,7 @@ impl Platform {
                         pci_vendor_id: None,
                         pci_device_id: None,
                     }),
+                    switch_downstreams: vec![],
                 });
                 gpu_idx += 1;
             }
@@ -481,6 +496,7 @@ impl Platform {
                         pci_vendor_id: None,
                         pci_device_id: None,
                     }),
+                    switch_downstreams: vec![],
                 });
 
                 gpu_idx += 1;
@@ -536,6 +552,7 @@ impl Platform {
                         pci_vendor_id: None,
                         pci_device_id: None,
                     }),
+                    switch_downstreams: vec![],
                 });
 
                 nic_dev_idx += 1;
@@ -645,7 +662,7 @@ impl Platform {
             args.push("-device".to_owned());
             args.push(emit_pxb(root, default_bus));
 
-            for port in &root.root_ports {
+            for (port_idx, port) in root.root_ports.iter().enumerate() {
                 args.push("-device".to_owned());
                 args.push(emit_root_port(port, &root.id));
 
@@ -656,6 +673,11 @@ impl Platform {
                     }
                     args.push("-device".to_owned());
                     args.push(emit_vfio_q35(vfio, &port.id));
+                }
+                if !port.switch_downstreams.is_empty() {
+                    emit_switch_ports(port, &mut args, port_idx as u8 * 10, |vfio, bus| {
+                        emit_vfio_q35(vfio, bus)
+                    });
                 }
             }
         }
@@ -716,13 +738,19 @@ impl Platform {
                 args.push(emit_smmu(smmu, &root.id));
             }
 
-            for port in &root.root_ports {
+            for (port_idx, port) in root.root_ports.iter().enumerate() {
                 args.push("-device".to_owned());
                 args.push(emit_root_port(port, &root.id));
 
                 if let Some(vfio) = &port.device {
                     args.push("-device".to_owned());
                     args.push(emit_vfio_grace(vfio, &port.id, self.objects.iommufd.as_ref()));
+                }
+                if !port.switch_downstreams.is_empty() {
+                    let ifd = self.objects.iommufd.as_ref();
+                    emit_switch_ports(port, &mut args, port_idx as u8 * 10, |vfio, bus| {
+                        emit_vfio_grace(vfio, bus, ifd)
+                    });
                 }
             }
         }
@@ -916,6 +944,39 @@ fn emit_root_port(port: &PciRootPort, bus: &str) -> String {
         s.push_str(&format!(",io-reserve={io}"));
     }
     s
+}
+
+/// Emit the x3130-upstream + N xio3130-downstream devices for a switch-port
+/// fan-out topology into `args`.
+///
+/// Layout (one upstream, N downstreams):
+///   `-device x3130-upstream,id=<port.id>-sw,bus=<port.id>`
+///   `-device xio3130-downstream,id=<port.id>-ds0,bus=<port.id>-sw,chassis=<ch>,slot=0`
+///   ...
+///   `-device <vfio>,bus=<port.id>-ds0,...`
+fn emit_switch_ports(
+    port: &PciRootPort,
+    args: &mut Vec<String>,
+    chassis_base: u8,
+    emit_vfio: impl Fn(&VfioDevice, &str) -> String,
+) {
+    if port.switch_downstreams.is_empty() {
+        return;
+    }
+    let up_id = format!("{}-sw", port.id);
+    args.push("-device".to_owned());
+    args.push(format!("x3130-upstream,id={up_id},bus={}", port.id));
+
+    for (i, vfio) in port.switch_downstreams.iter().enumerate() {
+        let ds_id = format!("{}-ds{i}", port.id);
+        args.push("-device".to_owned());
+        args.push(format!(
+            "xio3130-downstream,id={ds_id},bus={up_id},chassis={},slot={i}",
+            chassis_base as usize + i
+        ));
+        args.push("-device".to_owned());
+        args.push(emit_vfio(vfio, &ds_id));
+    }
 }
 
 /// Q35 vfio emission: host → id → [x-pci-vendor-id] → [x-pci-device-id] → bus → [iommufd]
