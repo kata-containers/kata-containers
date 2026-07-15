@@ -82,6 +82,19 @@ spec:
               delete_one clusterrolebinding "${CLUSTER_ROLE_BINDING_NAME}" ""
               delete_one clusterrole "${CLUSTER_ROLE_NAME}" ""
               delete_one serviceaccount "${SERVICE_ACCOUNT_NAME}" "${NAMESPACE}"
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+              echo "Removing job-mode dispatcher RBAC (if present)..."
+              echo "  [RoleBinding] ${DISPATCHER_ROLE_BINDING_NAME} (namespace: ${NAMESPACE})"
+              echo "  [Role] ${DISPATCHER_ROLE_NAME} (namespace: ${NAMESPACE})"
+              echo "  [ClusterRoleBinding] ${DISPATCHER_NODE_ROLE_BINDING_NAME}"
+              echo "  [ClusterRole] ${DISPATCHER_NODE_ROLE_NAME}"
+              echo "  [ServiceAccount] ${DISPATCHER_SERVICE_ACCOUNT_NAME} (namespace: ${NAMESPACE})"
+              delete_one rolebinding "${DISPATCHER_ROLE_BINDING_NAME}" "${NAMESPACE}"
+              delete_one role "${DISPATCHER_ROLE_NAME}" "${NAMESPACE}"
+              delete_one clusterrolebinding "${DISPATCHER_NODE_ROLE_BINDING_NAME}" ""
+              delete_one clusterrole "${DISPATCHER_NODE_ROLE_NAME}" ""
+              delete_one serviceaccount "${DISPATCHER_SERVICE_ACCOUNT_NAME}" "${NAMESPACE}"
+{{- end }}
               echo "Kata-deploy RBAC cleanup completed."
           env:
             - name: NAMESPACE
@@ -109,4 +122,16 @@ spec:
               value: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
               value: {{ .Chart.Name }}-sa
+{{- end }}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+            - name: DISPATCHER_SERVICE_ACCOUNT_NAME
+              value: {{ include "kata-deploy.dispatcherServiceAccountName" . }}
+            - name: DISPATCHER_NODE_ROLE_NAME
+              value: {{ .Chart.Name }}-dispatcher-noderole{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+            - name: DISPATCHER_NODE_ROLE_BINDING_NAME
+              value: {{ .Chart.Name }}-dispatcher-noderb{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+            - name: DISPATCHER_ROLE_NAME
+              value: {{ .Chart.Name }}-dispatcher-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
+            - name: DISPATCHER_ROLE_BINDING_NAME
+              value: {{ .Chart.Name }}-dispatcher-rb{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
 {{- end }}
