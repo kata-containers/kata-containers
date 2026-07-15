@@ -14,7 +14,7 @@
 //! completed pods when balancing the spread).
 //!
 //! It has no host dependencies and only needs RBAC to list nodes and to
-//! manage Jobs in its namespace.
+//! create/get/delete Jobs in its namespace.
 
 mod job;
 
@@ -256,7 +256,6 @@ async fn run_fanout(
     // prefix; sanitize it once so it is a valid label value / DNS-1123 prefix
     // regardless of what the caller passed (e.g. a Helm release suffix).
     let owner_value = sanitize_label_value(&args.name_prefix);
-    let owner_selector = format!("{OWNER_LABEL}={owner_value}");
 
     while !queue.is_empty() || !in_flight.is_empty() {
         // Refill the in-flight set up to the parallelism cap.
@@ -270,10 +269,10 @@ async fn run_fanout(
                 Ok(_) => info!("created job {name} (node {node})"),
                 // A Job with this name already exists (e.g. left over from a
                 // previous, interrupted run). Only adopt it if it actually
-                // carries our owner label: status polling LISTs Jobs by that
-                // label, so adopting one that lacks it (or belongs to someone
-                // else) would leave it stuck in-flight forever. If it is not
-                // ours, fail the node instead of hanging.
+                // carries our owner label: status polling GETs each in-flight
+                // Job by name, so adopting one that lacks it (or belongs to
+                // someone else) would leave it stuck in-flight forever. If it
+                // is not ours, fail the node instead of hanging.
                 Err(kube::Error::Api(e)) if e.code == 409 => match jobs.get(&name).await {
                     Ok(existing) if job_owned_by(&existing, &owner_value) => {
                         info!("job {name} (node {node}) already exists and is ours, adopting it");
@@ -307,28 +306,18 @@ async fn run_fanout(
 
         tokio::time::sleep(poll).await;
 
-        // One LIST per poll returns the status of all our Jobs at once.
-        let lp = ListParams {
-            label_selector: Some(owner_selector.clone()),
-            ..Default::default()
-        };
-        let listed = jobs
-            .list(&lp)
-            .await
-            .context("failed to list per-node jobs")?;
-        let mut status_by_name: HashMap<&str, &Job> = HashMap::new();
-        for j in &listed.items {
-            if let Some(name) = j.metadata.name.as_deref() {
-                status_by_name.insert(name, j);
-            }
-        }
-
+        // Poll each in-flight Job via GET so we only need the `get` verb on
+        // batch/jobs (not `list`), matching the least-privilege Role.
         let mut finished: Vec<String> = Vec::new();
         for (name, node) in &in_flight {
-            let Some(j) = status_by_name.get(name.as_str()) else {
-                continue;
+            let j = match jobs.get(name).await {
+                Ok(j) => j,
+                Err(e) => {
+                    error!("failed to get job {name} (node {node}): {e}");
+                    continue;
+                }
             };
-            match interpret_status(j) {
+            match interpret_status(&j) {
                 JobOutcome::Succeeded => {
                     succeeded += 1;
                     finished.push(name.clone());

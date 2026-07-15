@@ -96,7 +96,7 @@ pub fn sanitize_label_value(value: &str) -> String {
 
 /// True if `job` carries [`OWNER_LABEL`] set to exactly `owner_value`. Used to
 /// decide whether a pre-existing (409) Job is safe to adopt: the dispatcher
-/// only ever LISTs Jobs by that label, so adopting one that lacks it would
+/// only ever GETs in-flight Jobs by name, so adopting one that lacks it would
 /// leave it stuck in-flight forever.
 pub fn job_owned_by(job: &Job, owner_value: &str) -> bool {
     job.metadata

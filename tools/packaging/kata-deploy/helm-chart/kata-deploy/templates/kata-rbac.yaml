@@ -108,10 +108,10 @@ metadata:
   name: {{ .Chart.Name }}-dispatcher-role{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
   namespace: {{ .Release.Namespace }}
 rules:
-# The dispatcher only ever creates/watches/GCs per-node Jobs in its own namespace.
+# The dispatcher only ever creates, polls, and deletes per-node Jobs in its own namespace.
 - apiGroups: ["batch"]
   resources: ["jobs"]
-  verbs: ["create", "get", "list", "watch", "delete"]
+  verbs: ["create", "get", "delete"]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
