@@ -14,7 +14,10 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
-    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
+    device_manager::{
+        balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
+        rng_dev_mgr::RngDeviceConfigInfo,
+    },
     vm::VmConfigInfo,
 };
 
@@ -172,6 +175,19 @@ impl DragonballInner {
                 .context("kernel params to string")?,
         )
         .context("set_boot_source")?;
+
+        // insert the virtio-rng device before boot: it is cold-plug only
+        let entropy_source = &self.config.machine_info.entropy_source;
+        if !entropy_source.is_empty() {
+            let rng_config = RngDeviceConfigInfo {
+                src: entropy_source.clone(),
+                use_shared_irq: None,
+                use_generic_irq: None,
+            };
+            self.vmm_instance
+                .insert_rng_device(rng_config)
+                .context("insert rng device")?;
+        }
 
         // add pending devices
         while let Some(dev) = self.pending_devices.pop() {
