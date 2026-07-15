@@ -120,7 +120,11 @@ monitor:
     tag: ""
   listenAddress: "0.0.0.0:8090"
   runtimeEndpoint: "unix:///run/containerd/containerd.sock"
-  logLevel: "info"
+  # Optional CLI log level override for kata-monitor.
+  # Supported values: trace, debug, info, warn, error, fatal, panic
+  # When empty, debug:true implies -log-level=debug; otherwise kata-monitor falls
+  # back to cli default.
+  logLevel: ""
   port: 8090
   securityContext:
     privileged: false

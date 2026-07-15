@@ -41,9 +41,15 @@ spec:
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         securityContext:
 {{- toYaml .Values.monitor.securityContext | nindent 10 }}
+        {{- $monitorLogLevel := .Values.monitor.logLevel | default "" | trim -}}
+        {{- if and (not $monitorLogLevel) .Values.debug -}}
+        {{- $monitorLogLevel = "debug" -}}
+        {{- end }}
         args:
           - -listen-address={{ .Values.monitor.listenAddress }}
-          - -log-level={{ .Values.monitor.logLevel }}
+          {{- if $monitorLogLevel }}
+          - -log-level={{ $monitorLogLevel }}
+          {{- end }}
           - -runtime-endpoint={{ .Values.monitor.runtimeEndpoint }}
         ports:
           - containerPort: {{ .Values.monitor.port }}
