@@ -80,6 +80,7 @@ virtio-mem = [
   "atomic-guest-memory",
 ]
 virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
+virtio-rng = ["dbs-virtio-devices/virtio-rng", "virtio-queue"]
 vhost-net = ["dbs-virtio-devices/vhost-net"]
 vhost-user-fs = ["dbs-virtio-devices/vhost-user-fs"]
 vhost-user-net = ["dbs-virtio-devices/vhost-user-net"]
