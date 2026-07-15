@@ -217,6 +217,11 @@ pub enum StartMicroVmError {
     /// Virtio-balloon errors.
     #[error("virtio-balloon errors: {0}")]
     BalloonDeviceError(#[source] device_manager::balloon_dev_mgr::BalloonDeviceError),
+
+    #[cfg(feature = "virtio-rng")]
+    /// Virtio-rng errors.
+    #[error("virtio-rng errors: {0}")]
+    RngDeviceError(#[source] device_manager::rng_dev_mgr::RngDeviceError),
     #[cfg(feature = "host-device")]
     /// Failed to create VFIO device
     #[error("cannot create VFIO device {0:?}")]
