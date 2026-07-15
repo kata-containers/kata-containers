@@ -250,18 +250,24 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
             debug!("Failed to get buffer address for request"))?;
 
         for io in data_descs {
-            let host_addr = mem
-                .get_host_address(GuestAddress(io.data_addr))
+            // It is important to validate that the ENTIRE [data_addr, data_addr + data_len)
+            // range lies within a single contiguous guest-memory mapping before
+            // building the iovec.
+            let slice = mem
+                .get_slice(GuestAddress(io.data_addr), io.data_len)
                 .map_err(|e| {
-                    // It's caused by invalid request from guest, simple...
                     warn!(
-                        "virtio-blk: Failed to get buffer guest address {:?} for request {:?}",
-                        io.data_addr, req
+                        "virtio-blk: guest buffer [{:#x}, {:#x}) is not a valid contiguous \
+                         guest-memory range for request {:?}: {:?}",
+                        io.data_addr,
+                        io.data_addr.wrapping_add(io.data_len as u64),
+                        req,
+                        e
                     );
                     ExecuteError::BadRequest(Error::GuestMemory(e))
                 })?;
             iovecs.push(IoDataDesc {
-                data_addr: host_addr as u64,
+                data_addr: slice.ptr_guard().as_ptr() as u64,
                 data_len: io.data_len,
             });
         }
