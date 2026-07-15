@@ -316,6 +316,135 @@ fn q35_coco_snp_single_gpu() {
     assert_eq!(want, got);
 }
 
+// ---- Q35 vanilla (non-CoCo) + 8 GPUs + 4 NVSwitches — HGX H100 PPCIE ----
+//
+// Production capture: same host as the TDX capture, 2026-07-15.
+// Same physical topology (8 H100 GPUs + 4 NVSwitches, 2 NUMA nodes, /dev/shm
+// memory, NUMA distance 21) but without CoCo:
+//   - No protection object; -machine q35,accel=kvm (no kernel_irqchip)
+//   - memory-backend-file via /dev/shm (not memory-backend-ram)
+//   - Per-device iommufd retained (modern VFIO interface, CoCo-independent)
+//   - x-pci-vendor-id/device-id retained (kata applies them for any GPU passthrough)
+//   - NUMA node 1 is memory-only; the single vCPU lives on node 0
+
+#[test]
+fn q35_vanilla_8gpu_4nvswitch() {
+    use VfioDeviceKind::{GpuPci, NvSwitch};
+
+    fn rp(
+        id: &str,
+        chassis: u8,
+        slot: u8,
+        host: &str,
+        vfio_id: &str,
+        iommufd_id: &str,
+        kind: VfioDeviceKind,
+        device_id: u16,
+    ) -> PciRootPort {
+        PciRootPort {
+            id: id.to_owned(),
+            chassis,
+            slot: Some(slot),
+            multifunction: Some(false),
+            io_reserve: None,
+            device: Some(VfioDevice {
+                id: vfio_id.to_owned(),
+                host: host.to_owned(),
+                rombar: None,
+                kind,
+                iommufd_id: Some(iommufd_id.to_owned()),
+                pci_vendor_id: Some(0x10de),
+                pci_device_id: Some(device_id),
+            }),
+        }
+    }
+
+    let platform = Platform {
+        machine: Machine::Q35(Q35 {
+            base: BaseMachine {
+                accel: "kvm".to_owned(),
+                memory_backend: None,
+                cpu: CpuConfig { model: CpuModel::Host { extra_features: vec![] } },
+            },
+            kernel_irqchip: None,
+            confidential_guest_support: None,
+            intel_iommu: None,
+        }),
+        pci: PciTopology {
+            default_bus: Some("pcie.0".to_owned()),
+            roots: vec![
+                PciRootComplex {
+                    id: "pxb-numa0".to_owned(),
+                    bus_nr: 32,
+                    numa_node: Some(0),
+                    iommu: None,
+                    root_ports: vec![
+                        rp("rp-numa0-0", 10, 0, "0000:1b:00.0", "vfio-5c7a307d86e7ae830",    "iommufdvfio-5c7a307d86e7ae830",    GpuPci,   0x2330),
+                        rp("rp-numa0-1", 10, 1, "0000:43:00.0", "vfio-98077fd3aa014b541",    "iommufdvfio-98077fd3aa014b541",    GpuPci,   0x2330),
+                        rp("rp-numa0-2", 10, 2, "0000:52:00.0", "vfio-35b65d16a30068022",    "iommufdvfio-35b65d16a30068022",    GpuPci,   0x2330),
+                        rp("rp-numa0-3", 10, 3, "0000:61:00.0", "vfio-331446c1d73050393",    "iommufdvfio-331446c1d73050393",    GpuPci,   0x2330),
+                        rp("rp-numa0-4", 10, 4, "0000:07:00.0", "vfio-b91919c2fa001cd18",    "iommufdvfio-b91919c2fa001cd18",    NvSwitch, 0x22a3),
+                        rp("rp-numa0-5", 10, 5, "0000:08:00.0", "vfio-fab9e6a06185873e9",    "iommufdvfio-fab9e6a06185873e9",    NvSwitch, 0x22a3),
+                        rp("rp-numa0-6", 10, 6, "0000:09:00.0", "vfio-3a77ef115d3f0ab610",   "iommufdvfio-3a77ef115d3f0ab610",   NvSwitch, 0x22a3),
+                        rp("rp-numa0-7", 10, 7, "0000:0a:00.0", "vfio-2e0a336d490089a111",   "iommufdvfio-2e0a336d490089a111",   NvSwitch, 0x22a3),
+                    ],
+                },
+                PciRootComplex {
+                    id: "pxb-numa1".to_owned(),
+                    bus_nr: 64,
+                    numa_node: Some(1),
+                    iommu: None,
+                    root_ports: vec![
+                        rp("rp-numa1-0", 11, 0, "0000:9d:00.0", "vfio-7f57f8dea75cdeca4",    "iommufdvfio-7f57f8dea75cdeca4",    GpuPci, 0x2330),
+                        rp("rp-numa1-1", 11, 1, "0000:c3:00.0", "vfio-4461976d3de811155",    "iommufdvfio-4461976d3de811155",    GpuPci, 0x2330),
+                        rp("rp-numa1-2", 11, 2, "0000:d1:00.0", "vfio-dc1944aed29728336",    "iommufdvfio-dc1944aed29728336",    GpuPci, 0x2330),
+                        rp("rp-numa1-3", 11, 3, "0000:df:00.0", "vfio-5c974cdc2dcfe4cb7",    "iommufdvfio-5c974cdc2dcfe4cb7",    GpuPci, 0x2330),
+                    ],
+                },
+            ],
+            pcie_root_port: vec![],
+        },
+        objects: Objects {
+            iommufd: None,
+            memory_backends: vec![
+                MemoryBackend::File {
+                    id: "numa-mem0".to_owned(),
+                    size: 4096 << 20,
+                    path: "/dev/shm".to_owned(),
+                    prealloc: false,
+                    share: true,
+                    host_nodes: Some(0),
+                    policy: Some("bind".to_owned()),
+                    is_egm: false,
+                },
+                MemoryBackend::File {
+                    id: "numa-mem1".to_owned(),
+                    size: 4096 << 20,
+                    path: "/dev/shm".to_owned(),
+                    prealloc: false,
+                    share: true,
+                    host_nodes: Some(1),
+                    policy: Some("bind".to_owned()),
+                    is_egm: false,
+                },
+            ],
+            numa_nodes: vec![
+                NumaNode { nodeid: 0, memdev: Some("numa-mem0".to_owned()), cpus: Some(0..1) },
+                NumaNode { nodeid: 1, memdev: Some("numa-mem1".to_owned()), cpus: None },
+            ],
+            numa_distances: vec![(0, 1, 21), (1, 0, 21)],
+            thread_contexts: vec![],
+            acpi_links: vec![],
+            rng: None,
+            protection: None,
+        },
+    };
+
+    let got = platform.to_qemu_args().expect("to_qemu_args");
+    let want = load_fixture("q35_vanilla_8gpu_4nvswitch.args");
+    assert_eq!(want, got);
+}
+
 // ---- Q35 CoCo (TDX) + 8 GPUs + 4 NVSwitches — Intel TDX host, HGX H100 PPCIE ----
 //
 // Production capture: Intel TDX host, 2026-07-15.  1 vCPU, 8192M, 2 NUMA nodes.

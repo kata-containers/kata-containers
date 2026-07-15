@@ -762,8 +762,9 @@ each supported machine type and that `HostTopology` round-trips through
 - `VfioDeviceKind::NvSwitch` added; maps to `vfio-pci` (same as `GpuPci`).
   Production TDX capture shows NVSwitches use `pcie-root-port + vfio-pci` topology
   (not switch-port hierarchy); distinguished in the type for probe-side classification.
-- Three Q35 fixture tests pass without `#[ignore]`:
-  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`, `q35_coco_tdx_8gpu_4nvswitch`.
+- Four Q35 fixture tests pass without `#[ignore]`:
+  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`,
+  `q35_coco_tdx_8gpu_4nvswitch`, `q35_vanilla_8gpu_4nvswitch`.
 
 ### Phase 4 — Multi-RC PCIe and NUMA layout
 
@@ -958,6 +959,26 @@ Platform fields added in Phase 3 from this capture:
 
 Phase 4 will wire `apply_host_defaults` end-to-end for TDX + NVSwitch topologies
 and add `HostTopology` fields for NVSwitch device classification.
+
+### Vanilla kata + GPU passthrough (non-CoCo)
+
+**Production data captured** (same host as TDX capture, 2026-07-15).
+Fixture: `q35_vanilla_8gpu_4nvswitch.args`.  Test: `q35_vanilla_8gpu_4nvswitch` (passing, Phase 3).
+
+Same physical topology as the TDX capture (8 GPUs + 4 NVSwitches, 2 NUMA nodes, NUMA
+distance 21) but without CoCo.  Key differences from the TDX capture:
+
+- No protection object; `-machine q35,accel=kvm` without `kernel_irqchip` or
+  `confidential-guest-support`.
+- Memory backend is `memory-backend-file` via `/dev/shm` (same pattern as
+  `q35_vanilla_kata_x86`), not `memory-backend-ram` as in the CoCo captures.
+- Per-device iommufd is still present: the modern VFIO iommufd interface is used
+  for GPU passthrough regardless of CoCo mode.
+- `x-pci-vendor-id`/`x-pci-device-id` overrides are still present: the kata
+  runtime applies them for any GPU passthrough, not only for CoCo attestation.
+- NUMA node 1 is memory-only (no `cpus=`).  The single vCPU lives on node 0.
+
+No new Platform types were required; the fixture exercises the existing model.
 
 ---
 
