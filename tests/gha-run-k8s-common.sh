@@ -701,6 +701,12 @@ function helm_helper() {
 	local base_values_file="${helm_chart_dir}/values.yaml"
 	if [[ -n "${KATA_HYPERVISOR}" ]]; then
 		case "${KATA_HYPERVISOR}" in
+			*nvidia-cpu*)
+				# Use NVIDIA CPU example file
+				if [[ -f "${helm_chart_dir}/try-kata-nvidia-cpu.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/try-kata-nvidia-cpu.values.yaml"
+				fi
+				;;
 			*nvidia-gpu*)
 				# Use NVIDIA GPU example file
 				if [[ -f "${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml" ]]; then

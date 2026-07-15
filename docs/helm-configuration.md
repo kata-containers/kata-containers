@@ -297,6 +297,24 @@ Includes:
 - `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
 - `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, arm64, s390x)
 
+### [`try-kata-nvidia-cpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-cpu.values.yaml)
+
+This file enables only the NVIDIA CPU-only shims and installs them using the
+[`job` deployment mode](#deployment-modes-daemonset-vs-job) (no always-on
+DaemonSet on the node):
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata-nvidia-cpu.values.yaml
+```
+
+Includes:
+
+- `qemu-nvidia-cpu` - NVIDIA base image without GPU passthrough (amd64, arm64)
+- `qemu-nvidia-cpu-runtime-rs` - NVIDIA base image without GPU passthrough,
+  using the Rust runtime (amd64, arm64)
+
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
 This file enables only the NVIDIA GPU-enabled shims and installs them using the
@@ -504,4 +522,3 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 **Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
-
