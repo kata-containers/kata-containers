@@ -334,22 +334,24 @@ impl Platform {
         }
 
         let mut gpu_idx = 0usize;
-        let mut bus_nr_running: u8 = 0;
 
         for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
-            let bus_nr = 32u8 + bus_nr_running;
-            bus_nr_running += 1;
+            // 32-bus spacing between pxb complexes: each pxb may have up to 31
+            // subordinate buses (one per root port + potential downstream buses).
+            // Production captures show bus_nr=32 for pxb-numa0, 64 for pxb-numa1.
+            let bus_nr = 32u8 + (group_idx as u8) * 32;
 
             let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
             let pxb_id = format!("pxb-numa{group_idx}");
 
             let mut root_ports = Vec::new();
-            for pci_addr in &group.pci_bus_addrs {
-                let rp_id = format!("rp-numa{group_idx}-{gpu_idx}");
+            for (port_idx, pci_addr) in group.pci_bus_addrs.iter().enumerate() {
+                // slot and chassis are per-pxb-relative; chassis increments per complex.
+                let rp_id = format!("rp-numa{group_idx}-{port_idx}");
                 root_ports.push(PciRootPort {
                     id: rp_id,
-                    chassis: 10,
-                    slot: Some(0),
+                    chassis: 10 + group_idx as u8,
+                    slot: Some(port_idx as u8),
                     multifunction: Some(false),
                     io_reserve: None,
                     device: Some(VfioDevice {

@@ -533,6 +533,37 @@ devices emitted on `pcie.0` at VM creation, with no device attached.  At runtime
 devices are plugged into available slots via QMP `device_add`.  DANs and dynamically
 assigned VFIO NICs use this path.  Mirrors the `pcie_root_port =` kata config field.
 
+**Scalability (1–8 GPUs, Q35 root-port topology):**
+
+Any count from 1 to 8 GPUs on a Q35/x86 host is expressed by varying the number
+of entries in `gpu_smmu_groups` and `pci_bus_addrs`.  The model scales linearly:
+each GPU gets exactly one `pcie-root-port` on a `pxb-pcie`; GPUs on the same NUMA
+socket share a pxb complex.  `apply_q35_defaults` assigns:
+
+- `bus_nr = 32 + group_idx × 32` per pxb (32-bus spacing matches production captures)
+- `chassis = 10 + group_idx` per pxb (unique chassis per complex, e.g. 10, 11)
+- `slot = port_index_within_pxb` (0-based, unique per pxb)
+- `id = rp-numa{group}-{port}` (port-relative, not global GPU index)
+
+Example layouts for B200/B300 PCIe (no NVSwitch, no NVLink):
+
+| GPU count | NUMA nodes | pxb layout |
+|-----------|-----------|------------|
+| 1 | 1 | pxb-numa0 (bus_nr=32, chassis=10): slot 0 |
+| 2 | 1 | pxb-numa0: slots 0-1 |
+| 4 | 1 | pxb-numa0: slots 0-3 |
+| 4 | 2 | pxb-numa0 (slots 0-1) + pxb-numa1 (bus_nr=64, chassis=11, slots 0-1) |
+| 8 | 2 | pxb-numa0 (slots 0-3) + pxb-numa1 (slots 0-3) |
+
+**NVSwitch classification is Phase 4:** `apply_q35_defaults` generates `GpuPci` for
+every entry in `gpu_smmu_groups` because `GpuSmmuGroup::pci_bus_addrs` carries no
+device-type information.  NVSwitch passthrough (where NVSwitches share the pxb with
+GPUs on slots 4–7) requires a Phase 4 extension to `HostTopology` — a separate
+`nvswitch_addrs` field or a typed `VfioPassthroughEntry { addr, kind }` — so the
+prober can classify each PCI address before `apply_q35_defaults` is called.
+Until then, callers building an NVSwitch topology construct `Platform` directly
+(as the `q35_coco_tdx_8gpu_4nvswitch` and `q35_vanilla_8gpu_4nvswitch` tests do).
+
 Grace/aarch64 uses `vfio-pci-nohotplug` for cold-plug onto `pxb-pcie`-attached root
 ports with a per-bus `arm-smmuv3` — a distinct topology from Q35 `root-port` cold-plug
 even though both are classified as "cold-plug root-port" in kata config terms.
