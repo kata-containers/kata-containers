@@ -52,8 +52,13 @@ pub(crate) struct VfioDevice {
 pub(crate) enum VfioDeviceKind {
     /// `vfio-pci-nohotplug` — aarch64 Grace static binding.
     Gpu,
-    /// `vfio-pci` — x86 Q35 / CoCo passthrough and NIC.
+    /// `vfio-pci` — x86 Q35 / CoCo GPU passthrough.
     GpuPci,
+    /// `vfio-pci` — NVSwitch (DGX/HGX fabric chip).
+    ///
+    /// Uses the same device string as GpuPci; distinguished here so probers
+    /// and emitters can identify device type without re-reading PCI IDs.
+    NvSwitch,
     Nic,
 }
 

@@ -761,7 +761,19 @@ fn emit_protection(prot: &ProtectionDevice) -> String {
             }
             s
         }
-        ProtectionDevice::Tdx { id } => format!("tdx-guest,id={id}"),
+        ProtectionDevice::Tdx { id, quote_generation_socket } => {
+            // QEMU's key=value parser cannot represent nested objects, so
+            // tdx-guest must be expressed as a JSON -object argument.
+            let mut json = format!(r#"{{"qom-type":"tdx-guest","id":"{id}""#);
+            if let Some(sock) = quote_generation_socket {
+                json.push_str(&format!(
+                    r#","quote-generation-socket":{{"type":"{}","cid":"{}","port":"{}"}}"#,
+                    sock.ty, sock.cid, sock.port
+                ));
+            }
+            json.push('}');
+            json
+        }
     }
 }
 
@@ -854,7 +866,7 @@ fn emit_root_port(port: &PciRootPort, bus: &str) -> String {
 fn emit_vfio_q35(vfio: &VfioDevice, port_id: &str) -> String {
     let device = match vfio.kind {
         VfioDeviceKind::Gpu => "vfio-pci-nohotplug",
-        VfioDeviceKind::GpuPci | VfioDeviceKind::Nic => "vfio-pci",
+        VfioDeviceKind::GpuPci | VfioDeviceKind::NvSwitch | VfioDeviceKind::Nic => "vfio-pci",
     };
     let mut s = format!("{device},host={},id={}", vfio.host, vfio.id);
     if let Some(vid) = vfio.pci_vendor_id {
@@ -878,7 +890,7 @@ fn emit_vfio_grace(
 ) -> String {
     let device = match vfio.kind {
         VfioDeviceKind::Gpu => "vfio-pci-nohotplug",
-        VfioDeviceKind::GpuPci | VfioDeviceKind::Nic => "vfio-pci",
+        VfioDeviceKind::GpuPci | VfioDeviceKind::NvSwitch | VfioDeviceKind::Nic => "vfio-pci",
     };
     let mut s = format!("{device},host={},bus={port_id}", vfio.host);
     if let Some(rombar) = vfio.rombar {

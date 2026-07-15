@@ -57,17 +57,30 @@ pub(crate) enum ProtectionDevice {
         policy: u64,
         host_data: Option<String>,
     },
-    /// TDX — fields TBD when a production capture is available.
     Tdx {
         id: String,
+        /// vsock address for the DCAP quote generation service.
+        /// Absent on TDs that do not perform local attestation.
+        quote_generation_socket: Option<TdxQuoteSocket>,
     },
+}
+
+/// vsock socket used by the TDX quote generation daemon (DCAP).
+///
+/// Emitted as a JSON sub-object in the `tdx-guest` `-object` argument because
+/// QEMU's key=value parser cannot represent nested structures.
+#[derive(Clone)]
+pub(crate) struct TdxQuoteSocket {
+    pub ty: String,   // "vsock"
+    pub cid: String,  // guest CID, e.g. "2"
+    pub port: String, // port number, e.g. "4050"
 }
 
 impl ProtectionDevice {
     pub(crate) fn id(&self) -> &str {
         match self {
             ProtectionDevice::SevSnp { id, .. } => id,
-            ProtectionDevice::Tdx { id } => id,
+            ProtectionDevice::Tdx { id, .. } => id,
         }
     }
 }
