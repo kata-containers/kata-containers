@@ -126,7 +126,7 @@ pub struct Q35 {
     /// Global IOMMU device for Q35.  Emitted as a top-level -device intel-iommu,
     /// not attached to any pxb-pcie.  Contrast with SmmuV3 on PciRootComplex.
     pub intel_iommu: Option<IntelIommuConfig>,
-    // pub runtime: RuntimeFeatures,  -- Phase 3+
+    // pub runtime: RuntimeFeatures,  -- Phase 4+
 }
 
 pub struct IntelIommuConfig {
@@ -253,9 +253,10 @@ pub struct VfioDevice {
 }
 
 pub enum VfioDeviceKind {
-    Gpu,    // vfio-pci-nohotplug (Grace aarch64)
-    GpuPci, // vfio-pci           (Q35 / CoCo x86)
-    Nic,    // vfio-pci
+    Gpu,      // vfio-pci-nohotplug (Grace aarch64)
+    GpuPci,   // vfio-pci           (Q35 / CoCo x86 GPU)
+    NvSwitch, // vfio-pci           (DGX/HGX NVSwitch; same device string as GpuPci)
+    Nic,      // vfio-pci
 }
 
 /// IOMMU that attaches to a specific PCIe expander bus (pxb-pcie).
@@ -376,7 +377,17 @@ pub struct EgmSocketInfo {
 pub enum ProtectionDevice {
     SevSnp { id: String, cbitpos: u8, reduced_phys_bits: u8,
              kernel_hashes: bool, policy: u64, host_data: Option<String> },
-    Tdx    { id: String },  // fields TBD — no production capture yet
+    Tdx    { id: String, quote_generation_socket: Option<TdxQuoteSocket> },
+}
+
+/// vsock address for the DCAP quote generation daemon.
+/// Emitted as a JSON sub-object because QEMU's key=value parser cannot
+/// represent nested structures.  The production TDX capture uses
+/// {"type":"vsock","cid":"2","port":"4050"}.
+pub struct TdxQuoteSocket {
+    pub ty: String,   // "vsock"
+    pub cid: String,  // guest CID
+    pub port: String, // port number
 }
 ```
 
@@ -744,8 +755,15 @@ each supported machine type and that `HostTopology` round-trips through
   `vfio-pci-nohotplug` for Grace).
 - `PciRootPort` extended: `slot`, `multifunction`, `io_reserve` — all `Option`
   to cover both Q35 cold-plug and Grace io-reserve formats.
-- Two Q35 fixture tests pass without `#[ignore]`:
-  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`.
+- `ProtectionDevice::Tdx` fields added from TDX production capture:
+  `quote_generation_socket: Option<TdxQuoteSocket>` with `ty/cid/port`.
+  TDX protection object is emitted as JSON (`{"qom-type":"tdx-guest",...}`) rather
+  than key=value because QEMU's key=value parser cannot represent nested objects.
+- `VfioDeviceKind::NvSwitch` added; maps to `vfio-pci` (same as `GpuPci`).
+  Production TDX capture shows NVSwitches use `pcie-root-port + vfio-pci` topology
+  (not switch-port hierarchy); distinguished in the type for probe-side classification.
+- Three Q35 fixture tests pass without `#[ignore]`:
+  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`, `q35_coco_tdx_8gpu_4nvswitch`.
 
 ### Phase 4 — Multi-RC PCIe and NUMA layout
 
@@ -898,30 +916,48 @@ Platform fields added in Phase 3:
 - `VfioDevice::iommufd_id: Option<String>` — per-device iommufd for CoCo x86
 - `VfioDevice::pci_vendor_id / pci_device_id` for CoCo attestation overrides
 
-**TDX data still needed:** capture from a CoCo + GPU pod on an Intel TDX host.
+**TDX production data captured** (Intel TDX host, 2026-07-15).
+See the `q35_coco_tdx_8gpu_4nvswitch` fixture for full topology details.
+Key differences from SNP: TDX object comes in JSON format; NUMA node 1 is
+memory-only (no `cpus=`); NVSwitches share pxb-numa0 with GPUs.
 
 ### 8 GPUs + 4 NVSwitches (DGX/HGX topology)
 
-NVSwitch passthrough adds a new device kind and a multi-level PCIe hierarchy
-not present in the Grace configs:
+**Production data captured** (Intel TDX host, 2026-07-15 — HGX H100 PPCIE).
+Fixture: `q35_coco_tdx_8gpu_4nvswitch.args`.  Test: `q35_coco_tdx_8gpu_4nvswitch` (passing, Phase 3).
 
-- `VfioDeviceKind::NvSwitch` is not yet defined in `topology.rs` (only `Gpu`
-  and `Nic` exist).
-- NVSwitches currently use `VfioDeviceConfig` (not `VfioDeviceGroup`) in the
-  legacy path (`add_gpu_nvswitch_setup` at cmdline_generator.rs:3373).
-- PCIe hierarchy: root port → `x3130-upstream` → `xio3130-downstream` →
-  device (three levels vs. the two levels used for GPU direct attachment).
-- `add_pcie_switch_ports` (cmdline_generator.rs:3508) emits this hierarchy;
-  `PciTopology` has no equivalent typed representation yet.
+Key observations from the TDX + 8 GPU + 4 NVSwitch invocation:
 
-New types needed before a fixture can be written:
+- 2 `pxb-pcie` complexes: `pxb-numa0` (`bus_nr=32`, `numa_node=0`, chassis=10) and
+  `pxb-numa1` (`bus_nr=64`, `numa_node=1`, chassis=11).  `bus_nr` is 32 apart to
+  reserve space for up to 32 subordinate buses per complex.
+- pxb-numa0 carries both GPUs (slots 0-3, 0x10de:0x2330) and NVSwitches (slots 4-7,
+  0x10de:0x22a3) on the same complex.  NVSwitch NUMA affinity on this host matches
+  GPU NUMA node 0 so they share the pxb.
+- pxb-numa1 carries 4 more GPUs (slots 0-3).  The 4 NVSwitches are fabric chips
+  shared across all GPUs; they are homed on pxb-numa0 regardless.
+- **NVSwitches use `pcie-root-port + vfio-pci` (root-port topology), NOT the
+  `pcie-root-port → x3130-upstream → xio3130-downstream` switch-port hierarchy.**
+  The legacy `add_pcie_switch_ports` path exists in `cmdline_generator.rs:3508`
+  for a different topology variant (DAN / NVSwitch fan-out) but was not used in
+  this TDX production deployment.  Switch-port topology is tracked as Phase 4+.
+- `VfioDeviceKind::NvSwitch` added in Phase 3; emits `vfio-pci` (same device
+  string as `GpuPci`).  The kind distinction is used by probers and higher-level
+  code to classify devices without re-reading PCI IDs.
+- NUMA node 1 is memory-only: the single vCPU (`smp 1`) lives on node 0.
+  NUMA distance 21 (symmetric) between nodes 0 and 1.
+- TDX object emitted as JSON: `{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`.
+  QEMU's key=value parser cannot represent the nested `quote-generation-socket`
+  object, so the entire `-object` value is a JSON string.
+
+Platform fields added in Phase 3 from this capture:
+- `ProtectionDevice::Tdx { quote_generation_socket: Option<TdxQuoteSocket> }`
+- `TdxQuoteSocket { ty, cid, port }` and JSON emission in `emit_protection`
 - `VfioDeviceKind::NvSwitch`
-- `PciSwitchPort { upstream: PcieUpstreamPort, downstream: Vec<PcieDownstreamPort> }` on `PciRootComplex`
-- `HostTopology::nvswitch_addrs` or equivalent probe field
+- Per-pxb `chassis` assignment (chassis=10 for pxb-numa0, chassis=11 for pxb-numa1)
 
-**Data needed:** capture from a DGX/HGX or GB200 NVL system with 8 GPUs and
-4 NVSwitches passed through.  Exact bus_nr arithmetic and PCIe address
-assignments must come from a live invocation, not from inference.
+Phase 4 will wire `apply_host_defaults` end-to-end for TDX + NVSwitch topologies
+and add `HostTopology` fields for NVSwitch device classification.
 
 ---
 

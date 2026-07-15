@@ -7,7 +7,9 @@ use std::path::Path;
 use super::platform::{
     BaseMachine, CpuConfig, CpuModel, Machine, MemoryBackend, NumaNode, Objects, Platform,
 };
-use super::probe::{EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice, SocketInfo};
+use super::probe::{
+    EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice, SocketInfo, TdxQuoteSocket,
+};
 use super::q35::Q35;
 use super::topology::{PciRootComplex, PciRootPort, PciTopology, VfioDevice, VfioDeviceKind};
 
@@ -311,6 +313,137 @@ fn q35_coco_snp_single_gpu() {
 
     let got = platform.to_qemu_args().expect("to_qemu_args");
     let want = load_fixture("q35_coco_snp_single_gpu.args");
+    assert_eq!(want, got);
+}
+
+// ---- Q35 CoCo (TDX) + 8 GPUs + 4 NVSwitches — Intel TDX host, HGX H100 PPCIE ----
+//
+// Production capture: Intel TDX host, 2026-07-15.  1 vCPU, 8192M, 2 NUMA nodes.
+// 4 H100 SXM5 GPUs (0x10de:0x2330) + 4 NVSwitch 3.0 (0x10de:0x22a3) on
+// pxb-numa0 (bus_nr=32, chassis=10), 4 more H100 GPUs on pxb-numa1 (bus_nr=64,
+// chassis=11).  Node 1 is memory-only (no cpus= field).  NUMA distance 21.
+// TDX object emitted as JSON (not key=value); includes vsock quote-generation-socket.
+// NVSwitches use root-port + vfio-pci topology — NOT x3130 switch-port hierarchy.
+//
+// Platform is built directly (not via apply_host_defaults) because per-device
+// iommufd UUIDs are assigned by the runtime at VM launch time and because
+// NvSwitch vs GPU classification is not yet in HostTopology (Phase 4).
+
+#[test]
+fn q35_coco_tdx_8gpu_4nvswitch() {
+    use VfioDeviceKind::{GpuPci, NvSwitch};
+
+    fn rp(
+        id: &str,
+        chassis: u8,
+        slot: u8,
+        host: &str,
+        vfio_id: &str,
+        iommufd_id: &str,
+        kind: VfioDeviceKind,
+        device_id: u16,
+    ) -> PciRootPort {
+        PciRootPort {
+            id: id.to_owned(),
+            chassis,
+            slot: Some(slot),
+            multifunction: Some(false),
+            io_reserve: None,
+            device: Some(VfioDevice {
+                id: vfio_id.to_owned(),
+                host: host.to_owned(),
+                rombar: None,
+                kind,
+                iommufd_id: Some(iommufd_id.to_owned()),
+                pci_vendor_id: Some(0x10de),
+                pci_device_id: Some(device_id),
+            }),
+        }
+    }
+
+    let platform = Platform {
+        machine: Machine::Q35(Q35 {
+            base: BaseMachine {
+                accel: "kvm".to_owned(),
+                memory_backend: None,
+                cpu: CpuConfig { model: CpuModel::Host { extra_features: vec![] } },
+            },
+            kernel_irqchip: Some("split".to_owned()),
+            confidential_guest_support: Some("tdx".to_owned()),
+            intel_iommu: None,
+        }),
+        pci: PciTopology {
+            default_bus: Some("pcie.0".to_owned()),
+            roots: vec![
+                PciRootComplex {
+                    id: "pxb-numa0".to_owned(),
+                    bus_nr: 32,
+                    numa_node: Some(0),
+                    iommu: None,
+                    root_ports: vec![
+                        rp("rp-numa0-0", 10, 0, "0000:1b:00.0", "vfio-4a182f997e753b150",  "iommufdvfio-4a182f997e753b150",  GpuPci,   0x2330),
+                        rp("rp-numa0-1", 10, 1, "0000:43:00.0", "vfio-03bafd69f614ffb21",  "iommufdvfio-03bafd69f614ffb21",  GpuPci,   0x2330),
+                        rp("rp-numa0-2", 10, 2, "0000:52:00.0", "vfio-947368d0843e55b42",  "iommufdvfio-947368d0843e55b42",  GpuPci,   0x2330),
+                        rp("rp-numa0-3", 10, 3, "0000:61:00.0", "vfio-41adfe2466817df03",  "iommufdvfio-41adfe2466817df03",  GpuPci,   0x2330),
+                        rp("rp-numa0-4", 10, 4, "0000:07:00.0", "vfio-7eff1447579be32f8",  "iommufdvfio-7eff1447579be32f8",  NvSwitch, 0x22a3),
+                        rp("rp-numa0-5", 10, 5, "0000:08:00.0", "vfio-bfaa424dfcf1b24d9",  "iommufdvfio-bfaa424dfcf1b24d9",  NvSwitch, 0x22a3),
+                        rp("rp-numa0-6", 10, 6, "0000:09:00.0", "vfio-585d94b2d0bd3b6b10", "iommufdvfio-585d94b2d0bd3b6b10", NvSwitch, 0x22a3),
+                        rp("rp-numa0-7", 10, 7, "0000:0a:00.0", "vfio-44e4edb8e24e522911", "iommufdvfio-44e4edb8e24e522911", NvSwitch, 0x22a3),
+                    ],
+                },
+                PciRootComplex {
+                    id: "pxb-numa1".to_owned(),
+                    bus_nr: 64,
+                    numa_node: Some(1),
+                    iommu: None,
+                    root_ports: vec![
+                        rp("rp-numa1-0", 11, 0, "0000:9d:00.0", "vfio-fd42e60b81a629b24",  "iommufdvfio-fd42e60b81a629b24",  GpuPci, 0x2330),
+                        rp("rp-numa1-1", 11, 1, "0000:c3:00.0", "vfio-c3b4a6ef942a66a45",  "iommufdvfio-c3b4a6ef942a66a45",  GpuPci, 0x2330),
+                        rp("rp-numa1-2", 11, 2, "0000:d1:00.0", "vfio-4ababdb3c8421bf06",  "iommufdvfio-4ababdb3c8421bf06",  GpuPci, 0x2330),
+                        rp("rp-numa1-3", 11, 3, "0000:df:00.0", "vfio-2e0f5a646c1bbd557",  "iommufdvfio-2e0f5a646c1bbd557",  GpuPci, 0x2330),
+                    ],
+                },
+            ],
+            pcie_root_port: vec![],
+        },
+        objects: Objects {
+            iommufd: None,
+            memory_backends: vec![
+                MemoryBackend::Ram {
+                    id: "numa-mem0".to_owned(),
+                    size: 4096 << 20,
+                    host_nodes: Some(0),
+                    policy: Some("bind".to_owned()),
+                },
+                MemoryBackend::Ram {
+                    id: "numa-mem1".to_owned(),
+                    size: 4096 << 20,
+                    host_nodes: Some(1),
+                    policy: Some("bind".to_owned()),
+                },
+            ],
+            numa_nodes: vec![
+                NumaNode { nodeid: 0, memdev: Some("numa-mem0".to_owned()), cpus: Some(0..1) },
+                // Node 1 is memory-only: the single vCPU lives on node 0.
+                NumaNode { nodeid: 1, memdev: Some("numa-mem1".to_owned()), cpus: None },
+            ],
+            numa_distances: vec![(0, 1, 21), (1, 0, 21)],
+            thread_contexts: vec![],
+            acpi_links: vec![],
+            rng: None,
+            protection: Some(ProtectionDevice::Tdx {
+                id: "tdx".to_owned(),
+                quote_generation_socket: Some(TdxQuoteSocket {
+                    ty: "vsock".to_owned(),
+                    cid: "2".to_owned(),
+                    port: "4050".to_owned(),
+                }),
+            }),
+        },
+    };
+
+    let got = platform.to_qemu_args().expect("to_qemu_args");
+    let want = load_fixture("q35_coco_tdx_8gpu_4nvswitch.args");
     assert_eq!(want, got);
 }
 
