@@ -125,6 +125,24 @@ Used for kata-monitor volume hostPath and mountPath so the socket is reachable i
 {{- end -}}
 
 {{/*
+Resolve kata-monitor log level.
+Honors monitor.logLevel, then the chart-wide logLevel, then debug:true -> debug.
+*/}}
+{{- define "monitorLogLevel" -}}
+{{- $logLevel := .Values.monitor.logLevel | default "" | trim -}}
+{{- if not $logLevel -}}
+{{- $logLevel = .Values.logLevel | default "" | trim -}}
+{{- end -}}
+{{- if and (not $logLevel) .Values.debug -}}
+{{- $logLevel = "debug" -}}
+{{- end -}}
+{{- if not $logLevel -}}
+{{- $logLevel = "info" -}}
+{{- end -}}
+{{- $logLevel -}}
+{{- end -}}
+
+{{/*
 Check if node-feature-discovery is already installed by someone else
 Returns the namespace where node-feature-discovery is found, or empty string if not found
 */}}

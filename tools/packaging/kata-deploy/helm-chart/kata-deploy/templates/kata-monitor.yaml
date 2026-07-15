@@ -43,7 +43,7 @@ spec:
 {{- toYaml .Values.monitor.securityContext | nindent 10 }}
         args:
           - -listen-address={{ .Values.monitor.listenAddress }}
-          - -log-level={{ .Values.monitor.logLevel }}
+          - -log-level={{ include "monitorLogLevel" . }}
           - -runtime-endpoint={{ include "monitorRuntimeEndpoint" . }}
         ports:
           - containerPort: {{ .Values.monitor.port }}
