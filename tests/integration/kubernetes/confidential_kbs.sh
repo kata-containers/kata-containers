@@ -528,14 +528,14 @@ function kbs_k8s_deploy() {
 
 	# Handle IBM SE (s390x): the SE verifier runs inside the gRPC Attestation
 	# Service, so the SE materials are mounted on the AS Pod (not KBS) via the
-	# chart's as.ibmse.* knobs, which create a node-local PV/PVC pointing at
+	# chart's as.verifier.se.* knobs, which create a node-local PV/PVC pointing at
 	# ${IBM_SE_CREDS_DIR} on the target node.
 	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
 		local node_name
 		node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 		prepare_credentials_for_qemu_se
-		helm_set_args+=(--set "as.ibmse.credsDir=${IBM_SE_CREDS_DIR:-}")
-		helm_set_args+=(--set "as.ibmse.nodeName=${node_name}")
+		helm_set_args+=(--set "as.verifier.se.credsDir=${IBM_SE_CREDS_DIR:-}")
+		helm_set_args+=(--set "as.verifier.se.nodeName=${node_name}")
 		# fsGroup must match the owning GID of the files under credsDir so the
 		# non-root AS container (CAP_DAC_OVERRIDE dropped) can read them.
 		helm_set_args+=(--set "as.podSecurityContext.fsGroup=1000")

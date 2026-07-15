@@ -310,16 +310,16 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "80a3c55e68e7d81fd31730ce9d49031f989e6c72"
+    version: "b6c8dc2bbb9374e00cb15e51acd8ba99b4febd7a"
     # image and image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "80a3c55e68e7d81fd31730ce9d49031f989e6c72"
+    image_tag: "b6c8dc2bbb9374e00cb15e51acd8ba99b4febd7a"
     toolchain: "1.90.0"
     # Helm chart deploys three separate images (kbs, as, rvps)
     # yamllint disable rule:line-length
-    image_kbs: "ghcr.io/confidential-containers/staged-images/kbs-grpc-as:80a3c55e68e7d81fd31730ce9d49031f989e6c72"
-    image_as: "ghcr.io/confidential-containers/staged-images/coco-as-grpc:80a3c55e68e7d81fd31730ce9d49031f989e6c72"
-    image_rvps: "ghcr.io/confidential-containers/staged-images/rvps:80a3c55e68e7d81fd31730ce9d49031f989e6c72"
+    image_kbs: "ghcr.io/confidential-containers/staged-images/kbs-grpc-as:b6c8dc2bbb9374e00cb15e51acd8ba99b4febd7a"
+    image_as: "ghcr.io/confidential-containers/staged-images/coco-as-grpc:b6c8dc2bbb9374e00cb15e51acd8ba99b4febd7a"
+    image_rvps: "ghcr.io/confidential-containers/staged-images/rvps:b6c8dc2bbb9374e00cb15e51acd8ba99b4febd7a"
     # yamllint enable rule:line-length
 
   containerd:
