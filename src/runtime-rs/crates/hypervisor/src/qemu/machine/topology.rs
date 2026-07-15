@@ -31,7 +31,14 @@ pub(crate) struct PciRootPort {
     pub multifunction: Option<bool>,
     /// `io-reserve=N` — required for aarch64 Grace ports; absent on Q35.
     pub io_reserve: Option<u32>,
+    /// Direct device assignment via a single root port (the common Grace path).
     pub device: Option<VfioDevice>,
+    /// Switch-port fan-out for NVSwitch/DAN topologies.
+    ///
+    /// When non-empty the root port drives an `x3130-upstream` switch and N
+    /// `xio3130-downstream` ports, one per entry.  Mutually exclusive with
+    /// `device` (only one assignment model is valid per root port).
+    pub switch_downstreams: Vec<VfioDevice>,
 }
 
 pub(crate) struct VfioDevice {
