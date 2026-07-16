@@ -18,7 +18,7 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 # For kata-runtime
 export PATH="${PATH}:/opt/kata/bin"
 
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 # Only the Attestation Service reaches out to the public Intel DCAP collateral
 # endpoint (api.trustedservices.intel.com) when verifying TDX quotes, so on the
 # Intel TDX CI runner it needs the corporate HTTPS proxy. HTTP_PROXY is

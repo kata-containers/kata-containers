@@ -341,7 +341,7 @@ customRuntimes:
   enabled: true
   runtimes:
     ${CUSTOM_RUNTIME_NAME}:
-      baseConfig: "${KATA_HYPERVISOR:-qemu}"
+      baseConfig: "${KATA_HYPERVISOR:-qemu-runtime-rs}"
       dropIn: |
         [agent.kata]
         dial_timeout = 999
