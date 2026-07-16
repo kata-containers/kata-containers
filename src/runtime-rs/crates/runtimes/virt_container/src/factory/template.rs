@@ -10,8 +10,10 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
+use hypervisor::{HYPERVISOR_NAME_CH, HYPERVISOR_QEMU};
 use kata_types::config::TomlConfig;
 use nix::mount::{mount, MsFlags};
+use slog::warn;
 
 use crate::factory::vm::{TemplateVm, VmConfig};
 
@@ -20,6 +22,7 @@ const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 
 /// Preallocated size (in MB) for saving the device state snapshot of the template VM.
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8;
+const MIB: u64 = 1024 * 1024;
 
 #[derive(Debug)]
 pub struct Template {
@@ -73,10 +76,30 @@ impl Template {
     }
 
     pub fn template_vm_exists(&self) -> bool {
-        let memory_path = self.state_path.join("memory");
-        let state_path = self.state_path.join("state");
+        if !self.memory_path().exists() || !self.device_state_path().exists() {
+            return false;
+        }
 
-        memory_path.exists() && state_path.exists()
+        self.config_path().is_none_or(|path| path.exists())
+    }
+
+    fn memory_path(&self) -> PathBuf {
+        self.state_path.join("memory")
+    }
+
+    fn device_state_path(&self) -> PathBuf {
+        match self.config.hypervisor_name.as_str() {
+            HYPERVISOR_NAME_CH => self.state_path.join("state.json"),
+            HYPERVISOR_QEMU => self.state_path.join("state"),
+            _ => self.state_path.join("state"),
+        }
+    }
+
+    fn config_path(&self) -> Option<PathBuf> {
+        match self.config.hypervisor_name.as_str() {
+            HYPERVISOR_NAME_CH => Some(self.state_path.join("config.json")),
+            _ => None,
+        }
     }
 
     pub fn prepare_template_files(&self) -> Result<()> {
@@ -119,9 +142,14 @@ impl Template {
         }
 
         // Create memory file
-        let memory_file = self.state_path.join("memory");
-        File::create(&memory_file)
+        let memory_file = self.memory_path();
+        let file = File::create(&memory_file)
             .context(format!("failed to create memory file: {memory_file:?}"))?;
+        let memory_size_bytes = u64::from(self.config.hypervisor_config.memory_info.default_memory)
+            .checked_mul(MIB)
+            .ok_or_else(|| anyhow!("template memory size overflows u64"))?;
+        file.set_len(memory_size_bytes)
+            .context(format!("failed to size memory file: {memory_file:?}"))?;
 
         // Verify memory file was created successfully
         if !memory_file.exists() {
@@ -140,9 +168,9 @@ impl Template {
         config.hypervisor_config.vm_template.boot_to_be_template = boot_to_be_template;
         config.hypervisor_config.vm_template.boot_from_template = !boot_to_be_template;
         config.hypervisor_config.vm_template.memory_path =
-            self.state_path.join("memory").to_string_lossy().to_string();
+            self.memory_path().to_string_lossy().to_string();
         config.hypervisor_config.vm_template.device_state_path =
-            self.state_path.join("state").to_string_lossy().to_string();
+            self.device_state_path().to_string_lossy().to_string();
         config
     }
 
@@ -152,22 +180,43 @@ impl Template {
             .await
             .context("new template vm")?;
 
-        vm.disconnect().await.context("disconnect template vm")?;
+        // Save the result so teardown still runs if any creation step fails.
+        let result: Result<()> = async {
+            vm.disconnect().await.context("disconnect template vm")?;
 
-        // Sleep a bit to let the agent grpc server clean up
-        // See: src/runtime/virtcontainers/factory/template/template_linux.go#L139-L145
-        // When we close connection to the agent, it needs sometime to cleanup
-        // and restart listening on the communication( serial or vsock) port.
-        // That time can be saved if we sleep a bit to wait for the agent to
-        // come around and start listening again. The sleep is only done when
-        // creating new vm templates and saves time for every new vm that are
-        // created from template, so it worth the invest.
-        sleep(TEMPLATE_WAIT_FOR_AGENT);
+            // Sleep a bit to let the agent grpc server clean up
+            // See: src/runtime/virtcontainers/factory/template/template_linux.go#L139-L145
+            // When we close connection to the agent, it needs sometime to cleanup
+            // and restart listening on the communication( serial or vsock) port.
+            // That time can be saved if we sleep a bit to wait for the agent to
+            // come around and start listening again. The sleep is only done when
+            // creating new vm templates and saves time for every new vm that are
+            // created from template, so it worth the invest.
+            sleep(TEMPLATE_WAIT_FOR_AGENT);
 
-        vm.pause().await.context("pause template vm")?;
+            vm.pause().await.context("pause template vm")?;
+            vm.save().await.context("save template vm")
+        }
+        .await;
 
-        vm.save().await.context("save template vm")?;
+        let teardown_result: Result<()> = async {
+            vm.stop().await.context("stop template vm")?;
+            vm.cleanup().await.context("cleanup template vm")
+        }
+        .await;
 
-        Ok(())
+        if let Err(teardown_error) = teardown_result {
+            if result.is_ok() {
+                return Err(teardown_error);
+            }
+
+            warn!(
+                sl!(),
+                "failed to tear down template VM after template creation failed: {}",
+                teardown_error
+            );
+        }
+
+        result
     }
 }
