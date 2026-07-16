@@ -9,7 +9,7 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
-export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu-runtime-rs}"
 
 TEE=false
 if is_confidential_gpu_hardware; then

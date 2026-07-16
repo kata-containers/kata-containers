@@ -720,10 +720,17 @@ shims:
       noProxy: ""
 
 # Default shim per architecture
+#
+# Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
+# "qemu-runtime-rs") is the default on every architecture that ships a
+# runtime-rs build. ppc64le has no runtime-rs build yet, so it stays on the
+# Go runtime ("qemu"). The Go runtime remains supported (no new features are
+# being added) and selectable (e.g. RuntimeClass "kata-qemu"); see the
+# deprecation notice in docs/migrating-config-go-runtime-to-runtime-rs.md.
 defaultShim:
-  amd64: qemu
-  arm64: qemu
-  s390x: qemu
+  amd64: qemu-runtime-rs
+  arm64: qemu-runtime-rs
+  s390x: qemu-runtime-rs
   ppc64le: qemu
 
 runtimeClasses:

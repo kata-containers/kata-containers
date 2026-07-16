@@ -55,6 +55,28 @@ default (non-custom) runtime. kata-deploy writes it as
 
 It's best to reference the default `values.yaml` file above for more details.
 
+### defaultShim
+
+`defaultShim` selects, per architecture, which shim the auto-created default
+RuntimeClass (`runtimeClasses.createDefault`) resolves to:
+
+```yaml title="values.yaml"
+defaultShim:
+  amd64: qemu-runtime-rs
+  arm64: qemu-runtime-rs
+  s390x: qemu-runtime-rs
+  ppc64le: qemu
+```
+
+Since the Kata Containers **4.0 release**, the default is the **Rust runtime**
+(`runtime-rs`, `qemu-runtime-rs`) on every architecture that ships a
+`runtime-rs` build (x86_64, aarch64, s390x). ppc64le has no `runtime-rs` build
+yet and stays on the Go runtime (`qemu`). The Go runtime remains selectable
+(e.g. via the `kata-qemu` RuntimeClass) but is
+[deprecated](migrating-config-go-runtime-to-runtime-rs.md#go-runtime-deprecation).
+See the [config migration guide](migrating-config-go-runtime-to-runtime-rs.md)
+for per-option differences when migrating.
+
 ### Custom Runtimes
 
 Kata allows you to create custom runtime configurations. This is done by overlaying one of the pre-existing runtime configs with user-provided configs. For example, we can use the `qemu-nvidia-gpu` as a base config and overlay our own parameters to it:

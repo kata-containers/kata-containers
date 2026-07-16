@@ -1069,8 +1069,9 @@ function helm_helper() {
 	# Creates a simple verification pod that runs with the Kata runtime
 	local helm_set_file_args=""
 	if [[ "${HELM_VERIFY_DEPLOYMENT}" == "true" ]]; then
-		# Determine runtime class from HELM_DEFAULT_SHIM or default to kata-qemu
-		local runtime_class="kata-qemu"
+		# Determine runtime class from HELM_DEFAULT_SHIM, otherwise fall back to
+		# the chart's default shim (Rust runtime since the 4.0 release).
+		local runtime_class="kata-qemu-runtime-rs"
 		if [[ -n "${HELM_DEFAULT_SHIM}" ]]; then
 			runtime_class="kata-${HELM_DEFAULT_SHIM}"
 		fi

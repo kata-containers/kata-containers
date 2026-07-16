@@ -243,7 +243,8 @@ impl Config {
             .map(|s| s.to_string())
             .collect();
 
-        let default_shim_for_arch = get_arch_var("DEFAULT_SHIM", "qemu", &arch);
+        let default_shim_for_arch =
+            get_arch_var("DEFAULT_SHIM", get_default_shim_for_arch(&arch), &arch);
 
         // Only use arch-specific variable for allowed hypervisor annotations
         let allowed_hypervisor_annotations_for_arch =
@@ -894,6 +895,21 @@ fn get_default_shims_for_arch(arch: &str) -> &'static str {
     }
 }
 
+/// Get the default shim for a specific architecture.
+///
+/// Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
+/// "qemu-runtime-rs") is the default wherever a runtime-rs build exists.
+/// ppc64le has no runtime-rs build yet, so it keeps the Go runtime ("qemu").
+/// This only acts as a fallback: the Helm chart normally provides DEFAULT_SHIM
+/// explicitly via values.yaml (`defaultShim`).
+fn get_default_shim_for_arch(arch: &str) -> &'static str {
+    match arch {
+        "x86_64" | "aarch64" | "s390x" => "qemu-runtime-rs",
+        "ppc64le" => "qemu",
+        _ => "qemu", // Fallback to the Go runtime for unknown architectures
+    }
+}
+
 /// Get architecture-specific variable (e.g., SHIMS_X86_64)
 /// Falls back to provided default if arch-specific variable is not found or empty
 fn get_arch_var(base_name: &str, default: &str, arch: &str) -> String {
@@ -1035,6 +1051,16 @@ mod tests {
         let arch = get_arch().unwrap();
         assert!(!arch.is_empty());
         cleanup_env_vars();
+    }
+
+    #[rstest]
+    #[case("x86_64", "qemu-runtime-rs")]
+    #[case("aarch64", "qemu-runtime-rs")]
+    #[case("s390x", "qemu-runtime-rs")]
+    #[case("ppc64le", "qemu")]
+    #[case("riscv64", "qemu")]
+    fn test_get_default_shim_for_arch(#[case] arch: &str, #[case] expected: &str) {
+        assert_eq!(get_default_shim_for_arch(arch), expected);
     }
 
     #[serial]
