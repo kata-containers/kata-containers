@@ -185,7 +185,7 @@ async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>
         h.vm_template.boot_from_template = true;
         let path = Path::new(&h.factory.template_path);
         h.vm_template.memory_path = path.join("memory").to_string_lossy().to_string();
-        h.vm_template.device_state_path = path.join("state").to_string_lossy().to_string();
+        h.vm_template.device_state_path = template_device_state_path(&hypervisor_name, path);
         let _ = VmConfig::validate_hypervisor_config(h);
     } else {
         return Err(anyhow!("hypervisor '{}' not found", hypervisor_name));
@@ -196,6 +196,15 @@ async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>
     let agent = new_agent(&toml_config).context("new agent")? as Arc<dyn agent::Agent>;
 
     Ok((hypervisor, agent))
+}
+
+fn template_device_state_path(hypervisor_name: &str, template_path: &Path) -> String {
+    let state_file = match hypervisor_name {
+        hypervisor::HYPERVISOR_NAME_CH => "state.json",
+        _ => "state",
+    };
+
+    template_path.join(state_file).to_string_lossy().to_string()
 }
 
 async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {

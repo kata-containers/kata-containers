@@ -291,6 +291,18 @@ guest_swap_size_percent = 100
 # Default 60.
 guest_swap_create_threshold_secs = 60
 
+[hypervisor.clh.factory]
+# VM templating support. Once enabled, new VMs are created from template.
+# CLH templating requires no shared filesystem and a block-capable snapshotter.
+#
+# Default false
+enable_template = false
+
+# Specifies the path of template.
+#
+# Default "/run/vc/vm/template"
+template_path = "/run/vc/vm/template"
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size = @PIPESIZE@
 # If enabled, make the agent display debug-level messages.
