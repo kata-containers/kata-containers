@@ -269,6 +269,16 @@ async fn get_entity_from_netns(
         entity_list.push(NetworkEntity::new(endpoint, network_info));
     }
 
+    // Currently, l3forwarding configures the host netns for a single pod interface.
+    if config.network_model == crate::network::network_model::L3_FORWARDING_NET_MODEL_STR
+        && entity_list.len() > 1
+    {
+        return Err(anyhow!(
+            "l3forwarding supports only a single interface per network namespace, found {}",
+            entity_list.len()
+        ));
+    }
+
     Ok(entity_list)
 }
 

@@ -68,6 +68,8 @@ pub struct Runtime {
     ///
     /// Options:
     /// - macvtap: used when the Container network interface can be bridged using macvtap.
+    /// - l3forwarding: for Istio Ambient-style service mesh integration with node proxies.
+    ///   Experimental, IPv4 only.
     /// - none: used when customize network. Only creates a tap device. No veth pair.
     /// - tcfilter: uses tc filter rules to redirect traffic from the network interface provided
     ///   by plugin to a tap interface connected to the VM.
@@ -79,8 +81,7 @@ pub struct Runtime {
     /// This option may have some potential impacts to your host. It should only be used when you
     /// know what you're doing.
     ///
-    /// `disable_new_netns` conflicts with `internetworking_model=tcfilter` and
-    /// `internetworking_model=macvtap`. It works only with `internetworking_model=none`.
+    /// `disable_new_netns` only works with `internetworking_model=none`.
     /// The tap device will be in the host network namespace and can connect to a bridge (like OVS)
     /// directly.
     ///
@@ -265,6 +266,7 @@ impl ConfigOps for Runtime {
             && net_model != "macvtap"
             && net_model != "none"
             && net_model != "tcfilter"
+            && net_model != "l3forwarding"
         {
             return Err(std::io::Error::other(format!(
                 "Invalid internetworking_model `{net_model}` in configuration file",

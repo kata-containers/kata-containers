@@ -14,9 +14,12 @@ This is a very namespace-centric approach as many hypervisors or VM
 Managers (VMMs) such as `virt-manager` cannot handle `veth`
 interfaces. Typically, [`TAP`](https://www.kernel.org/doc/Documentation/networking/tuntap.txt)
 interfaces are created for VM connectivity.
+There are various internetworking models that overcome incompatibility between typical
+container engines expectations and virtual machines,
 
-To overcome incompatibility between typical container engines expectations
-and virtual machines, Kata Containers networking transparently connects `veth`
+### TC-Filter
+
+Kata Containers networking transparently connects `veth`
 interfaces with `TAP` ones using [Traffic Control](https://man7.org/linux/man-pages/man8/tc.8.html):
 
 ![Kata Containers networking](../arch-images/network.png)
@@ -28,6 +31,8 @@ Kata Containers will create a tap device for the VM, `tap0_kata`,
 and setup a TC redirection filter to redirect traffic from `eth0`'s ingress to `tap0_kata`'s egress,
 and a second TC filter to redirect traffic from `tap0_kata`'s ingress to `eth0`'s egress.
 
+### MACVTAP
+
 Kata Containers maintains support for MACVTAP, which was an earlier implementation used in Kata.
 With this method, Kata created a MACVTAP device to connect directly to the `eth0` device.
 TC-filter is the default because it allows for simpler configuration, better CNI plugin
@@ -38,6 +43,12 @@ Kata Containers has deprecated support for bridge due to lacking performance rel
 Kata Containers supports both
 [CNM](https://github.com/moby/libnetwork/blob/master/docs/design.md#the-container-network-model)
 and [CNI](https://github.com/containernetworking/cni) for networking management.
+
+### L3 Forwarding (Experimental)
+
+With L3 forwarding, we modify the route table on the host-side network namespace to route traffic to the pod IP through the tap device.
+This is useful for integrating with service meshes such as Istio Ambient, where the CNI sets up iptables rules and a node proxy listens on the host-side network namespace.
+This model only supports IPv4 and only one pod address per pod.
 
 ## Network Hotplug
 
