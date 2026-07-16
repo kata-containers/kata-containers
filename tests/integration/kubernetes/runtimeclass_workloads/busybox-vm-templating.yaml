@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: POD_NAME
+spec:
+  runtimeClassName: kata
+  shareProcessNamespace: true
+  securityContext:
+    supplementalGroups: [10]
+  containers:
+  - name: CTR_NAME
+    # TODO: Use the shared template once CLH supports multi-layer images with EROFS.
+    image: docker.io/library/busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+    command:
+      - sleep
+      - "120"
