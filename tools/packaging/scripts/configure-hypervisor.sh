@@ -586,8 +586,7 @@ main() {
 			static="true"
 			;;
 		*)
-			usage
-			exit 1
+			die "Invalid option: -${OPTARG:-${opt}}"
 			;;
 		esac
 	done
