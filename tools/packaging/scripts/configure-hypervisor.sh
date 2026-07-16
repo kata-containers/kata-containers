@@ -438,7 +438,9 @@ generate_qemu_options() {
 	# removes code paths that survive individual compilation but become
 	# unreachable across the final link.  With our minimal device set this
 	# typically shrinks the binary by 15-25%.  Build time increases ~2-3x.
-	qemu_options+=(size:--enable-lto)
+	if [[ "${arch}" != "ppc64le" ]]; then
+		qemu_options+=(size:--enable-lto)
+	fi
 
 	# Enable kernel Virtual Machine support.
 	# This is the default, but be explicit to avoid any future surprises
