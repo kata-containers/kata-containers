@@ -51,6 +51,7 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: latest },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
+          { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: clh-runtime-rs, containerd_version: minimum },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
           { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity },
