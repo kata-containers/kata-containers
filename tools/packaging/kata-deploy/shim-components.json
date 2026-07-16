@@ -37,27 +37,27 @@
       "x86_64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia-gpu", "ovmf"]
     },
     "qemu-nvidia-gpu-runtime-rs": {
-      "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "ovmf"]
+      "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "rootfs-image-nvidia-devkit-extension", "ovmf"]
     },
     "qemu-nvidia-cpu": {
       "x86_64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
       "aarch64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"]
     },
     "qemu-nvidia-cpu-runtime-rs": {
-      "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
-      "aarch64": ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"]
+      "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-devkit-extension"],
+      "aarch64": ["shim-v2-rust", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-devkit-extension"]
     },
     "qemu-nvidia-gpu-snp": {
       "x86_64": ["shim-v2-go", "qemu-snp-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia-gpu-confidential", "ovmf-sev"]
     },
     "qemu-nvidia-gpu-snp-runtime-rs": {
-      "x86_64": ["shim-v2-rust", "qemu-snp-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "rootfs-image-coco-extension", "ovmf-sev"]
+      "x86_64": ["shim-v2-rust", "qemu-snp-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "rootfs-image-nvidia-devkit-extension", "rootfs-image-coco-extension", "ovmf-sev"]
     },
     "qemu-nvidia-gpu-tdx": {
       "x86_64": ["shim-v2-go", "qemu-tdx-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia-gpu-confidential", "ovmf-tdx"]
     },
     "qemu-nvidia-gpu-tdx-runtime-rs": {
-      "x86_64": ["shim-v2-rust", "qemu-tdx-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "rootfs-image-coco-extension", "ovmf-tdx"]
+      "x86_64": ["shim-v2-rust", "qemu-tdx-experimental", "kernel-nvidia-gpu", "rootfs-image-nvidia", "rootfs-image-nvidia-gpu-extension", "rootfs-image-nvidia-devkit-extension", "rootfs-image-coco-extension", "ovmf-tdx"]
     },
     "qemu-coco-dev": {
       "x86_64": ["shim-v2-go", "qemu", "kernel", "kernel-debug", "rootfs-image-confidential"],

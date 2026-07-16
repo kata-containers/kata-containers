@@ -706,6 +706,21 @@ The architecture is designed to support multiple guest extension images:
   CoCo extension (NVML resolution, attester selection) is covered in
   "Runtime dependencies" and "Attester variant selection" above.
 
+- **NVIDIA devkit extension** — a self-contained minimal **Alpine** rootfs
+  (musl + busybox + apk) with common debug tools prebaked (strace, gdb, ltrace,
+  iproute2, procps, lsof, tcpdump, ...), mounted at `/run/kata-extensions/devkit`.
+  Built standalone via `rootfs-image-nvidia-devkit-extension-tarball` (no driver
+  stage-one, no chisel, no kata-agent): the build fetches the Alpine minirootfs
+  and `apk add`s the toolset. At runtime the `devkit-enter` debug shell and the
+  `devkit-apk` wrapper overlay a writable tmpfs on the read-only extension and
+  chroot in, so apk and the tools run natively; `devkit-apk add <pkg>` works
+  inside that chroot. Alpine is chosen so its musl sonames never collide with the
+  base image's glibc (mounting the extension cannot shadow the base kata-agent)
+  and to avoid dpkg maintainer-script fragility. Also produces
+  `root_hash_nvidia-devkit-extension.txt` for `verity_params`; enabled through
+  runtime-rs **drop-ins** (see `src/runtime-rs/config/drop-in-examples/`).
+  Development use only — not for attested production/TEE deployments.
+
 - **Custom extensions** — users can build their own guest extension images for
   workload-specific libraries, models, or configurations.
 

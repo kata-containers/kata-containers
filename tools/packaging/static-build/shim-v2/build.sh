@@ -44,6 +44,7 @@ esac
 # - rootfs-image-nvidia-gpu / rootfs-image-nvidia-gpu-confidential (monolithic)
 # - rootfs-image-nvidia (the driver-agnostic NVIDIA boot image)
 # - rootfs-image-nvidia-gpu-extension (the driver-versioned gpu extension)
+# - rootfs-image-nvidia-devkit-extension (optional shell for kata-runtime exec)
 #
 # Both the CoCo and the NVIDIA GPU configs come in two flavours during the
 # transition to split images, and the two runtimes are built in separate `make`
@@ -88,6 +89,7 @@ RUST_EXTRA_OPTS="$(read_verity_param "base" "KERNELVERITYPARAMS")"
 RUST_EXTRA_OPTS+="$(read_verity_param "coco-extension" "COCOVERITYPARAMS")"
 RUST_EXTRA_OPTS+="$(read_verity_param "nvidia" "KERNELVERITYPARAMS_NV")"
 RUST_EXTRA_OPTS+="$(read_verity_param "nvidia-gpu-extension" "NVIDIAGPUEXTENSIONVERITYPARAMS")"
+RUST_EXTRA_OPTS+="$(read_verity_param "nvidia-devkit-extension" "NVIDIADEVKITEXTENSIONVERITYPARAMS")"
 
 # runtime (Go): monolithic confidential image -> confidential hash, plus the
 # monolithic nvidia-gpu / nvidia-gpu-confidential hashes for the NVIDIA configs.

@@ -1,0 +1,42 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Static busybox for the NVIDIA devkit guest extension.
+#
+# The devkit extension is a full minimal Alpine rootfs.  This static busybox
+# exists ONLY to bootstrap the overlay/chroot from the shell-less nvidia base:
+# the Alpine busybox inside the extension is a musl binary and cannot run on the
+# loader-less glibc base, so a statically linked bootstrap is required.  It is the
+# interpreter for the devkit-* scripts (#!/...busybox sh) and provides the handful
+# of applets they call (mount/umount/chroot/mkdir/cp/rm/ln/grep/echo/test/touch)
+# before control is handed to the Alpine musl busybox + apk inside the chroot.
+# Everything else comes from the Alpine rootfs, so keep this build tiny.
+#
+# Symbol names must match busybox 1.36.x Kconfig (see Alpine busyboxconfig).
+
+CONFIG_STATIC=y
+
+# Script interpreter for devkit-init/enter/apk (#!/...busybox sh).
+CONFIG_SH_IS_ASH=y
+CONFIG_ASH=y
+CONFIG_BASH_IS_NONE=y
+CONFIG_ASH_TEST=y
+
+# Overlay/chroot bootstrap: mount the exec tmpfs + overlay, bind the virtual
+# filesystems (rbind needs FEATURE_MOUNT_FLAGS) and chroot into the merged tree.
+CONFIG_MOUNT=y
+CONFIG_FEATURE_MOUNT_FLAGS=y
+CONFIG_UMOUNT=y
+CONFIG_MOUNTPOINT=y
+CONFIG_CHROOT=y
+
+# File helpers used by the devkit-* scripts.
+CONFIG_MKDIR=y
+CONFIG_CP=y
+CONFIG_RM=y
+CONFIG_LN=y
+CONFIG_TOUCH=y
+CONFIG_ECHO=y
+CONFIG_TEST=y
+CONFIG_GREP=y

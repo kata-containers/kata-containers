@@ -18,11 +18,31 @@ mod toml_tree_ops {
     fn merge_tables(base_table: &mut toml::value::Table, dropin_table: toml::value::Table) {
         for (key, val) in dropin_table.into_iter() {
             match base_table.get_mut(&key) {
-                Some(base_val) => merge(base_val, val),
+                Some(base_val) => {
+                    if key == "guest_extension_images" {
+                        merge_guest_extension_images(base_val, val);
+                    } else {
+                        merge(base_val, val);
+                    }
+                }
                 None => {
                     base_table.insert(key, val);
                 }
             }
+        }
+    }
+
+    /// Append drop-in guest extension entries onto the base config instead of
+    /// replacing the whole array.  This lets a small drop-in add e.g. the devkit
+    /// extension without repeating gpu/coco entries from the base profile.
+    fn merge_guest_extension_images(base: &mut toml::Value, dropin: toml::Value) {
+        match dropin {
+            toml::Value::Array(mut dropin_arr) if base.is_array() => {
+                if let toml::Value::Array(base_arr) = base {
+                    base_arr.append(&mut dropin_arr);
+                }
+            }
+            other => *base = other,
         }
     }
 
@@ -212,6 +232,43 @@ mod toml_tree_ops {
                 })
             );
         }
+
+        #[test]
+        fn dropin_appends_guest_extension_images() {
+            let mut base: toml::Value = toml::from_str(
+                r#"
+                [[hypervisor.qemu.guest_extension_images]]
+                name = "gpu"
+                path = "/opt/kata/share/kata-containers/kata-containers-nvidia-gpu-extension.img"
+            "#,
+            )
+            .unwrap();
+
+            let dropin: toml::Value = toml::from_str(
+                r#"
+                [[hypervisor.qemu.guest_extension_images]]
+                name = "devkit"
+                path = "/opt/kata/share/kata-containers/kata-containers-nvidia-devkit-extension.img"
+            "#,
+            )
+            .unwrap();
+
+            merge(&mut base, dropin);
+
+            let hypervisor = base.get("hypervisor").unwrap().as_table().unwrap();
+            let qemu = hypervisor.get("qemu").unwrap().as_table().unwrap();
+            let extensions = qemu
+                .get("guest_extension_images")
+                .unwrap()
+                .as_array()
+                .unwrap();
+            assert_eq!(extensions.len(), 2);
+            assert_eq!(extensions[0].get("name").unwrap().as_str().unwrap(), "gpu");
+            assert_eq!(
+                extensions[1].get("name").unwrap().as_str().unwrap(),
+                "devkit"
+            );
+        }
     }
 }
 
@@ -380,6 +437,41 @@ mod drop_in_directory_handling {
             assert!(config.runtime.sandbox_cgroup_only);
             assert_eq!(config.runtime.internetworking_model, "macvtap".to_string());
             assert_eq!(config.runtime.vfio_mode, "vfio".to_string());
+        }
+
+        #[test]
+        fn test_guest_extension_images_dropin_appends() {
+            let tmpdir = tempfile::tempdir().unwrap();
+
+            let base_config = r#"
+                [hypervisor.qemu]
+                path = "/usr/bin/qemu-kvm"
+                [[hypervisor.qemu.guest_extension_images]]
+                name = "gpu"
+                path = "/opt/kata/share/kata-containers/kata-containers-nvidia-gpu-extension.img"
+            "#;
+
+            let dropin_data = r#"
+                [[hypervisor.qemu.guest_extension_images]]
+                name = "devkit"
+                path = "/opt/kata/share/kata-containers/kata-containers-nvidia-devkit-extension.img"
+                [agent.kata]
+                debug_console_enabled = true
+            "#;
+
+            let config_path = tmpdir.path().join("runtime.toml");
+            create_file(&config_path, base_config.as_bytes()).unwrap();
+
+            let dropin_dir = tmpdir.path().join("config.d");
+            fs::create_dir(&dropin_dir).unwrap();
+            create_file(&dropin_dir.join("25-devkit.toml"), dropin_data.as_bytes()).unwrap();
+
+            let config = load(&config_path).unwrap();
+            let extensions = &config.hypervisor["qemu"].guest_extension_images;
+            assert_eq!(extensions.len(), 2);
+            assert_eq!(extensions[0].name, "gpu");
+            assert_eq!(extensions[1].name, "devkit");
+            assert!(config.agent["kata"].debug_console_enabled);
         }
     }
 }

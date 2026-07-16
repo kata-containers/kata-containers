@@ -38,7 +38,7 @@ default: runtime show-header
 ##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
 test: static-checks-build
 	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
-install: install-runtime install-configs
+install: install-runtime install-configs install-drop-in-examples
 
 ifeq (,$(realpath $(ARCH_FILE)))
     $(error "ERROR: invalid architecture: '$(ARCH)'")
@@ -502,6 +502,7 @@ endif
     # shim-v2 build from the emitted root-hash files.
     KERNELVERITYPARAMS_NV ?=
     NVIDIAGPUEXTENSIONVERITYPARAMS ?=
+    NVIDIADEVKITEXTENSIONVERITYPARAMS ?=
     DEFAULTVCPUS_NV := 1
     DEFAULTMEMORY_NV := 8192
     DEFOVERHEADVCPUS_NV := 0.5
@@ -685,6 +686,7 @@ USER_VARS += IMAGEPATH_NV_BASE
 USER_VARS += IMAGENAME_NV_EXTENSION
 USER_VARS += IMAGEPATH_NV_EXTENSION
 USER_VARS += NVIDIAGPUEXTENSIONVERITYPARAMS
+USER_VARS += NVIDIADEVKITEXTENSIONVERITYPARAMS
 USER_VARS += IMAGECONFIDENTIALPATH
 USER_VARS += COCOIMAGENAME
 USER_VARS += COCOIMAGEPATH
@@ -1092,8 +1094,13 @@ install-configs: $(CONFIGS)
 	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
 	ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
 
+install-drop-in-examples:
+	$(call INSTALL_FILE,config/drop-in-examples/README.md,$(CONFDIR)/drop-in-examples)
+	$(call INSTALL_FILE,config/drop-in-examples/25-devkit.toml.example,$(CONFDIR)/drop-in-examples)
+
 .PHONY: \
 	help \
 	optimize \
 	show-header \
-	show-summary
+	show-summary \
+	install-drop-in-examples

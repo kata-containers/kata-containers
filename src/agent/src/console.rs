@@ -5,6 +5,7 @@
 //
 
 use crate::util;
+use crate::AGENT_CONFIG;
 use anyhow::{anyhow, Result};
 use nix::fcntl::{self, FcntlArg, FdFlag, OFlag};
 use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
@@ -29,17 +30,27 @@ use tokio::sync::watch::Receiver;
 
 const CONSOLE_PATH: &str = "/dev/console";
 
+/// Shell candidates for the debug console, in priority order.
+fn debug_console_shell_candidates() -> Vec<String> {
+    let mut shells = Vec::new();
+
+    if !AGENT_CONFIG.debug_console_shell.is_empty() {
+        shells.push(AGENT_CONFIG.debug_console_shell.clone());
+    }
+
+    if !cfg!(test) {
+        shells.push("/bin/bash".to_string());
+        shells.push("/bin/sh".to_string());
+    }
+
+    shells.extend(SHELLS.lock().unwrap().clone());
+
+    shells
+}
+
 lazy_static! {
-    static ref SHELLS: Arc<SyncMutex<Vec<String>>> = {
-        let mut v = Vec::new();
-
-        if !cfg!(test) {
-            v.push("/bin/bash".to_string());
-            v.push("/bin/sh".to_string());
-        }
-
-        Arc::new(SyncMutex::new(v))
-    };
+    /// Extra shell paths (used by unit tests and future extension hooks).
+    static ref SHELLS: Arc<SyncMutex<Vec<String>>> = Arc::new(SyncMutex::new(Vec::new()));
 }
 
 pub fn initialize() {
@@ -53,7 +64,7 @@ pub async fn debug_console_handler(
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "debug-console"));
 
-    let shells = SHELLS.lock().unwrap().to_vec();
+    let shells = debug_console_shell_candidates();
 
     let shell = shells
         .into_iter()

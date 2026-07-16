@@ -46,6 +46,7 @@ jobs:
         asset:
           - agent
           - busybox
+          - busybox-devkit
           - cloud-hypervisor
           - coco-guest-components
           - firecracker
@@ -206,6 +207,7 @@ jobs:
           - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia
           - rootfs-image-nvidia-gpu-extension
+          - rootfs-image-nvidia-devkit-extension
           - rootfs-initrd
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
@@ -273,6 +275,7 @@ jobs:
       matrix:
         asset:
           - busybox
+          - busybox-devkit
           - coco-guest-components
           - kernel-nvidia-gpu-modules
           - pause-image

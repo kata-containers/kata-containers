@@ -166,6 +166,9 @@ Configuration files in `config/`:
 
 See [runtime configuration](../runtime/README.md#configuration) for configuration options.
 
+NVIDIA runtime-rs debug console support uses optional drop-ins under
+`config/drop-in-examples/` (see [NVIDIA devkit extension](../../docs/how-to/how-to-build-and-deploy-local-artifacts.md#nvidia-devkit-extension)).
+
 ## Logging
 
 See [Developer Guide - Troubleshooting](../../docs/Developer-Guide.md#troubleshoot-kata-containers).

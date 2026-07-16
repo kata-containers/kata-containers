@@ -1,0 +1,29 @@
+# NVIDIA devkit extension drop-in (runtime-rs)
+#
+# Copy into the config.d/ directory next to your runtime configuration file,
+# e.g. .../runtime-rs/runtimes/qemu-nvidia-gpu-runtime-rs/configuration-qemu-nvidia-gpu-runtime-rs.toml/config.d/
+#
+# Works with all NVIDIA runtime-rs profiles (qemu-nvidia-cpu/gpu/gpu-snp/gpu-tdx):
+# guest_extension_images entries from this drop-in are appended to the base
+# config, so existing gpu and coco extensions are preserved.
+#
+# Requires kata-containers-nvidia-devkit-extension.img and root_hash_nvidia-devkit-extension.txt
+# under share/kata-containers/ (see docs/how-to/how-to-build-and-deploy-local-artifacts.md).
+# The devkit image is a full minimal Alpine rootfs with common debug tools
+# prebaked (strace, gdb, iproute2, ...).  The devkit-apk wrapper and the debug
+# console overlay a writable tmpfs on it and chroot in, so apk runs natively;
+# `devkit-apk add <pkg>` works inside that chroot at runtime.
+# Copy the contents of root_hash_nvidia-devkit-extension.txt into verity_params
+# (root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...).
+#
+# debug_console_shell is passed to the guest as agent.debug_console_shell and tells
+# kata-runtime exec which shell to spawn on the shell-less NVIDIA base.
+
+[agent.kata]
+debug_console_enabled = true
+debug_console_shell = "/run/kata-extensions/devkit/bin/sh"
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "devkit"
+path = "/opt/kata/share/kata-containers/kata-containers-nvidia-devkit-extension.img"
+verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=..."

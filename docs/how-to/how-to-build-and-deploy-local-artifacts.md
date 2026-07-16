@@ -260,3 +260,138 @@ EOF
 ```
 
 `EROFS magic present: True` means the filesystem is really in the image.
+
+## NVIDIA devkit extension
+
+The production NVIDIA base image ships a **shell-less** busybox (minimal attack
+surface), so the agent debug console has no interactive shell on the guest root.
+
+Instead of rebuilding the whole NVIDIA rootfs with a debug busybox, build the
+optional **devkit** guest extension and cold-plug it alongside the nvidia
+base and gpu extension.  The devkit extension is a self-contained minimal
+**Alpine** rootfs (musl + busybox + apk) with common debug tools prebaked
+(strace, gdb, ltrace, iproute2, procps, lsof, tcpdump, ...), plus a `bin/sh`
+wrapper over static busybox.  At runtime it overlays a writable tmpfs and
+chroots in, so `apk` runs natively; use `devkit-apk add <pkg>` to install
+anything else into the writable overlay.
+
+!!! note
+    Alpine is used (rather than an Ubuntu/glibc rootfs) so its musl sonames
+    never collide with the base image's glibc — mounting the extension cannot
+    shadow or corrupt the base kata-agent — and to avoid dpkg maintainer-script
+    fragility. It is not tied to any CUDA/apt repository.
+
+```bash
+cd tools/packaging/kata-deploy/local-build
+
+export USE_CACHE=no
+make rootfs-image-nvidia-devkit-extension-tarball
+```
+
+The resulting `kata-static-rootfs-image-nvidia-devkit-extension.tar.zst` contains
+`kata-containers-nvidia-devkit-extension.img` and `root_hash_nvidia-devkit-extension.txt` (dm-verity
+parameters for the extension), an EROFS image with the Alpine rootfs and `devkit-apk`
+wrapper mounted at `/run/kata-extensions/devkit/` inside the guest.
+
+Build the devkit extension together with the NVIDIA runtime-rs shim so the
+root hash stays in sync (the shim build reads `root_hash_nvidia-devkit-extension.txt` from
+`tools/packaging/kata-deploy/local-build/build/` when present).
+
+### Deploy and use
+
+Extract the tarball under `/opt/kata/share/kata-containers/` (or your custom
+prefix).
+
+Enable the debug console and cold-plug the extension with a **drop-in** under
+the runtime config's `config.d/` directory. The same fragment works for every
+NVIDIA runtime-rs profile (`qemu-nvidia-cpu`, `qemu-nvidia-gpu`,
+`qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`); `guest_extension_images` entries
+from drop-ins are appended to the base config.
+
+=== "Manual drop-in"
+
+    Copy the example shipped with runtime-rs (after `make install` or from the
+    source tree):
+
+    ```bash
+    example=/opt/kata/share/defaults/kata-containers/runtime-rs/drop-in-examples/25-devkit.toml.example
+    cfg=/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/qemu-nvidia-gpu-runtime-rs/configuration-qemu-nvidia-gpu-runtime-rs.toml
+    verity="$(tr -d '\n' < /opt/kata/share/kata-containers/root_hash_nvidia-devkit-extension.txt)"
+    sudo install -d "$(dirname "$cfg")/config.d"
+    sudo cp "${example}" "$(dirname "$cfg")/config.d/25-devkit.toml"
+    sudo sed -i "s|verity_params = .*|verity_params = \"${verity}\"|" \
+      "$(dirname "$cfg")/config.d/25-devkit.toml"
+    ```
+
+    Adjust `path` if your install prefix is not `/opt/kata`. The `verity_params`
+    value must match `root_hash_nvidia-devkit-extension.txt` from the same build as the
+    `.img` file (NVRC requires measured extensions).
+
+=== "kata-deploy"
+
+    Set `debug: true` in the kata-deploy Helm values (or environment). For
+    NVIDIA runtime-rs shims, kata-deploy writes `20-debug.toml` with
+    `debug_console_enabled = true` and the devkit extension entry (including
+    `verity_params` from `root_hash_nvidia-devkit-extension.txt`) when that file is
+    installed under `share/kata-containers/`.
+
+Example drop-in contents:
+
+```toml title="config.d/25-devkit.toml"
+[agent.kata]
+debug_console_enabled = true
+
+[[hypervisor.qemu.guest_extension_images]]
+name = "devkit"
+path = "/opt/kata/share/kata-containers/kata-containers-nvidia-devkit-extension.img"
+verity_params = "root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=..."
+```
+
+Copy the `verity_params` value verbatim from
+`/opt/kata/share/kata-containers/root_hash_nvidia-devkit-extension.txt`.
+
+!!! warning
+    The devkit extension is for **development and troubleshooting only**.
+    Do not include it in attested production or TEE runtime configurations.
+
+!!! note
+    Rebuild and redeploy the devkit extension image whenever its contents change;
+    the dm-verity root hash in `root_hash_nvidia-devkit-extension.txt` must match the
+    image or NVRC will refuse to mount the extension at boot.
+
+### Open a shell and install packages with devkit-apk
+
+Enable the devkit drop-in (`25-devkit.toml.example`) or set:
+
+```toml
+[agent.kata]
+debug_console_enabled = true
+debug_console_shell = "/run/kata-extensions/devkit/bin/sh"
+```
+
+That passes `agent.debug_console_shell` on the guest kernel command line. Then connect
+with the debug console (no command argument — the agent spawns the configured shell):
+
+```bash
+kata-runtime exec <sandbox-id>
+```
+
+The devkit `bin/sh` wrapper enters the overlay/chroot and drops you into a
+bash shell inside the Alpine rootfs, with all prebaked debug tools on `PATH`.
+
+The guest rootfs and devkit extension are read-only (EROFS + dm-verity). The
+`devkit-apk` wrapper (and any `apk` call from inside the debug shell) installs
+packages into a writable tmpfs overlay at `/run/kata-devkit-writable/`:
+
+```bash
+# strace, gdb, iproute2, ... are already prebaked and work offline:
+strace --version
+
+# install anything else at runtime (needs guest network):
+devkit-apk add htop
+```
+
+Package sources are the standard Alpine `main`/`community` repositories pinned in
+`versions.yaml` (`externals.alpine`). Packages installed at runtime and the apk
+state live under `/run/kata-devkit-writable/` and are lost when the pod/guest is
+recreated.

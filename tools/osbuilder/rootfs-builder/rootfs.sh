@@ -68,6 +68,9 @@ BUILD_VARIANT=${BUILD_VARIANT:-""}
 # nvidia-gpu-extension) are handled by the NVIDIA rootfs builder.
 is_nvidia_variant() { [[ "${BUILD_VARIANT}" == "nvidia" || "${BUILD_VARIANT}" == "nvidia-"* ]]; }
 is_nvidia_confidential_variant() { [[ "${BUILD_VARIANT}" == "nvidia-gpu-confidential" ]]; }
+# The devkit extension is a self-contained Alpine rootfs; it needs neither the
+# generic base distro rootfs nor the kata-agent/kernel that the other variants do.
+is_nvidia_devkit_variant() { [[ "${BUILD_VARIANT}" == "nvidia-devkit-extension" ]]; }
 
 # shellcheck source=/dev/null
 is_nvidia_variant && source "${script_dir}/nvidia/nvidia_rootfs.sh"
@@ -464,7 +467,15 @@ build_rootfs_distro()
 
 	if [[ -z "${USE_DOCKER}" ]] && [[ -z "${USE_PODMAN}" ]]; then
 		info "build directly"
-		build_rootfs "${ROOTFS_DIR}"
+		# The devkit extension replaces the whole rootfs with an Alpine tree
+		# (partition_devkit_extension), so the base distro rootfs build here would
+		# just be discarded - skip it and let the NVIDIA stage build into an empty
+		# ${ROOTFS_DIR}.
+		if is_nvidia_devkit_variant; then
+			info "nvidia: devkit extension - skipping base distro rootfs build"
+		else
+			build_rootfs "${ROOTFS_DIR}"
+		fi
 	else
 		engine_build_args=""
 		if [[ -n "${USE_DOCKER}" ]]; then
@@ -913,13 +924,17 @@ main()
 	fi
 
 	init="${ROOTFS_DIR}/sbin/init"
-	setup_rootfs
+	# The devkit extension is built entirely by partition_devkit_extension
+	# (Alpine); the generic kata-agent install would just be discarded by the
+	# partition step, so skip it (and its agent-tarball build dependency).
+	is_nvidia_devkit_variant || setup_rootfs
 
 	# The nvidia base and nvidia-gpu-extension layouts are carved from the same
 	# chiseled tree as the monolith (sharing its driver stage-one); confidential
-	# only differs in the rootfs type passed down. They all drive the same
-	# stage-one/two and differ in the final partition step (see
-	# nvidia_image_layout in nvidia_rootfs.sh).
+	# only differs in the rootfs type passed down. The nvidia-devkit-extension is
+	# self-contained (Alpine) and skips the driver stage-one/chisel entirely.
+	# They differ in the final partition step (see nvidia_image_layout in
+	# nvidia_rootfs.sh).
 	if is_nvidia_variant; then
 		local rootfs_type=""
 		is_nvidia_confidential_variant && rootfs_type="confidential"

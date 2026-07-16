@@ -71,6 +71,7 @@ ifeq ($(ARCH), x86_64)
 NVGPU_BASE_TARBALLS = \
 	agent-tarball \
 	busybox-tarball \
+	busybox-devkit-tarball \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
@@ -87,6 +88,7 @@ else ifeq ($(ARCH), aarch64)
 NVGPU_BASE_TARBALLS = \
 	agent-tarball \
 	busybox-tarball \
+	busybox-devkit-tarball \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
@@ -115,6 +117,7 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-rootfs-image-nvidia-gpu-confidential.tar.zst \
 	kata-static-rootfs-image-nvidia.tar.zst \
 	kata-static-rootfs-image-nvidia-gpu-extension.tar.zst \
+	kata-static-rootfs-image-nvidia-devkit-extension.tar.zst \
 	kata-static-shim-v2-go.tar.zst \
 	kata-static-shim-v2-rust.tar.zst
 
@@ -123,7 +126,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball rootfs-image-nvidia-devkit-extension-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
@@ -179,6 +182,9 @@ agent-ctl-tarball: copy-scripts-for-the-tools-build
 BUSYBOX_CONF_FILE ?= busybox.nvidia.fragment
 busybox-tarball:
 	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
+
+busybox-devkit-tarball:
+	${MAKE} BUSYBOX_CONF_FILE=busybox.devkit.nvidia.fragment busybox-devkit-tarball-build
 
 coco-guest-components-tarball:
 	${MAKE} $@-build
@@ -291,6 +297,14 @@ rootfs-image-nvidia-tarball: $(DEPS)
 
 DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# The devkit extension is a self-contained Alpine rootfs (fetched via curl+apk at
+# build time): it ships no kata-agent, no kernel/modules and no chiseled driver
+# tree, so it only needs the static bootstrap busybox (used to enter the
+# overlay/chroot at runtime).
+DEPS := busybox-devkit-tarball
+rootfs-image-nvidia-devkit-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 shim-v2-go-tarball:

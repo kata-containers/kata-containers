@@ -76,7 +76,7 @@ build_busybox_from_source()
 	# Regenerate the config from a small fragment instead of shipping a full,
 	# frozen .config. Start from allnoconfig, drop every symbol the fragment
 	# overrides (Kconfig keeps the first value it reads, so the baseline entries
-	# have to go), append the fragment and let silentoldconfig resolve the rest.
+	# have to go), append the fragment and let oldconfig resolve the rest.
 	local fragment="${BUSYBOX_CONF_DIR:?}/${BUSYBOX_CONF_FILE:?}"
 	make allnoconfig
 	local sym
@@ -84,7 +84,14 @@ build_busybox_from_source()
 		sed -i -E "/^(${sym}=|# ${sym} is not set)/d" .config
 	done < <(grep -oE 'CONFIG_[A-Z0-9_]+' "${fragment}" | sort -u)
 	cat "${fragment}" >> .config
-	make silentoldconfig
+	# busybox 1.36.x has oldconfig/silentoldconfig only (no olddefconfig).
+	# silentoldconfig aborts on new sub-options under CI/non-TTY; pipe empty
+	# lines so defaults are accepted non-interactively.
+	set +o pipefail
+	yes "" | make oldconfig
+	local oldconfig_status=${PIPESTATUS[1]}
+	set -o pipefail
+	[[ "${oldconfig_status}" -eq 0 ]]
 
 	make -j "$(nproc)"
 	# shellcheck disable=SC2154

@@ -81,6 +81,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
 	coco-extension
+	nvidia-devkit-extension
 	nvidia-gpu
 	nvidia-gpu-confidential
 	nvidia
@@ -151,6 +152,7 @@ options:
 	rootfs-image
 	rootfs-image-confidential
 	rootfs-image-coco-extension
+	rootfs-image-nvidia-devkit-extension
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
@@ -495,6 +497,17 @@ install_image() {
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+	fi
+
+	# The devkit extension is a self-contained Alpine rootfs (no kernel, driver,
+	# NVRC or agent), so its cache key only tracks the Alpine release it is built
+	# from and the static bootstrap busybox (version + config fragment, since the
+	# fragment lives outside tools/osbuilder and is not covered by the osbuilder
+	# hash above).
+	if [[ "${variant}" == "nvidia-devkit-extension" ]]; then
+		latest_artefact+="-$(get_from_kata_deps ".externals.alpine.version")"
+		latest_artefact+="-$(get_from_kata_deps ".externals.busybox.version")"
+		latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/busybox/busybox.devkit.nvidia.fragment")"
 	fi
 
 	if [[ "${variant}" == "nvidia" ]]; then
@@ -946,6 +959,21 @@ install_image_nvidia_gpu_extension() {
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
 	install_image "nvidia-gpu-extension"
+}
+
+# Install the nvidia-devkit extension image: an Alpine rootfs plus devkit-apk,
+# laid out for /run/kata-extensions/devkit (see docs/design/composable-vm-images.md).
+install_image_nvidia_devkit_extension() {
+	export AGENT_POLICY="no"
+	export MEASURED_ROOTFS="yes"
+	export FS_TYPE="erofs"
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+	local version
+	version=$(get_latest_nvidia_driver_version)
+	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
+	install_image "nvidia-devkit-extension"
 }
 
 install_se_image() {
@@ -1405,6 +1433,11 @@ install_ovmf_tdx() {
 
 install_busybox() {
 	latest_artefact="$(get_from_kata_deps ".externals.busybox.version")"
+	# Bust the cache whenever the busybox config fragment changes: the fragment
+	# selects the applet/builtin set, so keying only on the busybox version would
+	# silently reuse a tarball built from a different fragment (e.g. one missing
+	# the ash `test`/`[` builtin).
+	latest_artefact+="-$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/busybox/${BUSYBOX_CONF_FILE:?}")"
 	latest_builder_image="$(get_busybox_image_name)"
 
 	install_cached_tarball_component \
@@ -1668,7 +1701,7 @@ handle_build() {
 
 	agent-ctl) install_agent_ctl ;;
 
-	busybox) install_busybox ;;
+	busybox|busybox-devkit) install_busybox ;;
 
 	boot-image-se) install_se_image ;;
 
@@ -1731,6 +1764,8 @@ handle_build() {
 	rootfs-image-nvidia) install_image_nvidia ;;
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
+
+	rootfs-image-nvidia-devkit-extension) install_image_nvidia_devkit_extension ;;
 
 	shim-v2-go) install_shim_v2_go ;;
 

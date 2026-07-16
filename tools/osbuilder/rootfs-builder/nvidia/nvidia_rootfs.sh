@@ -39,7 +39,8 @@ fi
 
 # The nvidia base and gpu-extension images are carved out of the very same chiseled
 # tree as the monolith, so they share the (expensive) driver stage-one with the
-# monolithic "nvidia-gpu" build instead of rebuilding it per layout.
+# monolithic "nvidia-gpu" build instead of rebuilding it per layout.  The devkit
+# extension is self-contained (Alpine minirootfs + apk) and builds no stage-one.
 nvidia_stage_one_variant() {
 	case "${BUILD_VARIANT}" in
 		nvidia|nvidia-gpu-extension) echo "nvidia-gpu" ;;
@@ -50,14 +51,17 @@ nvidia_stage_one_variant() {
 stage_one="${BUILD_DIR:?}/rootfs-$(nvidia_stage_one_variant)-stage-one"
 readonly stage_one
 
-# Image layout produced from the chiseled tree:
-#   monolith    - the full GPU image (default; unchanged behaviour)
-#   base        - driver-agnostic nvidia base (NVRC init + agent + base libs)
-#   gpu-extension   - GPU userspace only, laid out for /run/kata-extensions/gpu
+# Image layout produced from the chiseled tree (devkit-extension is built
+# standalone from an Alpine minirootfs, not from the chiseled tree):
+#   monolith         - the full GPU image (default; unchanged behaviour)
+#   base             - driver-agnostic nvidia base (NVRC init + agent + base libs)
+#   gpu-extension    - GPU userspace only, laid out for /run/kata-extensions/gpu
+#   devkit-extension - self-contained Alpine rootfs for /run/kata-extensions/devkit
 nvidia_image_layout() {
 	case "${BUILD_VARIANT}" in
 		nvidia) echo "base" ;;
 		nvidia-gpu-extension) echo "gpu-extension" ;;
+		nvidia-devkit-extension) echo "devkit-extension" ;;
 		*) echo "monolith" ;;
 	esac
 }
@@ -88,6 +92,14 @@ setup_nvidia-nvrc() {
 
 setup_nvidia_gpu_rootfs_stage_one() {
 	local rootfs_type=${1:-""}
+
+	# The devkit extension is a self-contained Alpine rootfs (see
+	# partition_devkit_extension) and needs none of the NVIDIA driver stage-one;
+	# skip the expensive driver build entirely.
+	if [[ "$(nvidia_image_layout)" == "devkit-extension" ]]; then
+		info "nvidia: devkit extension - skipping driver stage-one"
+		return
+	fi
 
 	if [[ -e "${stage_one}.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
@@ -278,9 +290,9 @@ chisseled_init() {
 	echo "nvidia: chisseling init"
 	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
 
-	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
-		 bin sbin usr/bin etc/modprobe.d etc/ssl/certs
+	mkdir -p dev etc/apt/apt.conf.d etc/modprobe.d etc/ssl/certs proc run/cdi sys tmp usr var \
+		lib/modules lib/firmware usr/share/nvidia usr/share/dpkg usr/share/keyrings \
+		lib/"${machine_arch}"-linux-gnu lib64 bin sbin usr/bin
 
 	ln -sf ../run var/run
 	ln -sf ../run var/log
@@ -338,6 +350,10 @@ compress_rootfs() {
 			continue
 		fi
 		strip "${file}"
+		# UPX on a full unchiseled distro tree is impractical; strip only.
+		if [[ "$(nvidia_image_layout)" == "devkit-extension" ]]; then
+			continue
+		fi
 		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
 
@@ -348,9 +364,17 @@ compress_rootfs() {
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
+	if [[ "$(nvidia_image_layout)" == "devkit-extension" ]]; then
+		# The devkit extension is a self-contained Alpine (musl) rootfs and ships
+		# its OWN program interpreter.  Unlike glibc - where the loader is a
+		# separate ld-linux-*.so - musl's loader IS libc (ld-musl-<arch>.so.1,
+		# always under /lib), so the "*.so.*" strip loop above cleared its exec
+		# bit.  Restore it, or the kernel refuses it as an ELF interpreter and
+		# every dynamic binary (bash, apk, strace, ...) fails to exec with EACCES.
+		chmod +x lib/ld-musl-*.so.* 2>/dev/null || true
 	# The gpu-extension layout ships no program interpreter (it lives in the
-	# nvidia base image), so only fix up the loader for the other layouts.
-	if [[ "$(nvidia_image_layout)" != "gpu-extension" ]]; then
+	# nvidia base image), so only fix up the loader for the remaining layouts.
+	elif [[ "$(nvidia_image_layout)" != "gpu-extension" ]]; then
 		chmod +x "${libdir}"/ld-linux-*
 	fi
 }
@@ -537,6 +561,177 @@ partition_gpu_extension() {
 	rm -rf "${extension}"
 }
 
+# Remove GPU userspace that is cold-plugged via the gpu extension.  Runs inside
+# ${ROOTFS_DIR}.
+strip_gpu_userspace() {
+	local f
+	for f in "${nvidia_gpu_extension_bins[@]}"; do
+		rm -f "${f}"
+	done
+
+	local md="lib/${machine_arch}-linux-gnu"
+	local g
+	for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
+		find "${md}" -maxdepth 1 -name "${g}" -delete
+	done
+	rm -f lib/libgrpc_mgr.so
+
+	rm -rf usr/share/nvidia
+	mkdir -p usr/share/nvidia
+
+	rm -rf lib/firmware/nvidia
+	mkdir -p lib/firmware/nvidia
+
+	rm -rf lib/modules
+	mkdir -p lib/modules
+}
+
+# The devkit extension ships a full, self-contained minimal Alpine rootfs.  At
+# runtime devkit-enter overlays a writable tmpfs on top of it and chroots in, so
+# apk and every prebaked debug tool run natively against a normal root filesystem
+# instead of the fragile hand-assembled userland this used to be.
+#
+# Alpine (musl + busybox + apk) is deliberately chosen over a glibc distro:
+#   - apk has no maintainer scripts, so populating the rootfs and `apk add`ing at
+#     runtime "just work" - none of the dpkg dash/gpgv/apt-sandbox fragility.
+#   - musl sonames (ld-musl-*.so) never collide with the base image's glibc, so
+#     mounting this extension can't shadow or corrupt the base kata-agent.
+#   - it is tiny, keeping the verity image and rebuilds small.
+
+# Debug tools prebaked into the extension so they work offline; `apk add <pkg>`
+# stays available inside the chroot for anything else.  Space-separated (apk).
+readonly nvidia_devkit_debug_packages="bash ca-certificates strace ltrace gdb iproute2 procps psmisc lsof tcpdump curl wget file less vim netcat-openbsd bind-tools pciutils"
+
+# apk add the debug toolset into the freshly unpacked Alpine rootfs.  We run the
+# rootfs's own apk under chroot, relying on the same builder binfmt/qemu that the
+# existing `chroot "${stage_one}"` calls already require for cross-arch builds.
+# apk verifies every package against the signed APKINDEX + the keys shipped in
+# the minirootfs, so the plain-HTTP mirror is safe and needs no ca-certificates
+# to bootstrap.  Unlike dpkg there are no maintainer scripts to emulate.
+install_devkit_alpine_packages() {
+	local ext="${1:?}"
+
+	# shellcheck disable=SC2086
+	chroot "${ext}" /sbin/apk add --no-cache ${nvidia_devkit_debug_packages} \
+		|| die "apk failed to install the devkit debug toolset"
+}
+
+# Copy one static busybox into the extension.  It exists purely to bootstrap the
+# chroot from the shell-less guest base (sh, mount, umount, mountpoint, chroot,
+# mkdir, cp, rm, ln): the Alpine busybox inside is a musl binary and cannot run
+# on the glibc/loader-less base, so a statically linked bootstrap is required.
+# Everything else comes from the Alpine rootfs inside the chroot.
+install_devkit_static_busybox() {
+	local ext="${1:?}"
+
+	local bb_tar="${BUILD_DIR}/kata-static-busybox-devkit.tar.zst"
+	[[ -e "${bb_tar}" ]] || die "missing ${bb_tar}; build busybox-devkit-tarball first"
+
+	local overlay
+	overlay="$(mktemp -d "${BUILD_DIR}/.devkit-busybox-overlay.XXXX")"
+	tar --zstd -xf "${bb_tar}" -C "${overlay}"
+
+	mkdir -p "${ext}/bin"
+	if [[ -e "${overlay}/bin/busybox" ]]; then
+		install -m0755 "${overlay}/bin/busybox" "${ext}/bin/busybox"
+	elif [[ -e "${overlay}/bin/sh" ]]; then
+		install -m0755 "${overlay}/bin/sh" "${ext}/bin/busybox"
+	else
+		die "devkit busybox tarball has no bin/busybox or bin/sh"
+	fi
+
+	rm -rf "${overlay}"
+}
+
+# Trim the bits Alpine ships that a debug rootfs does not need: man pages, docs
+# and the apk download cache.  The seeded resolver is dropped too - devkit-init
+# re-seeds a fresh /etc/resolv.conf into the writable overlay at runtime.
+strip_devkit_docs() {
+	local ext="${1:?}"
+
+	rm -rf \
+		"${ext}/usr/share/man"/* \
+		"${ext}/usr/share/doc"/* \
+		"${ext}/usr/share/info"/* \
+		"${ext}/var/cache/apk"/* \
+		"${ext}/etc/resolv.conf" \
+		2>/dev/null || true
+}
+
+# Install guest-side devkit scripts: the chroot entrypoint (devkit-enter, exposed
+# as the debug_console_shell via bin/sh) plus the apk wrapper, all thin
+# overlay+chroot shims sharing devkit-init.sh.
+install_devkit_guest_scripts() {
+	local ext="${1:?}"
+	local nvidia_dir script dest
+
+	nvidia_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+	for script in devkit-init.sh devkit-enter.sh devkit-apk.sh; do
+		[[ -f "${nvidia_dir}/${script}" ]] || die "missing ${nvidia_dir}/${script}"
+		dest="${script%.sh}"
+		install -D -m0755 "${nvidia_dir}/${script}" "${ext}/usr/bin/${dest}"
+	done
+
+	# The agent execs debug_console_shell at ${DEVKIT}/bin/sh; point it at the
+	# interactive chroot entrypoint.
+	mkdir -p "${ext}/bin"
+	ln -sf ../usr/bin/devkit-enter "${ext}/bin/sh"
+}
+
+# Build the devkit extension: a self-contained minimal Alpine rootfs with common
+# debug tools prebaked, a static busybox bootstrap, and the guest overlay/chroot
+# scripts.  At runtime devkit-enter overlays a writable tmpfs and chroots in, so
+# apk and the debug tools run natively against a normal root filesystem.
+#
+# Self-contained: needs neither the NVIDIA driver stage-one nor the chisel pass -
+# the Alpine minirootfs is fetched directly and apk pulls the toolset.  Runs
+# inside ${ROOTFS_DIR}, replacing whatever the generic rootfs build left there.
+partition_devkit_extension() {
+	echo "nvidia: building devkit extension layout (minimal Alpine rootfs)"
+
+	local branch ver mirror
+	branch="$(get_package_version_from_kata_yaml "externals.alpine.branch")"
+	ver="$(get_package_version_from_kata_yaml "externals.alpine.version")"
+	mirror="$(get_package_version_from_kata_yaml "externals.alpine.mirror")"
+	[[ -n "${branch}" ]] || die "externals.alpine.branch must be set in versions.yaml"
+	[[ -n "${ver}" ]] || die "externals.alpine.version must be set in versions.yaml"
+	[[ -n "${mirror}" ]] || mirror="http://dl-cdn.alpinelinux.org/alpine"
+
+	local extension
+	extension="$(mktemp -d "${BUILD_DIR}/.nvidia-devkit-extension.XXXX")"
+
+	# 1) Unpack the official Alpine minirootfs (musl userland + busybox + apk).
+	#    machine_arch (x86_64/aarch64) is already Alpine's arch naming.
+	local tarball url
+	tarball="alpine-minirootfs-${ver}-${machine_arch}.tar.gz"
+	url="${mirror}/${branch}/releases/${machine_arch}/${tarball}"
+	curl -fsSL -o "${BUILD_DIR}/${tarball}" "${url}" \
+		|| die "failed to download Alpine minirootfs ${url}"
+	tar -xzf "${BUILD_DIR}/${tarball}" -C "${extension}"
+
+	# 2) Pin the repositories (main + community) and seed a resolver so apk can
+	#    fetch package indexes and content.
+	mkdir -p "${extension}/etc/apk"
+	cat > "${extension}/etc/apk/repositories" <<-EOF
+		${mirror}/${branch}/main
+		${mirror}/${branch}/community
+	EOF
+	cp -L /etc/resolv.conf "${extension}/etc/resolv.conf" 2>/dev/null || true
+
+	# 3) Prebake the debug toolset (apk resolves + unpacks natively; no scripts).
+	install_devkit_alpine_packages "${extension}"
+
+	install_devkit_static_busybox "${extension}"
+	install_devkit_guest_scripts "${extension}"
+	strip_devkit_docs "${extension}"
+
+	find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+	cp -a "${extension}/." .
+	rm -rf "${extension}"
+
+	chmod 0755 .
+}
+
 # Strip the GPU userspace from the chiseled tree, leaving a driver-agnostic
 # nvidia base: NVRC init + kata-agent + busybox + loader/libc. No kernel
 # modules are shipped (see below). The empty /lib/firmware/nvidia directory is
@@ -550,34 +745,7 @@ partition_gpu_extension() {
 partition_base() {
 	echo "nvidia: building driver-agnostic base layout"
 
-	local f
-	for f in "${nvidia_gpu_extension_bins[@]}"; do
-		rm -f "${f}"
-	done
-
-	local md="lib/${machine_arch}-linux-gnu"
-	local g
-	for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
-		find "${md}" -maxdepth 1 -name "${g}" -delete
-	done
-	rm -f lib/libgrpc_mgr.so
-
-	# GPU configs live in the extension; keep usr/share/nvidia as an empty stub.
-	rm -rf usr/share/nvidia
-	mkdir -p usr/share/nvidia
-
-	# Keep /lib/firmware/nvidia as an empty mountpoint for NVRC's firmware bind.
-	rm -rf lib/firmware/nvidia
-	mkdir -p lib/firmware/nvidia
-
-	# Ship no kernel modules in the base: the NVIDIA driver modules are
-	# GPU-specific and live in the gpu extension (NVRC loads them via
-	# `modprobe --dirname <extension>`), and the remaining in-tree dependencies
-	# (mlx5, infiniband, ...) are built into the NVIDIA kernel. Keeping
-	# /lib/modules empty is what makes the base driver-agnostic and reusable
-	# across driver versions.
-	rm -rf lib/modules
-	mkdir -p lib/modules
+	strip_gpu_userspace
 }
 
 # NVRC opens every cold-plugged extension (the gpu extension always, and the coco extension
@@ -684,7 +852,19 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	local layout
 	layout="$(nvidia_image_layout)"
 
-	# If devkit flag is set, skip chisseling, use stage_one
+	# The devkit extension is built straight from an Alpine minirootfs and needs
+	# neither the driver stage-one nor the chisel pass.  Build it directly into
+	# stage_two (partition_devkit_extension wipes the generic distro rootfs left
+	# by setup_rootfs and drops in the Alpine tree) and compress.
+	if [[ "${layout}" == "devkit-extension" ]]; then
+		pushd "${stage_two}" >> /dev/null
+		partition_devkit_extension
+		compress_rootfs
+		popd >> /dev/null
+		return
+	fi
+
+	# If devkit flag is set on a monolith build, skip chisseling and use stage-one.
 	if echo "${stack}" | grep -q '\<devkit\>'; then
 		echo "nvidia: devkit mode enabled - skip chisseling"
 
@@ -754,13 +934,14 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	# boot and run the agent (the monolith and the nvidia base image, the latter
 	# via chisseled_storage). The gpu extension ships GPU userspace only, and
 	# partition_gpu_extension has already replaced the tree with extension-only
-	# content (no lib/<arch>-linux-gnu), so skip it there.
-	[[ "${layout}" != "gpu-extension" ]] && copy_mkfs_ext4_runtime_deps
+	# content (no lib/<arch>-linux-gnu).  (The devkit extension returns earlier
+	# and never reaches here; the guard below is belt-and-suspenders.)
+	[[ "${layout}" != "gpu-extension" && "${layout}" != "devkit-extension" ]] && copy_mkfs_ext4_runtime_deps
 	compress_rootfs
-	# The gpu extension has no loader/ldconfig of its own; NVRC rebuilds the ld.so
-	# cache from its libraries at boot, so skip the cache rebuild here. Its SONAME
-	# symlinks are created with `ldconfig -n` in partition_gpu_extension().
-	[[ "${layout}" != "gpu-extension" ]] && chroot . ldconfig
+	# The gpu extension has no loader/ldconfig of its own; NVRC rebuilds its
+	# loader cache from its libraries at boot, and its SONAME symlinks are
+	# created with `ldconfig -n` in partition_gpu_extension().
+	[[ "${layout}" != "gpu-extension" && "${layout}" != "devkit-extension" ]] && chroot . ldconfig
 
 	popd >> /dev/null
 }

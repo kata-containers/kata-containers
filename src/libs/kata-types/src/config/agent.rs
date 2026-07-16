@@ -93,6 +93,11 @@ pub struct Agent {
     #[serde(default)]
     pub debug_console_enabled: bool,
 
+    /// Absolute path to the shell binary for the agent debug console. Passed to
+    /// the guest as the `agent.debug_console_shell` kernel parameter.
+    #[serde(default)]
+    pub debug_console_shell: String,
+
     /// When enabled, the agent translates a container's VISIBLE_CDI_DEVICES
     /// environment variable into CDI GPU device requests (nvidia.com/gpu) so
     /// that the container sees the matching GPUs present in the VM.
@@ -186,6 +191,7 @@ impl std::default::Default for Agent {
             log_level: "info".to_string(),
             enable_tracing: false,
             debug_console_enabled: false,
+            debug_console_shell: String::new(),
             visible_cdi_devices: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,
             log_port: DEFAULT_AGENT_LOG_PORT,
