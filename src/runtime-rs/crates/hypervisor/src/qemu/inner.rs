@@ -5,7 +5,6 @@
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine};
 use super::qmp::Qmp;
-use crate::device::driver::BlockDeviceFormat;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIePort;
 use crate::qemu::cmdline_generator::VfioDeviceConfig;
@@ -128,6 +127,65 @@ impl QemuInner {
                 DeviceType::Vsock(vsock_dev) => {
                     let fd = vsock_dev.init_config().await?;
                     cmdline.add_vsock(fd, vsock_dev.config.guest_cid)?;
+                }
+                DeviceType::BlockModern(ref block_device) => {
+                    info!(sl!(), "Starting QMP hotplug for BlockModern device");
+
+                    // First, snapshot parameters within the lock.
+                    // Do not hold the lock across the 'await' point of the hotplug operation to avoid blocking.
+                    let (
+                        device_id,
+                        path_on_host,
+                        is_direct,
+                        is_readonly,
+                        discard_unmap,
+                        serial_override,
+                        driver_option,
+                    ) = {
+                        let device_locked = block_device.lock().await;
+                        let device_id = device_locked.device_id.clone();
+                        let cfg = &device_locked.config;
+                        (
+                            device_id,
+                            cfg.path_on_host.clone(),
+                            cfg.is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
+                            cfg.is_readonly,
+                            cfg.discard_unmap,
+                            cfg.serial_override.clone(),
+                            cfg.driver_option.clone(),
+                        )
+                    };
+                    if path_on_host == self.config.boot_info.initrd {
+                        // If this block device represents initrd we ignore it here, it
+                        // will be handled elsewhere by adding `-initrd` to the qemu
+                        // command line.
+                        continue;
+                    }
+                    match driver_option.as_str() {
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
+                            &path_on_host,
+                            is_readonly,
+                        )?,
+                        KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
+                            let serial = if serial_override.is_empty() {
+                                None
+                            } else {
+                                Some(serial_override.as_str())
+                            };
+                            cmdline.add_block_device(
+                                device_id.as_str(),
+                                &path_on_host,
+                                is_direct,
+                                driver_option.as_str() == KATA_SCSI_DEV_TYPE,
+                                discard_unmap,
+                                serial,
+                            )?
+                        }
+                        unsupported => {
+                            info!(sl!(), "unsupported block device driver: {}", unsupported)
+                        }
+                    }
                 }
                 DeviceType::Block(block_dev) => {
                     if block_dev.config.path_on_host == self.config.boot_info.initrd {
@@ -1146,6 +1204,7 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
+                    block_format,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1162,11 +1221,28 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
+                        cfg.format.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
                         cfg.physical_sector_size,
                     )
+                };
+
+                // Determine iothread for hotplugged virtio-blk-pci devices.
+                // Only attach iothread when:
+                // 1. enable_iothreads is true
+                // 2. indep_iothreads > 0
+                // 3. block driver is virtio-blk-pci
+                // 4. TODO: for more complex cases
+                let iothread = if self.config.enable_iothreads
+                    && self.config.indep_iothreads > 0
+                    && driver == VIRTIO_BLK_PCI
+                {
+                    // Use the first independent iothread (indep_iothread_0)
+                    Some("indep_iothread_0")
+                } else {
+                    None
                 };
 
                 // Second, execute the asynchronous hotplug without holding the lock.
@@ -1182,8 +1258,8 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        &BlockDeviceFormat::default(),
-                        None,
+                        &block_format,
+                        iothread,
                     )
                     .context("hotplug block device")?;
 
@@ -1203,6 +1279,7 @@ impl QemuInner {
                     }
                     info!(sl!(), "Completed BlockModern hotplug: {:?}", &cfg);
                 }
+                return Ok(DeviceType::BlockModern(block_device.clone()));
             }
             DeviceType::VfioModern(ref vfiodev) => {
                 // Snapshot VFIO parameters inside the lock.
