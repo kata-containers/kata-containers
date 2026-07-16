@@ -60,6 +60,14 @@ warn() {
 	echo >&2 "WARN: $*"
 }
 
+# ZSTD compression level (1-19) for kata tarball creation.
+# Override with KATA_TARBALL_ZSTD_LEVEL to tune size vs build time.
+KATA_TARBALL_ZSTD_LEVEL="${KATA_TARBALL_ZSTD_LEVEL:-10}"
+
+kata_tar_zstd() {
+	tar --use-compress-program="zstd -${KATA_TARBALL_ZSTD_LEVEL}" "$@"
+}
+
 get_repo_hash() {
 	local repo_dir=${1:-}
 	[[ -d "${repo_dir}" ]] || die "${repo_dir} is not a directory"
