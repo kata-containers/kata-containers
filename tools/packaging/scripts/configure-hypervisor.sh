@@ -220,9 +220,13 @@ generate_qemu_options() {
 		esac
 	fi
 
-	# We're starting with the minimal set of options required to build
+	# We're starting with the minimal set of options required to build:
+	# allnoconfig semantics for both features and devices.  Every device
+	# Kata needs is explicitly allowlisted per-architecture in
+	# static-build/qemu/build-qemu.sh (CONFIG_* entries in default.mak)
+	# and verified post-build against `qemu-system-* -device help`.
 	qemu_options+=(minimal:--without-default-features)
-	#qemu_options+=(minimal:--without-default-devices)
+	qemu_options+=(minimal:--without-default-devices)
 
 	# Disabled options
 
