@@ -57,6 +57,9 @@ build_openvmm_from_source() {
 
 	local binary="target/release/openvmm"
 	[[ -f "${binary}" ]] || die "openvmm binary not found at ${binary}"
+	# OpenVMM release builds include DWARF; remove it so the combined Kata
+	# release tarball remains below GitHub's 2 GiB asset limit.
+	strip --strip-debug "${binary}"
 	popd
 
 	# Stage the binary at openvmm/openvmm for the installer to pick up
