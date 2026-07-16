@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
+use hypervisor::HYPERVISOR_NAME_CH;
 use kata_sys_util::mount::umount_all;
 use kata_types::config::TomlConfig;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,16 @@ use crate::factory::{template::Template, vm::VmConfig};
 
 pub mod template;
 pub mod vm;
+
+/// Returns the path to the hypervisor's device-state artifact in the template directory.
+pub(crate) fn template_device_state_path(hypervisor_name: &str, template_path: &Path) -> PathBuf {
+    let state_file = match hypervisor_name {
+        HYPERVISOR_NAME_CH => "state.json",
+        _ => "state",
+    };
+
+    template_path.join(state_file)
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FactoryConfig {
