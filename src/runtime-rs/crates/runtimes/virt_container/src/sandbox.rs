@@ -33,7 +33,6 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
-use hypervisor::{BlockConfigModern, Hypervisor, VfioDeviceBase, is_vfio_ap_device};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -43,6 +42,7 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
+use hypervisor::{is_vfio_ap_device, BlockConfigModern, Hypervisor, VfioDeviceBase};
 #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
@@ -238,16 +238,17 @@ impl VirtSandbox {
 
         let network_env: SandboxNetworkEnv = sandbox_config.network_env.clone();
         // prepare network config
-        if !network_env.network_created {
+        if !network_env.network_created && !self.should_defer_network().await? {
             if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
                 resource_configs.push(network_resource);
             }
         }
 
         // prepare sharefs device config
-        let virtio_fs_config =
-            ResourceConfig::ShareFs(self.hypervisor.hypervisor_config().await.shared_fs);
-        resource_configs.push(virtio_fs_config);
+        let shared_fs = self.hypervisor.hypervisor_config().await.shared_fs;
+        if shared_fs.shared_fs.is_some() {
+            resource_configs.push(ResourceConfig::ShareFs(shared_fs));
+        }
 
         // prepare VM rootfs device config
         if let Some(block_config) = self
@@ -881,6 +882,42 @@ impl VirtSandbox {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
 
+    fn is_factory_enabled(&self) -> bool {
+        self.factory
+            .as_ref()
+            .map(|factory| factory.enable_template)
+            .unwrap_or(false)
+    }
+
+    async fn should_defer_network(&self) -> Result<bool> {
+        if !self.is_factory_enabled() {
+            return Ok(false);
+        }
+
+        Ok(self
+            .hypervisor
+            .capabilities()
+            .await?
+            .is_network_device_hotplug_supported())
+    }
+
+    async fn setup_deferred_network_after_start(
+        &self,
+        sandbox_config: &SandboxConfig,
+    ) -> Result<()> {
+        if let Some(ResourceConfig::Network(network_resource)) = self
+            .prepare_network_resource(&sandbox_config.network_env)
+            .await
+        {
+            self.resource_manager
+                .handle_network(network_resource)
+                .await
+                .context("set up factory network after start vm")?;
+        }
+
+        Ok(())
+    }
+
     /// Build a network rescan config targeting the hypervisor's network
     /// namespace.  Docker 26+ bind-mounts `/proc/<vmm_pid>/ns/net` and
     /// configures veth pairs there between Create and Start, so the
@@ -980,6 +1017,8 @@ impl Sandbox for VirtSandbox {
             .await
             .context("prepare vm")?;
 
+        let defer_network = self.should_defer_network().await?;
+
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self.prepare_for_start_sandbox(id, sandbox_config).await?;
@@ -1030,9 +1069,12 @@ impl Sandbox for VirtSandbox {
         // 1. if there are pre-start hook functions, network config might have been changed.
         //    We need to rescan the netns to handle the change.
         // 2. Do not scan the netns if we want no network for the VM.
-        // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
+        // QEMU and Cloud Hypervisor advertise network hotplug support, so
+        // factory VMs using them defer network setup until after VM startup.
+        // Backends without this capability retain pre-start setup.
         let config = self.resource_manager.config().await;
         if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
+            && !defer_network
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
         {
@@ -1053,6 +1095,11 @@ impl Sandbox for VirtSandbox {
                     .await
                     .context("set up device after start vm")?;
             }
+        }
+
+        if defer_network {
+            self.setup_deferred_network_after_start(sandbox_config)
+                .await?;
         }
 
         // connect agent

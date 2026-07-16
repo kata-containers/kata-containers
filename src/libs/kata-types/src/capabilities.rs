@@ -23,6 +23,8 @@ pub enum CapabilityBits {
     GuestMemoryProbe,
     /// hypervisor supports exposing block discard/unmap to the guest
     BlockDeviceDiscardSupport,
+    /// hypervisor supports network device hotplug
+    NetworkDeviceHotplugSupport,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -91,6 +93,11 @@ impl Capabilities {
     pub fn is_block_device_discard_supported(&self) -> bool {
         self.flags.and(CapabilityBits::BlockDeviceDiscardSupport) != 0
     }
+
+    /// is_network_device_hotplug_supported tells if the hypervisor supports network hotplug.
+    pub fn is_network_device_hotplug_supported(&self) -> bool {
+        self.flags.and(CapabilityBits::NetworkDeviceHotplugSupport) != 0
+    }
 }
 
 #[cfg(test)]
@@ -103,6 +110,7 @@ mod tests {
     fn test_set_hypervisor_capabilities() {
         let mut cap = Capabilities::new();
         assert!(!cap.is_block_device_supported());
+        assert!(!cap.is_network_device_hotplug_supported());
 
         // test legacy vsock support
         assert!(!cap.is_hybrid_vsock_supported());
@@ -144,5 +152,8 @@ mod tests {
         // test block discard capability
         cap.add(CapabilityBits::BlockDeviceDiscardSupport);
         assert!(cap.is_block_device_discard_supported());
+        // test network device hotplug capability
+        cap.add(CapabilityBits::NetworkDeviceHotplugSupport);
+        assert!(cap.is_network_device_hotplug_supported());
     }
 }
