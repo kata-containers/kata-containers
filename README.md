@@ -66,7 +66,7 @@ $ kata-runtime check
 
 New to Kata Containers? Start with the
 [Quick Start Guide](docs/quick-start-guide.md) to learn the basics and run your
-first workload, then see the [installation documentation](docs/install).
+first workload, then see the [installation guide](docs/installation.md).
 
 ## Documentation
 
