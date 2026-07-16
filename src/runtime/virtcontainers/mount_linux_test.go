@@ -170,6 +170,46 @@ func TestBindMountReadonlySuccessful(t *testing.T) {
 	assert.Error(err)
 }
 
+func TestBindMountRecursive(t *testing.T) {
+	assert := assert.New(t)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
+
+	source, err := os.MkdirTemp(testDir, "bindRecSrc")
+	assert.NoError(err)
+	defer os.RemoveAll(source)
+
+	dest, err := os.MkdirTemp(testDir, "bindRecDest")
+	assert.NoError(err)
+	defer os.RemoveAll(dest)
+
+	// Create a sub-directory inside source and mount a tmpfs on it.
+	subDir := filepath.Join(source, "submount")
+	err = os.Mkdir(subDir, mountPerm)
+	assert.NoError(err)
+
+	err = syscall.Mount("tmpfs", subDir, "tmpfs", 0, "")
+	assert.NoError(err)
+	defer syscall.Unmount(subDir, syscall.MNT_DETACH)
+
+	// Write a marker file on the tmpfs sub-mount.
+	marker := filepath.Join(subDir, "marker")
+	err = os.WriteFile(marker, []byte("hello"), mountPerm)
+	assert.NoError(err)
+
+	// Bind-mount source to dest; this must be recursive so the tmpfs
+	// sub-mount is visible at dest/submount.
+	err = bindMount(context.Background(), source, dest, false, "private")
+	assert.NoError(err)
+	defer syscall.Unmount(dest, syscall.MNT_DETACH)
+
+	// The marker file should be reachable through the bind destination.
+	content, err := os.ReadFile(filepath.Join(dest, "submount", "marker"))
+	assert.NoError(err)
+	assert.Equal("hello", string(content))
+}
+
 func TestBindMountInvalidPgtypes(t *testing.T) {
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
