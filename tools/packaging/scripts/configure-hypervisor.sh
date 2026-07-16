@@ -460,6 +460,9 @@ generate_qemu_options() {
 	# Support Ceph RADOS Block Device (RBD)
 	[[ -z "${static}" ]] && qemu_options+=(functionality:--enable-rbd)
 
+	# Support NUMA topology
+	qemu_options+=(functionality:--enable-numa)
+
 	# In "passthrough" security mode
 	# (-fsdev "...,security_model=passthrough,..."), qemu uses a helper
 	# application called virtfs-proxy-helper(1) to make certain 9p
@@ -486,6 +489,9 @@ generate_qemu_options() {
 
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
+
+	# Required by multi-layer EROFS rootfs with fsmerge (VMDK flat-extent descriptor)
+	qemu_options+=(functionality:--enable-vmdk)
 
 	#---------------------------------------------------------------------
 	# Other options
