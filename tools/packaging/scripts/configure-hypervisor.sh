@@ -400,7 +400,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-pixman)
 	qemu_options+=(size:--disable-relocatable)
 	qemu_options+=(size:--disable-rutabaga-gfx)
-	qemu_options+=(size:--disable-vmdk)
 	if ! gt_eq "${qemu_version}" "10.1.0" && [[ "${arch}" == x86_64 ]]; then
 		qemu_options+=(size:--disable-avx512bw)
 	fi
