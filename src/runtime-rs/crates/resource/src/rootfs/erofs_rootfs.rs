@@ -605,6 +605,8 @@ impl ErofsMultiLayerRootfs {
                         format: BlockDeviceFormat::Raw, // rw layer should be raw format
                         path_on_host: mount.source.clone(),
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        num_queues: blkdev_info.num_queues,
+                        queue_size: blkdev_info.queue_size,
                         ..Default::default()
                     };
 
@@ -758,6 +760,8 @@ impl ErofsMultiLayerRootfs {
                             path_on_host: erofs_path,
                             is_readonly: true,
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                            num_queues: blkdev_info.num_queues,
+                            queue_size: blkdev_info.queue_size,
                             ..Default::default()
                         };
 
@@ -913,6 +917,8 @@ impl ErofsMultiLayerRootfs {
                             path_on_host: erofs_path,
                             is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                            num_queues: blkdev_info.num_queues,
+                            queue_size: blkdev_info.queue_size,
                             ..Default::default()
                         };
 
