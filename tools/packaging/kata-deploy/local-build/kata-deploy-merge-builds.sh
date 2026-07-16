@@ -13,6 +13,9 @@ set -o errtrace
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "${this_script_dir}/../../../../" && pwd)"
 
+# shellcheck source=tools/packaging/scripts/lib.sh
+source "${this_script_dir}/../../scripts/lib.sh"
+
 kata_build_dir=${1:-build}
 kata_versions_yaml_file=${2:-""}
 output_tarball_name=${3:-kata-static.tar.zst}
@@ -78,5 +81,5 @@ pushd "${tarball_content_dir}"
 popd
 
 echo "create ${tar_path}"
-(cd "${tarball_content_dir}"; tar --zstd -cvf "${tar_path}" --owner=0 --group=0 .)
+(cd "${tarball_content_dir}"; kata_tar_zstd -cvf "${tar_path}" --owner=0 --group=0 .)
 popd

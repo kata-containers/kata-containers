@@ -1786,7 +1786,7 @@ handle_build() {
 	virtiofsd) install_virtiofsd ;;
 
 	dummy)
-		tar --zstd -cvf "${final_tarball_path}" --files-from /dev/null
+		kata_tar_zstd -cvf "${final_tarball_path}" --files-from /dev/null
 	       	;;
 
 	*)
@@ -1796,7 +1796,7 @@ handle_build() {
 
 	if [[ ! -f "${final_tarball_path}" ]]; then
 		cd "${destdir}"
-		tar --zstd -cvf "${final_tarball_path}" "."
+		kata_tar_zstd -cvf "${final_tarball_path}" "."
 	fi
 	tar --zstd -tvf "${final_tarball_path}"
 
@@ -1812,7 +1812,7 @@ handle_build() {
 
 				pushd "${parent_dir}"
 				rm -f "${parent_dir_basename}"/build
-				tar --zstd -cvf "${modules_final_tarball_path}" "."
+				kata_tar_zstd -cvf "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar --zstd -tvf "${modules_final_tarball_path}"
@@ -1825,7 +1825,7 @@ handle_build() {
 
 				pushd "${modules_dir}"
 				rm -f build
-				tar --zstd -cvf "${modules_final_tarball_path}" "."
+				kata_tar_zstd -cvf "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar --zstd -tvf "${modules_final_tarball_path}"
