@@ -72,11 +72,11 @@ first workload, then see the [installation guide](docs/installation.md).
 
 See the [official documentation](docs) including:
 
-- [Installation guides](docs/install)
+- [Installation guide](docs/installation.md)
 - [Developer guide](docs/Developer-Guide.md)
 - [Design documents](docs/design)
   - [Architecture overview](docs/design/architecture)
-  - [Architecture 4.0 overview](docs/design/architecture_4.0/)
+  - [Architecture 4.0 overview](docs/design/architecture_4.0/architecture.md)
 
 ## Configuration
 
@@ -148,8 +148,8 @@ The table below lists the remaining parts of the project:
 
 ### Packaging and releases
 
-Kata Containers is now
-[available natively for most distributions](docs/install/README.md#packaged-installation-methods).
+See the [installation guide](docs/installation.md) for release tarballs, the
+`kata-deploy` Helm chart on Kubernetes, and build-from-source instructions.
 
 ## General tests
 
