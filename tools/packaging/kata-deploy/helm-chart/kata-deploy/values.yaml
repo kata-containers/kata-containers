@@ -119,8 +119,12 @@ monitor:
     reference: quay.io/kata-containers/kata-monitor
     tag: ""
   listenAddress: "0.0.0.0:8090"
-  runtimeEndpoint: "unix:///run/containerd/containerd.sock"
-  logLevel: "info"
+  # CRI runtime socket for kata-monitor. When empty, inherits containerd.runtimeSocket
+  # or derives from k8sDistribution (e.g. k3s uses unix:///run/k3s/containerd/containerd.sock).
+  runtimeEndpoint: ""
+  # Log level for kata-monitor. When empty, inherits chart-wide logLevel and
+  # debug:true implies debug; otherwise defaults to info.
+  logLevel: ""
   port: 8090
   securityContext:
     privileged: false
@@ -144,6 +148,10 @@ containerd:
   # When empty, derived automatically from k8sDistribution.
   # Example: "/etc/my-containerd/"
   configDir: ""
+  # Override the CRI containerd socket URI.
+  # When empty, derived automatically from k8sDistribution.
+  # Example: "unix:///run/k3s/containerd/containerd.sock"
+  runtimeSocket: ""
   # Override the containerd config file name.
   # When empty, the kata-deploy binary uses its built-in default ("config.toml")
   # or auto-detects based on the runtime (k0s, microk8s, k3s/rke2).
