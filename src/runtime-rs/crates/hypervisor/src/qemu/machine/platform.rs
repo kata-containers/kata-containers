@@ -473,7 +473,7 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
         }
         MemoryBackend::File { size, path, is_egm: true, .. } => {
             format!(
-                "memory-backend-file,id={id},mem-path={path},size={},share=on,prealloc=on",
+                "memory-backend-file,id={id},size={},mem-path={path},prealloc=on,share=on",
                 format_memory(*size)
             )
         }
