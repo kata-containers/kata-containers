@@ -99,14 +99,16 @@ CONFIG_NVDIMM=y
 if [[ "${ARCH}" == "x86_64" ]]; then
 	# VTD_ACCEL enables IOMMUFD-backed VT-d for high-performance passthrough.
 	# PVPANIC_ISA provides the pvpanic device (guest kernel panic reporting).
-	printf 'CONFIG_Q35=y\n%s\n%s\nCONFIG_VTD=y\nCONFIG_VTD_ACCEL=y\nCONFIG_AMD_IOMMU=y\nCONFIG_PVPANIC_ISA=y\n' \
+	# CXL (+ CXL_MEM_DEVICE) provides the core and type-3 symbols pulled in by
+	# the pxb-cxl bridge (PXB).
+	printf 'CONFIG_Q35=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n%s\n%s\nCONFIG_VTD=y\nCONFIG_VTD_ACCEL=y\nCONFIG_AMD_IOMMU=y\nCONFIG_PVPANIC_ISA=y\n' \
 		"${_COMMON_DEVS}" "${_PCIE_DEVS}" \
 		>> configs/devices/i386-softmmu/default.mak
 elif [[ "${ARCH}" == "s390x" ]]; then
 	# s390x uses CCW bus (no PCI virtio); VIRTIO_CCW replaces VIRTIO_PCI and
 	# selects VIRTIO_MD_SUPPORTED.  Passthrough is via VFIO_CCW / VFIO_AP.
-	# None of the PCIe topology devices apply.
-	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\n' \
+	# VFIO_PCI is still required: the VFIO core references its symbols.
+	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\nCONFIG_VFIO_PCI=y\n' \
 		"${_COMMON_DEVS}" \
 		>> configs/devices/s390x-softmmu/default.mak
 elif [[ "${ARCH}" == "aarch64" ]]; then
