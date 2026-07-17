@@ -139,9 +139,9 @@ pub struct Virt {
     pub base: BaseMachine,
     pub gic_version: Option<u8>,
     pub ras: bool,
-    /// Required for Grace GPU passthrough; must be a power of 2.
-    /// 4T for GH200/GB200 (≤4 GPUs), 8T for GB300 NVL72 (4 GPUs).
-    /// bytes.
+    /// Highmem MMIO window size in bytes; must be a power of 2.
+    /// Required for Grace GPU passthrough: 4T for GH200/GB200 (≤4 GPUs),
+    /// 8T for GB300 NVL72 (4 GPUs).
     pub highmem_mmio_size: Option<u64>,
     // pub runtime: RuntimeFeatures,  -- Phase 3+
 }
@@ -840,10 +840,10 @@ three GPUs (384 GiB) fit within 1 TiB, but four GPUs (512 GiB) do not, causing
 the fourth GPU to fail PCIe BAR assignment at VM boot.
 
 **Fix:** set `cpu_features = "pmu=off,host-phys-bits=on"` in
-`configuration-qemu-nvidia-gpu*.toml.in`.  The `Makefile` now defaults
-`CPUFEATURES` and `TDXCPUFEATURES` to `pmu=off,host-phys-bits=on` for `amd64`
-builds so operator installs that regenerate configs from source pick up the fix;
-existing installed configs must be updated manually.
+`configuration-qemu-nvidia-gpu*.toml.in`.  The `Makefile` defaults
+(`CPUFEATURES`, `TDXCPUFEATURES`) still carry only `pmu=off`; extending them
+to include `host-phys-bits=on` for `amd64` builds is a separate pending
+change, so today the fix must be applied per configuration file.
 
 **Post-refactor:** the `Platform` Q35 builder should emit `host-phys-bits=on`
 unconditionally for x86_64/KVM so the fix is durable even if the config file
