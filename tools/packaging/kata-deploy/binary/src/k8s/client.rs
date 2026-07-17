@@ -7,7 +7,8 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use k8s_openapi::api::core::v1::Node;
 use kube::{
-    api::{Api, DeleteParams, DynamicObject, Patch, PatchParams},
+    api::{Api, DeleteParams, DynamicObject, GetParams, Patch, PatchParams},
+    core::Request,
     discovery::ApiResource,
     Client,
 };
@@ -69,6 +70,25 @@ impl K8sClient {
             .labels
             .as_ref()
             .and_then(|labels| labels.get(key).cloned()))
+    }
+
+    pub async fn get_kubelet_runtime_request_timeout(&self) -> Result<Option<String>> {
+        let request = Request::new(format!("/api/v1/nodes/{}/proxy", self.node_name))
+            .get("configz", &GetParams::default())?;
+
+        let configz: serde_json::Value = self.client.request(request).await.with_context(|| {
+            format!(
+                "Failed to query kubelet configz for node {}",
+                self.node_name
+            )
+        })?;
+
+        Ok(configz
+            .get("kubeletconfig")
+            .or_else(|| configz.get("kubeletConfig"))
+            .and_then(|kubelet_config| kubelet_config.get("runtimeRequestTimeout"))
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string()))
     }
 
     pub async fn label_node(
@@ -610,6 +630,11 @@ pub async fn get_container_runtime_version(config: &Config) -> Result<String> {
 pub async fn get_node_label(config: &Config, key: &str) -> Result<Option<String>> {
     let client = K8sClient::new(&config.node_name).await?;
     client.get_node_label(key).await
+}
+
+pub async fn get_kubelet_runtime_request_timeout(config: &Config) -> Result<Option<String>> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client.get_kubelet_runtime_request_timeout().await
 }
 
 pub async fn get_node_ready_status(config: &Config) -> Result<String> {

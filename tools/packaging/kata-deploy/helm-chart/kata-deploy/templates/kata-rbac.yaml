@@ -26,6 +26,11 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "patch"]
+# Read kubelet /configz via the apiserver node proxy during host-checks, for
+# example to warn about runtimeRequestTimeout values that may be too low.
+- apiGroups: [""]
+  resources: ["nodes/proxy"]
+  verbs: ["get"]
 - apiGroups: ["node.k8s.io"]
   resources: ["runtimeclasses"]
   verbs: ["get", "list", "patch"]
