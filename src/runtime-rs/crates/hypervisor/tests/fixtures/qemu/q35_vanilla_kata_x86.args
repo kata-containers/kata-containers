@@ -1,4 +1,4 @@
-# Q35 vanilla kata — x86_64, 2-socket NUMA, 65 vCPUs, no GPU assigned
+# Q35 vanilla kata: x86_64, 2-socket NUMA, 66 vCPUs, no GPU assigned
 # Source: production kata-containers log, July 2026 (NVIDIA DGX x86 host)
 #
 # Platform scope: machine line + NUMA SHM memory backends + NUMA topology +

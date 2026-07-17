@@ -1,6 +1,7 @@
-# Q35 CoCo (SEV-SNP) + single GPU — x86_64, single NUMA node, 17 vCPUs
+# Q35 CoCo (SEV-SNP) + single GPU: x86_64, single NUMA node, 17 vCPUs
 # Source: production kata-containers log, July 2026 (AMD EPYC host, H100 80GB GPU)
 # Binary: qemu-system-x86_64-snp-experimental
+# host-data is a synthetic placeholder, not production-captured material.
 #
 # Platform scope: sev-snp-guest object + machine line + NUMA RAM backend +
 #   NUMA node + pxb-pcie + pcie-root-port + per-device iommufd + vfio-pci.
@@ -27,7 +28,7 @@
 #   PciRootComplex::iommufd: Option<IommufdRef>  (per-device iommufd, not shared)
 #   VfioDevice::vendor_id / device_id overrides  (required for CoCo attestation)
 -object
-sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on,policy=196608,host-data=CexG7r8OExqKVdTzwFteO3U9GZRYx7lslmObi8SdcVA=
+sev-snp-guest,id=snp,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on,policy=196608,host-data=S0FUQS1TWU5USEVUSUMtSE9TVC1EQVRBLTAwMDAwMDA=
 -machine
 q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=snp
 -object

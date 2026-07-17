@@ -702,18 +702,18 @@ derived from tested deployments.  They anchor the per-machine fixture set.
 ```text
 -machine q35,accel=kvm
 ```
-(`kernel-irqchip` is absent on vanilla Q35; it is only required for CoCo.)
+(`kernel_irqchip` is absent on vanilla Q35; it is only required for CoCo.)
 
 **Q35 + TDX (x86_64 — CoCo)**
 ```text
 -object tdx-guest,id=tdx,...
--machine q35,accel=kvm,kernel-irqchip=split,confidential-guest-support=tdx
+-machine q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=tdx
 ```
 
 **Q35 + SEV-SNP (x86_64 — CoCo)**
 ```text
 -object sev-snp-guest,id=sev-snp,...
--machine q35,accel=kvm,kernel-irqchip=split,confidential-guest-support=sev-snp
+-machine q35,accel=kvm,kernel_irqchip=split,confidential-guest-support=sev-snp
 ```
 
 **s390-ccw-virtio (s390x)**
@@ -749,7 +749,7 @@ Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (ignored, Ph
 
 Key observations from the production invocation:
 
-- `-machine q35,accel=kvm` — no `kernel-irqchip` on vanilla; only required for CoCo
+- `-machine q35,accel=kvm`: no `kernel_irqchip` on vanilla; only required for CoCo
 - NUMA memory model differs from Grace: total memory via `-m 73728M,slots=10,maxmem=127052M`;
   NUMA pinning via separate `memory-backend-file` objects with `host-nodes=N,policy=bind`
   backed by `/dev/shm` (not `/dev/hugepages` or `/dev/egm*`)
