@@ -18,7 +18,7 @@ use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
 use crate::VmmState;
-use crate::{BlockConfig, BlockDevice};
+use crate::{BlockConfigModern, BlockDeviceModern};
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
@@ -42,6 +42,8 @@ use std::os::fd::AsRawFd;
 use std::os::fd::IntoRawFd;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 const VIRTIO_FS: &str = "virtio-fs";
 
@@ -58,8 +60,8 @@ impl CloudHypervisorInner {
             //   for the container rootfs.
             //
             // - For all other scenarios, the container rootfs is handled by a
-            //   DeviceType::Block and this method is called *after* the VM
-            //   has started so the device does not need to be added to the
+            //   DeviceType::BlockModern and this method is called *after* the
+            //   VM has started so the device does not need to be added to the
             //   pending list.
             //
             // - The VM rootfs is handled without waiting for calls to this
@@ -92,7 +94,7 @@ impl CloudHypervisorInner {
         match device {
             DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs).await,
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
-            DeviceType::Block(block) => self.handle_block_device(block).await,
+            DeviceType::BlockModern(block) => self.handle_block_device(block).await,
             DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
             DeviceType::Network(netdev) => self.handle_network_device(netdev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
@@ -120,8 +122,9 @@ impl CloudHypervisorInner {
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
             DeviceType::Vfio(vfiodev) => self.inner_remove_device(vfiodev.device_id.as_str()).await,
-            DeviceType::Block(blockdev) => {
-                self.inner_remove_device(blockdev.device_id.as_str()).await
+            DeviceType::BlockModern(blockdev) => {
+                let device_id = blockdev.lock().await.device_id.clone();
+                self.inner_remove_device(device_id.as_str()).await
             }
             _ => Ok(()),
         }
@@ -275,12 +278,18 @@ impl CloudHypervisorInner {
         Ok(DeviceType::HybridVsock(device))
     }
 
-    async fn handle_block_device(&mut self, device: BlockDevice) -> Result<DeviceType> {
-        let mut block_dev = device.clone();
+    async fn handle_block_device(
+        &mut self,
+        device: Arc<Mutex<BlockDeviceModern>>,
+    ) -> Result<DeviceType> {
+        // Build the cloud-hypervisor DiskConfig from a snapshot of the device config.
+        let (device_id, config) = {
+            let dev = device.lock().await;
+            (dev.device_id.clone(), dev.config.clone())
+        };
 
-        let mut disk_config = DiskConfig::try_from(device.config.clone())?;
-        disk_config.direct = device
-            .config
+        let mut disk_config = DiskConfig::try_from(config.clone())?;
+        disk_config.direct = config
             .is_direct
             .unwrap_or(self.config.blockdev_info.block_device_cache_direct);
 
@@ -303,11 +312,15 @@ impl CloudHypervisorInner {
 
             let dev_info: PciDeviceInfo =
                 serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
-            self.device_ids.insert(device.device_id, dev_info.id);
+            self.device_ids.insert(device_id.clone(), dev_info.id);
+
+            // Persist the cloud-hypervisor assigned PCI path back into the device
+            // so it can be used later for removal / hot-unplug.
+            let mut block_dev = device.lock().await;
             block_dev.config.pci_path = Some(Self::clh_pci_info_to_path(dev_info.bdf.as_str())?);
         }
 
-        Ok(DeviceType::Block(block_dev))
+        Ok(DeviceType::BlockModern(device))
     }
 
     async fn handle_network_device(&mut self, device: NetworkDevice) -> Result<DeviceType> {
@@ -500,15 +513,16 @@ impl TryFrom<NetworkConfig> for NetConfig {
     }
 }
 
-impl TryFrom<BlockConfig> for DiskConfig {
+impl TryFrom<BlockConfigModern> for DiskConfig {
     type Error = anyhow::Error;
 
-    fn try_from(blkcfg: BlockConfig) -> Result<Self, Self::Error> {
+    fn try_from(blkcfg: BlockConfigModern) -> Result<Self, Self::Error> {
         let disk_config: DiskConfig = DiskConfig {
             path: Some(blkcfg.path_on_host.as_str().into()),
             readonly: blkcfg.is_readonly,
             num_queues: blkcfg.num_queues,
             queue_size: blkcfg.queue_size as u16,
+            sparse: blkcfg.discard_unmap,
             image_type: ImageType::Raw,
             ..Default::default()
         };

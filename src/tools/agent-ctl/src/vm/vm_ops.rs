@@ -17,7 +17,7 @@ use hypervisor::{
         DeviceConfig,
     },
     qemu::Qemu,
-    BlockConfig, Hypervisor, VsockConfig,
+    BlockConfigModern, Hypervisor, VsockConfig,
 };
 use kata_types::config::{
     hypervisor::register_hypervisor_plugin, hypervisor::TopologyConfigInfo,
@@ -134,7 +134,7 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
             .context("qemu::adding vsock device")?;
 
         if !hypervisor_config.boot_info.image.is_empty() {
-            let blk_config = BlockConfig {
+            let blk_config = BlockConfigModern {
                 path_on_host: hypervisor_config.boot_info.image.clone(),
                 is_readonly: true,
                 driver_option: hypervisor_config.boot_info.vm_rootfs_driver.clone(),
@@ -181,8 +181,11 @@ pub(crate) async fn stop_vm(instance: TestVm) -> Result<()> {
         .context("stopping pod vm")
 }
 
-async fn add_block_device(dev_mgr: Arc<RwLock<DeviceManager>>, cfg: BlockConfig) -> Result<()> {
-    do_handle_device(&dev_mgr, &DeviceConfig::BlockCfg(cfg))
+async fn add_block_device(
+    dev_mgr: Arc<RwLock<DeviceManager>>,
+    cfg: BlockConfigModern,
+) -> Result<()> {
+    do_handle_device(&dev_mgr, &DeviceConfig::BlockCfgModern(cfg))
         .await
         .context("handle block device failed")?;
     Ok(())

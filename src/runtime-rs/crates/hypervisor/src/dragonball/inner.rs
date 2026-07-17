@@ -97,6 +97,7 @@ impl DragonballInner {
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
                 | CapabilityBits::HybridVsockSupport
                 | CapabilityBits::GuestMemoryProbe,

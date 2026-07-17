@@ -33,6 +33,7 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
+use hypervisor::{BlockConfigModern, Hypervisor, VfioDeviceBase, is_vfio_ap_device};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -42,13 +43,11 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
-use hypervisor::{is_vfio_ap_device, VfioDeviceBase};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{get_hvsock_path, uses_native_ccw_bus},
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
-use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
@@ -643,7 +642,7 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
+    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfigModern>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
         let security_info = self.hypervisor.hypervisor_config().await.security_info;
 
@@ -663,7 +662,7 @@ impl VirtSandbox {
             }
         }
 
-        Ok(Some(BlockConfig {
+        Ok(Some(BlockConfigModern {
             path_on_host: boot_info.image.clone(),
             is_readonly: true,
             driver_option: boot_info.vm_rootfs_driver,
@@ -671,7 +670,7 @@ impl VirtSandbox {
         }))
     }
 
-    async fn prepare_guest_extension_images_config(&self) -> Result<Vec<BlockConfig>> {
+    async fn prepare_guest_extension_images_config(&self) -> Result<Vec<BlockConfigModern>> {
         let hv_config = self.hypervisor.hypervisor_config().await;
         let mut configs = Vec::new();
 
@@ -693,7 +692,7 @@ impl VirtSandbox {
             if extra.path.is_empty() {
                 continue;
             }
-            configs.push(BlockConfig {
+            configs.push(BlockConfigModern {
                 path_on_host: extra.path.clone(),
                 is_readonly: true,
                 driver_option: block_driver.clone(),
@@ -859,7 +858,7 @@ impl VirtSandbox {
             "initdata push data into compressed block: {:?}", &image_path
         );
         let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
-        let block_config = BlockConfig {
+        let block_config = BlockConfigModern {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
             driver_option: block_driver.clone(),

@@ -20,7 +20,7 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
-    BlockConfig, BlockConfigModern, BlockDevice, BlockDeviceModernHandle, HybridVsockDevice,
+    BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice,
     Hypervisor, NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice,
     VhostUserConfig, VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE,
     KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW,
@@ -148,12 +148,6 @@ impl DeviceManager {
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
-                DeviceType::Block(device) => {
-                    self.shared_info.release_device_index(
-                        device.config.index,
-                        device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
-                    );
-                }
                 DeviceType::Vfio(device) => {
                     // safe here:
                     // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
@@ -166,6 +160,13 @@ impl DeviceManager {
                 DeviceType::VhostUserBlk(device) => {
                     self.shared_info
                         .release_device_index(device.config.index, false);
+                }
+                DeviceType::BlockModern(device) => {
+                    let (index, is_pmem) = {
+                        let cfg = &device.lock().await.config;
+                        (cfg.index, cfg.driver_option == *KATA_NVDIMM_DEV_TYPE)
+                    };
+                    self.shared_info.release_device_index(index, is_pmem);
                 }
                 _ => {
                     debug!(sl!(), "no need to do release device index.");
@@ -191,12 +192,12 @@ impl DeviceManager {
                 Ok(index) => {
                     if let Some(i) = index {
                         // release the declared device index
-                        let is_pmem =
-                            if let DeviceType::Block(blk) = device_guard.get_device_info().await {
-                                blk.config.driver_option == *KATA_NVDIMM_DEV_TYPE
-                            } else {
-                                false
-                            };
+                        let is_pmem = match device_guard.get_device_info().await {
+                            DeviceType::BlockModern(dev) => {
+                                dev.lock().await.config.driver_option == *KATA_NVDIMM_DEV_TYPE
+                            }
+                            _ => false,
+                        };
                         self.shared_info.release_device_index(i, is_pmem);
                     }
                     Ok(())
@@ -233,11 +234,6 @@ impl DeviceManager {
     async fn find_device(&self, host_path: String) -> Option<String> {
         for (device_id, dev) in &self.devices {
             match dev.lock().await.get_device_info().await {
-                DeviceType::Block(device) => {
-                    if device.config.path_on_host == host_path {
-                        return Some(device_id.to_string());
-                    }
-                }
                 DeviceType::Vfio(device) => {
                     if device.config.host_path == host_path {
                         return Some(device_id.to_string());
@@ -312,17 +308,6 @@ impl DeviceManager {
         // in case of ID collision
         let device_id = self.new_device_id()?;
         let dev: ArcMutexDevice = match device_config {
-            DeviceConfig::BlockCfg(config) => {
-                // try to find the device, if found and just return id.
-                if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
-                {
-                    return Ok(device_matched_id);
-                }
-
-                self.create_block_device(config, device_id.clone())
-                    .await
-                    .context("failed to create device")?
-            }
             DeviceConfig::BlockCfgModern(config) => {
                 if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
                 {
@@ -543,61 +528,6 @@ impl DeviceManager {
         ))))
     }
 
-    async fn create_block_device(
-        &mut self,
-        config: &BlockConfig,
-        device_id: String,
-    ) -> Result<ArcMutexDevice> {
-        let mut block_config = config.clone();
-        let mut is_pmem = false;
-
-        match block_config.driver_option.as_str() {
-            // convert the block driver to kata type
-            VIRTIO_BLOCK_MMIO => {
-                block_config.driver_option = KATA_MMIO_BLK_DEV_TYPE.to_string();
-            }
-            VIRTIO_BLOCK_PCI => {
-                block_config.driver_option = KATA_BLK_DEV_TYPE.to_string();
-            }
-            VIRTIO_BLOCK_CCW => {
-                block_config.driver_option = KATA_CCW_DEV_TYPE.to_string();
-            }
-            VIRTIO_PMEM => {
-                block_config.driver_option = KATA_NVDIMM_DEV_TYPE.to_string();
-                is_pmem = true;
-            }
-            VIRTIO_SCSI => {
-                block_config.driver_option = KATA_SCSI_DEV_TYPE.to_string();
-            }
-            _ => {
-                return Err(anyhow!(
-                    "unsupported driver type {}",
-                    block_config.driver_option
-                ));
-            }
-        };
-
-        // generate virt path
-        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK, is_pmem)? {
-            block_config.index = virt_path.0;
-            block_config.virt_path = virt_path.1;
-        }
-
-        // if the path on host is empty, we need to get device host path from the device major and minor number
-        // Otherwise, it might be rawfile based block device, the host path is already passed from the runtime,
-        // so we don't need to do anything here.
-        if block_config.path_on_host.is_empty() {
-            block_config.path_on_host =
-                get_host_path(DEVICE_TYPE_BLOCK, config.major, config.minor)
-                    .context("failed to get host path")?;
-        }
-
-        Ok(Arc::new(Mutex::new(BlockDevice::new(
-            device_id,
-            block_config,
-        ))))
-    }
-
     // device ID must be generated by device manager instead of device itself
     // in case of ID collision
     fn new_device_id(&self) -> Result<String> {
@@ -759,9 +689,7 @@ pub async fn find_cold_plugged_vfio_ap(
 mod tests {
     use super::DeviceManager;
     use crate::{
-        device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
-        qemu::Qemu,
-        BlockConfig, KATA_BLK_DEV_TYPE,
+        BlockConfigModern, KATA_BLK_DEV_TYPE, device::{DeviceConfig, DeviceType, device_manager::get_block_device_info}, qemu::Qemu,
     };
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
@@ -799,7 +727,7 @@ mod tests {
 
         let d = dm.unwrap();
         let block_driver = get_block_device_info(&d).await.block_device_driver;
-        let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
             path_on_host: "/dev/dddzzz".to_string(),
             driver_option: block_driver,
             ..Default::default()
@@ -812,7 +740,8 @@ mod tests {
         assert!(devices_info_result.is_ok());
 
         let device_info = devices_info_result.unwrap();
-        if let DeviceType::Block(device) = device_info {
+        if let DeviceType::BlockModern(device_lock) = device_info {
+            let device = device_lock.lock().await;
             assert_eq!(device.config.driver_option, KATA_BLK_DEV_TYPE);
         } else {
             assert_eq!(1, 0)

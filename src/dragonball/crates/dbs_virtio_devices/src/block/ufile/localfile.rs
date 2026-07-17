@@ -114,6 +114,22 @@ impl<E: IoEngine + Send> Ufile for LocalFile<E> {
         self.io_engine.writev(offset, iovecs, user_data as u64)
     }
 
+    fn punch_hole(&mut self, offset: u64, length: u64) -> io::Result<()> {
+        let ret = unsafe {
+            libc::fallocate64(
+                self.file.as_raw_fd(),
+                libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE,
+                offset as libc::off64_t,
+                length as libc::off64_t,
+            )
+        };
+        if ret == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
     fn io_complete(&mut self) -> io::Result<Vec<(u16, u32)>> {
         Ok(self
             .io_engine

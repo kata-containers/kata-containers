@@ -123,7 +123,7 @@ pub enum ImageType {
     Unknown,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct DiskConfig {
     pub path: Option<PathBuf>,
     #[serde(default)]
@@ -148,8 +148,35 @@ pub struct DiskConfig {
     pub disable_io_uring: bool,
     #[serde(default)]
     pub pci_segment: u16,
+    #[serde(default = "default_diskconfig_sparse")]
+    pub sparse: bool,
     #[serde(default)]
     pub image_type: ImageType,
+}
+
+pub fn default_diskconfig_sparse() -> bool {
+    true
+}
+
+impl Default for DiskConfig {
+    fn default() -> Self {
+        Self {
+            path: None,
+            readonly: false,
+            direct: false,
+            iommu: false,
+            num_queues: 0,
+            queue_size: 0,
+            vhost_user: false,
+            vhost_socket: None,
+            rate_limiter_config: None,
+            id: None,
+            disable_io_uring: false,
+            pci_segment: 0,
+            sparse: default_diskconfig_sparse(),
+            image_type: ImageType::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]

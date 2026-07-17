@@ -80,6 +80,7 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
     pub fn new(
         mut disk_images: Vec<Box<dyn Ufile>>,
         is_disk_read_only: bool,
+        sparse: bool,
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
         rate_limiters: Vec<RateLimiter>,
@@ -111,8 +112,16 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
             avail_features |= 1u64 << VIRTIO_BLK_F_MQ;
         }
 
-        let config_space =
-            Self::build_config_space(disk_size, disk_image.get_max_size(), num_queues as u16);
+        if sparse {
+            avail_features |= 1u64 << VIRTIO_BLK_F_DISCARD;
+        }
+
+        let config_space = Self::build_config_space(
+            disk_size,
+            disk_image.get_max_size(),
+            num_queues as u16,
+            sparse,
+        );
 
         Ok(Block {
             device_info: VirtioDeviceInfo::new(
@@ -133,7 +142,7 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         })
     }
 
-    fn build_config_space(disk_size: u64, max_size: u32, num_queues: u16) -> Vec<u8> {
+    fn build_config_space(disk_size: u64, max_size: u32, num_queues: u16, sparse: bool) -> Vec<u8> {
         // The disk size field of the configuration space, which uses the first two words.
         // If the image is not a multiple of the sector size, the tail bits are not exposed.
         // The config space is little endian.
@@ -162,6 +171,19 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
             config.push((num_queues >> (8 * i)) as u8);
         }
 
+        let (max_discard_sectors, max_discard_seg, discard_sector_alignment) =
+            if sparse { (u32::MAX, 1, 1) } else { (0, 0, 0) };
+        for i in 0..4 {
+            config.push((max_discard_sectors >> (8 * i)) as u8);
+        }
+        for i in 0..4 {
+            config.push((max_discard_seg >> (8 * i)) as u8);
+        }
+        for i in 0..4 {
+            config.push((discard_sector_alignment >> (8 * i)) as u8);
+        }
+
+        config.resize(CONFIG_SPACE_SIZE, 0);
         config
     }
 
@@ -469,6 +491,10 @@ mod tests {
             Ok(0)
         }
 
+        fn punch_hole(&mut self, _offset: u64, _length: u64) -> io::Result<()> {
+            Ok(())
+        }
+
         fn io_complete(&mut self) -> io::Result<Vec<(u16, u32)>> {
             let mut v = Vec::new();
             if self.have_complete_io {
@@ -630,7 +656,54 @@ mod tests {
         {
             let mut q = vq.create_queue();
             data_descs.clear();
+            // data desc write only for discard
+            m.write_obj::<u32>(VIRTIO_BLK_T_DISCARD, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1)
+                .set(0x2000, 16, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
+            vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+            assert!(matches!(
+                Request::parse(&mut q.pop_descriptor_chain(m).unwrap(), &mut data_descs, 32),
+                Err(Error::UnexpectedWriteOnlyDescriptor)
+            ));
+        }
+
+        {
+            let mut q = vq.create_queue();
+            data_descs.clear();
+            // discard segment must be exactly one virtio_blk_discard_write_zeroes.
+            m.write_obj::<u32>(VIRTIO_BLK_T_DISCARD, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1).set(0x2000, 8, VIRTQ_DESC_F_NEXT, 2);
+            vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+            assert!(matches!(
+                Request::parse(&mut q.pop_descriptor_chain(m).unwrap(), &mut data_descs, 32),
+                Err(Error::DescriptorLengthTooSmall)
+            ));
+        }
+
+        {
+            let mut q = vq.create_queue();
+            data_descs.clear();
+            // max_discard_seg is one, so reject larger discard payloads.
+            m.write_obj::<u32>(VIRTIO_BLK_T_DISCARD, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1).set(0x2000, 32, VIRTQ_DESC_F_NEXT, 2);
+            vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+            assert!(matches!(
+                Request::parse(&mut q.pop_descriptor_chain(m).unwrap(), &mut data_descs, 32),
+                Err(Error::DescriptorLengthTooBig)
+            ));
+        }
+
+        {
+            let mut q = vq.create_queue();
+            data_descs.clear();
             // status desc read only
+            m.write_obj::<u32>(VIRTIO_BLK_T_GET_ID, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1)
+                .set(0x2000, 0x40, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
             vq.dtable(2).flags().store(0);
             assert!(matches!(
                 Request::parse(&mut q.pop_descriptor_chain(m).unwrap(), &mut data_descs, 32),
@@ -642,6 +715,10 @@ mod tests {
             let mut q = vq.create_queue();
             data_descs.clear();
             // status desc too small
+            m.write_obj::<u32>(VIRTIO_BLK_T_GET_ID, GuestAddress(0x1000))
+                .unwrap();
+            vq.dtable(1)
+                .set(0x2000, 0x40, VIRTQ_DESC_F_NEXT | VIRTQ_DESC_F_WRITE, 2);
             vq.dtable(2).flags().store(VIRTQ_DESC_F_WRITE);
             vq.dtable(2).len().store(0);
             assert!(matches!(
@@ -755,6 +832,49 @@ mod tests {
         }
 
         {
+            // RequestType::Discard
+            let mut q = vq.create_queue();
+            data_descs.clear();
+            vq.dtable(0).set(0x1000, 0x1000, VIRTQ_DESC_F_NEXT, 1);
+            vq.dtable(1).set(0x2000, 16, VIRTQ_DESC_F_NEXT, 2);
+            vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+            m.write_obj::<u32>(VIRTIO_BLK_T_DISCARD, GuestAddress(0x1000))
+                .unwrap();
+            m.write_obj::<u64>(1, GuestAddress(0x2000)).unwrap();
+            m.write_obj::<u32>(2, GuestAddress(0x2008)).unwrap();
+            let req = Request::parse(
+                &mut q.pop_descriptor_chain(m).unwrap(),
+                &mut data_descs,
+                0x100000,
+            )
+            .unwrap();
+            assert!(req.execute(&mut disk, m, &data_descs, &disk_id).is_ok());
+        }
+
+        {
+            // RequestType::Discard rejects ranges past disk capacity.
+            let mut q = vq.create_queue();
+            data_descs.clear();
+            vq.dtable(0).set(0x1000, 0x1000, VIRTQ_DESC_F_NEXT, 1);
+            vq.dtable(1).set(0x2000, 16, VIRTQ_DESC_F_NEXT, 2);
+            vq.dtable(2).set(0x3000, 1, VIRTQ_DESC_F_WRITE, 1);
+            m.write_obj::<u32>(VIRTIO_BLK_T_DISCARD, GuestAddress(0x1000))
+                .unwrap();
+            m.write_obj::<u64>(7, GuestAddress(0x2000)).unwrap();
+            m.write_obj::<u32>(2, GuestAddress(0x2008)).unwrap();
+            let req = Request::parse(
+                &mut q.pop_descriptor_chain(m).unwrap(),
+                &mut data_descs,
+                0x100000,
+            )
+            .unwrap();
+            assert!(matches!(
+                req.execute(&mut disk, m, &data_descs, &disk_id),
+                Err(ExecuteError::BadRequest(VirtioError::InvalidOffset))
+            ));
+        }
+
+        {
             // RequestType::unsupport
             let mut q = vq.create_queue();
             data_descs.clear();
@@ -862,6 +982,7 @@ mod tests {
         let mut dev = Block::<Arc<GuestMemoryMmap>>::new(
             vec![disk_image],
             true,
+            false,
             Arc::new(vec![128]),
             epoll_mgr,
             vec![],
@@ -919,6 +1040,7 @@ mod tests {
             let mut dev = Block::<Arc<GuestMemoryMmap<()>>>::new(
                 vec![disk_image],
                 true,
+                false,
                 Arc::new(vec![128]),
                 epoll_mgr.clone(),
                 vec![],
@@ -956,6 +1078,7 @@ mod tests {
             let mut dev = Block::new(
                 vec![disk_image],
                 true,
+                false,
                 Arc::new(vec![128]),
                 epoll_mgr.clone(),
                 vec![],
@@ -994,6 +1117,7 @@ mod tests {
             let mut dev = Block::new(
                 vec![disk_image],
                 true,
+                false,
                 Arc::new(vec![128]),
                 epoll_mgr,
                 vec![],
@@ -1031,6 +1155,7 @@ mod tests {
         let mut dev = Block::<Arc<GuestMemoryMmap>>::new(
             vec![disk_image],
             true,
+            false,
             Arc::new(vec![128]),
             epoll_mgr,
             vec![],
