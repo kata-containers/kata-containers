@@ -4,13 +4,13 @@
 -object
 iommufd,id=iommufd0
 -object
-memory-backend-file,id=m0,mem-path=/dev/egm4,size=56896M,share=on,prealloc=on
+memory-backend-file,id=m0,size=56896M,mem-path=/dev/egm4,prealloc=on,share=on
 -object
-memory-backend-file,id=m1,mem-path=/dev/egm5,size=56896M,share=on,prealloc=on
+memory-backend-file,id=m1,size=56896M,mem-path=/dev/egm5,prealloc=on,share=on
 -object
-memory-backend-file,id=m2,mem-path=/dev/egm6,size=56896M,share=on,prealloc=on
+memory-backend-file,id=m2,size=56896M,mem-path=/dev/egm6,prealloc=on,share=on
 -object
-memory-backend-file,id=m3,mem-path=/dev/egm7,size=56896M,share=on,prealloc=on
+memory-backend-file,id=m3,size=56896M,mem-path=/dev/egm7,prealloc=on,share=on
 -machine
 virt,accel=kvm,gic-version=3,ras=on,highmem-mmio-size=4T
 -numa
