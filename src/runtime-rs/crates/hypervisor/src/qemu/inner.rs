@@ -1011,6 +1011,8 @@ impl QemuInner {
             (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => {
                 !std::sync::Arc::ptr_eq(a, b)
             }
+            (DeviceType::Vfio(a), DeviceType::Vfio(b)) => a.device_id != b.device_id,
+            (DeviceType::VfioModern(a), DeviceType::VfioModern(b)) => !std::sync::Arc::ptr_eq(a, b),
             _ => true,
         });
 
@@ -1035,9 +1037,21 @@ impl QemuInner {
                 qmp.hotunplug_block_device(&driver, index)
                     .context("hotunplug block device")?;
             }
+            DeviceType::Vfio(ref vfio_device) => {
+                let hostdev_id = vfio_device
+                    .devices
+                    .first()
+                    .map(|device| device.hostdev_id.as_str())
+                    .ok_or_else(|| anyhow!("VFIO device has no host device to hotunplug"))?;
+                qmp.hotunplug_vfio_device(hostdev_id)
+                    .context("hotunplug VFIO device")?;
+            }
+            DeviceType::VfioModern(ref vfio_device) => {
+                let hostdev_id = vfio_device.lock().await.device_id.clone();
+                qmp.hotunplug_vfio_device(&hostdev_id)
+                    .context("hotunplug VFIO device")?;
+            }
             DeviceType::Network(_)
-            | DeviceType::Vfio(_)
-            | DeviceType::VfioModern(_)
             | DeviceType::VhostUserBlk(_)
             | DeviceType::VhostUserNetwork(_)
             | DeviceType::ShareFs(_)
