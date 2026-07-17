@@ -112,8 +112,11 @@ fn grace_3_four_gpus_2_per_smmu() {
 #[test]
 #[ignore = "Phase 4"]
 fn grace_4_gpu_and_nic() {
-    // NIC is represented differently; exact HostTopology shape TBD in Phase 4.
-    // Fixture defines the expected output; this test drives the API design.
+    // Placeholder until Phase 4: HostTopology cannot represent NIC passthrough
+    // yet, so this topology covers only the GPU half and the test stays
+    // ignored.  Phase 4 adds nic_smmu_groups and rewrites this body; the
+    // fixture already defines the full expected output (GPU on pcie.1, NIC on
+    // pcie.2 with no acpi-generic-initiator links).
     check(
         HostTopology {
             sockets: single_socket(0..4),
@@ -129,14 +132,22 @@ fn grace_4_gpu_and_nic() {
 #[test]
 #[ignore = "Phase 5"]
 fn grace_5_vcmdq() {
-    check(
-        HostTopology {
-            sockets: single_socket(0..4),
-            gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
-            egm_sockets: vec![],
-        },
-        "grace_5_vcmdq.args",
-    );
+    // Config 5 backs guest RAM with hugepages: with_hugepages() swaps the
+    // primary backend to mem-path=/dev/hugepages/ with prealloc=on before
+    // emission.  The call is a stub until Phase 5 implements it, so the test
+    // stays ignored, but the body already documents the required step.
+    let topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        egm_sockets: vec![],
+    };
+    let mut platform =
+        Platform::from_config_defaults(16 << 30).expect("Platform::from_config_defaults");
+    platform.apply_host_defaults(&topo);
+    let platform = platform.with_hugepages("/dev/hugepages/");
+    let got = platform.to_qemu_args().expect("to_qemu_args");
+    let want = load_fixture("grace_5_vcmdq.args");
+    assert_eq!(want, got);
 }
 
 // ---- Grace Config 6: vEGM, 1 GPU per socket, 4 sockets ----
