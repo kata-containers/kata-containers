@@ -110,7 +110,13 @@ impl BlockRootfs {
                         .ccw_addr
                         .ok_or_else(|| anyhow!("CCW address missing for ccw block device"))?;
                 }
-                VIRTIO_SCSI | VIRTIO_PMEM => {
+                VIRTIO_SCSI => {
+                    storage.source = device
+                        .config
+                        .scsi_addr
+                        .ok_or_else(|| anyhow!("SCSI address missing for scsi block device"))?;
+                }
+                VIRTIO_PMEM => {
                     return Err(anyhow!(
                         "Complete support for block driver {} has not been implemented yet",
                         block_driver
