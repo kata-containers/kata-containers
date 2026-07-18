@@ -200,6 +200,10 @@ function deploy_kata() {
 		EXPERIMENTAL_FORCE_GUEST_PULL=false
 	fi
 
+	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-cpu-runtime-rs" ]] && [[ -z "${SNAPSHOTTER}" ]]; then
+		SNAPSHOTTER="erofs"
+	fi
+
 	ANNOTATIONS="default_vcpus"
 	if [[ "${KATA_HYPERVISOR}" == *azure* ]]; then
 		ANNOTATIONS="image kernel default_vcpus cc_init_data"

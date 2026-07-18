@@ -53,7 +53,7 @@ jobs:
           { vmm: clh-runtime-rs, containerd_version: latest },
           { vmm: clh-runtime-rs, containerd_version: minimum },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
-          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest },
+          { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
@@ -74,6 +74,7 @@ jobs:
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
       EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.erofs_mode }}
+      EROFS_DMVERITY: ${{ matrix.environment.erofs_dmverity }}
       EROFS_MERGE_MODE: ${{ matrix.environment.erofs_merge_mode }}
       GH_TOKEN: ${{ github.token }}
     steps:

@@ -15,7 +15,7 @@ debug: false
 deploymentMode: job
 
 snapshotter:
-  setup: []
+  setup: ["erofs"]
 
 # Enable NVIDIA CPU shims
 # Disable all shims at once, then enable only the ones we need.
@@ -38,7 +38,7 @@ shims:
       - arm64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
+      snapshotter: "erofs"
 
 # Default shim per architecture.
 defaultShim:
