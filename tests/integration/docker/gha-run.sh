@@ -92,6 +92,7 @@ function run() {
 	info "Running docker smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
+	configure_nvidia_runtime_rs_shared_fs_dropin
 	enable_kata_debug
 
 	info "Running docker with runc"

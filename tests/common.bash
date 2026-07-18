@@ -807,6 +807,31 @@ function enabling_hypervisor() {
 	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
+# Docker and nerdctl smoke tests exercise Kata through the default overlayfs
+# snapshotter path. Keep NVIDIA runtime-rs on virtio-fs for those tests; the
+# shared_fs=none + EROFS snapshotter path is covered by Kubernetes CI instead.
+function configure_nvidia_runtime_rs_shared_fs_dropin() {
+	case "${KATA_HYPERVISOR:-}" in
+		qemu-nvidia-cpu-runtime-rs) ;;
+		*) return 0 ;;
+	esac
+
+	local -r cfg="${KATA_CONFIG_PATH:-}"
+	[[ -z "${cfg}" || ! -e "${cfg}" ]] && return 0
+
+	local -r dropin_dir="$(dirname "${cfg}")/config.d"
+	local -r dropin_path="${dropin_dir}/99-nvidia-runtime-rs-shared-fs.toml"
+
+	info "Configuring NVIDIA runtime-rs shared-fs smoke test via ${dropin_path}"
+	sudo mkdir -p "${dropin_dir}"
+	sudo tee "${dropin_path}" >/dev/null <<EOF
+[hypervisor.qemu]
+shared_fs = "virtio-fs"
+
+[runtime]
+emptydir_mode = "shared-fs"
+EOF
+}
 
 function check_containerd_config_for_kata() {
 	declare -r containerd_path="/etc/containerd/config.toml"

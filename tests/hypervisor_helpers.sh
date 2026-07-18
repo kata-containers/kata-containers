@@ -122,6 +122,21 @@ function is_confidential_runtime_class() {
 	fi
 }
 
+# Runtime classes that boot with shared_fs=none, where the host cannot read
+# guest files directly. Data such as a container's termination log must then be
+# retrieved over the agent GetDiagnosticData RPC instead of a shared filesystem.
+# This covers the confidential runtime classes and the non-confidential NVIDIA
+# CPU runtime-rs handler. The plain qemu-nvidia-cpu (Go) class still uses
+# virtio-fs, so it is intentionally excluded.
+function is_shared_fs_none_runtime_class() {
+	local hypervisor="${1:-${KATA_HYPERVISOR}}"
+	if is_confidential_runtime_class "${hypervisor}"; then
+		return 0
+	fi
+	[[ "${hypervisor}" == "qemu-nvidia-cpu-runtime-rs" ]] && return 0
+	return 1
+}
+
 # Runtime classes that boot a measured (dm-verity) rootfs: the confidential
 # classes plus the CPU-only NVIDIA classes, which boot the verity-backed
 # nvidia base image without being confidential.

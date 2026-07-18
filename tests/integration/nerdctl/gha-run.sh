@@ -101,6 +101,7 @@ function run() {
 	sudo nerdctl network create "${net2}"
 
 	enabling_hypervisor
+	configure_nvidia_runtime_rs_shared_fs_dropin
 
 	if [[ -n "${GITHUB_ENV:-}" ]]; then
 		start_time=$(date '+%Y-%m-%d %H:%M:%S')
