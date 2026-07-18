@@ -5,8 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Test termination log propagation via GetDiagnosticData RPC.
-# These tests target shared_fs=none configurations (e.g. qemu-coco-dev)
-# where the host cannot directly read guest files.
+# These tests target shared_fs=none configurations (e.g. qemu-coco-dev or the
+# NVIDIA CPU runtime-rs handler) where the host cannot directly read guest
+# files.
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
@@ -14,9 +15,11 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 setup() {
-	# These tests only make sense on CoCo platforms (shared_fs=none).
-	if ! is_confidential_runtime_class; then
-		skip "Test requires a CoCo runtime class (shared_fs=none)"
+	# These tests only make sense on shared_fs=none configurations, where the
+	# host cannot read guest files directly and the termination log has to be
+	# fetched over the agent GetDiagnosticData RPC.
+	if ! is_shared_fs_none_runtime_class; then
+		skip "Test requires a shared_fs=none runtime class"
 	fi
 
 	setup_common || die "setup_common failed"
@@ -95,6 +98,13 @@ wait_for_pod_terminated() {
 }
 
 @test "Termination log: request blocked by default CoCo policy" {
+	# The default-deny behaviour is specific to the confidential runtime
+	# classes; non-confidential shared_fs=none classes (e.g. NVIDIA CPU
+	# runtime-rs) do not ship a default policy that blocks the RPC.
+	if ! is_confidential_runtime_class; then
+		skip "Default-deny policy check only applies to CoCo runtime classes"
+	fi
+
 	if ! auto_generate_policy_enabled; then
 		echo "# Skipping default CoCo policy check: requires AUTO_GENERATE_POLICY=yes" >&3
 		return 0
@@ -128,7 +138,7 @@ wait_for_pod_terminated() {
 }
 
 teardown() {
-	if ! is_confidential_runtime_class; then
+	if ! is_shared_fs_none_runtime_class; then
 		return
 	fi
 
