@@ -70,8 +70,8 @@ shims:
 
 # Default shim per architecture.
 defaultShim:
-  amd64: qemu-nvidia-cpu
-  arm64: qemu-nvidia-cpu
+  amd64: qemu-nvidia-cpu-runtime-rs
+  arm64: qemu-nvidia-cpu-runtime-rs
 
 runtimeClasses:
   enabled: true
