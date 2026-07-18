@@ -864,29 +864,35 @@ function helm_helper() {
 				die "EROFS_SNAPSHOTTER_MODE is only supported with SNAPSHOTTER=erofs"
 			fi
 
-			local erofs_default_size
-			case "${EROFS_SNAPSHOTTER_MODE}" in
-				disk)
-					erofs_default_size="10G"
-					;;
-				memory)
-					erofs_default_size="0"
-					;;
-				*)
-					die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
-					;;
-			esac
+			# Honor an erofs snapshotter drop-in already shipped by the base
+			# values file (e.g. try-kata-nvidia-cpu.values.yaml pins the
+			# memory-backed default_size and disables fs-verity, which cannot
+			# be guaranteed on an arbitrary node's backing filesystem). Only
+			# synthesize the default drop-in when the profile does not provide
+			# its own.
+			local existing_dropin
+			existing_dropin="$(yq -r '.containerd.userDropIn // ""' "${values_yaml}")"
 
-			HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
-			HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+			if [[ -z "${existing_dropin//[[:space:]]/}" ]]; then
+				local erofs_default_size
+				case "${EROFS_SNAPSHOTTER_MODE}" in
+					disk)
+						erofs_default_size="10G"
+						;;
+					memory)
+						erofs_default_size="0"
+						;;
+					*)
+						die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
+						;;
+				esac
 
-			# NVIDIA CI hosts are not configured with ext4 fs-verity support.
-			if [[ "${KATA_HYPERVISOR:-}" == *"nvidia-cpu"* ]]; then
-				HELM_CONTAINERD_USER_DROP_IN+=$'\n'"  enable_fsverity = false"
+				HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
+				HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+
+				HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
+					yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
 			fi
-
-			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
-				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
 
 			# Propagate rwlayer backing mode to kata-deploy.
 			yq -i ".snapshotter.erofsSnapshotterMode = \"${EROFS_SNAPSHOTTER_MODE}\"" "${values_yaml}"

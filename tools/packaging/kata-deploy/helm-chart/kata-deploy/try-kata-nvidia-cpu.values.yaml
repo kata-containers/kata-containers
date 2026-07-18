@@ -16,6 +16,34 @@ deploymentMode: job
 
 snapshotter:
   setup: ["erofs"]
+  # The NVIDIA CPU runtime-rs handler runs with shared_fs=none and uses the
+  # EROFS snapshotter with memory-backed rw layers and dm-verity for lower
+  # (image) layer integrity.
+  erofsSnapshotterMode: "memory"
+  erofsDmverity: true
+
+# EROFS fs-verity requires the backing filesystem to support fs-verity, and we
+# cannot guarantee that on an arbitrary node. Rather than gate this profile on a
+# host feature we do not control, we disable fs-verity so it works on the widest
+# possible range of setups; we take that hit deliberately to keep the profile
+# generic. Combined with memory-backed EROFS rw layers, ship this as the default
+# containerd erofs snapshotter drop-in for the NVIDIA CPU profile so it does not
+# need to be injected out-of-band. It is loaded after kata-deploy's generated
+# config, so it overrides the built-in enable_fsverity default.
+#
+# NOTE: This drop-in targets containerd's built-in EROFS snapshotter, which is
+# only available on containerd >= 2.2.0 (config version 3, using the
+# auto-imported conf.d drop-in mechanism). This is the same minimum kata-deploy
+# enforces for the EROFS snapshotter (see check_containerd_erofs_version_support:
+# "In order to use erofs-snapshotter containerd must be 2.2.0 or newer"). On
+# older containerd releases the erofs snapshotter plugin does not exist and this
+# specific "[plugins.'io.containerd.snapshotter.v1.erofs']" key layout will not
+# be recognized, so do not expect this profile to work there.
+containerd:
+  userDropIn: |
+    [plugins.'io.containerd.snapshotter.v1.erofs']
+      enable_fsverity = false
+      default_size = "0"
 
 # Enable NVIDIA CPU shims
 # Disable all shims at once, then enable only the ones we need.
