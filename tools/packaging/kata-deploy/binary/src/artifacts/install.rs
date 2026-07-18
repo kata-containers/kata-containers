@@ -30,7 +30,6 @@ const ALL_SHIMS: &[&str] = &[
     "remote",
     // QEMU shims
     "qemu",
-    "qemu-cca",
     "qemu-coco-dev",
     "qemu-coco-dev-runtime-rs",
     "qemu-nvidia-cpu",
@@ -1029,7 +1028,6 @@ fn get_qemu_share_name(shim: &str) -> Option<String> {
     }
 
     let share_name = match shim {
-        "qemu-cca" => "qemu-cca-experimental",
         "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-snp-runtime-rs" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
@@ -1370,7 +1368,6 @@ mod tests {
     #[case("qemu-snp", "qemu")]
     #[case("qemu-se", "qemu")]
     #[case("qemu-coco-dev", "qemu")]
-    #[case("qemu-cca", "qemu")]
     #[case("qemu-nvidia-cpu", "qemu")]
     #[case("qemu-nvidia-cpu-runtime-rs", "qemu")]
     #[case("qemu-nvidia-gpu", "qemu")]

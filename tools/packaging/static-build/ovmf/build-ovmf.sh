@@ -23,7 +23,7 @@ package_output_dir="${package_output_dir:-}"
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX="${PREFIX:-/opt/kata}"
 architecture="${architecture:-X64}"
-if [[ "${ovmf_build}" == "arm64" ]] || [[ "${ovmf_build}" == "cca" ]]; then
+if [[ "${ovmf_build}" == "arm64" ]]; then
 	architecture="AARCH64"
 fi
 toolchain="${toolchain:-GCC5}"
@@ -72,7 +72,7 @@ if [[ "${ovmf_build}" == "tdx" ]]; then
 	# shellcheck disable=SC2034
 	build_path_arch="${build_path_target_toolchain}/X64"
 	stat "${build_path_fv}/OVMF.fd"
-elif [[ "${ovmf_build}" == "arm64" ]] || [[ "${ovmf_build}" == "cca" ]]; then
+elif [[ "${ovmf_build}" == "arm64" ]]; then
 	stat "${build_path_fv}/QEMU_EFI.fd"
 	stat "${build_path_fv}/QEMU_VARS.fd"
 else
@@ -83,7 +83,7 @@ fi
 popd
 
 info "Install fd to destdir"
-if [[ "${ovmf_build}" == "arm64" ]] || [[ "${ovmf_build}" == "cca" ]]; then
+if [[ "${ovmf_build}" == "arm64" ]]; then
 	install_dir="${DESTDIR}/${PREFIX}/share/aavmf"
 else
 	install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
@@ -94,7 +94,7 @@ if [[ "${ovmf_build}" == "sev" ]]; then
 	install "${build_root}"/"${ovmf_dir}"/"${build_path_fv}"/OVMF.fd "${install_dir}/AMDSEV.fd"
 elif [[ "${ovmf_build}" == "tdx" ]]; then
 	install "${build_root}"/"${ovmf_dir}"/"${build_path_fv}"/OVMF.fd "${install_dir}/OVMF.inteltdx.fd"
-elif [[ "${ovmf_build}" == "arm64" ]] || [[ "${ovmf_build}" == "cca" ]]; then
+elif [[ "${ovmf_build}" == "arm64" ]]; then
 	install "${build_root}"/"${ovmf_dir}"/"${build_path_fv}"/QEMU_EFI.fd "${install_dir}/AAVMF_CODE.fd"
 	install "${build_root}"/"${ovmf_dir}"/"${build_path_fv}"/QEMU_VARS.fd "${install_dir}/AAVMF_VARS.fd"
 	# QEMU expects 64MiB CODE and VARS files on ARM/AARCH64 architectures

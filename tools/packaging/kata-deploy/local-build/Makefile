@@ -55,19 +55,15 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
-	kernel-cca-confidential-tarball \
 	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
-	qemu-cca-experimental-tarball \
 	shim-v2-go-tarball \
 	shim-v2-rust-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
-	rootfs-cca-confidential-image-tarball \
-	rootfs-cca-confidential-initrd-tarball \
 	rootfs-initrd-tarball
 endif
 
@@ -226,9 +222,6 @@ kernel-tarball:
 kernel-debug-tarball:
 	${MAKE} $@-build
 
-kernel-cca-confidential-tarball:
-	${MAKE} $@-build
-
 nydus-tarball:
 	${MAKE} $@-build
 
@@ -238,9 +231,6 @@ ovmf-sev-tarball:
 ovmf-tdx-tarball:
 	${MAKE} $@-build
 
-ovmf-cca-tarball:
-	${MAKE} $@-build
-
 ovmf-tarball:
 	${MAKE} $@-build
 
@@ -248,9 +238,6 @@ qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
-	${MAKE} $@-build
-
-qemu-cca-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
@@ -310,14 +297,6 @@ rootfs-image-nvidia-tarball: $(DEPS)
 
 DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
-	${MAKE} $@-build
-
-DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
-rootfs-cca-confidential-image-tarball: $(DEPS)
-	${MAKE} $@-build
-
-DEPS := agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
-rootfs-cca-confidential-initrd-tarball: $(DEPS)
 	${MAKE} $@-build
 
 shim-v2-go-tarball:

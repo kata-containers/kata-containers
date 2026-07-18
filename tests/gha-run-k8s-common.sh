@@ -183,33 +183,6 @@ function install_bats() {
 
 }
 
-# Install the kustomize tool in /usr/local/bin if it doesn't exist on
-# the system yet.
-#
-function install_kustomize() {
-	local arch
-	local checksum
-	local version
-
-	if command -v kustomize >/dev/null; then
-		return
-	fi
-
-	ensure_yq
-	version=$(get_from_kata_deps ".externals.kustomize.version")
-	arch=$(arch_to_golang)
-	checksum=$(get_from_kata_deps ".externals.kustomize.checksum.${arch}")
-
-	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
-	curl -Lf -o "${tarball}" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"
-
-	local rc=0
-	echo "${checksum} ${tarball}" | sha256sum -c || rc=$?
-	[[ ${rc} -eq 0 ]] && sudo tar -xvzf "${tarball}" -C /usr/local/bin || rc=$?
-	rm -f "${tarball}"
-	[[ ${rc} -eq 0 ]]
-}
-
 function get_cluster_credentials() {
 	test_type="${1:-k8s}"
 
@@ -799,7 +772,7 @@ function helm_helper() {
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
 			# shellcheck disable=SC2034
-			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
@@ -808,8 +781,6 @@ function helm_helper() {
 
 				if is_se_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
-				elif is_cca_hypervisor "${shim}"; then
-					yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 				elif is_snp_hypervisor "${shim}" || is_tdx_hypervisor "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 				# qemu-coco-dev-runtime-rs is checked explicitly because
