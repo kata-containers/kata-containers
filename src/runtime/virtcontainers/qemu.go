@@ -628,6 +628,31 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	return q.buildNUMATopologyForVFIOHostSet(vfioHostSet)
 }
 
+// defaultHugepagesMountpoint is the standard mount point of the hugetlbfs
+// filesystem used to back guest memory with huge pages.
+const defaultHugepagesMountpoint = "/dev/hugepages"
+
+// hugepageSizeBytes returns the size, in bytes, of a single huge page backing
+// the hugetlbfs mounted at path. hugetlbfs reports the huge page size as its
+// filesystem block size, so we can discover the actual page size (e.g. 2 MiB
+// or 1 GiB) via statfs without assuming a fixed value.
+func hugepageSizeBytes(path string) (uint64, error) {
+	var fs unix.Statfs_t
+	if err := unix.Statfs(path, &fs); err != nil {
+		return 0, fmt.Errorf("statfs %q: %w", path, err)
+	}
+	if fs.Bsize <= 0 {
+		return 0, fmt.Errorf("hugepage mount %q reported invalid block size %d", path, fs.Bsize)
+	}
+
+	hpSize := uint64(fs.Bsize)
+	mib := uint64(1) << utils.MibToBytesShift
+	if hpSize < mib || hpSize%mib != 0 {
+		return 0, fmt.Errorf("hugepage mount %q reported unexpected block size %d", path, fs.Bsize)
+	}
+	return hpSize, nil
+}
+
 func (q *qemu) buildNUMATopologyForVFIOHostSet(vfioHostSet map[int]struct{}) ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, error) {
 	// q.config.GuestNUMANodes has already been right-sized (when applicable)
 	// by maybeRightSizeAutoNUMA() at hypervisor setup time.  Empty means
@@ -703,14 +728,26 @@ func (q *qemu) buildNUMATopologyForVFIOHostSet(vfioHostSet map[int]struct{}) ([]
 
 	var memAlign uint64 = 1
 	if q.config.HugePages {
-		memAlign = 2
+		// Align per-node memory to the actual huge page size backing
+		// /dev/hugepages rather than assuming 2 MiB. Hosts may configure a
+		// default huge page size of 1 GiB (or other), in which case each
+		// node's memory must be a multiple of that size for QEMU to back it
+		// with huge pages.
+		hpSize, err := hugepageSizeBytes(defaultHugepagesMountpoint)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to determine huge page size for NUMA memory alignment: %w", err)
+		}
+		memAlign = hpSize >> utils.MibToBytesShift
+		if memAlign == 0 {
+			memAlign = 1
+		}
 	}
 
 	backendType := "memory-backend-ram"
 	backendPath := ""
 	if q.config.HugePages {
 		backendType = "memory-backend-file"
-		backendPath = "/dev/hugepages"
+		backendPath = defaultHugepagesMountpoint
 	} else if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		backendType = "memory-backend-file"
 		backendPath = fallbackFileBackedMemDir
