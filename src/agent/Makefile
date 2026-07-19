@@ -41,6 +41,14 @@ ifeq ($(AGENT_POLICY),yes)
     override EXTRA_RUSTFEATURES += agent-policy
 endif
 
+##VAR STRICT_POLICY=yes|no enable the strict confidential-runtime policy behaviour
+## (closed-door default baseline + escape hatch compiled out). Implies AGENT_POLICY.
+STRICT_POLICY ?= no
+
+ifeq ($(STRICT_POLICY),yes)
+    override EXTRA_RUSTFEATURES += strict-policy
+endif
+
 ##VAR INIT_DATA=yes|no define if agent enables the init data feature
 INIT_DATA ?= yes
 

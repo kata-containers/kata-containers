@@ -106,5 +106,6 @@ lto = true
 [features]
 seccomp = ["rustjail/seccomp"]
 agent-policy = ["kata-agent-policy"]
+strict-policy = ["agent-policy", "kata-agent-policy/strict-policy"]
 init-data = []
 devicemapper = ["kata-types/devicemapper"]

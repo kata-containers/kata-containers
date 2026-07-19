@@ -30,6 +30,14 @@ const POLICY_MAX_LINES: usize = 200_000;
 static POLICY_LOG_FILE: &str = "/tmp/policy.jsonl";
 static POLICY_DEFAULT_FILE: &str = "/etc/kata-opa/default-policy.rego";
 
+/// Closed-door baseline used in strict builds when no explicit policy is provided.
+/// It denies every security-relevant request (every endpoint is left undefined, so
+/// policy evaluation fails closed) except `SetPolicyRequest`, which is the channel
+/// through which an authorized policy is delivered.
+#[cfg(feature = "strict-policy")]
+static STRICT_DEFAULT_POLICY: &str =
+    "package agent_policy\n\ndefault SetPolicyRequest := true\n";
+
 /// Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {
@@ -115,8 +123,22 @@ impl AgentPolicy {
             debug!(sl!(), "policy: log file: {}", log_file_path);
         }
 
-        // Check if policy file has been set via AgentConfig
-        // If empty, use default file.
+        // Strict builds never fall back to a permissive default shipped in the guest
+        // image: if no explicit (attested) policy was provided, install the compiled-in
+        // closed-door baseline so the guest denies all security-relevant requests until
+        // an authorized policy is delivered.
+        #[cfg(feature = "strict-policy")]
+        if default_policy_file.is_empty() {
+            info!(
+                sl!(),
+                "strict-policy: no explicit policy provided; loading closed-door baseline"
+            );
+            self.engine
+                .add_policy("strict-default.rego".to_string(), STRICT_DEFAULT_POLICY.to_string())?;
+            self.update_allow_failures_flag().await?;
+            return Ok(());
+        }
+
         let mut default_policy_file = default_policy_file;
         if default_policy_file.is_empty() {
             default_policy_file = POLICY_DEFAULT_FILE.to_string();
@@ -248,19 +270,31 @@ impl AgentPolicy {
     }
 
     async fn update_allow_failures_flag(&mut self) -> Result<()> {
-        self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
-            Ok((allowed, _prints)) => {
-                if allowed {
-                    warn!(
-                        sl!(),
-                        "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
-                    );
+        // In strict builds the "ignore requests failing policy" escape hatch is
+        // compiled out: requests that fail policy evaluation are always denied,
+        // regardless of any AllowRequestsFailingPolicy value in the policy.
+        #[cfg(feature = "strict-policy")]
+        {
+            self.allow_failures = false;
+            return Ok(());
+        }
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await
+            {
+                Ok((allowed, _prints)) => {
+                    if allowed {
+                        warn!(
+                            sl!(),
+                            "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
+                        );
+                    }
+                    allowed
                 }
-                allowed
-            }
-            Err(_) => false,
-        };
-        Ok(())
+                Err(_) => false,
+            };
+            Ok(())
+        }
     }
 }
 

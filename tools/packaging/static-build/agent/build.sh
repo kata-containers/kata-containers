@@ -30,6 +30,7 @@ docker pull "${container_image}" || \
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env AGENT_POLICY="${AGENT_POLICY:-no}" \
+	--env STRICT_POLICY="${STRICT_POLICY:-no}" \
 	--env INIT_DATA="${INIT_DATA:-yes}" \
 	--env USE_DEVMAPPER="${USE_DEVMAPPER:-no}" \
 	--env LIBSECCOMP_VERSION="${LIBSECCOMP_VERSION}" \

@@ -28,6 +28,7 @@ LIBC=${LIBC:-musl}
 SECCOMP=${SECCOMP:-"yes"}
 SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
+STRICT_POLICY=${STRICT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
 GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
@@ -600,6 +601,7 @@ build_rootfs_distro()
 			--env TARGET_ARCH="${TARGET_ARCH}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
+			--env STRICT_POLICY="${STRICT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
 			--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
 			--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
@@ -768,7 +770,7 @@ EOF
 			fi
 		fi
 		make clean
-		make LIBC="${LIBC}" INIT="${AGENT_INIT}" SECCOMP="${SECCOMP}" AGENT_POLICY="${AGENT_POLICY}"
+		make LIBC="${LIBC}" INIT="${AGENT_INIT}" SECCOMP="${SECCOMP}" AGENT_POLICY="${AGENT_POLICY}" STRICT_POLICY="${STRICT_POLICY}"
 		make install DESTDIR="${ROOTFS_DIR}" LIBC="${LIBC}" INIT="${AGENT_INIT}"
 		if [[ "${SECCOMP}" == "yes" ]]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"

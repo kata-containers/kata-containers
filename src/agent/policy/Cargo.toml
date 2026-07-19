@@ -48,3 +48,11 @@ slog-scope.workspace = true
 # Internal dependencies
 
 protocols = { workspace = true, features = ["with-serde"] }
+
+[features]
+# Strict confidential-runtime policy behaviour:
+#  - when no explicit policy is provided, load a compiled-in closed-door baseline
+#    (deny every security-relevant request except the policy-delivery path) instead
+#    of falling back to a permissive file shipped in the guest image;
+#  - the "ignore requests failing policy" escape hatch is compiled out and forced off.
+strict-policy = []
