@@ -173,6 +173,24 @@ impl AgentPolicy {
         Ok(())
     }
 
+    /// FR-6: capture the current policy state (`pstate`) so a transaction can roll it back.
+    /// The policy applies its state-mutating `ops` during authorization; snapshotting before
+    /// authorization and restoring on abort ensures a failed operation leaves no committed
+    /// enforcer state (equivalent to runhcs/OpenGCS `WithMetadataRollback`).
+    #[cfg(feature = "strict-policy")]
+    pub fn snapshot_state(&self) -> Result<String> {
+        Ok(serde_json::to_value(self.engine.get_data())?.to_string())
+    }
+
+    /// FR-6: restore policy state captured by `snapshot_state` (transaction rollback).
+    #[cfg(feature = "strict-policy")]
+    pub fn restore_state(&mut self, snapshot: &str) -> Result<()> {
+        self.engine.clear_data();
+        self.engine
+            .add_data(regorus::Value::from_json_str(snapshot)?)?;
+        Ok(())
+    }
+
     /// Ask regorus if an API call should be allowed or not.
     pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");

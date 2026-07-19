@@ -921,14 +921,14 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed(&req).await?;
 
-        // FR-6: in strict builds, run the create as a Security Reference Monitor
-        // transaction. State is reserved at prepare, the plan is bound at execute
-        // (verified against the authorized digest), and it is only committed once the
-        // runtime create succeeds; a failure aborts (rolls back) or, if a safe state
-        // cannot be proven, quarantines the monitor. No new shim<->agent API: the
-        // operation id and plan digest are derived from the request inside the agent.
+        // FR-6: snapshot policy state before authorization. The policy applies its
+        // pstate mutations during is_allowed; if the create fails we restore this
+        // snapshot so no committed enforcer state survives a failed operation.
+        #[cfg(feature = "strict-policy")]
+        let policy_snapshot = crate::AGENT_POLICY.lock().await.snapshot_state().ok();
+
+        is_allowed(&req).await?;
         #[cfg(feature = "strict-policy")]
         {
             use kata_security_reference_monitor::Prepared;
@@ -958,6 +958,11 @@ impl agent_ttrpc::AgentService for AgentService {
                     let mut srm = crate::SRM.lock().await;
                     if srm.abort(&op_id).is_err() {
                         srm.quarantine("create_container failed with unprovable state");
+                    }
+                    drop(srm);
+                    // Roll back the policy pstate mutations applied during authorization.
+                    if let Some(snap) = &policy_snapshot {
+                        let _ = crate::AGENT_POLICY.lock().await.restore_state(snap);
                     }
                     Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
                 }
@@ -999,6 +1004,11 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
+
+        // FR-6: snapshot policy state before authorization for rollback on failure.
+        #[cfg(feature = "strict-policy")]
+        let policy_snapshot = crate::AGENT_POLICY.lock().await.snapshot_state().ok();
+
         is_allowed(&req).await?;
 
         // FR-6: an exec creates a new process, so run it as an SRM transaction. The
@@ -1031,6 +1041,10 @@ impl agent_ttrpc::AgentService for AgentService {
                     let mut srm = crate::SRM.lock().await;
                     if srm.abort(&op_id).is_err() {
                         srm.quarantine("exec_process failed with unprovable state");
+                    }
+                    drop(srm);
+                    if let Some(snap) = &policy_snapshot {
+                        let _ = crate::AGENT_POLICY.lock().await.restore_state(snap);
                     }
                     Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
                 }
