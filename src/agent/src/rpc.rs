@@ -494,6 +494,28 @@ impl AgentService {
     }
 
     #[instrument]
+    // FR-3: compute the signal that will actually be delivered, matching the rewrite in
+    // do_signal_process (a container init process with no SIGTERM handler receives SIGKILL).
+    // Called before authorization so the policy authorizes the effective signal.
+    #[cfg(feature = "strict-policy")]
+    async fn effective_signal(&self, cid: &str, eid: &str, requested: u32) -> u32 {
+        let sig: libc::c_int = requested as libc::c_int;
+        let all = eid.is_empty() && sig == libc::SIGKILL;
+        if !all {
+            let mut sandbox = self.sandbox.lock().await;
+            if let Ok(p) = sandbox.find_container_process(cid, eid) {
+                let proc_status_file = format!("/proc/{}/status", p.pid);
+                if p.init
+                    && sig == libc::SIGTERM
+                    && !is_signal_handled(&proc_status_file, sig as u32)
+                {
+                    return libc::SIGKILL as u32;
+                }
+            }
+        }
+        requested
+    }
+
     async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id;
         let eid = req.exec_id;
@@ -1064,14 +1086,27 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "signal_process", req);
+
+        // FR-3 (effective-signal canonicalization): the agent may rewrite a requested
+        // SIGTERM to SIGKILL for a container init process that installs no SIGTERM handler.
+        // In strict builds, resolve the effective signal BEFORE authorization so the policy
+        // authorizes (and the transaction digests) the signal that is actually delivered
+        // (authorized == executed), rather than the requested one.
+        #[cfg(feature = "strict-policy")]
+        let req = {
+            let mut req = req;
+            req.signal = self
+                .effective_signal(&req.container_id, &req.exec_id, req.signal)
+                .await;
+            req
+        };
+
         is_allowed(&req).await?;
 
         // FR-6: wrap signal delivery in an SRM transaction for a consistent audit record
-        // and idempotent retries. The operation id includes the signal number so distinct
-        // signals to the same process are distinct transactions (only an identical retried
-        // signal is an idempotent replay). NOTE: rollback of a delivered signal is a no-op;
-        // FR-3 (effective-signal canonicalization, e.g. SIGTERM->SIGKILL authorized as the
-        // effective signal) is tracked separately.
+        // and idempotent retries. The operation id includes the (effective) signal number
+        // so distinct signals to the same process are distinct transactions (only an
+        // identical retried signal is an idempotent replay).
         #[cfg(feature = "strict-policy")]
         {
             use kata_security_reference_monitor::Prepared;
