@@ -36,6 +36,7 @@ mmio
 mshv
 NVDIMM
 OVMF
+pcilibs
 SEV
 TDVF
 SLES

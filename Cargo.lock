@@ -3576,6 +3576,7 @@ dependencies = [
  "oci-spec 0.10.0",
  "opentelemetry 0.17.0",
  "pathrs",
+ "pcilibs-rs",
  "procfs 0.12.0",
  "prometheus",
  "protobuf",
@@ -3765,7 +3766,6 @@ dependencies = [
  "libc",
  "nix 0.31.3",
  "oci-spec 0.10.0",
- "pci-ids",
  "rand 0.10.1",
  "rstest",
  "runtime-spec",
@@ -5269,6 +5269,16 @@ dependencies = [
  "phf_codegen",
  "proc-macro2",
  "quote",
+]
+
+[[package]]
+name = "pcilibs-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a881b7e99a9f8a84ce775878838e5ad206e142d2213cc3868efea6bdac24590"
+dependencies = [
+ "nix 0.31.3",
+ "pci-ids",
 ]
 
 [[package]]
