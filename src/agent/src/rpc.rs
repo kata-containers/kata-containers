@@ -934,8 +934,7 @@ impl agent_ttrpc::AgentService for AgentService {
             use kata_security_reference_monitor::Prepared;
 
             let op_id = req.container_id.clone();
-            let digest = create_plan_digest(&req);
-
+            let digest = plan_digest(&req);
             {
                 let mut srm = crate::SRM.lock().await;
                 let version = srm.state_version();
@@ -1001,8 +1000,48 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
         is_allowed(&req).await?;
-        self.do_exec_process(req).await.map_ttrpc_err(same)?;
-        Ok(Empty::new())
+
+        // FR-6: an exec creates a new process, so run it as an SRM transaction. The
+        // operation id is the container+exec id; a retried exec id is an idempotent
+        // replay. Agent-internal (no new shim<->agent API).
+        #[cfg(feature = "strict-policy")]
+        {
+            use kata_security_reference_monitor::Prepared;
+
+            let op_id = format!("{}:{}", req.container_id, req.exec_id);
+            let digest = plan_digest(&req);
+            {
+                let mut srm = crate::SRM.lock().await;
+                let version = srm.state_version();
+                match srm.prepare(op_id.clone(), version, digest.clone()) {
+                    Ok(Prepared::AlreadyCommitted(_)) => return Ok(Empty::new()),
+                    Ok(Prepared::New) => {}
+                    Err(e) => return Err(ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e)),
+                }
+                srm.execute(&op_id, &digest)
+                    .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
+            }
+            return match self.do_exec_process(req).await {
+                Ok(_) => {
+                    let mut srm = crate::SRM.lock().await;
+                    let _ = srm.commit(&op_id, "process-execed");
+                    Ok(Empty::new())
+                }
+                Err(e) => {
+                    let mut srm = crate::SRM.lock().await;
+                    if srm.abort(&op_id).is_err() {
+                        srm.quarantine("exec_process failed with unprovable state");
+                    }
+                    Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
+                }
+            };
+        }
+
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            self.do_exec_process(req).await.map_ttrpc_err(same)?;
+            Ok(Empty::new())
+        }
     }
 
     async fn signal_process(
@@ -1012,8 +1051,49 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "signal_process", req);
         is_allowed(&req).await?;
-        self.do_signal_process(req).await.map_ttrpc_err(same)?;
-        Ok(Empty::new())
+
+        // FR-6: wrap signal delivery in an SRM transaction for a consistent audit record
+        // and idempotent retries. The operation id includes the signal number so distinct
+        // signals to the same process are distinct transactions (only an identical retried
+        // signal is an idempotent replay). NOTE: rollback of a delivered signal is a no-op;
+        // FR-3 (effective-signal canonicalization, e.g. SIGTERM->SIGKILL authorized as the
+        // effective signal) is tracked separately.
+        #[cfg(feature = "strict-policy")]
+        {
+            use kata_security_reference_monitor::Prepared;
+
+            let op_id = format!("{}:{}:sig:{}", req.container_id, req.exec_id, req.signal);
+            let digest = plan_digest(&req);
+            {
+                let mut srm = crate::SRM.lock().await;
+                let version = srm.state_version();
+                match srm.prepare(op_id.clone(), version, digest.clone()) {
+                    Ok(Prepared::AlreadyCommitted(_)) => return Ok(Empty::new()),
+                    Ok(Prepared::New) => {}
+                    Err(e) => return Err(ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e)),
+                }
+                srm.execute(&op_id, &digest)
+                    .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
+            }
+            return match self.do_signal_process(req).await {
+                Ok(_) => {
+                    let mut srm = crate::SRM.lock().await;
+                    let _ = srm.commit(&op_id, "signal-delivered");
+                    Ok(Empty::new())
+                }
+                Err(e) => {
+                    let mut srm = crate::SRM.lock().await;
+                    let _ = srm.abort(&op_id);
+                    Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
+                }
+            };
+        }
+
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            self.do_signal_process(req).await.map_ttrpc_err(same)?;
+            Ok(Empty::new())
+        }
     }
 
     async fn wait_process(
@@ -2047,11 +2127,11 @@ pub fn have_seccomp() -> bool {
     false
 }
 
-// FR-6: digest of the authorized CreateContainer request. Used as the transaction's
-// plan digest so the plan handed to execution can be verified byte-for-byte against
-// what policy authorized (authorized == executed). Agent-internal; not sent on the wire.
+// FR-6: digest of an authorized request. Used as the transaction's plan digest so the
+// plan handed to execution can be verified against what policy authorized (authorized ==
+// executed). Agent-internal; not sent on the wire.
 #[cfg(feature = "strict-policy")]
-fn create_plan_digest(req: &protocols::agent::CreateContainerRequest) -> String {
+fn plan_digest<T: serde::Serialize>(req: &T) -> String {
     use sha2::{Digest, Sha256};
     let bytes = serde_json::to_vec(req).unwrap_or_default();
     let mut hasher = Sha256::new();
