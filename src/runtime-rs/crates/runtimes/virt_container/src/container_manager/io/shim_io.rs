@@ -22,6 +22,8 @@ use tokio::{
 };
 use url::Url;
 
+use super::binary_io::{self, BinaryLogger};
+
 /// Clear O_NONBLOCK for an fd (turn it into blocking mode).
 fn set_flag_with_blocking(fd: RawFd) {
     let flag = unsafe { libc::fcntl(fd, libc::F_GETFL) };
@@ -29,7 +31,6 @@ fn set_flag_with_blocking(fd: RawFd) {
         error!(sl!(), "failed to fcntl(F_GETFL) fd {} ret {}", fd, flag);
         return;
     }
-
     let ret = unsafe { libc::fcntl(fd, libc::F_SETFL, flag & !libc::O_NONBLOCK) };
     if ret < 0 {
         error!(sl!(), "failed to fcntl(F_SETFL) fd {} ret {}", fd, ret);
@@ -60,6 +61,7 @@ pub struct ShimIo {
     pub stdin: Option<Box<dyn AsyncRead + Send + Unpin>>,
     pub stdout: Option<Box<dyn AsyncWrite + Send + Unpin>>,
     pub stderr: Option<Box<dyn AsyncWrite + Send + Unpin>>,
+    pub(crate) binary_logger: Option<BinaryLogger>,
 }
 
 impl ShimIo {
@@ -67,6 +69,8 @@ impl ShimIo {
         stdin: &Option<String>,
         stdout: &Option<String>,
         stderr: &Option<String>,
+        container_id: &str,
+        namespace: &str,
     ) -> Result<Self> {
         info!(
             sl!(),
@@ -116,6 +120,18 @@ impl ShimIo {
             }
         };
 
+        let stdout_url = get_url(stdout);
+        if let Some(uri) = stdout_url.as_ref().filter(|uri| uri.scheme() == "binary") {
+            let binary = binary_io::open(uri, container_id, namespace)
+                .await
+                .context("open binary logger")?;
+            return Ok(Self {
+                stdin: stdin_fd,
+                stdout: Some(binary.stdout),
+                stderr: Some(binary.stderr),
+                binary_logger: Some(binary.logger),
+            });
+        }
         let get_fd = |url: &Option<Url>| -> Option<Box<dyn AsyncWrite + Send + Unpin>> {
             info!(sl!(), "get fd for {:?}", &url);
             if let Some(url) = url {
@@ -139,6 +155,7 @@ impl ShimIo {
             stdin: stdin_fd,
             stdout: get_fd(&stdout_url),
             stderr: get_fd(&stderr_url),
+            binary_logger: None,
         })
     }
 }

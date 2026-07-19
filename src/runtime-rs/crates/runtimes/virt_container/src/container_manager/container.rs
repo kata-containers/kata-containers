@@ -54,6 +54,19 @@ pub struct Container {
     pub(crate) passfd_listener_addr: Option<(String, u32)>,
 }
 
+fn process_uses_passfd_io(inner: &ContainerInner, process: &ContainerProcess) -> Result<bool> {
+    match process.process_type {
+        ProcessType::Container => Ok(inner.init_process.passfd_io.is_some()),
+        ProcessType::Exec => Ok(inner
+            .exec_processes
+            .get(&process.exec_id)
+            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?
+            .process
+            .passfd_io
+            .is_some()),
+    }
+}
+
 impl Container {
     pub async fn new(
         pid: u32,
@@ -317,7 +330,7 @@ impl Container {
                     return Err(err);
                 }
 
-                if self.passfd_listener_addr.is_some() {
+                if process_uses_passfd_io(&inner, process)? {
                     inner
                         .init_process
                         .passfd_io_wait(containers, self.agent.clone())
@@ -364,7 +377,7 @@ impl Container {
                     }
                 }
 
-                if self.passfd_listener_addr.is_some() {
+                if process_uses_passfd_io(&inner, process)? {
                     // In passfd io mode, we don't bother with the IO.
                     // We send `WaitProcessRequest` immediately to the agent
                     // and wait for the response in a separate thread.
