@@ -22,6 +22,7 @@ members = [
   "src/agent",
   "src/agent/rustjail",
   "src/agent/policy",
+  "src/agent/security-reference-monitor",
   "src/agent/vsock-exporter",
 
   # Dragonball
@@ -144,6 +145,7 @@ test-utils = { path = "src/libs/test-utils" }
 
 # Local dependencies from `src/agent`
 kata-agent-policy = { path = "src/agent/policy" }
+kata-security-reference-monitor = { path = "src/agent/security-reference-monitor" }
 rustjail = { path = "src/agent/rustjail" }
 vsock-exporter = { path = "src/agent/vsock-exporter" }
 
