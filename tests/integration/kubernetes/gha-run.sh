@@ -200,7 +200,7 @@ function deploy_kata() {
 		EXPERIMENTAL_FORCE_GUEST_PULL=false
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-cpu-runtime-rs" ]] && [[ -z "${SNAPSHOTTER}" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-cpu-runtime-rs" || "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-runtime-rs" ]] && [[ -z "${SNAPSHOTTER}" ]]; then
 		SNAPSHOTTER="erofs"
 	fi
 
