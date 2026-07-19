@@ -10,6 +10,11 @@ pub fn get_build_features() -> Vec<String> {
         "agent-policy",
         #[cfg(feature = "seccomp")]
         "seccomp",
+        // Advertise the strict confidential-runtime policy behaviour so a shim or
+        // verifier can distinguish a strict (closed-door, one-shot policy) guest from
+        // a permissive one before relying on it.
+        #[cfg(feature = "strict-policy")]
+        "strict-policy",
     ];
 
     let mut sorted: Vec<String> = features.into_iter().map(String::from).collect();
