@@ -51,6 +51,10 @@ pub struct Transaction {
     pub expected_state_version: u64,
     /// Digest of the authorized, canonicalized operation plan.
     pub plan_digest: String,
+    /// FR-3: digest of the object actually resolved for execution (e.g. the OCI spec
+    /// after all in-guest transformers). Bound to the authorized plan so the
+    /// authorized→executed relationship is explicit and auditable.
+    pub executed_digest: Option<String>,
     pub state: TxnState,
     /// Committed result, retained for idempotent replay.
     pub result: Option<String>,
@@ -164,11 +168,29 @@ impl ReferenceMonitor {
                 op_id,
                 expected_state_version,
                 plan_digest: plan_digest.into(),
+                executed_digest: None,
                 state: TxnState::Prepared,
                 result: None,
             },
         );
         Ok(Prepared::New)
+    }
+
+    /// FR-3: record the digest of the object actually resolved for execution, binding it
+    /// to the authorized transaction. Returns the pair (authorized_plan_digest,
+    /// executed_digest) so the caller can audit/log the canonical-object relationship.
+    pub fn attach_executed(
+        &mut self,
+        op_id: &str,
+        executed_digest: impl Into<String>,
+    ) -> Result<(String, String), SrmError> {
+        let txn = self
+            .txns
+            .get_mut(op_id)
+            .ok_or_else(|| SrmError::UnknownOperation(op_id.to_string()))?;
+        let executed = executed_digest.into();
+        txn.executed_digest = Some(executed.clone());
+        Ok((txn.plan_digest.clone(), executed))
     }
 
     /// Phase 2a: bind the plan actually being executed. The presented plan digest MUST
@@ -317,6 +339,19 @@ mod tests {
         let mut m = ReferenceMonitor::new();
         m.prepare("op1", 0, "d").unwrap();
         assert!(matches!(m.commit("op1", "r"), Err(SrmError::InvalidState { .. })));
+    }
+
+    #[test]
+    fn attach_executed_binds_authorized_to_executed() {
+        let mut m = ReferenceMonitor::new();
+        m.prepare("op1", 0, "authorized-digest").unwrap();
+        let (authorized, executed) = m.attach_executed("op1", "executed-digest").unwrap();
+        assert_eq!(authorized, "authorized-digest");
+        assert_eq!(executed, "executed-digest");
+        assert_eq!(
+            m.transaction("op1").unwrap().executed_digest.as_deref(),
+            Some("executed-digest")
+        );
     }
 
     #[test]

@@ -3562,6 +3562,7 @@ dependencies = [
  "futures",
  "ipnetwork",
  "kata-agent-policy",
+ "kata-security-reference-monitor",
  "kata-sys-util",
  "kata-types",
  "lazy_static",
@@ -3751,6 +3752,10 @@ dependencies = [
  "serde_yaml 0.9.34+deprecated",
  "tokio",
 ]
+
+[[package]]
+name = "kata-security-reference-monitor"
+version = "0.1.0"
 
 [[package]]
 name = "kata-sys-util"

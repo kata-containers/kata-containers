@@ -246,6 +246,11 @@ impl AgentService {
 
         let container_name = k8s::container_name(&oci);
 
+        // FR-3 (canonical object): digest the authorized OCI spec BEFORE any in-guest
+        // transformer runs, so we can compare it to the executed spec after resolution.
+        #[cfg(feature = "strict-policy")]
+        let authorized_oci_digest = plan_digest(&oci);
+
         info!(sl(), "receive createcontainer, spec: {:?}", &oci);
         info!(
             sl(),
@@ -321,6 +326,31 @@ impl AgentService {
         // read ocispec
         let olddir = setup_bundle(&cid, &mut oci)?;
         // restore the cwd for kata-agent process.
+
+        // FR-3 (canonical object): the OCI spec is now fully resolved (devices, CDI,
+        // storage, sealed secrets, namespaces, guest hooks). Bind the digest of this
+        // executed object to the create transaction and compare it to the digest of the
+        // authorized spec captured before transformation. Divergence is expected (trusted
+        // in-guest transforms) and is recorded for audit; the executed object is bound to
+        // the transaction so the authorized->executed relationship is explicit.
+        #[cfg(feature = "strict-policy")]
+        {
+            let executed_oci_digest = plan_digest(&oci);
+            let _ = crate::SRM
+                .lock()
+                .await
+                .attach_executed(&cid, executed_oci_digest.clone());
+            if authorized_oci_digest != executed_oci_digest {
+                info!(
+                    sl(),
+                    "FR-3: executed OCI object differs from authorized spec (trusted \
+                     in-guest transforms applied); canonical-object binding recorded";
+                    "container-id" => &cid,
+                    "authorized-oci-digest" => &authorized_oci_digest,
+                    "executed-oci-digest" => &executed_oci_digest,
+                );
+            }
+        }
         defer!(unistd::chdir(&olddir).unwrap());
 
         // determine which cgroup driver to take and then assign to use_systemd_cgroup
