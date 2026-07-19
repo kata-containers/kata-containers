@@ -70,6 +70,7 @@ strum_macros.workspace = true
 
 # Local dependencies
 kata-agent-policy = { workspace = true, optional = true }
+kata-security-reference-monitor = { workspace = true, optional = true }
 mem-agent.workspace = true
 rustjail.workspace = true
 protocols = { workspace = true, features = ["async", "with-serde"] }
@@ -106,6 +107,6 @@ lto = true
 [features]
 seccomp = ["rustjail/seccomp"]
 agent-policy = ["kata-agent-policy"]
-strict-policy = ["agent-policy", "kata-agent-policy/strict-policy"]
+strict-policy = ["agent-policy", "kata-agent-policy/strict-policy", "kata-security-reference-monitor"]
 init-data = []
 devicemapper = ["kata-types/devicemapper"]

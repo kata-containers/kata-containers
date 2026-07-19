@@ -126,6 +126,16 @@ lazy_static! {
     static ref AGENT_POLICY: Mutex<AgentPolicy> = Mutex::new(AgentPolicy::new());
 }
 
+// FR-6: the Security Reference Monitor tracks each security-relevant, state-mutating
+// operation as a two-phase transaction (prepare/execute/commit/abort) so policy and
+// runtime state commit together or are rolled back/quarantined. Present only in strict
+// builds; it is agent-internal and introduces no new shim<->agent API.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    static ref SRM: Mutex<kata_security_reference_monitor::ReferenceMonitor> =
+        Mutex::new(kata_security_reference_monitor::ReferenceMonitor::new());
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]

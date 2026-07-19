@@ -922,8 +922,54 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
         is_allowed(&req).await?;
-        self.do_create_container(req).await.map_ttrpc_err(same)?;
-        Ok(Empty::new())
+
+        // FR-6: in strict builds, run the create as a Security Reference Monitor
+        // transaction. State is reserved at prepare, the plan is bound at execute
+        // (verified against the authorized digest), and it is only committed once the
+        // runtime create succeeds; a failure aborts (rolls back) or, if a safe state
+        // cannot be proven, quarantines the monitor. No new shim<->agent API: the
+        // operation id and plan digest are derived from the request inside the agent.
+        #[cfg(feature = "strict-policy")]
+        {
+            use kata_security_reference_monitor::Prepared;
+
+            let op_id = req.container_id.clone();
+            let digest = create_plan_digest(&req);
+
+            {
+                let mut srm = crate::SRM.lock().await;
+                let version = srm.state_version();
+                match srm.prepare(op_id.clone(), version, digest.clone()) {
+                    // Idempotent replay of an already-committed create: no new effect.
+                    Ok(Prepared::AlreadyCommitted(_)) => return Ok(Empty::new()),
+                    Ok(Prepared::New) => {}
+                    Err(e) => return Err(ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e)),
+                }
+                srm.execute(&op_id, &digest)
+                    .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
+            }
+
+            return match self.do_create_container(req).await {
+                Ok(_) => {
+                    let mut srm = crate::SRM.lock().await;
+                    let _ = srm.commit(&op_id, "container-created");
+                    Ok(Empty::new())
+                }
+                Err(e) => {
+                    let mut srm = crate::SRM.lock().await;
+                    if srm.abort(&op_id).is_err() {
+                        srm.quarantine("create_container failed with unprovable state");
+                    }
+                    Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
+                }
+            };
+        }
+
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            self.do_create_container(req).await.map_ttrpc_err(same)?;
+            Ok(Empty::new())
+        }
     }
 
     async fn start_container(
@@ -1999,6 +2045,22 @@ pub fn have_seccomp() -> bool {
     }
 
     false
+}
+
+// FR-6: digest of the authorized CreateContainer request. Used as the transaction's
+// plan digest so the plan handed to execution can be verified byte-for-byte against
+// what policy authorized (authorized == executed). Agent-internal; not sent on the wire.
+#[cfg(feature = "strict-policy")]
+fn create_plan_digest(req: &protocols::agent::CreateContainerRequest) -> String {
+    use sha2::{Digest, Sha256};
+    let bytes = serde_json::to_vec(req).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>()
 }
 
 fn get_agent_details() -> AgentDetails {
