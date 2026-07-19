@@ -1057,6 +1057,22 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
 
+        // FR-3 (exec-env canonicalization): the agent rewrites the process environment
+        // via update_env_pci (PCI address corrections) after authorization. In strict
+        // builds, apply that resolution BEFORE authorization so the policy authorizes
+        // (and the transaction digests) the environment that is actually executed
+        // (authorized == executed). do_exec_process re-applies it idempotently.
+        #[cfg(feature = "strict-policy")]
+        let req = {
+            let mut req = req;
+            let cid = req.container_id.clone();
+            if let Some(process) = req.process.as_mut() {
+                let sandbox = self.sandbox.lock().await;
+                let _ = update_env_pci(&cid, &mut process.Env, &sandbox.pcimap);
+            }
+            req
+        };
+
         // FR-6: snapshot policy state before authorization for rollback on failure.
         #[cfg(feature = "strict-policy")]
         let policy_snapshot = crate::AGENT_POLICY.lock().await.snapshot_state().ok();
