@@ -51,6 +51,12 @@ pub struct AgentPolicy {
     /// When true policy errors are ignored, for debug purposes.
     allow_failures: bool,
 
+    /// Strict builds: set once an authorized policy has been activated. After
+    /// activation, SetPolicy is rejected (policy is one-shot; changing it requires
+    /// a new verifier-authorized epoch), so the host cannot swap the policy at runtime.
+    #[cfg(feature = "strict-policy")]
+    policy_activated: bool,
+
     /// "/tmp/policy.jsonl" log file for policy activity.
     log_file: Option<tokio::fs::File>,
 
@@ -238,10 +244,21 @@ impl AgentPolicy {
 
     /// Replace the Policy in regorus.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
+        // Strict builds: policy activation is one-shot. Once an authorized policy is
+        // active, reject any attempt to replace it (changing policy requires a new
+        // verifier-authorized epoch), so the host cannot weaken policy at runtime.
+        #[cfg(feature = "strict-policy")]
+        if self.policy_activated {
+            bail!("strict-policy: policy already activated; SetPolicy is one-shot");
+        }
         self.engine = Self::new_engine();
         self.engine
             .add_policy("agent_policy".to_string(), policy.to_string())?;
         self.update_allow_failures_flag().await?;
+        #[cfg(feature = "strict-policy")]
+        {
+            self.policy_activated = true;
+        }
         Ok(())
     }
 
