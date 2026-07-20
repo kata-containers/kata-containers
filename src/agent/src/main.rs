@@ -156,6 +156,15 @@ lazy_static! {
         Mutex::new(kata_security_reference_monitor::FragmentStore::new(true));
 }
 
+// FR-14: network phase state machine. Network-mutating RPCs are permitted only during
+// sandbox setup; once a workload container starts the network surface is frozen. Strict
+// builds only; agent-internal.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    static ref NET_PHASE: Mutex<kata_security_reference_monitor::NetworkPhaseMachine> =
+        Mutex::new(kata_security_reference_monitor::NetworkPhaseMachine::new());
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]
@@ -399,7 +408,14 @@ async fn start_sandbox(
 ) -> Result<()> {
     let debug_console_vport = config.debug_console_vport as u32;
 
-    if config.debug_console {
+    // FR-7: the interactive debug console is an un-mediated shell into the guest and is
+    // never available in a strict confidential build, regardless of host configuration.
+    #[cfg(feature = "strict-policy")]
+    let debug_console_enabled = false;
+    #[cfg(not(feature = "strict-policy"))]
+    let debug_console_enabled = config.debug_console;
+
+    if debug_console_enabled {
         let debug_console_task = tokio::task::spawn(console::debug_console_handler(
             logger.clone(),
             debug_console_vport,

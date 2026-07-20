@@ -188,6 +188,18 @@ fn same<E>(e: E) -> E {
     e
 }
 
+/// FR-14: authorize a network-mutating RPC against the network phase (strict builds). The
+/// network surface is frozen once a workload container starts, so post-start network
+/// mutation is refused with FAILED_PRECONDITION.
+#[cfg(feature = "strict-policy")]
+async fn net_phase_authorize(op: kata_security_reference_monitor::NetOp) -> ttrpc::Result<()> {
+    crate::NET_PHASE
+        .lock()
+        .await
+        .authorize(op)
+        .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))
+}
+
 trait ResultToTtrpcResult<T, E: Debug>: Sized {
     fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce(E) -> R) -> ttrpc::Result<T>;
     fn map_ttrpc_err_do(self, doer: impl FnOnce(&E)) -> ttrpc::Result<T> {
@@ -765,6 +777,7 @@ impl AgentService {
         Ok(resp)
     }
 
+    #[cfg_attr(feature = "strict-policy", allow(dead_code))]
     async fn do_read_termination_log(
         &self,
         container_id: &str,
@@ -1079,7 +1092,12 @@ impl agent_ttrpc::AgentService for AgentService {
         #[cfg(feature = "strict-policy")]
         {
             return match self.do_start_container(req.clone()).await {
-                Ok(_) => Ok(Empty::new()),
+                Ok(_) => {
+                    // FR-14: a workload container is now running; freeze the network so
+                    // post-start network mutation is refused.
+                    crate::NET_PHASE.lock().await.to_workload_running();
+                    Ok(Empty::new())
+                }
                 Err(e) => {
                     // Runtime start failed: roll the occurrence back to `created` so the
                     // trusted state matches reality and a legitimate retry is possible.
@@ -1467,6 +1485,8 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Interface> {
         trace_rpc_call!(ctx, "update_interface", req);
         is_allowed(&req).await?;
+        #[cfg(feature = "strict-policy")]
+        net_phase_authorize(kata_security_reference_monitor::NetOp::ConfigureInterface).await?;
 
         let interface = req.interface.into_option().map_ttrpc_err(
             ttrpc::Code::INVALID_ARGUMENT,
@@ -1557,6 +1577,8 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Routes> {
         trace_rpc_call!(ctx, "update_routes", req);
         is_allowed(&req).await?;
+        #[cfg(feature = "strict-policy")]
+        net_phase_authorize(kata_security_reference_monitor::NetOp::ConfigureRoutes).await?;
 
         let new_routes = req
             .routes
@@ -1641,6 +1663,8 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<SetIPTablesResponse> {
         trace_rpc_call!(ctx, "set_iptables", req);
         is_allowed(&req).await?;
+        #[cfg(feature = "strict-policy")]
+        net_phase_authorize(kata_security_reference_monitor::NetOp::ConfigureIptables).await?;
 
         info!(sl(), "set_ip_tables request received");
 
@@ -1831,6 +1855,11 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        // FR-14: sandbox networking is now being set up; enter the setup phase in which
+        // network-mutating RPCs are permitted.
+        #[cfg(feature = "strict-policy")]
+        crate::NET_PHASE.lock().await.to_sandbox_setup();
+
         Ok(Empty::new())
     }
 
@@ -1869,6 +1898,8 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "add_arp_neighbors", req);
         is_allowed(&req).await?;
+        #[cfg(feature = "strict-policy")]
+        net_phase_authorize(kata_security_reference_monitor::NetOp::ConfigureArp).await?;
 
         let neighs = req
             .neighbors
@@ -2182,17 +2213,32 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::GetDiagnosticDataRequest,
     ) -> ttrpc::Result<protocols::agent::GetDiagnosticDataResponse> {
         trace_rpc_call!(ctx, "get_diagnostic_data", req);
-        is_allowed(&req).await?;
 
-        match req.log_type.as_str() {
-            "termination_log" => self
-                .do_read_termination_log(&req.container_id)
-                .await
-                .map_ttrpc_err(same),
-            other => Err(ttrpc_error(
-                ttrpc::Code::INVALID_ARGUMENT,
-                format!("unsupported diagnostic log_type: {other}"),
-            )),
+        // FR-7: guest diagnostics are an un-mediated data-exfiltration surface and are
+        // disabled in strict confidential builds.
+        #[cfg(feature = "strict-policy")]
+        {
+            let _ = &req;
+            return Err(ttrpc_error(
+                ttrpc::Code::PERMISSION_DENIED,
+                anyhow!("guest diagnostics are disabled in strict mode"),
+            ));
+        }
+
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            is_allowed(&req).await?;
+
+            match req.log_type.as_str() {
+                "termination_log" => self
+                    .do_read_termination_log(&req.container_id)
+                    .await
+                    .map_ttrpc_err(same),
+                other => Err(ttrpc_error(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    format!("unsupported diagnostic log_type: {other}"),
+                )),
+            }
         }
     }
 

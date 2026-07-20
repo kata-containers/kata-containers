@@ -19,6 +19,12 @@ pub fn get_build_features() -> Vec<String> {
         // execution-integrity guarantee for host-delivered files).
         #[cfg(feature = "strict-policy")]
         "no-generic-copyfile",
+        // FR-7: strict builds disable the interactive debug console and guest diagnostics
+        // (un-mediated guest access / data-exfiltration surfaces).
+        #[cfg(feature = "strict-policy")]
+        "no-debug-console",
+        #[cfg(feature = "strict-policy")]
+        "no-guest-diagnostics",
     ];
 
     let mut sorted: Vec<String> = features.into_iter().map(String::from).collect();
