@@ -28,7 +28,12 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod occurrence;
+pub mod resource_graph;
 pub use occurrence::{Lifecycle, Occurrence, OccurrenceError, OccurrenceRegistry};
+pub use resource_graph::{
+    verify_ordered_bijection, PresentedResource, ResourceDeclaration, ResourceGraphError,
+    ResourceKind, VerifiedResourceHandle,
+};
 
 /// Host-independent identifier for a single mutating operation (idempotency key).
 pub type OperationId = String;
