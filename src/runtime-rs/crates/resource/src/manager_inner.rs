@@ -510,7 +510,12 @@ impl ResourceManagerInner {
         self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }
 
-    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
+    pub async fn handler_devices(
+        &self,
+        _cid: &str,
+        linux: &Linux,
+        device_ids: &mut Vec<String>,
+    ) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
 
         // Build a map of host_bdf -> Option<guest_pci_path> for cold-plugged
@@ -580,6 +585,7 @@ impl ResourceManagerInner {
                     // CCW, or virtual path, depending on the driver and configuration.
                     if let DeviceType::BlockModern(device_mod) = device_info {
                         let device = device_mod.lock().await.clone();
+                        device_ids.push(device.device_id.clone());
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
                         } else if let Some(scsi_address) = device.config.scsi_addr {
@@ -730,6 +736,7 @@ impl ResourceManagerInner {
                     if let DeviceType::VfioModern(vfio_dev) = device_info.clone() {
                         info!(sl!(), "device info: {:?}", vfio_dev.lock().await);
                         let vfio_device = vfio_dev.lock().await;
+                        device_ids.push(vfio_device.device_id.clone());
 
                         let group_num = d
                             .path()
@@ -816,6 +823,7 @@ impl ResourceManagerInner {
 
                         // create agent device
                         if let DeviceType::Vfio(device) = device_info {
+                            device_ids.push(device.device_id.clone());
                             let device_options = sort_options_by_pcipath(device.device_options);
                             let group_num = d
                                 .path()
