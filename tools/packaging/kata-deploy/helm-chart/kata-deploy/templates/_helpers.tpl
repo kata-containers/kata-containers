@@ -776,6 +776,11 @@ spec:
         app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
         app.kubernetes.io/instance: {{ $root.Release.Name }}
         kata-deploy/stage: {{ $stage }}
+{{- $podAnnotations := include "kata-deploy.podTemplateAnnotations" $root | trim }}
+{{- if $podAnnotations }}
+      annotations:
+{{- $podAnnotations | nindent 8 }}
+{{- end }}
     spec:
 {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
