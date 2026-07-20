@@ -59,7 +59,7 @@ impl ContainerInner {
     }
 
     pub(crate) fn has_pending_cleanup(&self) -> bool {
-        !self.volumes.is_empty() || !self.rootfs.is_empty()
+        !self.devices.is_empty() || !self.volumes.is_empty() || !self.rootfs.is_empty()
     }
 
     fn container_id(&self) -> &str {
@@ -217,6 +217,10 @@ impl ContainerInner {
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;
 
+        let devices = self
+            .clean_devices(device_manager)
+            .await
+            .context("clean devices");
         let volumes = self
             .clean_volumes(device_manager)
             .await
@@ -225,9 +229,15 @@ impl ContainerInner {
             .clean_rootfs(device_manager)
             .await
             .context("clean rootfs");
-        match (volumes, rootfs) {
-            (Err(volumes), Err(rootfs)) => Err(anyhow!("{volumes:#}; {rootfs:#}")),
-            (volumes, rootfs) => volumes.and(rootfs),
+
+        let errors: Vec<String> = vec![devices, volumes, rootfs]
+            .into_iter()
+            .filter_map(|result| result.err().map(|err| format!("{err:#}")))
+            .collect();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(errors.join("; ")))
         }
     }
 
@@ -395,6 +405,41 @@ impl ContainerInner {
         }
         match first_err {
             Some(err) => Err(err.context(format!("failed to clean {} rootfs", failed))),
+            None => Ok(()),
+        }
+    }
+
+    async fn clean_devices(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        // Remove each entry immediately after successful cleanup.
+        let mut failed = 0;
+        let mut first_err = None;
+        while failed < self.devices.len() {
+            let device_id = self.devices[failed].clone();
+            match device_manager
+                .write()
+                .await
+                .try_remove_device(&device_id)
+                .await
+            {
+                Ok(()) => {
+                    self.devices.remove(failed);
+                }
+                Err(err) => {
+                    warn!(
+                        self.logger,
+                        "failed to hotunplug container device {}: {:?}", device_id, err
+                    );
+                    first_err.get_or_insert(err);
+                    failed += 1;
+                }
+            }
+        }
+
+        match first_err {
+            Some(err) => Err(err.context(format!(
+                "failed to hotunplug {} container device(s)",
+                failed
+            ))),
             None => Ok(()),
         }
     }
@@ -758,6 +803,28 @@ mod tests {
             .await
             .is_err());
         assert_eq!(rootfs.cleanups(), 1);
+    }
+
+    #[tokio::test]
+    async fn resource_cleanup_runs_when_device_cleanup_fails() {
+        let (mut inner, _) = new_container(Arc::default()).await;
+        let device_manager = new_device_manager().await;
+        let volume = FakeResource::failing(0);
+        let rootfs = FakeResource::failing(0);
+        inner.devices = vec!["missing-device".to_string()];
+        inner.volumes = vec![volume.clone()];
+        inner.rootfs = vec![rootfs.clone()];
+
+        let err = inner
+            .cleanup_container(CID, true, &device_manager)
+            .await
+            .expect_err("missing device cleanup failure was hidden");
+
+        assert!(format!("{err:#}").contains("clean devices"));
+        assert_eq!(volume.cleanups(), 1);
+        assert_eq!(rootfs.cleanups(), 1);
+        assert_eq!(inner.devices, ["missing-device"]);
+        assert!(inner.has_pending_cleanup());
     }
 
     #[tokio::test]
