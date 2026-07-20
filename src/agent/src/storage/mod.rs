@@ -418,12 +418,36 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     create_mount_destination(src_path, mount_path, "", &storage.fstype)
         .context("Could not create mountpoint")?;
 
+    // FR-4B: capture the identity of the just-validated mount destination so we can bind
+    // the mount to the *checked* object. If the path is swapped (symlink/`..` rename)
+    // between this check and the mount below, the mount is refused rather than following
+    // the swap. Strict builds only.
+    #[cfg(feature = "strict-policy")]
+    let checked_dst = if mount_path.exists() {
+        Some(
+            kata_security_reference_monitor::CheckedHandle::capture(
+                mount_path.to_string_lossy().as_ref(),
+            )
+            .context("FR-4B: capturing mount destination handle")?,
+        )
+    } else {
+        None
+    };
+
     info!(logger, "mounting storage";
         "mount-source" => src_path.display(),
         "mount-destination" => mount_path.display(),
         "mount-fstype"  => storage.fstype.as_str(),
         "mount-options" => options.as_str(),
     );
+
+    // FR-4B: re-verify the destination identity immediately before the mount syscall.
+    #[cfg(feature = "strict-policy")]
+    if let Some(handle) = &checked_dst {
+        handle
+            .verify_unchanged()
+            .map_err(|e| anyhow!("FR-4B: mount destination swapped: {}", e))?;
+    }
 
     baremount(
         src_path,
