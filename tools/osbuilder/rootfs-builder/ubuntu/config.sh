@@ -34,12 +34,3 @@ case "${ARCH}" in
 	*) die "${ARCH} not supported"
 esac
 REPO_URL=${REPO_URL:-http://ports.ubuntu.com}
-
-if [[ "$(uname -m)" != "${ARCH}" ]]; then
-	case "${ARCH}" in
-		ppc64le) cc_arch=powerpc64le;;
-		x86_64) cc_arch=x86-64;;
-		*) cc_arch="${ARCH}"
-	esac
-	export CC="${cc_arch}-linux-gnu-gcc"
-fi
