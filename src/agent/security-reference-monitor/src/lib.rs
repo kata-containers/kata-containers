@@ -29,12 +29,21 @@ use std::fmt;
 
 pub mod cdi;
 pub mod fragments;
+pub mod handle_binding;
+pub mod network_phase;
 pub mod occurrence;
 pub mod resource_graph;
+pub mod scratch;
 pub use cdi::{
     authorize_cdi, CdiDeviceRequest, CdiError, MeasuredCdiSpec, VerifiedCdiDevice,
 };
 pub use fragments::{FragmentError, FragmentStore, PolicyFragment};
+pub use handle_binding::{CheckedHandle, HandleError};
+pub use network_phase::{NetOp, NetPhaseError, NetworkPhase, NetworkPhaseMachine};
+pub use scratch::{
+    classify_scratch, dm_target_types, enforce_scratch, ScratchClass, ScratchError,
+    ScratchRequirement,
+};
 pub use occurrence::{Lifecycle, Occurrence, OccurrenceError, OccurrenceRegistry};
 pub use resource_graph::{
     verify_ordered_bijection, PresentedResource, ResourceDeclaration, ResourceGraphError,
