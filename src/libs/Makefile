@@ -11,18 +11,12 @@ ifeq ($(USERID), 0)
     override EXTRA_TEST_FLAGS = --ignored
 endif
 
-LIBS := \
-    -p kata-sys-util \
-    -p kata-types \
-    -p logging \
-    -p mem-agent \
-    -p protocols \
-    -p runtime-spec \
-    -p safe-path \
-    -p shim-interface \
-    -p test-utils
-
 default: build
+
+# Provides PACKAGE_FLAGS, scoping cargo commands to the packages of
+# this component. Note utils.mk defines rules, so it has to be
+# included after the default rule.
+include ../../utils.mk
 
 build:
 	cargo build --all-features
@@ -34,13 +28,13 @@ check: clippy format
 
 clippy:
 	@echo "INFO: cargo clippy..."
-	cargo clippy $(LIBS) --all-features --release \
+	cargo clippy $(PACKAGE_FLAGS) --all-features --release \
 		-- \
 		-D warnings
 
 format:
 	@echo "INFO: cargo fmt..."
-	cargo fmt $(LIBS) -- --check
+	cargo fmt $(PACKAGE_FLAGS) -- --check
 
 clean:
 	cargo clean
@@ -49,8 +43,8 @@ clean:
 # See the `test_logger_levels()` test for further information.
 test:
 	@echo "INFO: testing libraries for development build"
-	cargo test $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test $(PACKAGE_FLAGS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 	@echo "INFO: testing libraries for release build"
-	cargo test --release $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test --release $(PACKAGE_FLAGS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 
 .PHONY: install
