@@ -98,6 +98,7 @@ pub const MEDIATION_MANIFEST: &[(&str, &str, EnforcementClass)] = &[
     ("GetVolumeStats", "get_volume_stats", EnforcementClass::PolicyGatedQuery),
     // Policy activation.
     ("SetPolicy", "set_policy", EnforcementClass::PolicyActivation),
+    ("LoadPolicyFragment", "load_policy_fragment", EnforcementClass::PolicyGated),
 ];
 
 /// Return the enforcement class declared for a service method, if any.

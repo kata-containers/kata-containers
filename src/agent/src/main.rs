@@ -147,6 +147,15 @@ lazy_static! {
         Mutex::new(kata_security_reference_monitor::OccurrenceRegistry::new());
 }
 
+// FR-1: verifier/accumulator for signed, add-only policy fragments. Receipts are enforced
+// in strict builds. Authorized issuers and root constraints are configured from measured
+// state; absent configuration, no issuer is trusted (fail-closed). Strict builds only.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    static ref FRAGMENTS: Mutex<kata_security_reference_monitor::FragmentStore> =
+        Mutex::new(kata_security_reference_monitor::FragmentStore::new(true));
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]

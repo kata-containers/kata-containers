@@ -2143,6 +2143,39 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(Empty::new())
     }
 
+    // FR-1: load a signed, add-only policy fragment. Present only in strict builds; a
+    // non-strict agent returns the ttRPC default (unimplemented). The request is both
+    // policy-gated (the active policy must permit fragment loading) and cryptographically
+    // verified by the fragment store (issuer signature, monotonic SVN, add-only /
+    // fail-closed, transparency receipt).
+    #[cfg(feature = "strict-policy")]
+    async fn load_policy_fragment(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::LoadPolicyFragmentRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "load_policy_fragment", req);
+        is_allowed(&req).await?;
+
+        let fragment = kata_security_reference_monitor::PolicyFragment {
+            issuer: req.issuer.clone(),
+            svn: req.svn,
+            grants: req.grants.to_vec(),
+            receipt: if req.receipt.is_empty() {
+                None
+            } else {
+                Some(req.receipt.clone())
+            },
+            signature: req.signature.clone(),
+        };
+        crate::FRAGMENTS
+            .lock()
+            .await
+            .load(&fragment)
+            .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
+        Ok(Empty::new())
+    }
+
     async fn get_diagnostic_data(
         &self,
         ctx: &TtrpcContext,

@@ -79,6 +79,11 @@ service AgentService {
 	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
 	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
 	rpc SetPolicy(SetPolicyRequest) returns (google.protobuf.Empty);
+
+	// FR-1: load a signed, add-only policy fragment that extends the active policy with
+	// additional narrowly-scoped grants. The fragment is verified in the guest (issuer
+	// signature, monotonic SVN, add-only/fail-closed, transparency receipt).
+	rpc LoadPolicyFragment(LoadPolicyFragmentRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -625,6 +630,21 @@ message ResizeVolumeRequest {
 
 message SetPolicyRequest {
 	string policy = 1;
+}
+
+// FR-1: a signed, add-only policy fragment. The signature covers a canonical encoding of
+// the issuer, svn, sorted grants, and receipt; see the guest-side verifier.
+message LoadPolicyFragmentRequest {
+	// Identifier of the issuer that signed the fragment.
+	string issuer = 1;
+	// Security version number; must strictly increase per issuer.
+	uint64 svn = 2;
+	// Additional grants introduced by this fragment (add-only).
+	repeated string grants = 3;
+	// Transparency receipt identifier/blob (required in strict mode).
+	string receipt = 4;
+	// Detached Ed25519 signature over the fragment's canonical bytes.
+	bytes signature = 5;
 }
 
 message GetDiagnosticDataRequest {
