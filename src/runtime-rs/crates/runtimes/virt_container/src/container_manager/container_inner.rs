@@ -214,6 +214,9 @@ impl ContainerInner {
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;
 
+        self.clean_devices(device_manager)
+        .await
+        .context("clean devices")?;
         self.clean_volumes(device_manager)
             .await
             .context("clean volumes")?;
@@ -368,6 +371,33 @@ impl ContainerInner {
             Ok(())
         } else {
             Err(anyhow!("failed to clean {} rootfs(s)", self.rootfs.len()))
+        }
+    }
+
+    async fn clean_devices(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        let mut unhandled = Vec::new();
+        for device_id in &self.devices {
+            if let Err(err) = device_manager
+                .write()
+                .await
+                .try_remove_device(device_id)
+                .await
+            {
+                unhandled.push(device_id.clone());
+                warn!(
+                    self.logger,
+                    "failed to hotunplug container device {}: {:?}", device_id, err
+                );
+            }
+        }
+        self.devices = unhandled;
+        if self.devices.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "failed to hotunplug {} container device(s)",
+                self.devices.len()
+            ))
         }
     }
 }
