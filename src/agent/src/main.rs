@@ -136,6 +136,16 @@ lazy_static! {
         Mutex::new(kata_security_reference_monitor::ReferenceMonitor::new());
 }
 
+// FR-9: registry of container occurrences and their lifecycle states. The host
+// container_id is an untrusted alias; the enforcer mints its own occurrence handle and
+// gates every lifecycle-mutating RPC on the occurrence state. Strict builds only;
+// agent-internal, no new shim<->agent API.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    static ref OCCURRENCES: Mutex<kata_security_reference_monitor::OccurrenceRegistry> =
+        Mutex::new(kata_security_reference_monitor::OccurrenceRegistry::new());
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]

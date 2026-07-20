@@ -1004,6 +1004,11 @@ impl agent_ttrpc::AgentService for AgentService {
                 Ok(_) => {
                     let mut srm = crate::SRM.lock().await;
                     let _ = srm.commit(&op_id, "container-created");
+                    drop(srm);
+                    // FR-9: record the new occurrence in the `created` state. Cardinality
+                    // is opt-in per declaration; declaration indexing is not yet plumbed
+                    // from the policy, so no cap is applied here.
+                    let _ = crate::OCCURRENCES.lock().await.create(&op_id, None, None);
                     Ok(Empty::new())
                 }
                 Err(e) => {
@@ -1035,8 +1040,35 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "start_container", req);
         is_allowed(&req).await?;
-        self.do_start_container(req).await.map_ttrpc_err(same)?;
-        Ok(Empty::new())
+
+        // FR-9: a container may only be started from the `created` state. This rejects
+        // start-before-create and double-start against the enforcer's own occurrence
+        // record (the host container_id is an untrusted alias).
+        #[cfg(feature = "strict-policy")]
+        crate::OCCURRENCES
+            .lock()
+            .await
+            .start(&req.container_id)
+            .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
+
+        #[cfg(feature = "strict-policy")]
+        {
+            return match self.do_start_container(req.clone()).await {
+                Ok(_) => Ok(Empty::new()),
+                Err(e) => {
+                    // Runtime start failed: roll the occurrence back to `created` so the
+                    // trusted state matches reality and a legitimate retry is possible.
+                    let _ = crate::OCCURRENCES.lock().await.remove(&req.container_id);
+                    Err(ttrpc_error(ttrpc::Code::INTERNAL, e))
+                }
+            };
+        }
+
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            self.do_start_container(req).await.map_ttrpc_err(same)?;
+            Ok(Empty::new())
+        }
     }
 
     async fn remove_container(
@@ -1046,7 +1078,13 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
         is_allowed(&req).await?;
-        self.do_remove_container(req).await.map_ttrpc_err(same)?;
+        self.do_remove_container(req.clone()).await.map_ttrpc_err(same)?;
+
+        // FR-9: retire the occurrence. Its alias may not be operated on again until a
+        // fresh create re-mints it with a new generation.
+        #[cfg(feature = "strict-policy")]
+        let _ = crate::OCCURRENCES.lock().await.remove(&req.container_id);
+
         Ok(Empty::new())
     }
 
@@ -1085,6 +1123,14 @@ impl agent_ttrpc::AgentService for AgentService {
         #[cfg(feature = "strict-policy")]
         {
             use kata_security_reference_monitor::Prepared;
+
+            // FR-9: an exec is only permitted into a running occurrence. This rejects
+            // exec on an unknown container_id or one that has not been started.
+            crate::OCCURRENCES
+                .lock()
+                .await
+                .require_running(&req.container_id, "exec")
+                .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
 
             let op_id = format!("{}:{}", req.container_id, req.exec_id);
             let digest = plan_digest(&req);
@@ -1148,6 +1194,15 @@ impl agent_ttrpc::AgentService for AgentService {
         };
 
         is_allowed(&req).await?;
+
+        // FR-9: a signal may only be delivered to a running occurrence. This rejects
+        // signalling an unknown, not-yet-started, or already-removed occurrence.
+        #[cfg(feature = "strict-policy")]
+        crate::OCCURRENCES
+            .lock()
+            .await
+            .require_running(&req.container_id, "signal")
+            .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
 
         // FR-6: wrap signal delivery in an SRM transaction for a consistent audit record
         // and idempotent retries. The operation id includes the (effective) signal number
