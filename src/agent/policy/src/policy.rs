@@ -257,7 +257,30 @@ impl AgentPolicy {
             allow = true;
         }
 
+        // FR-8: on denial, emit a structured, rule-attributable decision object. It
+        // records the endpoint, the denied rule, and the request's top-level field names
+        // (never values), so denials are auditable without leaking env values, sealed
+        // secrets, or policy text.
+        if !allow {
+            let decision = crate::decision::DecisionObject::for_denial(ep, ep_input);
+            self.log_decision(&decision).await;
+        }
+
         Ok((allow, prints))
+    }
+
+    /// FR-8: append a structured decision object to the policy log. The object carries no
+    /// request values, so this cannot leak workload data.
+    async fn log_decision(&mut self, decision: &crate::decision::DecisionObject) {
+        debug!(sl!(), "policy decision"; "endpoint" => &decision.endpoint, "decision" => decision.decision, "failed-rule" => &decision.failed_rule);
+        if let Some(log_file) = &mut self.log_file {
+            let line = format!("{}\n", decision.to_json());
+            if let Err(e) = log_file.write_all(line.as_bytes()).await {
+                warn!(sl!(), "policy: log_decision: write_all failed: {}", e);
+            } else if let Err(e) = log_file.flush().await {
+                warn!(sl!(), "policy: log_decision: flush failed: {}", e);
+            }
+        }
     }
 
     /// Replace the Policy in regorus.
