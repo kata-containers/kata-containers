@@ -1084,6 +1084,142 @@ fn expose_guest_infiniband_devices(logger: &Logger, spec: &mut Spec) -> Result<(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// FR-11: trusted CDI resolution
+// ---------------------------------------------------------------------------
+
+/// Default guest path (in the measured rootfs) listing the authorized/measured CDI spec
+/// content digests, one `sha256:<hex>` per line (`#` comments allowed). Absent => empty
+/// authorized set => closed-door (host-arbitrary CDI refused).
+#[cfg(feature = "strict-policy")]
+pub const TRUSTED_CDI_DIGESTS_PATH: &str = "/etc/kata/trusted-cdi-digests";
+
+/// Best-effort extraction of a CDI spec's top-level `kind` (supports JSON and YAML).
+#[cfg(feature = "strict-policy")]
+fn parse_cdi_kind(bytes: &[u8]) -> Option<String> {
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes) {
+        if let Some(k) = v.get("kind").and_then(|k| k.as_str()) {
+            return Some(k.to_string());
+        }
+    }
+    for line in String::from_utf8_lossy(bytes).lines() {
+        if let Some(rest) = line.trim_start().strip_prefix("kind:") {
+            let k = rest.trim().trim_matches('"').trim_matches('\'');
+            if !k.is_empty() {
+                return Some(k.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Measure every CDI spec file in `spec_dir`: compute each file's `sha256` content digest
+/// and its declared `kind`. Missing directory yields an empty list.
+#[cfg(feature = "strict-policy")]
+pub fn measure_cdi_specs(
+    spec_dir: &str,
+) -> Result<Vec<kata_security_reference_monitor::MeasuredCdiSpec>> {
+    use sha2::{Digest, Sha256};
+    let mut out = Vec::new();
+    let rd = match fs::read_dir(spec_dir) {
+        Ok(r) => r,
+        Err(_) => return Ok(out),
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        if !matches!(ext, "json" | "yaml" | "yml") {
+            continue;
+        }
+        let bytes = fs::read(&path)?;
+        let digest = format!(
+            "sha256:{}",
+            Sha256::digest(&bytes)
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>()
+        );
+        let kind = parse_cdi_kind(&bytes).unwrap_or_default();
+        out.push(kata_security_reference_monitor::MeasuredCdiSpec {
+            path: path.display().to_string(),
+            kind,
+            digest,
+        });
+    }
+    Ok(out)
+}
+
+/// Load the authorized (measured) CDI spec digests from the trusted guest path. The path
+/// may be overridden via `KATA_TRUSTED_CDI_DIGESTS` (used by tests).
+#[cfg(feature = "strict-policy")]
+pub fn load_authorized_cdi_digests() -> HashSet<String> {
+    let path = std::env::var("KATA_TRUSTED_CDI_DIGESTS")
+        .unwrap_or_else(|_| TRUSTED_CDI_DIGESTS_PATH.to_string());
+    match fs::read_to_string(&path) {
+        Ok(s) => s
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .collect(),
+        Err(_) => HashSet::new(),
+    }
+}
+
+/// The CDI devices a container requests, from `cdi.k8s.io/*` annotations merged with any
+/// devices selected via `VISIBLE_CDI_DEVICES`.
+#[cfg(feature = "strict-policy")]
+fn requested_cdi_devices(
+    spec: &Spec,
+    extra: &[String],
+) -> Result<Vec<kata_security_reference_monitor::CdiDeviceRequest>> {
+    let mut names: Vec<String> = match spec.annotations().as_ref() {
+        Some(a) => parse_annotations(a)?.1,
+        None => Vec::new(),
+    };
+    for d in extra {
+        if !names.contains(d) {
+            names.push(d.clone());
+        }
+    }
+    Ok(names
+        .iter()
+        .filter_map(|n| kata_security_reference_monitor::CdiDeviceRequest::parse(n))
+        .collect())
+}
+
+/// FR-11: authorize a container's CDI resolution before the edits are applied. Every CDI
+/// spec that provides a requested device must be measured (its digest present in the
+/// authorized set); otherwise the create is refused. Sandbox containers and containers
+/// that request no CDI devices are a no-op. Returns the verified devices so the caller can
+/// bind them to the container occurrence.
+#[cfg(feature = "strict-policy")]
+pub fn authorize_cdi_resolution(
+    spec: &Spec,
+    spec_dir: &str,
+    extra: &[String],
+) -> Result<Vec<kata_security_reference_monitor::VerifiedCdiDevice>> {
+    if let Some(ct) = spec
+        .annotations()
+        .as_ref()
+        .and_then(|a| a.get("io.katacontainers.pkg.oci.container_type"))
+    {
+        if ct == "pod_sandbox" {
+            return Ok(Vec::new());
+        }
+    }
+    let requested = requested_cdi_devices(spec, extra)?;
+    if requested.is_empty() {
+        return Ok(Vec::new());
+    }
+    let specs = measure_cdi_specs(spec_dir)?;
+    let authorized = load_authorized_cdi_digests();
+    kata_security_reference_monitor::authorize_cdi(&requested, &specs, &authorized)
+        .map_err(|e| anyhow!("trusted CDI authorization failed: {}", e))
+}
+
 // Test helper constants for common edge case testing
 #[cfg(test)]
 pub(crate) mod test_helpers {
@@ -1110,6 +1246,38 @@ mod tests {
 
     const VM_ROOTFS: &str = "/";
     const TEST_CONTAINER_PATH: &str = "/dev/null";
+
+    #[cfg(feature = "strict-policy")]
+    #[test]
+    fn test_fr11_measure_and_authorize_cdi() {
+        use kata_security_reference_monitor::{authorize_cdi, CdiDeviceRequest};
+        let dir = tempdir().expect("tmpdir");
+        let f = dir.path().join("kata.json");
+        std::fs::write(
+            &f,
+            r#"{"cdiVersion":"0.6.0","kind":"kata.com/gpu","devices":[{"name":"0","containerEdits":{}}]}"#,
+        )
+        .unwrap();
+
+        let specs = measure_cdi_specs(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].kind, "kata.com/gpu");
+        assert!(specs[0].digest.starts_with("sha256:"));
+
+        let req = vec![CdiDeviceRequest::parse("kata.com/gpu=0").unwrap()];
+
+        // Unmeasured (empty authorized set) -> closed-door refusal.
+        assert!(authorize_cdi(&req, &specs, &HashSet::new()).is_err());
+
+        // Measured -> accepted and bound to the providing spec digest.
+        let mut authorized: HashSet<String> = HashSet::new();
+        authorized.insert(specs[0].digest.clone());
+        let verified = authorize_cdi(&req, &specs, &authorized).unwrap();
+        assert_eq!(verified.len(), 1);
+        assert_eq!(verified[0].device, "kata.com/gpu=0");
+        assert_eq!(verified[0].spec_digest, specs[0].digest);
+    }
+
     const TEST_VM_PATH: &str = "/dev/null";
     const TEST_MAJOR: i64 = 7;
     const TEST_MINOR: i64 = 2;

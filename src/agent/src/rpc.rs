@@ -289,6 +289,16 @@ impl AgentService {
         )
         .await?;
 
+        // FR-11 (trusted CDI): the CDI edits applied above come from spec files in the
+        // guest that may be host-influenced. In strict builds, require every CDI spec that
+        // provides a requested device to be measured (its content digest authorized);
+        // otherwise refuse the create rather than apply host-arbitrary device edits.
+        // Resolution is closed-door by default. The verified devices are bound to the
+        // occurrence once the container is created.
+        #[cfg(feature = "strict-policy")]
+        let verified_cdi_devices =
+            crate::device::authorize_cdi_resolution(&oci, "/var/run/cdi", &visible_cdi_devices)?;
+
         // Handle trusted storage configuration before mounting any storage
         cdh_handler_trusted_storage(&mut oci)
             .await
@@ -416,6 +426,18 @@ impl AgentService {
         s.setup_shared_mounts(&ctr, &req.shared_mounts)?;
         s.add_container(ctr);
         info!(sl(), "created container!");
+
+        // FR-9/FR-11: the container now exists. Record its occurrence in the `created`
+        // state and bind the trusted-resolved CDI devices to it, so lifecycle and device
+        // handles are tracked against the enforcer's own occurrence (not the host alias).
+        #[cfg(feature = "strict-policy")]
+        {
+            let mut occ = crate::OCCURRENCES.lock().await;
+            let _ = occ.create(&cid, None, None);
+            for d in &verified_cdi_devices {
+                let _ = occ.bind_device(&cid, &d.device, &d.spec_digest);
+            }
+        }
 
         Ok(())
     }
@@ -1005,10 +1027,8 @@ impl agent_ttrpc::AgentService for AgentService {
                     let mut srm = crate::SRM.lock().await;
                     let _ = srm.commit(&op_id, "container-created");
                     drop(srm);
-                    // FR-9: record the new occurrence in the `created` state. Cardinality
-                    // is opt-in per declaration; declaration indexing is not yet plumbed
-                    // from the policy, so no cap is applied here.
-                    let _ = crate::OCCURRENCES.lock().await.create(&op_id, None, None);
+                    // FR-9 occurrence creation (and FR-11 device binding) is performed
+                    // inside do_create_container once the container actually exists.
                     Ok(Empty::new())
                 }
                 Err(e) => {
