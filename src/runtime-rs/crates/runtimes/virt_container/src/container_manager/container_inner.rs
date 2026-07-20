@@ -33,6 +33,7 @@ pub struct ContainerInner {
     pub(crate) exec_processes: HashMap<String, Exec>,
     pub(crate) rootfs: Vec<Arc<dyn Rootfs>>,
     pub(crate) volumes: Vec<Arc<dyn Volume>>,
+    pub(crate) devices: Vec<String>, // device ids of devices hotplugged to the container
     pub(crate) linux_resources: Option<LinuxResources>,
     removed_from_agent: bool,
 }
@@ -51,6 +52,7 @@ impl ContainerInner {
             exec_processes: HashMap::new(),
             rootfs: vec![],
             volumes: vec![],
+            devices: vec![],
             linux_resources,
             removed_from_agent: false,
         }
