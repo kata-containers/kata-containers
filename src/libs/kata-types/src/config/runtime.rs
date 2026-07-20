@@ -223,10 +223,27 @@ pub struct Runtime {
     ///              based cold plug.
     #[serde(default)]
     pub pod_resource_api_sock: String,
+
+    /// PodResources API sources feeding the cold-plug device list:
+    /// "device-plugin" and/or "dra". Defaults to ["device-plugin"],
+    /// preserving historical behavior. List both only for disjoint device
+    /// sets: kubelet double-counts a device advertised via both at scheduling.
+    #[serde(default = "default_pod_resource_device_sources")]
+    pub pod_resource_device_sources: Vec<String>,
 }
 
 fn default_passfd_listener_port() -> u32 {
     default::DEFAULT_PASSFD_LISTENER_PORT
+}
+
+/// Device source token for the legacy device-plugin API (container.Devices).
+pub const POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN: &str = "device-plugin";
+
+/// Device source token for Dynamic Resource Allocation (KEP-3695).
+pub const POD_RESOURCE_DEVICE_SOURCE_DRA: &str = "dra";
+
+fn default_pod_resource_device_sources() -> Vec<String> {
+    vec![POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()]
 }
 
 impl ConfigOps for Runtime {
@@ -286,6 +303,31 @@ impl ConfigOps for Runtime {
             return Err(std::io::Error::other(format!(
                 "Invalid emptydir_mode `{emptydir_mode}` in configuration file",
             )));
+        }
+
+        // pod_resource_device_sources: mirrors the Go katautils validation.
+        // A missing key defaults via serde; an explicitly empty list, unknown
+        // token, or duplicate is a hard error at config load time.
+        let sources = &conf.runtime.pod_resource_device_sources;
+        if sources.is_empty() {
+            return Err(std::io::Error::other(format!(
+                "pod_resource_device_sources: must not be empty, allowed values: {:?}, {:?}",
+                POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN, POD_RESOURCE_DEVICE_SOURCE_DRA,
+            )));
+        }
+        let mut seen = std::collections::HashSet::new();
+        for s in sources {
+            if s != POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN && s != POD_RESOURCE_DEVICE_SOURCE_DRA {
+                return Err(std::io::Error::other(format!(
+                    "pod_resource_device_sources: invalid source {:?}, allowed values: {:?}, {:?}",
+                    s, POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN, POD_RESOURCE_DEVICE_SOURCE_DRA,
+                )));
+            }
+            if !seen.insert(s.clone()) {
+                return Err(std::io::Error::other(format!(
+                    "pod_resource_device_sources: duplicate source {s:?}",
+                )));
+            }
         }
 
         for shared_mount in &conf.runtime.shared_mounts {
@@ -431,6 +473,77 @@ emptydir_mode = "block-plain"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(&config.runtime.emptydir_mode, "shared-fs");
+    }
+
+    #[test]
+    fn test_default_pod_resource_device_sources() {
+        let content = r#"
+[runtime]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(
+            config.runtime.pod_resource_device_sources,
+            vec![POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()]
+        );
+    }
+
+    #[test]
+    fn test_valid_pod_resource_device_sources() {
+        // single valid source
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+
+        // dra only
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+
+        // both sources
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin", "dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+        assert_eq!(
+            config.runtime.pod_resource_device_sources,
+            vec!["device-plugin".to_string(), "dra".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_invalid_pod_resource_device_sources() {
+        // explicitly empty list is a hard error
+        let content = r#"
+[runtime]
+pod_resource_device_sources = []
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+
+        // unknown token
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["device-plugin", "bogus"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+
+        // duplicate token
+        let content = r#"
+[runtime]
+pod_resource_device_sources = ["dra", "dra"]
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
     }
 
     #[test]
