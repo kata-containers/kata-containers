@@ -1071,6 +1071,43 @@ data:
 {{- end -}}
 
 {{/*
+Checksum annotations for ConfigMaps mounted into kata-deploy pods. Changing a
+mounted ConfigMap does not update the pod spec by itself; hashing the rendered
+ConfigMap into the pod template forces a rollout when the data changes.
+*/}}
+{{- define "kata-deploy.configMapChecksumAnnotations" -}}
+{{- $annotations := dict -}}
+{{- if .Values.containerd.userDropIn | trim }}
+{{- $_ := set $annotations "checksum/containerd-user-dropin" (include (print $.Template.BasePath "/containerd-user-dropin-config.yaml") . | sha256sum) -}}
+{{- end }}
+{{- if eq (include "kata-deploy.hasCustomConfigsConfigMap" . | trim) "true" }}
+{{- $_ := set $annotations "checksum/custom-configs" (include "kata-deploy.customConfigsConfigMap" . | sha256sum) -}}
+{{- end }}
+{{- toYaml $annotations -}}
+{{- end -}}
+
+{{/*
+Pod template annotations: user-provided podAnnotations plus ConfigMap checksums.
+Checksums are applied last so a user-supplied "checksum/*" key can never
+override a computed value and silently disable the rollout trigger.
+*/}}
+{{- define "kata-deploy.podTemplateAnnotations" -}}
+{{- $annotations := dict -}}
+{{- with .Values.podAnnotations }}
+{{- range $key, $value := . }}
+{{- $_ := set $annotations $key $value -}}
+{{- end }}
+{{- end }}
+{{- $checksums := fromYaml (include "kata-deploy.configMapChecksumAnnotations" .) | default dict -}}
+{{- range $key, $value := $checksums }}
+{{- $_ := set $annotations $key $value -}}
+{{- end }}
+{{- if $annotations }}
+{{- toYaml $annotations -}}
+{{- end }}
+{{- end -}}
+
+{{/*
 NFD virtualization nodeAffinity for the kata-deploy DaemonSet.
 Applied when node-feature-discovery is managed by this chart (enabled: true).
 Kata Containers requires hardware virtualization support to function.
