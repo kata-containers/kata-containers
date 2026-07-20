@@ -34,11 +34,7 @@ git fetch --depth=1 origin "${QEMU_VERSION_NUM}"
 git checkout FETCH_HEAD
 scripts/git-submodule.sh update meson capstone
 "${kata_packaging_scripts}/patch_qemu.sh" "${QEMU_VERSION_NUM}" "${kata_packaging_dir}/qemu/patches"
-if [[ "$(uname -m)" != "${ARCH}" ]] && [[ "${ARCH}" == "s390x" ]]; then
-       PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}" --cc=s390x-linux-gnu-gcc --cross-prefix=s390x-linux-gnu- --prefix="${PREFIX}" --target-list=s390x-softmmu
-else
-       PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
-fi
+PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 make -j"$(nproc --ignore=1)"
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
