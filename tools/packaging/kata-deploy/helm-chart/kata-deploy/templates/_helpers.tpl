@@ -878,7 +878,7 @@ host. Emitted at column 0; indent with `nindent` at the call site.
   mountPath: /custom-containerd-config/
   readOnly: true
 {{- end }}
-{{- if or (and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes) (eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true") }}
+{{- if eq (include "kata-deploy.hasCustomConfigsConfigMap" . | trim) "true" }}
 - name: custom-configs
   mountPath: /custom-configs/
   readOnly: true
@@ -908,7 +908,7 @@ indent with `nindent` at the call site.
     name: {{ .Chart.Name }}-containerd-user-dropin
 {{- end }}
 {{- end }}
-{{- if or (and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes) (eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true") }}
+{{- if eq (include "kata-deploy.hasCustomConfigsConfigMap" . | trim) "true" }}
 - name: custom-configs
   configMap:
 {{- if .Values.env.multiInstallSuffix }}
@@ -991,6 +991,83 @@ Returns "true" when at least one default shim has a non-empty dropIn value.
 {{- end -}}
 {{- end -}}
 {{- if $has -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+Returns "true" when the custom-configs ConfigMap is rendered and mounted.
+*/}}
+{{- define "kata-deploy.hasCustomConfigsConfigMap" -}}
+{{- $hasCustomRuntimes := and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes -}}
+{{- $hasDefaultRuntimeDropIns := eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true" -}}
+{{- if or $hasCustomRuntimes $hasDefaultRuntimeDropIns -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+ConfigMap containing custom runtime configuration and default shim drop-ins.
+Mounted into kata-deploy pods at /custom-configs/.
+*/}}
+{{- define "kata-deploy.customConfigsConfigMap" -}}
+{{- $hasCustomRuntimes := and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes -}}
+{{- $hasDefaultRuntimeDropIns := eq (include "kata-deploy.hasDefaultRuntimeDropIns" . | trim) "true" -}}
+{{- if or $hasCustomRuntimes $hasDefaultRuntimeDropIns }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-custom-configs
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+data:
+{{- if $hasCustomRuntimes }}
+  custom-runtimes.list: |
+{{- range $name := keys .Values.customRuntimes.runtimes | sortAlpha }}
+{{- $runtime := index $.Values.customRuntimes.runtimes $name }}
+{{- $handler := "" }}
+{{- if $runtime.runtimeClass }}
+{{- range (splitList "\n" $runtime.runtimeClass) }}
+{{- $line := trim . }}
+{{- if hasPrefix "handler:" $line }}
+{{- $handler = trim (trimPrefix "handler:" $line) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $handler }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}
+{{- end }}
+{{- end }}
+{{- range $name := keys .Values.customRuntimes.runtimes | sortAlpha }}
+{{- $runtime := index $.Values.customRuntimes.runtimes $name }}
+{{- $handler := "" }}
+{{- if $runtime.runtimeClass }}
+{{- range (splitList "\n" $runtime.runtimeClass) }}
+{{- $line := trim . }}
+{{- if hasPrefix "handler:" $line }}
+{{- $handler = trim (trimPrefix "handler:" $line) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $handler $runtime.dropIn }}
+  dropin-{{ $handler }}.toml: |
+{{ $runtime.dropIn | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- range $shimName := keys .Values.shims | sortAlpha }}
+{{- if ne $shimName "disableAll" }}
+{{- $shimConfig := index $.Values.shims $shimName -}}
+{{- $shimEnabled := eq (include "kata-deploy.isShimEnabled" (dict "shimConfig" $shimConfig "disableAll" $disableAll) | trim) "true" -}}
+{{- if and $shimEnabled $shimConfig.dropIn (ne (trim $shimConfig.dropIn) "") }}
+  dropin-{{ $shimName }}.toml: |
+{{ $shimConfig.dropIn | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/*
