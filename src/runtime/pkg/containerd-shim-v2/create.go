@@ -101,7 +101,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 
-	runtimeConfig, err := loadRuntimeConfig(s, r, ociSpec.Annotations)
+	runtimeConfig, err := loadRuntimeConfig(s, r)
 	if err != nil {
 		return nil, err
 	}
@@ -258,15 +258,14 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 }
 
 // Config override ordering(high to low):
-// 1. podsandbox annotation
-// 2. shimv2 create task option
-// 3. environment
-func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string]string) (*oci.RuntimeConfig, error) {
+// 1. shimv2 create task option
+// 2. environment
+func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeConfig, error) {
 	if s.config != nil {
 		return s.config, nil
 	}
-	configPath := oci.GetSandboxConfigPath(anno)
-	if configPath == "" && r.Options != nil {
+	configPath := ""
+	if r.Options != nil {
 		v, err := typeurl.UnmarshalAny(r.Options)
 		if err != nil {
 			return nil, err
@@ -291,7 +290,14 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 
 	// Try to get the config file from the env KATA_CONF_FILE
 	if configPath == "" {
-		configPath = os.Getenv("KATA_CONF_FILE")
+		envConfigPath := os.Getenv("KATA_CONF_FILE")
+		if envConfigPath != "" {
+			if isShippedKataConfigPath(envConfigPath) {
+				configPath = envConfigPath
+			} else {
+				return nil, fmt.Errorf("invalid KATA_CONF_FILE %q: only shipped Kata configuration files are accepted", envConfigPath)
+			}
+		}
 	}
 
 	_, runtimeConfig, err := katautils.LoadConfiguration(configPath, false)
@@ -305,6 +311,26 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 	}
 
 	return &runtimeConfig, nil
+}
+
+func isShippedKataConfigPath(configPath string) bool {
+	resolvedConfigPath, err := katautils.ResolvePath(configPath)
+	if err != nil {
+		return false
+	}
+
+	for _, defaultConfigPath := range katautils.GetDefaultConfigFilePaths() {
+		resolvedDefaultPath, err := katautils.ResolvePath(defaultConfigPath)
+		if err != nil {
+			continue
+		}
+
+		if resolvedConfigPath == resolvedDefaultPath {
+			return true
+		}
+	}
+
+	return false
 }
 
 func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {

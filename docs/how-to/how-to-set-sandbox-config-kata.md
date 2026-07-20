@@ -16,7 +16,6 @@ There are several kinds of Kata configurations and they are listed below.
 
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
-| `io.katacontainers.config_path` | string | Kata config file location that overrides the default config paths |
 | `io.katacontainers.pkg.oci.bundle_path` | string | OCI bundle path |
 | `io.katacontainers.pkg.oci.container_type`| string | OCI container type. Only accepts `pod_container` and `pod_sandbox` |
 

@@ -224,7 +224,7 @@ Next, we need to configure containerd. Add a file in your path (e.g. `/usr/local
 #!/bin/bash
 KATA_CONF_FILE=/etc/kata-containers/configuration-fc.toml /usr/local/bin/containerd-shim-kata-v2 $@
 ```
-> **Note:** You may need to edit the paths of the configuration file and the `containerd-shim-kata-v2` to correspond to your setup.
+> **Note:** You may need to edit the paths of the configuration file and the `containerd-shim-kata-v2` to correspond to your setup. `KATA_CONF_FILE` is only accepted when it resolves to one of Kata's shipped default configuration files.
 
 Make it executable:
 
