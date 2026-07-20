@@ -177,6 +177,7 @@ impl QemuInner {
                                 device_id.as_str(),
                                 &path_on_host,
                                 is_direct,
+                                is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                                 discard_unmap,
                                 serial,
