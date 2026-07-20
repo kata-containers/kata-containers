@@ -595,10 +595,18 @@ partition_gpu_extension() {
 	# loader-cache rebuild and `nvidia-ctk --driver-root=<root>` resolve them and
 	# the container sees them at /usr/lib/<triplet> (see header); libc/loader stay
 	# in the base.
-	local md="lib/${machine_arch}-linux-gnu"
-	local g
-	for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
-		find "${md}" -maxdepth 1 -name "${g}" -exec cp -a {} "${extension}/${extlib}/" \;
+	#
+	# The driver libraries are laid out by kata-nvidia-cdi-list at their canonical
+	# CDI container paths (usr/lib/<triplet>), while a few libs still copied by
+	# hand (libnvidia-nscq, libdcgm, confidential libnvidia-pkcs11) land in the
+	# flat lib/<triplet>. Scan both so the extension gets the full driver set.
+	local -a lib_srcs=("lib/${machine_arch}-linux-gnu" "usr/lib/${machine_arch}-linux-gnu")
+	local md g
+	for md in "${lib_srcs[@]}"; do
+		[[ -d "${md}" ]] || continue
+		for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
+			find "${md}" -maxdepth 1 -name "${g}" -exec cp -a {} "${extension}/${extlib}/" \;
+		done
 	done
 	[[ -e lib/libgrpc_mgr.so ]] && cp -a lib/libgrpc_mgr.so "${extension}/${extlib}/"
 
@@ -655,10 +663,16 @@ partition_base() {
 		rm -f "${f}"
 	done
 
-	local md="lib/${machine_arch}-linux-gnu"
-	local g
-	for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
-		find "${md}" -maxdepth 1 -name "${g}" -delete
+	# Driver libraries live in both the flat lib/<triplet> (hand-copied nscq/dcgm/
+	# pkcs11) and the canonical usr/lib/<triplet> (kata-nvidia-cdi-list); strip
+	# both so the base stays driver-agnostic.
+	local -a lib_srcs=("lib/${machine_arch}-linux-gnu" "usr/lib/${machine_arch}-linux-gnu")
+	local md g
+	for md in "${lib_srcs[@]}"; do
+		[[ -d "${md}" ]] || continue
+		for g in "${nvidia_gpu_extension_lib_globs[@]}"; do
+			find "${md}" -maxdepth 1 -name "${g}" -delete
+		done
 	done
 	rm -f lib/libgrpc_mgr.so
 
