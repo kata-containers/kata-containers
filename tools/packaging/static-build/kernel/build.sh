@@ -19,9 +19,6 @@ repo_root_dir="${repo_root_dir:-}"
 [[ -n "${repo_root_dir}" ]] || die "repo_root_dir is not set"
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 
-BUILDX=
-PLATFORM=
-
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
@@ -35,30 +32,8 @@ if [[ "${MEASURED_ROOTFS}" == "yes" ]] || [[ "${CONFIDENTIAL_GUEST}" == "yes" ]]
 	kernel_builder_args+=" -m"
 fi
 
-if [[ "${CROSS_BUILD:-}" == "true" ]]; then
-       container_image="${container_image}-${ARCH:-}-cross-build"
-       # Need to build a s390x image due to an issue at
-       # https://github.com/kata-containers/kata-containers/pull/6586#issuecomment-1603189242
-       if [[ ${ARCH:-} == "s390x" ]]; then
-               BUILDX="buildx"
-               PLATFORM="--platform=linux/s390x"
-       fi
-fi
-
 container_engine=${CONTAINER_ENGINE:-"docker"}
-container_build=${container_engine}
-
-if [[ -n "${BUILDX}" ]]; then
-	container_build+=" ${BUILDX}"
-fi
-
-container_build+=" build"
-
-if [[ -n "${PLATFORM}" ]]; then
-	container_build+=" ${PLATFORM}"
-fi
-
-container_build+=" --build-arg ARCH=${ARCH:-}"
+container_build="${container_engine} build"
 
 "${container_engine}" pull "${container_image}" || \
 	{
