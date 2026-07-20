@@ -27,6 +27,9 @@
 use std::collections::HashMap;
 use std::fmt;
 
+pub mod occurrence;
+pub use occurrence::{Lifecycle, Occurrence, OccurrenceError, OccurrenceRegistry};
+
 /// Host-independent identifier for a single mutating operation (idempotency key).
 pub type OperationId = String;
 
