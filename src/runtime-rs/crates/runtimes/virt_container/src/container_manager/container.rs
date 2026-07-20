@@ -206,7 +206,7 @@ impl Container {
 
         let container_devices = self
             .resource_manager
-            .handler_devices(&config.container_id, linux)
+            .handler_devices(&config.container_id, linux, &mut inner.devices)
             .await?;
         let devices_agent = annotate_container_devices(&mut spec, container_devices)
             .context("annotate container devices failed")?;
