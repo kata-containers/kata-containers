@@ -47,6 +47,7 @@ mod guest_extension_image;
 mod initdata;
 mod linux_abi;
 mod metrics;
+mod mediation;
 mod mount;
 mod namespace;
 mod netlink;
