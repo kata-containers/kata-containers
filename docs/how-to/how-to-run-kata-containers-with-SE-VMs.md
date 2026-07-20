@@ -205,12 +205,6 @@ $ export INTERMEDIATE_CA_CERT_PATH=$HOME/certificates/DigiCertCA.crt
 $ export HOST_KEY_CRL_PATH=$HOME/certificates/ibm-z-host-key-gen2.crl
 ```
 
-To build an image on the `x86_64` platform, set the following environment variables together with the variables above before `make boot-image-se-tarball`:
-
-```
-CROSS_BUILD=true TARGET_ARCH=s390x ARCH=s390x
-```
-
 ### Adjust the configuration
 
 There still remains an opportunity to fine-tune the configuration file:
