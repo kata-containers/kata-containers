@@ -15,12 +15,10 @@ readonly agent_builder="${script_dir}/build-static-agent.sh"
 source "${script_dir}/../../scripts/lib.sh"
 
 container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
-# shellcheck disable=SC2154
-[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
-	(docker ${BUILDX} build ${PLATFORM} \
+	(docker build \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
