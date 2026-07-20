@@ -176,9 +176,9 @@ pub(crate) async fn open(uri: &Url, container_id: &str, namespace: &str) -> Resu
     // the Go runtime, logger startup waits for that handshake.
     let mut ready = File::from_std(std::fs::File::from(ready_read));
     let mut byte = [0_u8; 1];
-    ready
-        .read(&mut byte)
+    tokio::time::timeout(Duration::from_secs(10), ready.read(&mut byte))
         .await
+        .map_err(|_| anyhow!("timed out waiting for binary logger readiness"))?
         .context("wait for binary logger readiness")?;
 
     Ok(BinaryIo {
