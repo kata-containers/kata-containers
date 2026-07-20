@@ -75,6 +75,7 @@ rustjail.workspace = true
 protocols = { workspace = true, features = ["async", "with-serde"] }
 kata-sys-util.workspace = true
 kata-types.workspace = true
+pcilibs-rs.workspace = true
 runtime-spec.workspace = true
 safe-path.workspace = true
 # Note: this crate sets the slog 'max_*' features which allows the log level

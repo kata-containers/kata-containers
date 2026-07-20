@@ -15,7 +15,6 @@ pub mod mount;
 pub mod netns;
 pub mod numa;
 pub mod oci_docker;
-pub mod pcilibs;
 pub mod protection;
 pub mod rand;
 pub mod spec;
