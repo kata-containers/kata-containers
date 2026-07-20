@@ -15,6 +15,10 @@ pub fn get_build_features() -> Vec<String> {
         // a permissive one before relying on it.
         #[cfg(feature = "strict-policy")]
         "strict-policy",
+        // FR-10: strict builds refuse the generic host->guest CopyFile RPC (no
+        // execution-integrity guarantee for host-delivered files).
+        #[cfg(feature = "strict-policy")]
+        "no-generic-copyfile",
     ];
 
     let mut sorted: Vec<String> = features.into_iter().map(String::from).collect();

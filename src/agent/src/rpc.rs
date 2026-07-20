@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 #[cfg(feature = "agent-policy")]
+#[cfg(not(feature = "strict-policy"))]
 use kata_agent_policy::policy::PolicyCopyFileRequest;
 use pathrs::flags::OpenFlags;
 use rustjail::{pipestream::PipeStream, process::StreamType};
@@ -14,6 +15,7 @@ use tokio::time::{timeout, Duration};
 
 use std::convert::TryFrom;
 #[cfg(feature = "agent-policy")]
+#[cfg(not(feature = "strict-policy"))]
 use std::convert::TryInto as _;
 use std::ffi::{CString, OsStr};
 use std::fmt::Debug;
@@ -34,6 +36,7 @@ use cgroups::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 #[cfg(feature = "agent-policy")]
+#[cfg(not(feature = "strict-policy"))]
 use protobuf::MessageDyn;
 use protobuf::MessageField;
 use protocols::agent::{
@@ -99,7 +102,9 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::{do_set_policy, is_allowed, is_allowed_with_entrypoint};
+use crate::policy::{do_set_policy, is_allowed};
+#[cfg(not(feature = "strict-policy"))]
+use crate::policy::is_allowed_with_entrypoint;
 
 use opentelemetry::global;
 use tracing::span;
@@ -1973,22 +1978,43 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "copy_file", req);
-        #[cfg(feature = "agent-policy")]
+
+        // FR-10: a generic host->guest file copy lands host-chosen bytes at a host-chosen
+        // path with no content-addressing or execution-integrity guarantee. Strict builds
+        // refuse it outright (the safe default); trusted artifacts must instead arrive
+        // through a content-addressed, destination-classed channel. Advertised as
+        // "no-generic-copyfile" in the agent build features.
+        #[cfg(feature = "strict-policy")]
         {
-            let req_for_policy: PolicyCopyFileRequest = (&req)
-                .try_into()
-                .context("parsing CopyFileRequest for policy")
-                .map_ttrpc_err(same)?;
-            is_allowed_with_entrypoint(req.descriptor_dyn().name(), &req_for_policy).await?;
+            let _ = &req;
+            return Err(ttrpc_error(
+                ttrpc::Code::PERMISSION_DENIED,
+                anyhow!(
+                    "CopyFile is disabled in strict mode (no execution-integrity guarantee \
+                     for generic host-delivered files)"
+                ),
+            ));
         }
-        #[cfg(not(feature = "agent-policy"))]
-        is_allowed(&req).await?;
 
-        // Potentially untrustworthy data from the host needs to go into the shared dir.
-        let root_path = PathBuf::from(KATA_GUEST_SHARE_DIR);
-        do_copy_file(&req, &root_path).map_ttrpc_err(same)?;
+        #[cfg(not(feature = "strict-policy"))]
+        {
+            #[cfg(feature = "agent-policy")]
+            {
+                let req_for_policy: PolicyCopyFileRequest = (&req)
+                    .try_into()
+                    .context("parsing CopyFileRequest for policy")
+                    .map_ttrpc_err(same)?;
+                is_allowed_with_entrypoint(req.descriptor_dyn().name(), &req_for_policy).await?;
+            }
+            #[cfg(not(feature = "agent-policy"))]
+            is_allowed(&req).await?;
 
-        Ok(Empty::new())
+            // Potentially untrustworthy data from the host needs to go into the shared dir.
+            let root_path = PathBuf::from(KATA_GUEST_SHARE_DIR);
+            do_copy_file(&req, &root_path).map_ttrpc_err(same)?;
+
+            Ok(Empty::new())
+        }
     }
 
     async fn get_metrics(
@@ -2580,6 +2606,7 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
 /// If this function returns an error, the filesystem may be in an unexpected state. This is not
 /// significant for the caller, since errors are almost certainly not retriable. The runtime should
 /// abandon this VM instead.
+#[cfg_attr(feature = "strict-policy", allow(dead_code))]
 fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
     let insecure_full_path = PathBuf::from(req.path.as_str());
     let path = insecure_full_path
