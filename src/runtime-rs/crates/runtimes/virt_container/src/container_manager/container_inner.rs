@@ -342,10 +342,12 @@ impl ContainerInner {
                 );
             }
         }
-        if !unhandled.is_empty() {
-            self.volumes = unhandled;
+        self.volumes = unhandled;
+        if self.volumes.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("failed to clean {} volume(s)", self.volumes.len()))
         }
-        Ok(())
     }
 
     async fn clean_rootfs(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
@@ -361,9 +363,11 @@ impl ContainerInner {
                 );
             }
         }
-        if !unhandled.is_empty() {
-            self.rootfs = unhandled;
+        self.rootfs = unhandled;
+        if self.rootfs.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("failed to clean {} rootfs(s)", self.rootfs.len()))
         }
-        Ok(())
     }
 }
