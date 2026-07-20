@@ -27,8 +27,12 @@
 use std::collections::HashMap;
 use std::fmt;
 
+pub mod cdi;
 pub mod occurrence;
 pub mod resource_graph;
+pub use cdi::{
+    authorize_cdi, CdiDeviceRequest, CdiError, MeasuredCdiSpec, VerifiedCdiDevice,
+};
 pub use occurrence::{Lifecycle, Occurrence, OccurrenceError, OccurrenceRegistry};
 pub use resource_graph::{
     verify_ordered_bijection, PresentedResource, ResourceDeclaration, ResourceGraphError,

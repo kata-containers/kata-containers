@@ -67,6 +67,9 @@ pub struct Occurrence {
     /// Policy declaration index this occurrence was admitted against (FR-4A binding /
     /// cardinality accounting). `None` if declarations are not indexed.
     pub declaration_index: Option<usize>,
+    /// FR-11: fully-qualified CDI devices (with their measured spec digest) bound to this
+    /// occurrence after trusted resolution.
+    pub devices: Vec<(String, String)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -198,9 +201,32 @@ impl OccurrenceRegistry {
                 generation,
                 state: Lifecycle::Created,
                 declaration_index,
+                devices: Vec::new(),
             },
         );
         Ok(handle)
+    }
+
+    /// FR-11: bind a trusted-resolved CDI device (fully-qualified name + measured spec
+    /// digest) to a live occurrence. Rejects binding to an unknown/removed occurrence.
+    pub fn bind_device(
+        &mut self,
+        alias: &str,
+        device: impl Into<String>,
+        spec_digest: impl Into<String>,
+    ) -> Result<(), OccurrenceError> {
+        match self.by_alias.get_mut(alias) {
+            Some(o) if o.state != Lifecycle::Removed => {
+                o.devices.push((device.into(), spec_digest.into()));
+                Ok(())
+            }
+            _ => Err(OccurrenceError::UnknownAlias(alias.to_string())),
+        }
+    }
+
+    /// Devices bound to a live occurrence.
+    pub fn devices(&self, alias: &str) -> Option<&[(String, String)]> {
+        self.get_live(alias).ok().map(|o| o.devices.as_slice())
     }
 
     fn get_live(&self, alias: &str) -> Result<&Occurrence, OccurrenceError> {
@@ -420,6 +446,20 @@ mod tests {
         // removing the first frees the slot
         r.remove("c1").unwrap();
         r.create("c2", Some(0), Some(1)).unwrap();
+    }
+
+    #[test]
+    fn bind_device_records_verified_cdi_devices() {
+        let mut r = OccurrenceRegistry::new();
+        r.create("c1", None, None).unwrap();
+        r.bind_device("c1", "nvidia.com/gpu=0", "sha256:TRUSTED").unwrap();
+        assert_eq!(
+            r.devices("c1"),
+            Some([("nvidia.com/gpu=0".to_string(), "sha256:TRUSTED".to_string())].as_slice())
+        );
+        // cannot bind to a removed occurrence
+        r.remove("c1").unwrap();
+        assert!(r.bind_device("c1", "x=1", "d").is_err());
     }
 
     #[test]
