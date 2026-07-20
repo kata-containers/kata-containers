@@ -53,6 +53,10 @@ spec:
         app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
         app.kubernetes.io/instance: {{ $root.Release.Name }}
         kata-deploy/dispatcher: install
+{{- if eq ($root.Values.deploymentMode | default "daemonset") "job" }}
+      annotations:
+        checksum/job-templates: {{ include (print $root.Template.BasePath "/kata-deploy-job-templates.yaml") $root | sha256sum }}
+{{- end }}
     spec:
 {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
