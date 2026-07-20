@@ -6665,7 +6665,7 @@ dependencies = [
  "protobuf",
  "protocols",
  "resource",
- "rstest 0.18.2",
+ "rstest",
  "runtime-spec",
  "serde_json",
  "shim-interface",
