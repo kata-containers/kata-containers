@@ -5489,6 +5489,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-scope",
+ "tempfile",
  "tokio",
  "tokio-util",
  "tonic 0.14.6",

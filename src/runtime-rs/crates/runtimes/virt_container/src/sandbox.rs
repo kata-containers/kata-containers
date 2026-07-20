@@ -401,6 +401,7 @@ impl VirtSandbox {
             let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
                 pod_resource_socket,
                 annotations,
+                &config.runtime.pod_resource_device_sources,
             )
             .await
             .context("failed to query Pod Resources CDI devices")?;

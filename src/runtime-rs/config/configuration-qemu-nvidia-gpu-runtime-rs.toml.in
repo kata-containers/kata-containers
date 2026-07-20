@@ -851,6 +851,15 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 # devices discovered via the Pod Resources API. Path is typically under kubelet root-dir.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK_NV@"
 
+# pod_resource_device_sources selects which kubelet PodResources sources feed
+# cold plug: "device-plugin" and/or "dra" (KEP-3695). Default ["device-plugin"]
+# preserves historical behavior; ["dra"] for DRA-only nodes. List both only for
+# DISJOINT device sets -- kubelet double-counts a device advertised via both at
+# scheduling (a same-device collision is caught at cold plug). Unlisted-source
+# cold-pluggable data fails sandbox creation rather than being silently dropped.
+# Requires cold_plug_vfio and pod_resource_api_sock.
+pod_resource_device_sources = @DEFPODRESOURCEDEVICESOURCES_NV@
+
 # The GPU driver stack (userspace binaries, libraries, configs, firmware and the
 # NVIDIA kernel modules) ships in a separate, driver-versioned extension image that
 # is cold-plugged alongside the nvidia base boot image.  NVRC mounts it at
