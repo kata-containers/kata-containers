@@ -645,6 +645,11 @@ message LoadPolicyFragmentRequest {
 	string receipt = 4;
 	// Detached Ed25519 signature over the fragment's canonical bytes.
 	bytes signature = 5;
+	// FR-1c: a signed Rego module (text) the fragment contributes to the policy engine.
+	// Must declare a package under the reserved fragment namespace.
+	bytes policy_module = 6;
+	// FR-1c: the policy namespaces this fragment is scoped to contribute to.
+	repeated string includes = 7;
 }
 
 message GetDiagnosticDataRequest {

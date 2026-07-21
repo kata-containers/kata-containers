@@ -440,6 +440,14 @@ async fn start_sandbox(
         std::process::abort();
     }
 
+    // FR-1b: seed the policy-fragment trust root (authorized issuers, per-issuer SVN floor,
+    // receipt requirement) from measured guest state. Absent config ⇒ no authorized issuer
+    // ⇒ every fragment is rejected (fail-closed).
+    #[cfg(feature = "strict-policy")]
+    if let Err(e) = seed_fragment_trust_root(logger).await {
+        warn!(logger, "FR-1: fragment trust root not seeded: {:?}", e);
+    }
+
     let sandbox = Arc::new(Mutex::new(s));
 
     let signal_handler_task = tokio::spawn(setup_signal_handler(
@@ -867,6 +875,81 @@ async fn initialize_policy() -> Result<()> {
             None,
         )
         .await
+}
+
+// FR-1b: measured guest path listing the authorized policy-fragment issuers. It lives in
+// the measured rootfs; overridable via KATA_FRAGMENT_ISSUERS for tests. Format (TOML):
+//   require_receipt = true
+//   [[issuer]]
+//   id = "issuerA"
+//   ed25519_pubkey_hex = "<64 hex chars>"
+//   min_svn = 5
+#[cfg(feature = "strict-policy")]
+const FRAGMENT_ISSUERS_PATH: &str = "/etc/kata/fragment-issuers.toml";
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize, Default)]
+struct FragmentTrustConfig {
+    #[serde(default)]
+    require_receipt: Option<bool>,
+    #[serde(default)]
+    issuer: Vec<FragmentIssuerConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct FragmentIssuerConfig {
+    id: String,
+    ed25519_pubkey_hex: String,
+    #[serde(default)]
+    min_svn: u64,
+}
+
+#[cfg(feature = "strict-policy")]
+fn decode_hex32(s: &str) -> Result<[u8; 32]> {
+    let s = s.trim();
+    if s.len() != 64 {
+        anyhow::bail!("ed25519 pubkey must be 64 hex chars, got {}", s.len());
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16)
+            .map_err(|e| anyhow::anyhow!("invalid hex in pubkey: {e}"))?;
+    }
+    Ok(out)
+}
+
+// FR-1b: configure the global fragment store from measured state. Absent/empty config
+// leaves the store with no authorized issuers (fail-closed).
+#[cfg(feature = "strict-policy")]
+async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
+    let path = std::env::var("KATA_FRAGMENT_ISSUERS")
+        .unwrap_or_else(|_| FRAGMENT_ISSUERS_PATH.to_string());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => {
+            info!(logger, "FR-1: no fragment-issuer config; fragments fail-closed");
+            return Ok(());
+        }
+    };
+    let cfg: FragmentTrustConfig = toml::from_str(&text).context("parse fragment-issuers.toml")?;
+
+    let mut store = FRAGMENTS.lock().await;
+    if let Some(rr) = cfg.require_receipt {
+        // Rebuild with the configured receipt requirement, preserving fail-closed default.
+        *store = kata_security_reference_monitor::FragmentStore::new(rr);
+    }
+    for issuer in &cfg.issuer {
+        let key = decode_hex32(&issuer.ed25519_pubkey_hex)
+            .with_context(|| format!("issuer {}", issuer.id))?;
+        store
+            .authorize_issuer(issuer.id.clone(), &key)
+            .map_err(|e| anyhow::anyhow!("authorize issuer {}: {}", issuer.id, e))?;
+        store.set_min_svn(issuer.id.clone(), issuer.min_svn);
+        info!(logger, "FR-1: authorized fragment issuer";
+            "issuer" => &issuer.id, "min-svn" => issuer.min_svn);
+    }
+    Ok(())
 }
 
 // The Rust standard library had suppressed the default SIGPIPE behavior,

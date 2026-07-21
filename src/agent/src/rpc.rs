@@ -2188,10 +2188,19 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "load_policy_fragment", req);
         is_allowed(&req).await?;
 
+        let policy_module = if req.policy_module.is_empty() {
+            None
+        } else {
+            Some(String::from_utf8(req.policy_module.clone()).map_err(|e| {
+                ttrpc_error(ttrpc::Code::INVALID_ARGUMENT, format!("policy_module not UTF-8: {e}"))
+            })?)
+        };
         let fragment = kata_security_reference_monitor::PolicyFragment {
             issuer: req.issuer.clone(),
             svn: req.svn,
             grants: req.grants.to_vec(),
+            policy_module: policy_module.clone(),
+            includes: req.includes.to_vec(),
             receipt: if req.receipt.is_empty() {
                 None
             } else {
@@ -2199,11 +2208,30 @@ impl agent_ttrpc::AgentService for AgentService {
             },
             signature: req.signature.clone(),
         };
-        crate::FRAGMENTS
+
+        // FR-1a: verify → apply → commit, atomically. Verification does not mutate the
+        // fragment store; the module is applied to the live policy engine only after it
+        // verifies, and the store's SVN/grant state is committed only after the apply
+        // succeeds. A failed apply leaves both the engine and the store unchanged.
+        let verified = crate::FRAGMENTS
             .lock()
             .await
-            .load(&fragment)
+            .verify(&fragment)
             .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
+
+        if let Some(module) = &verified.policy_module {
+            crate::AGENT_POLICY
+                .lock()
+                .await
+                .apply_fragment_module(
+                    &format!("fragment:{}:{}", verified.issuer, verified.svn),
+                    module,
+                    &verified.includes,
+                )
+                .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
+        }
+
+        crate::FRAGMENTS.lock().await.commit(&verified);
         Ok(Empty::new())
     }
 
