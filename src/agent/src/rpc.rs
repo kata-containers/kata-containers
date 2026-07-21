@@ -2215,11 +2215,16 @@ impl agent_ttrpc::AgentService for AgentService {
         // fragment store; the module is applied to the live policy engine only after it
         // verifies, and the store's SVN/grant state is committed only after the apply
         // succeeds. A failed apply leaves both the engine and the store unchanged.
-        let verified = crate::FRAGMENTS
-            .lock()
-            .await
-            .verify(&fragment)
-            .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
+        // FR-1h: if a COSE_Sign1 envelope is presented, verify through the COSE path.
+        let verified = {
+            let store = crate::FRAGMENTS.lock().await;
+            let r = if req.cose_sign1.is_empty() {
+                store.verify(&fragment)
+            } else {
+                store.verify_cose(&fragment, &req.cose_sign1)
+            };
+            r.map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?
+        };
 
         if let Some(module) = &verified.policy_module {
             crate::AGENT_POLICY
@@ -2233,7 +2238,14 @@ impl agent_ttrpc::AgentService for AgentService {
                 .map_err(|e| ttrpc_error(ttrpc::Code::FAILED_PRECONDITION, e))?;
         }
 
-        crate::FRAGMENTS.lock().await.commit(&verified);
+        // FR-1i: persist the SVN high-water marks after commit so an agent restart cannot
+        // reopen a rollback window. The store on the (encrypted-scratch / sealed) path is
+        // re-imported at boot by seed_fragment_trust_root.
+        {
+            let mut store = crate::FRAGMENTS.lock().await;
+            store.commit(&verified);
+            crate::persist_fragment_svn_state(&store.export_svn_state());
+        }
         Ok(Empty::new())
     }
 

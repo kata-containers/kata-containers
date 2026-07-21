@@ -655,6 +655,10 @@ message LoadPolicyFragmentRequest {
 	string feed = 8;
 	// FR-1g: identifiers of fragments that must already be loaded before this one.
 	repeated string requires = 9;
+	// FR-1h: optional COSE_Sign1 (CBOR) envelope carrying the fragment statement as its
+	// payload, for interop with COSE tooling. When present, it is verified instead of the
+	// detached `signature`.
+	bytes cose_sign1 = 10;
 }
 
 message GetDiagnosticDataRequest {

@@ -887,6 +887,27 @@ async fn initialize_policy() -> Result<()> {
 #[cfg(feature = "strict-policy")]
 const FRAGMENT_ISSUERS_PATH: &str = "/etc/kata/fragment-issuers.toml";
 
+// FR-1i: runtime SVN high-water state, persisted so an agent restart cannot reopen a
+// rollback window. Must live on sealed/encrypted-scratch storage (in a confidential guest
+// the writable scratch is memory-/disk-encrypted). Overridable via KATA_FRAGMENT_SVN_STATE.
+#[cfg(feature = "strict-policy")]
+const FRAGMENT_SVN_STATE_PATH: &str = "/run/kata/fragment-svn.state";
+
+#[cfg(feature = "strict-policy")]
+fn fragment_svn_state_path() -> String {
+    std::env::var("KATA_FRAGMENT_SVN_STATE").unwrap_or_else(|_| FRAGMENT_SVN_STATE_PATH.to_string())
+}
+
+// FR-1i: write the exported SVN snapshot to the persistence path (best-effort).
+#[cfg(feature = "strict-policy")]
+pub(crate) fn persist_fragment_svn_state(snapshot: &str) {
+    let path = fragment_svn_state_path();
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, snapshot);
+}
+
 #[cfg(feature = "strict-policy")]
 #[derive(serde::Deserialize, Default)]
 struct FragmentTrustConfig {
@@ -974,6 +995,13 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
         }
         info!(logger, "FR-1: authorized fragment issuer";
             "issuer" => &issuer.id, "min-svn" => issuer.min_svn, "feeds" => issuer.feed.len());
+    }
+
+    // FR-1i: re-import any persisted SVN high-water marks so a restart keeps rollback
+    // protection (import can only raise the floor, never lower it).
+    if let Ok(snapshot) = std::fs::read_to_string(fragment_svn_state_path()) {
+        store.import_svn_state(&snapshot);
+        info!(logger, "FR-1: imported persisted fragment SVN state");
     }
     Ok(())
 }
