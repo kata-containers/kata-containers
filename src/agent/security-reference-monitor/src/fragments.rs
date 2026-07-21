@@ -32,7 +32,10 @@ use std::fmt;
 pub struct PolicyFragment {
     /// Identifier of the issuer that signed the fragment.
     pub issuer: String,
-    /// Security version number; must strictly increase per issuer.
+    /// FR-1e: the logical feed (scope) under the issuer. The base policy declares which
+    /// `(issuer, feed)` pairs it accepts and their SVN floor. Empty = the default feed.
+    pub feed: String,
+    /// Security version number; must strictly increase per `(issuer, feed)`.
     pub svn: u64,
     /// Additional grants introduced by this fragment (add-only). Legacy/opaque form.
     pub grants: Vec<String>,
@@ -42,25 +45,40 @@ pub struct PolicyFragment {
     /// FR-1c: the policy namespaces this fragment is scoped to contribute to. The applier
     /// refuses a module whose package is outside these.
     pub includes: Vec<String>,
-    /// Transparency receipt identifier/blob. Required when receipts are enforced.
+    /// FR-1g: identifiers of fragments that must already be loaded before this one
+    /// (composition). A fragment id is `"<issuer>/<feed>/<svn>"`.
+    pub requires: Vec<String>,
+    /// FR-1f: transparency receipt — a detached signature (hex) by the transparency anchor
+    /// over [`PolicyFragment::signing_bytes`]. Required when receipts are enforced; verified
+    /// against a measured anchor when one is configured.
     pub receipt: Option<String>,
-    /// Detached Ed25519 signature over [`PolicyFragment::signing_bytes`].
+    /// Detached Ed25519 signature (by the issuer) over [`PolicyFragment::signing_bytes`].
     pub signature: Vec<u8>,
 }
 
 impl PolicyFragment {
-    /// Canonical byte encoding that the signature covers. Deterministic: the issuer, the
-    /// SVN, the sorted grants, the contributed Rego module, the sorted `includes`
-    /// namespaces, and the receipt are all bound, so none can be altered without
-    /// invalidating the signature.
+    /// This fragment's composition identifier: `"<issuer>/<feed>/<svn>"`.
+    pub fn id(&self) -> String {
+        format!("{}/{}/{}", self.issuer, self.feed, self.svn)
+    }
+
+    /// Canonical byte encoding of the fragment *statement* that both the issuer signature
+    /// and the transparency receipt cover. Deterministic and binds issuer, feed, SVN,
+    /// sorted grants, module, sorted includes, and sorted requires — so none can be altered
+    /// without invalidating the signature. The receipt itself is NOT included (it is a
+    /// separate signature over these same bytes, created after the issuer signs).
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut grants = self.grants.clone();
         grants.sort();
         let mut includes = self.includes.clone();
         includes.sort();
+        let mut requires = self.requires.clone();
+        requires.sort();
         let mut s = String::new();
-        s.push_str("kata-policy-fragment/v1\n");
+        s.push_str("kata-policy-fragment/v2\n");
         s.push_str(&self.issuer);
+        s.push('\n');
+        s.push_str(&self.feed);
         s.push('\n');
         s.push_str(&self.svn.to_string());
         s.push('\n');
@@ -73,11 +91,13 @@ impl PolicyFragment {
             s.push_str(i);
             s.push('\n');
         }
+        s.push_str("--requires--\n");
+        for r in &requires {
+            s.push_str(r);
+            s.push('\n');
+        }
         s.push_str("--module--\n");
         s.push_str(self.policy_module.as_deref().unwrap_or(""));
-        s.push('\n');
-        s.push_str("--receipt--\n");
-        s.push_str(self.receipt.as_deref().unwrap_or(""));
         s.into_bytes()
     }
 }
@@ -88,7 +108,9 @@ impl PolicyFragment {
 #[derive(Debug, Clone)]
 pub struct VerifiedFragment {
     pub issuer: String,
+    pub feed: String,
     pub svn: u64,
+    pub id: String,
     pub grants: Vec<String>,
     pub policy_module: Option<String>,
     pub includes: Vec<String>,
@@ -109,6 +131,12 @@ pub enum FragmentError {
     },
     /// Receipts are enforced but the fragment carries none.
     MissingReceipt,
+    /// FR-1f: the transparency receipt does not verify against the configured anchor.
+    InvalidReceipt,
+    /// FR-1e: the fragment's `(issuer, feed)` pair is not declared/accepted.
+    UndeclaredFeed { issuer: String, feed: String },
+    /// FR-1g: a required (dependency) fragment has not been loaded.
+    UnsatisfiedRequirement { requires: String },
     /// The fragment introduces a grant that would relax a declared root constraint.
     RootConstraintRelaxation(String),
 }
@@ -127,6 +155,13 @@ impl fmt::Display for FragmentError {
                 "rolled-back SVN for issuer {issuer}: presented {presented}, require >= {min_required}"
             ),
             FragmentError::MissingReceipt => write!(f, "fragment is missing a transparency receipt"),
+            FragmentError::InvalidReceipt => write!(f, "fragment transparency receipt is invalid"),
+            FragmentError::UndeclaredFeed { issuer, feed } => {
+                write!(f, "undeclared fragment feed: issuer {issuer}, feed {feed:?}")
+            }
+            FragmentError::UnsatisfiedRequirement { requires } => {
+                write!(f, "required fragment not loaded: {requires}")
+            }
             FragmentError::RootConstraintRelaxation(g) => {
                 write!(f, "fragment would relax a root constraint: {g}")
             }
@@ -140,12 +175,18 @@ impl std::error::Error for FragmentError {}
 #[derive(Default)]
 pub struct FragmentStore {
     issuers: HashMap<String, VerifyingKey>,
-    last_svn: HashMap<String, u64>,
+    /// Monotonic SVN high-water mark keyed by (issuer, feed).
+    last_svn: HashMap<(String, String), u64>,
+    /// FR-1e: declared/accepted (issuer, feed) pairs and their SVN floor.
+    feeds: HashMap<(String, String), u64>,
     root_constraints: HashSet<String>,
     require_receipt: bool,
     active_grants: HashSet<String>,
-    /// FR-1b: declarative per-issuer SVN floor seeded from measured state.
-    min_svn: HashMap<String, u64>,
+    /// FR-1f: transparency anchor public key; when set, receipts are cryptographically
+    /// verified against it (not just checked for presence).
+    transparency_anchor: Option<VerifyingKey>,
+    /// FR-1g: identifiers of fragments that have been loaded (for composition).
+    loaded_ids: HashSet<String>,
 }
 
 impl FragmentStore {
@@ -165,14 +206,38 @@ impl FragmentStore {
         public_key: &[u8; 32],
     ) -> Result<(), FragmentError> {
         let key = VerifyingKey::from_bytes(public_key).map_err(|_| FragmentError::InvalidSignature)?;
-        self.issuers.insert(issuer.into(), key);
+        let issuer = issuer.into();
+        // Authorizing an issuer also declares its default feed ("") so simple fragments
+        // (no explicit feed) are accepted; named feeds are added via `declare_feed`.
+        self.feeds.entry((issuer.clone(), String::new())).or_insert(0);
+        self.issuers.insert(issuer, key);
         Ok(())
     }
 
-    /// FR-1b: set a declarative minimum-SVN floor for an issuer (from measured state). A
-    /// fragment from this issuer is only accepted at `svn >= floor`.
+    /// FR-1b: set a declarative minimum-SVN floor for an issuer's default feed (from
+    /// measured state). A fragment is only accepted at `svn >= floor`.
     pub fn set_min_svn(&mut self, issuer: impl Into<String>, floor: u64) {
-        self.min_svn.insert(issuer.into(), floor);
+        self.feeds.insert((issuer.into(), String::new()), floor);
+    }
+
+    /// FR-1e: declare an accepted `(issuer, feed)` pair with its SVN floor (from measured
+    /// state). A fragment whose `(issuer, feed)` is not declared is rejected.
+    pub fn declare_feed(
+        &mut self,
+        issuer: impl Into<String>,
+        feed: impl Into<String>,
+        min_svn: u64,
+    ) {
+        self.feeds.insert((issuer.into(), feed.into()), min_svn);
+    }
+
+    /// FR-1f: set the transparency anchor public key. When set, a fragment's receipt is
+    /// cryptographically verified against it (a detached signature over the fragment
+    /// statement); without an anchor, receipts are only checked for presence.
+    pub fn set_transparency_anchor(&mut self, public_key: &[u8; 32]) -> Result<(), FragmentError> {
+        let key = VerifyingKey::from_bytes(public_key).map_err(|_| FragmentError::InvalidSignature)?;
+        self.transparency_anchor = Some(key);
+        Ok(())
     }
 
     /// Declare a grant that no fragment may ever introduce (a base-policy invariant).
@@ -190,11 +255,12 @@ impl FragmentStore {
         !self.issuers.is_empty()
     }
 
-    /// The minimum SVN an issuer's next fragment must carry (declarative floor combined
-    /// with the monotonic high-water mark of accepted fragments).
-    fn min_required(&self, issuer: &str) -> u64 {
-        let floor = self.min_svn.get(issuer).copied().unwrap_or(0);
-        match self.last_svn.get(issuer) {
+    /// The minimum SVN the next fragment for `(issuer, feed)` must carry (declarative floor
+    /// combined with the monotonic high-water mark of accepted fragments).
+    fn min_required(&self, issuer: &str, feed: &str) -> u64 {
+        let key = (issuer.to_string(), feed.to_string());
+        let floor = self.feeds.get(&key).copied().unwrap_or(0);
+        match self.last_svn.get(&key) {
             Some(last) => (last + 1).max(floor),
             None => floor,
         }
@@ -210,15 +276,27 @@ impl FragmentStore {
             .get(&fragment.issuer)
             .ok_or_else(|| FragmentError::UnauthorizedIssuer(fragment.issuer.clone()))?;
 
-        // 2. Signature must verify over the canonical bytes (rejects unsigned/tampered).
+        // 2. Issuer signature must verify over the fragment statement (rejects
+        //    unsigned/tampered; the statement binds issuer/feed/svn/grants/includes/
+        //    requires/module).
+        let statement = fragment.signing_bytes();
         let sig =
             Signature::from_slice(&fragment.signature).map_err(|_| FragmentError::InvalidSignature)?;
-        key.verify(&fragment.signing_bytes(), &sig)
+        key.verify(&statement, &sig)
             .map_err(|_| FragmentError::InvalidSignature)?;
 
-        // 3. Monotonic SVN: >= the declarative floor and strictly greater than the last
-        //    accepted for this issuer.
-        let min_required = self.min_required(&fragment.issuer);
+        // 3. FR-1e: the (issuer, feed) pair must be declared/accepted.
+        let feed_key = (fragment.issuer.clone(), fragment.feed.clone());
+        if !self.feeds.contains_key(&feed_key) {
+            return Err(FragmentError::UndeclaredFeed {
+                issuer: fragment.issuer.clone(),
+                feed: fragment.feed.clone(),
+            });
+        }
+
+        // 4. Monotonic SVN per (issuer, feed): >= the declared floor and strictly greater
+        //    than the last accepted.
+        let min_required = self.min_required(&fragment.issuer, &fragment.feed);
         if fragment.svn < min_required {
             return Err(FragmentError::RolledBackSvn {
                 issuer: fragment.issuer.clone(),
@@ -227,12 +305,30 @@ impl FragmentStore {
             });
         }
 
-        // 4. Transparency receipt required in strict mode.
-        if self.require_receipt && fragment.receipt.as_deref().unwrap_or("").is_empty() {
+        // 5. Transparency receipt: required in strict mode, and cryptographically verified
+        //    against the anchor when one is configured (FR-1f).
+        let receipt = fragment.receipt.as_deref().unwrap_or("");
+        if self.require_receipt && receipt.is_empty() {
             return Err(FragmentError::MissingReceipt);
         }
+        if let Some(anchor) = &self.transparency_anchor {
+            let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
+            let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
+            anchor
+                .verify(&statement, &rsig)
+                .map_err(|_| FragmentError::InvalidReceipt)?;
+        }
 
-        // 5. Add-only: reject any grant that would relax a root constraint.
+        // 6. FR-1g: every required (dependency) fragment must already be loaded.
+        for req in &fragment.requires {
+            if !self.loaded_ids.contains(req) {
+                return Err(FragmentError::UnsatisfiedRequirement {
+                    requires: req.clone(),
+                });
+            }
+        }
+
+        // 7. Add-only: reject any grant that would relax a root constraint.
         for g in &fragment.grants {
             if self.root_constraints.contains(g) {
                 return Err(FragmentError::RootConstraintRelaxation(g.clone()));
@@ -241,17 +337,22 @@ impl FragmentStore {
 
         Ok(VerifiedFragment {
             issuer: fragment.issuer.clone(),
+            feed: fragment.feed.clone(),
             svn: fragment.svn,
+            id: fragment.id(),
             grants: fragment.grants.clone(),
             policy_module: fragment.policy_module.clone(),
             includes: fragment.includes.clone(),
         })
     }
 
-    /// Commit a previously [`verify`](Self::verify)-ed fragment: advance the issuer's SVN
-    /// high-water mark and accumulate its grants. Returns the grants newly added.
+    /// Commit a previously [`verify`](Self::verify)-ed fragment: advance the `(issuer, feed)`
+    /// SVN high-water mark, record the fragment id (for composition), and accumulate its
+    /// grants. Returns the grants newly added.
     pub fn commit(&mut self, verified: &VerifiedFragment) -> Vec<String> {
-        self.last_svn.insert(verified.issuer.clone(), verified.svn);
+        self.last_svn
+            .insert((verified.issuer.clone(), verified.feed.clone()), verified.svn);
+        self.loaded_ids.insert(verified.id.clone());
         let mut added = Vec::new();
         for g in &verified.grants {
             if self.active_grants.insert(g.clone()) {
@@ -267,6 +368,18 @@ impl FragmentStore {
         let verified = self.verify(fragment)?;
         Ok(self.commit(&verified))
     }
+}
+
+/// Decode a hex string into bytes.
+fn hex_to_bytes(s: &str) -> Result<Vec<u8>, ()> {
+    let s = s.trim();
+    if s.len() % 2 != 0 {
+        return Err(());
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| ()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -347,6 +460,7 @@ mod tests {
             includes: vec!["exec".into()],
             receipt: Some("r".into()),
             signature: Vec::new(),
+            ..Default::default()
         };
         sign(&sk, &mut f);
         let v = store.verify(&f).unwrap();
@@ -501,5 +615,127 @@ mod tests {
         f.receipt = None;
         sign(&sk, &mut f);
         assert_eq!(store.load(&f).unwrap_err(), FragmentError::MissingReceipt);
+    }
+
+    fn frag_feed(issuer: &str, feed: &str, svn: u64) -> PolicyFragment {
+        PolicyFragment {
+            issuer: issuer.to_string(),
+            feed: feed.to_string(),
+            svn,
+            receipt: Some("receipt-1".to_string()),
+            ..Default::default()
+        }
+    }
+
+    /// TC-F1.13 (FR-1e): a fragment for an undeclared (issuer, feed) is rejected.
+    #[test]
+    fn undeclared_feed_is_rejected() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap(); // declares default feed only
+        let mut f = frag_feed("issuerA", "prod", 1);
+        sign(&sk, &mut f);
+        assert_eq!(
+            store.load(&f).unwrap_err(),
+            FragmentError::UndeclaredFeed {
+                issuer: "issuerA".into(),
+                feed: "prod".into()
+            }
+        );
+        // After declaring the feed, the same fragment is accepted.
+        store.declare_feed("issuerA", "prod", 0);
+        assert!(store.load(&f).is_ok());
+    }
+
+    /// TC-F1.14 (FR-1e): the SVN floor is enforced per (issuer, feed) independently.
+    #[test]
+    fn svn_floor_is_per_feed() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        store.declare_feed("issuerA", "prod", 10);
+        store.declare_feed("issuerA", "test", 0);
+
+        // prod floor is 10: svn 5 rejected.
+        let mut low = frag_feed("issuerA", "prod", 5);
+        sign(&sk, &mut low);
+        assert!(matches!(
+            store.load(&low).unwrap_err(),
+            FragmentError::RolledBackSvn { min_required: 10, .. }
+        ));
+        // test feed floor is 0: svn 1 accepted (independent of prod).
+        let mut t = frag_feed("issuerA", "test", 1);
+        sign(&sk, &mut t);
+        assert!(store.load(&t).is_ok());
+        // prod at floor accepted.
+        let mut p = frag_feed("issuerA", "prod", 10);
+        sign(&sk, &mut p);
+        assert!(store.load(&p).is_ok());
+    }
+
+    /// TC-F1.15 / TC-F1.16 (FR-1f): with a transparency anchor configured, a fragment whose
+    /// receipt is an invalid signature is rejected; a valid receipt (anchor signature over
+    /// the statement) is accepted.
+    #[test]
+    fn transparency_receipt_is_cryptographically_verified() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (anchor_sk, anchor_pk) = keypair(9);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.set_transparency_anchor(&anchor_pk).unwrap();
+
+        // Build + issuer-sign a fragment.
+        let mut f = frag_feed("issuerA", "", 1);
+        f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+
+        // Bogus receipt -> rejected.
+        f.receipt = Some("deadbeef".into());
+        assert_eq!(store.verify(&f).unwrap_err(), FragmentError::InvalidReceipt);
+
+        // Valid receipt: anchor signs the same statement.
+        let rsig = anchor_sk.sign(&f.signing_bytes());
+        f.receipt = Some(rsig.to_bytes().iter().map(|b| format!("{:02x}", b)).collect());
+        assert!(store.verify(&f).is_ok());
+    }
+
+    /// TC-F1.17 / TC-F1.18 / TC-F1.19 (FR-1g): a chain of fragments applies in dependency
+    /// order; a fragment requiring an unloaded dependency is rejected; because `requires`
+    /// can only reference already-loaded fragments, cycles/unbounded depth are impossible.
+    #[test]
+    fn fragment_chaining_requires_loaded_dependencies() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+
+        // Base fragment (svn 1), id "issuerA//1".
+        let mut base = frag_feed("issuerA", "", 1);
+        sign(&sk, &mut base);
+        let base_id = base.id();
+
+        // Dependent fragment (svn 2) requires the base.
+        let mut dep = frag_feed("issuerA", "", 2);
+        dep.requires = vec![base_id.clone()];
+        sign(&sk, &mut dep);
+
+        // Loading the dependent before the base is rejected (broken link).
+        assert_eq!(
+            store.verify(&dep).unwrap_err(),
+            FragmentError::UnsatisfiedRequirement {
+                requires: base_id.clone()
+            }
+        );
+
+        // Load the base first, then the dependent applies.
+        store.load(&base).unwrap();
+        assert!(store.load(&dep).is_ok());
+
+        // A fragment requiring a never-loaded id is rejected wholesale.
+        let mut orphan = frag_feed("issuerA", "", 3);
+        orphan.requires = vec!["issuerA//999".into()];
+        sign(&sk, &mut orphan);
+        assert!(matches!(
+            store.verify(&orphan).unwrap_err(),
+            FragmentError::UnsatisfiedRequirement { .. }
+        ));
     }
 }
