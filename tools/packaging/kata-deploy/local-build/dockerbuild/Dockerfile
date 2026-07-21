@@ -45,6 +45,7 @@ RUN apt-get update && \
     build-essential \
     cpio \
     gcc \
+    jq \
     unzip \
     git \
     make \

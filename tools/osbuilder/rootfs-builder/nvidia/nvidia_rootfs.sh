@@ -50,6 +50,47 @@ nvidia_stage_one_variant() {
 stage_one="${BUILD_DIR:?}/rootfs-$(nvidia_stage_one_variant)-stage-one"
 readonly stage_one
 
+# The driver ships its own capability-to-file map so we do not have to maintain
+# one ourselves or guess from filename prefixes.
+readonly filelist="${stage_one}/usr/share/nvidia/files.d/sandboxutils-filelist.json"
+
+# sandboxutils-filelist.json schema (one object per file):
+#   { "name": "libcuda.so.570.00",
+#     "type": "LIB",                          # LIB | BINARY | FIRMWARE | ICD | SYMLINK | ...
+#     "category": ["cuda", "vulkan", ...],    # capability tags; a file can belong to many
+#     "is_32bit_compat": "true"               # present only on 32-bit compat entries
+#   }
+#
+# If this schema changes (key renamed, type values altered) jq will return
+# empty output and nvidia_driver_capabilities_validate() will catch it early.
+nvidia_driver_capabilities_validate() {
+	command -v jq > /dev/null || die "nvidia: jq is required but not installed"
+	[[ -f "${filelist}" ]] || die "sandboxutils filelist not found: ${filelist}"
+	# Require at least one entry with the mandatory keys (name, type, category).
+	local count
+	count=$(jq '[.[] | select(.name and .type and .category)] | length' "${filelist}") \
+		|| die "nvidia: sandboxutils-filelist.json is not valid JSON"
+	[[ "${count}" -gt 0 ]] \
+		|| die "nvidia: sandboxutils-filelist.json missing expected keys (name/type/category) — schema may have changed"
+}
+
+# nvidia_driver_capabilities TYPE CATEGORY [CATEGORY ...]
+#
+# The driver knows better than we do which files belong to which capability.
+# 32-bit compat entries are skipped: kata is 64-bit only.
+nvidia_driver_capabilities() {
+	local filetype="${1:?type required}"; shift
+	command -v jq > /dev/null || die "jq is required for nvidia_driver_capabilities"
+	[[ -f "${filelist}" ]] || die "sandboxutils filelist not found: ${filelist}"
+
+	jq -r --arg ftype "${filetype}" \
+		'[.[] | select((.is_32bit_compat // false | tostring) != "true")
+		       | select(.type == $ftype)
+		       | select([.category[] | IN($ARGS.positional[])] | any)
+		       | .name] | unique[]' \
+		"${filelist}" --args "$@"
+}
+
 # Image layout produced from the chiseled tree:
 #   monolith    - the full GPU image (default; unchanged behaviour)
 #   base        - driver-agnostic nvidia base (NVRC init + agent + base libs)
@@ -229,16 +270,60 @@ chisseled_compute() {
 
 	cp -aL "${stage_one}/${libdir}"/ld-linux-* "${libdir}"/.
 
+	# Kata runs headless compute workloads; the graphics stack (EGL, OpenGL,
+	# Vulkan, NGX, OptiX) has no consumers in the guest and only inflates the
+	# image. video is included for headless ffmpeg (nvenc/nvdec go through
+	# /dev/nvidia0, not DRI, so no display stack is needed).
+	# nvapi is excluded: libnvidia-api.so is a Linux shim for the Windows
+	# NVAPI SDK and has no CUDA compute dependency.
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
-	cp -a "${stage_one}/${libdir}"/libnv*        lib/"${machine_arch}"-linux-gnu/.
-	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
+	destdir=lib/"${machine_arch}"-linux-gnu
 
-	# basic GPU admin tools
-	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
-	cp -a "${stage_one}"/usr/bin/nvidia-smi           bin/.
-	cp -a "${stage_one}"/usr/bin/nvidia-ctk           bin/.
-	cp -a "${stage_one}"/usr/bin/nvidia-cdi-hook      bin/.
+	for lib in "${_nvidia_libs[@]}"; do
+		# pkcs11 is only needed for the TEE attestation path in confidential builds.
+		if [[ "${type}" != "confidential" ]] && [[ "${lib}" == libnvidia-pkcs11* ]]; then
+			continue
+		fi
+		# vdpau needs a display server (X11/Wayland); cannot function headless.
+		# cudadebugger is cuda-gdb support; no production use in a VM.
+		# opticalflow is a specialised CV primitive, not general compute.
+		case "${lib}" in
+			libvdpau_nvidia.*|libcudadebugger.*|libnvidia-opticalflow.*) continue ;;
+		esac
+		# The filelist is a superset; skip files absent on this OS/SSL configuration.
+		[[ -e "${stage_one}/${libdir}/${lib}" ]] && cp -a "${stage_one}/${libdir}/${lib}" "${destdir}/."
+	done
+
+	# libnvidia-allocator is classified as graphics-only in the filelist but
+	# the CUDA driver dlopens it at runtime for GPU memory management; omitting
+	# it causes headless CUDA workloads to hang on driver initialisation.
+	find "${stage_one}/${libdir}" -maxdepth 1 -name "libnvidia-allocator.so*" \
+		-exec cp -a {} "${destdir}/." \;
+
+	for binary in "${_nvidia_bins[@]}"; do
+		# MPS assumes a persistent host daemon model that conflicts with
+		# NVRC's per-container lifecycle. debugdump is a host-side tool.
+		case "${binary}" in
+			nvidia-cuda-mps-control|nvidia-cuda-mps-server|nvidia-debugdump) continue ;;
+		esac
+		[[ -e "${stage_one}/usr/bin/${binary}" ]] && cp -a "${stage_one}/usr/bin/${binary}" bin/.
+	done
+
+	# OpenCL ICD registration so the OpenCL loader finds the NVIDIA driver.
+	mkdir -p etc/OpenCL/vendors
+	for icd in "${_nvidia_icds[@]}"; do
+		[[ -e "${stage_one}/etc/OpenCL/vendors/${icd}" ]] && cp -a "${stage_one}/etc/OpenCL/vendors/${icd}" etc/OpenCL/vendors/.
+	done
+
 	ln -s ../bin usr/bin
+}
+
+chisseled_ctk() {
+	echo "nvidia: chisseling container-toolkit"
+	# nvidia-ctk and nvidia-cdi-hook come from the container-toolkit package,
+	# not the driver, so they are not in the sandboxutils filelist.
+	cp -a "${stage_one}"/usr/bin/nvidia-ctk      bin/.
+	cp -a "${stage_one}"/usr/bin/nvidia-cdi-hook bin/.
 }
 
 chisseled_gpudirect() {
@@ -447,12 +532,8 @@ readonly nvidia_gpu_extension_bins=(
 # GPU shared-library globs (inside the multiarch lib dir, plus libgrpc_mgr in
 # /lib) owned by the gpu extension.
 #
-# 'libnv*' is deliberately broad: the NVIDIA userspace ships many libraries that
-# start with libnv but not libnvidia- (libnvcuvid, libnvrtc, libnvidia-*,
-# libnvoptix, libnvToolsExt, ...), and we want all of them in the extension. This
-# is safe because the source tree is a chiseled rootfs that only contains what the
-# NVIDIA driver/CUDA install puts there - there is no unrelated libnv* (e.g. an
-# NVMe libnvme) to accidentally sweep in.
+# The chiseled rootfs is built from the filelist so only compute/video libs
+# are present; the globs below cannot accidentally match graphics libs.
 readonly nvidia_gpu_extension_lib_globs=(
 	'libnv*'
 	'libcuda.so*'
@@ -512,6 +593,13 @@ partition_gpu_extension() {
 	# in the given dir (no cache, no chroot), which is all the loader-less extension
 	# needs. The monolith gets the same links via the `chroot . ldconfig` below.
 	ldconfig -n "${extension}/${extlib}"
+
+	# Generate a full ldcache so nvidia-ctk can locate libraries efficiently
+	# when running with --driver-root=<extension>. Without it nvidia-ctk falls
+	# back to directory scanning, which serialises CDI generation and slows
+	# container start significantly.
+	mkdir -p "${extension}/etc"
+	ldconfig -r "${extension}" 2>/dev/null || true
 
 	# GPU configs (fabricmanager.cfg, nvlsm.conf, ...).
 	[[ -d usr/share/nvidia ]] && cp -a usr/share/nvidia/. "${extension}/usr/share/nvidia/"
@@ -702,6 +790,13 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 		tar -C "${stage_one}" -xf "${stage_one}".tar.zst
 
+		# Validate and populate capability arrays after stage-one is extracted
+		# so the filelist is actually present on disk.
+		nvidia_driver_capabilities_validate
+		mapfile -t _nvidia_libs < <(nvidia_driver_capabilities LIB cuda opencl nvml nvpd video nvsandboxutils)
+		mapfile -t _nvidia_bins < <(nvidia_driver_capabilities BINARY cuda nvml nvpd)
+		mapfile -t _nvidia_icds < <(nvidia_driver_capabilities ICD opencl)
+
 		pushd "${stage_two}" >> /dev/null
 
 		# stage-one archives the full base+driver tree with `tar
@@ -735,6 +830,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 			fi
 		done
 
+		chisseled_ctk
 		coco_guest_components
 		chisseled_nvat
 
