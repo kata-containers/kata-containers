@@ -301,6 +301,11 @@ static AGENT_CMDS: &[AgentCmd] = &[
         fp: agent_cmd_sandbox_set_policy,
     },
     AgentCmd {
+        name: "LoadPolicyFragment",
+        st: ServiceType::Agent,
+        fp: agent_cmd_load_policy_fragment,
+    },
+    AgentCmd {
         name: "MemAgentMemcgSet",
         st: ServiceType::Agent,
         fp: agent_cmd_mem_agent_memcg_set,
@@ -2209,6 +2214,67 @@ fn agent_cmd_sandbox_add_swap(
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
 
+    Ok(())
+}
+
+// FR-1: load a signed policy fragment. Arguments are space-separated key=value pairs to
+// avoid protobuf-bytes-in-JSON ambiguity:
+//   LoadPolicyFragment issuer=<id> svn=<n> includes=<csv> receipt=<r> \
+//       module=<path-to-rego> sig=<hex>
+fn agent_cmd_load_policy_fragment(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut kv = std::collections::HashMap::new();
+    for tok in args.split_whitespace() {
+        if let Some((k, v)) = tok.split_once('=') {
+            kv.insert(k.to_string(), v.to_string());
+        }
+    }
+    let get = |k: &str| kv.get(k).cloned().unwrap_or_default();
+
+    let hex_decode = |s: &str| -> Result<Vec<u8>> {
+        let s = s.trim();
+        if s.len() % 2 != 0 {
+            return Err(anyhow!("hex string has odd length"));
+        }
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| anyhow!("bad hex: {e}")))
+            .collect()
+    };
+
+    let includes: Vec<String> = get("includes")
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    let policy_module = match kv.get("module") {
+        Some(p) if !p.is_empty() => {
+            std::fs::read(p).map_err(|e| anyhow!("read fragment module file: {e}"))?
+        }
+        _ => Vec::new(),
+    };
+    let signature = hex_decode(&get("sig"))?;
+    let svn: u64 = get("svn").parse().unwrap_or(0);
+
+    let mut req = protocols::agent::LoadPolicyFragmentRequest::new();
+    req.issuer = get("issuer");
+    req.svn = svn;
+    req.includes = includes;
+    req.receipt = get("receipt");
+    req.signature = signature;
+    req.policy_module = policy_module;
+
+    let ctx = clone_context(ctx);
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+    let reply = client
+        .load_policy_fragment(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+    info!(sl!(), "response received"; "response" => format!("{:?}", reply));
     Ok(())
 }
 
