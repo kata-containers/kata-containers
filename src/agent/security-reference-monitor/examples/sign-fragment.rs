@@ -114,15 +114,38 @@ fn main() {
 
             let fragment = PolicyFragment {
                 issuer,
+                feed: f.get("feed").cloned().unwrap_or_default(),
                 svn,
                 grants: vec![],
                 policy_module: module,
                 includes,
+                requires: f
+                    .get("requires")
+                    .map(|s| {
+                        s.split(',')
+                            .map(|x| x.trim().to_string())
+                            .filter(|x| !x.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
                 receipt,
                 signature: vec![],
             };
             let sig = sk.sign(&fragment.signing_bytes());
             println!("signature_hex={}", hex_encode(&sig.to_bytes()));
+
+            // FR-1f: optionally also emit a transparency receipt = a signature over the
+            // same statement by the transparency anchor key (--receipt-key <hex>).
+            if let Some(rk_hex) = f.get("receipt-key") {
+                let rk_vec = hex_decode(rk_hex).expect("decode receipt key hex");
+                if rk_vec.len() == 32 {
+                    let mut rk = [0u8; 32];
+                    rk.copy_from_slice(&rk_vec);
+                    let ask = SigningKey::from_bytes(&rk);
+                    let rsig = ask.sign(&fragment.signing_bytes());
+                    println!("receipt_hex={}", hex_encode(&rsig.to_bytes()));
+                }
+            }
         }
         other => {
             eprintln!("unknown subcommand: {other}");

@@ -2263,8 +2263,14 @@ fn agent_cmd_load_policy_fragment(
 
     let mut req = protocols::agent::LoadPolicyFragmentRequest::new();
     req.issuer = get("issuer");
+    req.feed = get("feed");
     req.svn = svn;
     req.includes = includes;
+    req.requires = get("requires")
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
     req.receipt = get("receipt");
     req.signature = signature;
     req.policy_module = policy_module;
