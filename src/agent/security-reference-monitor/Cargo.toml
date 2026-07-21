@@ -7,3 +7,4 @@ license.workspace = true
 
 [dependencies]
 ed25519-dalek = { version = "2", default-features = false }
+coset = "0.3"

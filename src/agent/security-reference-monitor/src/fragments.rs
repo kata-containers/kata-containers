@@ -285,6 +285,55 @@ impl FragmentStore {
         key.verify(&statement, &sig)
             .map_err(|_| FragmentError::InvalidSignature)?;
 
+        // 3+. Remaining gates (feed, SVN, receipt, requires, add-only).
+        self.check_gates(fragment, &statement)
+    }
+
+    /// FR-1h: verify a fragment carried in a COSE_Sign1 (CBOR) envelope, for interop with
+    /// COSE tooling (`sign1util` / `az confcom`). The envelope's payload must equal the
+    /// fragment statement, and its signature must verify against the authorized issuer's
+    /// Ed25519 key (EdDSA). After signature verification the same gates as [`verify`] apply.
+    pub fn verify_cose(
+        &self,
+        fragment: &PolicyFragment,
+        cose_sign1: &[u8],
+    ) -> Result<VerifiedFragment, FragmentError> {
+        let key = self
+            .issuers
+            .get(&fragment.issuer)
+            .ok_or_else(|| FragmentError::UnauthorizedIssuer(fragment.issuer.clone()))?;
+
+        use coset::CborSerializable;
+        let sign1 = coset::CoseSign1::from_slice(cose_sign1)
+            .map_err(|_| FragmentError::InvalidSignature)?;
+
+        // The COSE payload must be exactly the fragment statement, binding the envelope to
+        // the presented fields.
+        let statement = fragment.signing_bytes();
+        match &sign1.payload {
+            Some(p) if p.as_slice() == statement.as_slice() => {}
+            _ => return Err(FragmentError::InvalidSignature),
+        }
+
+        // Verify the COSE_Sign1 signature (coset reconstructs the Sig_structure).
+        sign1
+            .verify_signature(b"", |sig, tbs| {
+                let s = Signature::from_slice(sig).map_err(|_| ())?;
+                key.verify(tbs, &s).map_err(|_| ())
+            })
+            .map_err(|_| FragmentError::InvalidSignature)?;
+
+        self.check_gates(fragment, &statement)
+    }
+
+    /// The verification gates that follow signature verification (shared by the native and
+    /// COSE paths): feed declared, monotonic SVN, transparency receipt, requires loaded,
+    /// add-only.
+    fn check_gates(
+        &self,
+        fragment: &PolicyFragment,
+        statement: &[u8],
+    ) -> Result<VerifiedFragment, FragmentError> {
         // 3. FR-1e: the (issuer, feed) pair must be declared/accepted.
         let feed_key = (fragment.issuer.clone(), fragment.feed.clone());
         if !self.feeds.contains_key(&feed_key) {
@@ -315,7 +364,7 @@ impl FragmentStore {
             let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
             let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
             anchor
-                .verify(&statement, &rsig)
+                .verify(statement, &rsig)
                 .map_err(|_| FragmentError::InvalidReceipt)?;
         }
 
@@ -367,6 +416,39 @@ impl FragmentStore {
     pub fn load(&mut self, fragment: &PolicyFragment) -> Result<Vec<String>, FragmentError> {
         let verified = self.verify(fragment)?;
         Ok(self.commit(&verified))
+    }
+
+    /// FR-1i: export the per-`(issuer, feed)` SVN high-water marks as a stable text snapshot
+    /// (`issuer\tfeed\tsvn` per line) for persistence to a sealed/measured store. Sorted
+    /// for determinism.
+    pub fn export_svn_state(&self) -> String {
+        let mut lines: Vec<String> = self
+            .last_svn
+            .iter()
+            .map(|((issuer, feed), svn)| format!("{issuer}\t{feed}\t{svn}"))
+            .collect();
+        lines.sort();
+        lines.join("\n")
+    }
+
+    /// FR-1i: import a persisted SVN snapshot on boot. Each entry can only **raise** the
+    /// high-water mark for its `(issuer, feed)`, never lower it — so an agent/VM restart can
+    /// never reopen a rollback window (a fragment at or below a previously-accepted SVN
+    /// stays rejected). Combined with the declarative floor (FR-1e), the effective minimum
+    /// is `max(declared floor, persisted high-water + 1)`.
+    pub fn import_svn_state(&mut self, snapshot: &str) {
+        for line in snapshot.lines() {
+            let mut it = line.splitn(3, '\t');
+            let (Some(issuer), Some(feed), Some(svn)) = (it.next(), it.next(), it.next()) else {
+                continue;
+            };
+            let Ok(svn) = svn.trim().parse::<u64>() else {
+                continue;
+            };
+            let key = (issuer.to_string(), feed.to_string());
+            let entry = self.last_svn.entry(key).or_insert(0);
+            *entry = (*entry).max(svn);
+        }
     }
 }
 
@@ -737,5 +819,94 @@ mod tests {
             store.verify(&orphan).unwrap_err(),
             FragmentError::UnsatisfiedRequirement { .. }
         ));
+    }
+
+    /// TC-F1.21 (FR-1i): SVN high-water marks survive a restart via export/import, so a
+    /// fragment at or below a previously-accepted SVN stays rejected after restart.
+    #[test]
+    fn svn_state_persists_across_restart() {
+        let (sk, pk) = keypair(1);
+
+        // First "boot": accept svn 5 on the default feed.
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        let mut f5 = frag_feed("issuerA", "", 5);
+        sign(&sk, &mut f5);
+        store.load(&f5).unwrap();
+        let snapshot = store.export_svn_state();
+        assert!(snapshot.contains("issuerA\t\t5"));
+
+        // "Restart": a fresh store re-seeds issuers/floors, then imports the snapshot.
+        let mut restarted = FragmentStore::new(true);
+        restarted.authorize_issuer("issuerA", &pk).unwrap();
+        restarted.import_svn_state(&snapshot);
+
+        // A replay of svn 5 (or lower) is still rejected after restart.
+        assert!(matches!(
+            restarted.verify(&f5).unwrap_err(),
+            FragmentError::RolledBackSvn { min_required: 6, .. }
+        ));
+        // svn 6 is accepted.
+        let mut f6 = frag_feed("issuerA", "", 6);
+        sign(&sk, &mut f6);
+        assert!(restarted.load(&f6).is_ok());
+
+        // import can only raise, never lower: importing an older snapshot is a no-op.
+        restarted.import_svn_state("issuerA\t\t2");
+        assert!(matches!(
+            restarted.verify(&f6).unwrap_err(),
+            FragmentError::RolledBackSvn { min_required: 7, .. }
+        ));
+    }
+
+    /// TC-F1.20 (FR-1h): a fragment carried in a COSE_Sign1 envelope, signed by the
+    /// authorized issuer over the fragment statement, verifies through the COSE path; a
+    /// tampered envelope is rejected.
+    #[test]
+    fn cose_sign1_fragment_verifies() {
+        use coset::{iana, CborSerializable, CoseSign1Builder, HeaderBuilder};
+
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+
+        // The fragment whose statement the COSE envelope carries.
+        let fragment = PolicyFragment {
+            issuer: "issuerA".into(),
+            svn: 1,
+            policy_module: Some("package agent_policy.fragments\nexec_allowed := true".into()),
+            includes: vec!["exec".into()],
+            receipt: Some("r1".into()),
+            ..Default::default()
+        };
+        let statement = fragment.signing_bytes();
+
+        // Build a COSE_Sign1 (EdDSA) with the statement as payload, signed by the issuer.
+        let protected = HeaderBuilder::new().algorithm(iana::Algorithm::EdDSA).build();
+        let sign1 = CoseSign1Builder::new()
+            .protected(protected)
+            .payload(statement.clone())
+            .create_signature(b"", |tbs| sk.sign(tbs).to_bytes().to_vec())
+            .build();
+        let cose_bytes = sign1.to_vec().unwrap();
+
+        // Verifies through the COSE path.
+        let v = store.verify_cose(&fragment, &cose_bytes).unwrap();
+        assert_eq!(v.issuer, "issuerA");
+        assert!(v.policy_module.is_some());
+
+        // A tampered envelope (flip a signature byte) is rejected.
+        let mut tampered = cose_bytes.clone();
+        let n = tampered.len();
+        tampered[n - 1] ^= 0xff;
+        assert!(store.verify_cose(&fragment, &tampered).is_err());
+
+        // A COSE envelope whose payload does not match the presented fields is rejected.
+        let mut other = fragment.clone();
+        other.svn = 2;
+        assert_eq!(
+            store.verify_cose(&other, &cose_bytes).unwrap_err(),
+            FragmentError::InvalidSignature
+        );
     }
 }
