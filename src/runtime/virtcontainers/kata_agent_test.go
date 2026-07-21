@@ -1131,6 +1131,7 @@ func TestKataAgentKernelParams(t *testing.T) {
 		containerPipeSize    uint32
 		launchProcessTimeout uint32
 		visibleCdiDevices    bool
+		debugConsoleShell    string
 		expectedParams       []Param
 	}
 
@@ -1140,6 +1141,7 @@ func TestKataAgentKernelParams(t *testing.T) {
 	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
 	launchProcessTimeoutParam := Param{Key: vcAnnotations.LaunchProcessTimeoutKernelParam, Value: "60"}
 	visibleCdiDevicesParam := Param{Key: "agent.visible_cdi_devices", Value: "true"}
+	debugConsoleShellParam := Param{Key: "agent.debug_console_shell", Value: "/run/kata-extensions/devkit/bin/sh"}
 
 	data := []testData{
 		{name: "no options", expectedParams: []Param{}},
@@ -1163,6 +1165,8 @@ func TestKataAgentKernelParams(t *testing.T) {
 		{name: "debug and launch process timeout", debug: true, launchProcessTimeout: 60, expectedParams: []Param{debugParam, launchProcessTimeoutParam}},
 
 		{name: "visible cdi devices", visibleCdiDevices: true, expectedParams: []Param{visibleCdiDevicesParam}},
+
+		{name: "debug console shell", debugConsoleShell: "/run/kata-extensions/devkit/bin/sh", expectedParams: []Param{debugConsoleShellParam}},
 	}
 
 	for _, d := range data {
@@ -1175,6 +1179,7 @@ func TestKataAgentKernelParams(t *testing.T) {
 				ContainerPipeSize:    d.containerPipeSize,
 				LaunchProcessTimeout: d.launchProcessTimeout,
 				VisibleCdiDevices:    d.visibleCdiDevices,
+				DebugConsoleShell:    d.debugConsoleShell,
 			}
 
 			params := KataAgentKernelParams(config)

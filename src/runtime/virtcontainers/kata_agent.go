@@ -95,6 +95,7 @@ const (
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
 	kernelParamDebugConsoleVPortValue = "1026"
+	kernelParamDebugConsoleShell      = "agent.debug_console_shell"
 
 	// Default SELinux type applied to the container process inside guest
 	defaultSeLinuxContainerType = "container_t"
@@ -309,6 +310,7 @@ type KataAgentConfig struct {
 	Debug                bool
 	Trace                bool
 	EnableDebugConsole   bool
+	DebugConsoleShell    string
 	VisibleCdiDevices    bool
 	Policy               string
 }
@@ -369,6 +371,10 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.EnableDebugConsole {
 		params = append(params, Param{Key: kernelParamDebugConsole, Value: ""})
 		params = append(params, Param{Key: kernelParamDebugConsoleVPort, Value: kernelParamDebugConsoleVPortValue})
+	}
+
+	if config.DebugConsoleShell != "" {
+		params = append(params, Param{Key: kernelParamDebugConsoleShell, Value: config.DebugConsoleShell})
 	}
 
 	if config.CdhApiTimeout > 0 {

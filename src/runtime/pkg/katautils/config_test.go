@@ -1841,6 +1841,36 @@ vfio_mode="vfio"
 	assert.Equal(t, config.Runtime.VfioMode, "vfio")
 }
 
+func TestLoadDropInAgentDebugConsoleShell(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	configPath := path.Join(tmpdir, "runtime.toml")
+	err := createConfig(configPath, `
+[hypervisor.qemu]
+path = "/usr/bin/qemu-kvm"
+[runtime]
+hypervisor_name = "qemu"
+agent_name = "kata"
+`)
+	assert.NoError(t, err)
+
+	dropInDir := path.Join(tmpdir, "config.d")
+	err = os.Mkdir(dropInDir, os.FileMode(0777))
+	assert.NoError(t, err)
+
+	err = createConfig(path.Join(dropInDir, "20-debug.toml"), `
+[agent.kata]
+debug_console_enabled = true
+debug_console_shell = "/run/kata-extensions/devkit/bin/sh"
+`)
+	assert.NoError(t, err)
+
+	_, runtimeConfig, err := LoadConfiguration(configPath, true)
+	assert.NoError(t, err)
+	assert.True(t, runtimeConfig.AgentConfig.EnableDebugConsole)
+	assert.Equal(t, "/run/kata-extensions/devkit/bin/sh", runtimeConfig.AgentConfig.DebugConsoleShell)
+}
+
 func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 	assert := assert.New(t)
 

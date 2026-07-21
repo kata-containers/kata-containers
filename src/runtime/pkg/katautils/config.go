@@ -233,6 +233,7 @@ type agent struct {
 	Debug                bool     `toml:"enable_debug"`
 	Tracing              bool     `toml:"enable_tracing"`
 	DebugConsoleEnabled  bool     `toml:"debug_console_enabled"`
+	DebugConsoleShell    string   `toml:"debug_console_shell"`
 	DialTimeout          uint32   `toml:"dial_timeout"`
 	CdhApiTimeout        uint32   `toml:"cdh_api_timeout"`
 	LaunchProcessTimeout uint32   `toml:"launch_process_timeout"`
@@ -795,6 +796,10 @@ func (h hypervisor) getRemoteHypervisorTimeout() uint32 {
 
 func (a agent) debugConsoleEnabled() bool {
 	return a.DebugConsoleEnabled
+}
+
+func (a agent) debugConsoleShell() string {
+	return a.DebugConsoleShell
 }
 
 func (a agent) dialTimout() uint32 {
@@ -1534,6 +1539,7 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 			Trace:                agent.trace(),
 			KernelModules:        agent.kernelModules(),
 			EnableDebugConsole:   agent.debugConsoleEnabled(),
+			DebugConsoleShell:    agent.debugConsoleShell(),
 			DialTimeout:          agent.dialTimout(),
 			CdhApiTimeout:        agent.cdhApiTimout(),
 			LaunchProcessTimeout: agent.launchProcessTimeout(),
