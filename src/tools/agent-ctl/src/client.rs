@@ -2274,6 +2274,12 @@ fn agent_cmd_load_policy_fragment(
     req.receipt = get("receipt");
     req.signature = signature;
     req.policy_module = policy_module;
+    // FR-1h: optional COSE_Sign1 envelope (hex) — verified instead of the detached sig.
+    if let Some(c) = kv.get("cose") {
+        if !c.is_empty() {
+            req.cose_sign1 = hex_decode(c)?;
+        }
+    }
 
     let ctx = clone_context(ctx);
     info!(sl!(), "sending request"; "request" => format!("{:?}", req));

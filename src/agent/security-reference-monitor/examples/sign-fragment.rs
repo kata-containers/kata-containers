@@ -41,17 +41,22 @@ fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// Parse `--flag value` pairs from args.
+/// Parse `--flag value` pairs from args. A `--flag` with no following value (end of args
+/// or immediately followed by another `--flag`) is recorded as a boolean (value "true").
 fn parse_flags(args: &[String]) -> HashMap<String, String> {
     let mut m = HashMap::new();
     let mut i = 0;
     while i < args.len() {
         if let Some(flag) = args[i].strip_prefix("--") {
-            if i + 1 < args.len() {
+            let next_is_value = i + 1 < args.len() && !args[i + 1].starts_with("--");
+            if next_is_value {
                 m.insert(flag.to_string(), args[i + 1].clone());
                 i += 2;
-                continue;
+            } else {
+                m.insert(flag.to_string(), "true".to_string());
+                i += 1;
             }
+            continue;
         }
         i += 1;
     }
@@ -145,6 +150,19 @@ fn main() {
                     let rsig = ask.sign(&fragment.signing_bytes());
                     println!("receipt_hex={}", hex_encode(&rsig.to_bytes()));
                 }
+            }
+
+            // FR-1h: optionally emit a COSE_Sign1 (CBOR) envelope carrying the statement as
+            // payload, signed by the issuer key (EdDSA) — for the COSE load path.
+            if f.contains_key("cose") {
+                use coset::{iana, CborSerializable, CoseSign1Builder, HeaderBuilder};
+                let protected = HeaderBuilder::new().algorithm(iana::Algorithm::EdDSA).build();
+                let sign1 = CoseSign1Builder::new()
+                    .protected(protected)
+                    .payload(fragment.signing_bytes())
+                    .create_signature(b"", |tbs| sk.sign(tbs).to_bytes().to_vec())
+                    .build();
+                println!("cose_sign1_hex={}", hex_encode(&sign1.to_vec().unwrap()));
             }
         }
         other => {
