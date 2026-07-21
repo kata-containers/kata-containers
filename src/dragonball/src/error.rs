@@ -195,10 +195,14 @@ pub enum StartMicroVmError {
     #[error("virtio-blk errors: {0}")]
     BlockDeviceError(#[source] device_manager::blk_dev_mgr::BlockDeviceError),
 
-    #[cfg(feature = "virtio-net")]
-    /// Virtio-net errors.
-    #[error("virtio-net errors: {0}")]
-    VirtioNetDeviceError(#[source] device_manager::virtio_net_dev_mgr::VirtioNetDeviceError),
+    #[cfg(any(
+        feature = "virtio-net",
+        feature = "vhost-net",
+        feature = "vhost-user-net"
+    ))]
+    /// Network device errors.
+    #[error("network device errors: {0}")]
+    NetworkDeviceError(#[source] device_manager::net_dev_mgr::NetworkDeviceError),
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// Virtio-fs errors.
@@ -209,18 +213,6 @@ pub enum StartMicroVmError {
     /// Virtio-balloon errors.
     #[error("virtio-balloon errors: {0}")]
     BalloonDeviceError(#[source] device_manager::balloon_dev_mgr::BalloonDeviceError),
-
-    /// Vhost-net device errors.
-    #[cfg(feature = "vhost-net")]
-    #[error("vhost-net errors: {0:?}")]
-    VhostNetDeviceError(#[source] device_manager::vhost_net_dev_mgr::VhostNetDeviceError),
-
-    /// Vhost-user-net device errors.
-    #[cfg(feature = "vhost-user-net")]
-    #[error("vhost-user-net errors: {0:?}")]
-    VhostUserNetDeviceError(
-        #[source] device_manager::vhost_user_net_dev_mgr::VhostUserNetDeviceError,
-    ),
     #[cfg(feature = "host-device")]
     /// Failed to create VFIO device
     #[error("cannot create VFIO device {0:?}")]
