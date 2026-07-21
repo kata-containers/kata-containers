@@ -1,0 +1,323 @@
+# Confidential-runtime execution-integrity hardening (PARMA compliance)
+
+In order to support **PARMA compliance**, we identified a set of hardening features that
+close concrete execution-integrity gaps in the Kata confidential-containers runtime, and
+this development branch (`coco-parity`) addresses them.
+
+PARMA reasons about a guest whose *authorized* plan equals its *executed* plan under a
+closed-door policy that mediates every host-reachable operation. Reaching that bar
+requires more than a policy check on the incoming request: the agent must default to
+deny, treat host-supplied identifiers as untrusted aliases, bind every mutating operation
+to a transactional state machine, verify that the object actually executed matches the
+object that was authorized, and freeze or refuse surfaces that would otherwise let the
+host mutate a running workload. The features below implement those properties as a
+"strict" build of the guest agent (`STRICT_POLICY=yes`), deployed via the `kata-parma`
+runtime profile.
+
+This document maps each feature to the requirement it satisfies, the commits that
+implement it, the security guarantee it introduces, and how it was validated.
+
+---
+
+## How to read this document
+
+- **Branch:** `coco-parity` (fork), based on kata `main` @ `4984d7944`.
+- **Strict build:** all hardening is compiled under the `strict-policy` feature; a normal
+  (non-strict) build is behaviourally unchanged, so the branch is safe to carry as a
+  superset.
+- **Trusted-state authority:** most guarantees are enforced by an agent-internal
+  **Security Reference Monitor (SRM)** crate (`src/agent/security-reference-monitor/`),
+  which owns the transactional lifecycle, occurrence registry, resource graph, CDI trust,
+  policy-fragment verifier, scratch classifier, TOCTOU handle binding, and network-phase
+  machine. Keeping this logic in one crate makes it unit-testable and, for the lifecycle,
+  formally model-checkable.
+- **No new host↔guest protocol** except FR-1 (`LoadPolicyFragment`), which is additive and
+  backward-compatible.
+- **Validation vocabulary:** *unit* = crate unit/integration tests; *matrix* = the live
+  `policy-matrix.sh` on strict `kata-parma` pods (expected 5/5); *live attack* = a
+  `kata-agent-ctl` ttRPC client impersonating the shim against a running guest.
+
+---
+
+## Feature → requirement → commit map
+
+| Requirement | Feature | Key commits |
+|---|---|---|
+| FR-2 | Closed-door default policy (fail closed) | `0a538d111` |
+| FR-12 | One-shot policy activation + strict capability advertisement | `85b3ce3f7`, `ad01dd311`, `8424e7e08` |
+| FR-6 | Two-phase transaction manager (SRM substrate) | `b10ffc663`, `b88ff8e51`, `e4d6c8c97`, `dfac4bd7a` |
+| FR-3 | Canonical object: authorized == executed | `61ee0ca0d`, `5a736c4a8`, `798301421` |
+| FR-9 | Container occurrence + lifecycle state machine | `96a0d641c`, `2434d3ef2` |
+| FR-7 | Complete-mediation manifest + CI coverage | `d68c96708` |
+| FR-4A | Ordered bijective resource graph | `6f8f42eea` |
+| FR-11 | Trusted device/CDI resolution + occurrence binding | `9669a913b`, `0f3aa0f2f` |
+| FR-10 | Disable generic CopyFile in strict | `0b41cf8a4` |
+| FR-1 | Signed, add-only policy fragments | `11285337c`, `4ccd43f8a` |
+| FR-5 | Encrypted scratch by effective mode | `44d6f9d04`, `b1603c3a6` |
+| FR-4B | Mount bound to the checked handle (TOCTOU) | `44d6f9d04`, `dbea0d59b` |
+| FR-14 | Network phase binding | `44d6f9d04`, `8cf9c5785` |
+| FR-7 (rest) | Debug console + diagnostics disabled in strict | `8cf9c5785` |
+| FR-15 | Formal model + fault injection + equivalence-claim proof | `21ac6e048`, `e76bc8d81` |
+| FR-8 | Structured, no-leak decision objects | `a59f5e74f` |
+| — | Local dev-env build plumbing | `c486222c1` |
+
+---
+
+## Stage 1 — Strict profile foundation
+
+### FR-2 — Closed-door default policy
+- **Gap:** a guest with no (or a not-yet-delivered) policy would fail open, allowing host
+  requests before an authorized policy is active.
+- **Fix:** the strict build ships a closed-door default policy that denies every request
+  except `SetPolicyRequest`. The "ignore requests failing policy" escape hatch is compiled
+  out of strict builds.
+- **Guarantee:** no host-reachable operation is permitted before an authorized policy is
+  activated; unknown/undefined requests are denied, not allowed.
+- **Commit:** `0a538d111`.
+- **Validated:** matrix — a pod booted with no policy is closed-door (sandbox denied).
+
+### FR-12 — One-shot policy activation + capability advertisement
+- **Gap:** if the host can replace the active policy at runtime, it can weaken enforcement
+  after attestation; a verifier also needs to distinguish a strict guest from a permissive
+  one.
+- **Fix:** once an authorized policy is active, `SetPolicy` is refused (changing policy
+  requires a new verifier-authorized epoch). The guest advertises `strict-policy` in its
+  build features.
+- **Guarantee:** policy is immutable within an epoch; a shim/verifier can detect a strict
+  guest before relying on it.
+- **Commits:** `85b3ce3f7` (one-shot), `ad01dd311` (advertisement), `8424e7e08` (build).
+- **Validated:** matrix + capability advertisement observed live.
+
+---
+
+## Stage 2 — Canonical object + transaction core
+
+### FR-6 — Two-phase transaction manager (Security Reference Monitor)
+- **Gap:** policy state and runtime state could diverge on partial failure, leaving the
+  enforcer believing a container/mount/identity exists (or not) when the opposite is true.
+- **Fix:** a universal `ReferenceMonitor` models every mutating operation as
+  `prepare → execute → commit`/`abort`, with idempotent replay, anti-replay via a monotonic
+  state version, and a fail-closed `quarantine`. `CreateContainer`, `ExecProcess`, and
+  `SignalProcess` run as SRM transactions; policy state is snapshotted before authorization
+  and restored on abort.
+- **Guarantee:** policy and runtime state commit together or are reconciled/rolled back;
+  an unprovable state quarantines the monitor (never fails open).
+- **Commits:** `b10ffc663` (crate), `b88ff8e51` (create), `e4d6c8c97` (exec/signal),
+  `dfac4bd7a` (policy-state rollback).
+- **Validated:** unit (transaction manager tests) + matrix no-regression.
+
+### FR-3 — Canonical object (authorized == executed)
+- **Gap:** the agent mutates the authorized request before executing it (effective signal
+  resolution, PCI-address rewriting of the exec environment, and a chain of in-guest OCI
+  transformers at create time), so the executed object was not the object policy saw.
+- **Fix, at all three mutation sites:**
+  - **Effective signal:** the delivered signal is resolved (e.g. `SIGTERM`→`SIGKILL` for an
+    init process with no handler) *before* authorization, so policy authorizes the signal
+    actually delivered (`61ee0ca0d`).
+  - **Exec environment:** `update_env_pci` is applied before authorization so the policy
+    evaluates the environment actually given to the process (`798301421`).
+  - **Create spec:** the authorized OCI spec is digested before any transformer runs, and
+    the fully-resolved spec is digested and bound to the create transaction; divergence is
+    recorded for audit (`5a736c4a8`).
+- **Guarantee:** the object that executes is explicitly and auditably tied to the object
+  that was authorized.
+- **Commits:** `61ee0ca0d`, `798301421`, `5a736c4a8`.
+- **Validated:** unit + matrix no-regression.
+
+---
+
+## Stage 3 — Resource graph + occurrence + total mediation
+
+### FR-9 — Container occurrence + lifecycle state machine
+- **Gap:** the host-supplied `container_id` is an untrusted alias — it can be forged,
+  reused, or replayed to drive illegal lifecycle transitions.
+- **Fix:** the enforcer mints its own occurrence handle per container and drives it through
+  `created → running → stopped → removed`. Lifecycle RPCs are gated on occurrence state,
+  with a monotonic per-alias generation as a replay guard and optional per-declaration
+  cardinality.
+- **Guarantee:** start-before-create, exec/signal on an unknown or not-running occurrence,
+  operations on a removed occurrence, and replay of a stale generation are all rejected.
+- **Commits:** `96a0d641c` (registry), `2434d3ef2` (wiring).
+- **Validated:** unit + **live attack** — `StartContainer` on a never-created id and
+  `SignalProcess` on an unknown id are denied under an allow-all policy (the gate is the
+  occurrence machine, not the policy).
+
+### FR-7 — Complete-mediation manifest
+- **Gap:** without a machine-checked inventory, a newly added RPC could ship unmediated.
+- **Fix:** a manifest classifies every agent ttRPC method by its enforcement point; build
+  tests fail if the proto and manifest drift, if the manifest lists a removed method, or if
+  a mediated handler does not reach its enforcement point.
+- **Guarantee:** every host-reachable RPC is provably mediated; there is no always-allow
+  escape hatch (the strict default is closed-door).
+- **Commit:** `d68c96708`.
+- **Validated:** three build-time CI tests.
+
+### FR-4A — Ordered bijective resource graph
+- **Gap:** verifying only that *some* declared resource matches each presented one, with
+  equal counts, lets image layers be reordered or a duplicate satisfy one declaration
+  twice — producing a different root filesystem than authorized.
+- **Fix:** a typed verifier enforces an order-relevant 1:1 mapping between declared and
+  presented resources and equality of each resource's integrity digest (dm-verity root
+  hash), returning typed handles bound to the declaration index.
+- **Guarantee:** reorder, duplicate, undeclared/extra, cardinality mismatch, and
+  stale-digest substitution are all rejected.
+- **Commit:** `6f8f42eea`.
+- **Validated:** unit tests (reorder / duplicate / stale-verity / undeclared / cardinality).
+- **Follow-up:** moving this bijection into the live rego/genpolicy storage check needs a
+  dm-verity/guest-pull-backed image to validate.
+
+---
+
+## Stage 4 — Conditional capabilities
+
+### FR-11 — Trusted device / CDI resolution
+- **Gap:** CDI resolution applies `containerEdits` (env/devices/mounts/hooks) from spec
+  files in the guest *after* authorization, from a possibly host-influenced source — the
+  device instance of the canonical-object gap.
+- **Fix:** every CDI spec that provides a requested device must be **measured** (its content
+  digest present in an authorized set); resolution is closed-door by default (host-arbitrary
+  CDI refused), and each authorized device is bound to the container occurrence.
+- **Guarantee:** a host cannot smuggle privilege via an unmeasured CDI annotation or spec;
+  resolved device handles are tied to the occurrence.
+- **Commits:** `9669a913b` (authorization logic), `0f3aa0f2f` (agent wiring + binding).
+- **Validated:** unit + device-module tests; matrix no-regression.
+- **Deferred (HW):** real GPU CC-attestation evidence for the device.
+
+### FR-10 — Disable generic CopyFile in strict
+- **Gap:** a generic host→guest `CopyFile` lands host-chosen bytes at a host-chosen path
+  with no content-addressing or execution-integrity guarantee.
+- **Fix:** strict builds refuse `CopyFile` outright (independent of the active policy) and
+  advertise `no-generic-copyfile`.
+- **Guarantee:** the host cannot plant files the policy never authorized.
+- **Commit:** `0b41cf8a4`.
+- **Validated:** **live attack** — `CopyFile` under an allow-all policy returns
+  `PERMISSION_DENIED`; matrix no-regression (pod creation does not require CopyFile).
+
+### FR-1 — Signed, add-only policy fragments
+- **Gap:** dynamically extending a policy at runtime is unsafe unless every extension is
+  authenticated, monotonic, and incapable of relaxing a base invariant.
+- **Fix:** a fragment verifier requires an authorized-issuer Ed25519 signature, a strictly
+  monotonic per-issuer SVN, add-only/fail-closed semantics against declared root
+  constraints, and a transparency receipt. A new `LoadPolicyFragment` RPC is doubly
+  mediated (policy `is_allowed` + signature verification) and fail-closed (no authorized
+  issuers ⇒ every fragment rejected).
+- **Guarantee:** unsigned, wrong-issuer, rolled-back, over-broad, or receipt-less fragments
+  are rejected; extensions can only add narrowly-scoped grants.
+- **Commits:** `11285337c` (verifier), `4ccd43f8a` (RPC wiring).
+- **Validated:** unit tests with generated keys (accept / unsigned / wrong-issuer /
+  rolled-back-SVN / over-broad / missing-receipt); the FR-7 mediation CI forced the new RPC
+  to be classified.
+- **Follow-up:** apply accepted grants into live rego re-evaluation; configure issuers and
+  verify transparency receipts from measured state.
+
+---
+
+## Stage 5 — Production hardening
+
+### FR-5 — Encrypted scratch by effective mode
+- **Gap:** trusting the host's storage driver options to decide whether scratch is
+  encrypted lets a host claim encryption while presenting a plaintext backing device.
+- **Fix:** the enforcer classifies scratch by its **effective** device-mapper target stack
+  (`dmsetup table`) — `crypt`/`integrity` — not the host's claim, and refuses a scratch
+  mount whose effective stack is plaintext.
+- **Guarantee:** writable scratch is provably encrypted; host-claims-encrypted-but-plaintext
+  is denied.
+- **Commits:** `44d6f9d04` (classifier), `b1603c3a6` (wiring).
+- **Validated:** unit tests (classification / plaintext-denied / effective-not-claimed).
+- **Follow-up:** live block-`emptyDir` validation needs a dm-crypt emptyDir pod.
+
+### FR-4B — Mount bound to the checked handle (TOCTOU)
+- **Gap:** a mount destination validated at check time can be swapped (symlink/rename)
+  before the mount syscall uses it.
+- **Fix:** capture the destination's identity (dev/ino) right after validation and
+  re-verify it immediately before `baremount`; a swap is detected and the mount refused.
+- **Guarantee:** a mount binds to the object that was checked, not a re-resolved name.
+- **Commits:** `44d6f9d04` (handle-binding), `dbea0d59b` (wiring).
+- **Validated:** unit tests including a real filesystem swap; matrix no-regression.
+
+### FR-14 — Network phase binding
+- **Gap:** a host that can add a route, rewrite iptables, or spoof ARP *after* the workload
+  starts can exfiltrate or redirect traffic.
+- **Fix:** a phase machine (`Boot → SandboxSetup → WorkloadRunning → Locked`) permits
+  network-mutating RPCs only during sandbox setup and freezes them once the workload runs;
+  a route allowlist further constrains programmed destinations.
+- **Guarantee:** post-start network mutation is refused.
+- **Commits:** `44d6f9d04` (phase machine), `8cf9c5785` (wiring).
+- **Validated:** unit tests + **live attack** — `UpdateRoutes` on a running pod is denied
+  (`FrozenPhase`); matrix no-regression (network config during sandbox setup is unaffected).
+
+### FR-7 (remainder) — Strict runtime surface
+- **Gap:** the interactive debug console and guest diagnostics are un-mediated
+  guest-access / data-exfiltration surfaces.
+- **Fix:** strict builds never launch the debug console (regardless of host config) and
+  refuse `GetDiagnosticData`; the guest advertises `no-debug-console` and
+  `no-guest-diagnostics`.
+- **Guarantee:** no un-mediated shell or diagnostic dump in a strict guest.
+- **Commit:** `8cf9c5785`.
+- **Validated:** **live** — features advertised; `GetDiagnosticData` denied in strict.
+
+---
+
+## Stage 6 — Formal proof + auditability
+
+### FR-15 — Formal model, fault injection, and the equivalence-claim proof
+- **Goal:** prove that no reachable state of the monitor is permissive or phantom — the
+  equivalence claim underpinning PARMA-style reasoning.
+- **Fix:**
+  - a **TLA+ model** (`src/agent/security-reference-monitor/formal/SRM.tla`) of the
+    two-phase lifecycle + quarantine, model-checked by TLC over all reachable states:
+    version equals committed count (no phantom/missed commit), `Commit` is enabled only from
+    `executed` (authorized == executed), committed/aborted are terminal & exclusive, and
+    quarantine is sticky;
+  - **fault-injection + fuzz** tests
+    (`src/agent/security-reference-monitor/tests/fault_injection.rs`): a fault injected at
+    every phase and reconciled as the agent does never leaves an operation committed or
+    advances the version; a deterministic 200-seed fuzz checks the invariants after every
+    step;
+  - an **aggregate negative-test runner** that runs the policy matrix and the FR-9/FR-10/
+    FR-14 live attacks (plus the unit/fault tests and the model check) as one gate.
+- **Guarantee:** the lifecycle safety properties hold under all interleavings and injected
+  faults; the negative-test matrix is the reproducible equivalence-claim proof.
+- **Commits:** `21ac6e048` (fault/fuzz), `e76bc8d81` (TLA+ model).
+- **Validated:** TLC — *no error* over 250 states; fault/fuzz tests pass; aggregate runner
+  green.
+
+### FR-8 — Structured, rule-attributable decision objects
+- **Gap:** denials must be auditable without leaking workload data.
+- **Fix:** on denial the policy emits a `DecisionObject` recording the endpoint, the
+  decision, the denied Rego rule (query path), and the **names** of the request's top-level
+  fields — never their values.
+- **Guarantee:** denials are rule-attributable and carry no environment values, sealed
+  secrets, or policy text.
+- **Commit:** `a59f5e74f`.
+- **Validated:** unit tests for attribution and the no-secret-leakage guarantee.
+
+---
+
+## Deferred / out of scope
+
+- **FR-13 (snapshot/restore/migration sealing) — not applicable.** Snapshot, restore, and
+  live-migration are not possible for GPU-passthrough (VFIO) confidential workloads at the
+  hypervisor/device layer, so there is no state to securely restore. The strict guest should
+  advertise these as unsupported and deny them; the anti-replay defenses that would back
+  secure migration (monotonic SRM state version, occurrence generation) already exist and
+  are model-checked. The sealing machinery itself is not built.
+- **Hardware-gated items** requiring a real TEE (SNP/TDX) or real GPU attestation:
+  verifier-bound claims and secret-release gating (part of FR-12), and real GPU
+  CC-attestation evidence for FR-11. These cannot be exercised on a software-only bed.
+- **FR-10 content-addressed artifact API** (`BeginArtifactInstall/…`) — an optional
+  alternative to the "disable CopyFile" default that this branch ships; build it only if
+  trusted host-delivered artifacts become a requirement.
+
+---
+
+## Validation at a glance
+
+- **Unit / integration:** the SRM crate carries the transaction manager, occurrence
+  registry, resource graph, CDI trust, fragment verifier, scratch classifier, handle
+  binding, network-phase machine, and lifecycle fault-injection/fuzz tests, all green.
+- **Formal:** TLC model-checks the lifecycle safety properties with no error.
+- **Live matrix:** the strict `kata-parma` profile passes the policy-enforcement matrix
+  with no regression, and the FR-9/FR-10/FR-14 live ttRPC attacks are denied.
+- **Mediation CI:** build-time tests keep the complete-mediation manifest in sync with the
+  agent protocol.
