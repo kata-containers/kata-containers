@@ -358,8 +358,8 @@ impl DragonballInner {
             num_queues: Some(num_queues),
             queue_size: Some(config.queue_size as u16),
             backend: dragonball::api::v1::Backend::VhostUser(DragonballVhostUserConfig {
+                iface_id: config.dev_id.clone(),
                 sock_path: config.socket_path.clone(),
-                ..Default::default()
             }),
             guest_mac,
             use_shared_irq: None,
