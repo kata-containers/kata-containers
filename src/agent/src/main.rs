@@ -892,6 +892,9 @@ const FRAGMENT_ISSUERS_PATH: &str = "/etc/kata/fragment-issuers.toml";
 struct FragmentTrustConfig {
     #[serde(default)]
     require_receipt: Option<bool>,
+    /// FR-1f: transparency anchor public key (hex); when set, receipts are verified.
+    #[serde(default)]
+    transparency_anchor_hex: Option<String>,
     #[serde(default)]
     issuer: Vec<FragmentIssuerConfig>,
 }
@@ -901,6 +904,17 @@ struct FragmentTrustConfig {
 struct FragmentIssuerConfig {
     id: String,
     ed25519_pubkey_hex: String,
+    #[serde(default)]
+    min_svn: u64,
+    /// FR-1e: named feeds this issuer may publish, with their SVN floor.
+    #[serde(default)]
+    feed: Vec<FragmentFeedConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct FragmentFeedConfig {
+    name: String,
     #[serde(default)]
     min_svn: u64,
 }
@@ -939,6 +953,14 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
         // Rebuild with the configured receipt requirement, preserving fail-closed default.
         *store = kata_security_reference_monitor::FragmentStore::new(rr);
     }
+    // FR-1f: configure the transparency anchor (receipts cryptographically verified).
+    if let Some(anchor_hex) = &cfg.transparency_anchor_hex {
+        let key = decode_hex32(anchor_hex).context("transparency anchor key")?;
+        store
+            .set_transparency_anchor(&key)
+            .map_err(|e| anyhow::anyhow!("set transparency anchor: {}", e))?;
+        info!(logger, "FR-1: transparency anchor configured");
+    }
     for issuer in &cfg.issuer {
         let key = decode_hex32(&issuer.ed25519_pubkey_hex)
             .with_context(|| format!("issuer {}", issuer.id))?;
@@ -946,8 +968,12 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
             .authorize_issuer(issuer.id.clone(), &key)
             .map_err(|e| anyhow::anyhow!("authorize issuer {}: {}", issuer.id, e))?;
         store.set_min_svn(issuer.id.clone(), issuer.min_svn);
+        // FR-1e: declare named feeds for this issuer.
+        for feed in &issuer.feed {
+            store.declare_feed(issuer.id.clone(), feed.name.clone(), feed.min_svn);
+        }
         info!(logger, "FR-1: authorized fragment issuer";
-            "issuer" => &issuer.id, "min-svn" => issuer.min_svn);
+            "issuer" => &issuer.id, "min-svn" => issuer.min_svn, "feeds" => issuer.feed.len());
     }
     Ok(())
 }

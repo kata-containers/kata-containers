@@ -650,6 +650,11 @@ message LoadPolicyFragmentRequest {
 	bytes policy_module = 6;
 	// FR-1c: the policy namespaces this fragment is scoped to contribute to.
 	repeated string includes = 7;
+	// FR-1e: the logical feed (scope) under the issuer; the base policy declares accepted
+	// (issuer, feed) pairs and their SVN floor.
+	string feed = 8;
+	// FR-1g: identifiers of fragments that must already be loaded before this one.
+	repeated string requires = 9;
 }
 
 message GetDiagnosticDataRequest {

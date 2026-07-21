@@ -2197,10 +2197,12 @@ impl agent_ttrpc::AgentService for AgentService {
         };
         let fragment = kata_security_reference_monitor::PolicyFragment {
             issuer: req.issuer.clone(),
+            feed: req.feed.clone(),
             svn: req.svn,
             grants: req.grants.to_vec(),
             policy_module: policy_module.clone(),
             includes: req.includes.to_vec(),
+            requires: req.requires.to_vec(),
             receipt: if req.receipt.is_empty() {
                 None
             } else {
