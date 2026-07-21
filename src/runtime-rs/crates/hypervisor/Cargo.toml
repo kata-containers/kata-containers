@@ -79,6 +79,7 @@ dragonball = { workspace = true, features = [
     "dbs-upcall",
     "virtio-mem",
     "virtio-balloon",
+    "virtio-rng",
     "vhost-user-net",
     "host-device",
 ], optional = true }

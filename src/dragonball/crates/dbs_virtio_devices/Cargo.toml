@@ -65,6 +65,7 @@ virtio-fs-pro = [
 ]
 virtio-mem = ["virtio-mmio"]
 virtio-balloon = ["virtio-mmio"]
+virtio-rng = ["virtio-mmio"]
 vhost = ["virtio-mmio", "vhost-rs/vhost-user-frontend", "vhost-rs/vhost-kern"]
 vhost-net = ["vhost", "vhost-rs/vhost-net"]
 vhost-user = ["vhost"]

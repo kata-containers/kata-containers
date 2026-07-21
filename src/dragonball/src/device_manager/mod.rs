@@ -117,6 +117,12 @@ pub mod balloon_dev_mgr;
 #[cfg(feature = "virtio-balloon")]
 use self::balloon_dev_mgr::BalloonDeviceMgr;
 
+#[cfg(feature = "virtio-rng")]
+/// Device manager for virtio-rng devices.
+pub mod rng_dev_mgr;
+#[cfg(feature = "virtio-rng")]
+use self::rng_dev_mgr::RngDeviceMgr;
+
 #[cfg(feature = "vhost-net")]
 /// Device manager for vhost-net devices.
 pub mod vhost_net_dev_mgr;
@@ -668,6 +674,9 @@ pub struct DeviceManager {
     #[cfg(feature = "virtio-balloon")]
     pub(crate) balloon_manager: BalloonDeviceMgr,
 
+    #[cfg(feature = "virtio-rng")]
+    pub(crate) rng_manager: RngDeviceMgr,
+
     #[cfg(feature = "vhost-net")]
     vhost_net_manager: VhostNetDeviceMgr,
 
@@ -745,6 +754,8 @@ impl DeviceManager {
             mem_manager: MemDeviceMgr::default(),
             #[cfg(feature = "virtio-balloon")]
             balloon_manager: BalloonDeviceMgr::default(),
+            #[cfg(feature = "virtio-rng")]
+            rng_manager: RngDeviceMgr::default(),
             #[cfg(feature = "vhost-net")]
             vhost_net_manager: VhostNetDeviceMgr::default(),
             #[cfg(feature = "vhost-user-net")]
@@ -926,6 +937,11 @@ impl DeviceManager {
 
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.attach_devices(&mut ctx)?;
+
+        #[cfg(feature = "virtio-rng")]
+        self.rng_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicroVmError::RngDeviceError)?;
 
         #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
         self.block_manager
@@ -1671,6 +1687,8 @@ mod tests {
                 mem_manager: MemDeviceMgr::default(),
                 #[cfg(feature = "virtio-balloon")]
                 balloon_manager: BalloonDeviceMgr::default(),
+                #[cfg(feature = "virtio-rng")]
+                rng_manager: RngDeviceMgr::default(),
                 #[cfg(target_arch = "aarch64")]
                 mmio_device_info: HashMap::new(),
                 #[cfg(feature = "vhost-net")]

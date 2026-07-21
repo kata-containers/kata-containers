@@ -210,6 +210,11 @@ pub enum StartMicroVmError {
     #[error("virtio-balloon errors: {0}")]
     BalloonDeviceError(#[source] device_manager::balloon_dev_mgr::BalloonDeviceError),
 
+    #[cfg(feature = "virtio-rng")]
+    /// Virtio-rng errors.
+    #[error("virtio-rng errors: {0}")]
+    RngDeviceError(#[source] device_manager::rng_dev_mgr::RngDeviceError),
+
     /// Vhost-net device errors.
     #[cfg(feature = "vhost-net")]
     #[error("vhost-net errors: {0:?}")]
