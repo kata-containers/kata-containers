@@ -303,6 +303,56 @@ impl AgentPolicy {
         Ok(())
     }
 
+    /// FR-1a: apply a verified policy fragment's Rego module to the live engine.
+    ///
+    /// This is the **only** sanctioned runtime extension of an active policy. Unlike
+    /// `set_policy` it is **additive** — it adds a named module via `add_policy` and does
+    /// NOT rebuild the engine, so it bypasses the FR-12 one-shot lock without weakening it
+    /// (`set_policy` stays rejected after activation). The fragment module must declare a
+    /// package inside the reserved fragment namespace (`agent_policy.fragments`, optionally
+    /// scoped to one of the fragment's `includes`), so a fragment can only *add* rules in
+    /// its own namespace and can never redefine or shadow a base `agent_policy` rule. The
+    /// base policy is authored to consult `data.agent_policy.fragments.*`.
+    pub fn apply_fragment_module(
+        &mut self,
+        name: &str,
+        rego: &str,
+        includes: &[String],
+    ) -> Result<()> {
+        let pkg = Self::rego_package(rego)
+            .ok_or_else(|| anyhow::anyhow!("fragment module has no package declaration"))?;
+
+        let mut allowed = vec!["agent_policy.fragments".to_string()];
+        for ns in includes {
+            allowed.push(format!("agent_policy.fragments.{ns}"));
+        }
+        if !allowed.iter().any(|a| a == &pkg) {
+            bail!(
+                "fragment module package {:?} is outside the permitted fragment namespaces {:?}",
+                pkg,
+                allowed
+            );
+        }
+
+        // Additive merge; never resets the engine, never touches the one-shot lock.
+        self.engine.add_policy(name.to_string(), rego.to_string())?;
+        Ok(())
+    }
+
+    /// Extract the top-level `package` path from a Rego module (e.g. "agent_policy.fragments").
+    fn rego_package(rego: &str) -> Option<String> {
+        for line in rego.lines() {
+            let l = line.trim();
+            if let Some(rest) = l.strip_prefix("package ") {
+                let pkg = rest.trim();
+                if !pkg.is_empty() {
+                    return Some(pkg.to_string());
+                }
+            }
+        }
+        None
+    }
+
     async fn log_eval_input(&mut self, ep: &str, input: &str) {
         if let Some(log_file) = &mut self.log_file {
             match ep {
@@ -447,6 +497,57 @@ mod tests {
     use std::convert::TryInto;
 
     use protocols::agent::CopyFileRequest;
+
+    // FR-1a helper: evaluate `data.agent_policy.<ep>` on a policy's engine and return
+    // whether it is boolean-true. Synchronous (no async runtime needed).
+    fn eval_bool(p: &mut AgentPolicy, ep: &str) -> bool {
+        p.engine.set_input_json("{}").unwrap();
+        let r = p
+            .engine
+            .eval_query(format!("data.agent_policy.{ep}"), false)
+            .unwrap();
+        matches!(
+            r.result.first().and_then(|x| x.expressions.first()).map(|e| &e.value),
+            Some(regorus::Value::Bool(true))
+        )
+    }
+
+    /// TC-F1.1: a verified fragment module flips a specific decision from deny→allow, and
+    /// base rules are otherwise unaffected.
+    #[test]
+    fn test_fragment_module_flips_deny_to_allow() {
+        let mut p = AgentPolicy::new();
+        // Base policy: exec denied unless a fragment fact grants it.
+        let base = "package agent_policy\n\
+            default ExecProcessRequest := false\n\
+            ExecProcessRequest := data.agent_policy.fragments.exec_allowed\n";
+        p.engine.add_policy("agent_policy".to_string(), base.to_string()).unwrap();
+        assert!(!eval_bool(&mut p, "ExecProcessRequest"), "denied before fragment");
+
+        // Apply a verified fragment module in the reserved namespace.
+        let module = "package agent_policy.fragments\nexec_allowed := true\n";
+        p.apply_fragment_module("frag:issuerA:1", module, &[]).unwrap();
+        assert!(eval_bool(&mut p, "ExecProcessRequest"), "allowed after fragment");
+    }
+
+    /// TC-F1.2: a fragment module outside the permitted fragment namespaces is rejected —
+    /// it can never redefine/shadow a base rule or contribute outside its `includes`.
+    #[test]
+    fn test_fragment_module_namespace_is_enforced() {
+        let mut p = AgentPolicy::new();
+        // A module trying to live in the base package is refused.
+        let base_ns = "package agent_policy\ndefault ExecProcessRequest := true\n";
+        assert!(p.apply_fragment_module("evil", base_ns, &[]).is_err());
+
+        // A sub-namespace not in `includes` is refused; one that is, is accepted.
+        let mount_ns = "package agent_policy.fragments.mount\nallowed := true\n";
+        assert!(p
+            .apply_fragment_module("m", mount_ns, &["exec".to_string()])
+            .is_err());
+        assert!(p
+            .apply_fragment_module("m", mount_ns, &["mount".to_string()])
+            .is_ok());
+    }
 
     struct TestCase {
         name: String,
