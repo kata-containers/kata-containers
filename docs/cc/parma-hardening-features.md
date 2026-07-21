@@ -294,6 +294,47 @@ implement it, the security guarantee it introduces, and how it was validated.
 
 ---
 
+## Scope relative to the upstream baseline
+
+This branch targets the **upstream** Kata base it forks from. Some deployments already
+harden a subset of these areas through build configuration or product-layer mechanisms; to
+keep the guarantees explicit and portable, the features below are classified by how they
+relate to the upstream baseline. All remain valid on an unmodified upstream base; on a
+pre-hardened deployment a few are parity or additional defense-in-depth.
+
+- **Baseline-independent invariants (novel relative to the upstream default):**
+  - **FR-2** — the upstream rootfs default policy is fail-open (`allow-all.rego`). A
+    deny-all-except-`SetPolicy` policy file exists in-tree but is not the default. This
+    branch compiles the **closed-door default into the strict agent binary** so it does not
+    depend on build-time policy-file selection, and it **compiles out** the
+    `AllowRequestsFailingPolicy` escape hatch entirely. This is a stronger, build-independent
+    form of the closed-door posture.
+
+- **Defense-in-depth (the base capability may already exist; these add assurance):**
+  - **FR-5 (effective-mode scratch verification)** — encrypted ephemeral storage already
+    exists when requested via storage driver options; this branch additionally verifies the
+    **effective** device-mapper stack (so a plaintext effective mount is refused even when
+    encryption was requested) and enforces a mandatory-encryption invariant.
+  - **FR-3 (create-spec canonical binding)** — because policy evaluation, the in-guest
+    transformers, and execution all run inside a **single trusted agent process** sourcing
+    trusted guest state, byte-identity between the authorized and executed OCI object is not
+    required for the security property. This branch therefore **only records/audits** the
+    authorized→executed digest relationship (it does not reorder transformers or enforce
+    byte-identity). The **effective-signal** and **exec-environment** pre-authorization
+    resolution (also under FR-3) are independent integrity improvements and are enforced.
+  - **FR-4B (mount TOCTOU handle binding)** — a defensive re-verification of the mount
+    destination's identity; closes a check-to-use window rather than a demonstrated exploit.
+
+- **Confirmed structural gaps closed here (independent of any product-layer hardening):**
+  FR-4A (ordered/bijective resource graph), FR-9 (occurrence/cardinality), FR-1 (signed
+  policy fragments), FR-6 (universal transactional rollback), FR-7 (total-mediation
+  manifest + gating the always-allowed lifecycle RPCs), FR-11 (trusted CDI/device
+  resolution), FR-14 (network phase binding + route allowlist), FR-10 (CopyFile content),
+  and FR-8/FR-15 (auditability + the model-checked equivalence proof). These are not
+  addressed by image-integrity or default-posture hardening alone.
+
+---
+
 ## Deferred / out of scope
 
 - **FR-13 (snapshot/restore/migration sealing) — not applicable.** Snapshot, restore, and
