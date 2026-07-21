@@ -14,15 +14,7 @@ DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 IMAGE_SIZE_ALIGNMENT_MB=${IMAGE_SIZE_ALIGNMENT_MB:-128}
 
-#For cross build
-CROSS_BUILD=${CROSS_BUILD:-false}
-BUILDX=""
-PLATFORM=""
-TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 ARCH=${ARCH:-$(uname -m)}
-[[ "${TARGET_ARCH}" == "aarch64" ]] && TARGET_ARCH=arm64
-TARGET_OS=${TARGET_OS:-linux}
-[[ "${CROSS_BUILD}" == "true" ]] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
 BUILD_VARIANT=${BUILD_VARIANT:-}
 
 readonly script_name="${0##*/}"
@@ -144,7 +136,7 @@ build_with_container() {
 	fi
 
 	# shellcheck disable=SC2154,SC2086,SC2248
-	"${container_engine}" ${BUILDX} build ${PLATFORM}  \
+	"${container_engine}" build \
 		   ${engine_build_args} \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
@@ -183,7 +175,6 @@ build_with_container() {
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
-		   --env TARGET_ARCH="${TARGET_ARCH}" \
 		   --env USER="$(id -u)" \
 		   --env GROUP="$(id -g)" \
 		   --env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \

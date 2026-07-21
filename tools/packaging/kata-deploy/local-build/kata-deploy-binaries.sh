@@ -805,9 +805,6 @@ install_initrd() {
 
 	latest_builder_image=""
 
-	# shellcheck disable=SC2154
-	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
-
 	install_cached_tarball_component \
 		"${component}" \
 		"${latest_artefact}" \

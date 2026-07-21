@@ -33,12 +33,10 @@ nvat_version="${nvat_version:-}"
 [[ -n "${nvat_version}" ]] || nvat_version=$(get_from_kata_deps ".externals.nvidia.nvat.version" 2>/dev/null || true)
 
 container_image="${COCO_GUEST_COMPONENTS_CONTAINER_BUILDER:-$(get_coco_guest_components_image_name)}"
-# shellcheck disable=SC2154
-[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
-	(docker ${BUILDX} build ${PLATFORM} \
+	(docker build \
 	    	--build-arg RUST_TOOLCHAIN="${coco_guest_components_toolchain}" \
 		--build-arg NVAT_VERSION="${nvat_version}" \
 		-t "${container_image}" "${script_dir}" && \

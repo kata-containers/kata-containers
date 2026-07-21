@@ -72,26 +72,8 @@ is_nvidia_confidential_variant() { [[ "${BUILD_VARIANT}" == "nvidia-gpu-confiden
 # shellcheck source=/dev/null
 is_nvidia_variant && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
-#For cross build
-CROSS_BUILD=${CROSS_BUILD:-false}
-BUILDX=""
-PLATFORM=""
-TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 ARCH=${ARCH:-$(uname -m)}
-[[ "${TARGET_ARCH}" == "aarch64" ]] && TARGET_ARCH=arm64
-TARGET_OS=${TARGET_OS:-linux}
 stripping_tool="strip"
-if [[ "${CROSS_BUILD}" == "true" ]]; then
-	# shellcheck disable=SC2034
-	BUILDX=buildx
-	# shellcheck disable=SC2034
-	PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
-	if command -v "${TARGET_ARCH}-linux-gnu-strip" >/dev/null; then
-		stripping_tool="${TARGET_ARCH}-linux-gnu-strip"
-	else
-		die "Could not find ${TARGET_ARCH}-linux-gnu-strip for cross build"
-	fi
-fi
 
 # The list of systemd units and files that are not needed in Kata Containers
 readonly -a systemd_units=(
@@ -211,8 +193,6 @@ AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
 
 ARCH                Target architecture (according to \`uname -m\`).
-                    Foreign bootstraps are currently only supported for Ubuntu
-                    and glibc agents.
                     Default value: $(uname -m)
 
 COCO_GUEST_COMPONENTS_TARBALL       Path to the kata-coco-guest-components.tar.zst tarball to be unpacked inside the
@@ -596,8 +576,6 @@ build_rootfs_distro()
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
-			--env CROSS_BUILD="${CROSS_BUILD}" \
-			--env TARGET_ARCH="${TARGET_ARCH}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \

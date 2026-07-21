@@ -9,13 +9,7 @@ MK_DIR := $(dir $(MK_PATH))
 # Verbose build
 V := 1
 
-ifeq ($(CROSS_BUILD),)
-	CROSS_BUILD = false
-endif
-
-ifeq ($(CROSS_BUILD),false)
-	ARCH := $(shell uname -m)
-endif
+ARCH := $(shell uname -m)
 
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \

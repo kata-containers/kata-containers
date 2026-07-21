@@ -19,7 +19,6 @@ VMM_CONFIGS="qemu fc"
 GO_VERSION=${GO_VERSION}
 # shellcheck disable=SC2269
 RUST_VERSION=${RUST_VERSION}
-CC=""
 
 RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
 DESTDIR=${DESTDIR:-${PWD}}
@@ -37,9 +36,6 @@ case "${RUNTIME_CHOICE}" in
 		exit 1
 		;;
 esac
-
-# shellcheck disable=SC2154
-[[ "${CROSS_BUILD}" == "true" ]] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 
 # Variants (targets) that build a measured rootfs as of now are:
 # - rootfs-image (the base image, measured; root hash labelled "base")
@@ -105,7 +101,7 @@ GO_EXTRA_OPTS+="$(read_verity_param "nvidia" "KERNELVERITYPARAMS_NV_BASE")"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
-	(docker ${BUILDX} build ${PLATFORM}  \
+	(docker build \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
 		-t "${container_image}" \
@@ -113,30 +109,21 @@ docker pull "${container_image}" || \
 	 push_to_registry "${container_image}")
 
 arch=${ARCH:-$(uname -m)}
-GCC_ARCH=${arch}
 if [[ "${arch}" = "ppc64le" ]]; then
-	GCC_ARCH="powerpc64le"
 	arch="ppc64"
 fi
 
 case "${RUNTIME_CHOICE}" in
 	"rust"|"both")
-		#Build rust project using cross build musl image to speed up
-		[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
-
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-			--env CROSS_BUILD="${CROSS_BUILD}" \
 			--env ARCH="${ARCH}" \
-			--env CC="${CC}" \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
 			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}${RUST_EXTRA_OPTS}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-			--env CROSS_BUILD="${CROSS_BUILD}" \
 		        --env ARCH="${ARCH}" \
-		        --env CC="${CC}" \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
@@ -154,8 +141,6 @@ fi
 
 case "${RUNTIME_CHOICE}" in
 	"go"|"both")
-		[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image_bk}-cross-build"
-
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			-w "${repo_root_dir}/src/runtime" \
 			--user "$(id -u)":"$(id -g)" \

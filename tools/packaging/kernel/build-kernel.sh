@@ -69,8 +69,6 @@ kernel_ref=""
 # Enable measurement of the guest rootfs at boot.
 measured_rootfs="false"
 
-CROSS_BUILD_ARG=""
-
 packaging_scripts_dir="${script_dir}/../scripts"
 # shellcheck source=tools/packaging/scripts/lib.sh
 source "${packaging_scripts_dir}/lib.sh"
@@ -494,8 +492,7 @@ setup_kernel() {
 
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
-	# shellcheck disable=SC2086
-	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
+	ARCH=${arch_target}  make oldconfig
 	)
 
 	info "Fetching NVIDIA driver source code"
@@ -518,8 +515,7 @@ build_kernel() {
 	[[ -n "${arch_target}" ]] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	# shellcheck disable=SC2086
-	make -j "$(nproc)" ARCH="${arch_target}" ${CROSS_BUILD_ARG}
+	make -j "$(nproc)" ARCH="${arch_target}"
 	if [[ "${conf_guest}" == "confidential" ]]; then
 		make -j "$(nproc)" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${kernel_path}" modules_install
 	fi
@@ -739,8 +735,6 @@ main() {
 	fi
 
 	info "Kernel version: ${kernel_version}"
-
-	[[ "${arch_target}" != "" ]] && [[ "${arch_target}" != "$(uname -m)" ]] && CROSS_BUILD_ARG="CROSS_COMPILE=${arch_target}-linux-gnu-"
 
 	case "${subcmd}" in
 		build)

@@ -20,34 +20,6 @@ http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
 ARCH=${ARCH:-$(uname -m)}
-CROSS_BUILD=
-# shellcheck disable=SC2034
-BUILDX=""
-# shellcheck disable=SC2034
-PLATFORM=""
-TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
-[[ "$(uname -m)" != "${TARGET_ARCH}" ]] && CROSS_BUILD=true
-
-[[ "${TARGET_ARCH}" == "aarch64" ]] && TARGET_ARCH=arm64
-
-# used for cross build
-TARGET_OS=${TARGET_OS:-linux}
-TARGET_ARCH=${TARGET_ARCH:-${ARCH}}
-
-# We've seen issues related to the /home/runner/.docker/buildx/activity/default file
-# constantly being with the wrong permissions.
-# Let's just remove the file before we build.
-rm -f "${HOME}"/.docker/buildx/activity/default
-
-# shellcheck disable=SC2034
-[[ "${CROSS_BUILD}" == "true" ]] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
-if [[ "${CROSS_BUILD}" == "true" ]]; then
-       # check if the current docker support docker buildx
-       docker buildx ls > /dev/null 2>&1 || { echo "no docker buildx support, please upgrade your docker" && exit 1; }
-       # check if docker buildx support target_arch, if not install it
-       r=$(docker buildx ls | grep "${TARGET_ARCH}" || true)
-       [[ -z "${r}" ]] && sudo docker run --privileged --rm tonistiigi/binfmt --install "${TARGET_ARCH}"
-fi
 
 if [[ "${script_dir}" != "${PWD}" && ! -L "${PWD}/build" ]]; then
 	# If a parallel job creates the link between the check and our ln,
@@ -82,7 +54,6 @@ docker build -q -t build-kata-deploy \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID="${docker_gid}" \
-	--build-arg ARCH="${ARCH}" \
 	"${script_dir}/dockerbuild/"
 
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
@@ -169,8 +140,6 @@ docker run \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
 	--env FAKE_SE_IMAGE="${FAKE_SE_IMAGE:-}" \
-	--env CROSS_BUILD="${CROSS_BUILD}" \
-	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
 	--rm \
 	-w "${script_dir}" \

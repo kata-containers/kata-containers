@@ -259,7 +259,6 @@ RUN . /root/.cargo/env; cargo install cargo-when
 
 	sed \
 		-e "s#@OS_VERSION@#${OS_VERSION:-}#g" \
-		-e "s#@ARCH@#${ARCH}#g" \
 		-e "s#@INSTALL_RUST@#${install_rust//$'\n'/\\n}#g" \
 		-e "s#@SET_PROXY@#${set_proxy:-}#g" \
 		Dockerfile.in > Dockerfile
