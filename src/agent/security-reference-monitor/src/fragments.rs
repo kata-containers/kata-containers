@@ -28,14 +28,20 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 /// A policy fragment presented for loading.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PolicyFragment {
     /// Identifier of the issuer that signed the fragment.
     pub issuer: String,
     /// Security version number; must strictly increase per issuer.
     pub svn: u64,
-    /// Additional grants introduced by this fragment (add-only).
+    /// Additional grants introduced by this fragment (add-only). Legacy/opaque form.
     pub grants: Vec<String>,
+    /// FR-1c: a signed Rego module (text) the fragment contributes to the policy engine
+    /// (Model A). Must declare a package under the reserved fragment namespace.
+    pub policy_module: Option<String>,
+    /// FR-1c: the policy namespaces this fragment is scoped to contribute to. The applier
+    /// refuses a module whose package is outside these.
+    pub includes: Vec<String>,
     /// Transparency receipt identifier/blob. Required when receipts are enforced.
     pub receipt: Option<String>,
     /// Detached Ed25519 signature over [`PolicyFragment::signing_bytes`].
@@ -44,11 +50,14 @@ pub struct PolicyFragment {
 
 impl PolicyFragment {
     /// Canonical byte encoding that the signature covers. Deterministic: the issuer, the
-    /// SVN, the sorted grants, and the receipt identifier are all bound, so a fragment's
-    /// grants/SVN/receipt cannot be altered without invalidating the signature.
+    /// SVN, the sorted grants, the contributed Rego module, the sorted `includes`
+    /// namespaces, and the receipt are all bound, so none can be altered without
+    /// invalidating the signature.
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut grants = self.grants.clone();
         grants.sort();
+        let mut includes = self.includes.clone();
+        includes.sort();
         let mut s = String::new();
         s.push_str("kata-policy-fragment/v1\n");
         s.push_str(&self.issuer);
@@ -59,10 +68,30 @@ impl PolicyFragment {
             s.push_str(g);
             s.push('\n');
         }
+        s.push_str("--includes--\n");
+        for i in &includes {
+            s.push_str(i);
+            s.push('\n');
+        }
+        s.push_str("--module--\n");
+        s.push_str(self.policy_module.as_deref().unwrap_or(""));
+        s.push('\n');
         s.push_str("--receipt--\n");
         s.push_str(self.receipt.as_deref().unwrap_or(""));
         s.into_bytes()
     }
+}
+
+/// A fragment that has passed every verification gate but has not yet been committed to the
+/// store. Returned by [`FragmentStore::verify`] so the caller can apply it to the policy
+/// engine and only then [`FragmentStore::commit`] it — keeping verify+apply atomic.
+#[derive(Debug, Clone)]
+pub struct VerifiedFragment {
+    pub issuer: String,
+    pub svn: u64,
+    pub grants: Vec<String>,
+    pub policy_module: Option<String>,
+    pub includes: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -115,6 +144,8 @@ pub struct FragmentStore {
     root_constraints: HashSet<String>,
     require_receipt: bool,
     active_grants: HashSet<String>,
+    /// FR-1b: declarative per-issuer SVN floor seeded from measured state.
+    min_svn: HashMap<String, u64>,
 }
 
 impl FragmentStore {
@@ -138,6 +169,12 @@ impl FragmentStore {
         Ok(())
     }
 
+    /// FR-1b: set a declarative minimum-SVN floor for an issuer (from measured state). A
+    /// fragment from this issuer is only accepted at `svn >= floor`.
+    pub fn set_min_svn(&mut self, issuer: impl Into<String>, floor: u64) {
+        self.min_svn.insert(issuer.into(), floor);
+    }
+
     /// Declare a grant that no fragment may ever introduce (a base-policy invariant).
     pub fn add_root_constraint(&mut self, grant: impl Into<String>) {
         self.root_constraints.insert(grant.into());
@@ -148,9 +185,25 @@ impl FragmentStore {
         &self.active_grants
     }
 
-    /// Verify and apply a fragment. On success returns the grants newly added by this
-    /// fragment. On any failure, the store is left unchanged (fail-closed).
-    pub fn load(&mut self, fragment: &PolicyFragment) -> Result<Vec<String>, FragmentError> {
+    /// Whether any issuer is authorized (fail-closed indicator).
+    pub fn has_authorized_issuers(&self) -> bool {
+        !self.issuers.is_empty()
+    }
+
+    /// The minimum SVN an issuer's next fragment must carry (declarative floor combined
+    /// with the monotonic high-water mark of accepted fragments).
+    fn min_required(&self, issuer: &str) -> u64 {
+        let floor = self.min_svn.get(issuer).copied().unwrap_or(0);
+        match self.last_svn.get(issuer) {
+            Some(last) => (last + 1).max(floor),
+            None => floor,
+        }
+    }
+
+    /// Verify a fragment against every gate **without** mutating the store. Returns the
+    /// verified fragment so the caller can apply it to the policy engine and only then
+    /// [`commit`](Self::commit) it. On any failure the store is unchanged (fail-closed).
+    pub fn verify(&self, fragment: &PolicyFragment) -> Result<VerifiedFragment, FragmentError> {
         // 1. Issuer must be authorized.
         let key = self
             .issuers
@@ -163,12 +216,9 @@ impl FragmentStore {
         key.verify(&fragment.signing_bytes(), &sig)
             .map_err(|_| FragmentError::InvalidSignature)?;
 
-        // 3. Monotonic SVN: strictly greater than the last accepted for this issuer.
-        let min_required = self
-            .last_svn
-            .get(&fragment.issuer)
-            .map(|v| v + 1)
-            .unwrap_or(0);
+        // 3. Monotonic SVN: >= the declarative floor and strictly greater than the last
+        //    accepted for this issuer.
+        let min_required = self.min_required(&fragment.issuer);
         if fragment.svn < min_required {
             return Err(FragmentError::RolledBackSvn {
                 issuer: fragment.issuer.clone(),
@@ -189,15 +239,33 @@ impl FragmentStore {
             }
         }
 
-        // Commit (all checks passed).
-        self.last_svn.insert(fragment.issuer.clone(), fragment.svn);
+        Ok(VerifiedFragment {
+            issuer: fragment.issuer.clone(),
+            svn: fragment.svn,
+            grants: fragment.grants.clone(),
+            policy_module: fragment.policy_module.clone(),
+            includes: fragment.includes.clone(),
+        })
+    }
+
+    /// Commit a previously [`verify`](Self::verify)-ed fragment: advance the issuer's SVN
+    /// high-water mark and accumulate its grants. Returns the grants newly added.
+    pub fn commit(&mut self, verified: &VerifiedFragment) -> Vec<String> {
+        self.last_svn.insert(verified.issuer.clone(), verified.svn);
         let mut added = Vec::new();
-        for g in &fragment.grants {
+        for g in &verified.grants {
             if self.active_grants.insert(g.clone()) {
                 added.push(g.clone());
             }
         }
-        Ok(added)
+        added
+    }
+
+    /// Verify and commit a fragment in one step (verify + commit). On any failure the store
+    /// is left unchanged (fail-closed). Returns the grants newly added.
+    pub fn load(&mut self, fragment: &PolicyFragment) -> Result<Vec<String>, FragmentError> {
+        let verified = self.verify(fragment)?;
+        Ok(self.commit(&verified))
     }
 }
 
@@ -223,8 +291,109 @@ mod tests {
             grants: grants.iter().map(|s| s.to_string()).collect(),
             receipt: Some("receipt-1".to_string()),
             signature: Vec::new(),
+            ..Default::default()
         }
     }
+
+    /// TC-F1.5: a declarative minimum-SVN floor (from measured state) is enforced — a
+    /// fragment below the floor is rejected, one at/above the floor is accepted.
+    #[test]
+    fn min_svn_floor_is_enforced() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        store.set_min_svn("issuerA", 5);
+
+        let mut below = frag("issuerA", 4, &["exec:x"]);
+        sign(&sk, &mut below);
+        assert!(matches!(
+            store.load(&below).unwrap_err(),
+            FragmentError::RolledBackSvn { min_required: 5, .. }
+        ));
+
+        let mut at_floor = frag("issuerA", 5, &["exec:x"]);
+        sign(&sk, &mut at_floor);
+        assert!(store.load(&at_floor).is_ok());
+    }
+
+    /// TC-F1.6: with no authorized issuers (absent measured config), every fragment is
+    /// rejected — fail-closed.
+    #[test]
+    fn no_authorized_issuers_is_fail_closed() {
+        let (sk, _pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        assert!(!store.has_authorized_issuers());
+        let mut f = frag("issuerA", 1, &["exec:x"]);
+        sign(&sk, &mut f);
+        assert_eq!(
+            store.load(&f).unwrap_err(),
+            FragmentError::UnauthorizedIssuer("issuerA".into())
+        );
+    }
+
+    /// TC-F1.7 / TC-F1.8: the contributed Rego module and the `includes` scope are bound
+    /// into the signature — mutating either invalidates it.
+    #[test]
+    fn module_and_includes_are_signature_bound() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+
+        let mut f = PolicyFragment {
+            issuer: "issuerA".into(),
+            svn: 1,
+            grants: vec![],
+            policy_module: Some("package agent_policy.fragments\nexec_allowed := true".into()),
+            includes: vec!["exec".into()],
+            receipt: Some("r".into()),
+            signature: Vec::new(),
+        };
+        sign(&sk, &mut f);
+        let v = store.verify(&f).unwrap();
+        assert_eq!(v.includes, vec!["exec".to_string()]);
+        assert!(v.policy_module.is_some());
+
+        // Tamper the module after signing → signature no longer verifies.
+        let mut tampered = f.clone();
+        tampered.policy_module = Some("package agent_policy.fragments\nexec_allowed := true # evil".into());
+        assert_eq!(
+            store.verify(&tampered).unwrap_err(),
+            FragmentError::InvalidSignature
+        );
+
+        // Tamper the includes after signing → signature no longer verifies.
+        let mut tampered2 = f.clone();
+        tampered2.includes = vec!["mount".into()];
+        assert_eq!(
+            store.verify(&tampered2).unwrap_err(),
+            FragmentError::InvalidSignature
+        );
+    }
+
+    /// TC-F1.4 (store half): verify does not mutate; commit does — supporting atomic
+    /// verify→apply→commit at the call site.
+    #[test]
+    fn verify_is_side_effect_free_until_commit() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        let mut f = frag("issuerA", 7, &["exec:x"]);
+        sign(&sk, &mut f);
+
+        let v = store.verify(&f).unwrap();
+        // Not committed yet: no grants, SVN not advanced (a re-verify still succeeds).
+        assert!(store.active_grants().is_empty());
+        assert!(store.verify(&f).is_ok());
+
+        store.commit(&v);
+        assert!(store.active_grants().contains("exec:x"));
+        // After commit the same SVN is now a rollback.
+        assert!(matches!(
+            store.verify(&f).unwrap_err(),
+            FragmentError::RolledBackSvn { .. }
+        ));
+    }
+
 
     /// TC4.8: a valid signed add-only fragment (with receipt) is accepted and its grants
     /// become active.
