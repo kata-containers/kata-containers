@@ -18,7 +18,6 @@ qemu_rootless_sandbox_supported() {
 
 	# Additional QEMU configurations are tracked in:
 	# https://github.com/kata-containers/kata-containers/issues/13424
-	is_runtime_rs && return 1
 	is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" && return 1
 	# Rootless QEMU cannot access EROFS layers below root-owned
 	# snapshot directories.
@@ -29,6 +28,7 @@ qemu_rootless_sandbox_supported() {
 
 setup() {
 	local runtime_config_dropin_file
+	local seccomp_key
 
 	if ! qemu_rootless_sandbox_supported; then
 		skip "QEMU rootless and seccomp sandbox smoke testing does not cover ${KATA_HYPERVISOR}"
@@ -46,11 +46,17 @@ setup() {
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
 
+	if is_runtime_rs; then
+		seccomp_key="seccomp_sandbox"
+	else
+		seccomp_key="seccompsandbox"
+	fi
+
 	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-qemu-sandbox.toml"
 	cat > "${runtime_config_dropin_file}" <<EOF
 [hypervisor.qemu]
 rootless = true
-seccompsandbox = "${QEMU_SANDBOX_PARAM}"
+${seccomp_key} = "${QEMU_SANDBOX_PARAM}"
 EOF
 
 	runtime_config_dropin="$(set_kata_runtime_config_dropin_file \
