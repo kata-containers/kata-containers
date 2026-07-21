@@ -8,8 +8,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-CROSS_BUILD="${CROSS_BUILD:-false}"
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
@@ -22,10 +20,6 @@ source "${script_dir}/../qemu.blacklist"
 repo_root_dir="${repo_root_dir:-$(git rev-parse --show-toplevel 2>/dev/null || echo "${script_dir}/../../../..")}"
 
 ARCH=${ARCH:-$(uname -m)}
-dpkg_arch=":${ARCH}"
-[[ "${dpkg_arch}" == ":aarch64" ]] && dpkg_arch=":arm64"
-[[ "${dpkg_arch}" == ":x86_64" ]] && dpkg_arch=""
-[[ "${dpkg_arch}" == ":ppc64le" ]] && dpkg_arch=":ppc64el"
 
 packaging_dir="${script_dir}/../.."
 qemu_destdir="/tmp/qemu-static/"
@@ -52,14 +46,11 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 [[ -n "${build_suffix}" ]] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
 
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
-[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
 "${container_engine}" pull "${container_image}" || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
-	--build-arg DPKG_ARCH="${dpkg_arch}" \
-	--build-arg ARCH="${ARCH}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t "${container_image}" && \

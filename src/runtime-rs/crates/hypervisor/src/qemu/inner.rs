@@ -5,7 +5,6 @@
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine};
 use super::qmp::Qmp;
-use crate::device::driver::BlockDeviceFormat;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIePort;
 use crate::qemu::cmdline_generator::VfioDeviceConfig;
@@ -129,33 +128,57 @@ impl QemuInner {
                     let fd = vsock_dev.init_config().await?;
                     cmdline.add_vsock(fd, vsock_dev.config.guest_cid)?;
                 }
-                DeviceType::Block(block_dev) => {
-                    if block_dev.config.path_on_host == self.config.boot_info.initrd {
+                DeviceType::BlockModern(ref block_device) => {
+                    info!(sl!(), "Starting QMP hotplug for BlockModern device");
+
+                    // First, snapshot parameters within the lock.
+                    // Do not hold the lock across the 'await' point of the hotplug operation to avoid blocking.
+                    let (
+                        device_id,
+                        path_on_host,
+                        is_direct,
+                        is_readonly,
+                        discard_unmap,
+                        serial_override,
+                        driver_option,
+                    ) = {
+                        let device_locked = block_device.lock().await;
+                        let device_id = device_locked.device_id.clone();
+                        let cfg = &device_locked.config;
+                        (
+                            device_id,
+                            cfg.path_on_host.clone(),
+                            cfg.is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
+                            cfg.is_readonly,
+                            cfg.discard_unmap,
+                            cfg.serial_override.clone(),
+                            cfg.driver_option.clone(),
+                        )
+                    };
+                    if path_on_host == self.config.boot_info.initrd {
                         // If this block device represents initrd we ignore it here, it
                         // will be handled elsewhere by adding `-initrd` to the qemu
                         // command line.
                         continue;
                     }
-                    match block_dev.config.driver_option.as_str() {
+                    match driver_option.as_str() {
                         KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
-                            &block_dev.config.path_on_host,
-                            block_dev.config.is_readonly,
+                            &path_on_host,
+                            is_readonly,
                         )?,
                         KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
-                            let serial = if block_dev.config.serial_override.is_empty() {
+                            let serial = if serial_override.is_empty() {
                                 None
                             } else {
-                                Some(block_dev.config.serial_override.as_str())
+                                Some(serial_override.as_str())
                             };
                             cmdline.add_block_device(
-                                block_dev.device_id.as_str(),
-                                &block_dev.config.path_on_host,
-                                block_dev
-                                    .config
-                                    .is_direct
-                                    .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
-                                block_dev.config.driver_option.as_str() == KATA_SCSI_DEV_TYPE,
-                                block_dev.config.discard_unmap,
+                                device_id.as_str(),
+                                &path_on_host,
+                                is_direct,
+                                driver_option.as_str() == KATA_SCSI_DEV_TYPE,
+                                discard_unmap,
                                 serial,
                             )?
                         }
@@ -740,10 +763,13 @@ impl QemuInner {
         let flags = if self.hypervisor_config().security_info.confidential_guest
             || self.hypervisor_config().shared_fs.shared_fs.is_none()
         {
-            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
         } else {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
         };
         caps.set(flags);
@@ -979,7 +1005,6 @@ impl QemuInner {
         self.hotunplug_device(&device).await?;
 
         self.devices.retain(|d| match (d, &device) {
-            (DeviceType::Block(a), DeviceType::Block(b)) => a.config.index != b.config.index,
             (DeviceType::BlockModern(a), DeviceType::BlockModern(b)) => {
                 !std::sync::Arc::ptr_eq(a, b)
             }
@@ -996,11 +1021,6 @@ impl QemuInner {
         };
 
         match device {
-            DeviceType::Block(ref block_device) => {
-                let block_driver = &self.config.blockdev_info.block_device_driver;
-                qmp.hotunplug_block_device(block_driver, block_device.config.index)
-                    .context("hotunplug block device")?;
-            }
             DeviceType::BlockModern(ref block_device) => {
                 let (index, driver) = {
                     let cfg = &block_device.lock().await.config;
@@ -1060,60 +1080,6 @@ impl QemuInner {
 
                 return Ok(DeviceType::Network(network_device));
             }
-            DeviceType::Block(mut block_device) => {
-                let block_driver = &self.config.blockdev_info.block_device_driver;
-
-                // Determine iothread for hotplugged virtio-blk-pci devices.
-                // Only attach iothread when:
-                // 1. enable_iothreads is true
-                // 2. indep_iothreads > 0
-                // 3. block driver is virtio-blk-pci
-                // 4. TODO: for more complex cases
-                let iothread = if self.config.enable_iothreads
-                    && self.config.indep_iothreads > 0
-                    && block_driver == VIRTIO_BLK_PCI
-                {
-                    // Use the first independent iothread (indep_iothread_0)
-                    Some("indep_iothread_0")
-                } else {
-                    None
-                };
-
-                let (pci_path, addr_str) = qmp
-                    .hotplug_block_device(
-                        block_driver,
-                        block_device.config.index,
-                        &block_device.config.path_on_host,
-                        &block_device.config.blkdev_aio.to_string(),
-                        Some(
-                            block_device
-                                .config
-                                .is_direct
-                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
-                        ),
-                        block_device.config.is_readonly,
-                        block_device.config.no_drop,
-                        block_device.config.discard_unmap,
-                        block_device.config.logical_sector_size,
-                        block_device.config.physical_sector_size,
-                        &block_device.config.format,
-                        iothread,
-                    )
-                    .context("hotplug block device")?;
-
-                if pci_path.is_some() {
-                    block_device.config.pci_path = pci_path;
-                }
-                if let Some(addr) = addr_str {
-                    if block_driver == VIRTIO_BLK_CCW {
-                        block_device.config.ccw_addr = Some(addr);
-                    } else {
-                        block_device.config.scsi_addr = Some(addr);
-                    }
-                }
-
-                return Ok(DeviceType::Block(block_device));
-            }
             DeviceType::Vfio(mut vfiodev) => {
                 // FIXME: the first one might not the true device we want to passthrough.
                 // The `multifunction=on` is temporarily unsupported.
@@ -1146,6 +1112,7 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
+                    block_format,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1162,11 +1129,28 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
+                        cfg.format.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
                         cfg.physical_sector_size,
                     )
+                };
+
+                // Determine iothread for hotplugged virtio-blk-pci devices.
+                // Only attach iothread when:
+                // 1. enable_iothreads is true
+                // 2. indep_iothreads > 0
+                // 3. block driver is virtio-blk-pci
+                // 4. TODO: for more complex cases
+                let iothread = if self.config.enable_iothreads
+                    && self.config.indep_iothreads > 0
+                    && driver == VIRTIO_BLK_PCI
+                {
+                    // Use the first independent iothread (indep_iothread_0)
+                    Some("indep_iothread_0")
+                } else {
+                    None
                 };
 
                 // Second, execute the asynchronous hotplug without holding the lock.
@@ -1182,8 +1166,8 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        &BlockDeviceFormat::default(),
-                        None,
+                        &block_format,
+                        iothread,
                     )
                     .context("hotplug block device")?;
 
@@ -1203,6 +1187,7 @@ impl QemuInner {
                     }
                     info!(sl!(), "Completed BlockModern hotplug: {:?}", &cfg);
                 }
+                return Ok(DeviceType::BlockModern(block_device.clone()));
             }
             DeviceType::VfioModern(ref vfiodev) => {
                 // Snapshot VFIO parameters inside the lock.

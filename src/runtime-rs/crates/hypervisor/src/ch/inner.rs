@@ -88,6 +88,7 @@ impl CloudHypervisorInner {
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
                 | CapabilityBits::FsSharingSupport
                 | CapabilityBits::HybridVsockSupport,
         );

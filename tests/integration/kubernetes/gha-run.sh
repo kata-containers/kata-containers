@@ -24,7 +24,7 @@ export DOCKER_REGISTRY="${DOCKER_REGISTRY:-quay.io}"
 export DOCKER_REPO="${DOCKER_REPO:-kata-containers/kata-deploy-ci}"
 export DOCKER_TAG="${DOCKER_TAG:-kata-containers-latest}"
 export SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT="${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}"
-export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 export CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 export KBS="${KBS:-false}"
 export KBS_INGRESS="${KBS_INGRESS:-}"
@@ -198,6 +198,10 @@ function deploy_kata() {
 		export USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 		SNAPSHOTTER="nydus"
 		EXPERIMENTAL_FORCE_GUEST_PULL=false
+	fi
+
+	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-cpu-runtime-rs" || "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-runtime-rs" ]] && [[ -z "${SNAPSHOTTER}" ]]; then
+		SNAPSHOTTER="erofs"
 	fi
 
 	ANNOTATIONS="default_vcpus"

@@ -3576,6 +3576,7 @@ dependencies = [
  "oci-spec 0.10.0",
  "opentelemetry 0.17.0",
  "pathrs",
+ "pcilibs-rs",
  "procfs 0.12.0",
  "prometheus",
  "protobuf",
@@ -3718,12 +3719,14 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger 0.10.2",
+ "humantime",
  "k8s-openapi",
  "kube",
  "libc",
  "log",
  "regex",
  "rstest",
+ "semver",
  "serde_json",
  "serde_yaml 0.9.34+deprecated",
  "serial_test 0.10.0",
@@ -3763,7 +3766,6 @@ dependencies = [
  "libc",
  "nix 0.31.3",
  "oci-spec 0.10.0",
- "pci-ids",
  "rand 0.10.1",
  "rstest",
  "runtime-spec",
@@ -5270,6 +5272,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pcilibs-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a881b7e99a9f8a84ce775878838e5ad206e142d2213cc3868efea6bdac24590"
+dependencies = [
+ "nix 0.31.3",
+ "pci-ids",
+]
+
+[[package]]
 name = "pem"
 version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6663,11 +6675,13 @@ dependencies = [
  "protobuf",
  "protocols",
  "resource",
+ "rstest",
  "runtime-spec",
  "serde_json",
  "shim-interface",
  "slog",
  "slog-scope",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-opentelemetry 0.18.0",

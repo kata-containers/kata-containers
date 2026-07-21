@@ -38,8 +38,8 @@ jobs:
       fail-fast: false
       matrix:
         environment: [
-          { name: nvidia-cpu, vmm: qemu-nvidia-cpu, runner: arm64-nvidia-gh200 },
-          { name: nvidia-cpu-runtime-rs, vmm: qemu-nvidia-cpu-runtime-rs, runner: arm64-nvidia-gh200 },
+          { name: nvidia-cpu, vmm: qemu-nvidia-cpu, runner: arm64-nvidia-gh200, snapshotter: "" },
+          { name: nvidia-cpu-runtime-rs, vmm: qemu-nvidia-cpu-runtime-rs, runner: arm64-nvidia-gh200, snapshotter: "erofs" },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
@@ -54,6 +54,9 @@ jobs:
       KUBERNETES: kubeadm
       K8S_TEST_HOST_TYPE: baremetal
       TARGET_ARCH: aarch64
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
+      EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.snapshotter == 'erofs' && 'memory' || '' }}
+      EROFS_DMVERITY: ${{ matrix.environment.snapshotter == 'erofs' && 'dmverity' || '' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

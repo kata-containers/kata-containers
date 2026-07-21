@@ -72,6 +72,77 @@ If containerd.configDir is set explicitly, use that instead.
 {{- end -}}
 
 {{/*
+Set the CRI containerd socket URI depending on the k8s distribution.
+If containerd.runtimeSocket is set explicitly, use that instead.
+*/}}
+{{- define "containerdRuntimeSocket" -}}
+{{- if and .containerd .containerd.runtimeSocket -}}
+{{- .containerd.runtimeSocket -}}
+{{- else if or (eq .k8sDistribution "k3s") (eq .k8sDistribution "rke2") -}}
+unix:///run/k3s/containerd/containerd.sock
+{{- else if eq .k8sDistribution "k0s" -}}
+unix:///run/k0s/containerd.sock
+{{- else if eq .k8sDistribution "microk8s" -}}
+unix:///var/snap/microk8s/common/run/containerd.sock
+{{- else -}}
+unix:///run/containerd/containerd.sock
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve the kata-monitor CRI runtime endpoint.
+When monitor.runtimeEndpoint is empty, inherit containerd.runtimeSocket or
+derive it from k8sDistribution.
+*/}}
+{{- define "monitorRuntimeEndpoint" -}}
+{{- if .Values.monitor.runtimeEndpoint -}}
+{{- .Values.monitor.runtimeEndpoint -}}
+{{- else -}}
+{{- include "containerdRuntimeSocket" .Values -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Filesystem path of the CRI runtime socket, derived from monitorRuntimeEndpoint.
+*/}}
+{{- define "monitorRuntimeSocketPath" -}}
+{{- $endpoint := include "monitorRuntimeEndpoint" . -}}
+{{- if hasPrefix "unix://" $endpoint -}}
+{{- trimPrefix "unix://" $endpoint -}}
+{{- else if hasPrefix "unix:" $endpoint -}}
+{{- trimPrefix "unix:" $endpoint -}}
+{{- else -}}
+{{- $endpoint -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Host directory containing the CRI runtime socket, derived from monitorRuntimeEndpoint.
+Used for kata-monitor volume hostPath and mountPath so the socket is reachable in-container.
+*/}}
+{{- define "monitorRuntimeSocketDir" -}}
+{{- include "monitorRuntimeSocketPath" . | dir -}}
+{{- end -}}
+
+{{/*
+Resolve kata-monitor log level.
+Honors monitor.logLevel, then the chart-wide logLevel, then debug:true -> debug.
+*/}}
+{{- define "monitorLogLevel" -}}
+{{- $logLevel := .Values.monitor.logLevel | default "" | trim -}}
+{{- if not $logLevel -}}
+{{- $logLevel = .Values.logLevel | default "" | trim -}}
+{{- end -}}
+{{- if and (not $logLevel) .Values.debug -}}
+{{- $logLevel = "debug" -}}
+{{- end -}}
+{{- if not $logLevel -}}
+{{- $logLevel = "info" -}}
+{{- end -}}
+{{- $logLevel -}}
+{{- end -}}
+
+{{/*
 Check if node-feature-discovery is already installed by someone else
 Returns the namespace where node-feature-discovery is found, or empty string if not found
 */}}

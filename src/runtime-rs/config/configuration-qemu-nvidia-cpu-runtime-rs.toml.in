@@ -65,13 +65,13 @@ kernel_verity_params = "@KERNELVERITYPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWAREPATH_NV_CPU@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
 # as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
 # can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWAREVOLUMEPATH@"
+firmware_volume = "@FIRMWAREVOLUMEPATH_NV_CPU@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
@@ -195,7 +195,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-fs-nydus
 #   - none
-shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+shared_fs = "none"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -808,7 +808,7 @@ vfio_mode = "@DEFVFIOMODE_NV@"
 #   - block-plain
 #     Plugs a block device to be mounted directly in the guest.
 #
-emptydir_mode = "@DEFEMPTYDIRMODE@"
+emptydir_mode = "@DEFEMPTYDIRMODE_NV@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,

@@ -25,7 +25,7 @@ cleanup() {
 trap cleanup EXIT
 
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.

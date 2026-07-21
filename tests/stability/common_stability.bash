@@ -14,7 +14,7 @@ CTR_EXE="${CTR_EXE:-ctr}"
 DOCKER_EXE="${DOCKER_EXE:-docker}"
 CTR_RUNTIME="${CTR_RUNTIME:-io.containerd.kata.v2}"
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"

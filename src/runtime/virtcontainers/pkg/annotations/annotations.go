@@ -20,8 +20,6 @@ const (
 
 	// ContainerTypeKey is the annotation key to fetch container type.
 	ContainerTypeKey = kataAnnotationsPrefix + "pkg.oci.container_type"
-
-	SandboxConfigPathKey = kataAnnotationsPrefix + "config_path"
 )
 
 // Annotations related to Hypervisor configuration

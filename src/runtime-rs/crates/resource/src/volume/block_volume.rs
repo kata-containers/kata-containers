@@ -15,7 +15,7 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig,
     },
-    BlockConfig, BlockDeviceAio,
+    BlockConfigModern, BlockDeviceAio,
 };
 use kata_sys_util::mount::get_mount_path;
 use nix::sys::{stat, stat::SFlag};
@@ -59,7 +59,8 @@ impl BlockVolume {
                 false
             });
 
-        let block_device_config = BlockConfig {
+        let block_device_config = BlockConfigModern {
+            path_on_host: mnt_src.to_string_lossy().to_string(),
             major: stat::major(fstat.st_rdev) as i64,
             minor: stat::minor(fstat.st_rdev) as i64,
             is_readonly: read_only,
@@ -73,12 +74,13 @@ impl BlockVolume {
         };
 
         // create and insert block device into Kata VM
-        let device_info = do_handle_device(d, &DeviceConfig::BlockCfg(block_device_config.clone()))
-            .await
-            .context("do handle device failed.")?;
+        let device_info =
+            do_handle_device(d, &DeviceConfig::BlockCfgModern(block_device_config.clone()))
+                .await
+                .context("do handle device failed.")?;
 
         let block_volume =
-            handle_block_volume(device_info, m, read_only, sid, DEFAULT_VOLUME_FS_TYPE)
+            handle_block_volume(device_info, m, read_only, sid, DEFAULT_VOLUME_FS_TYPE, None)
                 .await
                 .context("do handle block volume failed")?;
 

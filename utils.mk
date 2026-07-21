@@ -160,15 +160,6 @@ endif
 
 EXTRA_RUSTFLAGS :=
 
-ifneq ($(HOST_ARCH),$(ARCH))
-    ifeq ($(CC),)
-         CC = gcc
-         $(warning "WARNING: A foreign ARCH was passed, but no CC alternative. Using gcc.")
-    endif
-    override EXTRA_RUSTFLAGS += -C linker=$(CC)
-    undefine CC
-endif
-
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))

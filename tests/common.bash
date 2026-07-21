@@ -26,7 +26,7 @@ KATA_TESTS_DATADIR="${KATA_TESTS_DATADIR:-${KATA_TESTS_BASEDIR}/data}"
 # Directory that can be used for storing cache kata components
 KATA_TESTS_CACHEDIR="${KATA_TESTS_CACHEDIR:-${KATA_TESTS_BASEDIR}/cache}"
 
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
@@ -644,7 +644,7 @@ function overwrite_containerd_config() {
 	drop_in="${conf_dir}/50-kata-containers-ci.toml"
 
 	schema="$(_containerd_resolved_schema_version)"
-	hv="${KATA_HYPERVISOR:-qemu}"
+	hv="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 	cfg_path="${KATA_CONFIG_PATH:-/opt/kata/share/defaults/kata-containers/configuration-${hv}.toml}"
 	shim_binary="$(command -v "containerd-shim-kata-${hv}-v2" 2>/dev/null || true)"
 	[[ -n "${shim_binary}" ]] || shim_binary="/usr/local/bin/containerd-shim-kata-${hv}-v2"
@@ -807,12 +807,37 @@ function enabling_hypervisor() {
 	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
+# Docker and nerdctl smoke tests exercise Kata through the default overlayfs
+# snapshotter path. Keep NVIDIA runtime-rs on virtio-fs for those tests; the
+# shared_fs=none + EROFS snapshotter path is covered by Kubernetes CI instead.
+function configure_nvidia_runtime_rs_shared_fs_dropin() {
+	case "${KATA_HYPERVISOR:-}" in
+		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) ;;
+		*) return 0 ;;
+	esac
+
+	local -r cfg="${KATA_CONFIG_PATH:-}"
+	[[ -z "${cfg}" || ! -e "${cfg}" ]] && return 0
+
+	local -r dropin_dir="$(dirname "${cfg}")/config.d"
+	local -r dropin_path="${dropin_dir}/99-nvidia-runtime-rs-shared-fs.toml"
+
+	info "Configuring NVIDIA runtime-rs shared-fs smoke test via ${dropin_path}"
+	sudo mkdir -p "${dropin_dir}"
+	sudo tee "${dropin_path}" >/dev/null <<EOF
+[hypervisor.qemu]
+shared_fs = "virtio-fs"
+
+[runtime]
+emptydir_mode = "shared-fs"
+EOF
+}
 
 function check_containerd_config_for_kata() {
 	declare -r containerd_path="/etc/containerd/config.toml"
 	local hv dump
 
-	hv="${KATA_HYPERVISOR:-qemu}"
+	hv="${KATA_HYPERVISOR:-qemu-runtime-rs}"
 
 	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump 2>/dev/null || true)"
 

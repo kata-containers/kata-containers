@@ -5,7 +5,7 @@ mkdocs-awesome-nav==3.3.0
 mkdocs-open-in-new-tab==1.0.8
 mkdocs-redirects==1.2.2
 CairoSVG==2.9.0
-pillow==12.2.0
+pillow==12.3.0
 click==8.3.3
 idna==3.15
 pymdown-extensions==10.21.3

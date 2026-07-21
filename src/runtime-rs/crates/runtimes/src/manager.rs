@@ -809,20 +809,26 @@ impl Env for RootlessEnv {
 }
 
 /// Config override ordering(high to low):
-/// 1. podsandbox annotation
-/// 2. environment variable
-/// 3. shimv2 create task option
-/// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
+/// 1. environment variable
+/// 2. shimv2 create task option
+/// 3. If above two are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 #[instrument]
 fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
     let annotation = Annotation::new(an.clone());
+    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
+    let logger = slog::Logger::clone(&slog_scope::logger());
 
-    let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
-        path
-    } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
-        path
+    let config_path = if let Ok(path) = std::env::var(KATA_CONF_FILE) {
+        if is_shipped_kata_config_path(&path) {
+            path
+        } else {
+            return Err(anyhow!(
+                "invalid KATA_CONF_FILE {:?}: only shipped Kata configuration files are accepted",
+                path
+            ));
+        }
     } else if let Some(option) = option {
         // Parse the containerd runtime options protobuf message to extract the config path.
         // The options are passed as a serialized runtimeoptions.v1.Options protobuf message
@@ -844,9 +850,6 @@ fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result
         String::from("")
     };
 
-    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
-    let logger = slog::Logger::clone(&slog_scope::logger());
-
     info!(logger, "get config path {:?}", &config_path);
     let (mut toml_config, _) = TomlConfig::load_from_file(&config_path).context(format!(
         "load TOML config failed (tried {:?})",
@@ -860,6 +863,21 @@ fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result
 
     info!(logger, "get config content {:?}", &toml_config);
     Ok(toml_config)
+}
+
+fn is_shipped_kata_config_path(config_path: &str) -> bool {
+    config_path_matches_defaults(config_path, TomlConfig::get_default_config_file_list())
+}
+
+fn config_path_matches_defaults(config_path: &str, default_config_paths: Vec<PathBuf>) -> bool {
+    let Ok(resolved_config_path) = std::fs::canonicalize(config_path) else {
+        return false;
+    };
+
+    default_config_paths
+        .into_iter()
+        .filter_map(|path| std::fs::canonicalize(path).ok())
+        .any(|path| path == resolved_config_path)
 }
 
 // this update the agent-specfic kernel parameters into hypervisor's bootinfo
@@ -1004,6 +1022,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
 mod tests {
     use super::*;
     use common::types::ShutdownRequest;
+    use rstest::rstest;
     use tokio::sync::mpsc::channel;
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
@@ -1038,5 +1057,51 @@ mod tests {
         assert_eq!(effective_log_level(true, "info"), "debug");
         assert_eq!(effective_log_level(true, "trace"), "trace");
         assert_eq!(effective_log_level(true, "warn"), "warn");
+    }
+
+    #[derive(Debug)]
+    enum ConfigPathCase {
+        Shipped,
+        NonShipped,
+        NonExistent,
+        Empty,
+    }
+
+    #[rstest]
+    #[case::shipped_config_is_accepted(ConfigPathCase::Shipped, true)]
+    #[case::non_shipped_config_is_rejected(ConfigPathCase::NonShipped, false)]
+    #[case::non_existent_path_is_rejected(ConfigPathCase::NonExistent, false)]
+    #[case::empty_path_is_rejected(ConfigPathCase::Empty, false)]
+    fn test_config_path_matches_defaults(
+        #[case] path_case: ConfigPathCase,
+        #[case] expected: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let shipped_path = tmpdir.path().join("shipped.toml");
+        let non_shipped_path = tmpdir.path().join("malicious.toml");
+        std::fs::write(&shipped_path, b"[hypervisor.qemu]\n").unwrap();
+        std::fs::write(&non_shipped_path, b"[hypervisor.qemu]\n").unwrap();
+
+        // Only the shipped path is treated as a default config location.
+        let default_config_paths = vec![shipped_path.clone()];
+
+        let config_path = match path_case {
+            ConfigPathCase::Shipped => shipped_path.to_string_lossy().to_string(),
+            ConfigPathCase::NonShipped => non_shipped_path.to_string_lossy().to_string(),
+            ConfigPathCase::NonExistent => tmpdir
+                .path()
+                .join("nonexistent.toml")
+                .to_string_lossy()
+                .to_string(),
+            ConfigPathCase::Empty => String::new(),
+        };
+
+        assert_eq!(
+            config_path_matches_defaults(&config_path, default_config_paths),
+            expected,
+            "case {:?}: unexpected result for path {:?}",
+            path_case,
+            config_path,
+        );
     }
 }

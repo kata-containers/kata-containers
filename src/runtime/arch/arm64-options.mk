@@ -11,7 +11,6 @@ MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
-QEMUCCAEXPERIMENTALCMD := qemu-system-aarch64-cca-experimental
 QEMUFW := AAVMF_CODE.fd
 QEMUFWVOL := AAVMF_VARS.fd
 

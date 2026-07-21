@@ -7,9 +7,8 @@
 SNP_HYPERVISORS=("qemu-snp" "qemu-snp-runtime-rs")
 TDX_HYPERVISORS=("qemu-tdx" "qemu-tdx-runtime-rs")
 SE_HYPERVISORS=("qemu-se" "qemu-se-runtime-rs")
-CCA_HYPERVISORS=("qemu-cca")
 GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
-TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${CCA_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
+TEE_HYPERVISORS=("${SNP_HYPERVISORS[@]}" "${TDX_HYPERVISORS[@]}" "${SE_HYPERVISORS[@]}" "${GPU_TEE_HYPERVISORS[@]}")
 NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 FIRECRACKER_HYPERVISORS=("firecracker" "fc")
 # CPU-only NVIDIA classes: boot the verity-backed nvidia base image, no GPU.
@@ -52,13 +51,6 @@ function is_se_hypervisor() {
 	local hypervisor="${1:-${KATA_HYPERVISOR}}"
 	# shellcheck disable=SC2076 # intentionally use literal string matching
 	[[ " ${SE_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
-	return 1
-}
-
-function is_cca_hypervisor() {
-	local hypervisor="${1:-${KATA_HYPERVISOR}}"
-	# shellcheck disable=SC2076 # intentionally use literal string matching
-	[[ " ${CCA_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
 	return 1
 }
 
@@ -120,6 +112,21 @@ function is_confidential_runtime_class() {
 	else
 		return 1
 	fi
+}
+
+# Runtime classes that boot with shared_fs=none, where the host cannot read
+# guest files directly. Data such as a container's termination log must then be
+# retrieved over the agent GetDiagnosticData RPC instead of a shared filesystem.
+# This covers the confidential runtime classes and the non-confidential NVIDIA
+# CPU runtime-rs handler. The plain qemu-nvidia-cpu (Go) class still uses
+# virtio-fs, so it is intentionally excluded.
+function is_shared_fs_none_runtime_class() {
+	local hypervisor="${1:-${KATA_HYPERVISOR}}"
+	if is_confidential_runtime_class "${hypervisor}"; then
+		return 0
+	fi
+	[[ "${hypervisor}" == "qemu-nvidia-cpu-runtime-rs" ]] && return 0
+	return 1
 }
 
 # Runtime classes that boot a measured (dm-verity) rootfs: the confidential

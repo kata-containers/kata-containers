@@ -277,7 +277,7 @@ async fn check_ap_device(address: ap::Address) -> Result<()> {
 
 #[cfg(target_arch = "s390x")]
 async fn associate_ap_device(apqn: &Apqn, mkvp: &str) -> Result<()> {
-    let resource_path = format!("/vfio_ap/{mkvp}");
+    let resource_path = format!("kbs:///vfio_ap/{mkvp}");
     let secret_resource_path = format!("{resource_path}/secret");
     let secret_id_resource_path = format!("{resource_path}/secret_id");
 

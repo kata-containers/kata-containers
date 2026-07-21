@@ -1577,6 +1577,7 @@ mod tests {
                     no_drop: false,
                     drive_id: String::from("1"),
                     rate_limiter: None,
+                    sparse: false,
                     num_queues: BlockDeviceConfigInfo::default_num_queues(),
                     queue_size: 256,
                     use_shared_irq: None,

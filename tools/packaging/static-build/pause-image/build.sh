@@ -27,12 +27,10 @@ package_output_dir="${package_output_dir:-}"
 [[ -n "${pause_image_version}" ]] || die "Failed to get pause image version or commit"
 
 container_image="${PAUSE_IMAGE_CONTAINER_BUILDER:-$(get_pause_image_name)}"
-# shellcheck disable=SC2154
-[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
 # shellcheck disable=SC2154,SC2086
 docker pull "${container_image}" || \
-	(docker ${BUILDX} build ${PLATFORM} \
+	(docker build \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")

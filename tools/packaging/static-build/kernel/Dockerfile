@@ -6,8 +6,6 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
-ARG ARCH
-
 COPY install_yq.sh /usr/bin/install_yq.sh
 
 # kernel deps
@@ -32,7 +30,6 @@ RUN apt-get update && \
 	    cpio \
 	    patch \
 	    python3 && \
-    if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${ARCH}"-linux-gnu binutils-"${ARCH}"-linux-gnu; fi && \
     apt-get clean && apt-get autoclean && rm -rf /var/lib/apt/lists/*
 
 RUN install_yq.sh

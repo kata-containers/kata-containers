@@ -11,6 +11,9 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "${script_dir}/../../../.." && pwd)"
+
+# shellcheck source=tools/packaging/scripts/lib.sh
+source "${script_dir}/../../scripts/lib.sh"
 build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 component="${1:-all}"
 versions_yaml="${repo_root_dir}/versions.yaml"
@@ -66,7 +69,7 @@ build_kata_deploy_binary() {
 	mkdir -p "${build_dir}/kata-deploy-binary/usr/bin"
 	tar -xf "${rust_builder_tar}" -C "${build_dir}/kata-deploy-binary/usr/bin" \
 		--strip-components=2 kata-deploy/bin/kata-deploy
-	tar --zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-binary.tar.zst" \
+	kata_tar_zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-binary.tar.zst" \
 		-C "${build_dir}/kata-deploy-binary" .
 }
 
@@ -76,7 +79,7 @@ build_kata_deploy_job_dispatcher() {
 	mkdir -p "${build_dir}/kata-deploy-job-dispatcher/usr/bin"
 	tar -xf "${rust_builder_tar}" -C "${build_dir}/kata-deploy-job-dispatcher/usr/bin" \
 		--strip-components=2 kata-deploy/bin/kata-deploy-job-dispatcher
-	tar --zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-job-dispatcher.tar.zst" \
+	kata_tar_zstd -cf "${build_dir}/kata-deploy-static-kata-deploy-job-dispatcher.tar.zst" \
 		-C "${build_dir}/kata-deploy-job-dispatcher" .
 }
 
@@ -99,7 +102,7 @@ build_nydus_snapshotter_for_coco_guest_pull() {
 		"${build_dir}/nydus-snapshotter/opt/kata-artifacts/nydus-snapshotter/"
 	cp "${build_dir}/nydus-snapshotter-out/opt/nydus-snapshotter/bin/nydus-overlayfs" \
 		"${build_dir}/nydus-snapshotter/opt/kata-artifacts/nydus-snapshotter/"
-	tar --zstd -cf "${build_dir}/kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst" \
+	kata_tar_zstd -cf "${build_dir}/kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst" \
 		-C "${build_dir}/nydus-snapshotter" .
 }
 

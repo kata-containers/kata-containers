@@ -15,7 +15,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{watch, RwLock};
 
 use super::container::Container;
-use super::io::{ContainerIo, PassfdIo, ShimIo};
+use super::io::{BinaryLogger, ContainerIo, PassfdIo, ShimIo};
 use super::logger_with_process;
 
 /// Exit status returned when containerd/shim is unable to determine
@@ -97,6 +97,12 @@ fn open_fifo_write(path: &str) -> Result<File> {
     open_fifo(path, false, true)
 }
 
+fn is_binary_stdio(value: &str) -> bool {
+    url::Url::parse(value)
+        .map(|uri| uri.scheme() == "binary")
+        .unwrap_or(false)
+}
+
 impl Process {
     pub fn new(
         process: &ContainerProcess,
@@ -133,12 +139,16 @@ impl Process {
 
     pub fn pre_fifos_open(&mut self) -> Result<()> {
         if let Some(ref stdout) = self.stdout {
-            self.stdout_r = Some(open_fifo_read(stdout).context("open stdout")?);
+            if !is_binary_stdio(stdout) {
+                self.stdout_r = Some(open_fifo_read(stdout).context("open stdout")?);
+            }
         }
 
         if !self.terminal {
             if let Some(ref stderr) = self.stderr {
-                self.stderr_r = Some(open_fifo_read(stderr).context("open stderr")?);
+                if !is_binary_stdio(stderr) {
+                    self.stderr_r = Some(open_fifo_read(stderr).context("open stderr")?);
+                }
             }
         }
 
@@ -155,6 +165,15 @@ impl Process {
     /// Init the `passfd_io` struct and vsock connections for io to the agent.
     pub async fn passfd_io_init(&mut self, hvsock_uds_path: &str, passfd_port: u32) -> Result<()> {
         info!(self.logger, "passfd io init");
+
+        // Binary loggers need the host shim to feed their pipes, so this
+        // process uses the legacy agent streams instead of passfd.
+        if self.stdout.as_deref().is_some_and(is_binary_stdio)
+            || self.stderr.as_deref().is_some_and(is_binary_stdio)
+        {
+            info!(self.logger, "binary logger disables passfd io");
+            return Ok(());
+        }
 
         let mut passfd_io =
             PassfdIo::new(self.stdin.clone(), self.stdout.clone(), self.stderr.clone()).await;
@@ -249,9 +268,15 @@ impl Process {
 
         self.pre_fifos_open()?;
         // new shim io
-        let shim_io = ShimIo::new(&self.stdin, &self.stdout, &self.stderr)
-            .await
-            .context("new shim io")?;
+        let shim_io = ShimIo::new(
+            &self.stdin,
+            &self.stdout,
+            &self.stderr,
+            self.process.container_id(),
+            &std::env::var("NAMESPACE").unwrap_or_default(),
+        )
+        .await
+        .context("new shim io")?;
         self.post_fifos_open()?;
 
         // start io copy for stdin
@@ -283,7 +308,7 @@ impl Process {
             }
         }
 
-        self.run_io_wait(containers, agent, wg)
+        self.run_io_wait(containers, agent, wg, shim_io.binary_logger)
             .await
             .context("run io thread")?;
         Ok(())
@@ -331,6 +356,9 @@ impl Process {
                 }
             };
 
+            // Close the destination before notifying the waiter. Binary
+            // loggers must see pipe EOF before their shutdown signal.
+            drop(writer);
             if let Some(w) = wgw {
                 w.done()
             }
@@ -347,6 +375,7 @@ impl Process {
         containers: Arc<RwLock<HashMap<String, Container>>>,
         agent: Arc<dyn Agent>,
         mut wg: WaitGroup,
+        binary_logger: Option<BinaryLogger>,
     ) -> Result<()> {
         let logger = self.logger.clone();
         info!(logger, "start run io wait");
@@ -360,6 +389,10 @@ impl Process {
             info!(logger, "begin wait group io");
             wg.wait().await;
             info!(logger, "end wait group for io");
+
+            if let Some(binary_logger) = binary_logger {
+                binary_logger.shutdown().await;
+            }
 
             let req = agent::WaitProcessRequest {
                 process_id: process.clone().into(),
@@ -455,5 +488,19 @@ impl Process {
     pub async fn set_status(&self, new_status: ProcessStatus) {
         let mut status = self.status.write().await;
         *status = new_status;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_binary_stdio;
+
+    #[test]
+    fn identifies_binary_logger_uri() {
+        assert!(is_binary_stdio(
+            "binary:///usr/bin/logger?config=%2Frun%2Flog.json"
+        ));
+        assert!(!is_binary_stdio("/run/containerd/io/stdout"));
+        assert!(!is_binary_stdio("file:///run/container.log"));
     }
 }

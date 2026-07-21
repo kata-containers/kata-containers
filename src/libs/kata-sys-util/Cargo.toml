@@ -25,7 +25,6 @@ subprocess = "1.2.0"
 rand = { version = "0.10.1", features = ["std", "std_rng", "thread_rng"] }
 thiserror = { workspace = true }
 hex = "0.4.3"
-pci-ids = "0.2.6"
 
 kata-types = { path = "../kata-types" }
 oci-spec = { workspace = true }

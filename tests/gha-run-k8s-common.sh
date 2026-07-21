@@ -183,33 +183,6 @@ function install_bats() {
 
 }
 
-# Install the kustomize tool in /usr/local/bin if it doesn't exist on
-# the system yet.
-#
-function install_kustomize() {
-	local arch
-	local checksum
-	local version
-
-	if command -v kustomize >/dev/null; then
-		return
-	fi
-
-	ensure_yq
-	version=$(get_from_kata_deps ".externals.kustomize.version")
-	arch=$(arch_to_golang)
-	checksum=$(get_from_kata_deps ".externals.kustomize.checksum.${arch}")
-
-	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
-	curl -Lf -o "${tarball}" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"
-
-	local rc=0
-	echo "${checksum} ${tarball}" | sha256sum -c || rc=$?
-	[[ ${rc} -eq 0 ]] && sudo tar -xvzf "${tarball}" -C /usr/local/bin || rc=$?
-	rm -f "${tarball}"
-	[[ ${rc} -eq 0 ]]
-}
-
 function get_cluster_credentials() {
 	test_type="${1:-k8s}"
 
@@ -799,7 +772,7 @@ function helm_helper() {
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
 			# shellcheck disable=SC2034
-			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
@@ -808,8 +781,6 @@ function helm_helper() {
 
 				if is_se_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
-				elif is_cca_hypervisor "${shim}"; then
-					yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 				elif is_snp_hypervisor "${shim}" || is_tdx_hypervisor "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 				# qemu-coco-dev-runtime-rs is checked explicitly because
@@ -864,24 +835,35 @@ function helm_helper() {
 				die "EROFS_SNAPSHOTTER_MODE is only supported with SNAPSHOTTER=erofs"
 			fi
 
-			local erofs_default_size
-			case "${EROFS_SNAPSHOTTER_MODE}" in
-				disk)
-					erofs_default_size="10G"
-					;;
-				memory)
-					erofs_default_size="0"
-					;;
-				*)
-					die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
-					;;
-			esac
+			# Honor an erofs snapshotter drop-in already shipped by the base
+			# values file (e.g. try-kata-nvidia-cpu.values.yaml pins the
+			# memory-backed default_size and disables fs-verity, which cannot
+			# be guaranteed on an arbitrary node's backing filesystem). Only
+			# synthesize the default drop-in when the profile does not provide
+			# its own.
+			local existing_dropin
+			existing_dropin="$(yq -r '.containerd.userDropIn // ""' "${values_yaml}")"
 
-			HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
-			HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+			if [[ -z "${existing_dropin//[[:space:]]/}" ]]; then
+				local erofs_default_size
+				case "${EROFS_SNAPSHOTTER_MODE}" in
+					disk)
+						erofs_default_size="10G"
+						;;
+					memory)
+						erofs_default_size="0"
+						;;
+					*)
+						die "Unsupported EROFS_SNAPSHOTTER_MODE: ${EROFS_SNAPSHOTTER_MODE}"
+						;;
+				esac
 
-			HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
-				yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
+				HELM_CONTAINERD_USER_DROP_IN="[plugins.'io.containerd.snapshotter.v1.erofs']"$'\n'
+				HELM_CONTAINERD_USER_DROP_IN+="  default_size = \"${erofs_default_size}\""
+
+				HELM_CONTAINERD_USER_DROP_IN="${HELM_CONTAINERD_USER_DROP_IN}" \
+					yq -i '.containerd.userDropIn = strenv(HELM_CONTAINERD_USER_DROP_IN)' "${values_yaml}"
+			fi
 
 			# Propagate rwlayer backing mode to kata-deploy.
 			yq -i ".snapshotter.erofsSnapshotterMode = \"${EROFS_SNAPSHOTTER_MODE}\"" "${values_yaml}"
@@ -1069,8 +1051,9 @@ function helm_helper() {
 	# Creates a simple verification pod that runs with the Kata runtime
 	local helm_set_file_args=""
 	if [[ "${HELM_VERIFY_DEPLOYMENT}" == "true" ]]; then
-		# Determine runtime class from HELM_DEFAULT_SHIM or default to kata-qemu
-		local runtime_class="kata-qemu"
+		# Determine runtime class from HELM_DEFAULT_SHIM, otherwise fall back to
+		# the chart's default shim (Rust runtime since the 4.0 release).
+		local runtime_class="kata-qemu-runtime-rs"
 		if [[ -n "${HELM_DEFAULT_SHIM}" ]]; then
 			runtime_class="kata-${HELM_DEFAULT_SHIM}"
 		fi

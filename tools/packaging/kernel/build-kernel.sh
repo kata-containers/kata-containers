@@ -69,8 +69,6 @@ kernel_ref=""
 # Enable measurement of the guest rootfs at boot.
 measured_rootfs="false"
 
-CROSS_BUILD_ARG=""
-
 packaging_scripts_dir="${script_dir}/../scripts"
 # shellcheck source=tools/packaging/scripts/lib.sh
 source "${packaging_scripts_dir}/lib.sh"
@@ -101,7 +99,6 @@ Options:
 	-c <path>   	: Path to config file to build the kernel.
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
-	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
 	-f          	: Enable force generate config when setup, old kernel path and config will be removed.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
@@ -495,8 +492,7 @@ setup_kernel() {
 
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
-	# shellcheck disable=SC2086
-	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
+	ARCH=${arch_target}  make oldconfig
 	)
 
 	info "Fetching NVIDIA driver source code"
@@ -519,8 +515,7 @@ build_kernel() {
 	[[ -n "${arch_target}" ]] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	# shellcheck disable=SC2086
-	make -j "$(nproc)" ARCH="${arch_target}" ${CROSS_BUILD_ARG}
+	make -j "$(nproc)" ARCH="${arch_target}"
 	if [[ "${conf_guest}" == "confidential" ]]; then
 		make -j "$(nproc)" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${kernel_path}" modules_install
 	fi
@@ -587,14 +582,6 @@ install_kata() {
 
 	if [[ ${gpu_vendor} != "" ]]; then
 		suffix="-${gpu_vendor}-gpu${suffix}"
-	elif [[ ${conf_guest} != "" ]]; then
-		# CCA kernel on arm64 needs a -confidential suffix to coexist
-		# with the unified kernel; the regular kernel with -x does not
-		# get the suffix (matching x86_64/s390x unified kernel behavior).
-		# CCA builds are identified by -H (linux_headers) being set.
-		if [[ "${arch_target}" == "arm64" ]] && [[ -n "${linux_headers}" ]]; then
-			suffix="-${conf_guest}${suffix}"
-		fi
 	fi
 
 	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
@@ -639,7 +626,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:r:st:u:v:x" opt; do
+	while getopts "a:b:c:defg:hH:k:mp:r:st:u:v:x" opt; do
 		case "${opt}" in
 			a)
 				arch_target="${OPTARG}"
@@ -656,9 +643,6 @@ main() {
 				;;
 			e)
 				build_type="experimental"
-				;;
-			E)
-				build_type="arch-experimental"
 				;;
 			f)
 				force_setup_generate_config="true"
@@ -727,17 +711,6 @@ main() {
 	if [[ -z "${kernel_version}" ]]; then
 		if [[ ${build_type} == "experimental" ]]; then
 			kernel_version=$(get_from_kata_deps ".assets.kernel-experimental.tag")
-		elif [[ ${build_type} == "arch-experimental" ]]; then
-			case "${arch_target}" in
-			"aarch64")
-				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps ".assets.kernel-arm-experimental.version")
-			;;
-			*)
-				info "No arch-specific experimental kernel supported, using experimental one instead"
-				kernel_version=$(get_from_kata_deps ".assets.kernel-experimental.tag")
-			;;
-			esac
 		elif [[ ${build_type} == "dragonball-experimental" ]]; then
 			kernel_version=$(get_from_kata_deps ".assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
@@ -762,8 +735,6 @@ main() {
 	fi
 
 	info "Kernel version: ${kernel_version}"
-
-	[[ "${arch_target}" != "" ]] && [[ "${arch_target}" != "$(uname -m)" ]] && CROSS_BUILD_ARG="CROSS_COMPILE=${arch_target}-linux-gnu-"
 
 	case "${subcmd}" in
 		build)

@@ -3,7 +3,9 @@
 Kata Containers ships two runtimes side by side: the legacy Go runtime
 (`src/runtime`) and `runtime-rs` (`src/runtime-rs`), the Rust implementation
 of the containerd shim v2. Since the 4.0.0 release `runtime-rs` is the
-default and recommended choice; the Go runtime is still shipped and supported.
+default and recommended choice. The Go runtime is still shipped and supported,
+but **deprecated** — see
+[Go runtime deprecation](migrating-config-go-runtime-to-runtime-rs.md#go-runtime-deprecation).
 
 The recommended install path is the [`kata-deploy` Helm chart](#install-on-kubernetes-with-helm-recommended)
 on a Kubernetes cluster. Pre-built release tarballs and from-source builds are
@@ -148,15 +150,9 @@ node selectors, TEE shims, drop-in configuration files and more), see the
 ### Use a Kata RuntimeClass
 
 The chart creates one `RuntimeClass` per enabled shim. `runtime-rs`-based
-runtimes use the `-runtime-rs` suffix; `kata-dragonball` (the built-in
-Dragonball VMM) is `runtime-rs` only:
-
-| RuntimeClass | Hypervisor | Runtime |
-|-|-|-|
-| `kata-qemu-runtime-rs` | QEMU | runtime-rs |
-| `kata-clh-runtime-rs` | Cloud Hypervisor | runtime-rs |
-| `kata-dragonball` | Dragonball (built-in) | runtime-rs |
-| `kata-qemu` | QEMU | Go runtime (deprecated) |
+runtimes use the `-runtime-rs` suffix (for example `kata-qemu-runtime-rs`);
+`kata-dragonball` (the built-in Dragonball VMM) is `runtime-rs` only. The
+deprecated Go runtime is available as `kata-qemu`.
 
 List the runtime classes available on your cluster:
 
@@ -212,7 +208,18 @@ Download the archive for your architecture from the
 
 ```sh
 export VERSION=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq -r .tag_name)
-export ARCH=amd64 # or arm64, s390x, ppcle64 etc
+
+# Release tarballs use architecture names that differ from `uname -m`.
+case "$(uname -m)" in
+  x86_64)  ARCH=amd64 ;;
+  aarch64) ARCH=arm64 ;;
+  s390x)   ARCH=s390x ;;
+  ppc64le) ARCH=ppc64le ;;
+  *)
+    echo "unsupported architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
 
 curl -fsSL -o kata-static.tar.zst \
   "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-${ARCH}.tar.zst"
@@ -225,8 +232,8 @@ The release installs both runtimes side by side:
 
 | Path | Runtime |
 |-|-|
-| `/opt/kata/runtime-rs/bin/containerd-shim-kata-v2` | runtime-rs (recommended) |
-| `/opt/kata/bin/containerd-shim-kata-v2` | Go runtime |
+| `/opt/kata/runtime-rs/bin/containerd-shim-kata-v2` | runtime-rs (default) |
+| `/opt/kata/bin/containerd-shim-kata-v2` | Go runtime (deprecated) |
 
 Packaged configuration files live under
 `/opt/kata/share/defaults/kata-containers/`. The `runtime-rs` configurations

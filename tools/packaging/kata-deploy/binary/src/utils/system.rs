@@ -215,7 +215,6 @@ mod tests {
             "qemu-snp",
             "qemu-se",
             "qemu-coco-dev",
-            "qemu-cca",
             "qemu-nvidia-cpu",
             "qemu-nvidia-gpu",
             "qemu-nvidia-gpu-tdx",

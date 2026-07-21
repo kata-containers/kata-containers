@@ -135,7 +135,6 @@ options:
 	kata-ctl
 	kata-manager
 	kernel
-	kernel-cca-confidential
 	kernel-debug
 	kernel-dragonball-experimental
 	kernel-experimental
@@ -145,9 +144,7 @@ options:
 	ovmf
 	ovmf-sev
 	ovmf-tdx
-	ovmf-cca
 	qemu
-	qemu-cca-experimental
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	stratovirt
@@ -808,9 +805,6 @@ install_initrd() {
 
 	latest_builder_image=""
 
-	# shellcheck disable=SC2154
-	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
-
 	install_cached_tarball_component \
 		"${component}" \
 		"${latest_artefact}" \
@@ -1073,16 +1067,6 @@ install_kernel_debug() {
 		""
 }
 
-install_kernel_cca_confidential() {
-	export CONFIDENTIAL_GUEST="yes"
-	export MEASURED_ROOTFS="yes"
-
-	install_kernel_helper \
-		"assets.kernel-arm-experimental.confidential" \
-		"kernel-confidential" \
-		"-x -H deb"
-}
-
 install_kernel_dragonball_experimental() {
 	install_kernel_helper \
 		"assets.kernel-dragonball-experimental" \
@@ -1142,17 +1126,6 @@ install_qemu() {
 		"assets.hypervisor.qemu.version" \
 		"qemu" \
 		"${qemu_builder}"
-}
-
-install_qemu_cca_experimental() {
-	export qemu_suffix="cca-experimental"
-	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
-
-	install_qemu_helper \
-		"assets.hypervisor.qemu-${qemu_suffix}.url" \
-		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
-		"qemu-${qemu_suffix}" \
-		"${qemu_experimental_builder}"
 }
 
 install_qemu_snp_experimental() {
@@ -1397,10 +1370,8 @@ install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 	if [[ "${ARCH}" == "aarch64" ]]; then
-	  if [[ "${ovmf_type}" != "cca" ]]; then
-		  ovmf_type="arm64"
-		  tarball_name="edk2-arm64.tar.gz"
-		fi
+		ovmf_type="arm64"
+		tarball_name="edk2-arm64.tar.gz"
 	fi
 
 	local component_name="ovmf"
@@ -1430,11 +1401,6 @@ install_ovmf_sev() {
 # Install OVMF TDX
 install_ovmf_tdx() {
 	install_ovmf "tdx" "edk2-tdx.tar.gz"
-}
-
-# Install OVMF CCA
-install_ovmf_cca() {
-	install_ovmf "cca" "edk2-cca.tar.gz"
 }
 
 install_busybox() {
@@ -1682,7 +1648,6 @@ handle_build() {
 		install_kata_ctl
 		install_kata_manager
 		install_kernel
-		install_kernel_cca_confidential
 		install_kernel_dragonball_experimental
 		install_log_parser_rs
 		install_nydus
@@ -1723,8 +1688,6 @@ handle_build() {
 
 	kernel-debug) install_kernel_debug ;;
 
-	kernel-cca-confidential) install_kernel_cca_confidential ;;
-
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
@@ -1739,13 +1702,9 @@ handle_build() {
 
 	ovmf-tdx) install_ovmf_tdx ;;
 
-	ovmf-cca) install_ovmf_cca ;;
-
 	pause-image) install_pause_image ;;
 
 	qemu) install_qemu ;;
-
-	qemu-cca-experimental) install_qemu_cca_experimental ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
@@ -1773,10 +1732,6 @@ handle_build() {
 
 	rootfs-image-nvidia-gpu-extension) install_image_nvidia_gpu_extension ;;
 
-	rootfs-cca-confidential-image) install_image_confidential ;;
-
-	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
-
 	shim-v2-go) install_shim_v2_go ;;
 
 	shim-v2-rust) install_shim_v2_rust ;;
@@ -1786,7 +1741,7 @@ handle_build() {
 	virtiofsd) install_virtiofsd ;;
 
 	dummy)
-		tar --zstd -cvf "${final_tarball_path}" --files-from /dev/null
+		kata_tar_zstd -cvf "${final_tarball_path}" --files-from /dev/null
 	       	;;
 
 	*)
@@ -1796,7 +1751,7 @@ handle_build() {
 
 	if [[ ! -f "${final_tarball_path}" ]]; then
 		cd "${destdir}"
-		tar --zstd -cvf "${final_tarball_path}" "."
+		kata_tar_zstd -cvf "${final_tarball_path}" "."
 	fi
 	tar --zstd -tvf "${final_tarball_path}"
 
@@ -1812,7 +1767,7 @@ handle_build() {
 
 				pushd "${parent_dir}"
 				rm -f "${parent_dir_basename}"/build
-				tar --zstd -cvf "${modules_final_tarball_path}" "."
+				kata_tar_zstd -cvf "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar --zstd -tvf "${modules_final_tarball_path}"
@@ -1825,7 +1780,7 @@ handle_build() {
 
 				pushd "${modules_dir}"
 				rm -f build
-				tar --zstd -cvf "${modules_final_tarball_path}" "."
+				kata_tar_zstd -cvf "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar --zstd -tvf "${modules_final_tarball_path}"

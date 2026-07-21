@@ -79,12 +79,6 @@ This crate provides safe wrappers and utility functions for interacting with var
 - Secure random byte generation
 - UUID generation
 
-### PCI Device Management (`pcilibs`)
-
-- PCI device enumeration and management
-- PCI configuration space access
-- Memory resource allocation for PCI devices
-
 ## Supported Architectures
 
 - x86_64

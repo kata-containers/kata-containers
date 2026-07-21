@@ -95,9 +95,16 @@ impl RawblockVolume {
             .await
             .context("do handle device failed.")?;
 
-        let block_volume = handle_block_volume(device_info, m, read_only, sid, &mount_info.fs_type)
-            .await
-            .context("do handle block volume failed")?;
+        let block_volume = handle_block_volume(
+            device_info,
+            m,
+            read_only,
+            sid,
+            &mount_info.fs_type,
+            Some(&mount_info.options),
+        )
+        .await
+        .context("do handle block volume failed")?;
 
         Ok(Self {
             storage: Some(block_volume.0),

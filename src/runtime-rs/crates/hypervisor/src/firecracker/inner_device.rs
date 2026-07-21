@@ -27,10 +27,13 @@ impl FcInner {
         debug!(sl(), "Add Device {} ", &device);
 
         match device {
-            DeviceType::Block(block) => self
-                .hotplug_block_device(block.config.path_on_host.as_str(), block.config.index)
-                .await
-                .context("add block device"),
+            DeviceType::BlockModern(block_mod) => {
+                let block = block_mod.lock().await.clone();
+                self
+                    .hotplug_block_device(block.config.path_on_host.as_str(), block.config.index)
+                    .await
+                    .context("add block device")
+            }
             DeviceType::Network(network) => self
                 .add_net_device(&network.config, network.device_id)
                 .await

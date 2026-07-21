@@ -14,7 +14,7 @@ use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::device::driver::virtio_blk_modern::BlockDeviceModern;
 use crate::vfio_device::VfioDeviceBase;
 use crate::{
-    BlockConfig, BlockConfigModern, BlockDevice, HybridVsockConfig, HybridVsockDevice,
+    BlockConfigModern, HybridVsockConfig, HybridVsockDevice,
     Hypervisor as hypervisor, NetworkConfig, NetworkDevice, PCIePortDevice, PortDeviceConfig,
     ProtectionDevice, ProtectionDeviceConfig, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice,
     VhostUserConfig, VhostUserNetDevice, VsockConfig, VsockDevice,
@@ -34,7 +34,6 @@ pub mod util;
 
 #[derive(Debug)]
 pub enum DeviceConfig {
-    BlockCfg(BlockConfig),
     BlockCfgModern(BlockConfigModern),
     VhostUserBlkCfg(VhostUserConfig),
     NetworkCfg(NetworkConfig),
@@ -50,7 +49,6 @@ pub enum DeviceConfig {
 
 #[derive(Debug, Clone)]
 pub enum DeviceType {
-    Block(BlockDevice),
     VhostUserBlk(VhostUserBlkDevice),
     Vfio(VfioDevice),
     Network(NetworkDevice),

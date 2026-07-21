@@ -27,6 +27,35 @@ use hypervisor::device::DeviceType;
 
 pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
+pub const KATA_MOUNT_RBIND_TYPE: &str = "rbind";
+
+/// Build the OCI mount options for the container-side bind mount of a direct
+/// block volume.
+pub(crate) fn build_bind_mount_options(
+    volume_options: &[String],
+    oci_options: &Option<Vec<String>>,
+) -> Vec<String> {
+    let mut opts = oci_options.clone().unwrap_or_default();
+    opts.extend(volume_options.iter().cloned());
+
+    if !opts
+        .iter()
+        .any(|o| matches!(o.as_str(), KATA_MOUNT_BIND_TYPE | KATA_MOUNT_RBIND_TYPE))
+    {
+        opts.push(KATA_MOUNT_BIND_TYPE.to_string());
+    }
+    opts
+}
+
+/// Filter OCI bind-mount flags ("bind", "rbind") from volume options that
+/// will be passed to the agent's `Storage.options`.
+pub(crate) fn filter_block_storage_options(options: &[String]) -> Vec<String> {
+    options
+        .iter()
+        .filter(|o| !matches!(o.as_str(), KATA_MOUNT_BIND_TYPE | KATA_MOUNT_RBIND_TYPE))
+        .cloned()
+        .collect()
+}
 
 // BLKROGET (_IO(0x12, 94)) returns the block device's read-only flag into an
 // int. It is encoded as an `_IO` ioctl but actually transfers data, so it is a
@@ -81,6 +110,8 @@ pub(crate) async fn generate_shared_path(
     let file_name = get_file_name(&dest).context("failed to get file name.")?;
     let mount_name = generate_mount_path(device_id, file_name.as_str());
     let guest_path = do_get_guest_path(&mount_name, device_id, true, false);
+    // Note: directories should always be created under the rw/ path. The ro/ directory is a
+    // read-only bind mount of rw/, so creating directories directly under ro/ would fail with a read-only FS.
     let host_path = do_get_host_path(&mount_name, sid, device_id, true, read_only);
 
     if get_mount_path(&Some(dest)).starts_with("/dev") {
@@ -137,14 +168,18 @@ pub async fn handle_block_volume(
     read_only: bool,
     sid: &str,
     fstype: &str,
+    volume_options: Option<&[String]>,
 ) -> Result<(agent::Storage, oci::Mount, String)> {
-    // storage
+    let oci_opts = get_mount_options(m.options());
+    let mut storage_options: Vec<String> =
+        filter_block_storage_options(volume_options.unwrap_or(&oci_opts));
+
+    if read_only && !storage_options.iter().any(|o| o == "ro") {
+        storage_options.push("ro".to_string());
+    }
+
     let mut storage = agent::Storage {
-        options: if read_only {
-            vec!["ro".to_string()]
-        } else {
-            Vec::new()
-        },
+        options: storage_options,
         ..Default::default()
     };
 
@@ -167,18 +202,6 @@ pub async fn handle_block_volume(
         device_id = device.device_id.clone();
     }
 
-    if let DeviceType::Block(device) = device_info {
-        storage.driver = device.config.driver_option.clone();
-        storage.source = extract_storage_source(
-            &device.config.driver_option,
-            device.config.pci_path.as_ref(),
-            device.config.scsi_addr.as_deref(),
-            device.config.ccw_addr.as_deref(),
-            &device.config.virt_path,
-        )?;
-        device_id = device.device_id;
-    }
-
     // generate host guest shared path
     let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
         .await
@@ -199,11 +222,58 @@ pub async fn handle_block_volume(
         storage.fs_type = fstype.to_owned();
     }
 
+    // The Storage object already mounts the block device at `guest_path`
+    // inside the guest. The OCI Mount then bind-mounts from `guest_path` to
+    // the container's destination, so its type must be "bind" rather than a
+    // filesystem type like "ext4".
     let mut mount = oci::Mount::default();
     mount.set_destination(m.destination().clone());
-    mount.set_typ(Some(storage.fs_type.clone()));
+    mount.set_typ(Some(KATA_MOUNT_BIND_TYPE.to_string()));
     mount.set_source(Some(PathBuf::from(&guest_path)));
-    mount.set_options(m.options().clone());
+    mount.set_options(Some(build_bind_mount_options(volume_options.unwrap_or(&[]), m.options())));
+
+    debug!(sl!(), "handle block volume with device_id: {}, storage: {:?}, mount: {:?}", device_id, storage, mount);
 
     Ok((storage, mount, device_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_bind_mount_options_merges_volume_options() {
+        let volume_options = vec!["ro".to_string(), "nosuid".to_string()];
+        let oci_options = Some(vec!["rbind".to_string(), "noexec".to_string()]);
+
+        let opts = build_bind_mount_options(&volume_options, &oci_options);
+
+        assert_eq!(
+            opts,
+            vec![
+                "rbind".to_string(),
+                "noexec".to_string(),
+                "ro".to_string(),
+                "nosuid".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_build_bind_mount_options_with_oci_options() {
+        let oci_options = Some(vec!["noexec".to_string(), "nodev".to_string()]);
+
+        let opts = build_bind_mount_options(&[], &oci_options);
+
+        // OCI options are used verbatim, then "bind" is appended because none of
+        // them is a bind/rbind flag.
+        assert_eq!(
+            opts,
+            vec![
+                "noexec".to_string(),
+                "nodev".to_string(),
+                KATA_MOUNT_BIND_TYPE.to_string(),
+            ]
+        );
+    }
 }

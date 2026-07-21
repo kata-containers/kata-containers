@@ -6,11 +6,9 @@
 use agent::Agent;
 use anyhow::{anyhow, Context, Error, Result};
 use hypervisor::{
-    device::{
-        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
-        DeviceConfig, DeviceType,
+    BlockConfigModern, device::{
+        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
     },
-    BlockConfig,
 };
 use nix::sched::sched_yield;
 use nix::sys::statvfs::statvfs;
@@ -159,7 +157,7 @@ impl SwapTask {
         let block_driver = get_block_device_info(&self.device_manager)
             .await
             .block_device_driver;
-        let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+        let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
             path_on_host: swap_path.clone(),
             driver_option: block_driver,
             is_direct: Some(true),
@@ -174,7 +172,10 @@ impl SwapTask {
             .await
             .context("do_handle_device")?;
         let device_id = match device_info {
-            DeviceType::Block(ref bdev) => bdev.device_id.clone(),
+            DeviceType::BlockModern(ref device_mod) => {
+                let device = device_mod.lock().await.clone();
+                device.device_id.clone()
+            },
             _ => return Err(anyhow!("swap_task: device_info {} is not Block", swap_path)),
         };
 
@@ -197,7 +198,9 @@ impl SwapTask {
             return Err(StStop::get_error(true));
         }
 
-        if let DeviceType::Block(device) = device_info {
+        if let DeviceType::BlockModern(device_mod) = device_info {
+            let device = device_mod.lock().await.clone();
+
             let ret = if let Some(pci_path) = device.config.pci_path.clone() {
                 self.agent.add_swap(agent::types::AddSwapRequest {
                     pci_path: pci_path.slots.iter().map(|slot| slot.0 as u32).collect(),

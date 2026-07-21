@@ -7,7 +7,8 @@ The `src/libs` directory hosts library crates shared by multiple Kata Containers
 | Library | Description |
 |---------|-------------|
 | [kata-types](kata-types/) | Constants, data types, and configuration structures shared by Kata Containers components |
-| [kata-sys-util](kata-sys-util/) | System utilities: CPU, device, filesystem, hooks, K8s, mount, netns, NUMA, PCI, protection, spec validation |
+| [kata-sys-util](kata-sys-util/) | System utilities: CPU, device, filesystem, hooks, K8s, mount, netns, NUMA, protection, spec validation |
+| [pcilibs-rs](https://github.com/kata-containers/pcilibs-rs) | PCI device enumeration, VFIO helpers, and InfiniBand diagnostics (standalone repo) |
 | [protocols](protocols/) | ttrpc protocol definitions for agent, health, remote, CSI, OCI, confidential data hub |
 | [runtime-spec](runtime-spec/) | OCI runtime spec data structures and constants |
 | [shim-interface](shim-interface/) | Shim management interface with RESTful API over Unix domain socket |
@@ -39,7 +40,6 @@ System-level utilities:
 - `mount`: Mount operations
 - `netns`: Network namespace handling
 - `numa`: NUMA topology
-- `pcilibs`: PCI device access
 - `protection`: Hardware protection features
 - `spec`: OCI spec loading
 - `validate`: Input validation
