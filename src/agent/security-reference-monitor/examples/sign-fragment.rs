@@ -245,6 +245,70 @@ fn main() {
                 println!("cose_sign1_hex={}", hex_encode(&sign1.to_vec().unwrap()));
             }
         }
+        // FR-1d dev/verification tool: verify a did:x509 COSE fragment offline against a CA
+        // fingerprint + policy, exactly as the agent would. Proves openssl-minted PKI interop.
+        //   verify-x509 --issuer <did> --svn <n> --includes <csv> --module <rego> \
+        //       --cose <hex> --ca-fp <sha256-hex> [--eku <oid>] [--revoked <sha256-hex,...>]
+        "verify-x509" => {
+            use kata_security_reference_monitor::did_x509::{DidX509Anchor, DidX509Policy};
+            use kata_security_reference_monitor::{FragmentStore, PolicyFragment};
+            let f = parse_flags(&argv[2..]);
+            let issuer = f.get("issuer").cloned().unwrap_or_default();
+            let svn: u64 = f.get("svn").and_then(|s| s.parse().ok()).unwrap_or(0);
+            let includes: Vec<String> = f
+                .get("includes")
+                .map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
+                .unwrap_or_default();
+            let module = f.get("module").map(|p| {
+                String::from_utf8(std::fs::read(p).expect("read module")).expect("module utf8")
+            });
+            let cose = hex_decode(f.get("cose").expect("--cose required")).expect("decode cose hex");
+            let ca_fp_vec = hex_decode(f.get("ca-fp").expect("--ca-fp required")).expect("decode ca-fp");
+            let mut ca_fp = [0u8; 32];
+            ca_fp.copy_from_slice(&ca_fp_vec);
+
+            let mut store = FragmentStore::new(false);
+            store.set_require_x509(true);
+            store.authorize_did_x509(DidX509Anchor {
+                did: issuer.clone(),
+                ca_fingerprint: ca_fp,
+                policy: DidX509Policy {
+                    require_eku: f
+                        .get("eku")
+                        .map(|s| s.split(',').map(|x| x.trim().to_string()).collect())
+                        .unwrap_or_default(),
+                    ..Default::default()
+                },
+            });
+            if let Some(rev) = f.get("revoked") {
+                let fps: Vec<[u8; 32]> = rev
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|h| {
+                        let v = hex_decode(h).expect("decode revoked fp");
+                        let mut a = [0u8; 32];
+                        a.copy_from_slice(&v);
+                        a
+                    })
+                    .collect();
+                store.set_revoked_certs(fps);
+            }
+            let fragment = PolicyFragment {
+                issuer,
+                feed: f.get("feed").cloned().unwrap_or_default(),
+                svn,
+                includes,
+                policy_module: module,
+                ..Default::default()
+            };
+            match store.verify_cose_x509(&fragment, &cose) {
+                Ok(v) => println!("verify=OK issuer={} svn={}", v.issuer, v.svn),
+                Err(e) => {
+                    println!("verify=ERR {e}");
+                    std::process::exit(1);
+                }
+            }
+        }
         other => {
             eprintln!("unknown subcommand: {other}");
             std::process::exit(2);
