@@ -70,6 +70,13 @@ pub struct PolicyFragment {
     /// current log head; on success the head advances by hashing this fragment in. `None` =
     /// not part of an ordered log (back-compat / opt-in).
     pub prev_log_head: Option<Vec<u8>>,
+    /// FR-1f Stage 2: an optional transparency **inclusion + consistency** proof anchoring
+    /// this fragment in an append-only transparency log (SCITT/CT). Text-encoded
+    /// (`kata-ttl-proof/v1`): a signed tree head (size, root, ledger signature), the
+    /// inclusion proof of this fragment's statement, and an optional consistency proof from
+    /// the previously-seen tree head. Verified against the transparency trust list; proves
+    /// the fragment is recorded in — and the log has only grown since the last — tree head.
+    pub receipt_proof: Option<String>,
     /// Detached Ed25519 signature (by the issuer) over [`PolicyFragment::signing_bytes`].
     pub signature: Vec<u8>,
 }
@@ -145,6 +152,9 @@ pub struct VerifiedFragment {
     /// FR-1j: SHA-256 of the fragment statement, used to advance the ordering log head on
     /// commit (so the head binds the exact applied sequence).
     pub stmt_sha256: [u8; 32],
+    /// FR-1f Stage 2: the verified transparency tree head `(ledger, size, root)` this
+    /// fragment advanced to, applied (raise-only) on commit. `None` when no proof was given.
+    pub ttl_head: Option<(String, u64, [u8; 32])>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -191,6 +201,12 @@ pub enum FragmentError {
     /// FR-1j: the fragment asserts a predecessor log head that is not the store's current
     /// head — a reordering, omission, or insertion in the append-only application log.
     LogHeadMismatch { expected: String, presented: String },
+    /// FR-1f Stage 2: the transparency inclusion proof does not recompute to the signed
+    /// tree-head root (the fragment is not provably recorded in the log).
+    InvalidInclusionProof,
+    /// FR-1f Stage 2: the presented signed tree head is not an append-only extension of the
+    /// last-seen one for this ledger (the log was rewound or forked).
+    LogRolledBack { ledger: String, last_size: u64, presented_size: u64 },
 }
 
 impl fmt::Display for FragmentError {
@@ -235,6 +251,13 @@ impl fmt::Display for FragmentError {
             FragmentError::LogHeadMismatch { expected, presented } => write!(
                 f,
                 "fragment ordering log-head mismatch: expected {expected}, presented {presented}"
+            ),
+            FragmentError::InvalidInclusionProof => {
+                write!(f, "transparency inclusion proof does not verify")
+            }
+            FragmentError::LogRolledBack { ledger, last_size, presented_size } => write!(
+                f,
+                "transparency log {ledger} rolled back: last size {last_size}, presented {presented_size}"
             ),
         }
     }
@@ -284,6 +307,10 @@ pub struct FragmentStore {
     /// FR-1j: number of fragments committed to the ordered log (persisted, raise-only, so a
     /// restart cannot rewind the log position).
     log_len: u64,
+    /// FR-1f Stage 2: last-seen signed tree head `(size, root)` per transparency ledger.
+    /// Monotonic (raise-only by size) and persisted, so the external log cannot be rewound
+    /// across a restart.
+    ttl_heads: HashMap<String, (u64, [u8; 32])>,
 }
 
 impl FragmentStore {
@@ -581,22 +608,29 @@ impl FragmentStore {
             });
         }
 
-        // 5. Transparency receipt (FR-1f trust list): a receipt may be required globally or
-        //    per-scope (`required_receipt_from`); when present it must originate from an
-        //    allowed ledger and verify against one of that ledger's current keys.
+        // 5. Transparency receipt (FR-1f): a receipt may be required globally or per-scope
+        //    (`required_receipt_from`). Two forms are accepted and both are scoped by
+        //    `allowed_ledgers`/`required_receipt_from`:
+        //      Stage 1 — a detached signature by a trust-list ledger key over the statement;
+        //      Stage 2 — an inclusion + consistency proof anchoring the statement in an
+        //                append-only transparency log at a signed, monotonic tree head.
         let receipt = fragment.receipt.as_deref().unwrap_or("");
+        let proof = fragment.receipt_proof.as_deref().unwrap_or("");
         let ledger = fragment
             .receipt_ledger
             .as_deref()
             .filter(|l| !l.is_empty())
             .unwrap_or(DEFAULT_LEDGER);
+        let has_receipt = !receipt.is_empty() || !proof.is_empty();
 
         // Per-scope required ledgers (policy-driven `required_receipts`). A non-empty list
         // makes a receipt mandatory for this scope and constrains its ledger.
         let required = self.required_receipt_from.get(&feed_key);
         let scope_requires = required.map(|r| !r.is_empty()).unwrap_or(false);
 
-        if receipt.is_empty() {
+        let mut ttl_head: Option<(String, u64, [u8; 32])> = None;
+
+        if !has_receipt {
             if scope_requires || self.require_receipt {
                 return Err(FragmentError::MissingReceipt);
             }
@@ -620,20 +654,64 @@ impl FragmentStore {
                     });
                 }
             }
-            // Cryptographic verification against the named ledger's key(s), when a trust
-            // list is configured. Any current key of that ledger may validate the receipt
-            // (rotation). An unknown ledger id has no keys ⇒ InvalidReceipt.
-            if !self.transparency_trust_list.is_empty() {
+            let keys = self
+                .transparency_trust_list
+                .get(ledger)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
+
+            // Stage 1: detached-signature receipt, verified against any current ledger key
+            // (rotation) when a trust list is configured.
+            if !receipt.is_empty() && !self.transparency_trust_list.is_empty() {
                 let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
                 let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
-                let keys = self
-                    .transparency_trust_list
-                    .get(ledger)
-                    .map(|v| v.as_slice())
-                    .unwrap_or(&[]);
                 if !keys.iter().any(|k| k.verify(statement, &rsig).is_ok()) {
                     return Err(FragmentError::InvalidReceipt);
                 }
+            }
+
+            // Stage 2: transparency inclusion + consistency proof.
+            if !proof.is_empty() {
+                let tp = TransparencyProof::parse(proof).ok_or(FragmentError::InvalidInclusionProof)?;
+                // (a) the signed tree head must be signed by a current ledger key.
+                let sth = sth_signing_bytes(ledger, tp.size, &tp.root);
+                let ssig = Signature::from_slice(&tp.sig).map_err(|_| FragmentError::InvalidReceipt)?;
+                if !keys.iter().any(|k| k.verify(&sth, &ssig).is_ok()) {
+                    return Err(FragmentError::InvalidReceipt);
+                }
+                // (b) the statement must be included in the tree at that head.
+                let leaf = crate::merkle::leaf_hash(statement);
+                if !crate::merkle::verify_inclusion(tp.index, tp.size, leaf, &tp.incl, &tp.root) {
+                    return Err(FragmentError::InvalidInclusionProof);
+                }
+                // (c) the head must be an append-only extension of the last-seen head
+                //     (monotonic + consistency-proven) — this is the ordering guarantee.
+                if let Some((last_size, last_root)) = self.ttl_heads.get(ledger) {
+                    if tp.size < *last_size {
+                        return Err(FragmentError::LogRolledBack {
+                            ledger: ledger.to_string(),
+                            last_size: *last_size,
+                            presented_size: tp.size,
+                        });
+                    } else if tp.size == *last_size {
+                        if &tp.root != last_root {
+                            return Err(FragmentError::LogRolledBack {
+                                ledger: ledger.to_string(),
+                                last_size: *last_size,
+                                presented_size: tp.size,
+                            });
+                        }
+                    } else if !crate::merkle::verify_consistency(
+                        *last_size, tp.size, last_root, &tp.root, &tp.cons,
+                    ) {
+                        return Err(FragmentError::LogRolledBack {
+                            ledger: ledger.to_string(),
+                            last_size: *last_size,
+                            presented_size: tp.size,
+                        });
+                    }
+                }
+                ttl_head = Some((ledger.to_string(), tp.size, tp.root));
             }
         }
 
@@ -678,6 +756,7 @@ impl FragmentStore {
             policy_module: fragment.policy_module.clone(),
             includes: fragment.includes.clone(),
             stmt_sha256,
+            ttl_head,
         })
     }
 
@@ -697,6 +776,13 @@ impl FragmentStore {
             self.ordered_log
                 .push((verified.id.clone(), verified.stmt_sha256));
             self.log_len += 1;
+        }
+        // FR-1f Stage 2: advance the per-ledger transparency tree head (raise-only by size).
+        if let Some((ledger, size, root)) = &verified.ttl_head {
+            let entry = self.ttl_heads.entry(ledger.clone()).or_insert((0, [0u8; 32]));
+            if *size >= entry.0 {
+                *entry = (*size, *root);
+            }
         }
         let mut added = Vec::new();
         for g in &verified.grants {
@@ -734,6 +820,16 @@ impl FragmentStore {
                 self.log_len
             ));
         }
+        // FR-1f Stage 2: persist each ledger's last-seen transparency tree head (raise-only).
+        let mut ttl: Vec<String> = self
+            .ttl_heads
+            .iter()
+            .map(|(ledger, (size, root))| {
+                format!("{TTL_STATE_KEY}\t{ledger}\t{size}\t{}", bytes_to_hex(root))
+            })
+            .collect();
+        ttl.sort();
+        lines.extend(ttl);
         lines.join("\n")
     }
 
@@ -741,37 +837,160 @@ impl FragmentStore {
     /// high-water mark for its `(issuer, feed)`, never lower it — so an agent/VM restart can
     /// never reopen a rollback window (a fragment at or below a previously-accepted SVN
     /// stays rejected). Combined with the declarative floor (FR-1e), the effective minimum
-    /// is `max(declared floor, persisted high-water + 1)`. FR-1j: the reserved log-state
-    /// line restores the ordering log head, and only if its length is `>=` the current one
-    /// (raise-only), so the head cannot be rewound.
+    /// is `max(declared floor, persisted high-water + 1)`. FR-1j restores the ordering log
+    /// head and FR-1f Stage 2 the per-ledger transparency tree head, both raise-only, so
+    /// neither can be rewound across a restart.
     pub fn import_svn_state(&mut self, snapshot: &str) {
         for line in snapshot.lines() {
-            let mut it = line.splitn(3, '\t');
-            let (Some(a), Some(b), Some(c)) = (it.next(), it.next(), it.next()) else {
-                continue;
-            };
-            if a == LOG_STATE_KEY {
-                // FR-1j: b = head (hex), c = length. Raise-only.
-                if let (Ok(head), Ok(len)) = (hex_to_bytes(b), c.trim().parse::<u64>()) {
-                    if len >= self.log_len {
-                        self.log_head = head;
-                        self.log_len = len;
+            let parts: Vec<&str> = line.split('\t').collect();
+            match parts.as_slice() {
+                [k, head, len] if *k == LOG_STATE_KEY => {
+                    // FR-1j: ordering log head + length. Raise-only.
+                    if let (Ok(head), Ok(len)) = (hex_to_bytes(head), len.trim().parse::<u64>()) {
+                        if len >= self.log_len {
+                            self.log_head = head;
+                            self.log_len = len;
+                        }
                     }
                 }
-                continue;
+                [k, ledger, size, root] if *k == TTL_STATE_KEY => {
+                    // FR-1f Stage 2: transparency tree head. Raise-only by size.
+                    if let (Ok(size), Ok(root)) = (size.trim().parse::<u64>(), hex_to_bytes(root)) {
+                        if root.len() == 32 {
+                            let mut r = [0u8; 32];
+                            r.copy_from_slice(&root);
+                            let entry = self.ttl_heads.entry(ledger.to_string()).or_insert((0, [0u8; 32]));
+                            if size >= entry.0 {
+                                *entry = (size, r);
+                            }
+                        }
+                    }
+                }
+                [issuer, feed, svn] => {
+                    if let Ok(svn) = svn.trim().parse::<u64>() {
+                        let entry = self
+                            .last_svn
+                            .entry((issuer.to_string(), feed.to_string()))
+                            .or_insert(0);
+                        *entry = (*entry).max(svn);
+                    }
+                }
+                _ => {}
             }
-            let Ok(svn) = c.trim().parse::<u64>() else {
-                continue;
-            };
-            let key = (a.to_string(), b.to_string());
-            let entry = self.last_svn.entry(key).or_insert(0);
-            *entry = (*entry).max(svn);
         }
     }
 }
 
 /// Reserved sentinel key for the FR-1j ordering-log state line in the SVN snapshot.
 const LOG_STATE_KEY: &str = "--log-state--";
+/// Reserved sentinel key for the FR-1f Stage 2 per-ledger tree-head state line.
+const TTL_STATE_KEY: &str = "--ttl-head--";
+
+/// FR-1f Stage 2: the bytes a transparency ledger signs to attest a tree head — binds the
+/// ledger id, tree size, and Merkle root so a signed head cannot be replayed for a different
+/// ledger or size. Public so ledger tooling/tests produce byte-identical signed heads.
+pub fn sth_signing_bytes(ledger: &str, size: u64, root: &[u8; 32]) -> Vec<u8> {
+    format!("kata-sth/v1\n{ledger}\n{size}\n{}", bytes_to_hex(root)).into_bytes()
+}
+
+/// FR-1f Stage 2: encode a `kata-ttl-proof/v1` transparency proof exactly as the verifier
+/// parses it (signed tree head + inclusion proof + optional consistency proof). Used by the
+/// mock-ledger dev tool, the demo, and tests so the wire format has a single source of truth.
+pub fn encode_transparency_proof(
+    size: u64,
+    root: &[u8; 32],
+    sig: &[u8],
+    index: u64,
+    incl: &[[u8; 32]],
+    cons: &[[u8; 32]],
+) -> String {
+    let join = |v: &[[u8; 32]]| v.iter().map(bytes_to_hex_arr).collect::<Vec<_>>().join(",");
+    format!(
+        "kata-ttl-proof/v1\nsize={}\nroot={}\nsig={}\nindex={}\nincl={}\ncons={}\n",
+        size,
+        bytes_to_hex(root),
+        bytes_to_hex(sig),
+        index,
+        join(incl),
+        join(cons)
+    )
+}
+
+fn bytes_to_hex_arr(b: &[u8; 32]) -> String {
+    bytes_to_hex(b)
+}
+
+/// FR-1f Stage 2: a parsed `kata-ttl-proof/v1` transparency proof (signed tree head +
+/// inclusion proof + optional consistency proof).
+struct TransparencyProof {
+    size: u64,
+    root: [u8; 32],
+    sig: Vec<u8>,
+    index: u64,
+    incl: Vec<[u8; 32]>,
+    cons: Vec<[u8; 32]>,
+}
+
+impl TransparencyProof {
+    fn parse(s: &str) -> Option<Self> {
+        let mut size = None;
+        let mut root = None;
+        let mut sig = None;
+        let mut index = None;
+        let mut incl = Vec::new();
+        let mut cons = Vec::new();
+        let mut header_ok = false;
+        for line in s.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if line == "kata-ttl-proof/v1" {
+                header_ok = true;
+                continue;
+            }
+            let (k, v) = line.split_once('=')?;
+            match k {
+                "size" => size = v.trim().parse::<u64>().ok(),
+                "root" => root = parse_hash32(v),
+                "sig" => sig = hex_to_bytes(v).ok(),
+                "index" => index = v.trim().parse::<u64>().ok(),
+                "incl" => incl = parse_hash_list(v)?,
+                "cons" => cons = parse_hash_list(v)?,
+                _ => {}
+            }
+        }
+        if !header_ok {
+            return None;
+        }
+        Some(TransparencyProof {
+            size: size?,
+            root: root?,
+            sig: sig?,
+            index: index?,
+            incl,
+            cons,
+        })
+    }
+}
+
+fn parse_hash32(v: &str) -> Option<[u8; 32]> {
+    let b = hex_to_bytes(v).ok()?;
+    if b.len() != 32 {
+        return None;
+    }
+    let mut h = [0u8; 32];
+    h.copy_from_slice(&b);
+    Some(h)
+}
+
+fn parse_hash_list(v: &str) -> Option<Vec<[u8; 32]>> {
+    let v = v.trim();
+    if v.is_empty() {
+        return Some(Vec::new());
+    }
+    v.split(',').map(|e| parse_hash32(e.trim())).collect()
+}
 
 /// Lower-case hex encoding.
 fn bytes_to_hex(b: &[u8]) -> String {
@@ -1515,6 +1734,145 @@ mod tests {
         f.receipt = None;
         sign(&sk, &mut f);
         assert!(store.load(&f).is_ok());
+    }
+    // ---- FR-1f Stage 2: transparency inclusion + consistency proofs ----
+    use crate::merkle::MerkleTree;
+
+    fn ttl_proof(tree: &MerkleTree, sk: &SigningKey, ledger: &str, index: usize, cons_from: Option<usize>) -> String {
+        let size = tree.size();
+        let root = tree.root();
+        let sig = sk.sign(&sth_signing_bytes(ledger, size, &root)).to_bytes();
+        let incl = tree.inclusion_proof(index);
+        let cons = cons_from.map(|m| tree.consistency_proof(m)).unwrap_or_default();
+        encode_transparency_proof(size, &root, &sig, index as u64, &incl, &cons)
+    }
+
+    fn ttl_frag(issuer_sk: &SigningKey, svn: u64, ledger: &str) -> PolicyFragment {
+        let mut f = PolicyFragment { issuer: "issuerA".into(), svn, receipt_ledger: Some(ledger.into()), ..Default::default() };
+        f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+        f
+    }
+
+    /// TC-F1.32 (Stage 2): a valid inclusion proof under a signed tree head is accepted; a
+    /// tampered inclusion proof (wrong leaf position) is rejected.
+    #[test]
+    fn stage2_inclusion_proof_verified() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (led_sk, led_pk) = keypair(30);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+
+        let f = ttl_frag(&issuer_sk, 1, "ttl");
+        let mut tree = MerkleTree::new();
+        tree.push(f.signing_bytes());
+        let mut ok = f.clone();
+        ok.receipt_proof = Some(ttl_proof(&tree, &led_sk, "ttl", 0, None));
+        assert!(store.verify(&ok).is_ok());
+
+        // Wrong index (leaf not at claimed position) -> inclusion fails.
+        let mut bad = f.clone();
+        tree.push(b"other".to_vec());
+        bad.receipt_proof = Some(ttl_proof(&tree, &led_sk, "ttl", 1, None)); // claims index 1, but leaf 1 is "other"
+        assert_eq!(store.verify(&bad).unwrap_err(), FragmentError::InvalidInclusionProof);
+    }
+
+    /// TC-F1.33 (Stage 2): a signed tree head signed by a key NOT in the trust list is
+    /// rejected (the ledger signature must chain to a trusted key).
+    #[test]
+    fn stage2_untrusted_sth_rejected() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (_led_sk, led_pk) = keypair(30);
+        let (evil_sk, _evil_pk) = keypair(31);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+
+        let f = ttl_frag(&issuer_sk, 1, "ttl");
+        let mut tree = MerkleTree::new();
+        tree.push(f.signing_bytes());
+        let mut bad = f.clone();
+        bad.receipt_proof = Some(ttl_proof(&tree, &evil_sk, "ttl", 0, None)); // signed by untrusted key
+        assert_eq!(store.verify(&bad).unwrap_err(), FragmentError::InvalidReceipt);
+    }
+
+    /// TC-F1.34 (Stage 2): the tree head is monotonic — a growing log with a valid
+    /// consistency proof is accepted; a shrunk head (rollback) is rejected.
+    #[test]
+    fn stage2_consistency_and_rollback() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (led_sk, led_pk) = keypair(30);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+
+        let fa = ttl_frag(&issuer_sk, 1, "ttl");
+        let fb = ttl_frag(&issuer_sk, 2, "ttl");
+
+        // Log state after A: size 1.
+        let mut t1 = MerkleTree::new();
+        t1.push(fa.signing_bytes());
+        let mut a = fa.clone();
+        a.receipt_proof = Some(ttl_proof(&t1, &led_sk, "ttl", 0, None));
+        assert!(store.load(&a).is_ok());
+
+        // Log state after B: size 2, with a consistency proof from size 1.
+        let mut t2 = MerkleTree::new();
+        t2.push(fa.signing_bytes());
+        t2.push(fb.signing_bytes());
+        let mut b = fb.clone();
+        b.receipt_proof = Some(ttl_proof(&t2, &led_sk, "ttl", 1, Some(1)));
+        assert!(store.load(&b).is_ok());
+
+        // A fragment presenting an OLDER (size 1) head after the head advanced to 2 -> rollback.
+        let fc = ttl_frag(&issuer_sk, 3, "ttl");
+        let mut t1b = MerkleTree::new();
+        t1b.push(fc.signing_bytes());
+        let mut c = fc.clone();
+        c.receipt_proof = Some(ttl_proof(&t1b, &led_sk, "ttl", 0, None));
+        assert!(matches!(store.verify(&c).unwrap_err(), FragmentError::LogRolledBack { .. }));
+    }
+
+    /// TC-F1.35 (Stage 2): the transparency tree head survives export/import (restart) and
+    /// is raise-only — after restart an older head is still rejected.
+    #[test]
+    fn stage2_tree_head_persists_across_restart() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (led_sk, led_pk) = keypair(30);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+
+        let fa = ttl_frag(&issuer_sk, 1, "ttl");
+        let fb = ttl_frag(&issuer_sk, 2, "ttl");
+        let mut t2 = MerkleTree::new();
+        t2.push(fa.signing_bytes());
+        t2.push(fb.signing_bytes());
+        // Jump straight to head size 2 (A already logged elsewhere): load B at size 2.
+        let mut a = fa.clone();
+        let mut t1 = MerkleTree::new();
+        t1.push(fa.signing_bytes());
+        a.receipt_proof = Some(ttl_proof(&t1, &led_sk, "ttl", 0, None));
+        store.load(&a).unwrap();
+        let mut b = fb.clone();
+        b.receipt_proof = Some(ttl_proof(&t2, &led_sk, "ttl", 1, Some(1)));
+        store.load(&b).unwrap();
+        let snap = store.export_svn_state();
+        assert!(snap.contains("--ttl-head--\tttl\t2\t"));
+
+        // Restart: fresh store, same trust list, import the persisted tree head.
+        let mut restarted = FragmentStore::new(false);
+        restarted.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        restarted.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+        restarted.import_svn_state(&snap);
+
+        // An older (size 1) head is rejected after restart (raise-only tree head).
+        let fc = ttl_frag(&issuer_sk, 3, "ttl");
+        let mut t1c = MerkleTree::new();
+        t1c.push(fc.signing_bytes());
+        let mut c = fc.clone();
+        c.receipt_proof = Some(ttl_proof(&t1c, &led_sk, "ttl", 0, None));
+        assert!(matches!(restarted.verify(&c).unwrap_err(), FragmentError::LogRolledBack { .. }));
     }
 }
 

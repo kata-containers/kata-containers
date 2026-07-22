@@ -2220,7 +2220,8 @@ fn agent_cmd_sandbox_add_swap(
 // FR-1: load a signed policy fragment. Arguments are space-separated key=value pairs to
 // avoid protobuf-bytes-in-JSON ambiguity:
 //   LoadPolicyFragment issuer=<id> svn=<n> includes=<csv> receipt=<r> \
-//       receipt_ledger=<ledger-id> prev_head=<hex> module=<path-to-rego> sig=<hex> cose=<hex>
+//       receipt_ledger=<ledger-id> prev_head=<hex> proof=<ttl-proof-file> \
+//       module=<path-to-rego> sig=<hex> cose=<hex>
 fn agent_cmd_load_policy_fragment(
     ctx: &Context,
     client: &AgentServiceClient,
@@ -2277,6 +2278,15 @@ fn agent_cmd_load_policy_fragment(
     if let Some(ph) = kv.get("prev_head") {
         if !ph.is_empty() {
             req.prev_log_head = hex_decode(ph)?;
+        }
+    }
+    // FR-1f Stage 2: transparency inclusion + consistency proof (from a file or inline).
+    if let Some(pf) = kv.get("proof") {
+        if !pf.is_empty() {
+            req.receipt_proof = match std::fs::read_to_string(pf) {
+                Ok(s) => s,
+                Err(_) => pf.clone(),
+            };
         }
     }
     req.signature = signature;

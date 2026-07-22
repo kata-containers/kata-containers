@@ -307,5 +307,72 @@ fn main() {
     section2_trust_list();
     section3_did_x509();
     section4_ordering();
+    section5_transparency_log();
     println!("\n\x1b[32mAll FR-1 fragment capabilities verified.\x1b[0m");
+}
+
+// ---------------------------------------------------------------------------------------
+// FR-1f Stage 2: transparency-log inclusion + consistency proofs (SCITT/CT). We play the
+// role of the external append-only ledger in-process using the RFC 6962 tree, and prove the
+// agent (a) accepts a fragment recorded in the log, (b) rejects a forged inclusion, and
+// (c) rejects a rewound (shrinking) log — the append-only ORDERING guarantee.
+use kata_security_reference_monitor::fragments::{encode_transparency_proof, sth_signing_bytes};
+use kata_security_reference_monitor::merkle::MerkleTree;
+
+fn ttl_proof(tree: &MerkleTree, sk: &SigningKey, ledger: &str, index: usize, cons_from: Option<usize>) -> String {
+    let size = tree.size();
+    let root = tree.root();
+    let sig = sk.sign(&sth_signing_bytes(ledger, size, &root)).to_bytes();
+    let incl = tree.inclusion_proof(index);
+    let cons = cons_from.map(|m| tree.consistency_proof(m)).unwrap_or_default();
+    encode_transparency_proof(size, &root, &sig, index as u64, &incl, &cons)
+}
+
+fn ttl_frag(issuer_sk: &SigningKey, svn: u64, ledger: &str) -> PolicyFragment {
+    let mut f = PolicyFragment { issuer: "issuerA".into(), svn, receipt_ledger: Some(ledger.into()), ..Default::default() };
+    f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+    f
+}
+
+fn section5_transparency_log() {
+    println!("\n== 5. FR-1f Stage 2: transparency-log inclusion + consistency (SCITT/CT) ==");
+    let (issuer_sk, issuer_pk) = ed_key(1);
+    let (led_sk, led_pk) = ed_key(30);
+    let mut store = FragmentStore::new(false);
+    store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+    store.load_transparency_trust_list(&[("acl".into(), vec![led_pk])]).unwrap();
+
+    // Ledger records fragment A as leaf 0; the agent accepts its inclusion proof.
+    let fa = ttl_frag(&issuer_sk, 1, "acl");
+    let mut ledger = MerkleTree::new();
+    ledger.push(fa.signing_bytes());
+    let mut a = fa.clone();
+    a.receipt_proof = Some(ttl_proof(&ledger, &led_sk, "acl", 0, None));
+    assert!(store.load(&a).is_ok());
+    ok(&format!("inclusion proof accepted (log size {})", ledger.size()));
+
+    // Ledger grows: fragment B at leaf 1, with a consistency proof from size 1 → accepted.
+    let fb = ttl_frag(&issuer_sk, 2, "acl");
+    ledger.push(fb.signing_bytes());
+    let mut b = fb.clone();
+    b.receipt_proof = Some(ttl_proof(&ledger, &led_sk, "acl", 1, Some(1)));
+    assert!(store.load(&b).is_ok());
+    ok(&format!("append-only growth accepted with consistency proof (size {})", ledger.size()));
+
+    // Forged inclusion: claim a statement never recorded in the log → rejected.
+    let forged = ttl_frag(&issuer_sk, 3, "acl");
+    let mut fbad = forged.clone();
+    // Reuse B's proof (wrong statement for that leaf) → inclusion recompute fails.
+    fbad.receipt_proof = Some(ttl_proof(&ledger, &led_sk, "acl", 1, Some(1)));
+    assert!(matches!(store.verify(&fbad), Err(FragmentError::InvalidInclusionProof)));
+    ok("forged inclusion (statement not in log) rejected");
+
+    // Rewound log: present an older, smaller signed tree head after the head advanced → rejected.
+    let fc = ttl_frag(&issuer_sk, 3, "acl");
+    let mut small = MerkleTree::new();
+    small.push(fc.signing_bytes());
+    let mut c = fc.clone();
+    c.receipt_proof = Some(ttl_proof(&small, &led_sk, "acl", 0, None));
+    assert!(matches!(store.verify(&c), Err(FragmentError::LogRolledBack { .. })));
+    ok("rewound (shrinking) transparency log rejected — append-only ordering enforced");
 }

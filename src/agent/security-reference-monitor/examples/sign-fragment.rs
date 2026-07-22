@@ -159,6 +159,7 @@ fn main() {
                     .unwrap_or_default(),
                 receipt,
                 receipt_ledger: f.get("ledger").cloned(),
+                receipt_proof: f.get("proof").cloned(),
                 // FR-1j: the append-only log head this fragment is applied on top of.
                 prev_log_head: f
                     .get("prev-head")
@@ -178,6 +179,12 @@ fn main() {
                 h.update(&prev);
                 h.update(stmt_hash);
                 println!("next_log_head={}", hex_encode(&h.finalize()));
+            }
+
+            // FR-1f Stage 2: optionally write this fragment's canonical statement bytes to a
+            // file so a (mock) transparency ledger can record it as a Merkle leaf.
+            if let Some(path) = f.get("emit-statement") {
+                std::fs::write(path, fragment.signing_bytes()).expect("write statement file");
             }
 
             // FR-1f: optionally also emit a transparency receipt = a signature over the

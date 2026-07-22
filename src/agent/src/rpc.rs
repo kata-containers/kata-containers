@@ -2218,6 +2218,11 @@ impl agent_ttrpc::AgentService for AgentService {
             } else {
                 Some(req.prev_log_head.clone())
             },
+            receipt_proof: if req.receipt_proof.is_empty() {
+                None
+            } else {
+                Some(req.receipt_proof.clone())
+            },
             signature: req.signature.clone(),
         };
 

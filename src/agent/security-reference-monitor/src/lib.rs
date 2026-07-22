@@ -30,6 +30,7 @@ use std::fmt;
 pub mod cdi;
 pub mod did_x509;
 pub mod fragments;
+pub mod merkle;
 pub mod handle_binding;
 pub mod network_phase;
 pub mod occurrence;

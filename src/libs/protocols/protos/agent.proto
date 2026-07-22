@@ -667,6 +667,10 @@ message LoadPolicyFragmentRequest {
 	// of. In ordered mode the agent requires this to equal its current log head (rejecting
 	// reordering/omission/insertion); it is bound into the issuer signature.
 	bytes prev_log_head = 12;
+	// FR-1f Stage 2: an optional transparency inclusion + consistency proof
+	// (`kata-ttl-proof/v1`) anchoring the fragment statement in an append-only transparency
+	// log at a signed, monotonic tree head. Verified against the transparency trust list.
+	string receipt_proof = 13;
 }
 
 message GetDiagnosticDataRequest {
