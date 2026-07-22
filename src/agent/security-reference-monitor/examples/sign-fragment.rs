@@ -159,10 +159,26 @@ fn main() {
                     .unwrap_or_default(),
                 receipt,
                 receipt_ledger: f.get("ledger").cloned(),
+                // FR-1j: the append-only log head this fragment is applied on top of.
+                prev_log_head: f
+                    .get("prev-head")
+                    .map(|h| hex_decode(h).expect("decode prev-head hex")),
                 signature: vec![],
             };
             let sig = sk.sign(&fragment.signing_bytes());
             println!("signature_hex={}", hex_encode(&sig.to_bytes()));
+
+            // FR-1j: print the next log head = sha256(prev_head || sha256(statement)), so a
+            // client can chain the following fragment onto this one.
+            if let Some(prev_hex) = f.get("prev-head") {
+                use sha2::{Digest, Sha256};
+                let prev = hex_decode(prev_hex).expect("decode prev-head hex");
+                let stmt_hash = Sha256::digest(fragment.signing_bytes());
+                let mut h = Sha256::new();
+                h.update(&prev);
+                h.update(stmt_hash);
+                println!("next_log_head={}", hex_encode(&h.finalize()));
+            }
 
             // FR-1f: optionally also emit a transparency receipt = a signature over the
             // same statement by a transparency ledger key (--receipt-key <hex>). Tag the

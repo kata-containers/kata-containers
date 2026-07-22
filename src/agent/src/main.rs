@@ -929,6 +929,13 @@ struct FragmentTrustConfig {
     /// FR-1d: authorized did:x509 CA anchors.
     #[serde(default, rename = "ca_anchor")]
     ca_anchor: Vec<FragmentCaAnchorConfig>,
+    /// FR-1j: enable append-only application ordering (the log-head gate). Opt-in.
+    #[serde(default)]
+    ordered: Option<bool>,
+    /// FR-1j: the measured ordering-log genesis (hex). Defaults to a fixed constant when
+    /// `ordered` is true and this is unset.
+    #[serde(default)]
+    log_genesis_hex: Option<String>,
     #[serde(default)]
     issuer: Vec<FragmentIssuerConfig>,
 }
@@ -1011,6 +1018,21 @@ fn decode_hex32(s: &str) -> Result<[u8; 32]> {
             .map_err(|e| anyhow::anyhow!("invalid hex in pubkey: {e}"))?;
     }
     Ok(out)
+}
+
+// FR-1j: decode an arbitrary-length hex string (e.g. the ordering-log genesis).
+#[cfg(feature = "strict-policy")]
+fn decode_hex_vec(s: &str) -> Result<Vec<u8>> {
+    let s = s.trim();
+    if s.len() % 2 != 0 {
+        anyhow::bail!("hex string has odd length: {}", s.len());
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| anyhow::anyhow!("invalid hex: {e}"))
+        })
+        .collect()
 }
 
 // FR-1b: configure the global fragment store from measured state. Absent/empty config
@@ -1121,8 +1143,21 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
             "issuer" => &issuer.id, "min-svn" => issuer.min_svn, "feeds" => issuer.feed.len());
     }
 
+    // FR-1j: enable append-only application ordering (before importing persisted state so
+    // the restored head is not overwritten by the genesis).
+    if cfg.ordered.unwrap_or(false) {
+        let genesis = if let Some(hex) = &cfg.log_genesis_hex {
+            decode_hex_vec(hex).context("log_genesis_hex")?
+        } else {
+            b"kata-fragment-log/v1".to_vec()
+        };
+        store.set_log_genesis(&genesis);
+        info!(logger, "FR-1: append-only fragment ordering enabled (FR-1j)");
+    }
+
     // FR-1i: re-import any persisted SVN high-water marks so a restart keeps rollback
-    // protection (import can only raise the floor, never lower it).
+    // protection (import can only raise the floor, never lower it). FR-1j: this also
+    // restores the ordering log head (raise-only) across restart.
     if let Ok(snapshot) = std::fs::read_to_string(fragment_svn_state_path()) {
         store.import_svn_state(&snapshot);
         info!(logger, "FR-1: imported persisted fragment SVN state");

@@ -2220,7 +2220,7 @@ fn agent_cmd_sandbox_add_swap(
 // FR-1: load a signed policy fragment. Arguments are space-separated key=value pairs to
 // avoid protobuf-bytes-in-JSON ambiguity:
 //   LoadPolicyFragment issuer=<id> svn=<n> includes=<csv> receipt=<r> \
-//       receipt_ledger=<ledger-id> module=<path-to-rego> sig=<hex> cose=<hex>
+//       receipt_ledger=<ledger-id> prev_head=<hex> module=<path-to-rego> sig=<hex> cose=<hex>
 fn agent_cmd_load_policy_fragment(
     ctx: &Context,
     client: &AgentServiceClient,
@@ -2273,6 +2273,12 @@ fn agent_cmd_load_policy_fragment(
         .collect();
     req.receipt = get("receipt");
     req.receipt_ledger = get("receipt_ledger");
+    // FR-1j: append-only ordering — the log head this fragment applies on top of.
+    if let Some(ph) = kv.get("prev_head") {
+        if !ph.is_empty() {
+            req.prev_log_head = hex_decode(ph)?;
+        }
+    }
     req.signature = signature;
     req.policy_module = policy_module;
     // FR-1h: optional COSE_Sign1 envelope (hex) — verified instead of the detached sig.

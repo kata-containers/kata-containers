@@ -663,6 +663,10 @@ message LoadPolicyFragmentRequest {
 	// from. Selects which ledger's key(s) the receipt is verified against and is subject to
 	// per-(issuer,feed) allowed_ledgers / required_receipts scoping. Empty = default ledger.
 	string receipt_ledger = 11;
+	// FR-1j: the append-only ordering log head this fragment asserts it is applied on top
+	// of. In ordered mode the agent requires this to equal its current log head (rejecting
+	// reordering/omission/insertion); it is bound into the issuer signature.
+	bytes prev_log_head = 12;
 }
 
 message GetDiagnosticDataRequest {

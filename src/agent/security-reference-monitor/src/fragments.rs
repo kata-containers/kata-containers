@@ -24,6 +24,7 @@
 //! dependency is introduced into the agent.
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -63,6 +64,12 @@ pub struct PolicyFragment {
     /// only selects a key set; a receipt is accepted only if that ledger's key actually
     /// signed the statement, so a forged ledger id cannot bypass verification.
     pub receipt_ledger: Option<String>,
+    /// FR-1j: the append-only log head this fragment asserts it is applied on top of. Bound
+    /// into [`PolicyFragment::signing_bytes`] (the issuer signs it), so a host/orchestrator
+    /// cannot forge an ordering. In ordered mode the store requires this to equal its
+    /// current log head; on success the head advances by hashing this fragment in. `None` =
+    /// not part of an ordered log (back-compat / opt-in).
+    pub prev_log_head: Option<Vec<u8>>,
     /// Detached Ed25519 signature (by the issuer) over [`PolicyFragment::signing_bytes`].
     pub signature: Vec<u8>,
 }
@@ -75,9 +82,10 @@ impl PolicyFragment {
 
     /// Canonical byte encoding of the fragment *statement* that both the issuer signature
     /// and the transparency receipt cover. Deterministic and binds issuer, feed, SVN,
-    /// sorted grants, module, sorted includes, and sorted requires — so none can be altered
-    /// without invalidating the signature. The receipt itself is NOT included (it is a
-    /// separate signature over these same bytes, created after the issuer signs).
+    /// sorted grants, module, sorted includes, sorted requires, and (FR-1j) the asserted
+    /// predecessor log head — so none can be altered without invalidating the signature.
+    /// The receipt is NOT included (it is a separate signature over these same bytes,
+    /// created after the issuer signs); the `receipt_ledger` selector is also excluded.
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut grants = self.grants.clone();
         grants.sort();
@@ -86,7 +94,7 @@ impl PolicyFragment {
         let mut requires = self.requires.clone();
         requires.sort();
         let mut s = String::new();
-        s.push_str("kata-policy-fragment/v2\n");
+        s.push_str("kata-policy-fragment/v3\n");
         s.push_str(&self.issuer);
         s.push('\n');
         s.push_str(&self.feed);
@@ -109,6 +117,15 @@ impl PolicyFragment {
         }
         s.push_str("--module--\n");
         s.push_str(self.policy_module.as_deref().unwrap_or(""));
+        // FR-1j: bind the asserted predecessor log head into the signature so ordering
+        // cannot be forged by the (untrusted) delivery path. Empty when not part of an
+        // ordered log.
+        s.push_str("\n--prevhead--\n");
+        if let Some(h) = &self.prev_log_head {
+            for b in h {
+                s.push_str(&format!("{:02x}", b));
+            }
+        }
         s.into_bytes()
     }
 }
@@ -125,6 +142,9 @@ pub struct VerifiedFragment {
     pub grants: Vec<String>,
     pub policy_module: Option<String>,
     pub includes: Vec<String>,
+    /// FR-1j: SHA-256 of the fragment statement, used to advance the ordering log head on
+    /// commit (so the head binds the exact applied sequence).
+    pub stmt_sha256: [u8; 32],
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -168,6 +188,9 @@ pub enum FragmentError {
     RevokedCertificate,
     /// FR-1d: a certificate in the chain is outside its validity window.
     CertExpired,
+    /// FR-1j: the fragment asserts a predecessor log head that is not the store's current
+    /// head — a reordering, omission, or insertion in the append-only application log.
+    LogHeadMismatch { expected: String, presented: String },
 }
 
 impl fmt::Display for FragmentError {
@@ -209,6 +232,10 @@ impl fmt::Display for FragmentError {
             }
             FragmentError::RevokedCertificate => write!(f, "certificate in chain is revoked"),
             FragmentError::CertExpired => write!(f, "certificate in chain is outside validity"),
+            FragmentError::LogHeadMismatch { expected, presented } => write!(
+                f,
+                "fragment ordering log-head mismatch: expected {expected}, presented {presented}"
+            ),
         }
     }
 }
@@ -247,6 +274,16 @@ pub struct FragmentStore {
     revoked_certs: HashSet<[u8; 32]>,
     /// FR-1d: when true, every fragment must present a valid `x5chain` (no raw-key path).
     require_x509: bool,
+    /// FR-1j: the append-only application log head. Advances by hashing each committed
+    /// fragment in. Equals the genesis until the first ordered fragment is committed.
+    log_head: Vec<u8>,
+    /// FR-1j: the log genesis; `Some` enables ordered mode (the log-head gate is enforced).
+    log_genesis: Option<Vec<u8>>,
+    /// FR-1j: the ordered, append-only record of committed fragments `(id, statement hash)`.
+    ordered_log: Vec<(String, [u8; 32])>,
+    /// FR-1j: number of fragments committed to the ordered log (persisted, raise-only, so a
+    /// restart cannot rewind the log position).
+    log_len: u64,
 }
 
 impl FragmentStore {
@@ -373,6 +410,41 @@ impl FragmentStore {
     /// Whether any `did:x509` anchor is configured.
     pub fn has_did_x509_anchors(&self) -> bool {
         !self.did_x509_anchors.is_empty()
+    }
+
+    /// FR-1j: enable append-only ordering by setting the log genesis (a measured constant).
+    /// Idempotent for a fresh store; does not rewind an already-advanced head. When set, the
+    /// log-head gate is enforced on every fragment.
+    pub fn set_log_genesis(&mut self, genesis: &[u8]) {
+        let g = genesis.to_vec();
+        if self.log_genesis.is_none() && self.log_len == 0 {
+            self.log_head = g.clone();
+        }
+        self.log_genesis = Some(g);
+    }
+
+    /// FR-1j: whether ordered mode is enabled.
+    pub fn is_ordered(&self) -> bool {
+        self.log_genesis.is_some()
+    }
+
+    /// FR-1j: the current append-only log head (the value the next fragment must assert as
+    /// its `prev_log_head`).
+    pub fn log_head(&self) -> &[u8] {
+        &self.log_head
+    }
+
+    /// FR-1j: export the ordered application log as a deterministic, customer-auditable
+    /// record: one `index\tfragment-id\tstatement-sha256` line per committed fragment, then
+    /// a final `head\t<hex>` line. This is the non-repudiable proof of the exact applied
+    /// sequence (empty when not in ordered mode / nothing committed this session).
+    pub fn export_fragment_log(&self) -> String {
+        let mut out = String::new();
+        for (i, (id, hash)) in self.ordered_log.iter().enumerate() {
+            out.push_str(&format!("{}\t{}\t{}\n", i, id, bytes_to_hex(hash)));
+        }
+        out.push_str(&format!("head\t{}", bytes_to_hex(&self.log_head)));
+        out
     }
 
     /// Declare a grant that no fragment may ever introduce (a base-policy invariant).
@@ -581,6 +653,22 @@ impl FragmentStore {
             }
         }
 
+        // 8. FR-1j: append-only ordering. In ordered mode the fragment's signed
+        //    `prev_log_head` must equal the store's current head, so any reordering,
+        //    omission, or insertion (which would present a different predecessor head) is
+        //    rejected fail-closed. `prev_log_head` is bound into `signing_bytes`, so the
+        //    untrusted delivery path cannot forge it.
+        let stmt_sha256: [u8; 32] = Sha256::digest(statement).into();
+        if self.log_genesis.is_some() {
+            let presented = fragment.prev_log_head.as_deref().unwrap_or(&[]);
+            if presented != self.log_head.as_slice() {
+                return Err(FragmentError::LogHeadMismatch {
+                    expected: bytes_to_hex(&self.log_head),
+                    presented: bytes_to_hex(presented),
+                });
+            }
+        }
+
         Ok(VerifiedFragment {
             issuer: fragment.issuer.clone(),
             feed: fragment.feed.clone(),
@@ -589,6 +677,7 @@ impl FragmentStore {
             grants: fragment.grants.clone(),
             policy_module: fragment.policy_module.clone(),
             includes: fragment.includes.clone(),
+            stmt_sha256,
         })
     }
 
@@ -599,6 +688,16 @@ impl FragmentStore {
         self.last_svn
             .insert((verified.issuer.clone(), verified.feed.clone()), verified.svn);
         self.loaded_ids.insert(verified.id.clone());
+        // FR-1j: advance the append-only ordering log head (ordered mode only).
+        if self.log_genesis.is_some() {
+            let mut h = Sha256::new();
+            h.update(&self.log_head);
+            h.update(verified.stmt_sha256);
+            self.log_head = h.finalize().to_vec();
+            self.ordered_log
+                .push((verified.id.clone(), verified.stmt_sha256));
+            self.log_len += 1;
+        }
         let mut added = Vec::new();
         for g in &verified.grants {
             if self.active_grants.insert(g.clone()) {
@@ -625,6 +724,16 @@ impl FragmentStore {
             .map(|((issuer, feed), svn)| format!("{issuer}\t{feed}\t{svn}"))
             .collect();
         lines.sort();
+        // FR-1j: persist the ordering log head + length (raise-only on import) so a restart
+        // cannot rewind the append-only log position. Uses a reserved sentinel key that can
+        // never collide with an issuer id (issuers cannot contain a tab).
+        if self.log_genesis.is_some() {
+            lines.push(format!(
+                "{LOG_STATE_KEY}\t{}\t{}",
+                bytes_to_hex(&self.log_head),
+                self.log_len
+            ));
+        }
         lines.join("\n")
     }
 
@@ -632,21 +741,45 @@ impl FragmentStore {
     /// high-water mark for its `(issuer, feed)`, never lower it — so an agent/VM restart can
     /// never reopen a rollback window (a fragment at or below a previously-accepted SVN
     /// stays rejected). Combined with the declarative floor (FR-1e), the effective minimum
-    /// is `max(declared floor, persisted high-water + 1)`.
+    /// is `max(declared floor, persisted high-water + 1)`. FR-1j: the reserved log-state
+    /// line restores the ordering log head, and only if its length is `>=` the current one
+    /// (raise-only), so the head cannot be rewound.
     pub fn import_svn_state(&mut self, snapshot: &str) {
         for line in snapshot.lines() {
             let mut it = line.splitn(3, '\t');
-            let (Some(issuer), Some(feed), Some(svn)) = (it.next(), it.next(), it.next()) else {
+            let (Some(a), Some(b), Some(c)) = (it.next(), it.next(), it.next()) else {
                 continue;
             };
-            let Ok(svn) = svn.trim().parse::<u64>() else {
+            if a == LOG_STATE_KEY {
+                // FR-1j: b = head (hex), c = length. Raise-only.
+                if let (Ok(head), Ok(len)) = (hex_to_bytes(b), c.trim().parse::<u64>()) {
+                    if len >= self.log_len {
+                        self.log_head = head;
+                        self.log_len = len;
+                    }
+                }
+                continue;
+            }
+            let Ok(svn) = c.trim().parse::<u64>() else {
                 continue;
             };
-            let key = (issuer.to_string(), feed.to_string());
+            let key = (a.to_string(), b.to_string());
             let entry = self.last_svn.entry(key).or_insert(0);
             *entry = (*entry).max(svn);
         }
     }
+}
+
+/// Reserved sentinel key for the FR-1j ordering-log state line in the SVN snapshot.
+const LOG_STATE_KEY: &str = "--log-state--";
+
+/// Lower-case hex encoding.
+fn bytes_to_hex(b: &[u8]) -> String {
+    let mut s = String::with_capacity(b.len() * 2);
+    for byte in b {
+        s.push_str(&format!("{:02x}", byte));
+    }
+    s
 }
 
 /// Decode a hex string into bytes.
@@ -1260,4 +1393,128 @@ mod tests {
             FragmentError::InvalidSignature
         );
     }
+    fn ordered_frag(issuer: &str, svn: u64, prev_head: &[u8]) -> PolicyFragment {
+        PolicyFragment {
+            issuer: issuer.to_string(),
+            svn,
+            prev_log_head: Some(prev_head.to_vec()),
+            ..Default::default()
+        }
+    }
+
+    /// TC-F1.28 (FR-1j): fragments applied in order are accepted and the append-only log
+    /// head advances deterministically; the exported log records the exact sequence.
+    #[test]
+    fn ordering_in_order_accepted_and_head_advances() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        store.set_log_genesis(b"kata-fragment-log/test-genesis");
+
+        let h0 = store.log_head().to_vec();
+        let mut a = ordered_frag("issuerA", 1, &h0);
+        sign(&sk, &mut a);
+        assert!(store.load(&a).is_ok());
+        let h1 = store.log_head().to_vec();
+        assert_ne!(h0, h1, "head must advance");
+
+        let mut b = ordered_frag("issuerA", 2, &h1);
+        sign(&sk, &mut b);
+        assert!(store.load(&b).is_ok());
+        let h2 = store.log_head().to_vec();
+        assert_ne!(h1, h2);
+
+        // The exported log is deterministic and ends with the current head.
+        let log = store.export_fragment_log();
+        assert!(log.contains("0\tissuerA//1\t"));
+        assert!(log.contains("1\tissuerA//2\t"));
+        assert!(log.trim_end().ends_with(&super::bytes_to_hex(&h2)));
+    }
+
+    /// TC-F1.29 (FR-1j): a fragment asserting a stale/wrong predecessor head (a reordering,
+    /// omission, or insertion) is rejected fail-closed and the store is unchanged.
+    #[test]
+    fn ordering_out_of_order_rejected() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        store.set_log_genesis(b"kata-fragment-log/test-genesis");
+
+        let h0 = store.log_head().to_vec();
+        let mut a = ordered_frag("issuerA", 1, &h0);
+        sign(&sk, &mut a);
+        store.load(&a).unwrap();
+        let h1 = store.log_head().to_vec();
+
+        // A second fragment that still asserts the genesis head (out of order) is rejected.
+        let mut stale = ordered_frag("issuerA", 2, &h0);
+        sign(&sk, &mut stale);
+        assert!(matches!(
+            store.load(&stale).unwrap_err(),
+            FragmentError::LogHeadMismatch { .. }
+        ));
+        // Head unchanged after the rejected fragment (fail-closed).
+        assert_eq!(store.log_head(), h1.as_slice());
+
+        // The correct next fragment (asserting h1) is accepted.
+        let mut b = ordered_frag("issuerA", 2, &h1);
+        sign(&sk, &mut b);
+        assert!(store.load(&b).is_ok());
+    }
+
+    /// TC-F1.30 (FR-1j): the ordering log head survives export/import (restart) and is
+    /// raise-only — after a restart the next in-order fragment is accepted, a stale one is
+    /// rejected, and importing an older (shorter) snapshot cannot rewind the head.
+    #[test]
+    fn ordering_head_persists_across_restart_raise_only() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        store.set_log_genesis(b"kata-fragment-log/test-genesis");
+
+        let h0 = store.log_head().to_vec();
+        let mut a = ordered_frag("issuerA", 1, &h0);
+        sign(&sk, &mut a);
+        store.load(&a).unwrap();
+        let snap_after_a = store.export_svn_state();
+        let h1 = store.log_head().to_vec();
+
+        let mut b = ordered_frag("issuerA", 2, &h1);
+        sign(&sk, &mut b);
+        store.load(&b).unwrap();
+        let snap_after_b = store.export_svn_state();
+        let h2 = store.log_head().to_vec();
+
+        // Restart: fresh store, re-seed genesis, import the persisted state.
+        let mut restarted = FragmentStore::new(false);
+        restarted.authorize_issuer("issuerA", &pk).unwrap();
+        restarted.set_log_genesis(b"kata-fragment-log/test-genesis");
+        restarted.import_svn_state(&snap_after_b);
+        assert_eq!(restarted.log_head(), h2.as_slice(), "head restored across restart");
+
+        // The next in-order fragment (prev = h2) is accepted after restart.
+        let mut c = ordered_frag("issuerA", 3, &h2);
+        sign(&sk, &mut c);
+        assert!(restarted.load(&c).is_ok());
+
+        // Raise-only: importing the older (shorter) snapshot must NOT rewind the head.
+        let head_now = restarted.log_head().to_vec();
+        restarted.import_svn_state(&snap_after_a);
+        assert_eq!(restarted.log_head(), head_now.as_slice(), "older snapshot cannot rewind");
+    }
+
+    /// TC-F1.30b (FR-1j): non-ordered mode is unchanged — with no genesis configured, a
+    /// fragment carrying no prev_log_head is accepted (opt-in / back-compat).
+    #[test]
+    fn ordering_disabled_by_default() {
+        let (sk, pk) = keypair(1);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &pk).unwrap();
+        assert!(!store.is_ordered());
+        let mut f = frag("issuerA", 1, &["exec:x"]);
+        f.receipt = None;
+        sign(&sk, &mut f);
+        assert!(store.load(&f).is_ok());
+    }
 }
+
