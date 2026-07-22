@@ -193,11 +193,37 @@ trait ResultToTtrpcResult<T, E: Debug>: Sized {
     }
 }
 
-impl<T, E: Debug> ResultToTtrpcResult<T, E> for Result<T, E> {
-    fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce(E) -> R) -> ttrpc::Result<T> {
-        self.map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)))
+impl<T> ResultToTtrpcResult<T, anyhow::Error> for anyhow::Result<T> {
+    fn map_ttrpc_err<R: Debug>(
+        self,
+        msg_builder: impl FnOnce(anyhow::Error) -> R,
+    ) -> ttrpc::Result<T> {
+        self.map_err(|e| match e.downcast::<ttrpc::error::Error>() {
+            Ok(ttrpc_err) => ttrpc_err,
+            Err(e) => ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)),
+        })
     }
 }
+
+macro_rules! impl_ttrpc_result_simple {
+    ($($err_ty:ty),* $(,)?) => {
+        $(
+            impl<T> ResultToTtrpcResult<T, $err_ty> for Result<T, $err_ty> {
+                fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce($err_ty) -> R) -> ttrpc::Result<T> {
+                    self.map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)))
+                }
+            }
+        )*
+    };
+}
+
+impl_ttrpc_result_simple!(
+    nix::errno::Errno,
+    tokio::time::error::Elapsed,
+    tokio::task::JoinError,
+    i32,
+    std::io::Error,
+);
 
 trait OptionToTtrpcResult<T>: Sized {
     fn map_ttrpc_err(self, code: ttrpc::Code, msg: &str) -> ttrpc::Result<T>;
@@ -4161,6 +4187,35 @@ COMMIT
                 panic!("{}: unexpected do_copy_file result: {:?}", tc.name, res)
             }
             (tc.assertions)(&base).context(tc.name).unwrap()
+        }
+    }
+
+    #[test]
+    fn test_map_ttrpc_err_preserves_not_found() {
+        let not_found_err = ttrpc_error(ttrpc::Code::NOT_FOUND, "process not found");
+        let anyhow_err: anyhow::Result<()> = Err(not_found_err.into());
+
+        let result = anyhow_err.map_ttrpc_err(same);
+
+        match &result.unwrap_err() {
+            ttrpc::Error::RpcStatus(status) => {
+                assert_eq!(status.code(), ttrpc::Code::NOT_FOUND);
+            }
+            other => panic!("expected RpcStatus, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_map_ttrpc_err_wraps_non_ttrpc_as_internal() {
+        let plain_err: anyhow::Result<()> = Err(anyhow!("something went wrong"));
+
+        let result = plain_err.map_ttrpc_err(same);
+
+        match &result.unwrap_err() {
+            ttrpc::Error::RpcStatus(status) => {
+                assert_eq!(status.code(), ttrpc::Code::INTERNAL);
+            }
+            other => panic!("expected RpcStatus, got: {:?}", other),
         }
     }
 }
