@@ -18,7 +18,9 @@
 //! untouched — the two identity models coexist and there is no downgrade path.
 
 use crate::FragmentError;
-use const_oid::db::rfc5280::{ID_CE_EXT_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME};
+use const_oid::db::rfc5280::{
+    ID_CE_BASIC_CONSTRAINTS, ID_CE_EXT_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME,
+};
 use const_oid::db::rfc5912::ID_EC_PUBLIC_KEY;
 use const_oid::ObjectIdentifier;
 use der::{Decode, Encode};
@@ -151,9 +153,32 @@ fn p256_key(cert: &Certificate) -> Result<P256VerifyingKey, FragmentError> {
     P256VerifyingKey::from_public_key_der(&der).map_err(|_| FragmentError::InvalidCertChain)
 }
 
+/// Whether a certificate asserts `basicConstraints: cA=TRUE` — required of every issuer
+/// (intermediate/CA) in the chain so that a non-CA leaf cannot mint sub-certificates.
+fn is_ca(cert: &Certificate) -> bool {
+    if let Some(exts) = &cert.tbs_certificate.extensions {
+        for ext in exts.iter() {
+            if ext.extn_id == ID_CE_BASIC_CONSTRAINTS {
+                if let Ok(bc) =
+                    x509_cert::ext::pkix::BasicConstraints::from_der(ext.extn_value.as_bytes())
+                {
+                    return bc.ca;
+                }
+                return false;
+            }
+        }
+    }
+    false
+}
+
 /// Verify that `subject` was signed by `issuer` (ECDSA P-256 / SHA-256 over the subject's
 /// TBSCertificate).
 fn verify_link(subject: &Certificate, issuer: &Certificate) -> Result<(), FragmentError> {
+    // The issuer must be a CA (basicConstraints cA=TRUE), else a plain leaf could act as an
+    // intermediate and mint sub-certificates (privilege escalation).
+    if !is_ca(issuer) {
+        return Err(FragmentError::InvalidCertChain);
+    }
     if subject.signature_algorithm.oid != ECDSA_WITH_SHA256 {
         return Err(FragmentError::InvalidCertChain);
     }
@@ -404,6 +429,23 @@ mod tests {
         builder.build::<DerSignature>().unwrap().to_der().unwrap()
     }
 
+    /// Mint an intermediate CA (basicConstraints cA=TRUE) signed by the root CA key.
+    fn mint_intermediate(cn: &str, int_sk: &SigningKey, root_cn: &str, root_sk: &SigningKey) -> Vec<u8> {
+        let issuer = Name::from_str(&format!("CN={root_cn}")).unwrap();
+        let subject = Name::from_str(&format!("CN={cn}")).unwrap();
+        let validity = Validity::from_now(Duration::from_secs(3600)).unwrap();
+        let builder = CertificateBuilder::new(
+            Profile::SubCA { issuer, path_len_constraint: None },
+            SerialNumber::from(3u32),
+            validity,
+            subject,
+            spki_of(int_sk),
+            root_sk,
+        )
+        .unwrap();
+        builder.build::<DerSignature>().unwrap().to_der().unwrap()
+    }
+
     fn cose_with_chain(statement: &[u8], leaf_sk: &SigningKey, chain: &[Vec<u8>]) -> Vec<u8> {
         let protected = HeaderBuilder::new()
             .algorithm(iana::Algorithm::ES256)
@@ -601,6 +643,49 @@ mod tests {
         assert_eq!(
             verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap_err(),
             FragmentError::DidX509Mismatch
+        );
+    }
+
+    /// TC-F1.13: a 3-cert chain (leaf ← intermediate CA ← root CA), anchored on the root
+    /// fingerprint, path-validates through the intermediate and is accepted.
+    #[test]
+    fn tc_f1_13_intermediate_ca_chain_accepted() {
+        let root_sk = SigningKey::random(&mut OsRng);
+        let int_sk = SigningKey::random(&mut OsRng);
+        let leaf_sk = SigningKey::random(&mut OsRng);
+        let root = mint_ca("root-ca", &root_sk);
+        let intermediate = mint_intermediate("int-ca", &int_sk, "root-ca", &root_sk);
+        let leaf = mint_leaf("issuerX", &leaf_sk, "int-ca", &int_sk, Validity::from_now(Duration::from_secs(3600)).unwrap());
+        // Trust anchored on the ROOT fingerprint; the intermediate is validated in between.
+        let anchor = anchor_for(&root, "did:x509:test:issuerX");
+        let mut anchors = HashMap::new();
+        anchors.insert(anchor.did.clone(), anchor);
+
+        let f = frag("did:x509:test:issuerX");
+        let cose = cose_with_chain(&f.signing_bytes(), &leaf_sk, &[leaf, intermediate, root]);
+        let did = verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap();
+        assert_eq!(did, "did:x509:test:issuerX");
+    }
+
+    /// TC-F1.13b: a chain whose "intermediate" is a non-CA leaf (basicConstraints cA=FALSE)
+    /// is rejected — a plain leaf cannot act as an issuer and mint sub-certificates.
+    #[test]
+    fn tc_f1_13b_non_ca_intermediate_rejected() {
+        let root_sk = SigningKey::random(&mut OsRng);
+        let mid_sk = SigningKey::random(&mut OsRng); // a LEAF (cA=FALSE), misused as an issuer
+        let subleaf_sk = SigningKey::random(&mut OsRng);
+        let root = mint_ca("root-ca", &root_sk);
+        let mid_leaf = mint_leaf("mid", &mid_sk, "root-ca", &root_sk, Validity::from_now(Duration::from_secs(3600)).unwrap());
+        let subleaf = mint_leaf("issuerX", &subleaf_sk, "mid", &mid_sk, Validity::from_now(Duration::from_secs(3600)).unwrap());
+        let anchor = anchor_for(&root, "did:x509:test:issuerX");
+        let mut anchors = HashMap::new();
+        anchors.insert(anchor.did.clone(), anchor);
+
+        let f = frag("did:x509:test:issuerX");
+        let cose = cose_with_chain(&f.signing_bytes(), &subleaf_sk, &[subleaf, mid_leaf, root]);
+        assert_eq!(
+            verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap_err(),
+            FragmentError::InvalidCertChain
         );
     }
 }
