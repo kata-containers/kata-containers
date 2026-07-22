@@ -17,6 +17,7 @@ use path_clean::PathClean;
 
 use kata_sys_util::fs::get_base_name;
 
+use super::is_iommu_ignored_pci_class;
 use crate::{
     device::{
         pci_path::PciPath,
@@ -35,10 +36,6 @@ pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
 pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
 pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
 pub const MAX_DEV_ID_SIZE: usize = 31;
-
-/// PCI class bitmasks for devices that must be ignored when enumerating an IOMMU group.
-/// Host Bridge: 0x0600, Audio device: 0x0403.
-const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
 
 const VFIO_PCI_DRIVER_NEW_ID: &str = "/sys/bus/pci/drivers/vfio-pci/new_id";
 const VFIO_PCI_DRIVER_UNBIND: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
@@ -443,7 +440,7 @@ impl VfioDevice {
 
     // filter Host or PCI Bridges and audio devices that are in the same IOMMU
     // group as the passed-through devices.
-    fn filter_bridge_device(&self, bdf: &str, bitmasks: &[u64]) -> Option<u64> {
+    fn filter_bridge_device(&self, bdf: &str) -> Option<u64> {
         let device_class = match get_device_property(bdf, "class") {
             Ok(dev_class) => dev_class,
             Err(_) => "".to_string(),
@@ -453,19 +450,8 @@ impl VfioDevice {
             return None;
         }
 
-        match device_class.parse::<u32>() {
-            Ok(cid_u32) => {
-                // class code is 16 bits, remove the two trailing zeros
-                let class_code = u64::from(cid_u32) >> 8;
-                for &bitmask in bitmasks {
-                    if class_code & bitmask == bitmask {
-                        return Some(class_code);
-                    }
-                }
-                None
-            }
-            _ => None,
-        }
+        let class_code = parse_pci_class_code(&device_class)?;
+        is_iommu_ignored_pci_class(class_code).then_some(class_code)
     }
 
     fn initialize_vfio_device(&mut self) -> Result<()> {
@@ -496,7 +482,7 @@ impl VfioDevice {
         // pass all devices in iommu group, and use index to identify device.
         for (index, device) in iommu_devices.iter().enumerate() {
             // filter host/PCI bridge, audio, etc.
-            if self.filter_bridge_device(device, IOMMU_IGNORE).is_some() {
+            if self.filter_bridge_device(device).is_some() {
                 continue;
             }
 
@@ -818,6 +804,13 @@ fn get_mediated_device_bdf(dev_sys_str: String) -> Option<String> {
 
 // dev_sys_path: /sys/bus/pci/devices/DDDD:BB:DD.F
 // cfg_path: : /sys/bus/pci/devices/DDDD:BB:DD.F/xxx
+fn parse_pci_class_code(device_class: &str) -> Option<u64> {
+    let trimmed = device_class.trim().strip_prefix("0x").unwrap_or(device_class.trim());
+    u32::from_str_radix(trimmed, 16)
+        .ok()
+        .map(|cid_u32| u64::from(cid_u32) >> 8)
+}
+
 fn get_device_property(device_name: &str, property: &str) -> Result<String> {
     let dev_sys_path = Path::new(SYS_BUS_PCI_DEVICES).join(device_name);
     let cfg_path = fs::read_to_string(dev_sys_path.join(property)).with_context(|| {
@@ -890,4 +883,32 @@ pub fn get_vfio_device(device: String) -> Result<String> {
     }
 
     Ok(vfio_device)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_iommu_ignored_pci_class, parse_pci_class_code};
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("0x030200", Some(0x0302))]
+    #[case("030200", Some(0x0302))]
+    #[case(" 0x068000\n", Some(0x0680))]
+    #[case("not-a-number", None)]
+    fn test_parse_pci_class_code(#[case] sysfs_class: &str, #[case] expected: Option<u64>) {
+        assert_eq!(parse_pci_class_code(sysfs_class), expected);
+    }
+
+    #[rstest]
+    #[case::host_bridge("0x060000", true)]
+    #[case::pci_bridge("0x060400", true)]
+    #[case::audio_device("0x040300", true)]
+    #[case::nvswitch("0x068000", false)]
+    #[case::gpu("0x030200", false)]
+    fn test_is_iommu_ignored_pci_class(#[case] sysfs_class: &str, #[case] ignored: bool) {
+        let is_ignored = parse_pci_class_code(sysfs_class)
+            .map(is_iommu_ignored_pci_class)
+            .unwrap_or(false);
+        assert_eq!(is_ignored, ignored);
+    }
 }

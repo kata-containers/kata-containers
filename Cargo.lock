@@ -3014,6 +3014,7 @@ dependencies = [
  "qapi-spec",
  "rand 0.10.1",
  "regex",
+ "rstest",
  "rust-ini",
  "safe-path",
  "seccompiler",
