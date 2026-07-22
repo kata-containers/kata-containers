@@ -90,6 +90,7 @@ dragonball = ["dep:dragonball"]
 cloud-hypervisor = ["ch-config"]
 
 [dev-dependencies]
+rstest = { workspace = true }
 serial_test = "2.0.0"
 tempfile = { workspace = true }
 

@@ -12,6 +12,8 @@ use std::fs;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
+use crate::device::driver::is_iommu_ignored_pci_class;
+
 /// Path constants for VFIO and IOMMU sysfs/dev interfaces
 const DEV_VFIO: &str = "/dev/vfio";
 const SYS_IOMMU_GROUPS: &str = "/sys/kernel/iommu_groups";
@@ -346,7 +348,7 @@ fn validate_group_basic(devices: &[DeviceInfo]) -> bool {
             // filter host or PCI bridge
             let bdf_str = bdf.to_string();
             // Filter out devices that cannot be passed through (bridges, audio, etc.)
-            if filter_bridge_device(&bdf_str, IOMMU_IGNORE).is_some() {
+            if filter_bridge_device(&bdf_str).is_some() {
                 continue;
             }
         }
@@ -367,13 +369,9 @@ fn get_device_property(device_bdf: &str, property: &str) -> Result<String> {
     Ok(cfg_path.trim().to_string())
 }
 
-/// PCI class bitmasks for devices that must be ignored when enumerating an IOMMU group.
-/// Host Bridge: 0x0600, Audio device: 0x0403.
-const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
-
 /// Filters for devices that cannot or should not be passed through within an IOMMU group
 /// (Host/PCI bridges, audio controllers that share the GPU's IOMMU group, etc.).
-fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
+fn filter_bridge_device(bdf: &str) -> Option<u64> {
     let device_class = get_device_property(bdf, "class").unwrap_or_default();
 
     if device_class.is_empty() {
@@ -387,12 +385,7 @@ fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
         Some(cid_u32) => {
             // PCI class code is 24 bits, shift right 8 to get base+sub class
             let class_code = u64::from(cid_u32) >> 8;
-            for &bitmask in bitmasks {
-                if class_code & bitmask == bitmask {
-                    return Some(class_code);
-                }
-            }
-            None
+            is_iommu_ignored_pci_class(class_code).then_some(class_code)
         }
         None => None,
     }
@@ -610,13 +603,13 @@ fn discover_vfio_device_for_iommu_group(gid: u32, group_devnode: PathBuf) -> Res
 
     // Drop functions that only share the GPU's IOMMU group but must not be
     // passed through (audio controllers, bridges), reusing the same
-    // IOMMU_IGNORE classification as validate_group_basic. Everything derived
+    // IOMMU ignored-class classification as validate_group_basic. Everything derived
     // below (vfio_cdevs, the IOMMUFD backend cdevs and the primary device) is
     // built from this filtered list. Passing such a function would otherwise
     // emit an extra vfio-pci entry reusing the GPU's cold-plug root-port and
     // IOMMUFD object ids, making QEMU abort with a duplicate-id error.
     devices.retain(|d| match &d.addr {
-        DeviceAddress::Pci(bdf) => filter_bridge_device(&bdf.to_string(), IOMMU_IGNORE).is_none(),
+        DeviceAddress::Pci(bdf) => filter_bridge_device(&bdf.to_string()).is_none(),
         _ => true,
     });
     if devices.is_empty() {
@@ -889,4 +882,27 @@ pub fn discover_vfio_ap_device(group_devnode: &Path) -> Result<VfioDevice> {
         health: Health::Healthy,
         ap_devices,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_iommu_ignored_pci_class, parse_class_code_u32};
+    use rstest::rstest;
+
+    fn is_ignored_sysfs_class(class: &str) -> bool {
+        parse_class_code_u32(class)
+            .map(|cid_u32| u64::from(cid_u32) >> 8)
+            .map(is_iommu_ignored_pci_class)
+            .unwrap_or(false)
+    }
+
+    #[rstest]
+    #[case::host_bridge("0x060000", true)]
+    #[case::pci_bridge("0x060400", true)]
+    #[case::audio_device("0x040300", true)]
+    #[case::nvswitch("0x068000", false)]
+    #[case::gpu("0x030200", false)]
+    fn test_is_iommu_ignored_pci_class(#[case] sysfs_class: &str, #[case] ignored: bool) {
+        assert_eq!(is_ignored_sysfs_class(sysfs_class), ignored);
+    }
 }

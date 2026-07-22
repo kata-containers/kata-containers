@@ -8,6 +8,14 @@ mod port_device;
 mod protection_device;
 mod vfio;
 pub mod vfio_device;
+
+/// Host Bridge (0x0600), PCI-to-PCI Bridge (0x0604) and Audio (0x0403) classes
+/// cannot be passed through when sharing an IOMMU group. Matched exactly rather
+/// than by base class so passthrough-capable bridges like NVSwitches (0x0680)
+/// are not filtered out.
+pub(crate) fn is_iommu_ignored_pci_class(class_code: u64) -> bool {
+    matches!(class_code, 0x0600 | 0x0604 | 0x0403)
+}
 mod vhost_user;
 pub mod vhost_user_blk;
 mod vhost_user_net;
