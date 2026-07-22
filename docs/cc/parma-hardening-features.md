@@ -249,7 +249,7 @@ implement it, the security guarantee it introduces, and how it was validated.
   `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo), Stage 2
   transparency-log inclusion + consistency proofs (RFC 6962 Merkle);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 84 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
+- **Validated:** 86 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
   did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering/Merkle-inclusion/
   consistency); an offline, self-contained capability demo (`examples/fragment-demo` —
   asserts all of the above with no cluster/openssl); **live E2E** — a base-denied exec
