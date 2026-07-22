@@ -56,7 +56,7 @@ serde_yaml = "0.9"
 ron = "0.8"
 quick-xml = { version = "0.41.0", features = ["serialize"] }
 csv = "1.2"
-serde_with = "2.3"
+serde_with = "3.21"
 chrono = { version = "0.4", features = ["serde"] }
 rstest = { workspace = true }
 
