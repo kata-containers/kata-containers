@@ -378,6 +378,7 @@ jobs:
       matrix:
         asset:
           - genpolicy
+          - kata-ctl
         stage:
           - ${{ inputs.stage }}
     steps:
