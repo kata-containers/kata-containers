@@ -239,6 +239,8 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::too_many_arguments)]
+
     use super::*;
     use kata_types::annotations::cri_containerd;
     use oci_spec::runtime::{LinuxBuilder, LinuxMemory, LinuxMemoryBuilder, LinuxResourcesBuilder};
