@@ -4,9 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**PciSegment** | **int32** |  | 
-**Mmio32ApertureWeight** | Pointer to **int32** |  | [optional] 
-**Mmio64ApertureWeight** | Pointer to **int32** |  | [optional] 
+**PciSegment** | **int32** |  |
+**Mmio32ApertureWeight** | Pointer to **int32** |  | [optional]
+**Mmio64ApertureWeight** | Pointer to **int32** |  | [optional]
 
 ## Methods
 
@@ -99,5 +99,3 @@ HasMmio64ApertureWeight returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

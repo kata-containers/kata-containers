@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | Pointer to **string** |  | [optional] 
-**DesiredRam** | Pointer to **int64** | desired memory zone size in bytes | [optional] 
+**Id** | Pointer to **string** |  | [optional]
+**DesiredRam** | Pointer to **int64** | desired memory zone size in bytes | [optional]
 
 ## Methods
 
@@ -78,5 +78,3 @@ HasDesiredRam returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

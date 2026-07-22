@@ -16,31 +16,34 @@ import (
 
 // VmConfig Virtual machine configuration
 type VmConfig struct {
-	Cpus            *CpusConfig             `json:"cpus,omitempty"`
-	Memory          *MemoryConfig           `json:"memory,omitempty"`
-	Payload         PayloadConfig           `json:"payload"`
-	RateLimitGroups *[]RateLimitGroupConfig `json:"rate_limit_groups,omitempty"`
-	Disks           *[]DiskConfig           `json:"disks,omitempty"`
-	Net             *[]NetConfig            `json:"net,omitempty"`
-	Rng             *RngConfig              `json:"rng,omitempty"`
-	Balloon         *BalloonConfig          `json:"balloon,omitempty"`
-	Fs              *[]FsConfig             `json:"fs,omitempty"`
-	Pmem            *[]PmemConfig           `json:"pmem,omitempty"`
-	Serial          *ConsoleConfig          `json:"serial,omitempty"`
-	Console         *ConsoleConfig          `json:"console,omitempty"`
-	DebugConsole    *DebugConsoleConfig     `json:"debug_console,omitempty"`
-	Devices         *[]DeviceConfig         `json:"devices,omitempty"`
-	Vdpa            *[]VdpaConfig           `json:"vdpa,omitempty"`
-	Vsock           *VsockConfig            `json:"vsock,omitempty"`
-	Numa            *[]NumaConfig           `json:"numa,omitempty"`
-	Iommu           *bool                   `json:"iommu,omitempty"`
-	Watchdog        *bool                   `json:"watchdog,omitempty"`
-	Pvpanic         *bool                   `json:"pvpanic,omitempty"`
-	PciSegments     *[]PciSegmentConfig     `json:"pci_segments,omitempty"`
-	Platform        *PlatformConfig         `json:"platform,omitempty"`
-	Tpm             *TpmConfig              `json:"tpm,omitempty"`
-	LandlockEnable  *bool                   `json:"landlock_enable,omitempty"`
-	LandlockRules   *[]LandlockConfig       `json:"landlock_rules,omitempty"`
+	Cpus             *CpusConfig               `json:"cpus,omitempty"`
+	Memory           *MemoryConfig             `json:"memory,omitempty"`
+	Payload          PayloadConfig             `json:"payload"`
+	RateLimitGroups  *[]RateLimitGroupConfig   `json:"rate_limit_groups,omitempty"`
+	Disks            *[]DiskConfig             `json:"disks,omitempty"`
+	Net              *[]NetConfig              `json:"net,omitempty"`
+	Rng              *RngConfig                `json:"rng,omitempty"`
+	Balloon          *BalloonConfig            `json:"balloon,omitempty"`
+	Fs               *[]FsConfig               `json:"fs,omitempty"`
+	GenericVhostUser *[]GenericVhostUserConfig `json:"generic-vhost-user,omitempty"`
+	Pmem             *[]PmemConfig             `json:"pmem,omitempty"`
+	Serial           *SerialConfig             `json:"serial,omitempty"`
+	Console          *ConsoleConfig            `json:"console,omitempty"`
+	DebugConsole     *DebugConsoleConfig       `json:"debug_console,omitempty"`
+	Devices          *[]DeviceConfig           `json:"devices,omitempty"`
+	UserDevices      *[]UserDeviceConfig       `json:"user_devices,omitempty"`
+	Vdpa             *[]VdpaConfig             `json:"vdpa,omitempty"`
+	Vsock            *VsockConfig              `json:"vsock,omitempty"`
+	Numa             *[]NumaConfig             `json:"numa,omitempty"`
+	Iommu            *bool                     `json:"iommu,omitempty"`
+	Watchdog         *bool                     `json:"watchdog,omitempty"`
+	Rtc              *RtcConfig                `json:"rtc,omitempty"`
+	Pvpanic          *bool                     `json:"pvpanic,omitempty"`
+	PciSegments      *[]PciSegmentConfig       `json:"pci_segments,omitempty"`
+	Platform         *PlatformConfig           `json:"platform,omitempty"`
+	Tpm              *TpmConfig                `json:"tpm,omitempty"`
+	LandlockEnable   *bool                     `json:"landlock_enable,omitempty"`
+	LandlockRules    *[]LandlockConfig         `json:"landlock_rules,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
@@ -357,6 +360,38 @@ func (o *VmConfig) SetFs(v []FsConfig) {
 	o.Fs = &v
 }
 
+// GetGenericVhostUser returns the GenericVhostUser field value if set, zero value otherwise.
+func (o *VmConfig) GetGenericVhostUser() []GenericVhostUserConfig {
+	if o == nil || o.GenericVhostUser == nil {
+		var ret []GenericVhostUserConfig
+		return ret
+	}
+	return *o.GenericVhostUser
+}
+
+// GetGenericVhostUserOk returns a tuple with the GenericVhostUser field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetGenericVhostUserOk() (*[]GenericVhostUserConfig, bool) {
+	if o == nil || o.GenericVhostUser == nil {
+		return nil, false
+	}
+	return o.GenericVhostUser, true
+}
+
+// HasGenericVhostUser returns a boolean if a field has been set.
+func (o *VmConfig) HasGenericVhostUser() bool {
+	if o != nil && o.GenericVhostUser != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetGenericVhostUser gets a reference to the given []GenericVhostUserConfig and assigns it to the GenericVhostUser field.
+func (o *VmConfig) SetGenericVhostUser(v []GenericVhostUserConfig) {
+	o.GenericVhostUser = &v
+}
+
 // GetPmem returns the Pmem field value if set, zero value otherwise.
 func (o *VmConfig) GetPmem() []PmemConfig {
 	if o == nil || o.Pmem == nil {
@@ -390,9 +425,9 @@ func (o *VmConfig) SetPmem(v []PmemConfig) {
 }
 
 // GetSerial returns the Serial field value if set, zero value otherwise.
-func (o *VmConfig) GetSerial() ConsoleConfig {
+func (o *VmConfig) GetSerial() SerialConfig {
 	if o == nil || o.Serial == nil {
-		var ret ConsoleConfig
+		var ret SerialConfig
 		return ret
 	}
 	return *o.Serial
@@ -400,7 +435,7 @@ func (o *VmConfig) GetSerial() ConsoleConfig {
 
 // GetSerialOk returns a tuple with the Serial field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *VmConfig) GetSerialOk() (*ConsoleConfig, bool) {
+func (o *VmConfig) GetSerialOk() (*SerialConfig, bool) {
 	if o == nil || o.Serial == nil {
 		return nil, false
 	}
@@ -416,8 +451,8 @@ func (o *VmConfig) HasSerial() bool {
 	return false
 }
 
-// SetSerial gets a reference to the given ConsoleConfig and assigns it to the Serial field.
-func (o *VmConfig) SetSerial(v ConsoleConfig) {
+// SetSerial gets a reference to the given SerialConfig and assigns it to the Serial field.
+func (o *VmConfig) SetSerial(v SerialConfig) {
 	o.Serial = &v
 }
 
@@ -515,6 +550,38 @@ func (o *VmConfig) HasDevices() bool {
 // SetDevices gets a reference to the given []DeviceConfig and assigns it to the Devices field.
 func (o *VmConfig) SetDevices(v []DeviceConfig) {
 	o.Devices = &v
+}
+
+// GetUserDevices returns the UserDevices field value if set, zero value otherwise.
+func (o *VmConfig) GetUserDevices() []UserDeviceConfig {
+	if o == nil || o.UserDevices == nil {
+		var ret []UserDeviceConfig
+		return ret
+	}
+	return *o.UserDevices
+}
+
+// GetUserDevicesOk returns a tuple with the UserDevices field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetUserDevicesOk() (*[]UserDeviceConfig, bool) {
+	if o == nil || o.UserDevices == nil {
+		return nil, false
+	}
+	return o.UserDevices, true
+}
+
+// HasUserDevices returns a boolean if a field has been set.
+func (o *VmConfig) HasUserDevices() bool {
+	if o != nil && o.UserDevices != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetUserDevices gets a reference to the given []UserDeviceConfig and assigns it to the UserDevices field.
+func (o *VmConfig) SetUserDevices(v []UserDeviceConfig) {
+	o.UserDevices = &v
 }
 
 // GetVdpa returns the Vdpa field value if set, zero value otherwise.
@@ -675,6 +742,38 @@ func (o *VmConfig) HasWatchdog() bool {
 // SetWatchdog gets a reference to the given bool and assigns it to the Watchdog field.
 func (o *VmConfig) SetWatchdog(v bool) {
 	o.Watchdog = &v
+}
+
+// GetRtc returns the Rtc field value if set, zero value otherwise.
+func (o *VmConfig) GetRtc() RtcConfig {
+	if o == nil || o.Rtc == nil {
+		var ret RtcConfig
+		return ret
+	}
+	return *o.Rtc
+}
+
+// GetRtcOk returns a tuple with the Rtc field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetRtcOk() (*RtcConfig, bool) {
+	if o == nil || o.Rtc == nil {
+		return nil, false
+	}
+	return o.Rtc, true
+}
+
+// HasRtc returns a boolean if a field has been set.
+func (o *VmConfig) HasRtc() bool {
+	if o != nil && o.Rtc != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRtc gets a reference to the given RtcConfig and assigns it to the Rtc field.
+func (o *VmConfig) SetRtc(v RtcConfig) {
+	o.Rtc = &v
 }
 
 // GetPvpanic returns the Pvpanic field value if set, zero value otherwise.
@@ -898,6 +997,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if o.Fs != nil {
 		toSerialize["fs"] = o.Fs
 	}
+	if o.GenericVhostUser != nil {
+		toSerialize["generic-vhost-user"] = o.GenericVhostUser
+	}
 	if o.Pmem != nil {
 		toSerialize["pmem"] = o.Pmem
 	}
@@ -913,6 +1015,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if o.Devices != nil {
 		toSerialize["devices"] = o.Devices
 	}
+	if o.UserDevices != nil {
+		toSerialize["user_devices"] = o.UserDevices
+	}
 	if o.Vdpa != nil {
 		toSerialize["vdpa"] = o.Vdpa
 	}
@@ -927,6 +1032,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Watchdog != nil {
 		toSerialize["watchdog"] = o.Watchdog
+	}
+	if o.Rtc != nil {
+		toSerialize["rtc"] = o.Rtc
 	}
 	if o.Pvpanic != nil {
 		toSerialize["pvpanic"] = o.Pvpanic

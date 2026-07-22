@@ -4,12 +4,13 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Tag** | **string** |  | 
-**Socket** | **string** |  | 
+**Tag** | **string** |  |
+**Socket** | **string** |  |
 **NumQueues** | **int32** |  | [default to 1]
 **QueueSize** | **int32** |  | [default to 1024]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**PciDeviceId** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 
@@ -135,6 +136,31 @@ SetPciSegment sets PciSegment field to given value.
 
 HasPciSegment returns a boolean if a field has been set.
 
+### GetPciDeviceId
+
+`func (o *FsConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *FsConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *FsConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *FsConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
+
 ### GetId
 
 `func (o *FsConfig) GetId() string`
@@ -162,5 +188,3 @@ HasId returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

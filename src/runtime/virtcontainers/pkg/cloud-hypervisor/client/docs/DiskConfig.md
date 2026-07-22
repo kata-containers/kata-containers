@@ -4,23 +4,25 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | Pointer to **string** |  | [optional] 
+**Path** | Pointer to **string** |  | [optional]
 **Readonly** | Pointer to **bool** |  | [optional] [default to false]
 **Direct** | Pointer to **bool** |  | [optional] [default to false]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 1]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 128]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
-**VhostSocket** | Pointer to **string** |  | [optional] 
-**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
-**Serial** | Pointer to **string** |  | [optional] 
-**RateLimitGroup** | Pointer to **string** |  | [optional] 
-**QueueAffinity** | Pointer to [**[]VirtQueueAffinity**](VirtQueueAffinity.md) |  | [optional] 
+**VhostSocket** | Pointer to **string** |  | [optional]
+**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional]
+**PciSegment** | Pointer to **int32** |  | [optional]
+**PciDeviceId** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
+**Serial** | Pointer to **string** |  | [optional]
+**RateLimitGroup** | Pointer to **string** |  | [optional]
+**QueueAffinity** | Pointer to [**[]VirtQueueAffinity**](VirtQueueAffinity.md) |  | [optional]
 **BackingFiles** | Pointer to **bool** |  | [optional] [default to false]
 **Sparse** | Pointer to **bool** |  | [optional] [default to true]
-**ImageType** | Pointer to **string** |  | [optional] 
+**ImageType** | Pointer to [**ImageType**](ImageType.md) |  | [optional]
+**LockGranularity** | Pointer to [**LockGranularity**](LockGranularity.md) |  | [optional] [default to BYTE_RANGE]
 
 ## Methods
 
@@ -291,6 +293,31 @@ SetPciSegment sets PciSegment field to given value.
 
 HasPciSegment returns a boolean if a field has been set.
 
+### GetPciDeviceId
+
+`func (o *DiskConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *DiskConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *DiskConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *DiskConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
+
 ### GetId
 
 `func (o *DiskConfig) GetId() string`
@@ -443,20 +470,20 @@ HasSparse returns a boolean if a field has been set.
 
 ### GetImageType
 
-`func (o *DiskConfig) GetImageType() string`
+`func (o *DiskConfig) GetImageType() ImageType`
 
 GetImageType returns the ImageType field if non-nil, zero value otherwise.
 
 ### GetImageTypeOk
 
-`func (o *DiskConfig) GetImageTypeOk() (*string, bool)`
+`func (o *DiskConfig) GetImageTypeOk() (*ImageType, bool)`
 
 GetImageTypeOk returns a tuple with the ImageType field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetImageType
 
-`func (o *DiskConfig) SetImageType(v string)`
+`func (o *DiskConfig) SetImageType(v ImageType)`
 
 SetImageType sets ImageType field to given value.
 
@@ -466,7 +493,30 @@ SetImageType sets ImageType field to given value.
 
 HasImageType returns a boolean if a field has been set.
 
+### GetLockGranularity
+
+`func (o *DiskConfig) GetLockGranularity() LockGranularity`
+
+GetLockGranularity returns the LockGranularity field if non-nil, zero value otherwise.
+
+### GetLockGranularityOk
+
+`func (o *DiskConfig) GetLockGranularityOk() (*LockGranularity, bool)`
+
+GetLockGranularityOk returns a tuple with the LockGranularity field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetLockGranularity
+
+`func (o *DiskConfig) SetLockGranularity(v LockGranularity)`
+
+SetLockGranularity sets LockGranularity field to given value.
+
+### HasLockGranularity
+
+`func (o *DiskConfig) HasLockGranularity() bool`
+
+HasLockGranularity returns a boolean if a field has been set.
+
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-
