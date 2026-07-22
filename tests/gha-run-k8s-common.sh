@@ -445,7 +445,7 @@ function do_deploy_k8s() {
 		EOF
 
 		sudo apt-get update
-		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl \
+		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl cri-tools \
 			--allow-downgrades >/dev/null 2>&1; then
 			version="${candidate}"
 			break
@@ -459,7 +459,7 @@ function do_deploy_k8s() {
 	fi
 
 	info "Installing Kubernetes ${version}"
-	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
+	sudo apt-get -y install kubeadm kubelet kubectl cri-tools --allow-downgrades
 	sudo apt-mark hold kubeadm kubelet kubectl
 
 	# Deploy k8s using kubeadm with CreateContainerRequest (CRI) timeout set to 600s,
