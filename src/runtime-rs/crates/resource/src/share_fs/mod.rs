@@ -46,7 +46,7 @@ const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 const DEFAULT_KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
 /// default share fs (for example virtio-fs) mount path in the guest
-const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+pub(crate) const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 /// The virtiofs mount point in the guest for nydusd mode.
 /// In nydusd mode, virtiofs is mounted at `/run/kata-containers/shared/`
