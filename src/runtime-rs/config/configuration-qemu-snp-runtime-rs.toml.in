@@ -354,6 +354,11 @@ enable_hugepages = false
 # major range 240-254 being chosen to represent vhost-user devices.
 enable_vhost_user_store = @DEFENABLEVHOSTUSERSTORE@
 
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
+
 # The base directory specifically used for vhost-user devices.
 # Its sub-path "block" is used for block devices; "block/sockets" is
 # where we expect vhost-user sockets to live; "block/devices" is where
