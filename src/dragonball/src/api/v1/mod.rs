@@ -24,14 +24,15 @@ pub use self::machine_config::{VmConfigError, MAX_SUPPORTED_VCPUS};
     feature = "vhost-net",
     feature = "vhost-user-net"
 ))]
-mod virtio_net;
 #[cfg(feature = "vhost-user-net")]
-pub use virtio_net::VhostUserConfig;
+pub use crate::device_manager::net_dev_mgr::VhostUserConfig;
 #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
-pub use virtio_net::VirtioConfig;
+pub use crate::device_manager::net_dev_mgr::VirtioConfig;
 #[cfg(any(
     feature = "virtio-net",
     feature = "vhost-net",
     feature = "vhost-user-net"
 ))]
-pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig};
+pub use crate::device_manager::net_dev_mgr::{
+    Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig,
+};

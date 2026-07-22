@@ -37,21 +37,16 @@ pub use crate::device_manager::fs_dev_mgr::{
 };
 #[cfg(feature = "virtio-mem")]
 pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
+#[cfg(any(
+    feature = "virtio-net",
+    feature = "vhost-net",
+    feature = "vhost-user-net"
+))]
+pub use crate::device_manager::net_dev_mgr::{
+    NetworkDeviceError, NetworkDeviceMgr, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig,
+};
 #[cfg(feature = "host-device")]
 use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
-#[cfg(feature = "vhost-net")]
-pub use crate::device_manager::vhost_net_dev_mgr::{
-    VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
-};
-#[cfg(feature = "vhost-user-net")]
-use crate::device_manager::vhost_user_net_dev_mgr::{
-    VhostUserNetDeviceConfigInfo, VhostUserNetDeviceError, VhostUserNetDeviceMgr,
-};
-#[cfg(feature = "virtio-net")]
-pub use crate::device_manager::virtio_net_dev_mgr::{
-    VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
-    VirtioNetDeviceMgr,
-};
 #[cfg(feature = "virtio-vsock")]
 pub use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
 #[cfg(feature = "host-device")]
@@ -109,20 +104,14 @@ pub enum VmmActionError {
     #[error("virtio-blk device error: {0}")]
     Block(#[source] BlockDeviceError),
 
-    #[cfg(feature = "virtio-net")]
-    /// Net device related errors.
-    #[error("virtio-net device error: {0}")]
-    VirtioNet(#[source] VirtioNetDeviceError),
-
-    #[cfg(feature = "vhost-net")]
-    #[error("vhost-net device error: {0:?}")]
-    /// Vhost-net device relared errors.
-    VhostNet(#[source] VhostNetDeviceError),
-
-    #[error("vhost-user-net device error: {0:?}")]
-    #[cfg(feature = "vhost-user-net")]
-    /// Vhost-user-net device relared errors.
-    VhostUserNet(#[source] VhostUserNetDeviceError),
+    #[cfg(any(
+        feature = "virtio-net",
+        feature = "vhost-net",
+        feature = "vhost-user-net"
+    ))]
+    /// Network device related errors.
+    #[error("network device error: {0}")]
+    Network(#[source] NetworkDeviceError),
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// The action `InsertFsDevice` failed either because of bad user input or an internal error.
@@ -233,7 +222,7 @@ pub enum VmmAction {
     /// are the RX and TX rate limiters.
     /// TODO: vhost-net rate limiters aren't implemented, see:
     /// https://github.com/kata-containers/kata-containers/issues/8327
-    UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo),
+    UpdateNetworkInterface(NetworkInterfaceUpdateConfig),
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// Add a new shared fs device or update one that already exists using the
@@ -376,16 +365,9 @@ impl VmmService {
                 feature = "vhost-net",
                 feature = "vhost-user-net"
             ))]
-            VmmAction::InsertNetworkDevice(config) => match config.backend {
-                #[cfg(feature = "virtio-net")]
-                Backend::Virtio(_) => self.add_virtio_net_device(vmm, event_mgr, config.into()),
-                #[cfg(feature = "vhost-net")]
-                Backend::Vhost(_) => self.add_vhost_net_device(vmm, event_mgr, config.into()),
-                #[cfg(feature = "vhost-user-net")]
-                Backend::VhostUser(_) => {
-                    self.add_vhost_user_net_device(vmm, event_mgr, config.into())
-                }
-            },
+            VmmAction::InsertNetworkDevice(config) => {
+                self.add_network_device(vmm, event_mgr, config)
+            }
             #[cfg(feature = "virtio-net")]
             VmmAction::UpdateNetworkInterface(netif_update) => {
                 self.update_net_rate_limiters(vmm, netif_update)
@@ -764,20 +746,24 @@ impl VmmService {
             .map_err(VmmActionError::Block)
     }
 
-    #[cfg(feature = "virtio-net")]
+    #[cfg(any(
+        feature = "virtio-net",
+        feature = "vhost-net",
+        feature = "vhost-user-net"
+    ))]
     #[instrument(skip(self, event_mgr))]
-    fn add_virtio_net_device(
+    fn add_network_device(
         &mut self,
         vmm: &mut Vmm,
         event_mgr: &mut EventManager,
-        config: VirtioNetDeviceConfigInfo,
+        config: NetworkInterfaceConfig,
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|e| {
                 if let StartMicroVmError::MicroVMAlreadyRunning = e {
-                    VmmActionError::VirtioNet(VirtioNetDeviceError::UpdateNotAllowedPostBoot)
+                    VmmActionError::Network(NetworkDeviceError::UpdateNotAllowedPostBoot)
                 } else if let StartMicroVmError::UpcallServerNotReady = e {
                     VmmActionError::UpcallServerNotReady
                 } else {
@@ -786,10 +772,10 @@ impl VmmService {
             })?;
 
         vm.device_manager_mut()
-            .virtio_net_manager
+            .net_manager
             .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
-            .map_err(VmmActionError::VirtioNet)
+            .map_err(VmmActionError::Network)
     }
 
     #[cfg(feature = "virtio-net")]
@@ -797,61 +783,15 @@ impl VmmService {
     fn update_net_rate_limiters(
         &mut self,
         vmm: &mut Vmm,
-        config: VirtioNetDeviceConfigUpdateInfo,
+        config: NetworkInterfaceUpdateConfig,
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
         vm.device_manager_mut()
-            .virtio_net_manager
+            .net_manager
             .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
-            .map_err(VmmActionError::VirtioNet)
-    }
-
-    #[cfg(feature = "vhost-net")]
-    fn add_vhost_net_device(
-        &mut self,
-        vmm: &mut Vmm,
-        event_mgr: &mut EventManager,
-        config: VhostNetDeviceConfigInfo,
-    ) -> VmmRequestResult {
-        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
-        let ctx = vm
-            .create_device_op_context(Some(event_mgr.epoll_manager()))
-            .map_err(|err| match err {
-                StartMicroVmError::MicroVMAlreadyRunning => {
-                    VmmActionError::VhostNet(VhostNetDeviceError::UpdateNotAllowedPostBoot)
-                }
-                StartMicroVmError::UpcallServerNotReady => VmmActionError::UpcallServerNotReady,
-                _ => VmmActionError::StartMicroVm(err),
-            })?;
-        VhostNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
-            .map(|_| VmmData::Empty)
-            .map_err(VmmActionError::VhostNet)
-    }
-
-    #[cfg(feature = "vhost-user-net")]
-    fn add_vhost_user_net_device(
-        &mut self,
-        vmm: &mut Vmm,
-        event_mgr: &mut EventManager,
-        config: VhostUserNetDeviceConfigInfo,
-    ) -> VmmRequestResult {
-        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
-        let ctx = vm
-            .create_device_op_context(Some(event_mgr.epoll_manager()))
-            .map_err(|err| {
-                if let StartMicroVmError::MicroVMAlreadyRunning = err {
-                    VmmActionError::VhostUserNet(VhostUserNetDeviceError::UpdateNotAllowedPostBoot)
-                } else if let StartMicroVmError::UpcallServerNotReady = err {
-                    VmmActionError::UpcallServerNotReady
-                } else {
-                    VmmActionError::StartMicroVm(err)
-                }
-            })?;
-        VhostUserNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
-            .map(|_| VmmData::Empty)
-            .map_err(VmmActionError::VhostUserNet)
+            .map_err(VmmActionError::Network)
     }
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
@@ -1772,10 +1712,20 @@ mod tests {
     fn test_vmm_action_insert_network_device() {
         skip_if_kvm_unaccessable!();
 
+        // A device must be named: the id identifies it for conflict detection
+        // and for later requests, so the manager refuses an unnamed one.
+        let named = || NetworkInterfaceConfig {
+            backend: Backend::Virtio(VirtioConfig {
+                iface_id: String::from("eth0"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
         let tests = &mut [
             // hotplug unready
             TestData::new(
-                VmmAction::InsertNetworkDevice(NetworkInterfaceConfig::default()),
+                VmmAction::InsertNetworkDevice(named()),
                 InstanceState::Running,
                 &|result| {
                     assert!(matches!(
@@ -1794,7 +1744,7 @@ mod tests {
             ),
             // success
             TestData::new(
-                VmmAction::InsertNetworkDevice(NetworkInterfaceConfig::default()),
+                VmmAction::InsertNetworkDevice(named()),
                 InstanceState::Uninitialized,
                 &|result| {
                     assert!(result.is_ok());
@@ -1815,7 +1765,7 @@ mod tests {
         let tests = &mut [
             // invalid id
             TestData::new(
-                VmmAction::UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo {
+                VmmAction::UpdateNetworkInterface(NetworkInterfaceUpdateConfig {
                     iface_id: String::from("1"),
                     rx_rate_limiter: None,
                     tx_rate_limiter: None,
@@ -1824,14 +1774,14 @@ mod tests {
                 &|result| {
                     assert!(matches!(
                         result,
-                        Err(VmmActionError::VirtioNet(
-                            VirtioNetDeviceError::InvalidIfaceId(_)
-                        ))
+                        Err(VmmActionError::Network(NetworkDeviceError::InvalidIfaceId(
+                            _
+                        )))
                     ));
                     let err_string = format!("{}", result.unwrap_err());
                     let expected_err = String::from(
-                        "virtio-net device error: \
-                    invalid virtio-net iface id '1'",
+                        "network device error: \
+                    invalid network iface id '1'",
                     );
                     assert_eq!(err_string, expected_err);
                 },
