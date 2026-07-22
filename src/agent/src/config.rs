@@ -28,6 +28,7 @@ const CDI_TIMEOUT_OPTION: &str = "agent.cdi_timeout";
 const LAUNCH_PROCESS_TIMEOUT_OPTION: &str = "agent.launch_process_timeout";
 const VISIBLE_CDI_DEVICES_OPTION: &str = "agent.visible_cdi_devices";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
+const DEBUG_CONSOLE_SHELL_OPTION: &str = "agent.debug_console_shell";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const CGROUP_NO_V1: &str = "cgroup_no_v1";
@@ -136,6 +137,9 @@ pub struct AgentConfig {
     pub launch_process_timeout: time::Duration,
     pub visible_cdi_devices: bool,
     pub debug_console_vport: i32,
+    // Guest path of the shell the debug console execs; empty uses the built-in
+    // candidates (/bin/bash, /bin/sh).
+    pub debug_console_shell: String,
     pub log_vport: i32,
     pub container_pipe_size: i32,
     pub server_addr: String,
@@ -171,6 +175,7 @@ pub struct AgentConfigBuilder {
     pub launch_process_timeout: Option<time::Duration>,
     pub visible_cdi_devices: Option<bool>,
     pub debug_console_vport: Option<i32>,
+    pub debug_console_shell: Option<String>,
     pub log_vport: Option<i32>,
     pub container_pipe_size: Option<i32>,
     pub server_addr: Option<String>,
@@ -267,6 +272,7 @@ impl Default for AgentConfig {
             launch_process_timeout: DEFAULT_LAUNCH_PROCESS_TIMEOUT,
             visible_cdi_devices: false,
             debug_console_vport: 0,
+            debug_console_shell: String::from(""),
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{VSOCK_ADDR}:{DEFAULT_AGENT_VSOCK_PORT}"),
@@ -310,6 +316,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, launch_process_timeout);
         config_override!(agent_config_builder, agent_config, visible_cdi_devices);
         config_override!(agent_config_builder, agent_config, debug_console_vport);
+        config_override!(agent_config_builder, agent_config, debug_console_shell);
         config_override!(agent_config_builder, agent_config, log_vport);
         config_override!(agent_config_builder, agent_config, container_pipe_size);
         config_override!(agent_config_builder, agent_config, server_addr);
@@ -514,6 +521,12 @@ impl AgentConfig {
                 config.debug_console_vport,
                 get_number_value,
                 |port: &i32| *port > 0
+            );
+            parse_cmdline_param!(
+                param,
+                DEBUG_CONSOLE_SHELL_OPTION,
+                config.debug_console_shell,
+                get_string_value
             );
             parse_cmdline_param!(
                 param,
@@ -902,6 +915,7 @@ mod tests {
             contents: &'a str,
             env_vars: Vec<&'a str>,
             debug_console: bool,
+            debug_console_shell: &'a str,
             dev_mode: bool,
             log_level: slog::Level,
             hotplug_timeout: time::Duration,
@@ -926,6 +940,7 @@ mod tests {
                     contents: "",
                     env_vars: Vec::new(),
                     debug_console: false,
+                    debug_console_shell: "",
                     dev_mode: false,
                     log_level: DEFAULT_LOG_LEVEL,
                     hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
@@ -999,6 +1014,11 @@ mod tests {
             TestData {
                 contents: "agent.debug_console",
                 debug_console: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.debug_console_shell=/run/kata-extensions/devkit/bin/devkit-sh",
+                debug_console_shell: "/run/kata-extensions/devkit/bin/devkit-sh",
                 ..Default::default()
             },
             TestData {
@@ -1498,6 +1518,7 @@ mod tests {
                 AgentConfig::from_cmdline(filename, vec![]).expect("Failed to parse command line");
 
             assert_eq!(d.debug_console, config.debug_console, "{msg}");
+            assert_eq!(d.debug_console_shell, config.debug_console_shell, "{msg}");
             assert_eq!(d.dev_mode, config.dev_mode, "{msg}");
             assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{msg}");
             assert_eq!(

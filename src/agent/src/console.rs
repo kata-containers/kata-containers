@@ -29,6 +29,16 @@ use tokio::sync::watch::Receiver;
 
 const CONSOLE_PATH: &str = "/dev/console";
 
+// A configured debug_console_shell is honored only if it resolves under this
+// prefix (a guest extension mount). Extension images are dm-verity measured and
+// read-only, so this confines the debug console to trusted binaries: a host that
+// can influence the agent cmdline (untrusted under CoCo) cannot repoint it at a
+// container rootfs to run tenant binaries or read guest-root data.
+//
+// Only referenced under `#[cfg(not(test))]`, so it reads as dead code in tests.
+#[cfg_attr(test, allow(dead_code))]
+const DEBUG_CONSOLE_SHELL_ALLOWED_PREFIX: &str = "/run/kata-extensions/";
+
 lazy_static! {
     static ref SHELLS: Arc<SyncMutex<Vec<String>>> = {
         let mut v = Vec::new();
@@ -46,6 +56,20 @@ pub fn initialize() {
     lazy_static::initialize(&SHELLS);
 }
 
+// Honor `shell` only if it canonicalizes (resolving symlinks and `..`) to a path
+// under `prefix`. Canonicalization is what makes this safe: a raw prefix check
+// could be bypassed by a symlink or `..` escape. The original path is returned so
+// an entrypoint symlink under the prefix (devkit-sh -> devkit-enter) stays the
+// exec target, since it is equally trusted.
+fn shell_under_prefix(shell: &str, prefix: &str) -> Option<String> {
+    if shell.is_empty() {
+        return None;
+    }
+
+    let canonical = std::fs::canonicalize(shell).ok()?;
+    canonical.starts_with(prefix).then(|| shell.to_string())
+}
+
 pub async fn debug_console_handler(
     logger: Logger,
     port: u32,
@@ -53,7 +77,26 @@ pub async fn debug_console_handler(
 ) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "debug-console"));
 
-    let shells = SHELLS.lock().unwrap().to_vec();
+    // Only mutated under `#[cfg(not(test))]`, so it need not be mut in tests.
+    #[cfg_attr(test, allow(unused_mut))]
+    let mut shells = SHELLS.lock().unwrap().to_vec();
+
+    // Prefer a configured debug_console_shell over the built-ins, but only if it
+    // passes the extension-prefix guard.
+    #[cfg(not(test))]
+    {
+        let configured = crate::AGENT_CONFIG.debug_console_shell.clone();
+        match shell_under_prefix(&configured, DEBUG_CONSOLE_SHELL_ALLOWED_PREFIX) {
+            Some(sh) => shells.insert(0, sh),
+            None if !configured.is_empty() => warn!(
+                logger,
+                "ignoring debug_console_shell outside {}: {}",
+                DEBUG_CONSOLE_SHELL_ALLOWED_PREFIX,
+                configured
+            ),
+            None => {}
+        }
+    }
 
     let shell = shells
         .into_iter()
@@ -304,6 +347,62 @@ mod tests {
         assert_eq!(
             result.unwrap_err().to_string(),
             "no shell found to launch debug console"
+        );
+    }
+
+    #[test]
+    fn test_shell_under_prefix() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempdir().expect("failed to create tmpdir");
+        let root = dir.path();
+
+        // Simulate an extension mount ("allowed") and a container rootfs
+        // ("other") side by side under the same tmpdir.
+        let allowed = root.join("allowed");
+        let other = root.join("other");
+        std::fs::create_dir_all(allowed.join("bin")).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+
+        let prefix = allowed.to_str().unwrap();
+
+        // Inside the prefix: honored.
+        let inside = allowed.join("bin").join("devkit-enter");
+        std::fs::write(&inside, b"#!/bin/sh\n").unwrap();
+        let inside = inside.to_str().unwrap();
+        assert_eq!(shell_under_prefix(inside, prefix), Some(inside.to_string()));
+
+        // A symlink that lives inside the prefix but targets another file inside
+        // the prefix is honored, and the (symlink) path is what gets returned.
+        let link = allowed.join("bin").join("devkit-sh");
+        symlink("devkit-enter", &link).unwrap();
+        let link = link.to_str().unwrap();
+        assert_eq!(shell_under_prefix(link, prefix), Some(link.to_string()));
+
+        // Outside the prefix (e.g. a container binary): rejected.
+        let outside = other.join("sh");
+        std::fs::write(&outside, b"#!/bin/sh\n").unwrap();
+        assert_eq!(shell_under_prefix(outside.to_str().unwrap(), prefix), None);
+
+        // A symlink under the prefix that escapes it via its target: rejected,
+        // because canonicalization resolves it outside the prefix.
+        let escape = allowed.join("escape");
+        symlink(&outside, &escape).unwrap();
+        assert_eq!(shell_under_prefix(escape.to_str().unwrap(), prefix), None);
+
+        // A `..` traversal that escapes the prefix: rejected.
+        let traversal = allowed.join("bin").join("..").join("..").join("other");
+        let traversal = traversal.join("sh");
+        assert_eq!(
+            shell_under_prefix(traversal.to_str().unwrap(), prefix),
+            None
+        );
+
+        // Empty and non-existent paths: rejected (no shell configured / bad path).
+        assert_eq!(shell_under_prefix("", prefix), None);
+        assert_eq!(
+            shell_under_prefix(allowed.join("bin").join("enoent").to_str().unwrap(), prefix),
+            None
         );
     }
 }
