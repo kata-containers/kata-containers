@@ -29,11 +29,21 @@ use tokio::sync::watch::Receiver;
 
 const CONSOLE_PATH: &str = "/dev/console";
 
+// Shell shipped by the devkit debug guest extension. A fixed path under
+// /run/kata-extensions, where extension images are mounted read-only and
+// dm-verity measured, so nothing outside the agent selects what the console
+// execs. It only exists when the extension is cold-plugged, which is itself the
+// operator opting in to debugging this sandbox.
+const DEVKIT_DEBUG_CONSOLE_SHELL: &str = "/run/kata-extensions/devkit/bin/devkit-sh";
+
 lazy_static! {
     static ref SHELLS: Arc<SyncMutex<Vec<String>>> = {
         let mut v = Vec::new();
 
         if !cfg!(test) {
+            // Ahead of the built-ins: some bases are shell-less, and where a
+            // shell does exist the devkit one is the richer choice.
+            v.push(DEVKIT_DEBUG_CONSOLE_SHELL.to_string());
             v.push("/bin/bash".to_string());
             v.push("/bin/sh".to_string());
         }
