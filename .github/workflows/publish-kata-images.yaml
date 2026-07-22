@@ -119,6 +119,18 @@ jobs:
           path: tools/packaging/kata-deploy/local-build/build
           merge-multiple: true
 
+      # kata-ctl lives in the kata-tools bundle, not the per-shim component set,
+      # so its tarball is uploaded under a separate artifact name. Stage it into
+      # the same build dir so it is baked into the kata-deploy image; the
+      # installer only extracts it on nodes where debug is enabled.
+      - name: get-kata-ctl for ${{ inputs.arch }}
+        if: ${{ inputs.artifact-name == '' && matrix.image-kind == 'deploy' }}
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: kata-tools-artifacts-${{ inputs.arch }}-kata-ctl${{ inputs.tarball-suffix }}
+          path: tools/packaging/kata-deploy/local-build/build
+          merge-multiple: true
+
       - name: get-kata-static-tarball for ${{ inputs.arch }}
         if: ${{ inputs.artifact-name == '' && matrix.image-kind == 'monitor' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0

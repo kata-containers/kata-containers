@@ -107,6 +107,10 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
 
     let mut extracted: HashSet<String> = HashSet::new();
     extract_component_tarballs(config, &mut extracted)?;
+    // Debug-only tooling (kata-ctl for `kata-ctl exec`) is not tied to any shim.
+    // Install it when debug is on and remove it when debug is off, so toggling
+    // debug off on a redeploy leaves nothing behind.
+    reconcile_debug_tools(config, &mut extracted)?;
     install_versions_yaml(config)?;
 
     set_executable_permissions(&config.host_install_dir)?;
@@ -736,6 +740,118 @@ fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) 
         })?;
 
         extracted.insert(component.clone());
+    }
+
+    Ok(())
+}
+
+/// Debug-only tool components that are not tied to any shim in
+/// shim-components.json. kata-ctl backs the `kata-ctl exec` debug console
+/// workflow; it ships in the kata-tools bundle rather than with the shims, so it
+/// is pulled in here whenever debug is enabled.
+const DEBUG_TOOL_COMPONENTS: &[&str] = &["kata-ctl"];
+
+/// Files each debug tool installs under the install prefix, relative to it.
+///
+/// Needed to remove the tool again when debug is turned off on a redeploy: at
+/// that point nothing is extracted, so the paths cannot be discovered and must
+/// be known statically. kata-ctl's tarball only ships bin/kata-ctl.
+fn debug_tool_paths(component: &str) -> &'static [&'static str] {
+    match component {
+        "kata-ctl" => &["bin/kata-ctl"],
+        _ => &[],
+    }
+}
+
+/// Reconcile debug-only tooling with the current debug setting: extract it when
+/// debug is enabled, and remove it when debug is off so toggling debug off on a
+/// redeploy never leaves stale tooling on the node.
+///
+/// Extraction is best-effort - a missing or unreadable tarball only warns and is
+/// skipped, so it can never turn a debug install into a hard failure (e.g. on an
+/// image built without the tools).
+fn reconcile_debug_tools(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
+    if config.debug {
+        extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            Path::new(TARBALLS_DIR),
+            &config.host_install_dir,
+            true,
+            extracted,
+        )
+    } else {
+        remove_debug_tools_in(DEBUG_TOOL_COMPONENTS, Path::new(&config.host_install_dir));
+        Ok(())
+    }
+}
+
+/// Remove the files installed by the given debug tools from `install_dir`.
+///
+/// Best-effort and idempotent: only existing files are touched, and a failed
+/// removal warns rather than aborting the install.
+fn remove_debug_tools_in(components: &[&str], install_dir: &Path) {
+    for component in components {
+        for rel in debug_tool_paths(component) {
+            let path = install_dir.join(rel);
+            if path.exists() {
+                info!(
+                    "debug disabled: removing debug tool '{}' ({})",
+                    component,
+                    path.display()
+                );
+                if let Err(e) = fs::remove_file(&path) {
+                    log::warn!("debug: failed to remove {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+}
+
+/// Pure core of [`extract_debug_tools`], parameterized on the tarball directory
+/// and install destination so it can be unit tested without the container image
+/// layout.
+fn extract_debug_tools_in(
+    components: &[&str],
+    tarballs_dir: &Path,
+    host_install_dir: &str,
+    debug: bool,
+    extracted: &mut HashSet<String>,
+) -> Result<()> {
+    if !debug {
+        return Ok(());
+    }
+
+    for component in components {
+        if extracted.contains(*component) {
+            continue;
+        }
+
+        let tarball_name = format!("kata-static-{}.tar.zst", component);
+        let tarball_path = tarballs_dir.join(&tarball_name);
+
+        if !tarball_path.exists() {
+            log::warn!(
+                "debug: optional tool '{}' not found at {}; skipping. Rebuild the \
+                 kata-deploy image with the '{}' component to enable it.",
+                component,
+                tarball_path.display(),
+                component
+            );
+            continue;
+        }
+
+        info!("debug: extracting optional tool '{}'", component);
+        if let Err(e) = extract_tarball(&tarball_path, host_install_dir) {
+            log::warn!(
+                "debug: failed to extract optional tool '{}' from {}: {:#}; skipping",
+                component,
+                tarball_path.display(),
+                e
+            );
+            continue;
+        }
+
+        extracted.insert((*component).to_string());
     }
 
     Ok(())
@@ -1655,5 +1771,83 @@ mod tests {
 
         fs::remove_dir_all(&runtime_dir).unwrap();
         assert!(!runtime_dir.exists());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_disabled_is_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().to_str().unwrap();
+        let mut extracted: HashSet<String> = HashSet::new();
+
+        // debug=false: nothing is looked up or extracted.
+        extract_debug_tools_in(&["kata-ctl"], tmp.path(), dest, false, &mut extracted).unwrap();
+
+        assert!(extracted.is_empty());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_missing_tarball_is_best_effort() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let mut extracted: HashSet<String> = HashSet::new();
+
+        // debug=true but the tarball is absent: must not error and must not
+        // record the component as extracted.
+        extract_debug_tools_in(
+            &["kata-ctl"],
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            &mut extracted,
+        )
+        .unwrap();
+
+        assert!(extracted.is_empty());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_skips_already_extracted() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let mut extracted: HashSet<String> = ["kata-ctl".to_string()].into_iter().collect();
+
+        // Already extracted (e.g. pulled by a shim): the missing tarball is never
+        // touched and the set is left unchanged.
+        extract_debug_tools_in(
+            &["kata-ctl"],
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            &mut extracted,
+        )
+        .unwrap();
+
+        assert_eq!(extracted.len(), 1);
+        assert!(extracted.contains("kata-ctl"));
+    }
+
+    #[test]
+    fn test_remove_debug_tools_removes_installed_files() {
+        let install = tempfile::tempdir().unwrap();
+        let bin = install.path().join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let kata_ctl = bin.join("kata-ctl");
+        fs::write(&kata_ctl, "binary").unwrap();
+        // A sibling that must be left untouched.
+        let shim = bin.join("containerd-shim-kata-v2");
+        fs::write(&shim, "shim").unwrap();
+
+        remove_debug_tools_in(&["kata-ctl"], install.path());
+
+        assert!(!kata_ctl.exists(), "kata-ctl removed when debug is off");
+        assert!(shim.exists(), "unrelated binaries untouched");
+    }
+
+    #[test]
+    fn test_remove_debug_tools_is_noop_when_absent() {
+        let install = tempfile::tempdir().unwrap();
+        // Nothing installed: removal must not create anything or panic.
+        remove_debug_tools_in(&["kata-ctl"], install.path());
+        assert!(!install.path().join("bin/kata-ctl").exists());
     }
 }
