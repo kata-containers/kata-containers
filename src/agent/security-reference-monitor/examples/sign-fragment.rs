@@ -134,13 +134,15 @@ fn main() {
                     })
                     .unwrap_or_default(),
                 receipt,
+                receipt_ledger: f.get("ledger").cloned(),
                 signature: vec![],
             };
             let sig = sk.sign(&fragment.signing_bytes());
             println!("signature_hex={}", hex_encode(&sig.to_bytes()));
 
             // FR-1f: optionally also emit a transparency receipt = a signature over the
-            // same statement by the transparency anchor key (--receipt-key <hex>).
+            // same statement by a transparency ledger key (--receipt-key <hex>). Tag the
+            // originating ledger with --ledger <id> so the trust list can scope/verify it.
             if let Some(rk_hex) = f.get("receipt-key") {
                 let rk_vec = hex_decode(rk_hex).expect("decode receipt key hex");
                 if rk_vec.len() == 32 {
@@ -149,6 +151,9 @@ fn main() {
                     let ask = SigningKey::from_bytes(&rk);
                     let rsig = ask.sign(&fragment.signing_bytes());
                     println!("receipt_hex={}", hex_encode(&rsig.to_bytes()));
+                    if let Some(ledger) = f.get("ledger") {
+                        println!("receipt_ledger={}", ledger);
+                    }
                 }
             }
 

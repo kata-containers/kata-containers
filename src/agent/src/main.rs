@@ -913,11 +913,24 @@ pub(crate) fn persist_fragment_svn_state(snapshot: &str) {
 struct FragmentTrustConfig {
     #[serde(default)]
     require_receipt: Option<bool>,
-    /// FR-1f: transparency anchor public key (hex); when set, receipts are verified.
+    /// FR-1f: legacy single transparency anchor public key (hex); mapped to the default
+    /// ledger. Prefer `[[ledger]]` for multi-ledger / rotation.
     #[serde(default)]
     transparency_anchor_hex: Option<String>,
+    /// FR-1f (trust list): the Transparency Trust List — named ledgers with rotatable keys.
+    #[serde(default)]
+    ledger: Vec<FragmentLedgerConfig>,
     #[serde(default)]
     issuer: Vec<FragmentIssuerConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct FragmentLedgerConfig {
+    id: String,
+    /// One or more current verification keys for this ledger (multiple ⇒ rotation).
+    #[serde(default)]
+    pubkey_hex: Vec<String>,
 }
 
 #[cfg(feature = "strict-policy")]
@@ -927,6 +940,13 @@ struct FragmentIssuerConfig {
     ed25519_pubkey_hex: String,
     #[serde(default)]
     min_svn: u64,
+    /// FR-1f (trust list): ledgers a receipt for this issuer's default feed must come from
+    /// (policy-driven required_receipts). Non-empty ⇒ a receipt is mandatory.
+    #[serde(default)]
+    required_receipt_from: Vec<String>,
+    /// FR-1f (trust list): ledgers allowed to back receipts for this issuer's default feed.
+    #[serde(default)]
+    allowed_ledgers: Vec<String>,
     /// FR-1e: named feeds this issuer may publish, with their SVN floor.
     #[serde(default)]
     feed: Vec<FragmentFeedConfig>,
@@ -938,6 +958,12 @@ struct FragmentFeedConfig {
     name: String,
     #[serde(default)]
     min_svn: u64,
+    /// FR-1f (trust list): ledgers a receipt for this feed must come from.
+    #[serde(default)]
+    required_receipt_from: Vec<String>,
+    /// FR-1f (trust list): ledgers allowed to back receipts for this feed.
+    #[serde(default)]
+    allowed_ledgers: Vec<String>,
 }
 
 #[cfg(feature = "strict-policy")]
@@ -980,7 +1006,22 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
         store
             .set_transparency_anchor(&key)
             .map_err(|e| anyhow::anyhow!("set transparency anchor: {}", e))?;
-        info!(logger, "FR-1: transparency anchor configured");
+        info!(logger, "FR-1: transparency anchor configured (default ledger)");
+    }
+    // FR-1f (trust list): load named ledgers with rotatable keys.
+    if !cfg.ledger.is_empty() {
+        let mut entries: Vec<(String, Vec<[u8; 32]>)> = Vec::with_capacity(cfg.ledger.len());
+        for l in &cfg.ledger {
+            let mut keys = Vec::with_capacity(l.pubkey_hex.len());
+            for k in &l.pubkey_hex {
+                keys.push(decode_hex32(k).with_context(|| format!("ledger {} key", l.id))?);
+            }
+            entries.push((l.id.clone(), keys));
+        }
+        store
+            .load_transparency_trust_list(&entries)
+            .map_err(|e| anyhow::anyhow!("load transparency trust list: {}", e))?;
+        info!(logger, "FR-1: transparency trust list loaded"; "ledgers" => cfg.ledger.len());
     }
     for issuer in &cfg.issuer {
         let key = decode_hex32(&issuer.ed25519_pubkey_hex)
@@ -989,9 +1030,27 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
             .authorize_issuer(issuer.id.clone(), &key)
             .map_err(|e| anyhow::anyhow!("authorize issuer {}: {}", issuer.id, e))?;
         store.set_min_svn(issuer.id.clone(), issuer.min_svn);
+        // FR-1f (trust list): default-feed receipt scoping for this issuer.
+        if !issuer.allowed_ledgers.is_empty() {
+            store.set_allowed_ledgers(issuer.id.clone(), "", &issuer.allowed_ledgers);
+        }
+        if !issuer.required_receipt_from.is_empty() {
+            store.require_receipt_for(issuer.id.clone(), "", &issuer.required_receipt_from);
+        }
         // FR-1e: declare named feeds for this issuer.
         for feed in &issuer.feed {
             store.declare_feed(issuer.id.clone(), feed.name.clone(), feed.min_svn);
+            // FR-1f (trust list): per-feed receipt scoping.
+            if !feed.allowed_ledgers.is_empty() {
+                store.set_allowed_ledgers(issuer.id.clone(), feed.name.clone(), &feed.allowed_ledgers);
+            }
+            if !feed.required_receipt_from.is_empty() {
+                store.require_receipt_for(
+                    issuer.id.clone(),
+                    feed.name.clone(),
+                    &feed.required_receipt_from,
+                );
+            }
         }
         info!(logger, "FR-1: authorized fragment issuer";
             "issuer" => &issuer.id, "min-svn" => issuer.min_svn, "feeds" => issuer.feed.len());

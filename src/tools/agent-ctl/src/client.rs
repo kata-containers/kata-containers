@@ -2220,7 +2220,7 @@ fn agent_cmd_sandbox_add_swap(
 // FR-1: load a signed policy fragment. Arguments are space-separated key=value pairs to
 // avoid protobuf-bytes-in-JSON ambiguity:
 //   LoadPolicyFragment issuer=<id> svn=<n> includes=<csv> receipt=<r> \
-//       module=<path-to-rego> sig=<hex>
+//       receipt_ledger=<ledger-id> module=<path-to-rego> sig=<hex> cose=<hex>
 fn agent_cmd_load_policy_fragment(
     ctx: &Context,
     client: &AgentServiceClient,
@@ -2272,6 +2272,7 @@ fn agent_cmd_load_policy_fragment(
         .map(|s| s.to_string())
         .collect();
     req.receipt = get("receipt");
+    req.receipt_ledger = get("receipt_ledger");
     req.signature = signature;
     req.policy_module = policy_module;
     // FR-1h: optional COSE_Sign1 envelope (hex) — verified instead of the detached sig.

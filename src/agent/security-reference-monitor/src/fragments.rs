@@ -27,6 +27,10 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+/// The ledger id used for a receipt that does not name one, and for the back-compat
+/// single-anchor configuration (`set_transparency_anchor`).
+pub const DEFAULT_LEDGER: &str = "default";
+
 /// A policy fragment presented for loading.
 #[derive(Debug, Clone, Default)]
 pub struct PolicyFragment {
@@ -48,10 +52,17 @@ pub struct PolicyFragment {
     /// FR-1g: identifiers of fragments that must already be loaded before this one
     /// (composition). A fragment id is `"<issuer>/<feed>/<svn>"`.
     pub requires: Vec<String>,
-    /// FR-1f: transparency receipt — a detached signature (hex) by the transparency anchor
-    /// over [`PolicyFragment::signing_bytes`]. Required when receipts are enforced; verified
-    /// against a measured anchor when one is configured.
+    /// FR-1f: transparency receipt — a detached signature (hex) by a transparency ledger
+    /// key over [`PolicyFragment::signing_bytes`]. Required when receipts are enforced;
+    /// verified against a measured trust list when one is configured.
     pub receipt: Option<String>,
+    /// FR-1f (trust list): the transparency ledger this receipt is claimed to originate
+    /// from. Selects which ledger's key(s) the receipt is verified against and is subject to
+    /// `allowed_ledgers`/`required_receipt_from` scoping. `None`/empty = the default ledger
+    /// (back-compat with a single-anchor configuration). This is *untrusted* metadata: it
+    /// only selects a key set; a receipt is accepted only if that ledger's key actually
+    /// signed the statement, so a forged ledger id cannot bypass verification.
+    pub receipt_ledger: Option<String>,
     /// Detached Ed25519 signature (by the issuer) over [`PolicyFragment::signing_bytes`].
     pub signature: Vec<u8>,
 }
@@ -131,8 +142,14 @@ pub enum FragmentError {
     },
     /// Receipts are enforced but the fragment carries none.
     MissingReceipt,
-    /// FR-1f: the transparency receipt does not verify against the configured anchor.
+    /// FR-1f: the transparency receipt does not verify against the configured trust list.
     InvalidReceipt,
+    /// FR-1f (trust list): the receipt's ledger is not in the `allowed_ledgers` scope for
+    /// this `(issuer, feed)`.
+    LedgerNotAllowed { issuer: String, feed: String, ledger: String },
+    /// FR-1f (trust list): a receipt is required from a specific ledger for this scope, but
+    /// the presented receipt originates from a different (or unspecified) ledger.
+    ReceiptFromDisallowedLedger { required: String, presented: String },
     /// FR-1e: the fragment's `(issuer, feed)` pair is not declared/accepted.
     UndeclaredFeed { issuer: String, feed: String },
     /// FR-1g: a required (dependency) fragment has not been loaded.
@@ -156,6 +173,14 @@ impl fmt::Display for FragmentError {
             ),
             FragmentError::MissingReceipt => write!(f, "fragment is missing a transparency receipt"),
             FragmentError::InvalidReceipt => write!(f, "fragment transparency receipt is invalid"),
+            FragmentError::LedgerNotAllowed { issuer, feed, ledger } => write!(
+                f,
+                "receipt ledger {ledger:?} not allowed for issuer {issuer}, feed {feed:?}"
+            ),
+            FragmentError::ReceiptFromDisallowedLedger { required, presented } => write!(
+                f,
+                "receipt required from ledger {required:?}, but presented from {presented:?}"
+            ),
             FragmentError::UndeclaredFeed { issuer, feed } => {
                 write!(f, "undeclared fragment feed: issuer {issuer}, feed {feed:?}")
             }
@@ -182,9 +207,19 @@ pub struct FragmentStore {
     root_constraints: HashSet<String>,
     require_receipt: bool,
     active_grants: HashSet<String>,
-    /// FR-1f: transparency anchor public key; when set, receipts are cryptographically
-    /// verified against it (not just checked for presence).
-    transparency_anchor: Option<VerifyingKey>,
+    /// FR-1f (trust list): the Transparency Trust List — a map of ledger id to that
+    /// ledger's current verification key(s). Multiple keys per ledger support rotation: a
+    /// receipt verifies if *any* current key of the named ledger validates it. When
+    /// non-empty, a fragment's receipt is cryptographically verified against the selected
+    /// ledger's keys.
+    transparency_trust_list: HashMap<String, Vec<VerifyingKey>>,
+    /// FR-1f (trust list): per-`(issuer, feed)` allow-list of ledger ids. A receipt whose
+    /// ledger is not in this list (when the list is non-empty) is rejected.
+    allowed_ledgers: HashMap<(String, String), Vec<String>>,
+    /// FR-1f (trust list): per-`(issuer, feed)` policy-driven receipt requirement — the set
+    /// of ledgers a receipt must originate from for this scope. Non-empty ⇒ a receipt from
+    /// one of these ledgers is mandatory (overrides the global `require_receipt` default).
+    required_receipt_from: HashMap<(String, String), Vec<String>>,
     /// FR-1g: identifiers of fragments that have been loaded (for composition).
     loaded_ids: HashSet<String>,
 }
@@ -231,13 +266,57 @@ impl FragmentStore {
         self.feeds.insert((issuer.into(), feed.into()), min_svn);
     }
 
-    /// FR-1f: set the transparency anchor public key. When set, a fragment's receipt is
-    /// cryptographically verified against it (a detached signature over the fragment
-    /// statement); without an anchor, receipts are only checked for presence.
-    pub fn set_transparency_anchor(&mut self, public_key: &[u8; 32]) -> Result<(), FragmentError> {
-        let key = VerifyingKey::from_bytes(public_key).map_err(|_| FragmentError::InvalidSignature)?;
-        self.transparency_anchor = Some(key);
+    /// FR-1f (trust list): load the Transparency Trust List — a set of `(ledger_id, keys)`
+    /// entries from measured state. Each ledger may carry multiple keys to support rotation
+    /// (a receipt verifies against any current key). Invalid keys are rejected.
+    pub fn load_transparency_trust_list(
+        &mut self,
+        entries: &[(String, Vec<[u8; 32]>)],
+    ) -> Result<(), FragmentError> {
+        for (id, keys) in entries {
+            let mut vks = Vec::with_capacity(keys.len());
+            for k in keys {
+                vks.push(VerifyingKey::from_bytes(k).map_err(|_| FragmentError::InvalidSignature)?);
+            }
+            self.transparency_trust_list
+                .entry(id.clone())
+                .or_default()
+                .extend(vks);
+        }
         Ok(())
+    }
+
+    /// FR-1f (trust list): scope the ledgers a receipt may originate from for a given
+    /// `(issuer, feed)`. A non-empty list rejects receipts from any other ledger.
+    pub fn set_allowed_ledgers(
+        &mut self,
+        issuer: impl Into<String>,
+        feed: impl Into<String>,
+        ledgers: &[String],
+    ) {
+        self.allowed_ledgers
+            .insert((issuer.into(), feed.into()), ledgers.to_vec());
+    }
+
+    /// FR-1f (trust list): policy-driven `required_receipts` — require a receipt from one of
+    /// `from_ledgers` for this `(issuer, feed)`. A non-empty list makes a receipt mandatory
+    /// for the scope (overriding the global default) and constrains its ledger.
+    pub fn require_receipt_for(
+        &mut self,
+        issuer: impl Into<String>,
+        feed: impl Into<String>,
+        from_ledgers: &[String],
+    ) {
+        self.required_receipt_from
+            .insert((issuer.into(), feed.into()), from_ledgers.to_vec());
+    }
+
+    /// FR-1f: set a single transparency anchor public key. Back-compat shim over the trust
+    /// list: registers the key under the default ledger. When set, a fragment's receipt is
+    /// cryptographically verified against it (a detached signature over the fragment
+    /// statement); without any trust-list entry, receipts are only checked for presence.
+    pub fn set_transparency_anchor(&mut self, public_key: &[u8; 32]) -> Result<(), FragmentError> {
+        self.load_transparency_trust_list(&[(DEFAULT_LEDGER.to_string(), vec![*public_key])])
     }
 
     /// Declare a grant that no fragment may ever introduce (a base-policy invariant).
@@ -354,18 +433,60 @@ impl FragmentStore {
             });
         }
 
-        // 5. Transparency receipt: required in strict mode, and cryptographically verified
-        //    against the anchor when one is configured (FR-1f).
+        // 5. Transparency receipt (FR-1f trust list): a receipt may be required globally or
+        //    per-scope (`required_receipt_from`); when present it must originate from an
+        //    allowed ledger and verify against one of that ledger's current keys.
         let receipt = fragment.receipt.as_deref().unwrap_or("");
-        if self.require_receipt && receipt.is_empty() {
-            return Err(FragmentError::MissingReceipt);
-        }
-        if let Some(anchor) = &self.transparency_anchor {
-            let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
-            let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
-            anchor
-                .verify(statement, &rsig)
-                .map_err(|_| FragmentError::InvalidReceipt)?;
+        let ledger = fragment
+            .receipt_ledger
+            .as_deref()
+            .filter(|l| !l.is_empty())
+            .unwrap_or(DEFAULT_LEDGER);
+
+        // Per-scope required ledgers (policy-driven `required_receipts`). A non-empty list
+        // makes a receipt mandatory for this scope and constrains its ledger.
+        let required = self.required_receipt_from.get(&feed_key);
+        let scope_requires = required.map(|r| !r.is_empty()).unwrap_or(false);
+
+        if receipt.is_empty() {
+            if scope_requires || self.require_receipt {
+                return Err(FragmentError::MissingReceipt);
+            }
+        } else {
+            // The presented ledger must be in the scope's allow-list (if one is set).
+            if let Some(allowed) = self.allowed_ledgers.get(&feed_key) {
+                if !allowed.is_empty() && !allowed.iter().any(|l| l == ledger) {
+                    return Err(FragmentError::LedgerNotAllowed {
+                        issuer: fragment.issuer.clone(),
+                        feed: fragment.feed.clone(),
+                        ledger: ledger.to_string(),
+                    });
+                }
+            }
+            // If the scope requires a receipt from a specific ledger, enforce it.
+            if let Some(req_ledgers) = required {
+                if !req_ledgers.is_empty() && !req_ledgers.iter().any(|l| l == ledger) {
+                    return Err(FragmentError::ReceiptFromDisallowedLedger {
+                        required: req_ledgers.join(","),
+                        presented: ledger.to_string(),
+                    });
+                }
+            }
+            // Cryptographic verification against the named ledger's key(s), when a trust
+            // list is configured. Any current key of that ledger may validate the receipt
+            // (rotation). An unknown ledger id has no keys ⇒ InvalidReceipt.
+            if !self.transparency_trust_list.is_empty() {
+                let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
+                let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
+                let keys = self
+                    .transparency_trust_list
+                    .get(ledger)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(&[]);
+                if !keys.iter().any(|k| k.verify(statement, &rsig).is_ok()) {
+                    return Err(FragmentError::InvalidReceipt);
+                }
+            }
         }
 
         // 6. FR-1g: every required (dependency) fragment must already be loaded.
@@ -707,6 +828,160 @@ mod tests {
             receipt: Some("receipt-1".to_string()),
             ..Default::default()
         }
+    }
+
+    /// Helper: build a ledger-signed receipt (hex) over a fragment's statement, tag its
+    /// ledger id, and issuer-sign the fragment.
+    fn signed_with_receipt(
+        issuer_sk: &SigningKey,
+        f: &mut PolicyFragment,
+        ledger: &str,
+        ledger_sk: &SigningKey,
+    ) {
+        f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+        let rsig = ledger_sk.sign(&f.signing_bytes());
+        f.receipt = Some(rsig.to_bytes().iter().map(|b| format!("{:02x}", b)).collect());
+        f.receipt_ledger = Some(ledger.to_string());
+    }
+
+    /// TC-F1.22 (FR-1f trust list): a multi-ledger trust list accepts a receipt from an
+    /// allowed ledger whose key signed the statement.
+    #[test]
+    fn trust_list_accepts_allowed_ledger() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (ledger_a_sk, ledger_a_pk) = keypair(20);
+        let (_ledger_b_sk, ledger_b_pk) = keypair(21);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store
+            .load_transparency_trust_list(&[
+                ("ledgerA".into(), vec![ledger_a_pk]),
+                ("ledgerB".into(), vec![ledger_b_pk]),
+            ])
+            .unwrap();
+
+        let mut f = frag_feed("issuerA", "", 1);
+        signed_with_receipt(&issuer_sk, &mut f, "ledgerA", &ledger_a_sk);
+        assert!(store.verify(&f).is_ok());
+
+        // A receipt tagged for ledgerB but signed by ledgerA's key does not verify against
+        // ledgerB's key -> InvalidReceipt (a forged ledger id cannot bypass verification).
+        f.receipt_ledger = Some("ledgerB".into());
+        assert_eq!(store.verify(&f).unwrap_err(), FragmentError::InvalidReceipt);
+    }
+
+    /// TC-F1.23 (FR-1f trust list): a receipt from a ledger outside the scope's
+    /// `allowed_ledgers` is rejected even if its signature is otherwise valid.
+    #[test]
+    fn trust_list_rejects_disallowed_ledger() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (ledger_a_sk, ledger_a_pk) = keypair(20);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store
+            .load_transparency_trust_list(&[("ledgerA".into(), vec![ledger_a_pk])])
+            .unwrap();
+        // Only ledgerB is allowed for the default feed, but the receipt is from ledgerA.
+        store.set_allowed_ledgers("issuerA", "", &["ledgerB".to_string()]);
+
+        let mut f = frag_feed("issuerA", "", 1);
+        signed_with_receipt(&issuer_sk, &mut f, "ledgerA", &ledger_a_sk);
+        assert_eq!(
+            store.verify(&f).unwrap_err(),
+            FragmentError::LedgerNotAllowed {
+                issuer: "issuerA".into(),
+                feed: "".into(),
+                ledger: "ledgerA".into(),
+            }
+        );
+    }
+
+    /// TC-F1.24 (FR-1f trust list): policy-driven `required_receipts` per feed — feed
+    /// "prod" requires a receipt from a specific ledger; feed "dev" requires none.
+    #[test]
+    fn per_feed_required_receipts_enforced() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (ledger_a_sk, ledger_a_pk) = keypair(20);
+        // Global receipt requirement off; requirement is expressed per-scope instead.
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.declare_feed("issuerA", "prod", 0);
+        store.declare_feed("issuerA", "dev", 0);
+        store
+            .load_transparency_trust_list(&[("ledgerA".into(), vec![ledger_a_pk])])
+            .unwrap();
+        store.require_receipt_for("issuerA", "prod", &["ledgerA".to_string()]);
+
+        // prod without a receipt -> MissingReceipt.
+        let mut prod_no = frag_feed("issuerA", "prod", 1);
+        prod_no.receipt = None;
+        sign(&issuer_sk, &mut prod_no);
+        assert_eq!(store.verify(&prod_no).unwrap_err(), FragmentError::MissingReceipt);
+
+        // prod with a receipt from a different ledger -> ReceiptFromDisallowedLedger.
+        let mut prod_wrong = frag_feed("issuerA", "prod", 1);
+        signed_with_receipt(&issuer_sk, &mut prod_wrong, "ledgerZ", &ledger_a_sk);
+        assert!(matches!(
+            store.verify(&prod_wrong).unwrap_err(),
+            FragmentError::ReceiptFromDisallowedLedger { .. }
+        ));
+
+        // prod with a valid receipt from the required ledger -> accepted.
+        let mut prod_ok = frag_feed("issuerA", "prod", 1);
+        signed_with_receipt(&issuer_sk, &mut prod_ok, "ledgerA", &ledger_a_sk);
+        assert!(store.verify(&prod_ok).is_ok());
+
+        // dev with no receipt -> accepted (no per-scope requirement, global off).
+        let mut dev_no = frag_feed("issuerA", "dev", 1);
+        dev_no.receipt = None;
+        sign(&issuer_sk, &mut dev_no);
+        assert!(store.verify(&dev_no).is_ok());
+    }
+
+    /// TC-F1.25 (FR-1f trust list): ledger key rotation — receipts signed by either the old
+    /// or the new key of a ledger both verify.
+    #[test]
+    fn ledger_key_rotation() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (old_sk, old_pk) = keypair(20);
+        let (new_sk, new_pk) = keypair(22);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        // Both keys are current for the same ledger (rotation window).
+        store
+            .load_transparency_trust_list(&[("ledgerA".into(), vec![old_pk, new_pk])])
+            .unwrap();
+
+        let mut f_old = frag_feed("issuerA", "", 1);
+        signed_with_receipt(&issuer_sk, &mut f_old, "ledgerA", &old_sk);
+        assert!(store.verify(&f_old).is_ok());
+
+        let mut f_new = frag_feed("issuerA", "", 2);
+        signed_with_receipt(&issuer_sk, &mut f_new, "ledgerA", &new_sk);
+        assert!(store.verify(&f_new).is_ok());
+    }
+
+    /// TC-F1.26 (FR-1f back-compat): a legacy single-anchor configuration (mapped to the
+    /// default ledger) behaves exactly as before — a valid anchor signature over the
+    /// statement is accepted; a bogus receipt is rejected. Preserves TC-F1.15/16 semantics.
+    #[test]
+    fn legacy_single_anchor_backcompat() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (anchor_sk, anchor_pk) = keypair(9);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.set_transparency_anchor(&anchor_pk).unwrap(); // -> default ledger
+
+        // Legacy fragment: no receipt_ledger set (defaults to the default ledger).
+        let mut f = frag_feed("issuerA", "", 1);
+        f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+        f.receipt = Some("deadbeef".into());
+        f.receipt_ledger = None;
+        assert_eq!(store.verify(&f).unwrap_err(), FragmentError::InvalidReceipt);
+
+        let rsig = anchor_sk.sign(&f.signing_bytes());
+        f.receipt = Some(rsig.to_bytes().iter().map(|b| format!("{:02x}", b)).collect());
+        assert!(store.verify(&f).is_ok());
     }
 
     /// TC-F1.13 (FR-1e): a fragment for an undeclared (issuer, feed) is rejected.

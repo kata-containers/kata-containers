@@ -2208,6 +2208,11 @@ impl agent_ttrpc::AgentService for AgentService {
             } else {
                 Some(req.receipt.clone())
             },
+            receipt_ledger: if req.receipt_ledger.is_empty() {
+                None
+            } else {
+                Some(req.receipt_ledger.clone())
+            },
             signature: req.signature.clone(),
         };
 

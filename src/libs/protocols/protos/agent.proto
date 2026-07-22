@@ -659,6 +659,10 @@ message LoadPolicyFragmentRequest {
 	// payload, for interop with COSE tooling. When present, it is verified instead of the
 	// detached `signature`.
 	bytes cose_sign1 = 10;
+	// FR-1f (trust list): the transparency ledger this receipt is claimed to originate
+	// from. Selects which ledger's key(s) the receipt is verified against and is subject to
+	// per-(issuer,feed) allowed_ledgers / required_receipts scoping. Empty = default ledger.
+	string receipt_ledger = 11;
 }
 
 message GetDiagnosticDataRequest {
