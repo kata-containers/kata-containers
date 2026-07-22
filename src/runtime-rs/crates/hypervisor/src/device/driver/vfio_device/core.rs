@@ -387,6 +387,17 @@ fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
         Some(cid_u32) => {
             // PCI class code is 24 bits, shift right 8 to get base+sub class
             let class_code = u64::from(cid_u32) >> 8;
+            // NVSwitches (PCI class 0x0680, "Bridge: Other") are passthrough-capable
+            // and required for NVLink in HGX/DGX confidential guests. They must
+            // NOT be filtered out: the 0x0600 bridge bitmask is a *subset* match
+            // (class_code & 0x0600 == 0x0600) that catches the whole 0x06 bridge
+            // base class — including 0x0680 — not just Host Bridges (0x0600) as
+            // the IOMMU_IGNORE comment implies. Without this exception, each
+            // NVSwitch (which sits in a singleton IOMMU group) is stripped, leaving
+            // an empty group -> "IOMMU group N has no passthrough-capable devices".
+            if class_code == 0x0680 {
+                return None;
+            }
             for &bitmask in bitmasks {
                 if class_code & bitmask == bitmask {
                     return Some(class_code);

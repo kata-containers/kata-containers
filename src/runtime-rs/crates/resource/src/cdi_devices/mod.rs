@@ -33,6 +33,12 @@ lazy_static! {
     pub static ref CDI_DEVICE_KIND_TABLE: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
         m.insert("0x10de-0x030", "nvidia.com/gpu");
+        // NVIDIA NVSwitch (PCI class 0x068000 -> "Bridge: Other"). Required for
+        // NVLink in HGX/DGX confidential guests. The kata-sandbox-device-plugin
+        // advertises it as nvidia.com/nvswitch; without this entry
+        // resolve_cdi_device_kind returns None and annotate_container_devices
+        // silently drops the NVSwitch (no CDI annotation -> not injected into guest).
+        m.insert("0x10de-0x068", "nvidia.com/nvswitch");
         m.insert("0x8086-0x030", "intel.com/gpu");
         m.insert("0x1002-0x030", "amd.com/gpu");
         m.insert("0x15b3-0x020", "nvidia.com/nic");
