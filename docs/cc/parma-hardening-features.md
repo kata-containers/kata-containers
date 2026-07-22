@@ -211,7 +211,11 @@ implement it, the security guarantee it introduces, and how it was validated.
   - **transparency Trust List** — receipts are validated at runtime against a measured
     trust list of ledgers (each with rotatable keys); per-`(issuer, feed)` `allowed_ledgers`
     scoping and policy-driven `required_receipts` decide which ledger(s) a receipt must come
-    from (a single legacy anchor maps to a default ledger for back-compat);
+    from (a single legacy anchor maps to a default ledger for back-compat). Receipts may be a
+    detached ledger signature or a **transparency-log inclusion + consistency proof** (RFC
+    6962 Merkle): the fragment must be provably recorded in an append-only log whose signed
+    tree head only ever grows (a rewound/forked log is rejected; the head is persisted
+    raise-only across restart);
   - **issuer identity** — either a pinned Ed25519 key **or** a `did:x509` certificate chain
     in the COSE `x5chain` header: path-validated to a measured CA fingerprint, leaf must
     satisfy a `did:x509` policy (subject CN / EKU / DNS SAN), revoked fingerprints rejected;
@@ -242,20 +246,22 @@ implement it, the security guarantee it introduces, and how it was validated.
   `ff8a4d5b9`,`c6b52c2ba`,`69228f3b5` (Iteration 2: feed scoping, cryptographic receipts,
   chaining); `c0ea3cb25`,`f7ed23319`,`93e1ff6e5` (Iteration 3: SVN persistence, COSE_Sign1);
   `db24d40f5` (Iteration 4: transparency trust list), `9cddd7f75` (did:x509 identity),
-  `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo);
+  `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo), Stage 2
+  transparency-log inclusion + consistency proofs (RFC 6962 Merkle);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 77 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
-  did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering); an offline,
-  self-contained capability demo (`examples/fragment-demo` — asserts all of the above with no
-  cluster/openssl); **live E2E** — a base-denied exec becomes allowed only after a valid
-  signed fragment is loaded over vsock (`fr1-fragment-attack.sh`), again via a COSE_Sign1
-  envelope (`fr1-cose-attack.sh`), via a did:x509 chain (`fr1-x509-attack.sh`), and an
-  out-of-order fragment is rejected (`fr1-ordering-attack.sh`); wrong-key / payload-mismatch
-  / untrusted-CA / revoked / stale-order fragments rejected. Reproducible dev guide:
-  `docs/cc/fr1-fragment-e2e.md`.
-- **Follow-up (optional):** SCITT Merkle inclusion + consistency proofs anchoring the
-  ordering log in an external transparency ledger; RSA/ES384 leaf algorithms for did:x509;
-  binding the issuer config + SVN/ordering state into the initdata measured section proper.
+- **Validated:** 84 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
+  did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering/Merkle-inclusion/
+  consistency); an offline, self-contained capability demo (`examples/fragment-demo` —
+  asserts all of the above with no cluster/openssl); **live E2E** — a base-denied exec
+  becomes allowed only after a valid signed fragment is loaded over vsock
+  (`fr1-fragment-attack.sh`), again via a COSE_Sign1 envelope (`fr1-cose-attack.sh`), via a
+  did:x509 chain (`fr1-x509-attack.sh`); an out-of-order fragment is rejected
+  (`fr1-ordering-attack.sh`); and a fragment without a transparency-log inclusion+consistency
+  proof, or one presenting a rewound log, is rejected (`fr1-ttl-attack.sh`). Reproducible dev
+  guide: `docs/cc/fr1-fragment-e2e.md`.
+- **Follow-up (optional):** additional signature algorithms (RSA/ES384) for did:x509 leaves
+  and receipts behind the existing verification entry points; binding the issuer config +
+  SVN/ordering/tree-head state into the initdata measured section proper.
 
 ---
 
