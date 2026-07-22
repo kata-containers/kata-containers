@@ -161,9 +161,13 @@ pub struct CustomRuntime {
     pub containerd_snapshotter: Option<String>,
     /// CRI-O pull type (e.g., "guest-pull")
     pub crio_pull_type: Option<String>,
-    /// True for kata-deploy-synthesized debug variant runtimes (kata-<shim>-debug).
-    /// Guest debug settings are applied only on these handlers.
+    /// True for kata-deploy-synthesized debug variant runtimes (kata-<shim>-debug
+    /// and kata-<shim>-devkit). Guest debug settings are applied only on these
+    /// handlers.
     pub debug_variant: bool,
+    /// True for the devkit runtime (kata-<shim>-devkit), which is a debug variant
+    /// with an extra drop-in wiring the extension image and debug console shell.
+    pub devkit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +206,11 @@ pub struct Config {
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
+    /// Install the devkit extension and a kata-<shim>-devkit custom runtime per
+    /// enabled shim. From the DEVKIT env var, honored only when debug is also on:
+    /// the devkit drop-in enables the agent debug console, which must never come
+    /// up without debug.
+    pub devkit_enabled: bool,
     /// EROFS snapshotter rw-layer backing mode ("disk" or "memory").
     pub erofs_snapshotter_mode: Option<String>,
     /// Enable dm-verity integrity for EROFS lower layers.
@@ -348,17 +357,18 @@ impl Config {
                 .map(|s| s.trim().to_string())
                 .collect();
 
-        // Parse custom runtimes from ConfigMap and synthesize debug variant runtimes.
-        let mut custom_runtimes_enabled =
+        // Parse custom runtimes from ConfigMap
+        let custom_runtimes_from_configmap =
             env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
-        let mut custom_runtimes = if custom_runtimes_enabled {
+        let mut custom_runtimes = if custom_runtimes_from_configmap {
             parse_custom_runtimes()?
         } else {
             Vec::new()
         };
 
         if debug {
-            synthesize_debug_variant_runtimes(
+            synthesize_variant_runtimes(
+                Variant::Debug,
                 &shims_for_arch,
                 multi_install_suffix.as_deref(),
                 snapshotter_handler_mapping_for_arch.as_deref(),
@@ -367,9 +377,27 @@ impl Config {
             );
         }
 
-        if !custom_runtimes.is_empty() {
-            custom_runtimes_enabled = true;
+        // Gate devkit on debug: the devkit drop-in turns on the agent debug
+        // console, so honoring DEVKIT without DEBUG would silently enable it,
+        // breaking the "only effective with debug" contract.
+        let devkit_requested = env::var("DEVKIT").unwrap_or_else(|_| "false".to_string()) == "true";
+        if devkit_requested && !debug {
+            log::warn!("DEVKIT=true ignored: it requires DEBUG=true to take effect");
         }
+        let devkit_enabled = devkit_requested && debug;
+        if devkit_enabled {
+            synthesize_variant_runtimes(
+                Variant::Devkit,
+                &shims_for_arch,
+                multi_install_suffix.as_deref(),
+                snapshotter_handler_mapping_for_arch.as_deref(),
+                pull_type_mapping_for_arch.as_deref(),
+                &mut custom_runtimes,
+            );
+        }
+
+        // Enable the custom-runtime code paths if either source produced entries.
+        let custom_runtimes_enabled = !custom_runtimes.is_empty();
 
         let erofs_snapshotter_mode = env::var("EROFS_SNAPSHOTTER_MODE")
             .ok()
@@ -418,6 +446,7 @@ impl Config {
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
+            devkit_enabled,
             erofs_snapshotter_mode,
             erofs_dmverity,
             startup_taints,
@@ -895,6 +924,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             containerd_snapshotter,
             crio_pull_type,
             debug_variant: false,
+            devkit: false,
         });
     }
 
@@ -921,36 +951,78 @@ fn lookup_mapping_value(mapping: &str, shim: &str) -> Option<String> {
     })
 }
 
-/// When DEBUG=true, append a debug variant custom runtime per enabled shim.
-/// These handlers carry the full guest debug configuration so the normal shim
-/// RuntimeClass keeps a stable kernel cmdline for measurements.
+/// A RuntimeClass kata-deploy synthesizes for a shim, in addition to the plain
+/// one. Both carry guest debug configuration, which is what keeps it off the
+/// plain RuntimeClass and its kernel cmdline stable for measurements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Variant {
+    /// kata-<shim>-debug: guest debug configuration.
+    Debug,
+    /// kata-<shim>-devkit: the same, plus the devkit extension image and the
+    /// debug console shell it carries.
+    Devkit,
+}
+
+impl Variant {
+    /// Suffix distinguishing the variant's handler from the plain one.
+    fn suffix(&self) -> &'static str {
+        match self {
+            Self::Debug => "debug",
+            Self::Devkit => "devkit",
+        }
+    }
+}
+
+/// The handler name, and hence the RuntimeClass name, of a shim's variant.
+///
+/// In one place because the cleanup of stale variants has to look for exactly
+/// the names the synthesis below produced, multi-install suffix and all.
+pub fn variant_handler(shim: &str, multi_install_suffix: Option<&str>, variant: Variant) -> String {
+    let suffix = variant.suffix();
+    match multi_install_suffix {
+        Some(install_suffix) if !install_suffix.is_empty() => {
+            format!("kata-{shim}-{install_suffix}-{suffix}")
+        }
+        _ => format!("kata-{shim}-{suffix}"),
+    }
+}
+
+/// Append a variant custom runtime per enabled shim, modelling them as custom
+/// runtimes so they reuse the whole install/register/cleanup machinery: all
+/// that distinguishes them is which drop-ins install.rs writes.
 ///
 /// The handler is derived from the standard runtime name (kata-<shim>, or
 /// kata-<shim>-<suffix> under a multi-install) so concurrent kata-deploy
-/// instances on the same node do not fight over one debug handler.
-fn synthesize_debug_variant_runtimes(
+/// instances on the same node do not fight over one variant handler.
+fn synthesize_variant_runtimes(
+    variant: Variant,
     shims_for_arch: &[String],
     multi_install_suffix: Option<&str>,
     snapshotter_handler_mapping_for_arch: Option<&str>,
     pull_type_mapping_for_arch: Option<&str>,
     custom_runtimes: &mut Vec<CustomRuntime>,
 ) {
+    let suffix = variant.suffix();
+
     for shim in shims_for_arch {
-        let handler = match multi_install_suffix {
-            Some(suffix) if !suffix.is_empty() => format!("kata-{shim}-{suffix}-debug"),
-            _ => format!("kata-{shim}-debug"),
-        };
+        let handler = variant_handler(shim, multi_install_suffix, variant);
         if custom_runtimes.iter().any(|r| r.handler == handler) {
             continue;
         }
 
+        // Inherit the base shim's image-pulling config: the variant RuntimeClass
+        // shares the base config (same shared_fs), so it must pull the same way.
+        // Otherwise containerd/CRI-O default to overlayfs/node-pull, which breaks
+        // shims running shared_fs = none (e.g. nvidia runtime-rs) and makes every
+        // pod on the variant terminate.
         let containerd_snapshotter = snapshotter_handler_mapping_for_arch
             .and_then(|mapping| lookup_mapping_value(mapping, shim));
         let crio_pull_type =
             pull_type_mapping_for_arch.and_then(|mapping| lookup_mapping_value(mapping, shim));
 
         log::info!(
-            "Synthesizing debug variant runtime: handler={}, base_config={}",
+            "Synthesizing {} variant runtime: handler={}, base_config={}",
+            suffix,
             handler,
             shim
         );
@@ -962,6 +1034,7 @@ fn synthesize_debug_variant_runtimes(
             containerd_snapshotter,
             crio_pull_type,
             debug_variant: true,
+            devkit: variant == Variant::Devkit,
         });
     }
 }
@@ -1071,6 +1144,7 @@ mod tests {
             "CONTAINERD_CONFIG_FILE_NAME",
             "STARTUP_TAINTS",
             "CUSTOM_RUNTIMES_ENABLED",
+            "DEVKIT",
         ];
         for var in &vars {
             std::env::remove_var(var);
@@ -1217,6 +1291,155 @@ mod tests {
         );
 
         cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_disabled_by_default() {
+        setup_minimal_env();
+
+        let config = Config::from_env().unwrap();
+
+        assert!(!config.devkit_enabled);
+        assert!(config.custom_runtimes.iter().all(|r| !r.devkit));
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_requires_debug() {
+        setup_minimal_env();
+        // DEBUG defaults to false in setup_minimal_env.
+        std::env::set_var("DEVKIT", "true");
+
+        let config = Config::from_env().unwrap();
+
+        assert!(!config.devkit_enabled);
+        assert!(config.custom_runtimes.iter().all(|r| !r.devkit));
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_synthesizes_per_shim_runtime() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+
+        let config = Config::from_env().unwrap();
+
+        assert!(config.devkit_enabled);
+        assert!(config.custom_runtimes_enabled);
+
+        // setup_minimal_env configures a single "qemu" shim for this arch.
+        let devkit: Vec<_> = config.custom_runtimes.iter().filter(|r| r.devkit).collect();
+        assert_eq!(devkit.len(), 1);
+        assert_eq!(devkit[0].handler, "kata-qemu-devkit");
+        assert_eq!(devkit[0].base_config, "qemu");
+        assert!(devkit[0].drop_in_file.is_none());
+        // With no snapshotter/pull-type mapping, the devkit runtime inherits
+        // nothing and containerd/CRI-O use their defaults for the base shim.
+        assert!(devkit[0].containerd_snapshotter.is_none());
+        assert!(devkit[0].crio_pull_type.is_none());
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_inherits_base_shim_snapshotter_and_pull_type() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+        // The base "qemu" shim is mapped to the erofs snapshotter / guest-pull;
+        // its devkit variant must inherit both so pods on the devkit
+        // RuntimeClass pull images the same way as the base shim (crucial for
+        // shims running with shared_fs = none).
+        set_arch_var("SNAPSHOTTER_HANDLER_MAPPING", "qemu:erofs");
+        set_arch_var("PULL_TYPE_MAPPING", "qemu:guest-pull");
+
+        let config = Config::from_env().unwrap();
+
+        let devkit: Vec<_> = config.custom_runtimes.iter().filter(|r| r.devkit).collect();
+        assert_eq!(devkit.len(), 1);
+        assert_eq!(devkit[0].handler, "kata-qemu-devkit");
+        assert_eq!(devkit[0].containerd_snapshotter.as_deref(), Some("erofs"));
+        assert_eq!(devkit[0].crio_pull_type.as_deref(), Some("guest-pull"));
+
+        cleanup_env_vars();
+    }
+
+    /// Guest debug lives on the variant RuntimeClasses rather than the plain
+    /// one, so the devkit RuntimeClass has to be a debug variant as well:
+    /// otherwise the class whose whole purpose is debugging would boot a guest
+    /// with no agent debug console to reach.
+    #[serial]
+    #[test]
+    fn test_devkit_runtime_is_also_a_debug_variant() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+
+        let config = Config::from_env().unwrap();
+
+        let devkit = config
+            .custom_runtimes
+            .iter()
+            .find(|r| r.devkit)
+            .expect("expected synthesized devkit runtime");
+        assert!(devkit.debug_variant);
+
+        // And the plain debug variant is still there, on its own handler.
+        let handlers: Vec<_> = config
+            .custom_runtimes
+            .iter()
+            .map(|r| r.handler.as_str())
+            .collect();
+        assert_eq!(handlers, vec!["kata-qemu-debug", "kata-qemu-devkit"]);
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_handler_includes_multi_install_suffix() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+        std::env::set_var("MULTI_INSTALL_SUFFIX", "dev");
+
+        let config = Config::from_env().unwrap();
+
+        let devkit = config
+            .custom_runtimes
+            .iter()
+            .find(|r| r.devkit)
+            .expect("expected synthesized devkit runtime");
+        // Same reason as the debug variant: two kata-deploy instances on one
+        // node must not share a handler.
+        assert_eq!(devkit.handler, "kata-qemu-dev-devkit");
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_lookup_mapping_value() {
+        let mapping = "qemu:erofs, fc:nydus,clh:";
+        assert_eq!(
+            lookup_mapping_value(mapping, "qemu").as_deref(),
+            Some("erofs")
+        );
+        // Entries may carry surrounding whitespace.
+        assert_eq!(
+            lookup_mapping_value(mapping, "fc").as_deref(),
+            Some("nydus")
+        );
+        // Empty value is treated as absent.
+        assert!(lookup_mapping_value(mapping, "clh").is_none());
+        // Unknown shim.
+        assert!(lookup_mapping_value(mapping, "stratovirt").is_none());
+        // Nothing mapped at all.
+        assert!(lookup_mapping_value("", "qemu").is_none());
     }
 
     #[serial]
@@ -1781,19 +2004,5 @@ mod tests {
         assert_eq!(debug_variant.crio_pull_type.as_deref(), Some("guest-pull"));
 
         cleanup_env_vars();
-    }
-
-    #[test]
-    fn test_lookup_mapping_value() {
-        assert_eq!(
-            lookup_mapping_value("qemu:nydus,fc:devmapper", "qemu").as_deref(),
-            Some("nydus")
-        );
-        assert_eq!(
-            lookup_mapping_value("qemu:nydus,fc:devmapper", "fc").as_deref(),
-            Some("devmapper")
-        );
-        assert!(lookup_mapping_value("qemu:nydus", "missing").is_none());
-        assert!(lookup_mapping_value("", "qemu").is_none());
     }
 }
