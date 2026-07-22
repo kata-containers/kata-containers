@@ -52,7 +52,7 @@ implement it, the security guarantee it introduces, and how it was validated.
 | FR-4A | Ordered bijective resource graph | `6f8f42eea` |
 | FR-11 | Trusted device/CDI resolution + occurrence binding | `9669a913b`, `0f3aa0f2f` |
 | FR-10 | Disable generic CopyFile in strict | `0b41cf8a4` |
-| FR-1 | Signed, add-only policy fragments | `11285337c`, `4ccd43f8a` |
+| FR-1 | Signed, add-only policy fragments (feed scoping, receipts, chaining, COSE, applied to live engine) | `11285337c`, `4ccd43f8a`, `bf602cb18`, `dd2630053`, `294353a2a`, `ff8a4d5b9`, `c6b52c2ba`, `69228f3b5`, `c0ea3cb25`, `f7ed23319`, `93e1ff6e5`, `392d890a8`, `adaa7558b` |
 | FR-5 | Encrypted scratch by effective mode | `44d6f9d04`, `b1603c3a6` |
 | FR-4B | Mount bound to the checked handle (TOCTOU) | `44d6f9d04`, `dbea0d59b` |
 | FR-14 | Network phase binding | `44d6f9d04`, `8cf9c5785` |
@@ -194,21 +194,48 @@ implement it, the security guarantee it introduces, and how it was validated.
   `PERMISSION_DENIED`; matrix no-regression (pod creation does not require CopyFile).
 
 ### FR-1 — Signed, add-only policy fragments
-- **Gap:** dynamically extending a policy at runtime is unsafe unless every extension is
-  authenticated, monotonic, and incapable of relaxing a base invariant.
-- **Fix:** a fragment verifier requires an authorized-issuer Ed25519 signature, a strictly
-  monotonic per-issuer SVN, add-only/fail-closed semantics against declared root
-  constraints, and a transparency receipt. A new `LoadPolicyFragment` RPC is doubly
-  mediated (policy `is_allowed` + signature verification) and fail-closed (no authorized
-  issuers ⇒ every fragment rejected).
-- **Guarantee:** unsigned, wrong-issuer, rolled-back, over-broad, or receipt-less fragments
-  are rejected; extensions can only add narrowly-scoped grants.
-- **Commits:** `11285337c` (verifier), `4ccd43f8a` (RPC wiring).
-- **Validated:** unit tests with generated keys (accept / unsigned / wrong-issuer /
-  rolled-back-SVN / over-broad / missing-receipt); the FR-7 mediation CI forced the new RPC
-  to be classified.
-- **Follow-up:** apply accepted grants into live rego re-evaluation; configure issuers and
-  verify transparency receipts from measured state.
+- **Gap:** the base policy is one-shot/immutable within an epoch (FR-12), but some
+  deployments need to *extend* what a workload may do at runtime without a new attestation.
+  Doing so is unsafe unless every extension is authenticated, monotonic, scope-limited, and
+  incapable of relaxing a base invariant.
+- **Fix:** a fragment carries a **signed Rego module** (the statement binds issuer, feed,
+  SVN, grants, includes, requires, and module). It is verified and, on success, **merged
+  into the live policy engine** so it changes authorization at enforcement time — via an
+  additive, namespace-scoped `add_policy` that never touches the one-shot `set_policy` lock.
+  Verification is a chain of fail-closed gates:
+  - **authorized issuer** (Ed25519), signature over the statement;
+  - **feed scoping** — the base declares accepted `(issuer, feed)` pairs; an undeclared feed
+    is rejected;
+  - **strictly-monotonic per-`(issuer, feed)` SVN**, with a declarative floor from measured
+    state, persisted across restart (import can only raise the floor, never lower it);
+  - **transparency receipt** — required in strict mode and cryptographically verified against
+    a configured anchor;
+  - **add-only / includes scoping** — a module may only contribute in its declared
+    `agent_policy.fragments[.<include>]` namespace and can never redefine a base rule;
+  - **composition** — a fragment may `require` other fragments, which must already be loaded
+    (cycles/unbounded depth are impossible by construction).
+  The `LoadPolicyFragment` RPC is doubly mediated (policy `is_allowed` + fragment
+  verification) and fail-closed (no authorized issuers ⇒ every fragment rejected). Verify →
+  apply → commit is atomic. Both a native detached-Ed25519 signature and a **COSE_Sign1
+  (CBOR) envelope** are accepted (COSE via the pure-Rust `coset` crate; no Go dependency).
+  Issuers, feeds, SVN floors, and the transparency anchor are configured from measured state.
+- **Guarantee:** only signed, non-rolled-back, scope-limited policy extensions from an
+  attested-trusted issuer can change what the workload may do — auditably; unsigned,
+  wrong-issuer, rolled-back, undeclared-feed, over-broad, invalid-receipt, or
+  unsatisfied-requirement fragments are all rejected.
+- **Commits:** `11285337c`,`4ccd43f8a` (verifier + RPC); `bf602cb18`,`dd2630053`,`294353a2a`
+  (Iteration 1: apply-to-live-engine, attested trust root, structured payload);
+  `ff8a4d5b9`,`c6b52c2ba`,`69228f3b5` (Iteration 2: feed scoping, cryptographic receipts,
+  chaining); `c0ea3cb25`,`f7ed23319`,`93e1ff6e5` (Iteration 3: SVN persistence, COSE_Sign1);
+  `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
+- **Validated:** 16 fragment unit tests (issuer/signature/SVN/feed/receipt/includes/
+  chaining/persistence/COSE); **live E2E** — a base-denied exec becomes allowed only after a
+  valid signed fragment is loaded over vsock (`fr1-fragment-attack.sh`), and again via a
+  COSE_Sign1 envelope (`fr1-cose-attack.sh`); wrong-key / payload-mismatch fragments
+  rejected. Reproducible dev guide: `docs/cc/fr1-fragment-e2e.md`.
+- **Follow-up (optional):** `did:x509` certificate-chain issuer identity with rotation/
+  revocation (layers on the COSE `x5chain` header); binding the issuer config + SVN state
+  into the initdata measured section proper.
 
 ---
 
