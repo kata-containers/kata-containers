@@ -391,7 +391,44 @@ impl CloudHypervisorInner {
 
         unsafe {
             let selinux_label = self.config.security_info.selinux_label.clone();
+            let vmm_cgroup_path = self.vmm_cgroup_path.clone();
             let _pre = cmd.pre_exec(move || {
+                // Join the pod sandbox cgroup *before* exec (and therefore
+                // before the guest boots) so that every page the guest RAM
+                // first-touches during boot is charged to the pod cgroup.
+                // Under cgroup v2 there is no re-charging of already-faulted
+                // pages on migration, so placing the VMM here is the only way
+                // to account the guest's memory to the pod rather than to the
+                // cgroup the shim happened to spawn the VMM in.
+                if let Some(cgroup_procs) = &vmm_cgroup_path {
+                    use std::io::Write;
+                    // After fork() this returns the child's own PID, which is
+                    // the VMM process being exec'd next.
+                    let pid = std::process::id();
+                    // Open cgroup.procs write-only (no create/truncate): it is
+                    // a cgroupfs pseudo-file, so O_CREAT/O_TRUNC are pointless
+                    // and only add portability risk. Writing the pid with a
+                    // trailing newline is the conventional form.
+                    let res = std::fs::OpenOptions::new()
+                        .write(true)
+                        .open(cgroup_procs)
+                        .and_then(|mut f| f.write_all(format!("{pid}\n").as_bytes()));
+                    if let Err(e) = res {
+                        error!(
+                            sl!(),
+                            "Failed to move VMM into sandbox cgroup {}: {}", cgroup_procs, e
+                        );
+                        // Don't return error here to avoid breaking VM
+                        // startup; log and continue.
+                    } else {
+                        info!(
+                            sl!(),
+                            "Moved VMM (pid {}) into sandbox cgroup before boot: {}",
+                            pid,
+                            cgroup_procs
+                        );
+                    }
+                }
                 if let Some(netns_path) = &netns {
                     let netns_fd = std::fs::File::open(netns_path);
                     let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
