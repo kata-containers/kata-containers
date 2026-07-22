@@ -156,6 +156,18 @@ pub enum FragmentError {
     UnsatisfiedRequirement { requires: String },
     /// The fragment introduces a grant that would relax a declared root constraint.
     RootConstraintRelaxation(String),
+    /// FR-1d: the X.509 certificate chain (`x5chain`) is malformed, an unsupported
+    /// algorithm, or a link signature does not verify.
+    InvalidCertChain,
+    /// FR-1d: no configured CA anchor is present in the presented certificate chain.
+    UntrustedCa,
+    /// FR-1d: the derived `did:x509` (chain CA + leaf policy) does not match an authorized
+    /// anchor or the fragment's declared issuer.
+    DidX509Mismatch,
+    /// FR-1d: a certificate in the chain is on the measured revocation list.
+    RevokedCertificate,
+    /// FR-1d: a certificate in the chain is outside its validity window.
+    CertExpired,
 }
 
 impl fmt::Display for FragmentError {
@@ -190,6 +202,13 @@ impl fmt::Display for FragmentError {
             FragmentError::RootConstraintRelaxation(g) => {
                 write!(f, "fragment would relax a root constraint: {g}")
             }
+            FragmentError::InvalidCertChain => write!(f, "invalid X.509 certificate chain"),
+            FragmentError::UntrustedCa => write!(f, "no trusted CA anchor in certificate chain"),
+            FragmentError::DidX509Mismatch => {
+                write!(f, "did:x509 identity does not match an authorized anchor")
+            }
+            FragmentError::RevokedCertificate => write!(f, "certificate in chain is revoked"),
+            FragmentError::CertExpired => write!(f, "certificate in chain is outside validity"),
         }
     }
 }
@@ -222,6 +241,12 @@ pub struct FragmentStore {
     required_receipt_from: HashMap<(String, String), Vec<String>>,
     /// FR-1g: identifiers of fragments that have been loaded (for composition).
     loaded_ids: HashSet<String>,
+    /// FR-1d: authorized `did:x509` anchors (CA fingerprint + leaf policy), keyed by did.
+    did_x509_anchors: HashMap<String, crate::did_x509::DidX509Anchor>,
+    /// FR-1d: measured revocation list — SHA-256 fingerprints of revoked certificates.
+    revoked_certs: HashSet<[u8; 32]>,
+    /// FR-1d: when true, every fragment must present a valid `x5chain` (no raw-key path).
+    require_x509: bool,
 }
 
 impl FragmentStore {
@@ -319,6 +344,37 @@ impl FragmentStore {
         self.load_transparency_trust_list(&[(DEFAULT_LEDGER.to_string(), vec![*public_key])])
     }
 
+    /// FR-1d: authorize a `did:x509` issuer identity — a trusted CA (by fingerprint) plus a
+    /// leaf policy. A fragment presenting an `x5chain` that path-validates to this CA and
+    /// satisfies the policy is accepted as issued by `anchor.did`. Also declares the did's
+    /// default feed so simple x509 fragments (no explicit feed) are accepted.
+    pub fn authorize_did_x509(&mut self, anchor: crate::did_x509::DidX509Anchor) {
+        self.feeds.entry((anchor.did.clone(), String::new())).or_insert(0);
+        self.did_x509_anchors.insert(anchor.did.clone(), anchor);
+    }
+
+    /// FR-1d: set the measured certificate revocation list (SHA-256 fingerprints). Any chain
+    /// containing a revoked certificate is rejected.
+    pub fn set_revoked_certs(&mut self, fingerprints: impl IntoIterator<Item = [u8; 32]>) {
+        self.revoked_certs = fingerprints.into_iter().collect();
+    }
+
+    /// FR-1d: require every fragment to present a valid `x5chain` (disables the raw-key
+    /// path). Fail-closed: with this set, a fragment lacking an x509 chain is rejected.
+    pub fn set_require_x509(&mut self, required: bool) {
+        self.require_x509 = required;
+    }
+
+    /// Whether the raw-key issuer path is disabled (FR-1d strict x509 mode).
+    pub fn require_x509(&self) -> bool {
+        self.require_x509
+    }
+
+    /// Whether any `did:x509` anchor is configured.
+    pub fn has_did_x509_anchors(&self) -> bool {
+        !self.did_x509_anchors.is_empty()
+    }
+
     /// Declare a grant that no fragment may ever introduce (a base-policy invariant).
     pub fn add_root_constraint(&mut self, grant: impl Into<String>) {
         self.root_constraints.insert(grant.into());
@@ -405,9 +461,29 @@ impl FragmentStore {
         self.check_gates(fragment, &statement)
     }
 
-    /// The verification gates that follow signature verification (shared by the native and
-    /// COSE paths): feed declared, monotonic SVN, transparency receipt, requires loaded,
-    /// add-only.
+    /// FR-1d: verify a fragment whose COSE_Sign1 envelope carries a `did:x509` certificate
+    /// chain (`x5chain`). The chain is path-validated to a trusted CA anchor, the leaf must
+    /// satisfy the anchor's `did:x509` policy, no chain certificate may be revoked, and the
+    /// leaf key must sign the fragment statement. The derived `did` must equal the
+    /// fragment's declared issuer. After identity verification the same gates as
+    /// [`verify`](Self::verify) apply (feed, SVN, receipt, requires, add-only).
+    pub fn verify_cose_x509(
+        &self,
+        fragment: &PolicyFragment,
+        cose_sign1: &[u8],
+    ) -> Result<VerifiedFragment, FragmentError> {
+        let statement = fragment.signing_bytes();
+        let did = crate::did_x509::verify_x509_cose(
+            &self.did_x509_anchors,
+            &self.revoked_certs,
+            cose_sign1,
+            &statement,
+        )?;
+        if did != fragment.issuer {
+            return Err(FragmentError::DidX509Mismatch);
+        }
+        self.check_gates(fragment, &statement)
+    }
     fn check_gates(
         &self,
         fragment: &PolicyFragment,

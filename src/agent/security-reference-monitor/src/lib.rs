@@ -28,6 +28,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod cdi;
+pub mod did_x509;
 pub mod fragments;
 pub mod handle_binding;
 pub mod network_phase;
@@ -37,6 +38,7 @@ pub mod scratch;
 pub use cdi::{
     authorize_cdi, CdiDeviceRequest, CdiError, MeasuredCdiSpec, VerifiedCdiDevice,
 };
+pub use did_x509::{DidX509Anchor, DidX509Policy};
 pub use fragments::{FragmentError, FragmentStore, PolicyFragment};
 pub use handle_binding::{CheckedHandle, HandleError};
 pub use network_phase::{NetOp, NetPhaseError, NetworkPhase, NetworkPhaseMachine};

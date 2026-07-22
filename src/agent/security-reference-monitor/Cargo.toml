@@ -8,3 +8,20 @@ license.workspace = true
 [dependencies]
 ed25519-dalek = { version = "2", default-features = false }
 coset = "0.3"
+# FR-1d: did:x509 issuer identity — X.509 chain parsing + ECDSA(P-256) verification.
+# All pure-Rust (RustCrypto); no Go dependency is introduced.
+x509-cert = { version = "0.2", default-features = false }
+der = { version = "0.7", default-features = false, features = ["alloc"] }
+spki = { version = "0.7", default-features = false }
+const-oid = { version = "0.9", default-features = false }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8"] }
+sha2 = { version = "0.10", default-features = false, features = ["oid"] }
+base64ct = { version = "1", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+# Enable the certificate builder + full ECDSA signer for hermetic FR-1d unit tests
+# (mint a CA + leaf + rotated/expired leaves in-process; no openssl, no embedded blobs).
+x509-cert = { version = "0.2", default-features = false, features = ["builder"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "pem", "pkcs8"] }
+ecdsa = { version = "0.16", default-features = false, features = ["der", "alloc", "signing"] }
+rand_core = { version = "0.6", features = ["getrandom"] }

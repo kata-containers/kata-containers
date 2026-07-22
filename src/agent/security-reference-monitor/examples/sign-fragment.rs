@@ -41,6 +41,30 @@ fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
+/// Decode the first `CERTIFICATE` block of a PEM string into DER (for the x5chain header).
+fn pem_cert_to_der(pem: &str) -> Result<Vec<u8>, String> {
+    use base64ct::{Base64, Encoding};
+    let mut b64 = String::new();
+    let mut in_block = false;
+    for line in pem.lines() {
+        let t = line.trim();
+        if t == "-----BEGIN CERTIFICATE-----" {
+            in_block = true;
+            continue;
+        }
+        if t == "-----END CERTIFICATE-----" {
+            break;
+        }
+        if in_block {
+            b64.push_str(t);
+        }
+    }
+    if b64.is_empty() {
+        return Err("no CERTIFICATE block in pem".into());
+    }
+    Base64::decode_vec(&b64).map_err(|e| e.to_string())
+}
+
 /// Parse `--flag value` pairs from args. A `--flag` with no following value (end of args
 /// or immediately followed by another `--flag`) is recorded as a boolean (value "true").
 fn parse_flags(args: &[String]) -> HashMap<String, String> {
@@ -166,6 +190,41 @@ fn main() {
                     .protected(protected)
                     .payload(fragment.signing_bytes())
                     .create_signature(b"", |tbs| sk.sign(tbs).to_bytes().to_vec())
+                    .build();
+                println!("cose_sign1_hex={}", hex_encode(&sign1.to_vec().unwrap()));
+            }
+
+            // FR-1d: optionally emit a did:x509 COSE_Sign1 envelope: the statement is signed
+            // by an EC P-256 leaf key (ES256) and the leaf→CA chain is carried in the
+            // x5chain header (COSE label 33). --x509-key <leaf-priv-pem>
+            // --x509-chain <leaf.pem,intermediate.pem,...,ca.pem> (leaf first).
+            if let (Some(key_pem), Some(chain_paths)) = (f.get("x509-key"), f.get("x509-chain")) {
+                use coset::cbor::value::Value;
+                use coset::{iana, CborSerializable, CoseSign1Builder, HeaderBuilder};
+                use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+                use p256::pkcs8::DecodePrivateKey;
+
+                let key_text = std::fs::read_to_string(key_pem).expect("read x509 key pem");
+                let leaf_sk = SigningKey::from_pkcs8_pem(&key_text)
+                    .expect("parse EC P-256 leaf private key (PKCS#8 PEM)");
+
+                let mut chain: Vec<Value> = Vec::new();
+                for path in chain_paths.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                    let pem = std::fs::read_to_string(path).expect("read cert pem");
+                    let der = pem_cert_to_der(&pem).expect("decode CERTIFICATE pem");
+                    chain.push(Value::Bytes(der));
+                }
+                let mut unprotected = coset::Header::default();
+                unprotected.rest.push((coset::Label::Int(33), Value::Array(chain)));
+                let protected = HeaderBuilder::new().algorithm(iana::Algorithm::ES256).build();
+                let sign1 = CoseSign1Builder::new()
+                    .protected(protected)
+                    .unprotected(unprotected)
+                    .payload(fragment.signing_bytes())
+                    .create_signature(b"", |tbs| {
+                        let sig: Signature = leaf_sk.sign(tbs);
+                        sig.to_bytes().to_vec()
+                    })
                     .build();
                 println!("cose_sign1_hex={}", hex_encode(&sign1.to_vec().unwrap()));
             }

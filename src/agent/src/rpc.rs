@@ -2221,10 +2221,24 @@ impl agent_ttrpc::AgentService for AgentService {
         // verifies, and the store's SVN/grant state is committed only after the apply
         // succeeds. A failed apply leaves both the engine and the store unchanged.
         // FR-1h: if a COSE_Sign1 envelope is presented, verify through the COSE path.
+        // FR-1d: if the envelope carries an x5chain (or x509 is required), verify the
+        // did:x509 certificate-chain identity. Routing is deterministic and offers no
+        // downgrade: an x5chain-bearing envelope is always verified as x509.
         let verified = {
             let store = crate::FRAGMENTS.lock().await;
             let r = if req.cose_sign1.is_empty() {
-                store.verify(&fragment)
+                if store.require_x509() {
+                    Err(kata_security_reference_monitor::FragmentError::UntrustedCa)
+                } else {
+                    store.verify(&fragment)
+                }
+            } else if store.require_x509()
+                || (store.has_did_x509_anchors()
+                    && kata_security_reference_monitor::did_x509::cose_has_x5chain(
+                        &req.cose_sign1,
+                    ))
+            {
+                store.verify_cose_x509(&fragment, &req.cose_sign1)
             } else {
                 store.verify_cose(&fragment, &req.cose_sign1)
             };

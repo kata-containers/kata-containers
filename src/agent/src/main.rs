@@ -920,8 +920,41 @@ struct FragmentTrustConfig {
     /// FR-1f (trust list): the Transparency Trust List — named ledgers with rotatable keys.
     #[serde(default)]
     ledger: Vec<FragmentLedgerConfig>,
+    /// FR-1d: require every fragment to carry a valid did:x509 chain (no raw-key path).
+    #[serde(default)]
+    require_x509: Option<bool>,
+    /// FR-1d: measured certificate revocation list (SHA-256 fingerprints, hex).
+    #[serde(default)]
+    revoked: Vec<String>,
+    /// FR-1d: authorized did:x509 CA anchors.
+    #[serde(default, rename = "ca_anchor")]
+    ca_anchor: Vec<FragmentCaAnchorConfig>,
     #[serde(default)]
     issuer: Vec<FragmentIssuerConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct FragmentCaAnchorConfig {
+    /// The did:x509 issuer id this anchor authorizes (must equal a fragment's issuer).
+    did: String,
+    /// SHA-256 fingerprint (hex) of the trusted CA certificate DER. One of this or
+    /// `ca_cert_pem` must be set.
+    #[serde(default)]
+    ca_fingerprint_hex: Option<String>,
+    /// PEM of the trusted CA certificate (its fingerprint is derived). Alternative to
+    /// `ca_fingerprint_hex`.
+    #[serde(default)]
+    ca_cert_pem: Option<String>,
+    /// did:x509 policy over the leaf: required subject Common Name.
+    #[serde(default)]
+    require_subject_cn: Option<String>,
+    /// did:x509 policy: required leaf Extended Key Usage OIDs (dotted).
+    #[serde(default)]
+    require_eku: Vec<String>,
+    /// did:x509 policy: required leaf DNS SubjectAltName entries.
+    #[serde(default)]
+    require_san_dns: Vec<String>,
 }
 
 #[cfg(feature = "strict-policy")]
@@ -1022,6 +1055,38 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
             .load_transparency_trust_list(&entries)
             .map_err(|e| anyhow::anyhow!("load transparency trust list: {}", e))?;
         info!(logger, "FR-1: transparency trust list loaded"; "ledgers" => cfg.ledger.len());
+    }
+    // FR-1d: did:x509 issuer identity — require_x509, revocation list, CA anchors.
+    if let Some(rx) = cfg.require_x509 {
+        store.set_require_x509(rx);
+    }
+    if !cfg.revoked.is_empty() {
+        let mut fps = Vec::with_capacity(cfg.revoked.len());
+        for hexfp in &cfg.revoked {
+            fps.push(decode_hex32(hexfp).context("revoked cert fingerprint")?);
+        }
+        store.set_revoked_certs(fps);
+        info!(logger, "FR-1: revocation list loaded"; "revoked" => cfg.revoked.len());
+    }
+    for ca in &cfg.ca_anchor {
+        let ca_fingerprint = if let Some(hexfp) = &ca.ca_fingerprint_hex {
+            decode_hex32(hexfp).with_context(|| format!("ca_anchor {} fingerprint", ca.did))?
+        } else if let Some(pem) = &ca.ca_cert_pem {
+            kata_security_reference_monitor::did_x509::ca_fingerprint_from_pem(pem)
+                .map_err(|e| anyhow::anyhow!("ca_anchor {} pem: {}", ca.did, e))?
+        } else {
+            anyhow::bail!("ca_anchor {} needs ca_fingerprint_hex or ca_cert_pem", ca.did);
+        };
+        store.authorize_did_x509(kata_security_reference_monitor::DidX509Anchor {
+            did: ca.did.clone(),
+            ca_fingerprint,
+            policy: kata_security_reference_monitor::DidX509Policy {
+                require_subject_cn: ca.require_subject_cn.clone(),
+                require_eku: ca.require_eku.clone(),
+                require_san_dns: ca.require_san_dns.clone(),
+            },
+        });
+        info!(logger, "FR-1: authorized did:x509 anchor"; "did" => &ca.did);
     }
     for issuer in &cfg.issuer {
         let key = decode_hex32(&issuer.ed25519_pubkey_hex)
