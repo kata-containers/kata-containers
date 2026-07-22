@@ -208,34 +208,54 @@ implement it, the security guarantee it introduces, and how it was validated.
     is rejected;
   - **strictly-monotonic per-`(issuer, feed)` SVN**, with a declarative floor from measured
     state, persisted across restart (import can only raise the floor, never lower it);
-  - **transparency receipt** — required in strict mode and cryptographically verified against
-    a configured anchor;
+  - **transparency Trust List** — receipts are validated at runtime against a measured
+    trust list of ledgers (each with rotatable keys); per-`(issuer, feed)` `allowed_ledgers`
+    scoping and policy-driven `required_receipts` decide which ledger(s) a receipt must come
+    from (a single legacy anchor maps to a default ledger for back-compat);
+  - **issuer identity** — either a pinned Ed25519 key **or** a `did:x509` certificate chain
+    in the COSE `x5chain` header: path-validated to a measured CA fingerprint, leaf must
+    satisfy a `did:x509` policy (subject CN / EKU / DNS SAN), revoked fingerprints rejected;
+    trust anchored on **CA + policy** so leaf rotation needs no config change; `require_x509`
+    disables the raw-key path (no downgrade). Pure-Rust X.509/ECDSA; no Go dependency;
   - **add-only / includes scoping** — a module may only contribute in its declared
     `agent_policy.fragments[.<include>]` namespace and can never redefine a base rule;
   - **composition** — a fragment may `require` other fragments, which must already be loaded
     (cycles/unbounded depth are impossible by construction).
+  - **append-only application ordering** (opt-in) — a rolling, signed log head binds each
+    fragment to its predecessor (bound into the signed statement), so reordering, omission,
+    or insertion is rejected fail-closed; the head is persisted raise-only across restart and
+    the ordered log is exportable as a non-repudiable, customer-auditable record of the exact
+    applied sequence.
   The `LoadPolicyFragment` RPC is doubly mediated (policy `is_allowed` + fragment
   verification) and fail-closed (no authorized issuers ⇒ every fragment rejected). Verify →
   apply → commit is atomic. Both a native detached-Ed25519 signature and a **COSE_Sign1
   (CBOR) envelope** are accepted (COSE via the pure-Rust `coset` crate; no Go dependency).
-  Issuers, feeds, SVN floors, and the transparency anchor are configured from measured state.
+  Issuers, feeds, SVN floors, the transparency trust list, the did:x509 CA anchors, and the
+  ordering genesis are all configured from measured state.
 - **Guarantee:** only signed, non-rolled-back, scope-limited policy extensions from an
-  attested-trusted issuer can change what the workload may do — auditably; unsigned,
-  wrong-issuer, rolled-back, undeclared-feed, over-broad, invalid-receipt, or
+  attested-trusted issuer (pinned key or did:x509 chain) can change what the workload may do
+  — in a verifiable order, auditably; unsigned, wrong-issuer, untrusted-CA, revoked,
+  rolled-back, undeclared-feed, over-broad, invalid/disallowed-receipt, out-of-order, or
   unsatisfied-requirement fragments are all rejected.
 - **Commits:** `11285337c`,`4ccd43f8a` (verifier + RPC); `bf602cb18`,`dd2630053`,`294353a2a`
   (Iteration 1: apply-to-live-engine, attested trust root, structured payload);
   `ff8a4d5b9`,`c6b52c2ba`,`69228f3b5` (Iteration 2: feed scoping, cryptographic receipts,
   chaining); `c0ea3cb25`,`f7ed23319`,`93e1ff6e5` (Iteration 3: SVN persistence, COSE_Sign1);
+  `db24d40f5` (Iteration 4: transparency trust list), `9cddd7f75` (did:x509 identity),
+  `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 16 fragment unit tests (issuer/signature/SVN/feed/receipt/includes/
-  chaining/persistence/COSE); **live E2E** — a base-denied exec becomes allowed only after a
-  valid signed fragment is loaded over vsock (`fr1-fragment-attack.sh`), and again via a
-  COSE_Sign1 envelope (`fr1-cose-attack.sh`); wrong-key / payload-mismatch fragments
-  rejected. Reproducible dev guide: `docs/cc/fr1-fragment-e2e.md`.
-- **Follow-up (optional):** `did:x509` certificate-chain issuer identity with rotation/
-  revocation (layers on the COSE `x5chain` header); binding the issuer config + SVN state
-  into the initdata measured section proper.
+- **Validated:** 77 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
+  did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering); an offline,
+  self-contained capability demo (`examples/fragment-demo` — asserts all of the above with no
+  cluster/openssl); **live E2E** — a base-denied exec becomes allowed only after a valid
+  signed fragment is loaded over vsock (`fr1-fragment-attack.sh`), again via a COSE_Sign1
+  envelope (`fr1-cose-attack.sh`), via a did:x509 chain (`fr1-x509-attack.sh`), and an
+  out-of-order fragment is rejected (`fr1-ordering-attack.sh`); wrong-key / payload-mismatch
+  / untrusted-CA / revoked / stale-order fragments rejected. Reproducible dev guide:
+  `docs/cc/fr1-fragment-e2e.md`.
+- **Follow-up (optional):** SCITT Merkle inclusion + consistency proofs anchoring the
+  ordering log in an external transparency ledger; RSA/ES384 leaf algorithms for did:x509;
+  binding the issuer config + SVN/ordering state into the initdata measured section proper.
 
 ---
 
