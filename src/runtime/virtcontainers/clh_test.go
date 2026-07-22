@@ -119,7 +119,7 @@ func (c *clhClientMock) VmAddDiskPut(ctx context.Context, diskConfig chclient.Di
 
 //nolint:golint
 func (c *clhClientMock) VmPausePut(ctx context.Context) (*http.Response, error) {
-	c.vmInfo.State = clhStatePaused
+	c.vmInfo.State = chclient.PAUSED
 	return nil, nil
 }
 
@@ -137,7 +137,7 @@ func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice ch
 func (c *clhClientMock) VmRestorePut(ctx context.Context, restoreConfig chclient.RestoreConfig) (*http.Response, error) {
 	c.restoreRequest = &restoreConfig
 	// restoreVM() verifies Paused after restore.
-	c.vmInfo.State = clhStatePaused
+	c.vmInfo.State = chclient.PAUSED
 	return nil, nil
 }
 
@@ -587,7 +587,7 @@ func TestClhRestoreVM(t *testing.T) {
 
 	info, err := clh.vmInfo()
 	assert.NoError(err)
-	assert.Equal(clhStatePaused, info.State)
+	assert.Equal(chclient.PAUSED, info.State)
 }
 
 func TestClhSaveVM(t *testing.T) {
@@ -808,7 +808,7 @@ func TestCloudHypervisorColdPlugVFIODevice(t *testing.T) {
 	// Verify the device was added to vmconfig.Devices
 	assert.NotNil(clh.vmconfig.Devices)
 	assert.Len(*clh.vmconfig.Devices, 1)
-	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", (*clh.vmconfig.Devices)[0].Path)
+	assert.Equal("/sys/bus/pci/devices/0000:41:00.0", *(*clh.vmconfig.Devices)[0].Path)
 	assert.Equal("gpu0", clh.devicesIds["gpu0"])
 
 	// Cold-plug a second device

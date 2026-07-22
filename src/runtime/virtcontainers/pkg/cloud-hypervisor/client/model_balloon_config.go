@@ -16,7 +16,11 @@ import (
 
 // BalloonConfig struct for BalloonConfig
 type BalloonConfig struct {
-	Size int64 `json:"size"`
+	Id          *string `json:"id,omitempty"`
+	PciSegment  *int32  `json:"pci_segment,omitempty"`
+	PciDeviceId *int32  `json:"pci_device_id,omitempty"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	Size        int64   `json:"size"`
 	// Deflate balloon when the guest is under memory pressure.
 	DeflateOnOom *bool `json:"deflate_on_oom,omitempty"`
 	// Enable guest to report free pages.
@@ -29,6 +33,8 @@ type BalloonConfig struct {
 // will change when the set of required properties is changed
 func NewBalloonConfig(size int64) *BalloonConfig {
 	this := BalloonConfig{}
+	var iommu bool = false
+	this.Iommu = &iommu
 	this.Size = size
 	var deflateOnOom bool = false
 	this.DeflateOnOom = &deflateOnOom
@@ -42,11 +48,141 @@ func NewBalloonConfig(size int64) *BalloonConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewBalloonConfigWithDefaults() *BalloonConfig {
 	this := BalloonConfig{}
+	var iommu bool = false
+	this.Iommu = &iommu
 	var deflateOnOom bool = false
 	this.DeflateOnOom = &deflateOnOom
 	var freePageReporting bool = false
 	this.FreePageReporting = &freePageReporting
 	return &this
+}
+
+// GetId returns the Id field value if set, zero value otherwise.
+func (o *BalloonConfig) GetId() string {
+	if o == nil || o.Id == nil {
+		var ret string
+		return ret
+	}
+	return *o.Id
+}
+
+// GetIdOk returns a tuple with the Id field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BalloonConfig) GetIdOk() (*string, bool) {
+	if o == nil || o.Id == nil {
+		return nil, false
+	}
+	return o.Id, true
+}
+
+// HasId returns a boolean if a field has been set.
+func (o *BalloonConfig) HasId() bool {
+	if o != nil && o.Id != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetId gets a reference to the given string and assigns it to the Id field.
+func (o *BalloonConfig) SetId(v string) {
+	o.Id = &v
+}
+
+// GetPciSegment returns the PciSegment field value if set, zero value otherwise.
+func (o *BalloonConfig) GetPciSegment() int32 {
+	if o == nil || o.PciSegment == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciSegment
+}
+
+// GetPciSegmentOk returns a tuple with the PciSegment field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BalloonConfig) GetPciSegmentOk() (*int32, bool) {
+	if o == nil || o.PciSegment == nil {
+		return nil, false
+	}
+	return o.PciSegment, true
+}
+
+// HasPciSegment returns a boolean if a field has been set.
+func (o *BalloonConfig) HasPciSegment() bool {
+	if o != nil && o.PciSegment != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegment gets a reference to the given int32 and assigns it to the PciSegment field.
+func (o *BalloonConfig) SetPciSegment(v int32) {
+	o.PciSegment = &v
+}
+
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *BalloonConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BalloonConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *BalloonConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *BalloonConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
+// GetIommu returns the Iommu field value if set, zero value otherwise.
+func (o *BalloonConfig) GetIommu() bool {
+	if o == nil || o.Iommu == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Iommu
+}
+
+// GetIommuOk returns a tuple with the Iommu field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BalloonConfig) GetIommuOk() (*bool, bool) {
+	if o == nil || o.Iommu == nil {
+		return nil, false
+	}
+	return o.Iommu, true
+}
+
+// HasIommu returns a boolean if a field has been set.
+func (o *BalloonConfig) HasIommu() bool {
+	if o != nil && o.Iommu != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetIommu gets a reference to the given bool and assigns it to the Iommu field.
+func (o *BalloonConfig) SetIommu(v bool) {
+	o.Iommu = &v
 }
 
 // GetSize returns the Size field value
@@ -139,6 +275,18 @@ func (o *BalloonConfig) SetFreePageReporting(v bool) {
 
 func (o BalloonConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Id != nil {
+		toSerialize["id"] = o.Id
+	}
+	if o.PciSegment != nil {
+		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
+	}
+	if o.Iommu != nil {
+		toSerialize["iommu"] = o.Iommu
+	}
 	if true {
 		toSerialize["size"] = o.Size
 	}

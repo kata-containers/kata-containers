@@ -4,16 +4,16 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Config** | [**VmConfig**](VmConfig.md) |  | 
-**State** | **string** |  | 
-**MemoryActualSize** | Pointer to **int64** |  | [optional] 
-**DeviceTree** | Pointer to [**map[string]DeviceNode**](DeviceNode.md) |  | [optional] 
+**Config** | [**VmConfig**](VmConfig.md) |  |
+**State** | [**VmState**](VmState.md) |  |
+**MemoryActualSize** | Pointer to **int64** |  | [optional]
+**DeviceTree** | Pointer to [**map[string]DeviceNode**](DeviceNode.md) |  | [optional]
 
 ## Methods
 
 ### NewVmInfo
 
-`func NewVmInfo(config VmConfig, state string, ) *VmInfo`
+`func NewVmInfo(config VmConfig, state VmState, ) *VmInfo`
 
 NewVmInfo instantiates a new VmInfo object
 This constructor will assign default values to properties that have it defined,
@@ -50,20 +50,20 @@ SetConfig sets Config field to given value.
 
 ### GetState
 
-`func (o *VmInfo) GetState() string`
+`func (o *VmInfo) GetState() VmState`
 
 GetState returns the State field if non-nil, zero value otherwise.
 
 ### GetStateOk
 
-`func (o *VmInfo) GetStateOk() (*string, bool)`
+`func (o *VmInfo) GetStateOk() (*VmState, bool)`
 
 GetStateOk returns a tuple with the State field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetState
 
-`func (o *VmInfo) SetState(v string)`
+`func (o *VmInfo) SetState(v VmState)`
 
 SetState sets State field to given value.
 
@@ -120,5 +120,3 @@ HasDeviceTree returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

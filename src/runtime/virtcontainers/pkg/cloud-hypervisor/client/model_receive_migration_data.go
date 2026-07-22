@@ -17,6 +17,9 @@ import (
 // ReceiveMigrationData struct for ReceiveMigrationData
 type ReceiveMigrationData struct {
 	ReceiverUrl string `json:"receiver_url"`
+	// Directory containing the TLS server certificate (server-cert.pem), the TLS server key (server-key.pem), and the client TLS root CA certificate (ca-cert.pem). TLS is only supported with tcp:<host>:<port> receiver URLs.
+	TlsDir     *string        `json:"tls_dir,omitempty"`
+	MemoryMode *MigrationMode `json:"memory_mode,omitempty"`
 }
 
 // NewReceiveMigrationData instantiates a new ReceiveMigrationData object
@@ -26,6 +29,8 @@ type ReceiveMigrationData struct {
 func NewReceiveMigrationData(receiverUrl string) *ReceiveMigrationData {
 	this := ReceiveMigrationData{}
 	this.ReceiverUrl = receiverUrl
+	var memoryMode MigrationMode = PRECOPY
+	this.MemoryMode = &memoryMode
 	return &this
 }
 
@@ -34,6 +39,8 @@ func NewReceiveMigrationData(receiverUrl string) *ReceiveMigrationData {
 // but it doesn't guarantee that properties required by API are set
 func NewReceiveMigrationDataWithDefaults() *ReceiveMigrationData {
 	this := ReceiveMigrationData{}
+	var memoryMode MigrationMode = PRECOPY
+	this.MemoryMode = &memoryMode
 	return &this
 }
 
@@ -61,10 +68,80 @@ func (o *ReceiveMigrationData) SetReceiverUrl(v string) {
 	o.ReceiverUrl = v
 }
 
+// GetTlsDir returns the TlsDir field value if set, zero value otherwise.
+func (o *ReceiveMigrationData) GetTlsDir() string {
+	if o == nil || o.TlsDir == nil {
+		var ret string
+		return ret
+	}
+	return *o.TlsDir
+}
+
+// GetTlsDirOk returns a tuple with the TlsDir field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ReceiveMigrationData) GetTlsDirOk() (*string, bool) {
+	if o == nil || o.TlsDir == nil {
+		return nil, false
+	}
+	return o.TlsDir, true
+}
+
+// HasTlsDir returns a boolean if a field has been set.
+func (o *ReceiveMigrationData) HasTlsDir() bool {
+	if o != nil && o.TlsDir != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsDir gets a reference to the given string and assigns it to the TlsDir field.
+func (o *ReceiveMigrationData) SetTlsDir(v string) {
+	o.TlsDir = &v
+}
+
+// GetMemoryMode returns the MemoryMode field value if set, zero value otherwise.
+func (o *ReceiveMigrationData) GetMemoryMode() MigrationMode {
+	if o == nil || o.MemoryMode == nil {
+		var ret MigrationMode
+		return ret
+	}
+	return *o.MemoryMode
+}
+
+// GetMemoryModeOk returns a tuple with the MemoryMode field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ReceiveMigrationData) GetMemoryModeOk() (*MigrationMode, bool) {
+	if o == nil || o.MemoryMode == nil {
+		return nil, false
+	}
+	return o.MemoryMode, true
+}
+
+// HasMemoryMode returns a boolean if a field has been set.
+func (o *ReceiveMigrationData) HasMemoryMode() bool {
+	if o != nil && o.MemoryMode != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetMemoryMode gets a reference to the given MigrationMode and assigns it to the MemoryMode field.
+func (o *ReceiveMigrationData) SetMemoryMode(v MigrationMode) {
+	o.MemoryMode = &v
+}
+
 func (o ReceiveMigrationData) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
 		toSerialize["receiver_url"] = o.ReceiverUrl
+	}
+	if o.TlsDir != nil {
+		toSerialize["tls_dir"] = o.TlsDir
+	}
+	if o.MemoryMode != nil {
+		toSerialize["memory_mode"] = o.MemoryMode
 	}
 	return json.Marshal(toSerialize)
 }

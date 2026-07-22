@@ -4,14 +4,15 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**BootVcpus** | **int32** |  | 
-**MaxVcpus** | **int32** |  | 
-**Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
+**BootVcpus** | **int32** |  |
+**MaxVcpus** | **int32** |  |
+**Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional]
 **KvmHyperv** | Pointer to **bool** |  | [optional] [default to false]
-**MaxPhysBits** | Pointer to **int32** |  | [optional] 
+**MaxPhysBits** | Pointer to **int32** |  | [optional]
 **Nested** | Pointer to **bool** |  | [optional] [default to true]
-**Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional] 
-**Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional] 
+**Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional]
+**Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional]
+**CoreScheduling** | Pointer to [**CoreSchedulingMode**](CoreSchedulingMode.md) |  | [optional] [default to VM]
 
 ## Methods
 
@@ -222,7 +223,30 @@ SetFeatures sets Features field to given value.
 
 HasFeatures returns a boolean if a field has been set.
 
+### GetCoreScheduling
+
+`func (o *CpusConfig) GetCoreScheduling() CoreSchedulingMode`
+
+GetCoreScheduling returns the CoreScheduling field if non-nil, zero value otherwise.
+
+### GetCoreSchedulingOk
+
+`func (o *CpusConfig) GetCoreSchedulingOk() (*CoreSchedulingMode, bool)`
+
+GetCoreSchedulingOk returns a tuple with the CoreScheduling field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetCoreScheduling
+
+`func (o *CpusConfig) SetCoreScheduling(v CoreSchedulingMode)`
+
+SetCoreScheduling sets CoreScheduling field to given value.
+
+### HasCoreScheduling
+
+`func (o *CpusConfig) HasCoreScheduling() bool`
+
+HasCoreScheduling returns a boolean if a field has been set.
+
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

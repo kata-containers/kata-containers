@@ -32,6 +32,7 @@ type NetConfig struct {
 	VhostMode         *string            `json:"vhost_mode,omitempty"`
 	Id                *string            `json:"id,omitempty"`
 	PciSegment        *int32             `json:"pci_segment,omitempty"`
+	PciDeviceId       *int32             `json:"pci_device_id,omitempty"`
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 	OffloadTso        *bool              `json:"offload_tso,omitempty"`
 	OffloadUfo        *bool              `json:"offload_ufo,omitempty"`
@@ -543,6 +544,38 @@ func (o *NetConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
 }
 
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *NetConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *NetConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *NetConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 // GetRateLimiterConfig returns the RateLimiterConfig field value if set, zero value otherwise.
 func (o *NetConfig) GetRateLimiterConfig() RateLimiterConfig {
 	if o == nil || o.RateLimiterConfig == nil {
@@ -714,6 +747,9 @@ func (o NetConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.RateLimiterConfig != nil {
 		toSerialize["rate_limiter_config"] = o.RateLimiterConfig
