@@ -304,6 +304,15 @@ resources:
 
 debug: false
 
+# Deploy the optional "devkit" debug guest extension and, per enabled shim, an
+# extra `kata-<shim>-devkit` RuntimeClass wired to it. Pods on that class boot
+# with the extension cold-plugged, so the agent debug console drops into a rich
+# shell (Ubuntu + apt + debug tools) overlaid on the read-only guest.
+#
+# Debugging aid: only effective with `debug: true`, ignored otherwise. Leave it
+# off in production and in confidential (CoCo/TEE) deployments.
+devkit: false
+
 # Optional CLI log level override for kata-deploy.
 # Supported values: error, warn, info, debug, trace
 # When empty, debug:true implies --log-level debug; otherwise kata-deploy falls
