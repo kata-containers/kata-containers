@@ -58,6 +58,10 @@ impl VhostUserEndpoint {
 
     fn get_network_config(&self) -> VhostUserConfig {
         VhostUserConfig {
+            // Name the device after the virt interface, as the virtio-net and
+            // vhost-net paths do, so the hypervisor identifies it by a name
+            // the runtime knows rather than by its socket path.
+            dev_id: self.name.clone(),
             socket_path: self.socket_path.clone(),
             mac_address: self.guest_mac.clone(),
             device_type: VhostUserType::Net,
