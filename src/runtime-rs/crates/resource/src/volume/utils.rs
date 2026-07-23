@@ -103,7 +103,6 @@ pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
 
 pub(crate) async fn generate_shared_path(
     dest: PathBuf,
-    read_only: bool,
     device_id: &str,
     sid: &str,
 ) -> Result<String> {
@@ -112,7 +111,7 @@ pub(crate) async fn generate_shared_path(
     let guest_path = do_get_guest_path(&mount_name, device_id, true, false);
     // Note: directories should always be created under the rw/ path. The ro/ directory is a
     // read-only bind mount of rw/, so creating directories directly under ro/ would fail with a read-only FS.
-    let host_path = do_get_host_path(&mount_name, sid, device_id, true, read_only);
+    let host_path = do_get_host_path(&mount_name, sid, device_id, true, false);
 
     if get_mount_path(&Some(dest)).starts_with("/dev") {
         fs::File::create(&host_path).context(format!("failed to create file {:?}", &host_path))?;
@@ -203,7 +202,7 @@ pub async fn handle_block_volume(
     }
 
     // generate host guest shared path
-    let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
+    let guest_path = generate_shared_path(m.destination().clone(), &device_id, sid)
         .await
         .context("generate host-guest shared path failed")?;
     storage.mount_point = guest_path.clone();

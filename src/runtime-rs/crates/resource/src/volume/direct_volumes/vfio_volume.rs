@@ -84,7 +84,7 @@ impl VfioVolume {
         }
 
         // generate host guest shared path
-        let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
+        let guest_path = generate_shared_path(m.destination().clone(), &device_id, sid)
             .await
             .context("generate host-guest shared path failed")?;
         storage.mount_point = guest_path.clone();
