@@ -37,6 +37,7 @@ pub mod network_phase;
 pub mod occurrence;
 pub mod resource_graph;
 pub mod scratch;
+pub mod verified_images;
 pub mod verified_layers;
 pub use cdi::{
     authorize_cdi, CdiDeviceRequest, CdiError, MeasuredCdiSpec, VerifiedCdiDevice,
@@ -49,6 +50,7 @@ pub use scratch::{
     classify_scratch, dm_target_types, enforce_scratch, ScratchClass, ScratchError,
     ScratchRequirement,
 };
+pub use verified_images::{ImageError, VerifiedImageStore};
 pub use verified_layers::{LayerError, VerifiedLayerStore};
 pub use occurrence::{Lifecycle, Occurrence, OccurrenceError, OccurrenceRegistry};
 pub use resource_graph::{
