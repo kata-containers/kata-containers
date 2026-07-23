@@ -13,7 +13,7 @@ mod tests {
 
     use protocols::agent::{
         AddARPNeighborsRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        RemoveContainerRequest, SignalProcessRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,7 @@ mod tests {
         CreateSandboxRequest(CreateSandboxRequest),
         ExecProcessRequest(ExecProcessRequest),
         RemoveContainerRequest(RemoveContainerRequest),
+        SignalProcessRequest(SignalProcessRequest),
         UpdateInterfaceRequest(UpdateInterfaceRequest),
         UpdateRoutesRequest(UpdateRoutesRequest),
         AddARPNeighborsRequest(AddARPNeighborsRequest),
@@ -43,6 +44,7 @@ mod tests {
                 TestRequest::CreateSandboxRequest(_) => write!(f, "CreateSandboxRequest"),
                 TestRequest::ExecProcessRequest(_) => write!(f, "ExecProcessRequest"),
                 TestRequest::RemoveContainerRequest(_) => write!(f, "RemoveContainerRequest"),
+                TestRequest::SignalProcessRequest(_) => write!(f, "SignalProcessRequest"),
                 TestRequest::UpdateInterfaceRequest(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutesRequest(_) => write!(f, "UpdateRoutesRequest"),
                 TestRequest::AddARPNeighborsRequest(_) => write!(f, "AddARPNeighborsRequest"),
@@ -303,6 +305,11 @@ mod tests {
     #[tokio::test]
     async fn test_state_exec_process() {
         runtests("state/execprocess").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_signal_process() {
+        runtests("state/signalprocess").await;
     }
 
     #[tokio::test]

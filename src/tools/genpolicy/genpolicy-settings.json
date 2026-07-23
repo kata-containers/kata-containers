@@ -418,6 +418,20 @@
         "GetDiagnosticDataRequest": false,
         "ReadStreamRequest": false,
         "UpdateEphemeralMountsRequest": false,
-        "WriteStreamRequest": false
+        "WriteStreamRequest": false,
+        "SignalProcessRequest": {
+            "allowed_signals": [
+                1,
+                2,
+                3,
+                9,
+                10,
+                12,
+                15,
+                18,
+                19,
+                28
+            ]
+        }
     }
 }

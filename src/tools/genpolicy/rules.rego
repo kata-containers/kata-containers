@@ -42,7 +42,7 @@ default ResumeContainerRequest := false
 default SetGuestDateTimeRequest := false
 default SetIPTablesRequest := false
 default SetPolicyRequest := false
-default SignalProcessRequest := true
+default SignalProcessRequest := false
 default StartContainerRequest := true
 default StartTracingRequest := false
 default StatsContainerRequest := true
@@ -1792,4 +1792,29 @@ RemoveContainerRequest:= {"ops": ops, "allowed": true} if {
     ops := concat_op_if_not_null(ops_builder1, del_container)
 
     print("RemoveContainerRequest: true")
+}
+
+# Gate SignalProcessRequest instead of allowing every signal unconditionally.
+# A signal is permitted only when (1) its number is in the policy's allowed_signals
+# set and (2) it targets a container this policy authorized to run (tracked in
+# persisted state by CreateContainerRequest and cleared by RemoveContainerRequest).
+# This mirrors the reference behavior of gating which signals the Host may deliver
+# and to which known container processes, closing the "any signal to any container"
+# gap of the previous unconditional default.
+SignalProcessRequest if {
+    print("SignalProcessRequest: input =", input)
+
+    # (1) The signal number must be explicitly allowed by policy.
+    i_signal := input.signal
+    some allowed_signal in policy_data.request_defaults.SignalProcessRequest.allowed_signals
+    i_signal == allowed_signal
+    print("SignalProcessRequest: signal", i_signal, "is allowed")
+
+    # (2) The target container must be known to this policy (present in state).
+    # get_state_val is undefined for an unknown/removed container_id, which makes
+    # this rule undefined and falls through to the fail-closed default.
+    p_container_index := get_state_val(input.container_id)
+    print("SignalProcessRequest: container", input.container_id, "known at index", p_container_index)
+
+    print("SignalProcessRequest: true")
 }
