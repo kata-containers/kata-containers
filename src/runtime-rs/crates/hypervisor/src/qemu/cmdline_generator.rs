@@ -3908,4 +3908,25 @@ mod tests {
         drop(cmdline);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
+
+    #[rstest]
+    #[case::sandbox_unset(None, vec![])]
+    #[case::sandbox_enabled(Some("on"), vec!["on"])]
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_seccomp_sandbox_params(
+        #[case] seccomp_sandbox: Option<&str>,
+        #[case] expected_values: Vec<&str>,
+    ) {
+        let mut config = test_qemu_config(None, false);
+        config.security_info.seccomp_sandbox = seccomp_sandbox.map(str::to_owned);
+        let params = build_test_cmdline("seccomp-sandbox", &config).await;
+
+        let values: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| (args[0] == "-sandbox").then_some(args[1].as_str()))
+            .collect();
+
+        assert_eq!(values, expected_values);
+    }
 }
