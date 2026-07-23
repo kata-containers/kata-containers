@@ -3901,4 +3901,19 @@ mod tests {
         drop(cmdline);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_seccomp_sandbox_params() {
+        let mut config = test_qemu_config(None, false);
+        let params = build_test_cmdline("seccomp-disabled", &config).await;
+        assert!(!params.iter().any(|arg| arg == "-sandbox"));
+
+        let sandbox = "on";
+        config.security_info.seccomp_sandbox = Some(sandbox.to_owned());
+        let params = build_test_cmdline("seccomp-enabled", &config).await;
+
+        assert!(has_qemu_arg(&params, "-sandbox", sandbox));
+        assert_eq!(params.iter().filter(|arg| *arg == "-sandbox").count(), 1);
+    }
 }
