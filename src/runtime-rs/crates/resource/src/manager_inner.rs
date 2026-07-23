@@ -542,20 +542,22 @@ impl ResourceManagerInner {
             match d.typ() {
                 LinuxDeviceType::B => {
                     let blkdev_info = get_block_device_info(&self.device_manager).await;
+                    let major = d.major();
+                    let minor = d.minor();
                     // Read-only intent comes from the cgroup device access rule.
                     // Also honor the host device's own read-only flag (BLKROGET):
                     // block-mode volumes frequently carry no read-only signal in
                     // the OCI spec, so the device flag is the only reliable
                     // source. Either signal being positive marks it read-only.
-                    let is_readonly = device_cgroup_access_is_readonly(
-                        linux,
-                        LinuxDeviceType::B,
-                        d.major(),
-                        d.minor(),
-                    ) || block_device_node_is_readonly(d.major(), d.minor());
+                    let is_readonly =
+                        device_cgroup_access_is_readonly(linux, LinuxDeviceType::B, major, minor)
+                            || block_device_node_is_readonly(major, minor);
+                    let path_on_host = get_host_path(DEVICE_TYPE_BLOCK, major, minor)
+                        .context(format!("get host path failed for block device {major}:{minor}"))?;
                     let dev_info = DeviceConfig::BlockCfgModern(BlockConfigModern {
-                        major: d.major(),
-                        minor: d.minor(),
+                        path_on_host,
+                        major,
+                        minor,
                         is_readonly,
                         driver_option: blkdev_info.block_device_driver,
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
