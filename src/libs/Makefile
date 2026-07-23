@@ -11,16 +11,10 @@ ifeq ($(USERID), 0)
     override EXTRA_TEST_FLAGS = --ignored
 endif
 
-LIBS := \
-    -p kata-sys-util \
-    -p kata-types \
-    -p logging \
-    -p mem-agent \
-    -p protocols \
-    -p runtime-spec \
-    -p safe-path \
-    -p shim-interface \
-    -p test-utils
+# Find all packages of this component
+PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
+                jq -r --arg d "$(CURDIR)/" '.packages[] | select(.manifest_path | startswith($$d)) | .name')
+PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
 
 default: build
 
@@ -49,8 +43,8 @@ clean:
 # See the `test_logger_levels()` test for further information.
 test:
 	@echo "INFO: testing libraries for development build"
-	cargo test $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test $(PACKAGE_FLAGS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 	@echo "INFO: testing libraries for release build"
-	cargo test --release $(LIBS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test --release $(PACKAGE_FLAGS) $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 
 .PHONY: install

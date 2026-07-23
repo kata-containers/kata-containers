@@ -6,6 +6,11 @@ include ../../utils.mk
 
 PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
 
+# Find all packages of this component
+PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
+                jq -r --arg d "$(CURDIR)/" '.packages[] | select(.manifest_path | startswith($$d)) | .name')
+PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
+
 ifeq ($(ARCH), $(filter $(ARCH), s390x powerpc64le))
 default build check test clippy:
 	@echo "$(ARCH) is not support currently"
@@ -41,7 +46,7 @@ test:
 ifdef SUPPORT_VIRTUALIZATION
 	@set -e; \
 	for dir in $(PROJECT_DIRS); do \
-		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) --no-fail-fast -- --nocapture --test-threads=1 --skip bindgen && popd"; \
+		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test $(PACKAGE_FLAGS) --all-features --target $(TRIPLE) --no-fail-fast -- --nocapture --test-threads=1 --skip bindgen && popd"; \
 	done
 else
 	@echo "INFO: skip testing dragonball, it need virtualization support."
