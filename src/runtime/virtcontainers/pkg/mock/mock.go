@@ -49,7 +49,8 @@ type HybridVSockTTRPCMock struct {
 	// the ttrpc interface we want the mock hybrid-vsock server to serve.
 	HybridVSockTTRPCMockImp
 
-	listener net.Listener
+	listener    net.Listener
+	ttrpcServer *ttrpc.Server
 }
 
 func (hv *HybridVSockTTRPCMock) ttrpcRegister(s *ttrpc.Server) {
@@ -80,6 +81,7 @@ func (hv *HybridVSockTTRPCMock) Start(socketAddr string) error {
 		return err
 	}
 	hv.ttrpcRegister(ttrpcServer)
+	hv.ttrpcServer = ttrpcServer
 
 	go func() {
 		ttrpcServer.Serve(context.Background(), l)
@@ -88,12 +90,14 @@ func (hv *HybridVSockTTRPCMock) Start(socketAddr string) error {
 	return nil
 }
 
-// Stop stops the ttrpc-based mock hybrid-vsock server
+// Stop stops the ttrpc-based mock hybrid-vsock server, closing all active connections.
 func (hv *HybridVSockTTRPCMock) Stop() error {
-	if hv.listener == nil {
-		return fmt.Errorf("Missing mock hvbrid vsock listener")
+	if hv.ttrpcServer != nil {
+		return hv.ttrpcServer.Close()
 	}
-
+	if hv.listener == nil {
+		return fmt.Errorf("Missing mock hybrid vsock listener")
+	}
 	return hv.listener.Close()
 }
 

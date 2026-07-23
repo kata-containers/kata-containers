@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -186,7 +188,10 @@ const (
 
 // newKataAgent returns an agent from an agent type.
 func newKataAgent() agent {
-	return &kataAgent{}
+	return &kataAgent{
+		reconnectAttempts: 30,
+		reconnectDelay:    2 * time.Second,
+	}
 }
 
 // The function is declared this way for mocking in unit tests
@@ -215,6 +220,30 @@ func getFSGroupChangePolicy(policy volume.FSGroupChangePolicy) pbTypes.FSGroupCh
 	default:
 		return pbTypes.FSGroupChangePolicy_Always
 	}
+}
+
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+
+	connectionErrors := []string{
+		"ttrpc: closed",
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"EOF",
+		"use of closed network connection",
+	}
+	for _, ce := range connectionErrors {
+		if strings.Contains(errStr, ce) {
+			return true
+		}
+	}
+
+	code := grpcStatus.Code(err)
+	return code == codes.Unavailable || code == codes.Aborted
 }
 
 // Shared path handling:
@@ -336,8 +365,12 @@ type kataAgent struct {
 
 	dialTimout uint32
 
-	keepConn bool
-	dead     bool
+	keepConn       bool
+	dead           bool
+	connGeneration uint64
+
+	reconnectAttempts uint
+	reconnectDelay    time.Duration
 }
 
 func (k *kataAgent) Logger() *logrus.Entry {
@@ -2377,33 +2410,111 @@ func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 }
 
 func (k *kataAgent) connect(ctx context.Context) error {
-	if k.dead {
-		return errors.New("Dead agent")
-	}
-	// lockless quick pass
-	if k.client != nil {
+	// lockless fast path
+	if !k.dead && k.client != nil {
 		return nil
 	}
 
 	span, _ := katatrace.Trace(ctx, k.Logger(), "connect", kataAgentTracingTags)
 	defer span.End()
 
-	// This is for the first connection only, to prevent race
 	k.Lock()
-	defer k.Unlock()
-	if k.client != nil {
+
+	// re-check under lock
+	if !k.dead && k.client != nil {
+		k.Unlock()
 		return nil
 	}
 
+	if k.dead {
+		if k.state.URL == "" {
+			k.Unlock()
+			return errors.New("dead agent with no URL to reconnect")
+		}
+
+		u, err := url.Parse(k.state.URL)
+		if err != nil {
+			k.Unlock()
+			return fmt.Errorf("dead agent, invalid URL %q: %w", k.state.URL, err)
+		}
+		socketPath := u.Path
+
+		// Release lock while waiting for socket
+		k.Unlock()
+
+		err = retry.Do(
+			func() error {
+				if _, err := os.Stat(socketPath); err != nil {
+					return errors.New("dead agent, socket not available")
+				}
+				conn, err := net.DialTimeout("unix", socketPath, 2*time.Second)
+				if err != nil {
+					return fmt.Errorf("dead agent, socket not connectable: %w", err)
+				}
+				conn.Close()
+				return nil
+			},
+			retry.Attempts(k.reconnectAttempts),
+			retry.Delay(k.reconnectDelay),
+			retry.MaxDelay(10*time.Second),
+			retry.DelayType(retry.BackOffDelay),
+			retry.OnRetry(func(n uint, err error) {
+				k.Logger().WithField("attempt", n+1).WithError(err).Warn("dead agent, waiting for socket...")
+			}),
+			retry.LastErrorOnly(true),
+		)
+		if err != nil {
+			return err
+		}
+
+		k.Logger().Warn("agent was dead but socket is now connectable, attempting reconnection")
+
+		k.Lock()
+		// Another goroutine may have reconnected while we waited
+		if !k.dead && k.client != nil {
+			k.Unlock()
+			return nil
+		}
+		k.dead = false
+	}
+
+	// Lock held, k.dead == false
 	k.Logger().WithField("url", k.state.URL).Info("New client")
-	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
+
+	// Close old client before creating new one
+	if k.client != nil {
+		k.client.Close()
+	}
+
+	var client *kataclient.AgentClient
+	err := retry.Do(
+		func() error {
+			var err error
+			client, err = kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
+			return err
+		},
+		retry.Attempts(k.reconnectAttempts),
+		retry.Delay(k.reconnectDelay),
+		retry.MaxDelay(10*time.Second),
+		retry.DelayType(retry.BackOffDelay),
+		retry.OnRetry(func(n uint, err error) {
+			k.Logger().WithField("attempt", n+1).WithError(err).Warn("agent connection failed, retrying...")
+		}),
+		retry.RetryIf(func(err error) bool {
+			return isConnectionError(err)
+		}),
+		retry.LastErrorOnly(true),
+	)
 	if err != nil {
 		k.dead = true
+		k.Unlock()
 		return err
 	}
 
 	k.installReqFunc(client)
+	k.connGeneration++
 	k.client = client
+	k.Unlock()
 
 	return nil
 }
@@ -2415,6 +2526,10 @@ func (k *kataAgent) disconnect(ctx context.Context) error {
 	k.Lock()
 	defer k.Unlock()
 
+	return k.disconnectLocked(ctx)
+}
+
+func (k *kataAgent) disconnectLocked(ctx context.Context) error {
 	if k.client == nil {
 		return nil
 	}
@@ -2424,7 +2539,6 @@ func (k *kataAgent) disconnect(ctx context.Context) error {
 	}
 
 	k.client = nil
-	k.reqHandlers = nil
 
 	return nil
 }
@@ -2646,92 +2760,105 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 	return newCtx, cancel
 }
 
+func (k *kataAgent) callWithReconnect(ctx context.Context, fn func() (interface{}, error)) (interface{}, error) {
+	for {
+		if err := k.connect(ctx); err != nil {
+			return nil, err
+		}
+
+		k.Lock()
+		gen := k.connGeneration
+		k.Unlock()
+
+		resp, err := fn()
+
+		if err == nil || !isConnectionError(err) {
+			return resp, err
+		}
+
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("connection error and context cancelled: %w", err)
+		}
+
+		k.Lock()
+		if k.connGeneration == gen {
+			k.Logger().WithError(err).Warn("connection error detected, flagging for reconnection")
+			k.dead = true
+		}
+		k.Unlock()
+	}
+}
+
 func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (interface{}, error) {
 	start := time.Now()
 
-	if err := k.connect(spanCtx); err != nil {
-		return nil, err
-	}
 	if !k.keepConn {
 		defer k.disconnect(spanCtx)
 	}
 
 	msgName := string(proto.MessageName(request.(proto.Message)))
 
-	k.Lock()
-
-	if k.reqHandlers == nil {
-		k.Unlock()
-		return nil, errors.New("Client has already disconnected")
-	}
-
-	handler := k.reqHandlers[msgName]
-	if msgName == "" || handler == nil {
-		k.Unlock()
-		return nil, errors.New("Invalid request type")
-	}
-
-	k.Unlock()
-
 	message := request.(proto.Message)
-	ctx, cancel := k.getReqContext(spanCtx, msgName)
-	if cancel != nil {
-		defer cancel()
-	}
-
 	jsonStr, err := protojson.Marshal(message)
 	if err != nil {
 		return nil, err
 	}
-	k.Logger().WithField("name", msgName).WithField("req", string(jsonStr)).Trace("sending request")
 
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
-	return handler(ctx, request)
+
+	return k.callWithReconnect(spanCtx, func() (interface{}, error) {
+		handler := k.reqHandlers[msgName]
+		if handler == nil {
+			return nil, errors.New("invalid request type")
+		}
+
+		k.Logger().WithField("name", msgName).WithField("req", string(jsonStr)).Trace("sending request")
+
+		ctx, cancel := k.getReqContext(spanCtx, msgName)
+		if cancel != nil {
+			defer cancel()
+		}
+		return handler(ctx, request)
+	})
 }
 
-// readStdout and readStderr are special that we cannot differentiate them with the request types...
 func (k *kataAgent) readProcessStdout(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(ctx); err != nil {
-		return 0, err
-	}
-	if !k.keepConn {
-		defer k.disconnect(ctx)
-	}
-
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout)
+	return k.readProcessStreamWithRetry(ctx, c.id, processID, data, false)
 }
 
-// readStdout and readStderr are special that we cannot differentiate them with the request types...
 func (k *kataAgent) readProcessStderr(ctx context.Context, c *Container, processID string, data []byte) (int, error) {
-	if err := k.connect(ctx); err != nil {
-		return 0, err
-	}
+	return k.readProcessStreamWithRetry(ctx, c.id, processID, data, true)
+}
+
+func (k *kataAgent) readProcessStreamWithRetry(ctx context.Context, containerID, processID string, data []byte, stderr bool) (int, error) {
 	if !k.keepConn {
 		defer k.disconnect(ctx)
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStderr)
-}
-
-type readFn func(context.Context, *grpc.ReadStreamRequest) (*grpc.ReadStreamResponse, error)
-
-func (k *kataAgent) readProcessStream(containerID, processID string, data []byte, read readFn) (int, error) {
-	resp, err := read(k.ctx, &grpc.ReadStreamRequest{
+	req := &grpc.ReadStreamRequest{
 		ContainerId: containerID,
 		ExecId:      processID,
-		Len:         uint32(len(data))})
+		Len:         uint32(len(data)),
+	}
+
+	resp, err := k.callWithReconnect(ctx, func() (interface{}, error) {
+		if stderr {
+			return k.client.AgentServiceClient.ReadStderr(k.ctx, req)
+		}
+		return k.client.AgentServiceClient.ReadStdout(k.ctx, req)
+	})
 	if err != nil {
 		return 0, err
 	}
 
-	if len(resp.Data) == 0 {
+	r := resp.(*grpc.ReadStreamResponse)
+	if len(r.Data) == 0 {
 		return 0, io.EOF
 	}
-
-	copy(data, resp.Data)
-	return len(resp.Data), nil
+	copy(data, r.Data)
+	return len(r.Data), nil
 }
 
 func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
@@ -2851,9 +2978,12 @@ func (k *kataAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 }
 
 func (k *kataAgent) markDead(ctx context.Context) {
-	k.Logger().Infof("mark agent dead")
+	k.Lock()
+	defer k.Unlock()
+
+	k.Logger().Info("mark agent dead")
 	k.dead = true
-	k.disconnect(ctx)
+	k.disconnectLocked(ctx)
 }
 
 func (k *kataAgent) cleanup(ctx context.Context) {
