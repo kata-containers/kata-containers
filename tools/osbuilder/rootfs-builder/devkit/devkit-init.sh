@@ -5,17 +5,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Shared devkit guest runtime library, sourced by devkit-enter and devkit-apk.
+# Shared devkit guest runtime library, sourced by devkit-enter and devkit-apt.
 #
-# The devkit extension (read-only at ${DEVKIT}) is a full minimal Alpine rootfs.
-# We overlay a writable, exec-enabled tmpfs on it and chroot in, so apk and the
+# The devkit extension (read-only at ${DEVKIT}) is a full minimal Ubuntu rootfs.
+# We overlay a writable, exec-enabled tmpfs on it and chroot in, so apt and the
 # prebaked tools run natively against a normal root filesystem.
 #
-# BB is Alpine's statically-linked busybox (busybox-static, /bin/busybox.static),
-# the ONLY binary we can exec on the shell-less guest base before the musl loader
-# exists. We deliberately do NOT reuse /bin/busybox: that is Alpine's dynamic
-# busybox providing the chroot's coreutils applets, and clobbering it breaks
-# ls/cat/ps and apk's busybox trigger.
+# BB is a statically-linked busybox (busybox-static, /bin/busybox.static), the
+# ONLY binary we can exec on the shell-less guest base before the glibc dynamic
+# loader is reachable there. It is installed at a dedicated path so it never
+# clobbers the rootfs's own /bin/busybox or GNU coreutils.
 
 DEVKIT_INIT_VERSION=1
 
@@ -33,7 +32,7 @@ devkit_is_mounted() {
 
 # Mount an exec-enabled tmpfs at ${WRITABLE}: /run is typically noexec, so the
 # overlay upper/work (and the fallback rootfs copy) must live on our own tmpfs
-# for the prebaked and apk-installed binaries to exec.
+# for the prebaked and apt-installed binaries to exec.
 devkit_mount_writable() {
 	"${BB}" mkdir -p "${WRITABLE}"
 	devkit_is_mounted "${WRITABLE}" && return 0
@@ -60,7 +59,7 @@ devkit_mount_root() {
 	"${BB}" touch "${WRITABLE}/.copied"
 }
 
-# Bind the kernel virtual filesystems so apk and the debug tools behave; /dev is
+# Bind the kernel virtual filesystems so apt and the debug tools behave; /dev is
 # rbind'd to bring in pts/shm for interactive shells.
 devkit_bind_mounts() {
 	"${BB}" mkdir -p "${MERGED}/proc" "${MERGED}/sys" "${MERGED}/dev"
@@ -78,7 +77,7 @@ devkit_bind_mounts() {
 	fi
 }
 
-# Give apk/curl working DNS by importing the guest resolver config.
+# Give apt/curl working DNS by importing the guest resolver config.
 devkit_seed_resolv_conf() {
 	"${BB}" test -e /etc/resolv.conf || return 0
 	"${BB}" mkdir -p "${MERGED}/etc"

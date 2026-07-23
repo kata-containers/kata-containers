@@ -8,7 +8,7 @@
 # (kata-ctl exec <sandbox-id>) on the NVIDIA CPU runtime-rs class:
 #
 #   * With the kata-<shim>-devkit RuntimeClass, the console drops into the rich
-#     Alpine-based devkit shell overlaid on the read-only guest rootfs.
+#     Ubuntu-based devkit shell overlaid on the read-only guest rootfs.
 #   * Without devkit (the base RuntimeClass), the shell-less NVIDIA base cannot
 #     spawn a console shell at all.
 
@@ -34,8 +34,9 @@ devkit_runtimeclass() {
 # when a real shell runs it. The literal command text, even if echoed back by
 # the PTY, never contains the expanded value - so "SHELL_OK=42" in the output is
 # unambiguous proof that a debug console shell actually executed. GUEST_ID and
-# apk then tell devkit (Alpine overlay) apart from the base rootfs.
-DEVKIT_PROBE='echo "SHELL_OK=$((6*7))"; . /etc/os-release 2>/dev/null; echo "GUEST_ID=${ID}"; command -v apk >/dev/null 2>&1 && apk --version || true'
+# the devkit-only devkit-apt wrapper then tell the devkit (Ubuntu) overlay apart
+# from the base rootfs.
+DEVKIT_PROBE='echo "SHELL_OK=$((6*7))"; . /etc/os-release 2>/dev/null; echo "GUEST_ID=${ID}"; command -v devkit-apt >/dev/null 2>&1 && echo "DEVKIT_TOOL=yes" || true'
 
 check_and_skip() {
 	if ! devkit_supported; then
@@ -119,10 +120,10 @@ setup() {
 
 	echo "${output}" | grep -q 'SHELL_OK=42' \
 		|| die "devkit debug console did not provide a working shell"
-	echo "${output}" | grep -q 'GUEST_ID=alpine' \
-		|| die "devkit debug console did not report an Alpine guest"
-	echo "${output}" | grep -q 'apk-tools' \
-		|| die "devkit debug console shell lacks apk; not the devkit overlay"
+	echo "${output}" | grep -q 'GUEST_ID=ubuntu' \
+		|| die "devkit debug console did not report an Ubuntu guest"
+	echo "${output}" | grep -q 'DEVKIT_TOOL=yes' \
+		|| die "devkit debug console shell lacks devkit-apt; not the devkit overlay"
 }
 
 @test "Without devkit, the NVIDIA base debug console has no usable shell" {

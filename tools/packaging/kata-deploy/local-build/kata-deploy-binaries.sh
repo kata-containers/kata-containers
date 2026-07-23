@@ -741,35 +741,35 @@ EOF
 	rm -rf "${extension_rootfs}"
 }
 
-# Debug tools prebaked so they work offline; `apk add <pkg>` covers anything else
-# inside the chroot. busybox-static is the static /bin/busybox.static that
-# bootstraps the overlay/chroot from the shell-less guest base (see
+# Debug tools prebaked so they work offline; `devkit-apt install <pkg>` covers
+# anything else inside the chroot. busybox-static is the static /bin/busybox.static
+# that bootstraps the overlay/chroot from the shell-less guest base (see
 # devkit-init.sh); pciutils and util-linux let the guest's devices and namespaces
 # be inspected from the chroot. Kept lean: heavier tools are pulled on demand.
-readonly devkit_debug_packages="busybox-static bash ca-certificates strace ltrace iproute2 procps psmisc lsof tcpdump curl wget file less netcat-openbsd bind-tools pciutils util-linux"
+readonly devkit_debug_packages="busybox-static bash ca-certificates strace ltrace iproute2 procps psmisc lsof tcpdump curl wget file less netcat-openbsd dnsutils pciutils util-linux"
 
 # Install the generic devkit debug extension image (erofs+verity): a self-contained
-# minimal Alpine rootfs with debug tools prebaked. It ships no kata-agent, kernel
+# minimal Ubuntu rootfs with debug tools prebaked. It ships no kata-agent, kernel
 # or driver userspace, so - unlike the monolithic images - it is assembled here
 # and handed to image_builder.sh (like install_image_coco_extension), never via
 # rootfs.sh.
 install_image_devkit_extension() {
 	local component="rootfs-image-devkit-extension"
 
-	local branch ver mirror
-	branch="$(get_from_kata_deps ".externals.alpine.branch")"
-	ver="$(get_from_kata_deps ".externals.alpine.version")"
-	mirror="$(get_from_kata_deps ".externals.alpine.mirror")"
-	[[ -n "${branch}" ]] || die "externals.alpine.branch must be set in versions.yaml"
-	[[ -n "${ver}" ]] || die "externals.alpine.version must be set in versions.yaml"
-	[[ -n "${mirror}" ]] || mirror="https://dl-cdn.alpinelinux.org/alpine"
+	# Reuse the guest image's Ubuntu release (e.g. "noble") so the devkit matches
+	# the base userspace ABI (glibc) the guest ships.
+	local os_name os_version
+	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
+	[[ "${os_name}" == "ubuntu" ]] || die "devkit extension expects an ubuntu base, got '${os_name}' for ${ARCH}"
+	[[ -n "${os_version}" ]] || die "assets.image.architecture.${ARCH}.version must be set in versions.yaml"
 
-	# Self-contained (Alpine release + guest scripts), so key the cache on the
-	# Alpine version and the devkit source directory.
+	# Self-contained (Ubuntu release + guest scripts), so key the cache on the
+	# Ubuntu version and the devkit source directory.
 	local devkit_last_commit
 	devkit_last_commit="$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
 		-- tools/osbuilder/rootfs-builder/devkit 2>/dev/null || echo "unknown")"
-	latest_artefact="$(get_kata_version)-devkit-extension-${ver}-${devkit_last_commit}"
+	latest_artefact="$(get_kata_version)-devkit-extension-${os_version}-${devkit_last_commit}"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
@@ -787,60 +787,61 @@ install_image_devkit_extension() {
 	local extension_rootfs
 	extension_rootfs="$(mktemp -d "${repo_root_dir}/.devkit-extension-rootfs.XXXX")"
 
-	# Alpine's arch naming matches ${ARCH} (x86_64/aarch64).
-	local tarball url
-	tarball="alpine-minirootfs-${ver}-${ARCH}.tar.gz"
-	url="${mirror}/${branch}/releases/${ARCH}/${tarball}"
-	info "Fetching Alpine minirootfs ${url}"
-	curl -fsSL -o "${extension_rootfs}/../${tarball}" "${url}" \
-		|| die "failed to download Alpine minirootfs ${url}"
-	tar -xzf "${extension_rootfs}/../${tarball}" -C "${extension_rootfs}"
-	rm -f "${extension_rootfs}/../${tarball}"
-
-	# Pin repositories and seed a resolver so apk can fetch indexes and content.
-	mkdir -p "${extension_rootfs}/etc/apk"
-	cat > "${extension_rootfs}/etc/apk/repositories" <<-EOF
-		${mirror}/${branch}/main
-		${mirror}/${branch}/community
+	# Build an Ubuntu image with the debug toolset, then export its filesystem as
+	# the extension rootfs. Building the toolset via `docker build`/apt lets apt
+	# resolve dependencies normally (no chroot or --root gymnastics), and
+	# `docker export | tar` as the unprivileged build user yields a tree we own
+	# outright - no privileged sibling / chown dance needed.
+	info "Building devkit ubuntu rootfs (${os_name}:${os_version}) with debug toolset"
+	local build_tag="kata-devkit-ubuntu-${ARCH}:build"
+	docker build -t "${build_tag}" - <<-EOF || die "docker build for the devkit ubuntu rootfs failed"
+		FROM docker.io/library/ubuntu:${os_version}
+		ENV DEBIAN_FRONTEND=noninteractive
+		RUN apt-get update \
+			&& apt-get install -y --no-install-recommends ${devkit_debug_packages} \
+			&& rm -rf /var/lib/apt/lists/*
 	EOF
-	cp -L /etc/resolv.conf "${extension_rootfs}/etc/resolv.conf" 2>/dev/null || true
 
-	# The build container is unprivileged, so a direct chroot is denied. Run apk
-	# in a privileged sibling container instead (Docker-in-Docker uses host paths,
-	# hence the repo-root temp dir): apk installs into --root but still runs
-	# package scripts chrooted, which needs the sibling's privileges. apk writes
-	# as root, so chown the tree back afterwards or the trim/cleanup and
-	# image_builder steps below hit "Permission denied".
-	info "Installing devkit debug toolset with apk"
-	# shellcheck disable=SC2086
-	docker run --rm --privileged \
-		-v "${extension_rootfs}:${extension_rootfs}" \
-		"docker.io/library/alpine:${ver}" \
-		sh -c "/sbin/apk add --no-cache --root '${extension_rootfs}' ${devkit_debug_packages} \
-			&& chown -R $(id -u):$(id -g) '${extension_rootfs}'" \
-		|| die "apk failed to install the devkit debug toolset"
+	local cid
+	cid="$(docker create "${build_tag}")" || die "docker create for the devkit ubuntu rootfs failed"
+	# Skip /dev: docker export carries device nodes the unprivileged tar cannot
+	# recreate (devkit-init mounts /dev at runtime anyway).
+	docker export "${cid}" | tar -C "${extension_rootfs}" --exclude='dev/*' -xf - \
+		|| { docker rm -f "${cid}" >/dev/null 2>&1 || true; die "exporting the devkit ubuntu rootfs failed"; }
+	docker rm -f "${cid}" >/dev/null 2>&1 || true
+	docker rmi -f "${build_tag}" >/dev/null 2>&1 || true
+
+	# busybox-static ships a statically-linked busybox; expose it at the path
+	# devkit-init bootstraps from on the shell-less guest base.
+	local bb_src=""
+	local cand
+	for cand in usr/bin/busybox bin/busybox usr/sbin/busybox sbin/busybox; do
+		[[ -f "${extension_rootfs}/${cand}" ]] && { bb_src="${cand}"; break; }
+	done
+	[[ -n "${bb_src}" ]] || die "busybox-static not found in the devkit ubuntu rootfs"
+	cp -a "${extension_rootfs}/${bb_src}" "${extension_rootfs}/usr/bin/busybox.static"
 
 	# Install the guest-side helper scripts and expose the debug console entry as
-	# ${DEVKIT}/bin/devkit-sh. Do NOT reuse ${DEVKIT}/bin/sh: that is Alpine's own
-	# /bin/sh -> busybox symlink, needed unclobbered inside the chroot.
+	# devkit-sh (a sibling symlink to devkit-enter; Ubuntu's /bin is a symlink to
+	# /usr/bin, so /run/kata-extensions/devkit/bin/devkit-sh resolves here).
 	local devkit_src="${repo_root_dir}/tools/osbuilder/rootfs-builder/devkit"
 	local script dest
-	for script in devkit-init.sh devkit-enter.sh devkit-apk.sh; do
+	for script in devkit-init.sh devkit-enter.sh devkit-apt.sh; do
 		[[ -f "${devkit_src}/${script}" ]] || die "missing ${devkit_src}/${script}"
 		dest="${script%.sh}"
 		install -D -m0755 "${devkit_src}/${script}" "${extension_rootfs}/usr/bin/${dest}"
 	done
-	mkdir -p "${extension_rootfs}/bin"
-	ln -sf ../usr/bin/devkit-enter "${extension_rootfs}/bin/devkit-sh"
+	ln -sf devkit-enter "${extension_rootfs}/usr/bin/devkit-sh"
 
-	# Trim what a debug rootfs does not need (man/doc/info, apk cache) and the
-	# seeded resolver (devkit-init re-seeds one at runtime). Root inode must be
-	# 0755 (mktemp makes it 0700), else the mount point is unsearchable non-root.
+	# Trim what a debug rootfs does not need (man/doc/info, apt lists/cache) and
+	# the docker-seeded resolver (devkit-init re-seeds one at runtime). Root inode
+	# must be 0755 (mktemp makes it 0700), else the mount point is unsearchable.
 	rm -rf \
 		"${extension_rootfs}/usr/share/man"/* \
 		"${extension_rootfs}/usr/share/doc"/* \
 		"${extension_rootfs}/usr/share/info"/* \
-		"${extension_rootfs}/var/cache/apk"/* \
+		"${extension_rootfs}/var/lib/apt/lists"/* \
+		"${extension_rootfs}/var/cache/apt"/* \
 		"${extension_rootfs}/etc/resolv.conf" \
 		2>/dev/null || true
 	chmod 0755 "${extension_rootfs}"

@@ -307,7 +307,7 @@ debug: false
 # Deploy the optional "devkit" debug guest extension and, per enabled shim, an
 # extra `kata-<shim>-devkit` RuntimeClass wired to it. Pods on that class boot
 # with the extension cold-plugged, so the agent debug console drops into a rich
-# shell (Alpine + apk + debug tools) overlaid on the read-only guest.
+# shell (Ubuntu + apt + debug tools) overlaid on the read-only guest.
 #
 # Debugging aid: only effective with `debug: true`, ignored otherwise. Leave it
 # off in production and in confidential (CoCo/TEE) deployments.
