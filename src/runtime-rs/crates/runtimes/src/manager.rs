@@ -235,6 +235,14 @@ impl RuntimeHandlerManagerInner {
             .setup_config(&mut config)
             .context("failed to setup static resource mgmt config")?;
 
+        // Re-apply the `io.katacontainers.config.hypervisor.default_vcpus` pod annotation
+        // override AFTER `setup_config`. setup_config (initial_size.rs:178) overwrites
+        // `default_vcpus` from the pod's CPU/memory resources whenever `mem_mb > 0` — e.g. a pod
+        // with a memory limit but no CPU limit resets it to `(overhead_vcpus + 0).max(1.0)` = 1,
+        // clobbering the override applied in `load_config` above. The annotation must win so
+        // qemu boots `-smp N` directly (no vCPU hotplug, kata-containers#13440).
+        apply_hypervisor_default_vcpus_annotation(&sandbox_config.annotations, &mut config)?;
+
         update_component_log_level(&config);
 
         let dan_path = dan_config_path(&config, &self.id);
@@ -856,6 +864,12 @@ fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result
         TomlConfig::get_default_config_file_list()
     ))?;
     annotation.update_config_by_annotation(&mut toml_config)?;
+    // runtime-rs' update_config_by_annotation (external `annotations` crate) does not handle
+    // the `io.katacontainers.config.hypervisor.default_vcpus` annotation (kata-containers#13439),
+    // so CC guests always boot with the TOML `default_vcpus` (1) — a severe bottleneck for
+    // CPU-bound guest workloads. Apply it ourselves so qemu boots `-smp N` directly, with NO
+    // vCPU hotplug (sidestepping the unstable runtime-rs hotplug path, kata-containers#13440).
+    apply_hypervisor_default_vcpus_annotation(an, &mut toml_config)?;
     update_agent_kernel_params(&mut toml_config)?;
 
     // validate configuration and return the error
@@ -863,6 +877,60 @@ fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result
 
     info!(logger, "get config content {:?}", &toml_config);
     Ok(toml_config)
+}
+
+// Apply the `io.katacontainers.config.hypervisor.default_vcpus` pod annotation override.
+//
+// runtime-rs' `Annotation::update_config_by_annotation` (external `annotations` crate) does
+// not handle the `default_vcpus` hypervisor annotation (kata-containers#13439): CC guests
+// always boot with the TOML `default_vcpus` (1), a severe bottleneck for CPU-bound guest
+// workloads (LLM weight load, DeepGEMM JIT, CUDA-graph capture). The pod annotation is
+// allowlisted in `enable_annotations` but silently dropped.
+//
+// This reads the annotation directly (respecting the per-hypervisor `enable_annotations`
+// regex allowlist via `SecurityInfo::is_annotation_enabled`) and sets `cpu_info.default_vcpus`
+// so qemu boots `-smp N` directly at sandbox creation — NO vCPU hotplug, sidestepping the
+// unstable runtime-rs hotplug path (kata-containers#13440). `default_maxvcpus` is capped at N
+// so no hotplug is triggered beyond it.
+//
+// Safe no-op when the annotation is absent or not allowlisted (preserves TOML default), so
+// pods without the annotation keep booting with the configured `default_vcpus`.
+fn apply_hypervisor_default_vcpus_annotation(
+    an: &HashMap<String, String>,
+    config: &mut TomlConfig,
+) -> Result<()> {
+    const DEFAULT_VCPUS_ANNOTATION: &str = "io.katacontainers.config.hypervisor.default_vcpus";
+
+    let hypervisor_name = config.runtime.hypervisor_name.clone();
+    let hv = config
+        .hypervisor
+        .get_mut(&hypervisor_name)
+        .context("failed to get hypervisor config for default_vcpus annotation")?;
+
+    // Respect the per-hypervisor `enable_annotations` regex allowlist (it lives on
+    // `security_info`, not on the top-level Hypervisor struct). Skip if `default_vcpus`
+    // is not allowlisted for this hypervisor.
+    if !hv.security_info.is_annotation_enabled(DEFAULT_VCPUS_ANNOTATION) {
+        return Ok(());
+    }
+
+    if let Some(val) = an.get(DEFAULT_VCPUS_ANNOTATION) {
+        if let Ok(n) = val.parse::<f32>() {
+            if n >= 1.0 {
+                hv.cpu_info.default_vcpus = n;
+                // Cap maxvcpus at default_vcpus so no vCPU hotplug is triggered beyond it
+                // (runtime-rs hotplug is unstable, kata-containers#13440).
+                hv.cpu_info.default_maxvcpus = n.ceil() as u32;
+                info!(
+                    sl!(),
+                    "applied {} annotation: default_vcpus={}",
+                    DEFAULT_VCPUS_ANNOTATION, n
+                );
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn is_shipped_kata_config_path(config_path: &str) -> bool {
