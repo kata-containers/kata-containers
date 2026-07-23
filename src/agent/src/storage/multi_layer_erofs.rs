@@ -647,6 +647,25 @@ async fn create_partition_dmverity_device(
     let verity_info =
         parse_dmverity_options(storage).context("Failed to parse dm-verity options")?;
 
+    // FR-4C: authorize the layer's root digest against the measured allowlist BEFORE creating
+    // the dm-verity device. dm-verity only proves "content matches this root hash"; this gate
+    // proves the root hash is one the tenant approved, so a host cannot substitute a layer
+    // with a matching self-computed hash. The Kata analogue of runhcs
+    // EnforceDeviceMountPolicy(target, RootDigest). Fail-closed in strict builds.
+    #[cfg(feature = "strict-policy")]
+    {
+        let store = crate::VERIFIED_LAYERS.lock().await;
+        store
+            .verify(&verity_info.hashtype, &verity_info.hash)
+            .map_err(|e| {
+                anyhow!(
+                    "FR-4C: dm-verity layer not authorized for partition {}: {}",
+                    partition_path,
+                    e
+                )
+            })?;
+    }
+
     // Create dm-verity device
     let verity_device_path = create_dmverity_device(&verity_info, Path::new(partition_path))
         .await

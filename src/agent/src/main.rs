@@ -165,6 +165,18 @@ lazy_static! {
         Mutex::new(kata_security_reference_monitor::NetworkPhaseMachine::new());
 }
 
+// FR-4C: measured allowlist of authorized read-only layer (dm-verity) root digests. The
+// storage handler authorizes each dm-verity layer's (algorithm, root_hash) against this
+// store before creating the verity device — the Kata analogue of runhcs
+// EnforceDeviceMountPolicy(target, RootDigest). Configured from measured state; when
+// verification is required but no layer is authorized, every layer is rejected (fail-closed).
+// Strict builds only.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    pub(crate) static ref VERIFIED_LAYERS: Mutex<kata_security_reference_monitor::VerifiedLayerStore> =
+        Mutex::new(kata_security_reference_monitor::VerifiedLayerStore::new(false));
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]
@@ -446,6 +458,14 @@ async fn start_sandbox(
     #[cfg(feature = "strict-policy")]
     if let Err(e) = seed_fragment_trust_root(logger).await {
         warn!(logger, "FR-1: fragment trust root not seeded: {:?}", e);
+    }
+
+    // FR-4C: seed the verified-layer allowlist (authorized dm-verity root digests) from
+    // measured guest state. When require_verified_layers is set but no layer is authorized,
+    // every read-only layer is rejected (fail-closed).
+    #[cfg(feature = "strict-policy")]
+    if let Err(e) = seed_verified_layers(logger).await {
+        warn!(logger, "FR-4C: verified layers not seeded: {:?}", e);
     }
 
     let sandbox = Arc::new(Mutex::new(s));
@@ -1162,6 +1182,70 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
         store.import_svn_state(&snapshot);
         info!(logger, "FR-1: imported persisted fragment SVN state");
     }
+    Ok(())
+}
+
+// FR-4C: measured guest path listing the authorized read-only layer (dm-verity) root
+// digests. It lives in the measured rootfs; overridable via KATA_VERIFIED_LAYERS for tests.
+// Format (TOML):
+//   require_verified_layers = true
+//   [[layer]]
+//   algorithm = "sha256"
+//   root_hash = "<hex>"
+#[cfg(feature = "strict-policy")]
+const VERIFIED_LAYERS_PATH: &str = "/etc/kata/verified-layers.toml";
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize, Default)]
+struct VerifiedLayersConfig {
+    /// When true, every dm-verity read-only layer must be in the allowlist (fail-closed).
+    #[serde(default)]
+    require_verified_layers: Option<bool>,
+    #[serde(default)]
+    layer: Vec<VerifiedLayerConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct VerifiedLayerConfig {
+    /// dm-verity hash algorithm (e.g. "sha256"). Defaults to "sha256".
+    #[serde(default = "default_layer_algorithm")]
+    algorithm: String,
+    /// dm-verity root hash (hex).
+    root_hash: String,
+}
+
+#[cfg(feature = "strict-policy")]
+fn default_layer_algorithm() -> String {
+    "sha256".to_string()
+}
+
+// FR-4C: configure the verified-layer allowlist from measured state. Absent/empty config
+// leaves verification not required (opt-in); when require_verified_layers is set but no
+// layer is authorized, every read-only layer is rejected (fail-closed).
+#[cfg(feature = "strict-policy")]
+async fn seed_verified_layers(logger: &Logger) -> Result<()> {
+    let path =
+        std::env::var("KATA_VERIFIED_LAYERS").unwrap_or_else(|_| VERIFIED_LAYERS_PATH.to_string());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => {
+            info!(logger, "FR-4C: no verified-layers config; layer verification off");
+            return Ok(());
+        }
+    };
+    let cfg: VerifiedLayersConfig =
+        toml::from_str(&text).context("parse verified-layers.toml")?;
+
+    let mut store = VERIFIED_LAYERS.lock().await;
+    if let Some(req) = cfg.require_verified_layers {
+        store.set_require(req);
+    }
+    for layer in &cfg.layer {
+        store.authorize_layer(&layer.algorithm, &layer.root_hash);
+    }
+    info!(logger, "FR-4C: verified-layer allowlist configured";
+        "required" => store.is_required(), "layers" => store.len());
     Ok(())
 }
 
