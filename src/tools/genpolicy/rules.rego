@@ -43,17 +43,17 @@ default SetGuestDateTimeRequest := false
 default SetIPTablesRequest := false
 default SetPolicyRequest := false
 default SignalProcessRequest := false
-default StartContainerRequest := true
+default StartContainerRequest := false
 default StartTracingRequest := false
-default StatsContainerRequest := true
+default StatsContainerRequest := false
 default StopTracingRequest := false
-default TtyWinResizeRequest := true
+default TtyWinResizeRequest := false
 default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := false
 default UpdateRoutesRequest := false
 default VolumeStatsRequest := false
-default WaitProcessRequest := true
+default WaitProcessRequest := false
 default WriteStreamRequest := false
 
 # AllowRequestsFailingPolicy := true configures the Agent to *allow any
@@ -1817,4 +1817,43 @@ SignalProcessRequest if {
     print("SignalProcessRequest: container", input.container_id, "known at index", p_container_index)
 
     print("SignalProcessRequest: true")
+}
+
+# Gate container-scoped lifecycle/inspection endpoints on a known-container check
+# instead of allowing them unconditionally. StartContainerRequest, WaitProcessRequest,
+# StatsContainerRequest and TtyWinResizeRequest each act on a specific container_id and
+# are permitted only for a container this policy authorized to run (recorded in
+# persisted state by CreateContainerRequest and cleared by RemoveContainerRequest).
+# get_state_val is undefined for an unknown or already-removed container_id, which makes
+# the rule undefined and falls through to the fail-closed default. This mirrors the
+# reference behavior of scoping per-container operations to containers the policy
+# actually created, closing the "operate on any container_id" gap of the previous
+# unconditional defaults.
+allow_known_container(container_id) if {
+    p_container_index := get_state_val(container_id)
+    print("allow_known_container: container", container_id, "known at index", p_container_index)
+}
+
+StartContainerRequest if {
+    print("StartContainerRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("StartContainerRequest: true")
+}
+
+WaitProcessRequest if {
+    print("WaitProcessRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("WaitProcessRequest: true")
+}
+
+StatsContainerRequest if {
+    print("StatsContainerRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("StatsContainerRequest: true")
+}
+
+TtyWinResizeRequest if {
+    print("TtyWinResizeRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("TtyWinResizeRequest: true")
 }
