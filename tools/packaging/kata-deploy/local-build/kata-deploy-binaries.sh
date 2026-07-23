@@ -81,6 +81,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
 	coco-extension
+	devkit-extension
 	nvidia-gpu
 	nvidia-gpu-confidential
 	nvidia
@@ -735,6 +736,136 @@ EOF
 
 	if [[ -e "${install_dir}/root_hash_coco-extension.txt" ]]; then
 		info "Root hash file: ${install_dir}/root_hash_coco-extension.txt"
+	fi
+
+	rm -rf "${extension_rootfs}"
+}
+
+# Debug tools prebaked so they work offline; `apk add <pkg>` covers anything else
+# inside the chroot. busybox-static is the static /bin/busybox.static that
+# bootstraps the overlay/chroot from the shell-less guest base (see
+# devkit-init.sh); pciutils and util-linux let the guest's devices and namespaces
+# be inspected from the chroot. Kept lean: heavier tools are pulled on demand.
+readonly devkit_debug_packages="busybox-static bash ca-certificates strace ltrace iproute2 procps psmisc lsof tcpdump curl wget file less netcat-openbsd bind-tools pciutils util-linux"
+
+# Install the generic devkit debug extension image (erofs+verity): a self-contained
+# minimal Alpine rootfs with debug tools prebaked. It ships no kata-agent, kernel
+# or driver userspace, so - unlike the monolithic images - it is assembled here
+# and handed to image_builder.sh (like install_image_coco_extension), never via
+# rootfs.sh.
+install_image_devkit_extension() {
+	local component="rootfs-image-devkit-extension"
+
+	local branch ver mirror
+	branch="$(get_from_kata_deps ".externals.alpine.branch")"
+	ver="$(get_from_kata_deps ".externals.alpine.version")"
+	mirror="$(get_from_kata_deps ".externals.alpine.mirror")"
+	[[ -n "${branch}" ]] || die "externals.alpine.branch must be set in versions.yaml"
+	[[ -n "${ver}" ]] || die "externals.alpine.version must be set in versions.yaml"
+	[[ -n "${mirror}" ]] || mirror="https://dl-cdn.alpinelinux.org/alpine"
+
+	# Self-contained (Alpine release + guest scripts), so key the cache on the
+	# Alpine version and the devkit source directory.
+	local devkit_last_commit
+	devkit_last_commit="$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
+		-- tools/osbuilder/rootfs-builder/devkit 2>/dev/null || echo "unknown")"
+	latest_artefact="$(get_kata_version)-devkit-extension-${ver}-${devkit_last_commit}"
+	latest_builder_image=""
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "Create devkit extension image"
+
+	# Temp dir under the repo root so the path is valid both in the outer build
+	# container and the nested image-builder (Docker-in-Docker uses host paths).
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.devkit-extension-rootfs.XXXX")"
+
+	# Alpine's arch naming matches ${ARCH} (x86_64/aarch64).
+	local tarball url
+	tarball="alpine-minirootfs-${ver}-${ARCH}.tar.gz"
+	url="${mirror}/${branch}/releases/${ARCH}/${tarball}"
+	info "Fetching Alpine minirootfs ${url}"
+	curl -fsSL -o "${extension_rootfs}/../${tarball}" "${url}" \
+		|| die "failed to download Alpine minirootfs ${url}"
+	tar -xzf "${extension_rootfs}/../${tarball}" -C "${extension_rootfs}"
+	rm -f "${extension_rootfs}/../${tarball}"
+
+	# Pin repositories and seed a resolver so apk can fetch indexes and content.
+	mkdir -p "${extension_rootfs}/etc/apk"
+	cat > "${extension_rootfs}/etc/apk/repositories" <<-EOF
+		${mirror}/${branch}/main
+		${mirror}/${branch}/community
+	EOF
+	cp -L /etc/resolv.conf "${extension_rootfs}/etc/resolv.conf" 2>/dev/null || true
+
+	# The build container is unprivileged, so a direct chroot is denied. Run apk
+	# in a privileged sibling container instead (Docker-in-Docker uses host paths,
+	# hence the repo-root temp dir): apk installs into --root but still runs
+	# package scripts chrooted, which needs the sibling's privileges. apk writes
+	# as root, so chown the tree back afterwards or the trim/cleanup and
+	# image_builder steps below hit "Permission denied".
+	info "Installing devkit debug toolset with apk"
+	# shellcheck disable=SC2086
+	docker run --rm --privileged \
+		-v "${extension_rootfs}:${extension_rootfs}" \
+		"docker.io/library/alpine:${ver}" \
+		sh -c "/sbin/apk add --no-cache --root '${extension_rootfs}' ${devkit_debug_packages} \
+			&& chown -R $(id -u):$(id -g) '${extension_rootfs}'" \
+		|| die "apk failed to install the devkit debug toolset"
+
+	# Install the guest-side helper scripts and expose the debug console entry as
+	# ${DEVKIT}/bin/devkit-sh. Do NOT reuse ${DEVKIT}/bin/sh: that is Alpine's own
+	# /bin/sh -> busybox symlink, needed unclobbered inside the chroot.
+	local devkit_src="${repo_root_dir}/tools/osbuilder/rootfs-builder/devkit"
+	local script dest
+	for script in devkit-init.sh devkit-enter.sh devkit-apk.sh; do
+		[[ -f "${devkit_src}/${script}" ]] || die "missing ${devkit_src}/${script}"
+		dest="${script%.sh}"
+		install -D -m0755 "${devkit_src}/${script}" "${extension_rootfs}/usr/bin/${dest}"
+	done
+	mkdir -p "${extension_rootfs}/bin"
+	ln -sf ../usr/bin/devkit-enter "${extension_rootfs}/bin/devkit-sh"
+
+	# Trim what a debug rootfs does not need (man/doc/info, apk cache) and the
+	# seeded resolver (devkit-init re-seeds one at runtime). Root inode must be
+	# 0755 (mktemp makes it 0700), else the mount point is unsearchable non-root.
+	rm -rf \
+		"${extension_rootfs}/usr/share/man"/* \
+		"${extension_rootfs}/usr/share/doc"/* \
+		"${extension_rootfs}/usr/share/info"/* \
+		"${extension_rootfs}/var/cache/apk"/* \
+		"${extension_rootfs}/etc/resolv.conf" \
+		2>/dev/null || true
+	chmod 0755 "${extension_rootfs}"
+
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	mkdir -p "${install_dir}"
+
+	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="devkit-extension"
+	export FS_TYPE="erofs"
+	# s390x does not use a measured rootfs, so no dm-verity hash is produced.
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	"${image_builder}" -o "${install_dir}/kata-containers-devkit-extension.img" "${extension_rootfs}"
+
+	if [[ -e "${install_dir}/root_hash_devkit-extension.txt" ]]; then
+		info "Root hash file: ${install_dir}/root_hash_devkit-extension.txt"
 	fi
 
 	rm -rf "${extension_rootfs}"
@@ -1717,6 +1848,8 @@ handle_build() {
 	rootfs-image-confidential) install_image_confidential ;;
 
 	rootfs-image-coco-extension) install_image_coco_extension ;;
+
+	rootfs-image-devkit-extension) install_image_devkit_extension ;;
 
 	rootfs-image-mariner) install_image_mariner ;;
 
