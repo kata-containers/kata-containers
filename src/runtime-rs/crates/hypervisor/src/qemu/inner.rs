@@ -35,6 +35,8 @@ use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -107,6 +109,8 @@ impl QemuInner {
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
+
+        check_bpf_enabled(self.config.security_info.seccomp_sandbox.as_deref());
 
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
         // open until spawn() is called to launch qemu later in this function,
@@ -944,6 +948,54 @@ impl QemuInner {
     }
 }
 
+const BPF_JIT_ENABLE_PATH: &str = "/proc/sys/net/core/bpf_jit_enable";
+
+fn check_bpf_enabled(seccomp_sandbox: Option<&str>) {
+    check_bpf_enabled_with(
+        seccomp_sandbox,
+        || fs::read_to_string(BPF_JIT_ENABLE_PATH),
+        |message| warn!(sl!(), "{}", message),
+    );
+}
+
+fn check_bpf_enabled_with<ReadStatus, LogWarning>(
+    seccomp_sandbox: Option<&str>,
+    read_status: ReadStatus,
+    mut log_warning: LogWarning,
+) where
+    ReadStatus: FnOnce() -> io::Result<String>,
+    LogWarning: FnMut(String),
+{
+    if seccomp_sandbox.unwrap_or_default().is_empty() {
+        return;
+    }
+
+    let status = match read_status() {
+        Ok(status) => status,
+        Err(err) => {
+            log_warning(format!("failed to get bpf_jit_enable status: {err}"));
+            return;
+        }
+    };
+
+    let enabled = match status.trim().parse::<i32>() {
+        Ok(enabled) => enabled,
+        Err(err) => {
+            log_warning(format!(
+                "failed to convert bpf_jit_enable status to integer: {err}"
+            ));
+            return;
+        }
+    };
+
+    if enabled == 0 {
+        log_warning(
+            "bpf_jit_enable is disabled. It's recommended to turn on bpf_jit_enable to reduce the performance impact of QEMU seccomp sandbox."
+                .to_string(),
+        );
+    }
+}
+
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
     info!(sl!(), "starting reading qemu console");
 
@@ -1328,5 +1380,101 @@ impl Persist for QemuInner {
 
             exit_notify: Some(exit_notify),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{Cell, RefCell};
+
+    use super::*;
+
+    #[test]
+    fn test_bpf_jit_check_warnings() {
+        struct TestCase {
+            name: &'static str,
+            seccomp_sandbox: Option<&'static str>,
+            read_result: Result<&'static str, io::ErrorKind>,
+            expect_read: bool,
+            expected_warning: Option<&'static str>,
+        }
+
+        let cases = [
+            TestCase {
+                name: "seccomp sandbox unset",
+                seccomp_sandbox: None,
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: false,
+                expected_warning: None,
+            },
+            TestCase {
+                name: "seccomp sandbox empty",
+                seccomp_sandbox: Some(""),
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: false,
+                expected_warning: None,
+            },
+            TestCase {
+                name: "read failure",
+                seccomp_sandbox: Some("on"),
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: true,
+                expected_warning: Some("failed to get bpf_jit_enable status"),
+            },
+            TestCase {
+                name: "parse failure",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("invalid"),
+                expect_read: true,
+                expected_warning: Some("failed to convert bpf_jit_enable status to integer"),
+            },
+            TestCase {
+                name: "disabled",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("0\n"),
+                expect_read: true,
+                expected_warning: Some("bpf_jit_enable is disabled"),
+            },
+            TestCase {
+                name: "enabled",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("1\n"),
+                expect_read: true,
+                expected_warning: None,
+            },
+        ];
+
+        for case in cases {
+            let TestCase {
+                name,
+                seccomp_sandbox,
+                read_result,
+                expect_read,
+                expected_warning,
+            } = case;
+            let read_called = Cell::new(false);
+            let warnings = RefCell::new(Vec::new());
+            check_bpf_enabled_with(
+                seccomp_sandbox,
+                || {
+                    read_called.set(true);
+                    read_result
+                        .map(str::to_owned)
+                        .map_err(|kind| io::Error::new(kind, "injected"))
+                },
+                |warning| warnings.borrow_mut().push(warning),
+            );
+
+            assert_eq!(read_called.get(), expect_read, "{}", name);
+
+            let warnings = warnings.borrow();
+            match expected_warning {
+                Some(expected) => {
+                    assert_eq!(warnings.len(), 1, "{}", name);
+                    assert!(warnings[0].contains(expected), "{}", name);
+                }
+                None => assert!(warnings.is_empty(), "{}", name),
+            }
+        }
     }
 }
