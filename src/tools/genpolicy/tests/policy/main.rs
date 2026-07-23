@@ -13,7 +13,8 @@ mod tests {
 
     use protocols::agent::{
         AddARPNeighborsRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        RemoveContainerRequest, SignalProcessRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        RemoveContainerRequest, SignalProcessRequest, StartContainerRequest, StatsContainerRequest,
+        TtyWinResizeRequest, UpdateInterfaceRequest, UpdateRoutesRequest, WaitProcessRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,10 @@ mod tests {
         ExecProcessRequest(ExecProcessRequest),
         RemoveContainerRequest(RemoveContainerRequest),
         SignalProcessRequest(SignalProcessRequest),
+        StartContainerRequest(StartContainerRequest),
+        StatsContainerRequest(StatsContainerRequest),
+        TtyWinResizeRequest(TtyWinResizeRequest),
+        WaitProcessRequest(WaitProcessRequest),
         UpdateInterfaceRequest(UpdateInterfaceRequest),
         UpdateRoutesRequest(UpdateRoutesRequest),
         AddARPNeighborsRequest(AddARPNeighborsRequest),
@@ -45,6 +50,10 @@ mod tests {
                 TestRequest::ExecProcessRequest(_) => write!(f, "ExecProcessRequest"),
                 TestRequest::RemoveContainerRequest(_) => write!(f, "RemoveContainerRequest"),
                 TestRequest::SignalProcessRequest(_) => write!(f, "SignalProcessRequest"),
+                TestRequest::StartContainerRequest(_) => write!(f, "StartContainerRequest"),
+                TestRequest::StatsContainerRequest(_) => write!(f, "StatsContainerRequest"),
+                TestRequest::TtyWinResizeRequest(_) => write!(f, "TtyWinResizeRequest"),
+                TestRequest::WaitProcessRequest(_) => write!(f, "WaitProcessRequest"),
                 TestRequest::UpdateInterfaceRequest(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutesRequest(_) => write!(f, "UpdateRoutesRequest"),
                 TestRequest::AddARPNeighborsRequest(_) => write!(f, "AddARPNeighborsRequest"),
@@ -310,6 +319,31 @@ mod tests {
     #[tokio::test]
     async fn test_state_signal_process() {
         runtests("state/signalprocess").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_remove_container() {
+        runtests("state/removecontainer").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_start_container() {
+        runtests("state/startcontainer").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_stats_container() {
+        runtests("state/statscontainer").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_tty_win_resize() {
+        runtests("state/ttywinresize").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_wait_process() {
+        runtests("state/waitprocess").await;
     }
 
     #[tokio::test]

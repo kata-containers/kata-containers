@@ -34,7 +34,7 @@ default MemHotplugByProbeRequest := false
 default OnlineCPUMemRequest := true
 default PauseContainerRequest := false
 default ReadStreamRequest := false
-default RemoveContainerRequest := true
+default RemoveContainerRequest := false
 default RemoveStaleVirtiofsShareMountsRequest := true
 default ReseedRandomDevRequest := false
 default ResizeVolumeRequest := false
@@ -43,18 +43,46 @@ default SetGuestDateTimeRequest := false
 default SetIPTablesRequest := false
 default SetPolicyRequest := false
 default SignalProcessRequest := false
-default StartContainerRequest := true
+default StartContainerRequest := false
 default StartTracingRequest := false
-default StatsContainerRequest := true
+default StatsContainerRequest := false
 default StopTracingRequest := false
-default TtyWinResizeRequest := true
+default TtyWinResizeRequest := false
 default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := false
 default UpdateRoutesRequest := false
 default VolumeStatsRequest := false
-default WaitProcessRequest := true
+default WaitProcessRequest := false
 default WriteStreamRequest := false
+
+# Intentionally-allowed infrastructure / sandbox-lifecycle endpoints (reviewed, not an
+# unexamined gap). The endpoints below keep `:= true` above by design: they are part of
+# the trusted, host-driven sandbox lifecycle and carry no attacker-constrainable,
+# security-relevant payload that an in-guest Rego gate could restrict without breaking
+# legitimate VM sizing, boot, or teardown.
+#
+#   DestroySandboxRequest                  empty payload; sandbox teardown. The host
+#                                          already controls the VM lifecycle (it can
+#                                          destroy the VM directly), so gating adds no
+#                                          guarantee.
+#   GetOOMEventRequest                     empty payload; read-only OOM notification
+#                                          stream polled by the runtime.
+#   GuestDetailsRequest                    read-only guest capability query (memory block
+#                                          size / hotplug probe) issued early in the boot
+#                                          handshake, before any container state exists.
+#   OnlineCPUMemRequest                    host-driven online of CPU/memory the host
+#                                          itself provisions; onlining host-provided
+#                                          hardware is not an in-guest trust boundary and
+#                                          the count is fixed by VM config, not the guest.
+#   RemoveStaleVirtiofsShareMountsRequest  empty payload; housekeeping of stale virtiofs
+#                                          shares the host already controls.
+#
+# This matches the reference, which likewise does not gate its GuestDetails/OOM/lifecycle
+# equivalents; the diagnostics surface the reference *does* gate (get-properties /
+# dump-stacks) is instead hard-disabled in the strict build (GetDiagnosticDataRequest and
+# CopyFileRequest are `:= false` above). Per-container operations (Create/Exec/Signal/
+# Start/Wait/Stats/TtyWinResize/RemoveContainer) ARE gated on authorized container state (see below).
 
 # AllowRequestsFailingPolicy := true configures the Agent to *allow any
 # requests causing a policy failure*. This is an unsecure configuration
@@ -1786,6 +1814,13 @@ GetDiagnosticDataRequest if {
 RemoveContainerRequest:= {"ops": ops, "allowed": true} if {
     print("RemoveContainerRequest: input =", input)
 
+    # Only a container this policy authorized to run may be removed. get_state_val is
+    # undefined for an unknown or already-removed container_id, which makes this rule
+    # undefined and falls through to the fail-closed default, closing the "remove any
+    # container_id" gap (and making removal idempotent: a second remove is denied).
+    p_container_index := get_state_val(input.container_id)
+    print("RemoveContainerRequest: container", input.container_id, "known at index", p_container_index)
+
     # Delete input.container_id from p_state
     ops_builder1 := []
     del_container := state_del_key(input.container_id)
@@ -1817,4 +1852,43 @@ SignalProcessRequest if {
     print("SignalProcessRequest: container", input.container_id, "known at index", p_container_index)
 
     print("SignalProcessRequest: true")
+}
+
+# Gate container-scoped lifecycle/inspection endpoints on a known-container check
+# instead of allowing them unconditionally. StartContainerRequest, WaitProcessRequest,
+# StatsContainerRequest and TtyWinResizeRequest each act on a specific container_id and
+# are permitted only for a container this policy authorized to run (recorded in
+# persisted state by CreateContainerRequest and cleared by RemoveContainerRequest).
+# get_state_val is undefined for an unknown or already-removed container_id, which makes
+# the rule undefined and falls through to the fail-closed default. This mirrors the
+# reference behavior of scoping per-container operations to containers the policy
+# actually created, closing the "operate on any container_id" gap of the previous
+# unconditional defaults.
+allow_known_container(container_id) if {
+    p_container_index := get_state_val(container_id)
+    print("allow_known_container: container", container_id, "known at index", p_container_index)
+}
+
+StartContainerRequest if {
+    print("StartContainerRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("StartContainerRequest: true")
+}
+
+WaitProcessRequest if {
+    print("WaitProcessRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("WaitProcessRequest: true")
+}
+
+StatsContainerRequest if {
+    print("StatsContainerRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("StatsContainerRequest: true")
+}
+
+TtyWinResizeRequest if {
+    print("TtyWinResizeRequest: input =", input)
+    allow_known_container(input.container_id)
+    print("TtyWinResizeRequest: true")
 }
