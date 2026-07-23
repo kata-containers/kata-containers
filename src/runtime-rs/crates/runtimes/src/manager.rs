@@ -17,7 +17,9 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::{
-    utils::{create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user},
+    utils::{
+        create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user, vmm_user_runtime_dir,
+    },
     Param,
 };
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
@@ -48,7 +50,6 @@ use std::{
     ops::Deref,
     os::unix::fs::{chown, MetadataExt},
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
     time::SystemTime,
 };
@@ -969,7 +970,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     let uid = user.uid.as_raw();
     let gid = user.gid.as_raw();
 
-    let user_tmp_dir = PathBuf::from_str(&format!("/run/user/{uid}"))?;
+    let user_tmp_dir = vmm_user_runtime_dir(uid);
 
     match std::fs::create_dir_all(&user_tmp_dir) {
         Ok(_) => match chown(&user_tmp_dir, Some(uid), Some(gid)) {
