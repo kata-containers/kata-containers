@@ -1120,6 +1120,14 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		s.Logger().WithError(err).Error("failed to cleanup ephemeral disks")
 	}
 
+	if rootless.IsRootless() {
+		uid := s.config.HypervisorConfig.Uid
+		userRuntimeDir := rootless.VmmUserRuntimeDir(uid)
+		if err := rootless.RemoveVmmUserRuntimeDir(uid); err != nil {
+			s.Logger().WithError(err).WithField("path", userRuntimeDir).Warn("failed to remove rootless runtime directory")
+		}
+	}
+
 	return s.store.Destroy(s.id)
 }
 
