@@ -988,9 +988,22 @@ struct FragmentCaAnchorConfig {
 #[derive(serde::Deserialize)]
 struct FragmentLedgerConfig {
     id: String,
-    /// One or more current verification keys for this ledger (multiple ⇒ rotation).
+    /// One or more current Ed25519 verification keys for this ledger (multiple ⇒ rotation).
     #[serde(default)]
     pubkey_hex: Vec<String>,
+    /// BL-2: additional non-Ed25519 keys (ES256/ES384/PS256/RS256), each a SubjectPublicKeyInfo
+    /// DER in hex plus its COSE algorithm name.
+    #[serde(default)]
+    key: Vec<FragmentLedgerKeyConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct FragmentLedgerKeyConfig {
+    /// COSE algorithm: "eddsa" | "es256" | "es384" | "ps256" | "rs256".
+    alg: String,
+    /// SubjectPublicKeyInfo DER (hex) for the ledger key.
+    spki_hex: String,
 }
 
 #[cfg(feature = "strict-policy")]
@@ -1096,6 +1109,24 @@ async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
         store
             .load_transparency_trust_list(&entries)
             .map_err(|e| anyhow::anyhow!("load transparency trust list: {}", e))?;
+        // BL-2: additional non-Ed25519 ledger keys (ES256/ES384/PS256/RS256).
+        for l in &cfg.ledger {
+            for k in &l.key {
+                let alg = match k.alg.trim().to_ascii_lowercase().as_str() {
+                    "eddsa" | "ed25519" => kata_security_reference_monitor::cose_keys::CoseAlg::EdDsa,
+                    "es256" => kata_security_reference_monitor::cose_keys::CoseAlg::Es256,
+                    "es384" => kata_security_reference_monitor::cose_keys::CoseAlg::Es384,
+                    "ps256" => kata_security_reference_monitor::cose_keys::CoseAlg::Ps256,
+                    "rs256" => kata_security_reference_monitor::cose_keys::CoseAlg::Rs256,
+                    other => anyhow::bail!("ledger {} unsupported key alg {}", l.id, other),
+                };
+                let der = decode_hex_vec(&k.spki_hex)
+                    .with_context(|| format!("ledger {} spki_hex", l.id))?;
+                let pk = kata_security_reference_monitor::cose_keys::PublicKey::from_spki_der(&der)
+                    .ok_or_else(|| anyhow::anyhow!("ledger {} invalid SPKI key", l.id))?;
+                store.add_ledger_key(l.id.clone(), pk, alg);
+            }
+        }
         info!(logger, "FR-1: transparency trust list loaded"; "ledgers" => cfg.ledger.len());
     }
     // FR-1d: did:x509 issuer identity — require_x509, revocation list, CA anchors.

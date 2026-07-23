@@ -28,6 +28,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod cdi;
+pub mod cose_keys;
 pub mod did_x509;
 pub mod fragments;
 pub mod merkle;
