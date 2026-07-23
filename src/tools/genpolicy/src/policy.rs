@@ -380,6 +380,25 @@ pub struct AddARPNeighborsRequestDefaults {
     allowed_states: Vec<u32>,
 }
 
+/// SignalProcessRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignalProcessRequestDefaults {
+    /// Signal numbers the Host is allowed to send to Guest container processes.
+    /// Any signal not in this list is rejected, and signals targeting a container
+    /// that was not created under this policy are rejected regardless of the signal.
+    pub allowed_signals: Vec<u32>,
+}
+
+/// Default signal allowlist used when `SignalProcessRequest` is absent from
+/// genpolicy-settings.json. Covers the standard container-lifecycle signals
+/// (SIGHUP/INT/QUIT/KILL/USR1/USR2/TERM/CONT/STOP/WINCH) while rejecting less
+/// common signals that a malicious Host could otherwise inject into a workload.
+fn default_signal_process_request() -> SignalProcessRequestDefaults {
+    SignalProcessRequestDefaults {
+        allowed_signals: vec![1, 2, 3, 9, 10, 12, 15, 18, 19, 28],
+    }
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -401,6 +420,10 @@ pub struct RequestDefaults {
 
     /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
     pub AddARPNeighborsRequest: AddARPNeighborsRequestDefaults,
+
+    /// Signals the Host is allowed to send to Guest container processes via SignalProcess.
+    #[serde(default = "default_signal_process_request")]
+    pub SignalProcessRequest: SignalProcessRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,
