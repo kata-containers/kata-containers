@@ -227,8 +227,9 @@ implement it, the security guarantee it introduces, and how it was validated.
   - **issuer identity** — either a pinned Ed25519 key **or** a `did:x509` certificate chain
     in the COSE `x5chain` header: path-validated to a measured CA fingerprint, leaf must
     satisfy a `did:x509` policy (subject CN / EKU / DNS SAN), revoked fingerprints rejected;
-    trust anchored on **CA + policy** so leaf rotation needs no config change; `require_x509`
-    disables the raw-key path (no downgrade). Pure-Rust X.509/ECDSA; no Go dependency;
+    trust anchored on **CA + policy** so leaf rotation (and leaf algorithm) needs no config
+    change; `require_x509` disables the raw-key path (no downgrade). Multi-algorithm
+    (ES256/ES384/RS256/PS256) leaf + chain; pure-Rust X.509/ECDSA/RSA, no Go dependency;
   - **add-only / includes scoping** — a module may only contribute in its declared
     `agent_policy.fragments[.<include>]` namespace and can never redefine a base rule;
   - **composition** — a fragment may `require` other fragments, which must already be loaded
@@ -257,7 +258,7 @@ implement it, the security guarantee it introduces, and how it was validated.
   `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo), Stage 2
   transparency-log inclusion + consistency proofs (RFC 6962 Merkle);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 86 fragment-related SRM unit tests (of 92 in the SRM crate)
+- **Validated:** 86 fragment-related SRM unit tests (of 98 in the SRM crate)
   (issuer/signature/SVN/feed/receipt/trust-list/rotation/
   did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering/Merkle-inclusion/
   consistency); an offline, self-contained capability demo (`examples/fragment-demo` —
@@ -268,9 +269,8 @@ implement it, the security guarantee it introduces, and how it was validated.
   (`fr1-ordering-attack.sh`); and a fragment without a transparency-log inclusion+consistency
   proof, or one presenting a rewound log, is rejected (`fr1-ttl-attack.sh`). Reproducible dev
   guide: `docs/cc/fr1-fragment-e2e.md`.
-- **Follow-up (optional):** additional signature algorithms (RSA/ES384) for did:x509 leaves
-  and receipts behind the existing verification entry points; binding the issuer config +
-  SVN/ordering/tree-head state into the initdata measured section proper.
+- **Follow-up (optional):** binding the issuer config + SVN/ordering/tree-head state into the
+  initdata measured section proper.
 
 ---
 
@@ -442,7 +442,7 @@ pre-hardened deployment a few are parity or additional defense-in-depth.
 - **Unit / integration:** the SRM crate carries the transaction manager, occurrence
   registry, resource graph, CDI trust, fragment verifier, scratch classifier, handle
   binding, verified-layer allowlist, network-phase machine, and lifecycle
-  fault-injection/fuzz tests, all green (92 SRM unit tests + 4 fault-injection).
+  fault-injection/fuzz tests, all green (98 SRM unit tests + 4 fault-injection).
 - **Formal:** TLC model-checks the lifecycle safety properties with no error.
 - **Live matrix:** the strict `kata-parma` profile passes the policy-enforcement matrix
   with no regression, and the FR-9/FR-10/FR-14 live ttRPC attacks are denied.
