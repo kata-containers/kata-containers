@@ -18,7 +18,8 @@ use common::{
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::{
     utils::{
-        create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user, vmm_user_runtime_dir,
+        create_dir_all_with_inherit_owner, create_vmm_user, remove_dir_all_if_exists,
+        remove_vmm_user, vmm_user_runtime_dir,
     },
     Param,
 };
@@ -190,9 +191,16 @@ impl RuntimeHandlerManagerInner {
             .ok_or_else(|| anyhow!("hypervisor {} not found in config", hypervisor_name))?;
 
         set_rootless(hypervisor.security_info.rootless);
-        if is_rootless() {
-            configure_non_root_hypervisor(hypervisor).context("configure non-root hypervisor")?;
+        let mut rootless_setup_guard = if is_rootless() {
+            Some(
+                configure_non_root_hypervisor(hypervisor)
+                    .context("configure non-root hypervisor")?,
+            )
+        } else {
+            None
+        };
 
+        if is_rootless() {
             // When kata-runtime is invoked as rootless by podman with net=none,
             // the initially created netns (bind-mounted under /var/run/netns) requires root privileges.
             // This makes it inaccessible to non-root users. We need to create a non-root accessible
@@ -247,6 +255,12 @@ impl RuntimeHandlerManagerInner {
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
             .await
             .context("init runtime handler")?;
+
+        // Rootless resource ownership now passes to the runtime instance and
+        // its normal teardown paths.
+        if let Some(guard) = rootless_setup_guard.as_mut() {
+            guard.disarm();
+        }
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -962,8 +976,58 @@ fn get_shm_size(spec: &oci::Spec) -> Result<u64> {
     Ok(shm_size)
 }
 
-fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
+struct RootlessSetupGuard {
+    user_name: Option<String>,
+    user_tmp_dir: Option<PathBuf>,
+    armed: bool,
+}
+
+impl RootlessSetupGuard {
+    fn new(user_name: String) -> Self {
+        Self {
+            user_name: Some(user_name),
+            user_tmp_dir: None,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for RootlessSetupGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+
+        if let Some(path) = self.user_tmp_dir.as_ref() {
+            if let Err(err) = remove_dir_all_if_exists(path) {
+                warn!(
+                    sl!(),
+                    "failed to remove rootless runtime directory {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
+
+        if let Some(user_name) = self.user_name.as_ref() {
+            if let Err(err) = remove_vmm_user(user_name) {
+                warn!(
+                    sl!(),
+                    "failed to remove rootless user {}: {}", user_name, err
+                );
+            }
+        }
+    }
+}
+
+fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
     let user_name = create_vmm_user().context("failed to create vmm user")?;
+    let mut guard = RootlessSetupGuard::new(user_name.clone());
+
     let user = User::from_name(&user_name)?
         .ok_or_else(|| anyhow!("failed to get user by name {}, user not found", user_name))?;
 
@@ -971,34 +1035,19 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     let gid = user.gid.as_raw();
 
     let user_tmp_dir = vmm_user_runtime_dir(uid);
+    guard.user_tmp_dir = Some(user_tmp_dir.clone());
 
-    match std::fs::create_dir_all(&user_tmp_dir) {
-        Ok(_) => match chown(&user_tmp_dir, Some(uid), Some(gid)) {
-            Ok(_) => info!(
-                sl!(),
-                "chown user tmp dir {} to uid {}, gid {}",
-                user_tmp_dir.display(),
-                uid,
-                gid
-            ),
-            Err(e) => {
-                remove_vmm_user(&user_name)?;
-                return Err(anyhow!(
-                    "failed to chown user tmp dir {}: {}",
-                    user_tmp_dir.display(),
-                    e
-                ));
-            }
-        },
-        Err(e) => {
-            remove_vmm_user(&user_name)?;
-            return Err(anyhow!(
-                "failed to create user tmp dir {}: {}",
-                user_tmp_dir.display(),
-                e
-            ));
-        }
-    }
+    std::fs::create_dir_all(&user_tmp_dir)
+        .with_context(|| format!("create user tmp dir {}", user_tmp_dir.display()))?;
+    chown(&user_tmp_dir, Some(uid), Some(gid))
+        .with_context(|| format!("chown user tmp dir {}", user_tmp_dir.display()))?;
+    info!(
+        sl!(),
+        "chown user tmp dir {} to uid {}, gid {}",
+        user_tmp_dir.display(),
+        uid,
+        gid
+    );
 
     env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
 
@@ -1016,7 +1065,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
         user_name,
     });
 
-    Ok(())
+    Ok(guard)
 }
 
 #[cfg(test)]
@@ -1025,6 +1074,39 @@ mod tests {
     use common::types::ShutdownRequest;
     use rstest::rstest;
     use tokio::sync::mpsc::channel;
+
+    #[test]
+    fn test_rootless_setup_guard_removes_runtime_dir() {
+        let parent = tempfile::tempdir().unwrap();
+        let runtime_dir = parent.path().join("runtime");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+
+        let guard = RootlessSetupGuard {
+            user_name: None,
+            user_tmp_dir: Some(runtime_dir.clone()),
+            armed: true,
+        };
+        drop(guard);
+
+        assert!(!runtime_dir.exists());
+    }
+
+    #[test]
+    fn test_rootless_setup_guard_can_transfer_ownership() {
+        let parent = tempfile::tempdir().unwrap();
+        let runtime_dir = parent.path().join("runtime");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+
+        let mut guard = RootlessSetupGuard {
+            user_name: None,
+            user_tmp_dir: Some(runtime_dir.clone()),
+            armed: true,
+        };
+        guard.disarm();
+        drop(guard);
+
+        assert!(runtime_dir.exists());
+    }
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
     // created (e.g. after a failed CreateContainer) must still drive the shim
