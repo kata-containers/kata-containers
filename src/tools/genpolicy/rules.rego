@@ -56,6 +56,34 @@ default VolumeStatsRequest := false
 default WaitProcessRequest := false
 default WriteStreamRequest := false
 
+# Intentionally-allowed infrastructure / sandbox-lifecycle endpoints (reviewed, not an
+# unexamined gap). The endpoints below keep `:= true` above by design: they are part of
+# the trusted, host-driven sandbox lifecycle and carry no attacker-constrainable,
+# security-relevant payload that an in-guest Rego gate could restrict without breaking
+# legitimate VM sizing, boot, or teardown.
+#
+#   DestroySandboxRequest                  empty payload; sandbox teardown. The host
+#                                          already controls the VM lifecycle (it can
+#                                          destroy the VM directly), so gating adds no
+#                                          guarantee.
+#   GetOOMEventRequest                     empty payload; read-only OOM notification
+#                                          stream polled by the runtime.
+#   GuestDetailsRequest                    read-only guest capability query (memory block
+#                                          size / hotplug probe) issued early in the boot
+#                                          handshake, before any container state exists.
+#   OnlineCPUMemRequest                    host-driven online of CPU/memory the host
+#                                          itself provisions; onlining host-provided
+#                                          hardware is not an in-guest trust boundary and
+#                                          the count is fixed by VM config, not the guest.
+#   RemoveStaleVirtiofsShareMountsRequest  empty payload; housekeeping of stale virtiofs
+#                                          shares the host already controls.
+#
+# This matches the reference, which likewise does not gate its GuestDetails/OOM/lifecycle
+# equivalents; the diagnostics surface the reference *does* gate (get-properties /
+# dump-stacks) is instead hard-disabled in the strict build (GetDiagnosticDataRequest and
+# CopyFileRequest are `:= false` above). Per-container operations (Create/Exec/Signal/
+# Start/Wait/Stats/TtyWinResize) ARE gated on authorized container state (see below).
+
 # AllowRequestsFailingPolicy := true configures the Agent to *allow any
 # requests causing a policy failure*. This is an unsecure configuration
 # but is useful for allowing unsecure pods to start, then connect to
