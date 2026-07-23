@@ -1113,6 +1113,8 @@ allow_mount(p_oci, i_mount, i_storages, bundle_id, sandbox_id):= p_index if {
     some p_index, p_mount in p_oci.Mounts
 
     print("allow_mount 1: p_mount =", p_mount)
+    # check_mount expects a regex in the source field, other p_mounts are not eligible for this rule.
+    p_mount.source != ""
     check_mount(p_mount, i_mount, bundle_id, sandbox_id)
 
     print("allow_mount 1: true, p_index =", p_index)
@@ -1126,10 +1128,14 @@ allow_mount(p_oci, i_mount, i_storages, bundle_id, sandbox_id):= p_index if {
     p_mount.destination == i_mount.destination
     p_mount.type_ == i_mount.type_
     p_mount.options == i_mount.options
+    # This rule is exclusively for block-based emptyDir mounts, which don't have a source.
+    p_mount.source == ""
 
     some i_storage in i_storages
     print("allow_mount 2: i_storage =", i_storage)
 
+    # Only block storage is a legitimate mount source for this rule.
+    i_storage.driver in {"blk", "scsi"}
     i_storage.mount_point == i_mount.source
 
     print("allow_mount 2: true, p_index =", p_index)
@@ -1259,13 +1265,21 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage: true")
 }
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
-    i_storage.driver == "image_guest_pull"
     print("allow_storage with image_guest_pull: start")
+    i_storage.driver == "image_guest_pull"
     i_storage.fstype == "overlay"
     i_storage.fs_group == null
     i_storage.shared == false
     count(i_storage.options) == 0
-    # TODO: Check Mount Point, Source, Driver Options, etc.
+
+    # image_guest_pull storages always target the rootfs path directly.
+    expect_root_path := replace(policy_data.common.root_path, "$(bundle-id)", bundle_id)
+    print("allow_storage with image_guest_pull: expect_root_path =", expect_root_path)
+    expect_root_path == i_storage.mount_point
+
+    # TODO: missing validation for fields:
+    #   - driver_options
+    #   - source
     print("allow_storage with image_guest_pull: true")
 }
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
