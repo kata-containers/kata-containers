@@ -52,7 +52,7 @@ impl CgroupManager for Manager {
         Ok(())
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(&self) -> Result<()> {
         Ok(())
     }
 

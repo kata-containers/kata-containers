@@ -1008,11 +1008,35 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "stats_container", req);
         is_allowed(&req).await?;
 
-        let mut sandbox = self.sandbox.lock().await;
-        let ctr = sandbox
-            .get_container(&req.container_id)
-            .map_ttrpc_err(ttrpc::Code::INVALID_ARGUMENT, "invalid container id")?;
-        ctr.stats().map_ttrpc_err(same)
+        // Clone the container's cgroup manager (an Arc) while holding the sandbox lock, then
+        // release the lock BEFORE the blocking cgroup read below.
+        //
+        // The sandbox lock is a single global mutex taken by nearly every agent RPC,
+        // including the signal_process/kill path. Previously stats_container held it across
+        // the synchronous get_stats() cgroup read; if that read blocked on a container whose
+        // cgroup is being torn down (e.g. during pod termination), it serialized the whole
+        // agent and starved the kill RPC, leaving the pod stuck Terminating with the host
+        // seeing ttrpc "Receive packet timeout". Cloning the Arc lets stats read the cgroup
+        // without blocking any other RPC.
+        let cgroup_manager = {
+            let mut sandbox = self.sandbox.lock().await;
+            let ctr = sandbox
+                .get_container(&req.container_id)
+                .map_ttrpc_err(ttrpc::Code::INVALID_ARGUMENT, "invalid container id")?;
+            ctr.cgroup_manager.clone()
+        };
+
+        // get_stats() performs blocking synchronous cgroup file reads; run it on the blocking
+        // thread pool so a slow/stuck read cannot park an async reactor worker.
+        let cgroup_stats = tokio::task::spawn_blocking(move || cgroup_manager.get_stats())
+            .await
+            .map_ttrpc_err(same)?
+            .map_ttrpc_err(same)?;
+
+        Ok(StatsContainerResponse {
+            cgroup_stats: MessageField::some(cgroup_stats),
+            ..Default::default()
+        })
     }
 
     async fn pause_container(
@@ -4162,5 +4186,113 @@ COMMIT
             }
             (tc.assertions)(&base).context(tc.name).unwrap()
         }
+    }
+
+    // A cgroup Manager whose get_stats() blocks until released, used to prove that
+    // stats_container does not hold the global sandbox lock across the (blocking) cgroup
+    // read. Only get_stats and name have no/overridden behavior; all other Manager methods
+    // use the trait defaults.
+    struct BlockingStatsManager {
+        started: Arc<std::sync::atomic::AtomicBool>,
+        release: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl rustjail::cgroups::Manager for BlockingStatsManager {
+        fn get_stats(&self) -> anyhow::Result<protocols::agent::CgroupStats> {
+            self.started
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            while !self.release.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Ok(protocols::agent::CgroupStats::default())
+        }
+
+        fn name(&self) -> &str {
+            "blocking-stats-test"
+        }
+    }
+
+    // Regression test for the stats_container / kill starvation deadlock: while
+    // stats_container is reading a container's cgroup stats (a blocking operation), the
+    // global sandbox lock must remain free so other RPCs — crucially signal_process/kill —
+    // can proceed. Previously the lock was held across get_stats(), so a stats read that
+    // blocked on a torn-down cgroup during teardown wedged the whole agent and left the pod
+    // stuck Terminating.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_stats_container_does_not_hold_sandbox_lock() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let (mut linux_container, _root) = create_linuxcontainer();
+        linux_container.id = "1".to_string();
+
+        let started = Arc::new(AtomicBool::new(false));
+        let release = Arc::new(AtomicBool::new(false));
+
+        // Always release the blocking get_stats() thread, even if the test panics before the
+        // explicit release below. Tokio cannot cancel spawn_blocking tasks, so a still-looping
+        // thread would otherwise hang the whole test binary at runtime shutdown.
+        struct ReleaseOnDrop(Arc<AtomicBool>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let _release_guard = ReleaseOnDrop(release.clone());
+
+        linux_container.cgroup_manager = Arc::new(BlockingStatsManager {
+            started: started.clone(),
+            release: release.clone(),
+        });
+
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        sandbox.add_container(linux_container);
+
+        let agent_service = Arc::new(AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        });
+
+        // Fire stats_container; get_stats() will block on the blocking thread pool.
+        let svc = agent_service.clone();
+        let handle = tokio::spawn(async move {
+            svc.stats_container(
+                &mk_ttrpc_context(),
+                protocols::agent::StatsContainerRequest {
+                    container_id: "1".to_string(),
+                    ..Default::default()
+                },
+            )
+            .await
+        });
+
+        // Wait until get_stats() is actually executing.
+        for _ in 0..500 {
+            if started.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        assert!(started.load(Ordering::SeqCst), "get_stats never started");
+
+        // The regression assertion: the sandbox lock must be acquirable while stats is
+        // mid-read. With the old code (lock held across get_stats) this times out — exactly
+        // the condition that starves the kill and wedges pod teardown.
+        let lock_res = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            agent_service.sandbox.lock(),
+        )
+        .await;
+        assert!(
+            lock_res.is_ok(),
+            "sandbox lock held during stats_container get_stats: signal_process/kill would be starved"
+        );
+        drop(lock_res);
+
+        // Unblock the read and confirm the RPC completes successfully.
+        release.store(true, Ordering::SeqCst);
+        let res = handle.await.unwrap();
+        assert!(res.is_ok(), "stats_container returned error: {:?}", res);
     }
 }
