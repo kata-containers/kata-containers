@@ -28,9 +28,13 @@ implement it, the security guarantee it introduces, and how it was validated.
 - **Trusted-state authority:** most guarantees are enforced by an agent-internal
   **Security Reference Monitor (SRM)** crate (`src/agent/security-reference-monitor/`),
   which owns the transactional lifecycle, occurrence registry, resource graph, CDI trust,
-  policy-fragment verifier, scratch classifier, TOCTOU handle binding, and network-phase
-  machine. Keeping this logic in one crate makes it unit-testable and, for the lifecycle,
-  formally model-checkable.
+  policy-fragment verifier, scratch classifier, verified-layer allowlist, TOCTOU handle
+  binding, and network-phase machine. Keeping this logic in one crate makes it
+  unit-testable and, for the lifecycle, formally model-checkable.
+- **Companion docs:** `docs/cc/fr1-fragments.md` (the full FR-1 fragments reference) and
+  `docs/cc/fr1-fragment-e2e.md` (a reproducible end-to-end walk-through). This file is the
+  guide-level overview across all features; the FR-1 fragments detail is large enough to
+  live in its own document.
 - **No new host↔guest protocol** except FR-1 (`LoadPolicyFragment`), which is additive and
   backward-compatible.
 - **Validation vocabulary:** *unit* = crate unit/integration tests; *matrix* = the live
@@ -52,9 +56,10 @@ implement it, the security guarantee it introduces, and how it was validated.
 | FR-4A | Ordered bijective resource graph | `6f8f42eea` |
 | FR-11 | Trusted device/CDI resolution + occurrence binding | `9669a913b`, `0f3aa0f2f` |
 | FR-10 | Disable generic CopyFile in strict | `0b41cf8a4` |
-| FR-1 | Signed, add-only policy fragments (feed scoping, receipts, chaining, COSE, applied to live engine) | `11285337c`, `4ccd43f8a`, `bf602cb18`, `dd2630053`, `294353a2a`, `ff8a4d5b9`, `c6b52c2ba`, `69228f3b5`, `c0ea3cb25`, `f7ed23319`, `93e1ff6e5`, `392d890a8`, `adaa7558b` |
+| FR-1 | Signed, add-only policy fragments — see **`docs/cc/fr1-fragments.md`** for the full sub-requirement (FR-1a…1j + Stage 2) breakdown | `11285337c`, `4ccd43f8a`, `dd2630053`, `294353a2a`, `bf602cb18`, `ff8a4d5b9`, `c6b52c2ba`, `69228f3b5`, `c0ea3cb25`, `f7ed23319`, `93e1ff6e5`, `db24d40f5`, `9cddd7f75`, `8efdaa65e`, `a63b9d5b3`, `d01fabe13`, `d6cdba49e`, `62fb8d45a`, `392d890a8`, `adaa7558b` |
 | FR-5 | Encrypted scratch by effective mode | `44d6f9d04`, `b1603c3a6` |
 | FR-4B | Mount bound to the checked handle (TOCTOU) | `44d6f9d04`, `dbea0d59b` |
+| FR-4C | Verified read-only layers (dm-verity root-digest authorization) | `26d408bd7` |
 | FR-14 | Network phase binding | `44d6f9d04`, `8cf9c5785` |
 | FR-7 (rest) | Debug console + diagnostics disabled in strict | `8cf9c5785` |
 | FR-15 | Formal model + fault injection + equivalence-claim proof | `21ac6e048`, `e76bc8d81` |
@@ -194,6 +199,9 @@ implement it, the security guarantee it introduces, and how it was validated.
   `PERMISSION_DENIED`; matrix no-regression (pod creation does not require CopyFile).
 
 ### FR-1 — Signed, add-only policy fragments
+> **Full detail:** `docs/cc/fr1-fragments.md` (sub-requirement map FR-1a…1j + Stage 2, code
+> locations, error variants, config format, tooling, tests). End-to-end walk-through:
+> `docs/cc/fr1-fragment-e2e.md`. The summary below is the guide-level overview.
 - **Gap:** the base policy is one-shot/immutable within an epoch (FR-12), but some
   deployments need to *extend* what a workload may do at runtime without a new attestation.
   Doing so is unsafe unless every extension is authenticated, monotonic, scope-limited, and
@@ -249,7 +257,8 @@ implement it, the security guarantee it introduces, and how it was validated.
   `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo), Stage 2
   transparency-log inclusion + consistency proofs (RFC 6962 Merkle);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 86 SRM unit tests (issuer/signature/SVN/feed/receipt/trust-list/rotation/
+- **Validated:** 86 fragment-related SRM unit tests (of 92 in the SRM crate)
+  (issuer/signature/SVN/feed/receipt/trust-list/rotation/
   did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering/Merkle-inclusion/
   consistency); an offline, self-contained capability demo (`examples/fragment-demo` —
   asserts all of the above with no cluster/openssl); **live E2E** — a base-denied exec
@@ -287,6 +296,29 @@ implement it, the security guarantee it introduces, and how it was validated.
 - **Guarantee:** a mount binds to the object that was checked, not a re-resolved name.
 - **Commits:** `44d6f9d04` (handle-binding), `dbea0d59b` (wiring).
 - **Validated:** unit tests including a real filesystem swap; matrix no-regression.
+
+### FR-4C — Verified read-only layers (dm-verity root-digest authorization)
+- **Gap:** the agent builds dm-verity targets for read-only rootfs (EROFS) layers, so the
+  kernel enforces that a layer's contents hash to a given root digest — but nothing checked
+  that the root digest the (untrusted) host supplied is one the tenant approved. Without that
+  check, a host can serve its *own* layer together with the matching, self-computed root hash:
+  dm-verity passes and an attacker-controlled layer is mounted read-only.
+- **Fix:** a **measured allowlist** of authorized `(algorithm, root_hash)` pairs
+  (`/etc/kata/verified-layers.toml`, seeded at boot from measured state like the fragment
+  trust root) plus a **fail-closed authorization gate** that runs *before* the dm-verity
+  device is created (`multi_layer_erofs.rs` → `VerifiedLayerStore::verify`). Fail-closed:
+  when verification is required but no layer is authorized, every layer is rejected; a
+  presented digest not in the allowlist is `UnauthorizedLayer`. Comparison is normalized
+  (trim + lower-case) and the algorithm is part of the key.
+- **Guarantee:** a read-only layer is mounted only if its contents match a root digest the
+  tenant measured/approved — the kernel proves *content ↔ digest*, this gate proves *digest ∈
+  approved set*, so the host cannot substitute a different (self-consistent) layer.
+- **Commits:** `26d408bd7` (store + gate + measured-config seed).
+- **Validated:** 6 unit tests (`verified_layers` — authorized/unauthorized, empty-allowlist
+  fail-closed, algorithm-bound, normalized compare, multi-layer); agent builds clean in both
+  strict (musl) and strict+`devicemapper` (gnu) feature sets.
+- **Follow-up:** live validation needs a `devicemapper` agent build + a GPT/EROFS verity
+  image; optional defense-in-depth is a dm-table read-back of the effective root hash.
 
 ### FR-14 — Network phase binding
 - **Gap:** a host that can add a route, rewrite iptables, or spoof ARP *after* the workload
@@ -409,7 +441,8 @@ pre-hardened deployment a few are parity or additional defense-in-depth.
 
 - **Unit / integration:** the SRM crate carries the transaction manager, occurrence
   registry, resource graph, CDI trust, fragment verifier, scratch classifier, handle
-  binding, network-phase machine, and lifecycle fault-injection/fuzz tests, all green.
+  binding, verified-layer allowlist, network-phase machine, and lifecycle
+  fault-injection/fuzz tests, all green (92 SRM unit tests + 4 fault-injection).
 - **Formal:** TLC model-checks the lifecycle safety properties with no error.
 - **Live matrix:** the strict `kata-parma` profile passes the policy-enforcement matrix
   with no regression, and the FR-9/FR-10/FR-14 live ttRPC attacks are denied.
