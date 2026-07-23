@@ -81,6 +81,7 @@ readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
 	coco-extension
+	devkit-extension
 	nvidia-gpu
 	nvidia-gpu-confidential
 	nvidia
@@ -738,6 +739,93 @@ EOF
 	fi
 
 	rm -rf "${extension_rootfs}"
+}
+
+# Install the generic devkit debug extension image (erofs+verity): a
+# self-contained minimal Ubuntu rootfs with debug tools prebaked. It ships no
+# kata-agent, kernel or driver userspace, so it is built as an agent-less
+# ROOTFS_ONLY rootfs through the osbuilder "devkit" distro (mmdebstrap, like the
+# base guest rootfs) and handed to image_builder.sh, never through rootfs.sh's
+# agent path.
+install_image_devkit_extension() {
+	local component="rootfs-image-devkit-extension"
+
+	# Reuse the guest image's Ubuntu release (e.g. "noble") so the devkit matches
+	# the base userspace ABI (glibc) the guest ships.
+	local os_name os_version
+	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
+	[[ "${os_name}" == "ubuntu" ]] || die "devkit extension expects an ubuntu base, got '${os_name}' for ${ARCH}"
+	[[ -n "${os_version}" ]] || die "assets.image.architecture.${ARCH}.version must be set in versions.yaml"
+
+	# Self-contained (Ubuntu release + guest scripts), so key the cache on the
+	# Ubuntu version and the devkit source directory.
+	local devkit_last_commit
+	devkit_last_commit="$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
+		-- tools/osbuilder/rootfs-builder/devkit 2>/dev/null || echo "unknown")"
+	latest_artefact="$(get_kata_version)-devkit-extension-${os_version}-${devkit_last_commit}"
+	latest_builder_image=""
+
+	install_cached_tarball_component \
+		"${component}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "Create devkit extension image"
+
+	# Temp dir under the repo root so the path is valid both in the outer build
+	# container and the nested osbuilder/image-builder (Docker-in-Docker uses
+	# host paths).
+	local extension_rootfs
+	extension_rootfs="$(mktemp -d "${repo_root_dir}/.devkit-extension-rootfs.XXXX")"
+
+	# Build the agent-less debug rootfs through the osbuilder "devkit" distro
+	# (mmdebstrap inside the builder container), mirroring how the base guest
+	# rootfs is built. ROOTFS_ONLY stops rootfs.sh before the agent/systemd setup.
+	info "Building devkit ubuntu rootfs (${os_name}:${os_version}) with mmdebstrap"
+	local rootfs_sh="${repo_root_dir}/tools/osbuilder/rootfs-builder/rootfs.sh"
+	ROOTFS_ONLY="yes" \
+		ROOTFS_DIR="${extension_rootfs}" \
+		USE_DOCKER="1" \
+		OS_VERSION="${os_version}" \
+		AGENT_INIT="no" \
+		AGENT_POLICY="no" \
+		AGENT_TARBALL="" \
+		"${rootfs_sh}" devkit || die "building the devkit rootfs failed"
+
+	local install_dir="${destdir}/${prefix}/share/kata-containers/"
+	mkdir -p "${install_dir}"
+
+	local image_builder="${repo_root_dir}/tools/osbuilder/image-builder/image_builder.sh"
+
+	export USE_DOCKER="1"
+	export BUILD_VARIANT="devkit-extension"
+	export FS_TYPE="erofs"
+	# s390x does not use a measured rootfs, so no dm-verity hash is produced.
+	if [[ "${ARCH}" == "s390x" ]]; then
+		export MEASURED_ROOTFS="no"
+	else
+		export MEASURED_ROOTFS="yes"
+	fi
+	export SKIP_DAX_HEADER="yes"
+	export SKIP_ROOTFS_CHECK="yes"
+
+	"${image_builder}" -o "${install_dir}/kata-containers-devkit-extension.img" "${extension_rootfs}"
+
+	if [[ -e "${install_dir}/root_hash_devkit-extension.txt" ]]; then
+		info "Root hash file: ${install_dir}/root_hash_devkit-extension.txt"
+	fi
+
+	# mmdebstrap builds a root-owned tree; remove it with sudo (passwordless in
+	# the build container) so cleanup works from the unprivileged build user.
+	if command -v sudo >/dev/null 2>&1; then
+		sudo rm -rf "${extension_rootfs}"
+	else
+		rm -rf "${extension_rootfs}"
+	fi
 }
 
 #Install cbl-mariner guest image
@@ -1717,6 +1805,8 @@ handle_build() {
 	rootfs-image-confidential) install_image_confidential ;;
 
 	rootfs-image-coco-extension) install_image_coco_extension ;;
+
+	rootfs-image-devkit-extension) install_image_devkit_extension ;;
 
 	rootfs-image-mariner) install_image_mariner ;;
 

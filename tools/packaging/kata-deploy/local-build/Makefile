@@ -32,6 +32,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-image-mariner-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
@@ -58,6 +59,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-initrd-tarball
 endif
 
@@ -260,6 +262,12 @@ rootfs-image-confidential-tarball: $(DEPS)
 
 DEPS := pause-image-tarball coco-guest-components-tarball
 rootfs-image-coco-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
+# Self-contained debug rootfs (no kata-agent, kernel or driver tree), so it has
+# no build-time dependency on any other target.
+DEPS :=
+rootfs-image-devkit-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 DEPS := agent-tarball

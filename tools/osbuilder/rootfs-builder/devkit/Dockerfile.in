@@ -1,0 +1,19 @@
+# Copyright (c) Kata Containers Community
+#
+# SPDX-License-Identifier: Apache-2.0
+
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
+@SET_PROXY@
+
+# mmdebstrap builds the devkit rootfs; the extension ships no agent, so none of
+# the language toolchains the guest rootfs builder carries are needed here.
+# hadolint ignore=DL3009
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get --no-install-recommends -y install \
+    ca-certificates \
+    file \
+    mmdebstrap \
+    zstd && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
