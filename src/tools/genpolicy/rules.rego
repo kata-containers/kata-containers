@@ -34,7 +34,7 @@ default MemHotplugByProbeRequest := false
 default OnlineCPUMemRequest := true
 default PauseContainerRequest := false
 default ReadStreamRequest := false
-default RemoveContainerRequest := true
+default RemoveContainerRequest := false
 default RemoveStaleVirtiofsShareMountsRequest := true
 default ReseedRandomDevRequest := false
 default ResizeVolumeRequest := false
@@ -82,7 +82,7 @@ default WriteStreamRequest := false
 # equivalents; the diagnostics surface the reference *does* gate (get-properties /
 # dump-stacks) is instead hard-disabled in the strict build (GetDiagnosticDataRequest and
 # CopyFileRequest are `:= false` above). Per-container operations (Create/Exec/Signal/
-# Start/Wait/Stats/TtyWinResize) ARE gated on authorized container state (see below).
+# Start/Wait/Stats/TtyWinResize/RemoveContainer) ARE gated on authorized container state (see below).
 
 # AllowRequestsFailingPolicy := true configures the Agent to *allow any
 # requests causing a policy failure*. This is an unsecure configuration
@@ -1813,6 +1813,13 @@ GetDiagnosticDataRequest if {
 
 RemoveContainerRequest:= {"ops": ops, "allowed": true} if {
     print("RemoveContainerRequest: input =", input)
+
+    # Only a container this policy authorized to run may be removed. get_state_val is
+    # undefined for an unknown or already-removed container_id, which makes this rule
+    # undefined and falls through to the fail-closed default, closing the "remove any
+    # container_id" gap (and making removal idempotent: a second remove is denied).
+    p_container_index := get_state_val(input.container_id)
+    print("RemoveContainerRequest: container", input.container_id, "known at index", p_container_index)
 
     # Delete input.container_id from p_state
     ops_builder1 := []

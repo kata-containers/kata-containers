@@ -322,6 +322,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_state_remove_container() {
+        runtests("state/removecontainer").await;
+    }
+
+    #[tokio::test]
     async fn test_state_start_container() {
         runtests("state/startcontainer").await;
     }
