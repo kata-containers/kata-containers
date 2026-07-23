@@ -32,8 +32,8 @@ use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
 
-use crate::log_child;
 use crate::cgroups_rs as cgroups;
+use crate::log_child;
 use safe_path::scoped_join;
 
 // Info reveals information about a particular mounted filesystem. This
