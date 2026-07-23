@@ -35,7 +35,7 @@ fragment store is mutated.
 | **FR-1a** | verified fragment module is applied to the **live** policy engine (additive `add_policy`, never touches the one-shot `set_policy` lock) | `policy.rs::apply_fragment_module`; `rpc.rs::load_policy_fragment` | `dd2630053`, `294353a2a`, `11285337c`, `4ccd43f8a` |
 | **FR-1b** | **authorized issuer** (measured trust root) + declarative **min-SVN floor**; atomic verify→apply→commit | `fragments.rs::{authorize_issuer,set_min_svn,verify,commit}`; `main.rs::seed_fragment_trust_root` | `bf602cb18`, `294353a2a` |
 | **FR-1c** | **structured payload** — signed Rego module + `includes` namespace scoping | `fragments.rs` (`policy_module`, `includes`); applier namespace check | `bf602cb18` |
-| **FR-1d** | **did:x509 issuer identity** — X.509 chain in COSE `x5chain`, CA-fingerprint + policy anchor, revocation, rotation, `basicConstraints CA:TRUE` on issuers | `did_x509.rs::{verify_x509_cose,verify_link,is_ca,policy_matches}` | `9cddd7f75`, `d6cdba49e`, `d01fabe13` |
+| **FR-1d** | **did:x509 issuer identity** — X.509 chain in COSE `x5chain`, CA-fingerprint + policy anchor, revocation, rotation, `basicConstraints CA:TRUE` on issuers; multi-algorithm (ES256/ES384/RS256/PS256) leaf + chain | `did_x509.rs`, `cose_keys.rs::{verify_cose,verify_cert_sig}` | `9cddd7f75`, `d6cdba49e`, `d01fabe13`, `bl2` |
 | **FR-1e** | **feed scoping** — accepted `(issuer, feed)` pairs declared; undeclared feed rejected; per-feed SVN floor | `fragments.rs::declare_feed`; `UndeclaredFeed` | `ff8a4d5b9`, `c6b52c2ba` |
 | **FR-1f** | **transparency receipts + Trust List** — multi-ledger, `allowed_ledgers` scoping, policy-driven `required_receipts`, ledger key rotation | `fragments.rs::{load_transparency_trust_list,set_allowed_ledgers,require_receipt_for}` | `ff8a4d5b9`, `c6b52c2ba`, `db24d40f5` |
 | **FR-1f Stage 2** | **transparency-log inclusion + consistency** — RFC 6962 Merkle inclusion proof + monotonic, persisted signed tree head (append-only log) | `merkle.rs`; `fragments.rs` (`TransparencyProof`, `ttl_heads`) | `62fb8d45a` |
@@ -90,22 +90,29 @@ gates without mutating; `commit` advances SVN/grants; `load` = verify+commit. `a
 namespace. Fail-closed: with no authorized issuers, every fragment is rejected.
 
 ### 4.2 did:x509 issuer identity (FR-1d)
-`did_x509.rs` parses the COSE `x5chain` (header 33), path-validates leaf→CA with ECDSA
-P-256/SHA-256 link signatures and validity windows, **requires every issuer cert to assert
+`did_x509.rs` parses the COSE `x5chain` (header 33), path-validates leaf→CA with per-cert
+signature verification and validity windows, **requires every issuer cert to assert
 `basicConstraints CA:TRUE`** (so a non-CA leaf cannot mint sub-certs), enforces the did:x509
 policy over the leaf, rejects revoked fingerprints, and verifies the COSE signature with the
-leaf key. Trust is anchored on **CA fingerprint + policy**, so leaf **rotation** needs no
-config change. Pure-Rust RustCrypto (`x509-cert`, `p256`); no Go. Errors: `InvalidCertChain`,
-`UntrustedCa`, `DidX509Mismatch`, `RevokedCertificate`, `CertExpired`.
+leaf key. **Multi-algorithm (BL-2):** the leaf COSE signature dispatches on the envelope's
+declared algorithm and chain-link signatures on each certificate's `signatureAlgorithm` OID —
+**ES256 (P-256), ES384 (P-384), RS256 and PS256 (RSA)** are supported (shared `cose_keys.rs`
+verifier), with no cross-algorithm confusion (the algorithm must match the key type). Trust is
+anchored on **CA fingerprint + policy**, so leaf **rotation** — and choice of leaf algorithm —
+needs no config change. Pure-Rust RustCrypto (`x509-cert`, `p256`, `p384`, `rsa`); no Go.
+Errors: `InvalidCertChain`, `UntrustedCa`, `DidX509Mismatch`, `RevokedCertificate`,
+`CertExpired`.
 
 ### 4.3 Transparency receipts + Trust List (FR-1f)
 Receipts prove a fragment's issuance is publicly auditable. The store holds a
 `transparency_trust_list` (ledger id → current key set; multiple keys ⇒ rotation), per-scope
 `allowed_ledgers`, and per-scope `required_receipt_from`. The receipt gate selects the ledger
 (untrusted id, safe because verification only passes if that ledger's key actually signed),
-enforces the allow-list and required ledger, and verifies against any current key. Errors:
-`MissingReceipt`, `InvalidReceipt`, `LedgerNotAllowed`, `ReceiptFromDisallowedLedger`. A single
-legacy anchor maps to a default ledger (back-compat).
+enforces the allow-list and required ledger, and verifies against any current key.
+**Multi-algorithm (BL-2):** each ledger key carries its algorithm, so receipts and signed
+tree heads may be Ed25519, ES256, ES384, PS256, or RS256 (shared `cose_keys.rs` verifier).
+Errors: `MissingReceipt`, `InvalidReceipt`, `LedgerNotAllowed`, `ReceiptFromDisallowedLedger`.
+A single legacy anchor maps to a default ledger (back-compat).
 
 ### 4.4 Transparency-log inclusion + consistency — Stage 2 (FR-1f Stage 2)
 `merkle.rs` implements RFC 6962 leaf/node hashing, inclusion-proof root recomputation, and
@@ -159,7 +166,10 @@ require_x509 = false                   # FR-1d: when true, all fragments must ca
 
 [[ledger]]                             # FR-1f transparency trust list
 id = "acl"
-pubkey_hex = ["<64 hex>", "<rotated>"] # multiple ⇒ rotation
+pubkey_hex = ["<64 hex>", "<rotated>"] # Ed25519 keys; multiple ⇒ rotation
+  [[ledger.key]]                       # BL-2: non-Ed25519 ledger key (ES256/ES384/PS256/RS256)
+  alg = "es256"
+  spki_hex = "<SubjectPublicKeyInfo DER, hex>"
 
 [[ca_anchor]]                          # FR-1d did:x509 anchor
 did = "did:x509:0:demo-ca:issuerX"
@@ -195,11 +205,12 @@ Runtime SVN/ordering/tree-head state is persisted to `/run/kata/fragment-svn.sta
   receipt= receipt_ledger= prev_head= proof= module= sig= cose=`).
 - `fragment-demo` — offline, no-cluster/no-openssl demo asserting every capability.
 
-**Unit tests** — 86 fragment-related tests (of 92 in the SRM crate): `fragments::tests::*`
-(core, feed, receipt/trust-list/rotation, chaining, persistence, COSE, ordering, Stage-2
-inclusion/consistency), `did_x509::tests::*` (valid/untrusted/broken/expired/revoked/rotated/
-policy-mismatch/intermediate-CA/non-CA-intermediate), `merkle::tests::*` (inclusion +
-consistency across sizes).
+**Unit tests** — fragment/identity tests (of 98 in the SRM crate): `fragments::tests::*`
+(core, feed, receipt/trust-list/rotation incl. an ES256 ledger key, chaining, persistence,
+COSE, ordering, Stage-2 inclusion/consistency), `did_x509::tests::*`
+(valid/untrusted/broken/expired/revoked/rotated/policy-mismatch/intermediate-CA/
+non-CA-intermediate + **ES384 and RSA-RS256 end-to-end**), `cose_keys::tests::*` (alg mapping,
+cross-alg rejection), `merkle::tests::*` (inclusion + consistency across sizes).
 
 **Live E2E** (strict `kata-parma`, over vsock) — `fr1-fragment-attack.sh` (deny→load→allow),
 `fr1-cose-attack.sh` (COSE), `fr1-x509-attack.sh` (did:x509 valid/untrusted/revoked/rotated),

@@ -17,24 +17,19 @@
 //! (`didx509resolver.Resolve` over the `x5chain`) while keeping the raw-Ed25519 issuer path
 //! untouched — the two identity models coexist and there is no downgrade path.
 
+use crate::cose_keys::{CoseAlg, PublicKey};
 use crate::FragmentError;
 use const_oid::db::rfc5280::{
     ID_CE_BASIC_CONSTRAINTS, ID_CE_EXT_KEY_USAGE, ID_CE_SUBJECT_ALT_NAME,
 };
-use const_oid::db::rfc5912::ID_EC_PUBLIC_KEY;
 use const_oid::ObjectIdentifier;
 use der::{Decode, Encode};
-use p256::ecdsa::signature::Verifier as _;
-use p256::ecdsa::{Signature as P256Signature, VerifyingKey as P256VerifyingKey};
 use sha2::{Digest, Sha256};
-use spki::DecodePublicKey;
 use std::collections::{HashMap, HashSet};
 use x509_cert::Certificate;
 
 /// COSE header parameter label for `x5chain` (RFC 9360).
 const COSE_HEADER_X5CHAIN: i64 = 33;
-/// ecdsa-with-SHA256 (1.2.840.10045.4.3.2).
-const ECDSA_WITH_SHA256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2");
 /// id-at-commonName (2.5.4.3).
 const AT_COMMON_NAME: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.5.4.3");
 
@@ -142,15 +137,15 @@ pub fn cose_has_x5chain(cose_sign1: &[u8]) -> bool {
     }
 }
 
-/// P-256 verifying key from a certificate's SubjectPublicKeyInfo. Only EC P-256 is supported
-/// (the code-signing algorithm we target); anything else is rejected fail-closed.
-fn p256_key(cert: &Certificate) -> Result<P256VerifyingKey, FragmentError> {
-    let spki = &cert.tbs_certificate.subject_public_key_info;
-    if spki.algorithm.oid != ID_EC_PUBLIC_KEY {
-        return Err(FragmentError::InvalidCertChain);
-    }
-    let der = spki.to_der().map_err(|_| FragmentError::InvalidCertChain)?;
-    P256VerifyingKey::from_public_key_der(&der).map_err(|_| FragmentError::InvalidCertChain)
+/// Public key of a certificate (multi-algorithm: EC P-256/P-384 or RSA), parsed from its
+/// SubjectPublicKeyInfo.
+fn cert_key(cert: &Certificate) -> Result<PublicKey, FragmentError> {
+    let der = cert
+        .tbs_certificate
+        .subject_public_key_info
+        .to_der()
+        .map_err(|_| FragmentError::InvalidCertChain)?;
+    PublicKey::from_spki_der(&der).ok_or(FragmentError::InvalidCertChain)
 }
 
 /// Whether a certificate asserts `basicConstraints: cA=TRUE` — required of every issuer
@@ -171,18 +166,15 @@ fn is_ca(cert: &Certificate) -> bool {
     false
 }
 
-/// Verify that `subject` was signed by `issuer` (ECDSA P-256 / SHA-256 over the subject's
-/// TBSCertificate).
+/// Verify that `subject` was signed by `issuer`, dispatching on the certificate's
+/// `signatureAlgorithm` (ECDSA P-256/384 or RSA PKCS#1 v1.5 with SHA-256/384).
 fn verify_link(subject: &Certificate, issuer: &Certificate) -> Result<(), FragmentError> {
     // The issuer must be a CA (basicConstraints cA=TRUE), else a plain leaf could act as an
     // intermediate and mint sub-certificates (privilege escalation).
     if !is_ca(issuer) {
         return Err(FragmentError::InvalidCertChain);
     }
-    if subject.signature_algorithm.oid != ECDSA_WITH_SHA256 {
-        return Err(FragmentError::InvalidCertChain);
-    }
-    let issuer_key = p256_key(issuer)?;
+    let issuer_key = cert_key(issuer)?;
     let tbs = subject
         .tbs_certificate
         .to_der()
@@ -191,9 +183,8 @@ fn verify_link(subject: &Certificate, issuer: &Certificate) -> Result<(), Fragme
         .signature
         .as_bytes()
         .ok_or(FragmentError::InvalidCertChain)?;
-    let sig = P256Signature::from_der(sig_der).map_err(|_| FragmentError::InvalidCertChain)?;
     issuer_key
-        .verify(&tbs, &sig)
+        .verify_cert_sig(&subject.signature_algorithm.oid, &tbs, sig_der)
         .map_err(|_| FragmentError::InvalidCertChain)
 }
 
@@ -348,13 +339,18 @@ pub fn verify_x509_cose(
             return Err(FragmentError::DidX509Mismatch);
         }
 
-        // Verify the COSE_Sign1 signature with the leaf key (ECDSA P-256 / SHA-256).
-        let leaf_key = p256_key(&certs[0])?;
+        // Verify the COSE_Sign1 signature with the leaf key, dispatching on the envelope's
+        // declared algorithm (ES256/ES384/PS256/RS256/EdDSA).
+        use coset::iana::EnumI64;
+        let alg = match &sign1.protected.header.alg {
+            Some(coset::RegisteredLabelWithPrivate::Assigned(a)) => {
+                CoseAlg::from_i64(a.to_i64()).ok_or(FragmentError::InvalidSignature)?
+            }
+            _ => return Err(FragmentError::InvalidSignature),
+        };
+        let leaf_key = cert_key(&certs[0])?;
         sign1
-            .verify_signature(b"", |sig, tbs| {
-                let s = P256Signature::from_slice(sig).map_err(|_| ())?;
-                leaf_key.verify(tbs, &s).map_err(|_| ())
-            })
+            .verify_signature(b"", |sig, tbs| leaf_key.verify_cose(alg, tbs, sig))
             .map_err(|_| FragmentError::InvalidSignature)?;
 
         return Ok(anchor.did.clone());
@@ -688,4 +684,155 @@ mod tests {
             FragmentError::InvalidCertChain
         );
     }
+    // ---- BL-2: multi-algorithm leaf/chain (ES384, RSA RS256) ----
+    use p384::ecdsa::{DerSignature as P384DerSig, Signature as P384Sig, SigningKey as P384Sk};
+    use rsa::pkcs1v15::{Signature as RsaPkcsSig, SigningKey as RsaPkcsSk};
+    use rsa::signature::SignatureEncoding as _RsaSigEnc;
+    use rsa::RsaPrivateKey;
+    use sha2::Sha256 as _Sha256;
+
+    fn spki_p384(sk: &P384Sk) -> SubjectPublicKeyInfoOwned {
+        let der = sk.verifying_key().to_public_key_der().unwrap();
+        SubjectPublicKeyInfoOwned::from_der(der.as_bytes()).unwrap()
+    }
+
+    fn mint_ca_p384(cn: &str, sk: &P384Sk) -> Vec<u8> {
+        let subject = Name::from_str(&format!("CN={cn}")).unwrap();
+        let validity = Validity::from_now(Duration::from_secs(3600)).unwrap();
+        CertificateBuilder::new(Profile::Root, SerialNumber::from(1u32), validity, subject, spki_p384(sk), sk)
+            .unwrap()
+            .build::<P384DerSig>()
+            .unwrap()
+            .to_der()
+            .unwrap()
+    }
+
+    fn mint_leaf_p384(cn: &str, leaf_sk: &P384Sk, ca_cn: &str, ca_sk: &P384Sk) -> Vec<u8> {
+        let issuer = Name::from_str(&format!("CN={ca_cn}")).unwrap();
+        let subject = Name::from_str(&format!("CN={cn}")).unwrap();
+        let mut b = CertificateBuilder::new(
+            Profile::Leaf { issuer, enable_key_agreement: false, enable_key_encipherment: false },
+            SerialNumber::from(2u32),
+            Validity::from_now(Duration::from_secs(3600)).unwrap(),
+            subject,
+            spki_p384(leaf_sk),
+            ca_sk,
+        )
+        .unwrap();
+        b.add_extension(&ExtendedKeyUsage(vec![ObjectIdentifier::new_unwrap(EKU_CODE_SIGNING)])).unwrap();
+        b.build::<P384DerSig>().unwrap().to_der().unwrap()
+    }
+
+    fn cose_es384(statement: &[u8], leaf_sk: &P384Sk, chain: &[Vec<u8>]) -> Vec<u8> {
+        let protected = HeaderBuilder::new().algorithm(iana::Algorithm::ES384).build();
+        let mut unprotected = coset::Header::default();
+        unprotected.rest.push((coset::Label::Int(COSE_HEADER_X5CHAIN),
+            Value::Array(chain.iter().map(|c| Value::Bytes(c.clone())).collect())));
+        CoseSign1Builder::new().protected(protected).unprotected(unprotected).payload(statement.to_vec())
+            .create_signature(b"", |tbs| { let s: P384Sig = leaf_sk.sign(tbs); s.to_bytes().to_vec() })
+            .build().to_vec().unwrap()
+    }
+
+    fn spki_rsa(sk: &RsaPrivateKey) -> SubjectPublicKeyInfoOwned {
+        let der = sk.to_public_key().to_public_key_der().unwrap();
+        SubjectPublicKeyInfoOwned::from_der(der.as_bytes()).unwrap()
+    }
+
+    fn mint_ca_rsa(cn: &str, sk: &RsaPrivateKey) -> Vec<u8> {
+        let signer = RsaPkcsSk::<_Sha256>::new(sk.clone());
+        let subject = Name::from_str(&format!("CN={cn}")).unwrap();
+        let validity = Validity::from_now(Duration::from_secs(3600)).unwrap();
+        CertificateBuilder::new(Profile::Root, SerialNumber::from(1u32), validity, subject, spki_rsa(sk), &signer)
+            .unwrap()
+            .build::<RsaPkcsSig>()
+            .unwrap()
+            .to_der()
+            .unwrap()
+    }
+
+    fn mint_leaf_rsa(cn: &str, leaf_sk: &RsaPrivateKey, ca_cn: &str, ca_sk: &RsaPrivateKey) -> Vec<u8> {
+        let signer = RsaPkcsSk::<_Sha256>::new(ca_sk.clone());
+        let issuer = Name::from_str(&format!("CN={ca_cn}")).unwrap();
+        let subject = Name::from_str(&format!("CN={cn}")).unwrap();
+        let mut b = CertificateBuilder::new(
+            Profile::Leaf { issuer, enable_key_agreement: false, enable_key_encipherment: false },
+            SerialNumber::from(2u32),
+            Validity::from_now(Duration::from_secs(3600)).unwrap(),
+            subject,
+            spki_rsa(leaf_sk),
+            &signer,
+        )
+        .unwrap();
+        b.add_extension(&ExtendedKeyUsage(vec![ObjectIdentifier::new_unwrap(EKU_CODE_SIGNING)])).unwrap();
+        b.build::<RsaPkcsSig>().unwrap().to_der().unwrap()
+    }
+
+    fn cose_rs256(statement: &[u8], leaf_sk: &RsaPrivateKey, chain: &[Vec<u8>]) -> Vec<u8> {
+        let signer = RsaPkcsSk::<_Sha256>::new(leaf_sk.clone());
+        let protected = HeaderBuilder::new().algorithm(iana::Algorithm::RS256).build();
+        let mut unprotected = coset::Header::default();
+        unprotected.rest.push((coset::Label::Int(COSE_HEADER_X5CHAIN),
+            Value::Array(chain.iter().map(|c| Value::Bytes(c.clone())).collect())));
+        CoseSign1Builder::new().protected(protected).unprotected(unprotected).payload(statement.to_vec())
+            .create_signature(b"", |tbs| { let s: RsaPkcsSig = signer.sign(tbs); s.to_vec() })
+            .build().to_vec().unwrap()
+    }
+
+    /// TC-F1.14: an ES384 (EC P-384) leaf under a P-384 CA verifies end-to-end.
+    #[test]
+    fn tc_f1_14_es384_chain_accepted() {
+        let ca_sk = P384Sk::random(&mut OsRng);
+        let leaf_sk = P384Sk::random(&mut OsRng);
+        let ca = mint_ca_p384("es384-ca", &ca_sk);
+        let leaf = mint_leaf_p384("issuerX", &leaf_sk, "es384-ca", &ca_sk);
+        let anchor = anchor_for(&ca, "did:x509:test:issuerX");
+        let mut anchors = HashMap::new();
+        anchors.insert(anchor.did.clone(), anchor);
+        let f = frag("did:x509:test:issuerX");
+        let cose = cose_es384(&f.signing_bytes(), &leaf_sk, &[leaf, ca]);
+        assert_eq!(
+            verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap(),
+            "did:x509:test:issuerX"
+        );
+    }
+
+    /// TC-F1.15: an RSA (RS256, PKCS#1 v1.5 / SHA-256) leaf under an RSA CA verifies
+    /// end-to-end (chain-link RSA signature + RS256 COSE leaf signature).
+    #[test]
+    fn tc_f1_15_rsa_rs256_chain_accepted() {
+        let ca_sk = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
+        let leaf_sk = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
+        let ca = mint_ca_rsa("rsa-ca", &ca_sk);
+        let leaf = mint_leaf_rsa("issuerX", &leaf_sk, "rsa-ca", &ca_sk);
+        let anchor = anchor_for(&ca, "did:x509:test:issuerX");
+        let mut anchors = HashMap::new();
+        anchors.insert(anchor.did.clone(), anchor);
+        let f = frag("did:x509:test:issuerX");
+        let cose = cose_rs256(&f.signing_bytes(), &leaf_sk, &[leaf, ca]);
+        assert_eq!(
+            verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap(),
+            "did:x509:test:issuerX"
+        );
+    }
+
+    /// TC-F1.15b: an RS256 envelope whose signature is over a different statement is rejected
+    /// (RSA path is not a rubber stamp).
+    #[test]
+    fn tc_f1_15b_rsa_wrong_statement_rejected() {
+        let ca_sk = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
+        let leaf_sk = RsaPrivateKey::new(&mut OsRng, 2048).unwrap();
+        let ca = mint_ca_rsa("rsa-ca", &ca_sk);
+        let leaf = mint_leaf_rsa("issuerX", &leaf_sk, "rsa-ca", &ca_sk);
+        let anchor = anchor_for(&ca, "did:x509:test:issuerX");
+        let mut anchors = HashMap::new();
+        anchors.insert(anchor.did.clone(), anchor);
+        let f = frag("did:x509:test:issuerX");
+        let cose = cose_rs256(b"a-different-statement", &leaf_sk, &[leaf, ca]);
+        // Payload mismatch -> InvalidSignature (payload must equal the presented statement).
+        assert_eq!(
+            verify_x509_cose(&anchors, &HashSet::new(), &cose, &f.signing_bytes()).unwrap_err(),
+            FragmentError::InvalidSignature
+        );
+    }
 }
+

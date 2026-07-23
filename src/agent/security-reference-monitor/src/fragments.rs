@@ -23,6 +23,7 @@
 //! Verification is performed with a maintained pure-Rust Ed25519 verifier; no Go
 //! dependency is introduced into the agent.
 
+use crate::cose_keys::{CoseAlg, PublicKey};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -280,8 +281,9 @@ pub struct FragmentStore {
     /// ledger's current verification key(s). Multiple keys per ledger support rotation: a
     /// receipt verifies if *any* current key of the named ledger validates it. When
     /// non-empty, a fragment's receipt is cryptographically verified against the selected
-    /// ledger's keys.
-    transparency_trust_list: HashMap<String, Vec<VerifyingKey>>,
+    /// ledger's keys. BL-2: each key carries its algorithm (EdDSA/ES256/ES384/PS256/RS256),
+    /// so a ledger may sign receipts/tree-heads with any supported scheme.
+    transparency_trust_list: HashMap<String, Vec<(PublicKey, CoseAlg)>>,
     /// FR-1f (trust list): per-`(issuer, feed)` allow-list of ledger ids. A receipt whose
     /// ledger is not in this list (when the list is non-empty) is rejected.
     allowed_ledgers: HashMap<(String, String), Vec<String>>,
@@ -356,23 +358,33 @@ impl FragmentStore {
     }
 
     /// FR-1f (trust list): load the Transparency Trust List — a set of `(ledger_id, keys)`
-    /// entries from measured state. Each ledger may carry multiple keys to support rotation
-    /// (a receipt verifies against any current key). Invalid keys are rejected.
+    /// entries of Ed25519 keys from measured state. Each ledger may carry multiple keys to
+    /// support rotation (a receipt verifies against any current key). Invalid keys are
+    /// rejected. (BL-2: for non-Ed25519 ledger keys use [`add_ledger_key`].)
     pub fn load_transparency_trust_list(
         &mut self,
         entries: &[(String, Vec<[u8; 32]>)],
     ) -> Result<(), FragmentError> {
         for (id, keys) in entries {
-            let mut vks = Vec::with_capacity(keys.len());
             for k in keys {
-                vks.push(VerifyingKey::from_bytes(k).map_err(|_| FragmentError::InvalidSignature)?);
+                let pk = PublicKey::from_ed25519_bytes(k).ok_or(FragmentError::InvalidSignature)?;
+                self.transparency_trust_list
+                    .entry(id.clone())
+                    .or_default()
+                    .push((pk, CoseAlg::EdDsa));
             }
-            self.transparency_trust_list
-                .entry(id.clone())
-                .or_default()
-                .extend(vks);
         }
         Ok(())
+    }
+
+    /// BL-2: add a single transparency ledger key of any supported algorithm (from a
+    /// SubjectPublicKeyInfo DER for EC/RSA, or an Ed25519 key). Multiple keys per ledger
+    /// support rotation and mixed algorithms.
+    pub fn add_ledger_key(&mut self, ledger: impl Into<String>, key: PublicKey, alg: CoseAlg) {
+        self.transparency_trust_list
+            .entry(ledger.into())
+            .or_default()
+            .push((key, alg));
     }
 
     /// FR-1f (trust list): scope the ledgers a receipt may originate from for a given
@@ -661,11 +673,13 @@ impl FragmentStore {
                 .unwrap_or(&[]);
 
             // Stage 1: detached-signature receipt, verified against any current ledger key
-            // (rotation) when a trust list is configured.
+            // (rotation) using that key's algorithm (BL-2 multi-alg).
             if !receipt.is_empty() && !self.transparency_trust_list.is_empty() {
                 let bytes = hex_to_bytes(receipt).map_err(|_| FragmentError::InvalidReceipt)?;
-                let rsig = Signature::from_slice(&bytes).map_err(|_| FragmentError::InvalidReceipt)?;
-                if !keys.iter().any(|k| k.verify(statement, &rsig).is_ok()) {
+                if !keys
+                    .iter()
+                    .any(|(k, alg)| k.verify_cose(*alg, statement, &bytes).is_ok())
+                {
                     return Err(FragmentError::InvalidReceipt);
                 }
             }
@@ -675,8 +689,10 @@ impl FragmentStore {
                 let tp = TransparencyProof::parse(proof).ok_or(FragmentError::InvalidInclusionProof)?;
                 // (a) the signed tree head must be signed by a current ledger key.
                 let sth = sth_signing_bytes(ledger, tp.size, &tp.root);
-                let ssig = Signature::from_slice(&tp.sig).map_err(|_| FragmentError::InvalidReceipt)?;
-                if !keys.iter().any(|k| k.verify(&sth, &ssig).is_ok()) {
+                if !keys
+                    .iter()
+                    .any(|(k, alg)| k.verify_cose(*alg, &sth, &tp.sig).is_ok())
+                {
                     return Err(FragmentError::InvalidReceipt);
                 }
                 // (b) the statement must be included in the tree at that head.
@@ -1873,6 +1889,33 @@ mod tests {
         let mut c = fc.clone();
         c.receipt_proof = Some(ttl_proof(&t1c, &led_sk, "ttl", 0, None));
         assert!(matches!(restarted.verify(&c).unwrap_err(), FragmentError::LogRolledBack { .. }));
+    }
+    /// TC-F1.36 (BL-2): a transparency ledger key may be ES256 (not just Ed25519) — a receipt
+    /// signed by that P-256 ledger key verifies; one signed by a different key is rejected.
+    #[test]
+    fn trust_list_accepts_es256_ledger_key() {
+        use crate::cose_keys::{CoseAlg, PublicKey};
+        use p256::ecdsa::{signature::Signer as _, Signature as P256Sig, SigningKey as P256Sk};
+        use p256::pkcs8::EncodePublicKey as _;
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let mut store = FragmentStore::new(true);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        let led = P256Sk::random(&mut rand_core::OsRng);
+        let spki = led.verifying_key().to_public_key_der().unwrap();
+        let pk = PublicKey::from_spki_der(spki.as_bytes()).unwrap();
+        store.add_ledger_key("es256-ledger", pk, CoseAlg::Es256);
+
+        let mut f = frag_feed("issuerA", "", 1);
+        f.receipt_ledger = Some("es256-ledger".into());
+        f.signature = issuer_sk.sign(&f.signing_bytes()).to_bytes().to_vec();
+        let sig: P256Sig = led.sign(&f.signing_bytes());
+        f.receipt = Some(sig.to_bytes().iter().map(|b| format!("{:02x}", b)).collect());
+        assert!(store.verify(&f).is_ok());
+
+        let other = P256Sk::random(&mut rand_core::OsRng);
+        let bad: P256Sig = other.sign(&f.signing_bytes());
+        f.receipt = Some(bad.to_bytes().iter().map(|b| format!("{:02x}", b)).collect());
+        assert_eq!(store.verify(&f).unwrap_err(), FragmentError::InvalidReceipt);
     }
 }
 
