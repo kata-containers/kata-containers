@@ -28,7 +28,7 @@ implement it, the security guarantee it introduces, and how it was validated.
 - **Trusted-state authority:** most guarantees are enforced by an agent-internal
   **Security Reference Monitor (SRM)** crate (`src/agent/security-reference-monitor/`),
   which owns the transactional lifecycle, occurrence registry, resource graph, CDI trust,
-  policy-fragment verifier, scratch classifier, verified-layer allowlist, TOCTOU handle
+  policy-fragment verifier, scratch classifier, verified-layer + verified-image allowlists, TOCTOU handle
   binding, and network-phase machine. Keeping this logic in one crate makes it
   unit-testable and, for the lifecycle, formally model-checkable.
 - **Companion docs:** `docs/cc/fr1-fragments.md` (the full FR-1 fragments reference) and
@@ -60,6 +60,7 @@ implement it, the security guarantee it introduces, and how it was validated.
 | FR-5 | Encrypted scratch by effective mode | `44d6f9d04`, `b1603c3a6` |
 | FR-4B | Mount bound to the checked handle (TOCTOU) | `44d6f9d04`, `dbea0d59b` |
 | FR-4C | Verified read-only layers (dm-verity root-digest authorization) | `26d408bd7` |
+| FR-4D | Verified guest-pull images (image manifest-digest authorization) | `bl3` |
 | FR-14 | Network phase binding | `44d6f9d04`, `8cf9c5785` |
 | FR-7 (rest) | Debug console + diagnostics disabled in strict | `8cf9c5785` |
 | FR-15 | Formal model + fault injection + equivalence-claim proof | `21ac6e048`, `e76bc8d81` |
@@ -320,6 +321,29 @@ implement it, the security guarantee it introduces, and how it was validated.
 - **Follow-up:** live validation needs a `devicemapper` agent build + a GPT/EROFS verity
   image; optional defense-in-depth is a dm-table read-back of the effective root hash.
 
+### FR-4D — Verified guest-pull images (image manifest-digest authorization)
+- **Gap:** in the confidential guest-pull path the agent asks the Confidential Data Hub (CDH)
+  to pull and unpack a container image referenced by the (untrusted) host. The registry/CDH
+  verify that the pulled content matches the referenced digest, but nothing in the guest
+  checked that the *reference* resolves to a digest the tenant approved — so a host could
+  point the workload at a different (self-consistent) image, or use a mutable tag.
+- **Fix:** a **measured allowlist** of authorized image manifest digests
+  (`/etc/kata/verified-images.toml`, seeded at boot like the other measured trust roots) plus
+  a **fail-closed authorization gate** that runs *before* the pull
+  (`image_pull_handler.rs` → `VerifiedImageStore::verify`). Fail-closed: when verification is
+  required, the reference must be pinned by digest (`name@alg:hex`, else `UnpinnedImage`), the
+  allowlist must be non-empty (else `NoApprovedImages`), and the digest must be present (else
+  `UnauthorizedImage`). Digests are normalized (`algorithm:hex`, lower-cased).
+- **Guarantee:** a guest-pull image is fetched only if it is pinned to a manifest digest the
+  tenant measured/approved — the registry/CDH prove *content ↔ digest* (pull-by-digest), this
+  gate proves *digest ∈ approved set*, so the host cannot substitute a different image or a
+  mutable tag.
+- **Commits:** `bl3` (store + gate + measured-config seed).
+- **Validated:** 6 unit tests (`verified_images` — authorized/unauthorized, unpinned rejected,
+  empty-allowlist fail-closed, normalized/algorithm-bound, multi-image); agent builds strict
+  clean; SRM crate 104 tests.
+- **Follow-up:** live validation needs a guest-pull-enabled (CDH) agent + pod.
+
 ### FR-14 — Network phase binding
 - **Gap:** a host that can add a route, rewrite iptables, or spoof ARP *after* the workload
   starts can exfiltrate or redirect traffic.
@@ -442,7 +466,7 @@ pre-hardened deployment a few are parity or additional defense-in-depth.
 - **Unit / integration:** the SRM crate carries the transaction manager, occurrence
   registry, resource graph, CDI trust, fragment verifier, scratch classifier, handle
   binding, verified-layer allowlist, network-phase machine, and lifecycle
-  fault-injection/fuzz tests, all green (98 SRM unit tests + 4 fault-injection).
+  fault-injection/fuzz tests, all green (104 SRM unit tests + 4 fault-injection).
 - **Formal:** TLC model-checks the lifecycle safety properties with no error.
 - **Live matrix:** the strict `kata-parma` profile passes the policy-enforcement matrix
   with no regression, and the FR-9/FR-10/FR-14 live ttRPC attacks are denied.
