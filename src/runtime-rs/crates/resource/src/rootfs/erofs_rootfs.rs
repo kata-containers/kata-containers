@@ -18,9 +18,11 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, KATA_SCSI_DEV_TYPE, device::{
-        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
+    device::{
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        DeviceConfig, DeviceType,
     },
+    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, KATA_SCSI_DEV_TYPE,
 };
 use kata_types::device::{
     DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
@@ -615,10 +617,9 @@ impl ErofsMultiLayerRootfs {
                     .await
                     .context("failed to attach rw block device")?;
 
-                    let (mut rwlayer, device_id) =
-                        extract_block_device_info(&device_info, false)
-                            .await
-                            .context("failed to get block device for rw layer")?;
+                    let (mut rwlayer, device_id) = extract_block_device_info(&device_info, false)
+                        .await
+                        .context("failed to get block device for rw layer")?;
                     info!(
                         sl!(),
                         "writable block device attached - device_id: {} guest_path: {}",

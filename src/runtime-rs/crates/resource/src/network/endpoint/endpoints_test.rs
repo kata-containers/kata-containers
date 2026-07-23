@@ -161,7 +161,10 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
-                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
+                        assert_eq!(
+                            manual.net_pair.network_queues,
+                            result.net_pair.network_queues
+                        );
                     }
                     assert!(delete_link(&handle, manual_vlan_iface_name.as_str())
                         .await
@@ -295,7 +298,10 @@ mod tests {
                             _ => unreachable!(),
                         }
                         assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
-                        assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
+                        assert_eq!(
+                            manual.net_pair.network_queues,
+                            result.net_pair.network_queues
+                        );
                     }
                     // delete the manually created links
                     assert!(delete_link(&handle, manual_macvlan_iface_name.as_str())
@@ -402,7 +408,10 @@ mod tests {
                         _ => unreachable!(),
                     }
                     assert_eq!(manual.net_pair.network_qos, result.net_pair.network_qos);
-                    assert_eq!(manual.net_pair.network_queues, result.net_pair.network_queues);
+                    assert_eq!(
+                        manual.net_pair.network_queues,
+                        result.net_pair.network_queues
+                    );
                 }
                 assert!(delete_link(&handle, manual_virt_iface_name.as_str())
                     .await
@@ -425,10 +434,7 @@ mod tests {
             queue_num: 0,
             queue_size: 0,
         };
-        assert_eq!(
-            vhost.get_effective_queues(default_network_queues),
-            (1, 256)
-        );
+        assert_eq!(vhost.get_effective_queues(default_network_queues), (1, 256));
 
         // HostTap fallback default behaviour.
         let tap = Device::HostTap {
@@ -453,13 +459,19 @@ mod tests {
             queue_num: 1,
             queue_size: 0,
         };
-        assert_eq!(vhost_nonzero.get_effective_queues(default_network_queues), (1, 256));
+        assert_eq!(
+            vhost_nonzero.get_effective_queues(default_network_queues),
+            (1, 256)
+        );
 
         let tap_explicit = Device::HostTap {
             tap_name: "tap0".to_owned(),
             queue_num: 7,
             queue_size: 512,
         };
-        assert_eq!(tap_explicit.get_effective_queues(default_network_queues), (7, 512));
+        assert_eq!(
+            tap_explicit.get_effective_queues(default_network_queues),
+            (7, 512)
+        );
     }
 }

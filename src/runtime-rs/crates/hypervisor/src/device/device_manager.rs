@@ -20,11 +20,11 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
-    BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice,
-    Hypervisor, NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice,
-    VhostUserConfig, VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE,
-    KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW,
-    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
+    PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
+    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
+    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -689,7 +689,9 @@ pub async fn find_cold_plugged_vfio_ap(
 mod tests {
     use super::DeviceManager;
     use crate::{
-        BlockConfigModern, KATA_BLK_DEV_TYPE, device::{DeviceConfig, DeviceType, device_manager::get_block_device_info}, qemu::Qemu,
+        device::{device_manager::get_block_device_info, DeviceConfig, DeviceType},
+        qemu::Qemu,
+        BlockConfigModern, KATA_BLK_DEV_TYPE,
     };
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;

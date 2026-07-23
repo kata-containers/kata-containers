@@ -163,10 +163,7 @@ impl QemuInner {
                         continue;
                     }
                     match driver_option.as_str() {
-                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
-                            &path_on_host,
-                            is_readonly,
-                        )?,
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(&path_on_host, is_readonly)?,
                         KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
                             let serial = if serial_override.is_empty() {
                                 None

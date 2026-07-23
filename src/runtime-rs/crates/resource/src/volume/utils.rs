@@ -229,9 +229,18 @@ pub async fn handle_block_volume(
     mount.set_destination(m.destination().clone());
     mount.set_typ(Some(KATA_MOUNT_BIND_TYPE.to_string()));
     mount.set_source(Some(PathBuf::from(&guest_path)));
-    mount.set_options(Some(build_bind_mount_options(volume_options.unwrap_or(&[]), m.options())));
+    mount.set_options(Some(build_bind_mount_options(
+        volume_options.unwrap_or(&[]),
+        m.options(),
+    )));
 
-    debug!(sl!(), "handle block volume with device_id: {}, storage: {:?}, mount: {:?}", device_id, storage, mount);
+    debug!(
+        sl!(),
+        "handle block volume with device_id: {}, storage: {:?}, mount: {:?}",
+        device_id,
+        storage,
+        mount
+    );
 
     Ok((storage, mount, device_id))
 }
