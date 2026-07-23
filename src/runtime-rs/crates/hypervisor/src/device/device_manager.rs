@@ -309,7 +309,13 @@ impl DeviceManager {
         let device_id = self.new_device_id()?;
         let dev: ArcMutexDevice = match device_config {
             DeviceConfig::BlockCfgModern(config) => {
-                if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
+                if let Some(device_matched_id) = self
+                    .find_device(resolve_host_path(
+                        &config.path_on_host,
+                        config.major,
+                        config.minor,
+                    )?)
+                    .await
                 {
                     return Ok(device_matched_id);
                 }
@@ -601,6 +607,21 @@ impl DeviceManager {
     }
 }
 
+// Resolve the effective host path for a block device.
+//
+// For device-file mounts path_on_host may be empty at this point (it is only
+// resolved from major:minor later, in create_block_device() /
+// create_block_device_modern()). Resolve it here so callers consistently use
+// the effective host path.
+fn resolve_host_path(path_on_host: &str, major: i64, minor: i64) -> Result<String> {
+    if path_on_host.is_empty() {
+        get_host_path(DEVICE_TYPE_BLOCK, major, minor)
+            .context(format!("failed to resolve host path for block device {major}:{minor}"))
+    } else {
+        Ok(path_on_host.to_string())
+    }
+}
+
 // Many scenarios have similar steps when adding devices. so to reduce duplicated code,
 // we should create a common method abstracted and use it in various scenarios.
 // do_handle_device:
@@ -746,5 +767,24 @@ mod tests {
         } else {
             assert_eq!(1, 0)
         }
+    }
+
+    #[test]
+    fn test_resolve_host_path_non_empty() {
+        // A non-empty path is returned as-is; major/minor are ignored and no
+        // host-path resolution (sysfs lookup) is attempted.
+        let path = super::resolve_host_path("/dev/vda", 0, 0).unwrap();
+        assert_eq!(path, "/dev/vda");
+    }
+
+    #[test]
+    fn test_resolve_host_path_empty_resolves_from_major_minor() {
+        // An empty path must trigger host-path resolution from major:minor
+        // rather than silently returning an empty string. -1:-1 is not a
+        // valid device number and can never exist under /sys/dev/block,
+        // so get_host_path deterministically fails and the helper propagates
+        // the error instead.
+        let res = super::resolve_host_path("", -1, -1);
+        assert!(res.is_err());
     }
 }
