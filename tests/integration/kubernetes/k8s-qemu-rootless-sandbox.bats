@@ -18,11 +18,17 @@ qemu_rootless_sandbox_supported() {
 
 	# Additional QEMU configurations are tracked in:
 	# https://github.com/kata-containers/kata-containers/issues/13424
-	is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" && return 1
 	# Rootless QEMU cannot access EROFS layers below root-owned
 	# snapshot directories.
 	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && return 1
-	is_confidential_runtime_class "${KATA_HYPERVISOR}" && return 1
+
+	# CoCo-dev does not enable a TEE or require TEE device nodes. Keep
+	# actual confidential handlers excluded until rootless QEMU can access
+	# resources such as /dev/sev and /dev/tdx_guest.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
+		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
+		return 1
+	fi
 	return 0
 }
 
