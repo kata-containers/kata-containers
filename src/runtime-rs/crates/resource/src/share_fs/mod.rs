@@ -31,7 +31,7 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::{prefix_with_rootless_dir, config::hypervisor::SharedFsInfo};
+use kata_types::{config::hypervisor::SharedFsInfo, prefix_with_rootless_dir};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 

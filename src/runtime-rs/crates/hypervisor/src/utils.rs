@@ -21,8 +21,8 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::{
-    prefix_with_rootless_dir,
     config::{Hypervisor, KATA_PATH},
+    prefix_with_rootless_dir,
 };
 use lazy_static::lazy_static;
 use nix::{

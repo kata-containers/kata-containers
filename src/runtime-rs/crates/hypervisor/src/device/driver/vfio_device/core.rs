@@ -450,7 +450,6 @@ fn is_char_dev(p: &Path) -> bool {
         .unwrap_or(false)
 }
 
-
 /// Locates the VFIO character device (cdev) for a given PCI BDF.
 /// Path: /sys/bus/pci/devices/<bdf>/vfio-dev/vfioX
 fn discover_vfio_cdev_for_pci(bdf: &str, gid: u32) -> Option<VfioCdev> {
@@ -569,12 +568,17 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
             DEV_IOMMU
         ));
     }
-    let iommufd_backend =
-        cdev.map(|c| VfioIommufdBackend {
+    let iommufd_backend = cdev
+        .map(|c| VfioIommufdBackend {
             iommufd_dev: iommu_dev,
             cdevs: vec![c],
         })
-        .ok_or_else(|| anyhow!("no VFIO cdev found for {} (vfio-dev sysfs missing?)", vfio_name))?;
+        .ok_or_else(|| {
+            anyhow!(
+                "no VFIO cdev found for {} (vfio-dev sysfs missing?)",
+                vfio_name
+            )
+        })?;
 
     Ok(VfioDevice {
         id: format!("vfio-iommufd-{}", vfio_name),

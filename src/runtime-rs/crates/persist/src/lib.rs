@@ -6,7 +6,7 @@
 
 pub mod sandbox_persist;
 use anyhow::{anyhow, Context, Ok, Result};
-use kata_types::{prefix_with_rootless_dir, config::KATA_PATH};
+use kata_types::{config::KATA_PATH, prefix_with_rootless_dir};
 use serde::de;
 use std::{fs::File, io::BufReader};
 
