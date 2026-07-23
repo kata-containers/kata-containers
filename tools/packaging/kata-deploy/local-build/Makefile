@@ -32,6 +32,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-image-mariner-tarball \
 	rootfs-image-nvidia-gpu-tarball \
 	rootfs-image-nvidia-gpu-confidential-tarball \
@@ -69,6 +70,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-image-nvidia-gpu-tarball \
 	rootfs-image-nvidia-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
@@ -321,6 +323,12 @@ rootfs-image-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
 rootfs-image-coco-extension-tarball:
+	${MAKE} $@-build
+
+# Self-contained debug rootfs (no kata-agent, kernel or driver tree), so it has
+# no build-time dependency on any other target.
+DEPS :=
+rootfs-image-devkit-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 
 DEPS := agent-tarball
