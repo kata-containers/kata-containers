@@ -404,13 +404,8 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
-                    let groups = user.groups.clone();
-                    let gid = Gid::from_raw(user.gid);
-                    let uid = Uid::from_raw(user.uid);
-
-                    let _ = set_groups(&groups);
-                    let _ = setgid(gid).context("setgid failed");
-                    let _ = setuid(uid).context("setuid failed");
+                    set_process_credentials(user)
+                        .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
 
                 Ok(())
@@ -996,6 +991,32 @@ fn check_bpf_enabled_with<ReadStatus, LogWarning>(
     }
 }
 
+fn set_process_credentials(user: &RootlessUser) -> Result<()> {
+    set_process_credentials_with(
+        user,
+        set_groups,
+        |gid| setgid(Gid::from_raw(gid)).map_err(anyhow::Error::from),
+        |uid| setuid(Uid::from_raw(uid)).map_err(anyhow::Error::from),
+    )
+}
+
+fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
+    user: &RootlessUser,
+    set_groups_fn: SetGroups,
+    set_gid_fn: SetGid,
+    set_uid_fn: SetUid,
+) -> Result<()>
+where
+    SetGroups: Fn(&[u32]) -> Result<()>,
+    SetGid: Fn(u32) -> Result<()>,
+    SetUid: Fn(u32) -> Result<()>,
+{
+    set_groups_fn(&user.groups).context("setgroups failed")?;
+    set_gid_fn(user.gid).context("setgid failed")?;
+    set_uid_fn(user.uid).context("setuid failed")?;
+    Ok(())
+}
+
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
     info!(sl!(), "starting reading qemu console");
 
@@ -1476,5 +1497,123 @@ mod tests {
                 None => assert!(warnings.is_empty(), "{}", name),
             }
         }
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum CredentialOperation {
+        SetGroups(Vec<u32>),
+        SetGid(u32),
+        SetUid(u32),
+    }
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1001,
+            gid: 1002,
+            groups: vec![1003, 1004],
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_set_process_credentials_order() {
+        let operations = RefCell::new(Vec::new());
+
+        set_process_credentials_with(
+            &rootless_user(),
+            |groups| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGroups(groups.to_vec()));
+                Ok(())
+            },
+            |gid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGid(gid));
+                Ok(())
+            },
+            |uid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetUid(uid));
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            *operations.borrow(),
+            vec![
+                CredentialOperation::SetGroups(vec![1003, 1004]),
+                CredentialOperation::SetGid(1002),
+                CredentialOperation::SetUid(1001),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_set_process_credentials_stops_on_error() {
+        for (failed_operation, expected_error) in [
+            (0, "setgroups failed"),
+            (1, "setgid failed"),
+            (2, "setuid failed"),
+        ] {
+            let calls = RefCell::new(0);
+            let result = set_process_credentials_with(
+                &rootless_user(),
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 0 {
+                        Err(anyhow!("injected setgroups failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 1 {
+                        Err(anyhow!("injected setgid failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 2 {
+                        Err(anyhow!("injected setuid failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+
+            let error = result.expect_err("credential failure must abort setup");
+            assert!(format!("{error:#}").contains(expected_error));
+            assert_eq!(*calls.borrow(), failed_operation + 1);
+        }
+    }
+
+    #[test]
+    fn test_set_process_credentials_replaces_empty_groups() {
+        let user = RootlessUser {
+            groups: Vec::new(),
+            ..rootless_user()
+        };
+        let setgroups_called = RefCell::new(false);
+
+        set_process_credentials_with(
+            &user,
+            |groups| {
+                *setgroups_called.borrow_mut() = true;
+                assert!(groups.is_empty());
+                Ok(())
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .unwrap();
+
+        assert!(*setgroups_called.borrow());
     }
 }

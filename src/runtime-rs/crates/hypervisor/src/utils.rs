@@ -116,13 +116,12 @@ pub fn enter_netns(netns_path: &str) -> Result<()> {
 }
 
 pub fn set_groups(groups: &[u32]) -> Result<()> {
-    if !groups.is_empty() {
-        let group = groups
-            .iter()
-            .map(|gid| Gid::from_raw(*gid))
-            .collect::<Vec<_>>();
-        setgroups(&group).context("set groups failed")?;
-    }
+    let group = groups
+        .iter()
+        .map(|gid| Gid::from_raw(*gid))
+        .collect::<Vec<_>>();
+    // An empty list intentionally clears inherited supplementary groups.
+    setgroups(&group).context("set groups failed")?;
 
     Ok(())
 }
