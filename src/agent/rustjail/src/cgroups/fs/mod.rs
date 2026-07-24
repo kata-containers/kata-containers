@@ -211,7 +211,7 @@ impl CgroupManager for Manager {
         Ok(())
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(&self) -> Result<()> {
         if let Err(err) = self.cgroup.delete() {
             warn!(
                 sl(),

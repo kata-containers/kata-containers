@@ -255,7 +255,7 @@ pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
-    pub cgroup_manager: Box<dyn Manager + Send + Sync>,
+    pub cgroup_manager: Arc<dyn Manager + Send + Sync>,
     pub init_process_pid: pid_t,
     pub init_process_start_time: u64,
     pub uid_map_path: String,
@@ -1283,7 +1283,7 @@ impl BaseContainer for LinuxContainer {
         // Kill all of the processes created in this container to prevent
         // the leak of some daemon process when this container shared pidns
         // with the sandbox.
-        let cgm = self.cgroup_manager.as_mut();
+        let cgm = self.cgroup_manager.as_ref();
         let pids = cgm.get_pids().context("get cgroup pids")?;
         info!(
             self.logger,
@@ -1718,10 +1718,10 @@ impl LinuxContainer {
             linux_cgroups_path.replace(':', "/")
         };
 
-        let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
-            Box::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
+        let cgroup_manager: Arc<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
+            Arc::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
         } else {
-            Box::new(
+            Arc::new(
                 FsManager::new(cpath.as_str(), spec, devcg_info)
                     .context("Create cgroupfs manager")?,
             )
@@ -1982,7 +1982,7 @@ mod tests {
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager =
-                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                Arc::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
                     anyhow!(format!("fail to create cgroup manager with path: {:}", e))
                 })?);
             c.pause().map_err(|e| anyhow!(e))
@@ -2007,7 +2007,7 @@ mod tests {
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.cgroup_manager =
-                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                Arc::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
                     anyhow!(format!("fail to create cgroup manager with path: {:}", e))
                 })?);
             // Change status to paused, this way we can resume it
