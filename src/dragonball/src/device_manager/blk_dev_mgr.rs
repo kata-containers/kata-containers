@@ -37,7 +37,7 @@ use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
 use crate::vm::KernelConfigInfo;
 
-use super::DbsMmioV2Device;
+use super::{persist, DbsMmioV2Device};
 
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
@@ -73,6 +73,18 @@ pub enum BlockDeviceError {
     /// The block device type is invalid.
     #[error("invalid block device type")]
     InvalidBlockDeviceType,
+
+    /// Snapshotting this block device class is not supported.
+    #[error(
+        "cannot snapshot block device '{drive_id}': {device_type:?} devices are not supported; \
+         only RawBlock (virtio-blk) devices can be saved and restored"
+    )]
+    UnsupportedDeviceType {
+        /// Drive id of the offending device.
+        drive_id: String,
+        /// Low-level device type that cannot be snapshotted.
+        device_type: BlockDeviceType,
+    },
 
     /// The block device path was already used for a different drive.
     #[error("block device path '{0}' already exists")]
@@ -965,6 +977,132 @@ impl BlockDeviceMgr {
             None => Err(BlockDeviceError::InvalidDeviceId(new_cfg.drive_id)),
         }
     }
+}
+
+impl<'a> dbs_snapshot::Persist<'a> for BlockDeviceMgr {
+    type State = BlockDeviceMgrState;
+    type SaveArgs = ();
+    type RestoreArgs = ();
+    type Error = BlockDeviceError;
+
+    /// Capture the state of all block devices.
+    ///
+    /// The virtual machine must be paused when this is called. Only MMIO
+    /// virtio-blk devices are supported; vhost-user/PCI block devices are
+    /// refused.
+    fn save_state(&mut self, _args: ()) -> std::result::Result<Self::State, Self::Error> {
+        let mut devices = Vec::new();
+        for info in self.info_list.iter() {
+            let device = info
+                .device
+                .as_ref()
+                .ok_or_else(|| InvalidDeviceId(info.config.drive_id.clone()))?;
+            // Dispatch on the recorded device type rather than probing with a
+            // downcast: vhost-user drives (Spool/Spdk) share this info_list and
+            // this transport, and their backend state lives in another process,
+            // so they are refused by name instead of failing opaquely.
+            match info.config.device_type {
+                BlockDeviceType::RawBlock => {}
+                device_type => {
+                    return Err(BlockDeviceError::UnsupportedDeviceType {
+                        drive_id: info.config.drive_id.clone(),
+                        device_type,
+                    })
+                }
+            }
+            let (device_info, transport) =
+                persist::save_device_state::<Block<GuestAddressSpaceImpl>>(device, ())
+                    .map_err(BlockDeviceError::Virtio)?;
+            devices.push(persist::VirtioDevState {
+                config: info.config.clone(),
+                device_info: BlockDeviceState::RawBlock(device_info),
+                transport,
+            });
+        }
+        Ok(BlockDeviceMgrState { devices })
+    }
+
+    /// Restore the runtime state of all block devices.
+    ///
+    /// The devices must have been re-created from the same configuration
+    /// (matched by drive id) and must not have been activated yet. Replays
+    /// device activation for devices the guest had activated. Must be called
+    /// before the guest vCPUs resume.
+    fn restore_state(
+        &mut self,
+        state: &Self::State,
+        _args: (),
+    ) -> std::result::Result<(), Self::Error> {
+        for (pos, dev_state) in state.devices.iter().enumerate() {
+            // Drive ids may be generated per-run (e.g. the VM rootfs drive
+            // id), so an id miss is expected across template create/restore
+            // boundaries. Fall back to positional matching, but only when the
+            // device sets align *and* the backing path at that position
+            // confirms it is the same device -- otherwise saved queue state
+            // could be applied to the wrong block device. A path mismatch is
+            // refused rather than guessed.
+            let index = match self.get_index_of_drive_id(&dev_state.config.drive_id) {
+                Some(index) => index,
+                None if self.info_list.len() == state.devices.len()
+                    && self.info_list[pos].config.path_on_host == dev_state.config.path_on_host =>
+                {
+                    log::warn!(
+                        "block device id '{}' not found, matched by position {} (backing path {:?})",
+                        dev_state.config.drive_id,
+                        pos,
+                        dev_state.config.path_on_host,
+                    );
+                    pos
+                }
+                None => return Err(InvalidDeviceId(dev_state.config.drive_id.clone())),
+            };
+            // The saved type must match the device that was re-created from
+            // config, or the saved state belongs to a different device.
+            if self.info_list[index].config.device_type != dev_state.config.device_type {
+                return Err(BlockDeviceError::UnsupportedDeviceType {
+                    drive_id: dev_state.config.drive_id.clone(),
+                    device_type: dev_state.config.device_type,
+                });
+            }
+            let BlockDeviceState::RawBlock(device_info) = &dev_state.device_info;
+            let device = self.info_list[index]
+                .device
+                .as_ref()
+                .ok_or_else(|| InvalidDeviceId(dev_state.config.drive_id.clone()))?;
+            persist::restore_device_state::<Block<GuestAddressSpaceImpl>>(
+                device,
+                device_info,
+                &dev_state.transport,
+                (),
+            )
+            .map_err(BlockDeviceError::Virtio)?;
+        }
+        Ok(())
+    }
+}
+
+/// Snapshot state of one block device, tagged by the low-level device kind.
+///
+/// Wired as an enum from the start so support for a further kind is an added
+/// variant rather than a change to [`persist::VirtioDevState`]'s shape. Only
+/// `RawBlock` (virtio-blk) can be snapshotted today: vhost-user drives
+/// (Spool/Spdk) keep their state in the backend process, so a `VhostUser`
+/// variant has to carry that too and is added with the support, not before.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum BlockDeviceState {
+    /// State of a local-file-backed virtio-blk device.
+    RawBlock(virtio::persist::VirtioDeviceInfoState),
+}
+
+/// Snapshot state of one block device (config + device state + transport
+/// state); see [`persist::VirtioDevState`].
+pub type BlockDevState = persist::VirtioDevState<BlockDeviceConfigInfo, BlockDeviceState>;
+
+/// Snapshot state of the block device manager.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct BlockDeviceMgrState {
+    /// Per-device state, in insertion order.
+    pub devices: Vec<BlockDevState>,
 }
 
 impl Default for BlockDeviceMgr {
