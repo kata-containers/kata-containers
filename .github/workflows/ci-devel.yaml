@@ -43,6 +43,15 @@ jobs:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep this matrix in sync with the one in static-checks-self-hosted.yaml + static-checks.yaml
+        instance:
+          - "ubuntu-22.04"
+          - "ubuntu-24.04-arm"
+          - "ubuntu-24.04-s390x"
+          - "ppc64le"
     uses: ./.github/workflows/build-checks.yaml
     with:
-      instance: ubuntu-22.04
+      instance: ${{ matrix.instance }}
