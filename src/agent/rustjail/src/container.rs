@@ -818,6 +818,14 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    match unistd::setsid() {
+        Ok(_) => {}
+        // already session leader
+        Err(Errno::EPERM) => {}
+        Err(e) => {
+            return Err(e).context("create a new session");
+        }
+    }
     // With NoNewPrivileges, we should set seccomp as close to
     // do_exec as possible in order to reduce the amount of
     // system calls in the seccomp profiles.
