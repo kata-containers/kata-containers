@@ -21,8 +21,8 @@ use dbs_interrupt::IOAPIC_MAX_NR_REDIR_ENTRIES;
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::{
-    kvm_enable_cap, kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_CAP_SPLIT_IRQCHIP,
-    KVM_PIT_SPEAKER_DUMMY,
+    kvm_enable_cap, kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_CAP_EXIT_HYPERCALL,
+    KVM_CAP_SPLIT_IRQCHIP, KVM_PIT_SPEAKER_DUMMY,
 };
 use linux_loader::cmdline::Cmdline;
 use linux_loader::configurator::{linux::LinuxBootConfigurator, BootConfigurator, BootParams};
@@ -34,6 +34,7 @@ use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::api::v1::ConfidentialVmType;
 use crate::error::{Error, Result, StartMicroVmError};
 use crate::event_manager::EventManager;
+use crate::vcpu::KVM_HC_MAP_GPA_RANGE;
 use crate::vm::{VcpuManagerError, Vm, VmError};
 
 /// Configures the system and should be called once per vm before starting vcpu
@@ -239,6 +240,7 @@ impl Vm {
                 .map_err(StartMicroVmError::Vcpu)?;
 
             if self.confidential_vm_type() == Some(ConfidentialVmType::TDX) {
+                self.enable_hc_map_gpa_range()?;
                 self.tdx_init_vcpus(hob_address)?;
                 self.tdx_init_mem_region(vm_memory.deref(), &sections)?;
                 self.tdx_finalize()?;
@@ -521,6 +523,17 @@ impl Vm {
             .map_err(StartMicroVmError::TdvfError)?;
 
         Ok(())
+    }
+
+    pub(super) fn enable_hc_map_gpa_range(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        let mut enable_hc_map_gpa_range = kvm_enable_cap {
+            cap: KVM_CAP_EXIT_HYPERCALL,
+            ..Default::default()
+        };
+        enable_hc_map_gpa_range.args[0] = 1 << KVM_HC_MAP_GPA_RANGE;
+        self.vm_fd()
+            .enable_cap(&enable_hc_map_gpa_range)
+            .map_err(StartMicroVmError::EnableHcMapGpaRange)
     }
 
     pub(super) fn tdx_init_vm(&mut self) -> std::result::Result<(), StartMicroVmError> {
