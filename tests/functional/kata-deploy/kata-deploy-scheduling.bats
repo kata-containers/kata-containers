@@ -25,9 +25,13 @@ RENDERED="/tmp/kata-deploy-scheduling-rendered.yaml"
 RENDERED_JOBS="/tmp/kata-deploy-scheduling-rendered-jobs.yaml"
 
 render_chart() {
+	# These tests assert scheduling options (podLabels, podAnnotations,
+	# affinity, NFD nodeAffinity merge) on the kata-deploy DaemonSet pod
+	# template, so render in daemonset mode regardless of the chart default.
 	helm template kata-deploy "${CHART_PATH}" \
 		--set image.reference=quay.io/kata-containers/kata-deploy \
 		--set image.tag=latest \
+		--set deploymentMode=daemonset \
 		"$@" > "${RENDERED}"
 }
 

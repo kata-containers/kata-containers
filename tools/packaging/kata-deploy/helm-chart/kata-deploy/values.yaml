@@ -1,7 +1,7 @@
 # Deployment model for installing/cleaning up Kata on nodes.
-#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
+#   daemonset: the long-running kata-deploy DaemonSet installs Kata on
 #              every matching node and reverts it on pod termination (uninstall).
-#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
+#   job:       (default) no always-on component. A tiny dispatcher Job (the dispatcher,
 #              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
 #              the selected nodes LIVE, and creates one node-pinned install Job
 #              per node - paced to job.parallelism and guaranteeing one install
@@ -22,7 +22,7 @@
 #   and installs the new nodes (the staged actions are idempotent, so already-
 #   installed nodes are skipped). This is intentional: it avoids an always-on
 #   privileged component on every node.
-deploymentMode: daemonset  # daemonset | job
+deploymentMode: job  # daemonset | job
 
 # Settings specific to deploymentMode: job
 job:
