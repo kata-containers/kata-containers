@@ -236,10 +236,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             any(target_arch = "x86_64", target_arch = "aarch64")
         ))]
         HYPERVISOR_DRAGONBALL => {
-            let hypervisor = Dragonball::new();
-            hypervisor
-                .set_hypervisor_config(hypervisor_config.clone())
-                .await;
+            let hypervisor = Dragonball::new_with_hypervisor_config(hypervisor_config.clone());
             if toml_config.runtime.use_passfd_io {
                 hypervisor
                     .set_passfd_listener_port(toml_config.runtime.passfd_listener_port)
