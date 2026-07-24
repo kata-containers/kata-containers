@@ -44,6 +44,10 @@ _CI_DEVEL_OVERLAPPING_WORKFLOWS = {
     ".github/workflows/ci-on-push.yaml",
     ".github/workflows/static-checks-self-hosted.yaml",
 }
+_CI_DEVEL_WORKFLOW_ALIASES = (
+    "Kata Containers CI",
+    "Static checks self-hosted",
+)
 _GH_SUMMARY_URL = (
     f"{os.environ.get('GITHUB_SERVER_URL')}/"
     f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
@@ -283,6 +287,13 @@ class Checker:
         return (self.ci_devel_run is not None and
                 run.get("path") in _CI_DEVEL_OVERLAPPING_WORKFLOWS)
 
+    def workflow_names(self, run):
+        """Get workflow names used to match a run's jobs"""
+        if (self.ci_devel_run is not None and
+                run["id"] == self.ci_devel_run["id"]):
+            return _CI_DEVEL_WORKFLOW_ALIASES
+        return (run["name"],)
+
     def check_workflow_runs_status(self, attempt, workflow_runs=None):
         """
         Checks if all required jobs passed
@@ -298,7 +309,8 @@ class Checker:
                 continue
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
-                self.record(run["name"], job)
+                for workflow in self.workflow_names(run):
+                    self.record(workflow, job)
         print(self)
         self.write_step_summary()
         return self.status()
