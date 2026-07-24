@@ -19,6 +19,8 @@ p384 = { version = "0.13", default-features = false, features = ["ecdsa", "pkcs8
 rsa = { version = "0.9", default-features = false, features = ["sha2"] }
 sha2 = { version = "0.10", default-features = false, features = ["oid"] }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
+# BL-6: decode SCITT/CCF-profile inclusion proofs (CBOR) from a real transparency ledger.
+ciborium = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 # Enable the certificate builder + full signers for hermetic FR-1d/BL-2 unit tests
