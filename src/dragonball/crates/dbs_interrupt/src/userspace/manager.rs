@@ -8,7 +8,7 @@ use kvm_ioctls::VmFd;
 use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 
-#[cfg(feature = "split-legacy-irq")]
+#[cfg(feature = "legacy-irq")]
 use super::legacy_irq::*;
 use super::{
     ioapic::*, InterruptIndex, InterruptManager, InterruptSourceGroup, InterruptSourceType, Result,
@@ -25,7 +25,7 @@ pub struct UserspaceIoapicManager {
     // IoapicVer register is read-only
     ioapicver: IoapicVer,
     ioapicarb: RwLock<IoapicArb>,
-    #[cfg(feature = "split-legacy-irq")]
+    #[cfg(feature = "legacy-irq")]
     irqs: Vec<Arc<UserspaceLegacyIrqObj>>,
 }
 
@@ -44,7 +44,7 @@ impl UserspaceIoapicManager {
         ioapicver.set_version(version);
         ioapicver.set_entries(nr_redir_entries as u8 - 1);
 
-        #[cfg(feature = "split-legacy-irq")]
+        #[cfg(feature = "legacy-irq")]
         let irqs = {
             let mut irqs = Vec::with_capacity(nr_redir_entries as usize);
             for i in 0..nr_redir_entries {
@@ -58,7 +58,7 @@ impl UserspaceIoapicManager {
             ioapicid: RwLock::new(IoapicId::default()),
             ioapicver,
             ioapicarb: RwLock::new(IoapicArb::default()),
-            #[cfg(feature = "split-legacy-irq")]
+            #[cfg(feature = "legacy-irq")]
             irqs,
         })
     }
@@ -101,7 +101,7 @@ impl UserspaceIoapicManager {
             // We have checked the validity of ioregsel while setting, therefore all values beyond the
             // special IOAPIC registers above would become a valid redirection entry
             index => {
-                #[cfg(feature = "split-legacy-irq")]
+                #[cfg(feature = "legacy-irq")]
                 {
                     let offset = (index - IOAPIC_REDIR_TABLE_START_INDEX) as usize;
                     let is_low = (offset & 0x1) == 0;
@@ -113,7 +113,7 @@ impl UserspaceIoapicManager {
                         self.irqs[irq_base].redir_entry_high().into()
                     }
                 }
-                #[cfg(not(feature = "split-legacy-irq"))]
+                #[cfg(not(feature = "legacy-irq"))]
                 0
             }
         }
@@ -136,7 +136,7 @@ impl UserspaceIoapicManager {
             // We have checked the validity of ioregsel while setting, therefore all values beyond the four
             // special IOAPIC registers above would become a valid redirection entry
             index => {
-                #[cfg(feature = "split-legacy-irq")]
+                #[cfg(feature = "legacy-irq")]
                 {
                     let offset = (index - IOAPIC_REDIR_TABLE_START_INDEX) as usize;
                     let is_low = (offset & 0x1) == 0;
@@ -167,7 +167,7 @@ impl InterruptManager for UserspaceIoapicManager {
         count: u32,
     ) -> Result<Arc<Box<dyn InterruptSourceGroup>>> {
         let group = match ty {
-            #[cfg(feature = "split-legacy-irq")]
+            #[cfg(feature = "legacy-irq")]
             InterruptSourceType::LegacyIrq => {
                 if count != 1 {
                     return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
@@ -265,7 +265,7 @@ pub(crate) mod test {
             u4::from_u8(0)
         );
 
-        #[cfg(feature = "split-legacy-irq")]
+        #[cfg(feature = "legacy-irq")]
         {
             assert_eq!(manager.irqs.len(), 12);
             for irq in manager.irqs.iter() {
@@ -313,7 +313,7 @@ pub(crate) mod test {
         manager.set_ioregsel(0x12).unwrap();
         manager.set_iowin(0xcccccccc).unwrap();
         assert_eq!(manager.iowin(), 0xcccccccc);
-        #[cfg(feature = "split-legacy-irq")]
+        #[cfg(feature = "legacy-irq")]
         {
             assert_eq!(u32::from(manager.irqs[1].redir_entry_low()), 0xcccccccc);
         }
@@ -321,7 +321,7 @@ pub(crate) mod test {
         manager.set_ioregsel(0x15).unwrap();
         manager.set_iowin(0xbbbbbbbb).unwrap();
         assert_eq!(manager.iowin(), 0xbbbbbbbb);
-        #[cfg(feature = "split-legacy-irq")]
+        #[cfg(feature = "legacy-irq")]
         {
             assert_eq!(u32::from(manager.irqs[2].redir_entry_high()), 0xbbbbbbbb);
         }

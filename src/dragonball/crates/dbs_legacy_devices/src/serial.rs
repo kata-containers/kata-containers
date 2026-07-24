@@ -9,13 +9,13 @@ use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 use dbs_device::{DeviceIoMut, IoAddress, PioAddress};
+use dbs_interrupt::InterruptSourceGroup;
 use dbs_utils::metric::{IncMetric, SharedIncMetric};
 use log::error;
 use serde::Serialize;
 use vm_superio::{serial::SerialEvents, Serial, Trigger};
-use vmm_sys_util::eventfd::EventFd;
 
-use crate::EventFdTrigger;
+use crate::{EventFdTrigger, IrqTrigger};
 
 /// Trait for devices that handle raw non-blocking I/O requests.
 pub trait ConsoleHandler {
@@ -75,15 +75,15 @@ impl SerialEvents for SerialEventsWrapper {
     }
 }
 
-pub type SerialDevice = SerialWrapper<EventFdTrigger, SerialEventsWrapper>;
+pub type SerialDevice = SerialWrapper<IrqTrigger, SerialEventsWrapper>;
 
 impl SerialDevice {
     /// Creates a new SerialDevice instance.
-    pub fn new(event: EventFd) -> Self {
+    pub fn new(irq: Arc<Box<dyn InterruptSourceGroup>>) -> Self {
         let out = Arc::new(Mutex::new(None));
         Self {
             serial: Serial::with_events(
-                EventFdTrigger::new(event),
+                IrqTrigger::new(irq),
                 SerialEventsWrapper {
                     metrics: Arc::new(SerialDeviceMetrics::default()),
                     buffer_ready_event_fd: None,
@@ -104,7 +104,7 @@ pub struct SerialWrapper<T: Trigger, EV: SerialEvents> {
     pub out: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
 }
 
-impl ConsoleHandler for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
+impl ConsoleHandler for SerialDevice {
     fn raw_input(&mut self, data: &[u8]) -> std::io::Result<usize> {
         self.serial
             .enqueue_raw_bytes(data)
@@ -116,7 +116,7 @@ impl ConsoleHandler for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
     }
 }
 
-impl DeviceIoMut for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
+impl DeviceIoMut for SerialDevice {
     fn pio_read(&mut self, _base: PioAddress, offset: PioAddress, data: &mut [u8]) {
         if data.len() != 1 {
             self.serial.events().metrics.missed_read_count.inc();
@@ -176,9 +176,21 @@ impl Write for AdapterWriter {
 
 #[cfg(test)]
 mod tests {
+    use dbs_interrupt::{InterruptManager, InterruptSourceType, KvmIrqManager};
+    use kvm_ioctls::Kvm;
+
     use super::*;
     use std::io;
     use std::sync::{Arc, Mutex};
+
+    fn create_irq() -> Arc<Box<dyn InterruptSourceGroup>> {
+        let kvm = Kvm::new().unwrap();
+        let vmfd = kvm.create_vm().unwrap();
+        let irq_manager = KvmIrqManager::new(Arc::new(vmfd));
+        irq_manager
+            .create_group(InterruptSourceType::LegacyIrq, 0, 1)
+            .unwrap()
+    }
 
     #[derive(Clone)]
     struct SharedBuffer {
@@ -200,9 +212,9 @@ mod tests {
         let serial_out = Box::new(SharedBuffer {
             buf: serial_out_buf.clone(),
         });
-        let intr_evt = EventFd::new(libc::EFD_NONBLOCK).unwrap();
+        let irq = create_irq();
 
-        let mut serial = SerialDevice::new(intr_evt);
+        let mut serial = SerialDevice::new(irq);
         let metrics = serial.serial.events().metrics.clone();
 
         serial.set_output_stream(Some(serial_out));
@@ -238,7 +250,7 @@ mod tests {
 
     #[test]
     fn test_serial_bus_read() {
-        let intr_evt = EventFdTrigger::new(EventFd::new(libc::EFD_NONBLOCK).unwrap());
+        let irq = create_irq();
 
         let metrics = Arc::new(SerialDeviceMetrics::default());
 
@@ -246,7 +258,7 @@ mod tests {
             Arc::new(Mutex::new(Some(Box::new(std::io::sink()))));
         let mut serial = SerialDevice {
             serial: Serial::with_events(
-                intr_evt,
+                IrqTrigger::new(irq),
                 SerialEventsWrapper {
                     metrics: metrics.clone(),
                     buffer_ready_event_fd: None,
