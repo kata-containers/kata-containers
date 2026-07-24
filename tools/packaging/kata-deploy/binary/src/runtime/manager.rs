@@ -184,6 +184,23 @@ pub async fn configure_cri_runtime(config: &Config, runtime: &str) -> Result<()>
     Ok(())
 }
 
+/// Snapshot the current on-disk kata CRI configuration for `runtime`.
+///
+/// Returns the effective kata config content (containerd drop-in / main config,
+/// or the CRI-O drop-in), or `None` when nothing has been written yet. Because
+/// the config writes are idempotent, comparing a snapshot taken before a
+/// re-apply with one taken after tells the caller whether anything actually
+/// changed - and therefore whether the runtime needs to be restarted.
+pub async fn cri_config_snapshot(config: &Config, runtime: &str) -> Option<String> {
+    if runtime == "crio" {
+        crio::kata_cri_config_content(config)
+    } else if is_containerd_based(runtime) {
+        containerd::kata_cri_config_content(config, runtime).await
+    } else {
+        None
+    }
+}
+
 /// Remove CRI runtime configuration (containerd/crio config files) without restarting.
 pub async fn cleanup_cri_runtime_config(config: &Config, runtime: &str) -> Result<()> {
     log::info!(
