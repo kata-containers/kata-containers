@@ -40,6 +40,10 @@ _GH_API_URL = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}"
 _GH_RUNS_URL = f"{_GH_API_URL}/actions/runs"
 _GH_WEB_URL = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
 _CI_DEVEL_WORKFLOW_PATH = ".github/workflows/ci-devel.yaml"
+_CI_DEVEL_OVERLAPPING_WORKFLOWS = {
+    ".github/workflows/ci-on-push.yaml",
+    ".github/workflows/static-checks-self-hosted.yaml",
+}
 _GH_SUMMARY_URL = (
     f"{os.environ.get('GITHUB_SERVER_URL')}/"
     f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
@@ -274,6 +278,11 @@ class Checker:
             f"check_workflow_runs_status_{attempt}",
             {"head_sha": self.latest_commit_sha})
 
+    def should_ignore_workflow_run(self, run):
+        """Whether a regular run overlaps the selected ci-devel run"""
+        return (self.ci_devel_run is not None and
+                run.get("path") in _CI_DEVEL_OVERLAPPING_WORKFLOWS)
+
     def check_workflow_runs_status(self, attempt, workflow_runs=None):
         """
         Checks if all required jobs passed
@@ -283,6 +292,10 @@ class Checker:
         if workflow_runs is None:
             workflow_runs = self.get_workflow_runs(attempt)
         for run in workflow_runs:
+            if self.should_ignore_workflow_run(run):
+                print(f"Ignoring overlapping workflow run {run['html_url']}",
+                      file=sys.stderr)
+                continue
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
                 self.record(run["name"], job)
