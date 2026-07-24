@@ -2,7 +2,7 @@ name: CI | Publish Kata Containers payload
 on:
   push:
     branches:
-      - msft-preview
+      - msft-main
   workflow_dispatch:
 
 permissions: {}

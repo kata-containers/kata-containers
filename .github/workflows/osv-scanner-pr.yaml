@@ -7,7 +7,7 @@ name: OSV-Scanner (PR)
 
 on:
   pull_request:
-    branches: [ "msft-preview" ]
+    branches: [ "msft-main" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-osv-scanner-pr

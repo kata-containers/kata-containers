@@ -13,9 +13,9 @@ name: "CodeQL Advanced"
 
 on:
   push:
-    branches: [ "msft-preview", "release/*" ]
+    branches: [ "msft-main", "release/*" ]
   pull_request:
-    branches: [ "msft-preview", "release/*" ]
+    branches: [ "msft-main", "release/*" ]
   schedule:
     - cron: '45 0 * * 1'
 

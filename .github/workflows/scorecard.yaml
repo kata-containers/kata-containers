@@ -5,10 +5,10 @@
 name: Scorecard supply-chain security
 on:
   # For Branch-Protection check. Only the default branch is supported. See
-  # https://github.com/ossf/scorecard/blob/msft-preview/docs/checks.md#branch-protection
+  # https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection
   branch_protection_rule:
   push:
-    branches: [ "msft-preview" ]
+    branches: [ "msft-main" ]
   workflow_dispatch:
 
 concurrency:

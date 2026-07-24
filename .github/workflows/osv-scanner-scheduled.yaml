@@ -10,7 +10,7 @@ on:
   schedule:
     - cron: '0 1 * * 0'  # Weekly on Sunday at 1 AM UTC
   push:
-    branches: [ "msft-preview" ]
+    branches: [ "msft-main" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-osv-scanner-scheduled

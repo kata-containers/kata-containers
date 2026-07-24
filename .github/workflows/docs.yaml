@@ -2,7 +2,7 @@ name: Documentation
 on:
   push:
     branches:
-      - msft-preview
+      - msft-main
 permissions: {}
 
 concurrency:
