@@ -916,15 +916,12 @@ main()
 	setup_rootfs
 
 	# The nvidia base and nvidia-gpu-extension layouts are carved from the same
-	# chiseled tree as the monolith (sharing its driver stage-one); confidential
-	# only differs in the rootfs type passed down. They all drive the same
-	# stage-one/two and differ in the final partition step (see
+	# chiseled tree as the monolith (sharing its driver stage-one). They all
+	# drive the same stage-one/two and differ in the final partition step (see
 	# nvidia_image_layout in nvidia_rootfs.sh).
 	if is_nvidia_variant; then
-		local rootfs_type=""
-		is_nvidia_confidential_variant && rootfs_type="confidential"
-		setup_nvidia_gpu_rootfs_stage_one "${rootfs_type}"
-		setup_nvidia_gpu_rootfs_stage_two "${rootfs_type}"
+		setup_nvidia_gpu_rootfs_stage_one
+		setup_nvidia_gpu_rootfs_stage_two
 		return $?
 	fi
 }

@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-[[ -n "${DEBUG}" ]] && set -x
+[[ -n "${DEBUG:-}" ]] && set -x
 
 shopt -s nullglob
 shopt -s extglob
@@ -195,7 +195,7 @@ cleanup_rootfs() {
 }
 
 # Start of script
-echo "chroot: Setup NVIDIA GPU rootfs stage one"
+echo "chroot: Setup NVIDIA GPU package rootfs"
 
 setup_apt_repositories
 install_userspace_components

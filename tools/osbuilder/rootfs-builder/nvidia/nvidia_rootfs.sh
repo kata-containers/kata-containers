@@ -92,8 +92,14 @@ nvidia_driver_capabilities() {
 		"${driver_required_files}" --args "$@"
 }
 
+nvidia_stack_has() {
+	local feature="${1:?feature required}"
+	[[ ",${NVIDIA_GPU_STACK}," == *",${feature},"* ]]
+}
+
 # Populate the capability arrays introduced by f4b0e1a88c from the driver
-# filelist under the supplied source root.
+# filelist under the supplied source root. Both the monolith chisel and direct
+# extension assembly use this exact selection contract.
 nvidia_populate_capability_arrays() {
 	local source="${1:?source root required}"
 	local driver_required_files="${source}/usr/share/nvidia/files.d/sandboxutils-filelist.json"
@@ -109,10 +115,32 @@ nvidia_populate_capability_arrays() {
 	(( ${#_nvidia_icds[@]} > 0 )) || die "nvidia: no ICD entries selected from ${driver_required_files}"
 }
 
-# Image layout produced from the chiseled tree:
+setup_nvidia_upx() {
+	local upx_dir="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux"
+	[[ -x "${upx_dir}/upx" ]] && return
+
+	pushd "${BUILD_DIR}" >> /dev/null
+	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
+	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
+	popd >> /dev/null
+}
+
+install_nvidia_kernel_modules() {
+	local rootfs_dir="${1:?rootfs dir required}"
+	local appendix=""
+
+	nvidia_stack_has dragonball && appendix="-dragonball-experimental"
+
+	mkdir -p "${rootfs_dir}/lib/modules/"
+	tar --zstd -xvf \
+		"${BUILD_DIR}/kata-static-kernel-nvidia-gpu${appendix}-modules.tar.zst" \
+		-C "${rootfs_dir}/lib/modules/"
+}
+
+# NVIDIA image layout:
 #   monolith    - the full GPU image (default; unchanged behaviour)
 #   base        - driver-agnostic nvidia base (NVRC init + agent + base libs)
-#   gpu-extension   - GPU userspace only, laid out for /run/kata-extensions/gpu
+#   gpu-extension - GPU userspace only, laid out for /run/kata-extensions/gpu
 nvidia_image_layout() {
 	case "${BUILD_VARIANT}" in
 		nvidia) echo "base" ;;
@@ -145,66 +173,63 @@ setup_nvidia-nvrc() {
 	  "${BUILD_DIR}/${nvrc}.tar.xz"
 }
 
-setup_nvidia_gpu_rootfs_stage_one() {
-	local rootfs_type=${1:-""}
+# Install the NVIDIA package set into a supplied Ubuntu rootfs using the same
+# CUDA/tools repositories and pins for all NVIDIA image layouts.
+install_nvidia_driver_packages() {
+	local rootfs_dir="${1:?rootfs dir required}"
+	local install_nvrc="${2:-yes}"
+	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
+	local tools_repo_url tools_repo_pkg
 
-	if [[ -e "${stage_one}.tar.zst" ]]; then
-		info "nvidia: GPU rootfs stage one already exists"
-		return
+	cp "${SCRIPT_DIR}/nvidia_chroot.sh" "${rootfs_dir}/nvidia_chroot.sh"
+	chmod +x "${rootfs_dir}/nvidia_chroot.sh"
+
+	if [[ "${install_nvrc}" == "yes" ]]; then
+		local nvrc="NVRC-${machine_arch}-unknown-linux-musl"
+		if [[ ! -e "${BUILD_DIR}/${nvrc}.tar.xz" ]]; then
+			setup_nvidia-nvrc
+		fi
+		tar -xvf "${BUILD_DIR}/${nvrc}.tar.xz" -C "${rootfs_dir}/bin/"
 	fi
 
-	pushd "${ROOTFS_DIR:?}" >> /dev/null
+	install_nvidia_kernel_modules "${rootfs_dir}"
 
-	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
-	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
+	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url")
+	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg")
+	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.${machine_arch}.nvidia-gpu.version")
+	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
+	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
+	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
 
-	chmod +x ./nvidia_chroot.sh
-
-	local nvrc=NVRC-${machine_arch}-unknown-linux-musl
-	if [[ ! -e  "${BUILD_DIR}/${nvrc}.tar.xz" ]]; then
-		setup_nvidia-nvrc
-	fi
-	tar -xvf "${BUILD_DIR}/${nvrc}.tar.xz" -C ./bin/
-
-	local appendix=""
-	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
-    		appendix="-dragonball-experimental"
-	fi
-
-	# Install the precompiled kernel modules shipped with the kernel
-	mkdir -p ./lib/modules/
-	tar --zstd -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-modules.tar.zst -C ./lib/modules/
+	pushd "${rootfs_dir}" >> /dev/null
 
 	mount --rbind /dev ./dev
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
-
-	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
-	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url")
-	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg")
-	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.x86_64.nvidia-gpu.version")
-
-	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
-	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
-
-	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
 		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
 
 	umount -R ./dev
 	umount ./proc
-
 	rm ./nvidia_chroot.sh
 
+	popd >> /dev/null
+}
+
+setup_nvidia_gpu_rootfs_stage_one() {
+	setup_nvidia_upx
+	if [[ -e "${stage_one}.tar.zst" ]]; then
+		info "nvidia: GPU rootfs stage one already exists"
+		return
+	fi
+
+	info "nvidia: Setup GPU rootfs stage one"
+	install_nvidia_driver_packages "${ROOTFS_DIR:?}" yes
+
+	pushd "${ROOTFS_DIR}" >> /dev/null
 	tar cfa "${stage_one}.tar.zst" --remove-files -- *
-
-	popd  >> /dev/null
-
-	pushd "${BUILD_DIR}" >> /dev/null
-	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
-	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
-	popd  >> /dev/null
+	popd >> /dev/null
 }
 
 chisseled_iptables() {
@@ -339,8 +364,8 @@ chisseled_gpudirect() {
 }
 
 chisseled_nvat() {
-	if [[ "${type}" != "confidential" ]]; then
-                return
+	if ! is_nvidia_confidential_variant; then
+		return
 	fi
 
 	echo "nvidia: chisseling NVAT"
@@ -406,6 +431,14 @@ chisseled_init() {
 
 compress_rootfs() {
 	echo "nvidia: compressing rootfs"
+	local upx="${BUILD_DIR}/upx-4.2.4-${distro_arch}_linux/upx"
+
+	# The dedicated gpu-extension builder bakes UPX into PATH. The generic
+	# monolith/base builder keeps using setup_nvidia_upx() and its build path.
+	if command -v upx > /dev/null; then
+		upx="$(command -v upx)"
+	fi
+	[[ -x "${upx}" ]] || die "nvidia: UPX not found"
 
 	# For some unobvious reason libc has executable bit set
 	# clean this up otherwise the find -executable will not work correctly
@@ -429,7 +462,7 @@ compress_rootfs() {
 			continue
 		fi
 		strip "${file}"
-		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
+		"${upx}" --best --lzma "${file}"
 	done
 
  	# While I was playing with compression the executable flag on
@@ -499,7 +532,7 @@ copy_mkfs_ext4_runtime_deps() {
 }
 
 coco_guest_components() {
-	if [[ "${type}" != "confidential" ]]; then
+	if ! is_nvidia_confidential_variant; then
 		return
 	fi
 
@@ -782,7 +815,6 @@ chisseled_storage() {
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
-	readonly type=${1:-""}
 	local layout
 	layout="$(nvidia_image_layout)"
 
