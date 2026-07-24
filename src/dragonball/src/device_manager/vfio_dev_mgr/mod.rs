@@ -19,14 +19,16 @@ use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, Weak};
 
+use acpi_tables::{aml, Aml};
 use dbs_device::resources::Resource::LegacyIrq;
 use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::DeviceIo;
-use dbs_pci::{VfioPciDevice, VENDOR_NVIDIA};
+use dbs_pci::{VfioPciDevice, PCI_BUS_DEFAULT, VENDOR_NVIDIA};
 use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use kvm_ioctls::{DeviceFd, VmFd};
 use log::{debug, error};
 use serde_derive::{Deserialize, Serialize};
+use uuid::Uuid;
 use vfio_ioctls::{VfioContainer, VfioDevice};
 use vm_memory::{
     Address, GuestAddressSpace, GuestMemory, GuestMemoryRegion, GuestRegionMmap,
@@ -38,6 +40,8 @@ use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceMgrError, DeviceOpContext};
 use crate::resource_manager::ResourceError;
+
+const MAX_PCI_SLOTS: u8 = 32;
 
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
@@ -694,6 +698,256 @@ impl VfioDeviceMgr {
     /// Get the PCI manager to support PCI device passthrough
     pub fn get_pci_manager(&mut self) -> Arc<Mutex<PciSystemManager>> {
         self.pci_system_manager.clone()
+    }
+}
+
+impl Aml for VfioDeviceMgr {
+    fn to_aml_bytes(&self, sink: &mut dyn acpi_tables::AmlSink) {
+        let guard = self.pci_system_manager.lock().unwrap();
+        let pci_root_bus = &guard.pci_root_bus;
+        let bus_id = pci_root_bus.bus_id();
+
+        let mut pci_dsdt_inner_data: Vec<&dyn Aml> = Vec::new();
+        let hid = aml::Name::new("_HID".into(), &aml::EISAName::new("PNP0A08"));
+        pci_dsdt_inner_data.push(&hid);
+        let cid = aml::Name::new("_CID".into(), &aml::EISAName::new("PNP0A03"));
+        pci_dsdt_inner_data.push(&cid);
+        let adr = aml::Name::new("_ADR".into(), &aml::ZERO);
+        pci_dsdt_inner_data.push(&adr);
+        let seg = aml::Name::new("_SEG".into(), &bus_id);
+        pci_dsdt_inner_data.push(&seg);
+        let uid = aml::Name::new("_UID".into(), &aml::ZERO);
+        pci_dsdt_inner_data.push(&uid);
+        let cca = aml::Name::new("_CCA".into(), &aml::ONE);
+        pci_dsdt_inner_data.push(&cca);
+        let supp = aml::Name::new("SUPP".into(), &aml::ZERO);
+        pci_dsdt_inner_data.push(&supp);
+
+        let pci_dsm = PciDsmMethod {};
+        pci_dsdt_inner_data.push(&pci_dsm);
+
+        let mut children: Vec<&dyn Aml> = Vec::new();
+        let bus_number_entry =
+            aml::AddressSpace::new_bus_number(PCI_BUS_DEFAULT as u16, PCI_BUS_DEFAULT as u16);
+        children.push(&bus_number_entry);
+
+        #[cfg(target_arch = "x86_64")]
+        let ioport_base = guard.pci_root.ioport_base();
+        #[cfg(target_arch = "x86_64")]
+        let io_entry = aml::IO::new(ioport_base, ioport_base, 1, 0x8);
+        #[cfg(target_arch = "x86_64")]
+        if bus_id == 0 {
+            children.push(&io_entry);
+        }
+
+        let mmio_entries: Vec<aml::AddressSpace<u64>> = pci_root_bus
+            .get_device_resources()
+            .get_mmio_address_ranges()
+            .iter()
+            .map(|(base, size)| {
+                aml::AddressSpace::new_memory(
+                    aml::AddressSpaceCacheable::NotCacheable,
+                    true,
+                    *base,
+                    *base + (*size - 1),
+                    None,
+                )
+            })
+            .collect();
+        mmio_entries.iter().for_each(|e| children.push(e));
+
+        #[cfg(target_arch = "x86_64")]
+        let pio_entries = [
+            aml::AddressSpace::new_io(0u16, ioport_base - 1, None),
+            aml::AddressSpace::new_io(ioport_base + 8, u16::MAX, None),
+        ];
+        #[cfg(target_arch = "x86_64")]
+        if bus_id == 0 {
+            pio_entries.iter().for_each(|e| children.push(e));
+        }
+
+        let crs = aml::Name::new("_CRS".into(), &aml::ResourceTemplate::new(children));
+        pci_dsdt_inner_data.push(&crs);
+
+        let mut pci_devices = Vec::new();
+        for device_id in 0..MAX_PCI_SLOTS {
+            let pci_device = PciDevSlot { device_id };
+            pci_devices.push(pci_device);
+        }
+        for pci_device in pci_devices.iter() {
+            pci_dsdt_inner_data.push(pci_device);
+        }
+
+        let pci_device_methods = PciDevSlotMethods {};
+        pci_dsdt_inner_data.push(&pci_device_methods);
+
+        let empty_irqs = HashMap::new();
+        let pci_legacy_irqs = self.pci_legacy_irqs.as_ref().unwrap_or(&empty_irqs);
+        let prt_package_list: Vec<(u32, u32)> = pci_legacy_irqs
+            .iter()
+            .map(|(id, irq)| (((((*id as u32) & 0x1fu32) << 16) | 0xffffu32), *irq as u32))
+            .collect();
+        let prt_package_list: Vec<aml::Package> = prt_package_list
+            .iter()
+            .map(|(bdf, irq)| aml::Package::new(vec![bdf, &0u8, &0u8, irq]))
+            .collect();
+        let prt_package_list: Vec<&dyn Aml> = prt_package_list
+            .iter()
+            .map(|item| item as &dyn Aml)
+            .collect();
+        let prt = aml::Name::new("_PRT".into(), &aml::Package::new(prt_package_list));
+        pci_dsdt_inner_data.push(&prt);
+
+        aml::Device::new(
+            format!("_SB_.PC{:02X}", bus_id).as_str().into(),
+            pci_dsdt_inner_data,
+        )
+        .to_aml_bytes(sink);
+    }
+}
+
+struct PciDsmMethod {}
+
+impl Aml for PciDsmMethod {
+    fn to_aml_bytes(&self, sink: &mut dyn acpi_tables::AmlSink) {
+        // Refer to ACPI spec v6.3 Ch 9.1.1 and PCI Firmware spec v3.3 Ch 4.6.1
+        // _DSM (Device Specific Method), the following is the implementation in ASL.
+        /*
+        Method (_DSM, 4, NotSerialized)  // _DSM: Device-Specific Method
+        {
+              If ((Arg0 == ToUUID ("e5c937d0-3553-4d7a-9117-ea4d19c3434d") /* Device Labeling Interface */))
+              {
+                  If ((Arg2 == Zero))
+                  {
+                      Return (Buffer (One) { 0x21 })
+                  }
+                  If ((Arg2 == 0x05))
+                  {
+                      Return (Zero)
+                  }
+              }
+
+              Return (Buffer (One) { 0x00 })
+        }
+         */
+        /*
+         * As per ACPI v6.3 Ch 19.6.142, the UUID is required to be in mixed endian:
+         * Among the fields of a UUID:
+         *   {d1 (8 digits)} - {d2 (4 digits)} - {d3 (4 digits)} - {d4 (16 digits)}
+         * d1 ~ d3 need to be little endian, d4 be big endian.
+         * See https://en.wikipedia.org/wiki/Universally_unique_identifier#Encoding .
+         */
+        let uuid = Uuid::parse_str("E5C937D0-3553-4D7A-9117-EA4D19C3434D").unwrap();
+        let (uuid_d1, uuid_d2, uuid_d3, uuid_d4) = uuid.as_fields();
+        let mut uuid_buf = vec![];
+        uuid_buf.extend(uuid_d1.to_le_bytes());
+        uuid_buf.extend(uuid_d2.to_le_bytes());
+        uuid_buf.extend(uuid_d3.to_le_bytes());
+        uuid_buf.extend(uuid_d4);
+        aml::Method::new(
+            "_DSM".into(),
+            4,
+            false,
+            vec![
+                &aml::If::new(
+                    &aml::Equal::new(&aml::Arg(0), &aml::BufferData::new(uuid_buf)),
+                    vec![
+                        &aml::If::new(
+                            &aml::Equal::new(&aml::Arg(2), &aml::ZERO),
+                            vec![&aml::Return::new(&aml::BufferData::new(vec![0x21]))],
+                        ),
+                        &aml::If::new(
+                            &aml::Equal::new(&aml::Arg(2), &0x05u8),
+                            vec![&aml::Return::new(&aml::ZERO)],
+                        ),
+                    ],
+                ),
+                &aml::Return::new(&aml::BufferData::new(vec![0])),
+            ],
+        )
+        .to_aml_bytes(sink);
+    }
+}
+
+struct PciDevSlot {
+    device_id: u8,
+}
+
+impl Aml for PciDevSlot {
+    fn to_aml_bytes(&self, sink: &mut dyn acpi_tables::AmlSink) {
+        let sun = self.device_id;
+        let adr: u32 = (self.device_id as u32) << 16;
+        aml::Device::new(
+            format!("S{:03}", self.device_id).as_str().into(),
+            vec![
+                &aml::Name::new("_SUN".into(), &sun),
+                &aml::Name::new("_ADR".into(), &adr),
+                &aml::Method::new(
+                    "_EJ0".into(),
+                    1,
+                    true,
+                    vec![&aml::MethodCall::new(
+                        "\\_SB_.PHPR.PCEJ".into(),
+                        vec![&aml::Path::new("_SUN"), &aml::Path::new("_SEG")],
+                    )],
+                ),
+            ],
+        )
+        .to_aml_bytes(sink);
+    }
+}
+
+struct PciDevSlotMethods {}
+
+impl Aml for PciDevSlotMethods {
+    fn to_aml_bytes(&self, sink: &mut dyn acpi_tables::AmlSink) {
+        let mut device_notifies = Vec::new();
+        for device_id in 0..32 {
+            device_notifies.push(PciDevSlotNotify { device_id });
+        }
+
+        let mut device_notifies_refs: Vec<&dyn Aml> = Vec::new();
+        for device_notify in device_notifies.iter() {
+            device_notifies_refs.push(device_notify);
+        }
+
+        aml::Method::new("DVNT".into(), 2, true, device_notifies_refs).to_aml_bytes(sink);
+        aml::Method::new(
+            "PCNT".into(),
+            0,
+            true,
+            vec![
+                &aml::Acquire::new("\\_SB_.PHPR.BLCK".into(), 0xffff),
+                &aml::Store::new(&aml::Path::new("\\_SB_.PHPR.PSEG"), &aml::Path::new("_SEG")),
+                &aml::MethodCall::new(
+                    "DVNT".into(),
+                    vec![&aml::Path::new("\\_SB_.PHPR.PCIU"), &aml::ONE],
+                ),
+                &aml::MethodCall::new(
+                    "DVNT".into(),
+                    vec![&aml::Path::new("\\_SB_.PHPR.PCID"), &3usize],
+                ),
+                &aml::Release::new("\\_SB_.PHPR.BLCK".into()),
+            ],
+        )
+        .to_aml_bytes(sink);
+    }
+}
+
+struct PciDevSlotNotify {
+    device_id: u8,
+}
+
+impl Aml for PciDevSlotNotify {
+    fn to_aml_bytes(&self, sink: &mut dyn acpi_tables::AmlSink) {
+        let device_id_mask: u32 = 1 << self.device_id;
+        let object = aml::Path::new(&format!("S{:03}", self.device_id));
+        aml::And::new(&aml::Local(0), &aml::Arg(0), &device_id_mask).to_aml_bytes(sink);
+        aml::If::new(
+            &aml::Equal::new(&aml::Local(0), &device_id_mask),
+            vec![&aml::Notify::new(&object, &aml::Arg(1))],
+        )
+        .to_aml_bytes(sink);
     }
 }
 

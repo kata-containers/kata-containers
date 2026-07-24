@@ -11,6 +11,7 @@ use std::convert::TryInto;
 use std::ops::Deref;
 use std::os::unix::io::AsRawFd;
 
+use acpi_tables::Aml;
 use dbs_acpi::*;
 use dbs_address_space::{AddressSpace, AddressSpaceRegionType};
 use dbs_boot::{
@@ -261,10 +262,16 @@ impl Vm {
                 .cloned()
                 .ok_or(StartMicroVmError::GuestMemoryNotInitialized)?;
             let mut hob_address = 0;
+            let mut body_sink = Vec::new();
+            self.device_manager
+                .vfio_manager
+                .lock()
+                .unwrap()
+                .to_aml_bytes(&mut body_sink);
             let acpi_tables: Vec<sdt::Sdt> = vec![
                 create_madt_table(self.vm_config.max_vcpu_count, self.vm_config.vcpu_count),
                 create_fadt_table(),
-                create_dsdt_table(),
+                create_dsdt_table(&body_sink),
             ];
 
             self.load_kernel_with_tdshim(

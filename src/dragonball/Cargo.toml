@@ -10,6 +10,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+acpi_tables = { workspace = true }
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
@@ -46,6 +47,7 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = { workspace = true }
 tracing = "0.1.41"
+uuid = { version = "1", features = ["v4"] }
 vmm-sys-util = { workspace = true, features = ["with-serde"] }
 virtio-queue = { workspace = true, optional = true }
 vm-memory = { workspace = true, features = ["backend-mmap"] }

@@ -173,6 +173,11 @@ impl PciRootDevice {
     pub fn get_device_resources(&self) -> DeviceResources {
         self.resources.clone()
     }
+
+    /// Get PIO port base
+    pub fn ioport_base(&self) -> u16 {
+        self.ioport_base
+    }
 }
 
 impl DeviceIo for PciRootDevice {
