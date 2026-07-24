@@ -64,12 +64,16 @@ impl NetworkModel for L3ForwardingModel {
             ),
             "1",
         )
-        .context("enable proxy arp")?;
+        .context(
+                format!("enable proxy arp on {}", pair.tap.tap_iface.name)
+            )?;
         fs::write(
             format!("/proc/sys/net/ipv4/conf/{}/proxy_arp", pair.virt_iface.name),
             "1",
         )
-        .context("enable proxy arp")?;
+        .context(
+                format!("enable proxy arp on {}", pair.virt_iface.name)
+            )?;
         fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("enable ip forward")?;
 
         // We need the tap interface to have an address different from the pod ip for arp proxying

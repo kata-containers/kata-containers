@@ -48,7 +48,7 @@ and [CNI](https://github.com/containernetworking/cni) for networking management.
 
 With L3 forwarding, we modify the route table on the host-side network namespace to route traffic to the pod IP through the tap device.
 This is useful for integrating with service meshes such as Istio Ambient, where the CNI sets up iptables rules and a node proxy listens on the host-side network namespace.
-This model only supports IPv4 and only one pod address per pod.
+This model only supports IPv4 and only one IP address per pod.
 
 ## Network Hotplug
 

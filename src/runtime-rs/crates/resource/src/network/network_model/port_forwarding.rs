@@ -107,6 +107,7 @@ async fn configure_ipv4(tap_name: &str, pod_ip: Ipv4Addr, tap_ip: Ipv4Addr) -> R
 }
 
 async fn run_iptables(binary: &str, args: &[&str]) -> Result<()> {
+    // Note that "-w" is a no-op for iptables-nft.
     let output = Command::new(binary)
         .args(["-w", XTABLES_LOCK_WAIT_SECONDS])
         .args(args)
@@ -124,8 +125,15 @@ async fn run_iptables(binary: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
+// Simplified version of what Istio does in
+// https://github.com/istio/istio/blob/master/tools/istio-iptables/pkg/dependencies/implementation.go#L179-L210
+// In short, if "iptables-legacy" is available and has rules, use it.
+// If "iptables-nft" is available, use it.
+// If "iptables" (which symlinks to iptables-nft or iptables) is available, use it.
+// Finally, fail.
+// This error should be caught and logged, but should not be fatal.
 async fn detect_iptables_binary() -> Result<&'static str> {
-    let [legacy, nft, plain] = ["iptables-legacy", "iptables-nft", "iptables"];
+    let [legacy, plain, nft] = ["iptables-legacy", "iptables", "iptables-nft"];
 
     let legacy_output = probe_binary(legacy).await;
     if legacy_output.as_deref().is_some_and(has_rules) {
@@ -133,20 +141,12 @@ async fn detect_iptables_binary() -> Result<&'static str> {
     }
 
     let nft_output = probe_binary(nft).await;
-    if nft_output.as_deref().is_some_and(has_rules) {
+    if nft_output.is_some() {
         return Ok(nft);
     }
 
     if probe_binary(plain).await.is_some() {
         return Ok(plain);
-    }
-
-    if nft_output.is_some() {
-        return Ok(nft);
-    }
-
-    if legacy_output.is_some() {
-        return Ok(legacy);
     }
 
     Err(anyhow!(
@@ -157,10 +157,14 @@ async fn detect_iptables_binary() -> Result<&'static str> {
     ))
 }
 
+// Check if the output of iptablesxxx-save has any rules.
+// Istio does the same heuristic.
+// https://github.com/istio/istio/blob/master/tools/istio-iptables/pkg/dependencies/implementation_linux.go#L140-L144
 fn has_rules(output: &str) -> bool {
-    output.lines().any(|line| line.starts_with("-A "))
+    output.matches('\n').count() >= 3
 }
 
+// We assume that iptablesxxx-save runs iff iptablesxxx is usable.
 async fn probe_binary(binary: &'static str) -> Option<String> {
     let save_binary = format!("{binary}-save");
     match Command::new(save_binary).output().await {
