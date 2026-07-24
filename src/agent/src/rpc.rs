@@ -193,11 +193,34 @@ trait ResultToTtrpcResult<T, E: Debug>: Sized {
     }
 }
 
-impl<T, E: Debug> ResultToTtrpcResult<T, E> for Result<T, E> {
-    fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce(E) -> R) -> ttrpc::Result<T> {
-        self.map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)))
+impl<T> ResultToTtrpcResult<T, anyhow::Error> for anyhow::Result<T> {
+    fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce(anyhow::Error) -> R) -> ttrpc::Result<T> {
+        self.map_err(|e| match e.downcast::<ttrpc::error::Error>() {
+            Ok(ttrpc_err) => ttrpc_err,
+            Err(e) => ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)),
+        })
     }
 }
+
+macro_rules! impl_ttrpc_result_simple {
+  ($($err_ty:ty),* $(,)?) => {
+      $(
+          impl<T> ResultToTtrpcResult<T, $err_ty> for Result<T, $err_ty> {
+              fn map_ttrpc_err<R: Debug>(self, msg_builder: impl FnOnce($err_ty) -> R) -> ttrpc::Result<T> {
+                  self.map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, msg_builder(e)))
+              }
+          }
+      )*
+  };
+}
+
+impl_ttrpc_result_simple!(
+  nix::errno::Errno,
+  tokio::time::error::Elapsed,
+  tokio::task::JoinError,
+  i32,
+  std::io::Error,
+);
 
 trait OptionToTtrpcResult<T>: Sized {
     fn map_ttrpc_err(self, code: ttrpc::Code, msg: &str) -> ttrpc::Result<T>;

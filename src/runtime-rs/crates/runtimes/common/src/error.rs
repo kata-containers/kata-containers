@@ -67,6 +67,12 @@ const NO_SUCH_PROCESS_MESSAGES: &[&str] = &[
 /// target is no longer available.
 /// The function checks for standard OS error codes (`ESRCH`, `ENOENT`) and common error message patterns.
 pub fn is_no_such_process_error(err: &anyhow::Error) -> bool {
+    if let Some(Error::ProcessAlreadyTerminated | Error::ProcessNotFound(_)) =
+        err.downcast_ref::<Error>()
+    {
+        return true;
+    }
+
     // Check for standard OS error codes.
     if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
         if let Some(raw_os_error) = io_err.raw_os_error() {
