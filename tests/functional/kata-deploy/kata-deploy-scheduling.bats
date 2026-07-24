@@ -3,8 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Helm template tests for kata-deploy DaemonSet scheduling options
-# (podLabels, podAnnotations, affinity). No cluster required.
+# Helm template tests for kata-deploy scheduling options (podLabels,
+# podAnnotations, affinity). No cluster required.
+#
+# The pod-template metadata (podLabels, podAnnotations) is asserted in both
+# deployment modes: on the DaemonSet pod template (deploymentMode: daemonset)
+# and on the per-node install/cleanup Job pod templates (deploymentMode: job).
+# Affinity is DaemonSet-only: in job mode the dispatcher pins each per-node Job
+# to a node via spec.template.spec.nodeName (so pod affinity is a scheduling
+# no-op) and node selection is done through job.nodeSelectorExpressions instead.
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 
@@ -12,6 +19,7 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 
 CHART_PATH="$(get_chart_path)"
 RENDERED="/tmp/kata-deploy-scheduling-rendered.yaml"
+RENDERED_JOBS="/tmp/kata-deploy-scheduling-rendered-jobs.yaml"
 
 render_chart() {
 	# These tests assert scheduling options (podLabels, podAnnotations,
@@ -22,6 +30,28 @@ render_chart() {
 		--set image.tag=latest \
 		--set deploymentMode=daemonset \
 		"$@" > "${RENDERED}"
+}
+
+# Render only the per-node Job templates ConfigMap (deploymentMode: job).
+render_job_templates() {
+	helm template kata-deploy "${CHART_PATH}" \
+		--set image.reference=quay.io/kata-containers/kata-deploy \
+		--set image.tag=latest \
+		--set deploymentMode=job \
+		--show-only templates/kata-deploy-job-templates.yaml \
+		"$@" > "${RENDERED_JOBS}"
+}
+
+# Extract one per-node Job manifest (stage: install|cleanup) from the rendered
+# job-templates ConfigMap, stripping the 4-space block-scalar indentation so the
+# result is a standalone Job manifest.
+extract_pernode_job() {
+	local stage="${1}"
+	awk -v key="  ${stage}-job.yaml: |" '
+		$0 == key { grab = 1; next }
+		/^  [a-z-]+-job\.yaml: \|$/ { grab = 0 }
+		grab { sub(/^    /, ""); print }
+	' "${RENDERED_JOBS}"
 }
 
 # Extract the kata-deploy DaemonSet manifest (not kata-monitor or NFD subchart).
@@ -375,4 +405,84 @@ EOF
 	echo "${ds}" | grep -q "preferredDuringSchedulingIgnoredDuringExecution:"
 	echo "${ds}" | grep -q "preferred-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
+}
+
+# =============================================================================
+# Job mode: per-node Job pod-template rendering (deploymentMode: job)
+# =============================================================================
+
+@test "Helm template (job mode): per-node Jobs are rendered with default labels" {
+	render_job_templates
+
+	local install cleanup
+	install=$(extract_pernode_job install)
+	cleanup=$(extract_pernode_job cleanup)
+
+	[[ -n "${install}" ]]
+	[[ -n "${cleanup}" ]]
+	echo "${install}" | grep -q "kata-deploy/stage: install"
+	echo "${cleanup}" | grep -q "kata-deploy/stage: cleanup"
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "app.kubernetes.io/name: kata-deploy"
+	# Affinity is DaemonSet-only; per-node Jobs are pinned via nodeName.
+	! echo "${install}" | grep -q "affinity:"
+}
+
+@test "Helm template (job mode): podLabels are applied to per-node Job pod templates" {
+	render_job_templates --set podLabels.team=platform
+
+	local install cleanup
+	install=$(extract_pernode_job install)
+	cleanup=$(extract_pernode_job cleanup)
+
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
+	echo "${install}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "app.kubernetes.io/name: kata-deploy"
+	echo "${cleanup}" | grep -A5 "template:" | grep -A4 "labels:" | grep -q "team: platform"
+}
+
+@test "Helm template (job mode): podAnnotations are applied to per-node Job pod templates" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+podAnnotations:
+  example.com/owner: platform-team
+  prometheus.io/scrape: "false"
+EOF
+
+	render_job_templates -f "${values_file}"
+	rm -f "${values_file}"
+
+	local install cleanup
+	install=$(extract_pernode_job install)
+	cleanup=$(extract_pernode_job cleanup)
+
+	echo "${install}" | grep -A10 "template:" | grep -A5 "metadata:" | grep -q "annotations:"
+	echo "${install}" | grep -q "example.com/owner: platform-team"
+	echo "${install}" | grep -q 'prometheus.io/scrape: "false"'
+	echo "${cleanup}" | grep -q "example.com/owner: platform-team"
+}
+
+@test "Helm template (job mode): user affinity does not leak into per-node Jobs" {
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node.cloud/reserved
+              operator: In
+              values:
+                - platform-team
+EOF
+
+	render_job_templates -f "${values_file}"
+	rm -f "${values_file}"
+
+	local install
+	install=$(extract_pernode_job install)
+
+	[[ -n "${install}" ]]
+	! echo "${install}" | grep -q "affinity:"
+	! echo "${install}" | grep -q "node.cloud/reserved"
 }
