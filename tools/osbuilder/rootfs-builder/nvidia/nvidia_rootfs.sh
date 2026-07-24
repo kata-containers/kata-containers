@@ -279,9 +279,19 @@ chisseled_compute() {
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
 	destdir=lib/"${machine_arch}"-linux-gnu
 
+	# pkcs11 is only needed for the confidential path (the CC secure session the
+	# CUDA driver sets up on cudaMalloc, and the TEE attestation path). The
+	# monolith knows at build time whether it is confidential, but the
+	# gpu-extension is a single driver-userspace image reused by both
+	# confidential and non-confidential guests and is always built
+	# non-confidential (type=""); it must therefore always carry pkcs11, or CC
+	# workloads fail with CUDA_ERROR_NOT_SUPPORTED (operation not supported).
+	local keep_pkcs11="no"
+	[[ "${type}" == "confidential" ]] && keep_pkcs11="yes"
+	[[ "$(nvidia_image_layout)" == "gpu-extension" ]] && keep_pkcs11="yes"
+
 	for lib in "${_nvidia_libs[@]}"; do
-		# pkcs11 is only needed for the TEE attestation path in confidential builds.
-		if [[ "${type}" != "confidential" ]] && [[ "${lib}" == libnvidia-pkcs11* ]]; then
+		if [[ "${keep_pkcs11}" == "no" ]] && [[ "${lib}" == libnvidia-pkcs11* ]]; then
 			continue
 		fi
 		# vdpau needs a display server (X11/Wayland); cannot function headless.
