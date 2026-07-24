@@ -26,7 +26,9 @@ use vhost_rs::vhost_user::message::VhostUserVringAddrFlags;
 #[cfg(not(test))]
 use vhost_rs::VhostBackend;
 use vhost_rs::{VhostUserMemoryRegionInfo, VringConfigData};
-use virtio_bindings::bindings::virtio_config::{VIRTIO_F_NOTIFY_ON_EMPTY, VIRTIO_F_VERSION_1};
+use virtio_bindings::bindings::virtio_config::{
+    VIRTIO_F_ACCESS_PLATFORM, VIRTIO_F_NOTIFY_ON_EMPTY, VIRTIO_F_VERSION_1,
+};
 use virtio_bindings::bindings::virtio_net::*;
 use virtio_bindings::bindings::virtio_ring::*;
 use virtio_queue::{DescriptorChain, QueueT};
@@ -137,6 +139,7 @@ where
         guest_mac: Option<&MacAddr>,
         queue_sizes: Arc<Vec<u16>>,
         event_mgr: EpollManager,
+        f_access_platform: bool,
     ) -> VirtioResult<Self> {
         trace!(target: "vhost-net", "{NET_DRIVER_NAME}: Net::new_with_tap()");
 
@@ -160,6 +163,10 @@ where
             | (1u64 << VIRTIO_RING_F_EVENT_IDX)
             | (1u64 << VIRTIO_F_NOTIFY_ON_EMPTY)
             | (1u64 << VIRTIO_F_VERSION_1);
+
+        if f_access_platform {
+            avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
+        }
 
         if vq_pairs > 1 {
             avail_features |= ((1 << VIRTIO_NET_F_MQ) | (1 << VIRTIO_NET_F_CTRL_VQ)) as u64;
@@ -209,6 +216,7 @@ where
         guest_mac: Option<&MacAddr>,
         queue_sizes: Arc<Vec<u16>>,
         event_mgr: EpollManager,
+        f_access_platform: bool,
     ) -> VirtioResult<Self> {
         let vq_pairs = queue_sizes.len() / 2;
 
@@ -218,7 +226,7 @@ where
         tap.enable()
             .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Enable(err))))?;
 
-        Self::new_with_tap(tap, guest_mac, queue_sizes, event_mgr)
+        Self::new_with_tap(tap, guest_mac, queue_sizes, event_mgr, f_access_platform)
     }
 
     fn do_device_activate(
@@ -735,7 +743,13 @@ mod tests {
         let epoll_mgr = EpollManager::default();
         let tap_name = unique_tap_name("vtap");
         let dev_result: VirtioResult<Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>> =
-            Net::new(tap_name.clone(), Some(&guest_mac), queue_sizes, epoll_mgr);
+            Net::new(
+                tap_name.clone(),
+                Some(&guest_mac),
+                queue_sizes,
+                epoll_mgr,
+                false,
+            );
         let mut dev: Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap> = match dev_result {
             Ok(d) => d,
             Err(e) => {
@@ -780,7 +794,13 @@ mod tests {
             let epoll_mgr = EpollManager::default();
             let tap_name = unique_tap_name("vtap");
             let dev_result: VirtioResult<Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>> =
-                Net::new(tap_name.clone(), Some(&guest_mac), queue_sizes, epoll_mgr);
+                Net::new(
+                    tap_name.clone(),
+                    Some(&guest_mac),
+                    queue_sizes,
+                    epoll_mgr,
+                    false,
+                );
             let mut dev: Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap> = match dev_result {
                 Ok(d) => d,
                 Err(e) => {
@@ -827,7 +847,13 @@ mod tests {
 
             let tap_name = unique_tap_name("vtap");
             let dev_result: VirtioResult<Net<Arc<GuestMemoryMmap>, Queue, GuestRegionMmap>> =
-                Net::new(tap_name.clone(), Some(&guest_mac), queue_sizes, epoll_mgr);
+                Net::new(
+                    tap_name.clone(),
+                    Some(&guest_mac),
+                    queue_sizes,
+                    epoll_mgr,
+                    false,
+                );
             let mut dev: Net<Arc<GuestMemoryMmap>, Queue, GuestRegionMmap> = match dev_result {
                 Ok(d) => d,
                 Err(e) => {
