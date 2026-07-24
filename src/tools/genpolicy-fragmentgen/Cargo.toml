@@ -1,0 +1,17 @@
+# Copyright (c) 2026 Kata Containers community
+#
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "genpolicy-fragmentgen"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+oci-client = "0.17.0"
+kata-security-reference-monitor.workspace = true

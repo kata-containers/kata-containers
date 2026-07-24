@@ -43,6 +43,7 @@ members = [
   # tools
   "src/tools/agent-ctl",
   "src/tools/genpolicy",
+  "src/tools/genpolicy-fragmentgen",
   "src/tools/kata-ctl",
   "src/tools/trace-forwarder",
 
