@@ -504,12 +504,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Go runtime covers the minimum supported containerd only.
+        # runtime-rs covers both minimum and latest containerd.
         params: [
-          { containerd_version: latest,    vmm: clh              },
-          { containerd_version: latest,    vmm: dragonball       },
-          { containerd_version: latest,    vmm: qemu             },
-          { containerd_version: latest,    vmm: clh-runtime-rs   },
-          { containerd_version: latest,    vmm: qemu-runtime-rs  },
+          { containerd_version: latest,  vmm: dragonball       },
+          { containerd_version: latest,  vmm: clh-runtime-rs   },
+          { containerd_version: latest,  vmm: qemu-runtime-rs  },
           { containerd_version: minimum, vmm: clh              },
           { containerd_version: minimum, vmm: dragonball       },
           { containerd_version: minimum, vmm: qemu             },

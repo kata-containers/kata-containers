@@ -89,6 +89,11 @@ jobs:
       matrix:
         containerd_version: ['minimum', 'latest']
         vmm: ['clh', 'clh-runtime-rs', 'dragonball', 'qemu', 'qemu-runtime-rs']
+        exclude:
+          - containerd_version: latest
+            vmm: clh
+          - containerd_version: latest
+            vmm: qemu
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -138,6 +143,11 @@ jobs:
       matrix:
         containerd_version: ['minimum', 'latest']
         vmm: ['clh', 'qemu', 'dragonball', 'qemu-runtime-rs', 'clh-runtime-rs']
+        exclude:
+          - containerd_version: latest
+            vmm: clh
+          - containerd_version: latest
+            vmm: qemu
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-nydus-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
