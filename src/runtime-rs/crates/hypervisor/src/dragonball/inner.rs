@@ -5,6 +5,8 @@
 //
 
 use super::vmm_instance::VmmInstance;
+#[cfg(target_arch = "x86_64")]
+use crate::ANON;
 use crate::{
     device::DeviceType, firecracker::sl, hypervisor_persist::HypervisorState,
     kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM,
@@ -12,6 +14,8 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+#[cfg(target_arch = "x86_64")]
+use dragonball::api::v1::ConfidentialVmType;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
     device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
@@ -93,6 +97,13 @@ pub struct DragonballInner {
 
 impl DragonballInner {
     pub fn new(exit_notify: mpsc::Sender<i32>) -> DragonballInner {
+        Self::new_with_hypervisor_config(exit_notify, HypervisorConfig::default())
+    }
+
+    pub fn new_with_hypervisor_config(
+        exit_notify: mpsc::Sender<i32>,
+        config: HypervisorConfig,
+    ) -> DragonballInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -102,16 +113,29 @@ impl DragonballInner {
                 | CapabilityBits::HybridVsockSupport
                 | CapabilityBits::GuestMemoryProbe,
         );
+
+        #[cfg(target_arch = "x86_64")]
+        let confidential_vm_type = if config.security_info.confidential_guest {
+            Some(ConfidentialVmType::TDX)
+        } else {
+            None
+        };
+
         DragonballInner {
             id: "".to_string(),
             vm_path: "".to_string(),
             jailer_root: "".to_string(),
             netns: None,
-            config: Default::default(),
+            config,
             pending_devices: vec![],
             state: VmmState::NotReady,
             jailed: false,
-            vmm_instance: VmmInstance::new("", exit_notify),
+            vmm_instance: VmmInstance::new(
+                "",
+                exit_notify,
+                #[cfg(target_arch = "x86_64")]
+                confidential_vm_type,
+            ),
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
@@ -236,6 +260,14 @@ impl DragonballInner {
                 HugePageType::Hugetlbfs => (String::from(HUGETLBFS), String::from(DEV_HUGEPAGES)),
             }
         } else {
+            #[cfg(target_arch = "x86_64")]
+            if self.config.security_info.confidential_guest {
+                (String::from(ANON), String::from(""))
+            } else {
+                (String::from(SHMEM), String::from(""))
+            }
+
+            #[cfg(not(target_arch = "x86_64"))]
             (String::from(SHMEM), String::from(""))
         };
         let vm_config = VmConfigInfo {
@@ -288,6 +320,8 @@ impl DragonballInner {
         // set boot source
         let kernel_path = self.config.boot_info.kernel.as_str();
         let initrd_path = self.config.boot_info.initrd.as_str();
+        #[cfg(target_arch = "x86_64")]
+        let firmware_path = self.config.boot_info.firmware.as_str();
 
         info!(
             sl!(),
@@ -306,11 +340,22 @@ impl DragonballInner {
             );
         }
 
+        #[cfg(target_arch = "x86_64")]
+        let firmware = if self.config.security_info.confidential_guest && !firmware_path.is_empty()
+        {
+            Some(firmware_path.to_string())
+        } else {
+            None
+        };
+        #[cfg(not(target_arch = "x86_64"))]
+        let firmware = None;
+
         let mut boot_cfg = BootSourceConfig {
             kernel_path: self
                 .get_resource(kernel_path, DRAGONBALL_KERNEL)
                 .context("get kernel resource")?,
             initrd_path: initrd,
+            firmware_path: firmware,
             ..Default::default()
         };
 
@@ -586,7 +631,12 @@ impl Persist for DragonballInner {
             netns: hypervisor_state.netns,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
-            vmm_instance: VmmInstance::new("", hypervisor_args),
+            vmm_instance: VmmInstance::new(
+                "",
+                hypervisor_args,
+                #[cfg(target_arch = "x86_64")]
+                None,
+            ),
             run_dir: hypervisor_state.run_dir,
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
