@@ -31,8 +31,9 @@ implement it, the security guarantee it introduces, and how it was validated.
   policy-fragment verifier, scratch classifier, verified-layer + verified-image allowlists, TOCTOU handle
   binding, and network-phase machine. Keeping this logic in one crate makes it
   unit-testable and, for the lifecycle, formally model-checkable.
-- **Companion docs:** `docs/cc/fr1-fragments.md` (the full FR-1 fragments reference) and
-  `docs/cc/fr1-fragment-e2e.md` (a reproducible end-to-end walk-through). This file is the
+- **Companion docs:** `docs/cc/fr1-fragments.md` (the full FR-1 fragments reference),
+  `docs/cc/fr1-fragment-e2e.md` (a reproducible end-to-end walk-through), and
+  `docs/cc/backlog.md` (the remaining/open execution-integrity work items). This file is the
   guide-level overview across all features; the FR-1 fragments detail is large enough to
   live in its own document.
 - **No new host↔guest protocol** except FR-1 (`LoadPolicyFragment`), which is additive and
@@ -57,10 +58,15 @@ implement it, the security guarantee it introduces, and how it was validated.
 | FR-11 | Trusted device/CDI resolution + occurrence binding | `9669a913b`, `0f3aa0f2f` |
 | FR-10 | Disable generic CopyFile in strict | `0b41cf8a4` |
 | FR-1 | Signed, add-only policy fragments — see **`docs/cc/fr1-fragments.md`** for the full sub-requirement (FR-1a…1j + Stage 2) breakdown | `11285337c`, `4ccd43f8a`, `dd2630053`, `294353a2a`, `bf602cb18`, `ff8a4d5b9`, `c6b52c2ba`, `69228f3b5`, `c0ea3cb25`, `f7ed23319`, `93e1ff6e5`, `db24d40f5`, `9cddd7f75`, `8efdaa65e`, `a63b9d5b3`, `d01fabe13`, `d6cdba49e`, `62fb8d45a`, `392d890a8`, `adaa7558b` |
+| FR-1d / FR-1f | Multi-algorithm signature breadth (ES256/ES384 + RSA PS256/RS256 + EdDSA) for did:x509 leaves/chains and transparency receipts/tree-heads (PR #3) | `0ac3af0c2`, `10a0ec277` |
+| FR-1c | genpolicy-native fragment declaration & composition (`fragments[]`, `fragment_containers`/`all_policy_containers`) (PR #6) | `e3e203876` |
+| FR-1f (Stage 2) | External SCITT / CCF-profile transparency inclusion-proof receipts (`kata-ccf-proof/v1`) (PR #5) | `763a54cf5` |
+| FR-1 (delivery) | Boot-time OCI pull → SRM-verify → inject of declared fragments (fail-closed) + the `genpolicy-fragmentgen` OCI packaging/push + settings-emission tool (PRs #7, #8) | `09c7421ae`, `391bbacaf` |
+| FR-7 (breadth) | Fine-grained per-container endpoint gating on authorized container state (PRs #2, #4) | `2a6c1c3ae`, `c806264bf`, `109317082`, `54a652dd0` |
 | FR-5 | Encrypted scratch by effective mode | `44d6f9d04`, `b1603c3a6` |
 | FR-4B | Mount bound to the checked handle (TOCTOU) | `44d6f9d04`, `dbea0d59b` |
 | FR-4C | Verified read-only layers (dm-verity root-digest authorization) | `26d408bd7` |
-| FR-4D | Verified guest-pull images (image manifest-digest authorization) | `bl3` |
+| FR-4D | Verified guest-pull images (image manifest-digest authorization) (PR #9) | `3f21b647a`, `655671b39` |
 | FR-14 | Network phase binding | `44d6f9d04`, `8cf9c5785` |
 | FR-7 (rest) | Debug console + diagnostics disabled in strict | `8cf9c5785` |
 | FR-15 | Formal model + fault injection + equivalence-claim proof | `21ac6e048`, `e76bc8d81` |
@@ -259,7 +265,7 @@ implement it, the security guarantee it introduces, and how it was validated.
   `8efdaa65e` (append-only ordering), `a63b9d5b3` (capability demo), Stage 2
   transparency-log inclusion + consistency proofs (RFC 6962 Merkle);
   `392d890a8`,`adaa7558b` (signer example, agent-ctl command, demo policy, guide).
-- **Validated:** 86 fragment-related SRM unit tests (of 98 in the SRM crate)
+- **Validated:** 86 fragment-related SRM unit tests (of 109 in the SRM crate)
   (issuer/signature/SVN/feed/receipt/trust-list/rotation/
   did:x509-chain/revocation/includes/chaining/persistence/COSE/ordering/Merkle-inclusion/
   consistency); an offline, self-contained capability demo (`examples/fragment-demo` —
@@ -338,10 +344,10 @@ implement it, the security guarantee it introduces, and how it was validated.
   tenant measured/approved — the registry/CDH prove *content ↔ digest* (pull-by-digest), this
   gate proves *digest ∈ approved set*, so the host cannot substitute a different image or a
   mutable tag.
-- **Commits:** `bl3` (store + gate + measured-config seed).
+- **Commits:** `3f21b647a`, `655671b39` (store + gate + measured-config seed; PR #9).
 - **Validated:** 6 unit tests (`verified_images` — authorized/unauthorized, unpinned rejected,
   empty-allowlist fail-closed, normalized/algorithm-bound, multi-image); agent builds strict
-  clean; SRM crate 104 tests.
+  clean; SRM crate 109 tests.
 - **Follow-up:** live validation needs a guest-pull-enabled (CDH) agent + pod.
 
 ### FR-14 — Network phase binding
@@ -444,7 +450,94 @@ pre-hardened deployment a few are parity or additional defense-in-depth.
 
 ---
 
+## Post-baseline hardening — fragment distribution, transparency interop & endpoint breadth
+
+The items below were merged **after** the initial feature baseline, as reviewable pull
+requests (fork PRs #2–#9). They extend the FR-1 fragment surface (signature breadth,
+external transparency interop, and the full declare→publish→pull→verify→inject lifecycle),
+close the guest-pull image gap (FR-4D, above), and broaden per-endpoint enforcement. Each is
+build- and unit-test-validated; items whose *live* validation needs a node / registry /
+external ledger are flagged and tracked in `docs/cc/backlog.md`.
+
+### Multi-algorithm signature breadth (FR-1d / FR-1f) — PR #3
+- **What:** a shared multi-algorithm verifier (`security-reference-monitor/src/cose_keys.rs`)
+  covering **Ed25519 (EdDSA), ECDSA P-256 (ES256) / P-384 (ES384), and RSA (PS256 / RS256)**,
+  wired into did:x509 leaf + chain verification (`did_x509.rs`) and the transparency
+  receipt / signed-tree-head path (`fragments.rs`). Algorithm selection is dispatched on the
+  COSE `alg` / certificate OID — no downgrade.
+- **Why:** parity with (and beyond) the reference confidential runtime, which verifies the
+  RSA/ES256/ES384/EdDSA set; the baseline did Ed25519 + ES256 only.
+- **Commits:** `0ac3af0c2`, `10a0ec277`.
+
+### External SCITT / CCF transparency receipts (FR-1f Stage 2) — PR #5
+- **What:** verification of **SCITT CCF-profile inclusion proofs**
+  (draft-ietf-scitt-receipts-ccf-profile) from a real external ledger, in addition to the
+  native RFC 6962 `kata-ttl-proof/v1`. New module
+  `security-reference-monitor/src/ccf.rs` decodes the CBOR `ccf-inclusion-proof`, recomputes
+  the Merkle root using plain SHA-256 concatenation (CCF has **no** RFC 6962 `0x00`/`0x01`
+  domain-separation prefixes), and returns the leaf `data-hash`. A new `kata-ccf-proof/v1`
+  receipt variant in the fragment gate requires `data-hash == SHA-256(statement)` and
+  verifies the ledger's COSE signature over the recomputed root against a trust-list key
+  (multi-alg, per PR #3).
+- **Guarantee:** a fragment can be required to be anchored in an external transparency ledger
+  (e.g. Azure Confidential Ledger / a CCF-based SCITT service); cross-fragment append-only
+  ordering remains governed by FR-1j `prev_log_head`.
+- **Commits:** `763a54cf5`. *(Live SCITT/CCF endpoint e2e is deployment-time — no guest egress
+  in the test bed.)*
+
+### genpolicy-native fragment declaration & composition (FR-1c) — PR #6
+- **What:** the measured base policy can **declare** trusted fragments and **compose**
+  fragment-contributed containers at policy-generation time: a `fragments[]` settings block
+  plus `fragment_containers` / `all_policy_containers` composition in genpolicy's `rules.rego`
+  / `policy.rs`. Inert (no behavioural change) when no fragments are declared.
+- **Why:** fragments become operable/attested from the measured base policy, not only pushed
+  at runtime.
+- **Commits:** `e3e203876`.
+
+### Boot-time OCI pull → SRM-verify → inject (FR-1 delivery) — PR #7
+- **What:** at boot, for every fragment the measured base policy declares
+  (`data.agent_policy.policy_fragments[]`, read via `AgentPolicy::fragment_specs()`), the guest
+  pulls the COSE_Sign1(rego) OCI artifact (layer `application/cose-x509+rego`, artifactType
+  `application/x-ms-ccepolicy-frag`), reconstructs the fragment from the signed payload
+  (`PolicyFragment::from_cose_payload` / `from_cose_envelope`), and runs it through the **same**
+  SRM `FragmentStore` verify→apply→commit path as the runtime `LoadPolicyFragment` push
+  (`agent/src/policy_fragments.rs`). FR-1d (did:x509) / FR-1f (receipts) / FR-1i (rollback
+  floor) / FR-1j (ordering) therefore all apply to OCI-delivered fragments too; both delivery
+  paths share one monotonic ordering chain. did:x509 routing has no permissive fallback.
+- **Fail-closed:** wired into `start_sandbox()` after the initdata base policy is set and the
+  fragment trust root is seeded, before the ttRPC server serves any request; any
+  fetch/verify/inject failure **aborts the VM** (strict builds only). Adds `oci-client` under
+  the `agent-policy` feature.
+- **Commits:** `09c7421ae`. *(Live dev-registry wire tests are deployment-time.)*
+
+### OCI packaging/push + settings emission — `genpolicy-fragmentgen` — PR #8
+- **What:** a new workspace tool (`src/tools/genpolicy-fragmentgen`) that packages an
+  already-signed COSE fragment envelope as an OCI artifact (matching the guest fetcher's
+  artifactType / layer / empty-config media types), optionally pushes it (`--push`), and emits
+  the base-policy `data.agent_policy.policy_fragments[]` declaration entry. Issuer/feed/SVN are
+  derived from the envelope via the guest's own `PolicyFragment::from_cose_envelope`, so the
+  emitted entry matches exactly what the guest verifies — the tool reuses the existing signer
+  and adds **no** duplicate crypto/format code.
+- **Commits:** `391bbacaf`. *(Live registry push is deployment-time; verified offline
+  end-to-end: sign → package → matching settings entry.)*
+
+### Fine-grained per-container endpoint gating (FR-7 breadth) — PRs #2, #4
+- **What:** every per-container agent endpoint is gated on **authorized container state**
+  (fail-closed for unknown/removed `container_id`): `SignalProcessRequest` (plus an
+  `allowed_signals` allowlist), `StartContainerRequest`, `WaitProcessRequest`,
+  `StatsContainerRequest`, `TtyWinResizeRequest`, and `RemoveContainerRequest` (removal is now
+  idempotent — a second remove is denied). The remaining unconditional endpoints
+  (`DestroySandboxRequest`, `GetOOMEventRequest`, `GuestDetailsRequest`, `OnlineCPUMemRequest`,
+  `RemoveStaleVirtiofsShareMountsRequest`) are an audited host-driven sandbox-lifecycle /
+  read-only infrastructure set with a documented reviewed-allow rationale in `rules.rego`
+  (no attacker-constrainable payload); the diagnostics surface the reference runtime gates is
+  hard-disabled in the strict build.
+- **Commits:** `2a6c1c3ae`, `c806264bf`, `109317082`, `54a652dd0`.
+
+---
+
 ## Deferred / out of scope
+
 
 - **FR-13 (snapshot/restore/migration sealing) — not applicable.** Snapshot, restore, and
   live-migration are not possible for GPU-passthrough (VFIO) confidential workloads at the
@@ -466,7 +559,7 @@ pre-hardened deployment a few are parity or additional defense-in-depth.
 - **Unit / integration:** the SRM crate carries the transaction manager, occurrence
   registry, resource graph, CDI trust, fragment verifier, scratch classifier, handle
   binding, verified-layer allowlist, network-phase machine, and lifecycle
-  fault-injection/fuzz tests, all green (104 SRM unit tests + 4 fault-injection).
+  fault-injection/fuzz tests, all green (109 SRM unit tests + 4 fault-injection).
 - **Formal:** TLC model-checks the lifecycle safety properties with no error.
 - **Live matrix:** the strict `kata-parma` profile passes the policy-enforcement matrix
   with no regression, and the FR-9/FR-10/FR-14 live ttRPC attacks are denied.
