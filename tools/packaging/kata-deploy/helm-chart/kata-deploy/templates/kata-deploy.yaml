@@ -50,9 +50,10 @@ spec:
 {{- else }}
         name: {{ .Chart.Name }}
 {{- end }}
-{{- with .Values.podAnnotations }}
+{{- $podAnnotations := include "kata-deploy.podTemplateAnnotations" . | trim }}
+{{- if $podAnnotations }}
       annotations:
-{{- toYaml . | nindent 8 }}
+{{- $podAnnotations | nindent 8 }}
 {{- end }}
     spec:
 {{- with .Values.imagePullSecrets }}
