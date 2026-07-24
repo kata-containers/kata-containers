@@ -4,7 +4,7 @@
 //
 
 pub mod ioapic;
-#[cfg(feature = "split-legacy-irq")]
+#[cfg(feature = "userspace-legacy-irq")]
 pub mod legacy_irq;
 pub mod manager;
 

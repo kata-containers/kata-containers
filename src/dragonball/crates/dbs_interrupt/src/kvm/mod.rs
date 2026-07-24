@@ -71,6 +71,24 @@ impl KvmIrqManager {
                 groups: HashMap::new(),
                 routes: Arc::new(KvmIrqRouting::new(vmfd)),
                 max_msi_irqs: DEFAULT_MAX_MSI_IRQS_PER_DEVICE,
+                kvm_legacy_disabled: false,
+            }),
+        }
+    }
+
+    /// Create a new KVM interrupt manager that only handles MSI interrupt, usually
+    /// used for VM with split irqchip
+    ///
+    /// # Arguments
+    /// * `vmfd`: The KVM VM file descriptor, which will be used to access the KVM subsystem.
+    pub fn new_with_kvm_legacy_disabled(vmfd: Arc<VmFd>) -> Self {
+        KvmIrqManager {
+            mgr: Mutex::new(KvmIrqManagerObj {
+                vmfd: vmfd.clone(),
+                groups: HashMap::new(),
+                routes: Arc::new(KvmIrqRouting::new(vmfd)),
+                max_msi_irqs: DEFAULT_MAX_MSI_IRQS_PER_DEVICE,
+                kvm_legacy_disabled: true,
             }),
         }
     }
@@ -112,11 +130,12 @@ struct KvmIrqManagerObj {
     routes: Arc<KvmIrqRouting>,
     groups: HashMap<InterruptIndex, Arc<Box<dyn InterruptSourceGroup>>>,
     max_msi_irqs: InterruptIndex,
+    kvm_legacy_disabled: bool,
 }
 
 impl KvmIrqManagerObj {
     fn initialize(&self) -> Result<()> {
-        self.routes.initialize()?;
+        self.routes.initialize(self.kvm_legacy_disabled)?;
         Ok(())
     }
 
@@ -181,13 +200,15 @@ impl KvmIrqRouting {
         }
     }
 
-    pub(super) fn initialize(&self) -> Result<()> {
+    pub(super) fn initialize(&self, kvm_legacy_disabled: bool) -> Result<()> {
         // Safe to unwrap because there's no legal way to break the mutex.
         #[allow(unused_mut)]
         let mut routes = self.routes.lock().unwrap();
 
         #[cfg(feature = "kvm-legacy-irq")]
-        LegacyIrq::initialize_legacy(&mut routes)?;
+        if !kvm_legacy_disabled {
+            LegacyIrq::initialize_legacy(&mut routes)?;
+        }
 
         self.set_routing(&routes)?;
 
