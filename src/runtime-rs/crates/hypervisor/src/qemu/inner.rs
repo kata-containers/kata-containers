@@ -425,6 +425,18 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
+        if self.config.debug_info.enable_debug {
+            tokio::spawn(async move {
+                let stream_result = try_open_qemu_console(&console_socket_path).await;
+                if let Ok(stream) = stream_result {
+                    if let Err(err) = log_qemu_console(stream).await {
+                        warn!(sl!(), "error logging qemu console: {:?}", err);
+                    }
+                }
+            });
+        }
+
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
@@ -475,12 +487,6 @@ impl QemuInner {
                 .await
                 .context("boot from template")?;
             self.resume_vm().context("resume vm")?;
-        }
-
-        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
-        if self.config.debug_info.enable_debug {
-            let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
-            tokio::spawn(log_qemu_console(stream));
         }
 
         Ok(())
@@ -941,6 +947,30 @@ impl QemuInner {
 
         Ok((new_total_mem_mb, MemoryConfig::default()))
     }
+}
+
+async fn try_open_qemu_console(console_socket_path: &Path) -> Result<UnixStream> {
+    const DEADLINE_SECS: u64 = 5;
+    let deadline = Instant::now() + Duration::from_secs(DEADLINE_SECS);
+    let console_stream = loop {
+        match UnixStream::connect(console_socket_path.as_os_str()).await {
+            Ok(stream) => break stream,
+            Err(err) => {
+                if Instant::now() >= deadline {
+                    warn!(
+                        sl!(),
+                        "couldn't open qemu console at {:#?} in {} seconds: {}",
+                        console_socket_path,
+                        DEADLINE_SECS,
+                        err
+                    );
+                    return Err(anyhow!("couldn't open qemu console: {err}"));
+                }
+                sleep(Duration::from_millis(50)).await;
+            }
+        };
+    };
+    Ok(console_stream)
 }
 
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
