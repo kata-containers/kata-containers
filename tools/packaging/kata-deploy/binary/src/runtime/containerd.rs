@@ -143,6 +143,18 @@ fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
     }
 }
 
+/// Current on-disk content of the effective kata containerd config output file
+/// (the kata-deploy drop-in, or the main config when drop-ins are unsupported).
+///
+/// Returns `None` when the file does not exist yet or its path cannot be
+/// resolved. Callers use this to tell whether re-applying the config actually
+/// changed anything, and therefore whether a (potentially self-terminating, in
+/// job mode) containerd restart is required.
+pub(crate) async fn kata_cri_config_content(config: &Config, runtime: &str) -> Option<String> {
+    let paths = config.get_containerd_paths(runtime).await.ok()?;
+    fs::read_to_string(get_containerd_output_path(&paths)).ok()
+}
+
 fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
     if !paths.use_drop_in {
         anyhow::bail!(
