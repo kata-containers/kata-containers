@@ -227,10 +227,22 @@ function deploy_k0s() {
 		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
 	fi
 
+	# Disable the k0s components our tests don't rely on, to reduce the host
+	# memory footprint on the free GitHub runners. Unlike k3s/rke2, k0s ships
+	# its full default stack; without trimming it, the extra control-plane
+	# footprint leaves too little headroom and the host OOM-kills the 4GB Kata
+	# QEMU while it pulls a large image in-guest (test #5), showing up as
+	# "ttrpc: closed" / "QEMU exited ... signal: killed".
+	# - metrics-server: not needed by the tests (matches k3s/rke2).
+	# - autopilot: k0s self-update controller, pointless in CI.
+	# We keep coredns (DNS), kube-proxy/network-provider (networking) and
+	# konnectivity-server (apiserver<->kubelet), which pods rely on.
+	k0s_disable_components="metrics-server,autopilot"
+
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
 	# shellcheck disable=SC2086
-	sudo k0s install controller --single --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
+	sudo k0s install controller --single --disable-components "${k0s_disable_components}" --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
 
 	# kube-router decided to use :8080 for its metrics, and this seems
 	# to be a change that affected k0s 1.30.0+, leading to kube-router
@@ -276,8 +288,17 @@ function deploy_k0s() {
 }
 
 function deploy_k3s() {
-	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
-	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
+	# Configure the k3s server:
+	# - Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and
+	#   long-running create requests.
+	# - Disable the bundled add-ons that our tests don't rely on, to reduce the
+	#   CPU/memory footprint on the free GitHub runners.
+	curl -sfL https://get.k3s.io | sh -s - \
+		--write-kubeconfig-mode 644 \
+		--kubelet-arg runtime-request-timeout=600s \
+		--disable traefik \
+		--disable servicelb \
+		--disable metrics-server
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
@@ -342,9 +363,61 @@ function create_cluster_kcli() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
-	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	sudo mkdir -p /etc/rancher/rke2
-	printf '%s\n' 'kubelet-arg:' '  - --runtime-request-timeout=600s' | sudo tee /etc/rancher/rke2/config.yaml
+	# Configure the RKE2 server:
+	# - Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and
+	#   long-running create requests.
+	# - Disable the bundled add-ons that our tests don't rely on, to reduce the
+	#   CPU/memory footprint on the free GitHub runners. We keep CoreDNS (DNS)
+	#   and a CNI, which are required for pods to schedule, network, and resolve
+	#   names.
+	# - Prefer flannel over the default canal (calico+flannel) CNI purely to save
+	#   host resources on the free runners. Canal is not broken with Kata; it is
+	#   simply heavier, and matching the lighter k3s flannel setup frees enough
+	#   schedulable CPU/memory for Guaranteed 2-CPU test workloads.
+	# - Disable the cloud-controller-manager; our CI clusters don't use cloud LBs
+	#   and the CCM pod reserves schedulable CPU on the single-node runners.
+	# - Shrink control-plane static-pod CPU requests so Guaranteed 2-CPU test
+	#   workloads (which Kata sizes from limits, not requests) can schedule.
+	sudo tee /etc/rancher/rke2/config.yaml > /dev/null <<-'EOF'
+		cni: flannel
+		disable-cloud-controller: true
+		kubelet-arg:
+		  - --runtime-request-timeout=600s
+		disable:
+		  - rke2-ingress-nginx
+		  - rke2-metrics-server
+		  - rke2-snapshot-controller
+		  - rke2-snapshot-controller-crd
+		  - rke2-snapshot-validation-webhook
+		control-plane-resource-requests:
+		  - kube-apiserver-cpu=200m
+		  - kube-apiserver-memory=256M
+		  - kube-scheduler-cpu=100m
+		  - kube-scheduler-memory=128M
+		  - kube-controller-manager-cpu=100m
+		  - kube-controller-manager-memory=128M
+		  - kube-proxy-cpu=100m
+		  - etcd-cpu=100m
+		  - etcd-memory=256M
+	EOF
+
+	# Trim CoreDNS CPU requests via HelmChartConfig. The manifests directory must
+	# exist before the first rke2-server start.
+	sudo mkdir -p /var/lib/rancher/rke2/server/manifests
+	sudo tee /var/lib/rancher/rke2/server/manifests/rke2-coredns-config.yaml > /dev/null <<-'EOF'
+		apiVersion: helm.cattle.io/v1
+		kind: HelmChartConfig
+		metadata:
+		  name: rke2-coredns
+		  namespace: kube-system
+		spec:
+		  valuesContent: |-
+		    resources:
+		      requests:
+		        cpu: 50m
+		        memory: 64Mi
+	EOF
 
 	sudo systemctl enable --now rke2-server.service
 
@@ -361,6 +434,29 @@ function deploy_rke2() {
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+
+	# Wait for the default (dqlite + Calico) bring-up before reconfiguring it.
+	sudo microk8s status --wait-ready --timeout 300
+
+	# Trim the microk8s footprint on the free GitHub runners.
+	#
+	# microk8s ships only the "ha-cluster" addon enabled by default, which pulls
+	# in dqlite *and* Calico. Calico (Felix/BIRD/Typha on every node) is markedly
+	# heavier than the flannel CNI that k3s/rke2/k0s use, and on the shared
+	# runners that extra baseline leaves too little host memory for the large
+	# in-guest image-pull test: the ~4GB Kata QEMU gets OOM-killed mid-pull,
+	# surfacing as "QEMU exited ... signal: killed" / "ttrpc: closed". The same
+	# test passes on the flannel-based distros on the very same runner.
+	#
+	# Disabling ha-cluster reverts microk8s to the lighter etcd + flannel setup,
+	# matching the CNI the other distros already use. This is destructive (it
+	# wipes cluster resources), so it must run on the fresh cluster before we
+	# deploy anything; the dns (CoreDNS) addon, auto-enabled by the default
+	# launch config, is wiped along with it and has to be re-enabled afterwards.
+	sudo microk8s disable ha-cluster --force
+	sudo microk8s status --wait-ready --timeout 300
+	sudo microk8s enable dns
+
 	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	echo '--runtime-request-timeout=600s' | sudo tee -a /var/snap/microk8s/current/args/kubelet
 	sudo microk8s stop

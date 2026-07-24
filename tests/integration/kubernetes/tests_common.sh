@@ -108,7 +108,7 @@ is_aks_cluster() {
 
 is_k3s_or_rke2() {
 	case "${KUBERNETES:-}" in
-		k3s|rke2) return 0 ;;
+		k0s|k3s|rke2) return 0 ;;
 		*) return 1 ;;
 	esac
 }
@@ -265,8 +265,13 @@ install_genpolicy_drop_ins() {
 		fi
 	fi
 
-	# 20-* OCI version overlay
-	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
+	# 20-* OCI version overlay.
+	#
+	# These per-distro / per-platform mappings are a stopgap: genpolicy currently
+	# requires an exact OCI Version match, so each CRI that emits a different
+	# value needs its own drop-in. The sustainable fix is to stop treating the
+	# Version field as a hard equality check (see #10632).
+	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]] || [[ "${KUBERNETES:-}" == "microk8s" ]]; then
 		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
 	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
