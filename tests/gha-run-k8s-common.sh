@@ -651,6 +651,66 @@ function delete_test_runners(){
 	done
 }
 
+# Dump kata-deploy install diagnostics so failures are debuggable straight from
+# the CI log. In "job" mode this captures the install/cleanup dispatcher Jobs and
+# the per-node install/cleanup Jobs (their pods run the staged pipeline), which is
+# essential because a dispatcher hook Job that hits its backoffLimit only surfaces
+# as "BackoffLimitExceeded" in the helm output - the actual reason lives in the
+# dispatcher and per-node Job pod logs. In "daemonset" mode it captures the
+# kata-deploy DaemonSet pods. Everything is best-effort (|| true) so it can never
+# mask the original failure.
+function dump_kata_deploy_diagnostics() {
+	local deployment_mode="${1:-daemonset}"
+	local context="${2:-}"
+	local ns="kube-system"
+	# kubectl logs -l caps concurrent requests at 5 by default; raise it so we
+	# don't silently drop pods when several per-node Jobs (or retries) exist.
+	local max_log_requests=50
+
+	echo "::group::kata-deploy diagnostics${context:+ - ${context}}"
+
+	echo "== nodes =="
+	kubectl get nodes -o wide --show-labels || true
+
+	echo "== recent events (${ns}) =="
+	kubectl -n "${ns}" get events --sort-by=.lastTimestamp 2>/dev/null | tail -n 100 || true
+
+	if [[ "${deployment_mode}" == "job" ]]; then
+		echo "== kata-deploy Jobs (dispatchers + per-node) =="
+		kubectl -n "${ns}" get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
+		echo "== kata-deploy Pods =="
+		kubectl -n "${ns}" get pods -l app.kubernetes.io/name=kata-deploy -o wide || true
+		echo "== describe kata-deploy Jobs =="
+		kubectl -n "${ns}" describe jobs -l app.kubernetes.io/name=kata-deploy || true
+		echo "== describe kata-deploy Pods =="
+		kubectl -n "${ns}" describe pods -l app.kubernetes.io/name=kata-deploy || true
+		echo "== dispatcher logs (install + cleanup) =="
+		kubectl -n "${ns}" logs -l kata-deploy/dispatcher --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== per-node Job logs (all kata-deploy pods, current) =="
+		kubectl -n "${ns}" logs -l app.kubernetes.io/name=kata-deploy --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== per-node Job logs (previous, if any restarted) =="
+		kubectl -n "${ns}" logs -l app.kubernetes.io/name=kata-deploy --all-containers --prefix \
+			--previous --tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+	else
+		echo "== kata-deploy DaemonSet =="
+		kubectl -n "${ns}" get ds -l name=kata-deploy -o wide || true
+		kubectl -n "${ns}" describe ds -l name=kata-deploy || true
+		echo "== kata-deploy Pods =="
+		kubectl -n "${ns}" get pods -l name=kata-deploy -o wide || true
+		kubectl -n "${ns}" describe pods -l name=kata-deploy || true
+		echo "== kata-deploy logs (current) =="
+		kubectl -n "${ns}" logs -l name=kata-deploy --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== kata-deploy logs (previous) =="
+		kubectl -n "${ns}" logs -l name=kata-deploy --all-containers --prefix \
+			--previous --tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+	fi
+
+	echo "::endgroup::"
+}
+
 function helm_helper() {
 	local max_tries
 	local interval
@@ -1118,6 +1178,12 @@ VERIFICATION_POD_EOF
 			echo "Helm install succeeded!"
 			break
 		fi
+		# Capture diagnostics NOW, before retrying: in job mode the dispatcher
+		# runs as a post-install/upgrade hook with hook-delete-policy
+		# before-hook-creation, so the next `helm upgrade` deletes the failed
+		# dispatcher Job (and its pod logs) before recreating it. This is the
+		# only chance to see why the dispatcher hit BackoffLimitExceeded.
+		dump_kata_deploy_diagnostics "${deployment_mode}" "helm upgrade failed (exit ${ret}), attempt $((i+1)) of ${max_tries}"
 		i=$((i+1))
 		if [[ ${i} -lt ${max_tries} ]]; then
 			echo "Retrying after ${interval} seconds (Attempt ${i} of ${max_tries})"
@@ -1146,12 +1212,7 @@ VERIFICATION_POD_EOF
 			fi
 			if (( SECONDS >= label_wait_deadline )); then
 				echo "ERROR: Timed out waiting for kata-deploy install Jobs to label any node"
-				echo "::group::kata-deploy job-mode status (no node labeled)"
-				kubectl -n kube-system get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
-				kubectl -n kube-system get pods -l app.kubernetes.io/name=kata-deploy -o wide || true
-				kubectl -n kube-system describe jobs -l app.kubernetes.io/name=kata-deploy || true
-				kubectl -n kube-system logs -l app.kubernetes.io/name=kata-deploy --all-containers --tail=-1 --timestamps 2>/dev/null || true
-				echo "::endgroup::"
+				dump_kata_deploy_diagnostics "${deployment_mode}" "timed out waiting for a node to be labeled"
 				return 1
 			fi
 			sleep 5
