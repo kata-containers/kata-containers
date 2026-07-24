@@ -71,6 +71,8 @@ strum_macros.workspace = true
 # Local dependencies
 kata-agent-policy = { workspace = true, optional = true }
 kata-security-reference-monitor = { workspace = true, optional = true }
+# BL-8: OCI client for boot-time policy-fragment pull (gated under agent-policy).
+oci-client = { version = "0.17.0", optional = true }
 mem-agent.workspace = true
 rustjail.workspace = true
 protocols = { workspace = true, features = ["async", "with-serde"] }
@@ -106,7 +108,7 @@ lto = true
 
 [features]
 seccomp = ["rustjail/seccomp"]
-agent-policy = ["kata-agent-policy"]
+agent-policy = ["kata-agent-policy", "oci-client"]
 strict-policy = ["agent-policy", "kata-agent-policy/strict-policy", "kata-security-reference-monitor"]
 init-data = []
 devicemapper = ["kata-types/devicemapper"]

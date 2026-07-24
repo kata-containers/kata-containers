@@ -87,6 +87,11 @@ mod tracer;
 #[cfg(feature = "agent-policy")]
 mod policy;
 
+// BL-8: boot-time OCI pull + SRM verify + inject of declared policy fragments. Only in
+// strict confidential builds, where the SRM `FRAGMENTS` store exists.
+#[cfg(feature = "strict-policy")]
+mod policy_fragments;
+
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         mod ap;
@@ -509,6 +514,21 @@ async fn start_sandbox(
                 .set_policy(policy)
                 .await
                 .context("Failed to set policy from initdata")?;
+        }
+    }
+
+    // BL-8: pull, SRM-verify, and inject every fragment the measured base policy declares,
+    // after the base policy is set from init-data and the fragment trust root is seeded, but
+    // before the ttRPC server serves any request. Fail-closed: abort the VM on any failure
+    // so no request is ever served under a partially-composed policy.
+    #[cfg(feature = "strict-policy")]
+    match policy_fragments::load_declared_fragments().await {
+        Ok(n) if n > 0 => info!(logger, "FR-1/BL-8: injected {} boot-declared fragment(s)", n),
+        Ok(_) => {}
+        Err(e) => {
+            error!(logger, "FR-1/BL-8: boot fragment pull failed, aborting VM: {:?}", e);
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            std::process::abort();
         }
     }
 

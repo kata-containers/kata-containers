@@ -70,6 +70,20 @@ struct MetadataResponse {
     ops: Option<json_patch::Patch>,
 }
 
+/// BL-8: a boot-time fragment declaration from the measured base policy
+/// (`data.agent_policy.policy_fragments[]`). The agent pulls the COSE artifact at `feed`
+/// and verifies it (issuer/SVN/receipt/ordering) through the SRM `FragmentStore`.
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, Default, PartialEq)]
+pub struct FragmentSpec {
+    /// `did:x509` issuer the pulled fragment must be signed by.
+    pub issuer: String,
+    /// OCI reference (e.g. `contoso.azurecr.io/frag/infra:1`) to pull the COSE artifact from.
+    pub feed: String,
+    /// Minimum acceptable SVN (rollback floor) for this feed.
+    #[serde(default)]
+    pub minimum_svn: u64,
+}
+
 impl AgentPolicy {
     /// Create AgentPolicy object.
     pub fn new() -> Self {
@@ -339,6 +353,39 @@ impl AgentPolicy {
         Ok(())
     }
 
+    /// BL-8: read the boot-time fragment declarations the measured base policy exposes at
+    /// `data.agent_policy.policy_fragments`. Each declaration names an `issuer`
+    /// (`did:x509`), a `feed` (OCI reference to pull), and a `minimum_svn`. The agent's
+    /// boot OCI-pull path fetches each declared fragment and verifies it through the SRM.
+    ///
+    /// Returns an empty vector when the base policy declares none (or the value is absent /
+    /// not an array) — a base policy that declares no fragments boots with zero network
+    /// calls and no behavioural change.
+    pub fn fragment_specs(&mut self) -> Result<Vec<FragmentSpec>> {
+        self.engine.set_input_json("{}")?;
+        let results = self
+            .engine
+            .eval_query("data.agent_policy.policy_fragments".to_string(), false)?;
+        let value = match results
+            .result
+            .first()
+            .and_then(|r| r.expressions.first())
+            .map(|e| &e.value)
+        {
+            Some(v) => v,
+            None => return Ok(Vec::new()),
+        };
+        let arr = match value {
+            regorus::Value::Array(a) => a,
+            regorus::Value::Undefined => return Ok(Vec::new()),
+            _ => bail!("policy_fragments is not an array: {value:?}"),
+        };
+        let json = serde_json::to_string(arr)?;
+        let specs: Vec<FragmentSpec> = serde_json::from_str(&json)
+            .map_err(|e| anyhow::anyhow!("malformed policy_fragments declaration: {e}"))?;
+        Ok(specs)
+    }
+
     /// Extract the top-level `package` path from a Rego module (e.g. "agent_policy.fragments").
     fn rego_package(rego: &str) -> Option<String> {
         for line in rego.lines() {
@@ -510,6 +557,35 @@ mod tests {
             r.result.first().and_then(|x| x.expressions.first()).map(|e| &e.value),
             Some(regorus::Value::Bool(true))
         )
+    }
+
+    /// BL-8: the boot-time fragment declarations are read from
+    /// `data.agent_policy.policy_fragments[]`. A base policy declaring them yields the
+    /// parsed specs; a base policy declaring none yields an empty list (no boot pull).
+    #[test]
+    fn test_fragment_specs_read_from_base_policy() {
+        let mut p = AgentPolicy::new();
+        // No declaration → empty (default: boot unchanged, zero network calls).
+        let base_none = "package agent_policy\ndefault SetPolicyRequest := true\n";
+        p.engine.add_policy("agent_policy".to_string(), base_none.to_string()).unwrap();
+        assert!(p.fragment_specs().unwrap().is_empty());
+
+        // Declared fragments → parsed into FragmentSpec entries in policy order.
+        let mut p2 = AgentPolicy::new();
+        let base = "package agent_policy\n\
+            policy_fragments := [\n\
+            {\"issuer\": \"did:x509:0:sha256:AAA::CN:signer\", \"feed\": \"reg/frag/infra:1\", \"minimum_svn\": 2},\n\
+            {\"issuer\": \"did:x509:0:sha256:BBB::CN:other\", \"feed\": \"reg/frag/net:3\"}\n\
+            ]\n";
+        p2.engine.add_policy("agent_policy".to_string(), base.to_string()).unwrap();
+        let specs = p2.fragment_specs().unwrap();
+        assert_eq!(specs.len(), 2);
+        assert_eq!(specs[0].issuer, "did:x509:0:sha256:AAA::CN:signer");
+        assert_eq!(specs[0].feed, "reg/frag/infra:1");
+        assert_eq!(specs[0].minimum_svn, 2);
+        assert_eq!(specs[1].feed, "reg/frag/net:3");
+        // minimum_svn defaults to 0 when omitted.
+        assert_eq!(specs[1].minimum_svn, 0);
     }
 
     /// TC-F1.1: a verified fragment module flips a specific decision from deny→allow, and
