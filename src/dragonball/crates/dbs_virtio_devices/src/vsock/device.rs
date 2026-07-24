@@ -61,9 +61,14 @@ pub struct Vsock<AS: GuestAddressSpace, M: VsockGenericMuxer = VsockMuxer> {
 impl<AS: GuestAddressSpace> Vsock<AS> {
     /// Create a new virtio-vsock device with the given VM CID and vsock
     /// backend.
-    pub fn new(cid: u64, queue_sizes: Arc<Vec<u16>>, epoll_mgr: EpollManager) -> Result<Self> {
+    pub fn new(
+        cid: u64,
+        queue_sizes: Arc<Vec<u16>>,
+        epoll_mgr: EpollManager,
+        f_access_platform: bool,
+    ) -> Result<Self> {
         let muxer = VsockMuxer::new(cid).map_err(VsockError::Muxer)?;
-        Self::new_with_muxer(cid, queue_sizes, epoll_mgr, muxer)
+        Self::new_with_muxer(cid, queue_sizes, epoll_mgr, muxer, f_access_platform)
     }
 }
 
@@ -73,10 +78,17 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
         muxer: M,
+        f_access_platform: bool,
     ) -> Result<Self> {
         let mut config_space = Vec::with_capacity(VSOCK_CONFIG_SPACE_SIZE);
         for i in 0..VSOCK_CONFIG_SPACE_SIZE {
             config_space.push((cid >> (8 * i as u64)) as u8);
+        }
+
+        let mut avail_features = VSOCK_AVAIL_FEATURES;
+
+        if f_access_platform {
+            avail_features |= 1u64 << uapi::VIRTIO_F_ACCESS_PLATFORM;
         }
 
         Ok(Vsock {
@@ -84,7 +96,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
             queue_sizes: queue_sizes.clone(),
             device_info: VirtioDeviceInfo::new(
                 VSOCK_DRIVER_NAME.to_string(),
-                VSOCK_AVAIL_FEATURES,
+                avail_features,
                 queue_sizes,
                 config_space,
                 epoll_mgr,

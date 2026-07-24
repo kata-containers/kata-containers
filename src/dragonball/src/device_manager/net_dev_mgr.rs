@@ -25,6 +25,8 @@ use dbs_virtio_devices::Error as VirtioError;
 use serde::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfos, RateLimiterConfigInfo};
 use crate::device_manager::{DbsVirtioDevice, DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
@@ -606,6 +608,11 @@ impl NetworkDeviceMgr {
             None => None,
         };
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         let net_device = virtio::net::Net::new(
             config.host_dev_name.clone(),
             cfg.guest_mac(),
@@ -613,6 +620,7 @@ impl NetworkDeviceMgr {
             epoll_mgr,
             rx_rate_limiter,
             tx_rate_limiter,
+            f_access_platform,
         )
         .map_err(NetworkDeviceError::CreateNetDevice)?;
 
@@ -637,12 +645,18 @@ impl NetworkDeviceMgr {
             .clone()
             .ok_or(NetworkDeviceError::Virtio(VirtioError::InvalidInput))?;
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         Ok(Box::new(
             virtio::vhost::vhost_kern::net::Net::new(
                 config.host_dev_name.clone(),
                 cfg.guest_mac(),
                 Arc::new(cfg.queue_sizes()),
                 epoll_mgr,
+                f_access_platform,
             )
             .map_err(NetworkDeviceError::CreateNetDevice)?,
         ))
