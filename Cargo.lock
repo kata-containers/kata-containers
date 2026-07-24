@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "acpi_tables"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce821f856a3eb1d033287f2dcfcdf94276d7895dd5bdd8ca45ae17e7d33d4dd9"
+dependencies = [
+ "zerocopy 0.8.48",
+]
+
+[[package]]
 name = "actix-macros"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1897,6 +1906,7 @@ dependencies = [
 name = "dragonball"
 version = "0.1.0"
 dependencies = [
+ "acpi_tables",
  "anyhow",
  "arc-swap",
  "bytes 1.11.1",
@@ -1938,6 +1948,7 @@ dependencies = [
  "test-utils",
  "thiserror 2.0.18",
  "tracing",
+ "uuid 1.23.1",
  "vfio-bindings",
  "vfio-ioctls",
  "virtio-queue",
