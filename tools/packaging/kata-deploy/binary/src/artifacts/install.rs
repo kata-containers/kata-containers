@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use toml_edit::{value, ArrayOfTables, DocumentMut, Item, Table};
 #[cfg(test)]
 use walkdir::WalkDir;
 
@@ -107,6 +108,9 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
 
     let mut extracted: HashSet<String> = HashSet::new();
     extract_component_tarballs(config, &mut extracted)?;
+    // Not tied to any shim, so reconcile separately: turning debug off on a
+    // redeploy must also remove it.
+    reconcile_debug_tools(config, &mut extracted)?;
     install_versions_yaml(config)?;
 
     set_executable_permissions(&config.host_install_dir)?;
@@ -119,6 +123,10 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
         install_custom_runtime_configs(config, container_runtime)?;
     }
+
+    // Drop any devkit artifacts a previous deploy left behind but this one no
+    // longer wants (e.g. devkit toggled off, or a shim removed).
+    reconcile_devkit_artifacts(config)?;
 
     let expand_runtime_classes_for_nfd = nfd::setup_nfd_rules(config).await?;
 
@@ -303,6 +311,44 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             container_runtime,
         )?;
 
+        // Everything devkit needs (the extension image + the debug console shell)
+        // goes into the drop-in (25-devkit.toml), leaving the copied base config
+        // untouched for users to inspect.
+        //
+        // The drop-in merge REPLACES the guest_extension_images array rather than
+        // appending, so it must re-emit the base's existing extensions in order and
+        // append devkit last: this preserves them (stable device enumeration) and
+        // makes devkit the last image attached, perturbing the guest we want to
+        // debug as little as possible.
+        if runtime.devkit {
+            let image_path = format!(
+                "{}/share/kata-containers/kata-containers-devkit-extension.img",
+                config.dest_dir
+            );
+            let verity_params = devkit_verity_params(&config.dest_dir);
+            let hypervisor_name = get_hypervisor_name(&runtime.base_config)?;
+            let existing = if Path::new(&dest_config).exists() {
+                read_guest_extension_images(Path::new(&dest_config), hypervisor_name)?
+            } else {
+                log::warn!(
+                    "devkit: base config {} is missing; the devkit drop-in will only \
+                     carry the devkit extension image",
+                    dest_config
+                );
+                Vec::new()
+            };
+            write_drop_in_file(
+                &config_d_dir,
+                "25-devkit.toml",
+                &generate_devkit_drop_in(
+                    hypervisor_name,
+                    &existing,
+                    &image_path,
+                    verity_params.as_deref(),
+                ),
+            )?;
+        }
+
         // Copy user-provided drop-in file if provided (at 50-overrides.toml).
         // If it was removed from values in a later upgrade/migration, remove stale file.
         let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
@@ -367,6 +413,97 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
     }
 
     info!("Successfully removed custom runtime config files");
+    Ok(())
+}
+
+/// Remove on-node devkit artifacts the current configuration no longer wants.
+///
+/// Devkit is materialized as kata-<shim>-devkit custom runtimes only while
+/// DEVKIT=true. When a redeploy disables devkit (or drops a shim) those runtimes
+/// vanish from `config.custom_runtimes`, so the normal custom-runtime cleanup
+/// never touches their leftovers. Installs only ever add files, so reconcile
+/// explicitly: drop stale kata-<shim>-devkit handler directories and, once no
+/// devkit runtime remains, the now-unreferenced extension image and root-hash.
+///
+/// The RuntimeClasses are Helm-managed and the containerd handlers regenerated
+/// every install, so only these binary-installed files need reconciling here.
+fn reconcile_devkit_artifacts(config: &Config) -> Result<()> {
+    // Handlers the current config owns (devkit-synthesized or user-provided). Any
+    // kata-<shim>-devkit directory not in this set is a stale devkit leftover; a
+    // handler that happens to match a user's own custom runtime is protected.
+    let known: HashSet<&str> = config
+        .custom_runtimes
+        .iter()
+        .map(|r| r.handler.as_str())
+        .collect();
+
+    let custom_runtimes_dir = format!(
+        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        config.dest_dir
+    );
+    let share_dir = format!("{}/share/kata-containers", config.host_install_dir);
+
+    reconcile_devkit_artifacts_in(
+        &known,
+        Path::new(&custom_runtimes_dir),
+        Path::new(&share_dir),
+        config.devkit_enabled,
+    )
+}
+
+/// Pure core of [`reconcile_devkit_artifacts`], separated so it can be unit
+/// tested against real directories without a full [`Config`].
+///
+/// `known_handlers` are preserved; every other kata-<shim>-devkit directory under
+/// `custom_runtimes_dir` is removed. When `devkit_enabled` is false the
+/// unreferenced extension image and root-hash under `share_dir` are removed too.
+fn reconcile_devkit_artifacts_in(
+    known_handlers: &HashSet<&str>,
+    custom_runtimes_dir: &Path,
+    share_dir: &Path,
+    devkit_enabled: bool,
+) -> Result<()> {
+    for shim in ALL_SHIMS {
+        let handler = format!("kata-{shim}-devkit");
+        if known_handlers.contains(handler.as_str()) {
+            continue;
+        }
+        let handler_dir = custom_runtimes_dir.join(&handler);
+        if handler_dir.exists() {
+            info!(
+                "devkit: removing stale runtime directory {}",
+                handler_dir.display()
+            );
+            if let Err(e) = fs::remove_dir_all(&handler_dir) {
+                log::warn!("devkit: failed to remove {}: {}", handler_dir.display(), e);
+            }
+        }
+    }
+
+    if custom_runtimes_dir.exists() {
+        if let Ok(entries) = fs::read_dir(custom_runtimes_dir) {
+            if entries.count() == 0 {
+                let _ = fs::remove_dir(custom_runtimes_dir);
+            }
+        }
+    }
+
+    // With no devkit runtime left, the extracted extension image is unreferenced.
+    if !devkit_enabled {
+        for name in [
+            "kata-containers-devkit-extension.img",
+            "root_hash_devkit-extension.txt",
+        ] {
+            let path = share_dir.join(name);
+            if path.exists() {
+                info!("devkit: removing unreferenced {}", path.display());
+                if let Err(e) = fs::remove_file(&path) {
+                    log::warn!("devkit: failed to remove {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -499,6 +636,13 @@ fn collect_required_tarballs(config: &Config) -> Result<HashSet<String>> {
             }
         }
     }
+
+    // Generic, not tied to any shim in shim-components.json, so it is pulled in
+    // by the devkit flag rather than per-shim membership.
+    if config.devkit_enabled {
+        required.insert("rootfs-image-devkit-extension".to_string());
+    }
+
     Ok(required)
 }
 
@@ -736,6 +880,106 @@ fn extract_component_tarballs(config: &Config, extracted: &mut HashSet<String>) 
         })?;
 
         extracted.insert(component.clone());
+    }
+
+    Ok(())
+}
+
+/// Debug-only tools pulled in by the debug flag rather than per-shim membership:
+/// kata-ctl ships in the kata-tools bundle, not with the shims.
+const DEBUG_TOOL_COMPONENTS: &[&str] = &["kata-ctl"];
+
+/// Static list of a tool's installed files, needed to remove it when debug is
+/// off: nothing is extracted then, so paths can't be discovered dynamically.
+fn debug_tool_paths(component: &str) -> &'static [&'static str] {
+    match component {
+        "kata-ctl" => &["bin/kata-ctl"],
+        _ => &[],
+    }
+}
+
+/// Extract debug tooling when debug is on, remove it when off so a redeploy
+/// never leaves it behind. Extraction is best-effort: a missing tarball only
+/// warns, since an image may be built without the tools.
+fn reconcile_debug_tools(config: &Config, extracted: &mut HashSet<String>) -> Result<()> {
+    if config.debug {
+        extract_debug_tools_in(
+            DEBUG_TOOL_COMPONENTS,
+            Path::new(TARBALLS_DIR),
+            &config.host_install_dir,
+            true,
+            extracted,
+        )
+    } else {
+        remove_debug_tools_in(DEBUG_TOOL_COMPONENTS, Path::new(&config.host_install_dir));
+        Ok(())
+    }
+}
+
+/// Remove the given debug tools' files. Best-effort and idempotent: only
+/// existing files are touched and a failed removal warns instead of aborting.
+fn remove_debug_tools_in(components: &[&str], install_dir: &Path) {
+    for component in components {
+        for rel in debug_tool_paths(component) {
+            let path = install_dir.join(rel);
+            if path.exists() {
+                info!(
+                    "debug disabled: removing debug tool '{}' ({})",
+                    component,
+                    path.display()
+                );
+                if let Err(e) = fs::remove_file(&path) {
+                    log::warn!("debug: failed to remove {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+}
+
+/// Testable core of the debug-tool extraction: takes explicit paths so it can
+/// be unit tested without the container image layout.
+fn extract_debug_tools_in(
+    components: &[&str],
+    tarballs_dir: &Path,
+    host_install_dir: &str,
+    debug: bool,
+    extracted: &mut HashSet<String>,
+) -> Result<()> {
+    if !debug {
+        return Ok(());
+    }
+
+    for component in components {
+        if extracted.contains(*component) {
+            continue;
+        }
+
+        let tarball_name = format!("kata-static-{}.tar.zst", component);
+        let tarball_path = tarballs_dir.join(&tarball_name);
+
+        if !tarball_path.exists() {
+            log::warn!(
+                "debug: optional tool '{}' not found at {}; skipping. Rebuild the \
+                 kata-deploy image with the '{}' component to enable it.",
+                component,
+                tarball_path.display(),
+                component
+            );
+            continue;
+        }
+
+        info!("debug: extracting optional tool '{}'", component);
+        if let Err(e) = extract_tarball(&tarball_path, host_install_dir) {
+            log::warn!(
+                "debug: failed to extract optional tool '{}' from {}: {:#}; skipping",
+                component,
+                tarball_path.display(),
+                e
+            );
+            continue;
+        }
+
+        extracted.insert((*component).to_string());
     }
 
     Ok(())
@@ -1199,6 +1443,154 @@ enable_debug = true
     Ok(content)
 }
 
+/// Guest path of the devkit debug console shell. Must live under
+/// /run/kata-extensions/, the prefix the agent enforces for debug_console_shell.
+const DEVKIT_DEBUG_CONSOLE_SHELL: &str = "/run/kata-extensions/devkit/bin/devkit-sh";
+
+/// Read the devkit extension's dm-verity params from its root-hash file. Absent
+/// (e.g. s390x, built without a measured rootfs) means `None` and the image is
+/// mounted unverified.
+fn devkit_verity_params(dest_dir: &str) -> Option<String> {
+    let root_hash_file = format!(
+        "/host{}/share/kata-containers/root_hash_devkit-extension.txt",
+        dest_dir
+    );
+    match fs::read_to_string(&root_hash_file) {
+        Ok(content) => content
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .map(|l| l.to_string()),
+        Err(_) => {
+            log::warn!(
+                "devkit: {} not found; mounting the devkit extension without dm-verity",
+                root_hash_file
+            );
+            None
+        }
+    }
+}
+
+/// A `guest_extension_images` entry read from a runtime's base config.
+struct GuestExtension {
+    name: String,
+    path: String,
+    verity_params: Option<String>,
+}
+
+/// Read the base config's existing `guest_extension_images`, in order, so the
+/// drop-in can re-emit them ahead of devkit (the merge replaces the array, so
+/// anything omitted is lost). Any pre-existing `devkit` entry is skipped, since
+/// the drop-in always appends its own.
+fn read_guest_extension_images(
+    config_file: &Path,
+    hypervisor_name: &str,
+) -> Result<Vec<GuestExtension>> {
+    let content = fs::read_to_string(config_file)
+        .with_context(|| format!("Failed to read config for devkit extension: {config_file:?}"))?;
+    let doc = content
+        .parse::<DocumentMut>()
+        .with_context(|| format!("Failed to parse config as TOML: {config_file:?}"))?;
+
+    let images = doc
+        .get("hypervisor")
+        .and_then(|h| h.get(hypervisor_name))
+        .and_then(|hv| hv.get("guest_extension_images"))
+        .and_then(|i| i.as_array_of_tables());
+
+    let mut out = Vec::new();
+    if let Some(images) = images {
+        for t in images.iter() {
+            let name = t.get("name").and_then(|i| i.as_str());
+            let path = t.get("path").and_then(|i| i.as_str());
+            if let (Some(name), Some(path)) = (name, path) {
+                if name == "devkit" {
+                    continue;
+                }
+                out.push(GuestExtension {
+                    name: name.to_string(),
+                    path: path.to_string(),
+                    verity_params: t
+                        .get("verity_params")
+                        .and_then(|i| i.as_str())
+                        .map(str::to_string),
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn push_guest_extension(
+    images: &mut ArrayOfTables,
+    name: &str,
+    path: &str,
+    verity_params: Option<&str>,
+) {
+    let mut entry = Table::new();
+    entry["name"] = value(name);
+    entry["path"] = value(path);
+    if let Some(vp) = verity_params {
+        entry["verity_params"] = value(vp);
+    }
+    images.push(entry);
+}
+
+/// Generate the devkit drop-in (25-devkit.toml): the agent debug-console scalars
+/// plus the full guest_extension_images array (base extensions in order, devkit
+/// last). The base config is left untouched so the shipped configuration.toml
+/// stays clean for users.
+fn generate_devkit_drop_in(
+    hypervisor_name: &str,
+    existing: &[GuestExtension],
+    image_path: &str,
+    verity_params: Option<&str>,
+) -> String {
+    let mut doc = DocumentMut::new();
+
+    // [agent.kata] scalars. The intermediate `agent` table is implicit so only
+    // the `[agent.kata]` header is emitted, not an empty `[agent]`.
+    let mut agent_kata = Table::new();
+    agent_kata["debug_console_enabled"] = value(true);
+    agent_kata["debug_console_shell"] = value(DEVKIT_DEBUG_CONSOLE_SHELL);
+    let mut agent = Table::new();
+    agent.set_implicit(true);
+    agent.insert("kata", Item::Table(agent_kata));
+    doc.insert("agent", Item::Table(agent));
+
+    // [[hypervisor.<hv>.guest_extension_images]]: base extensions first, devkit
+    // last. Built as explicit (non-inline) tables so the array of tables renders
+    // as headers; the intermediate `hypervisor` table is implicit.
+    let mut images = ArrayOfTables::new();
+    for ext in existing {
+        push_guest_extension(
+            &mut images,
+            &ext.name,
+            &ext.path,
+            ext.verity_params.as_deref(),
+        );
+    }
+    push_guest_extension(&mut images, "devkit", image_path, verity_params);
+    let mut hv = Table::new();
+    hv.insert("guest_extension_images", Item::ArrayOfTables(images));
+    let mut hypervisor = Table::new();
+    hypervisor.set_implicit(true);
+    hypervisor.insert(hypervisor_name, Item::Table(hv));
+    doc.insert("hypervisor", Item::Table(hypervisor));
+
+    let mut content = String::new();
+    content.push_str("# Devkit debug extension\n");
+    content.push_str("# Generated by kata-deploy\n");
+    content.push_str("#\n");
+    content.push_str("# Points the agent debug console at the shell shipped by the devkit\n");
+    content.push_str("# extension, and cold-plugs the extension image as the last\n");
+    content.push_str("# guest_extension_images entry (any extensions the base config already\n");
+    content
+        .push_str("# ships are re-listed here first, since drop-in merging replaces arrays).\n\n");
+    content.push_str(&doc.to_string());
+    content
+}
+
 /// Get proxy value for a specific shim from config.
 /// Handles both per-shim format ("qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080")
 /// and global format ("http://proxy:8080").
@@ -1412,6 +1804,179 @@ mod tests {
             err_msg.contains("Valid shims are:"),
             "Error message should list valid shims"
         );
+    }
+
+    const DEVKIT_IMG: &str = "/opt/kata/share/kata-containers/kata-containers-devkit-extension.img";
+
+    /// Parse a generated drop-in and return the ordered `name` values of its
+    /// guest_extension_images array under the given hypervisor.
+    fn drop_in_extension_names(content: &str, hypervisor_name: &str) -> Vec<String> {
+        let doc = content.parse::<DocumentMut>().unwrap();
+        doc["hypervisor"][hypervisor_name]["guest_extension_images"]
+            .as_array_of_tables()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_generate_devkit_drop_in_scalars() {
+        // The drop-in always carries the agent debug-console scalars.
+        let content = generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None);
+
+        assert!(content.contains("[agent.kata]"));
+        assert!(content.contains("debug_console_enabled = true"));
+        assert!(
+            content.contains("debug_console_shell = \"/run/kata-extensions/devkit/bin/devkit-sh\"")
+        );
+    }
+
+    #[test]
+    fn test_generate_devkit_drop_in_only_devkit_when_base_empty() {
+        // A base config with no extensions yields an array with devkit only.
+        let content = generate_devkit_drop_in("qemu", &[], DEVKIT_IMG, None);
+
+        assert_eq!(drop_in_extension_names(&content, "qemu"), vec!["devkit"]);
+        assert!(content.contains(&format!("path = \"{DEVKIT_IMG}\"")));
+        // No root hash provided -> no verity params emitted (raw mount).
+        assert!(!content.contains("verity_params"));
+    }
+
+    #[test]
+    fn test_generate_devkit_drop_in_reemits_existing_then_devkit() {
+        // A base config that already ships an extension (e.g. coco) must have it
+        // re-listed first, with devkit strictly after it, so the array-replacing
+        // drop-in merge does not drop it.
+        let existing = vec![GuestExtension {
+            name: "coco".to_string(),
+            path: "/opt/kata/share/kata-containers/coco.img".to_string(),
+            verity_params: Some("root_hash=abc".to_string()),
+        }];
+        let content = generate_devkit_drop_in("qemu", &existing, DEVKIT_IMG, Some("root_hash=def"));
+
+        assert_eq!(
+            drop_in_extension_names(&content, "qemu"),
+            vec!["coco", "devkit"]
+        );
+        // The pre-existing coco entry (path + verity) is re-emitted verbatim.
+        assert!(content.contains("name = \"coco\""));
+        assert!(content.contains("path = \"/opt/kata/share/kata-containers/coco.img\""));
+        assert!(content.contains("root_hash=abc"));
+        // devkit is present with its own image path and verity params.
+        assert!(content.contains(&format!("path = \"{DEVKIT_IMG}\"")));
+        assert!(content.contains("root_hash=def"));
+    }
+
+    #[test]
+    fn test_read_guest_extension_images_skips_devkit_and_keeps_order() {
+        // Base config carries two extensions plus a stray devkit; the reader keeps
+        // the real ones in order and drops any pre-existing devkit entry.
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            tmp.path(),
+            "[hypervisor.qemu]\npath = \"/usr/bin/qemu\"\n\n\
+             [[hypervisor.qemu.guest_extension_images]]\n\
+             name = \"coco\"\npath = \"/opt/kata/share/kata-containers/coco.img\"\n\
+             verity_params = \"root_hash=abc\"\n\n\
+             [[hypervisor.qemu.guest_extension_images]]\n\
+             name = \"gpu\"\npath = \"/opt/kata/share/kata-containers/gpu.img\"\n\n\
+             [[hypervisor.qemu.guest_extension_images]]\n\
+             name = \"devkit\"\npath = \"/stale/devkit.img\"\n",
+        )
+        .unwrap();
+
+        let existing = read_guest_extension_images(tmp.path(), "qemu").unwrap();
+        let names: Vec<_> = existing.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["coco", "gpu"]);
+        assert_eq!(existing[0].verity_params.as_deref(), Some("root_hash=abc"));
+        assert_eq!(existing[1].verity_params, None);
+    }
+
+    #[test]
+    fn test_read_guest_extension_images_none_when_absent() {
+        // A base config with no extension array yields an empty list.
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), "[hypervisor.qemu]\npath = \"/usr/bin/qemu\"\n").unwrap();
+
+        assert!(read_guest_extension_images(tmp.path(), "qemu")
+            .unwrap()
+            .is_empty());
+    }
+
+    /// Lay down a fake devkit handler directory and the extension image + root
+    /// hash, mimicking what a devkit-enabled install leaves on the node.
+    fn seed_devkit_layout(custom_runtimes_dir: &Path, share_dir: &Path, handlers: &[&str]) {
+        for handler in handlers {
+            let d = custom_runtimes_dir.join(handler).join("config.d");
+            fs::create_dir_all(&d).unwrap();
+            fs::write(d.join("25-devkit.toml"), "[agent.kata]\n").unwrap();
+        }
+        fs::create_dir_all(share_dir).unwrap();
+        fs::write(
+            share_dir.join("kata-containers-devkit-extension.img"),
+            "img",
+        )
+        .unwrap();
+        fs::write(
+            share_dir.join("root_hash_devkit-extension.txt"),
+            "root_hash=x",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_reconcile_devkit_disabled_removes_everything() {
+        let tmp = tempfile::tempdir().unwrap();
+        let custom = tmp.path().join("custom-runtimes");
+        let share = tmp.path().join("share/kata-containers");
+        seed_devkit_layout(&custom, &share, &["kata-qemu-devkit", "kata-fc-devkit"]);
+
+        // devkit disabled -> no known devkit handlers, image should go too.
+        reconcile_devkit_artifacts_in(&HashSet::new(), &custom, &share, false).unwrap();
+
+        assert!(!custom.join("kata-qemu-devkit").exists());
+        assert!(!custom.join("kata-fc-devkit").exists());
+        // Emptied custom-runtimes dir is dropped.
+        assert!(!custom.exists());
+        assert!(!share.join("kata-containers-devkit-extension.img").exists());
+        assert!(!share.join("root_hash_devkit-extension.txt").exists());
+    }
+
+    #[test]
+    fn test_reconcile_devkit_keeps_active_and_protects_user_runtimes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let custom = tmp.path().join("custom-runtimes");
+        let share = tmp.path().join("share/kata-containers");
+        // kata-qemu-devkit is still active; kata-fc-devkit is stale.
+        seed_devkit_layout(&custom, &share, &["kata-qemu-devkit", "kata-fc-devkit"]);
+        // A user custom runtime that must never be touched.
+        let user = custom.join("kata-mine");
+        fs::create_dir_all(&user).unwrap();
+        fs::write(user.join("marker"), "keep").unwrap();
+
+        let known: HashSet<&str> = ["kata-qemu-devkit", "kata-mine"].into_iter().collect();
+        // devkit still enabled -> image is preserved.
+        reconcile_devkit_artifacts_in(&known, &custom, &share, true).unwrap();
+
+        assert!(custom.join("kata-qemu-devkit").exists(), "active kept");
+        assert!(!custom.join("kata-fc-devkit").exists(), "stale removed");
+        assert!(user.join("marker").exists(), "user runtime untouched");
+        assert!(
+            share.join("kata-containers-devkit-extension.img").exists(),
+            "image kept while devkit enabled"
+        );
+    }
+
+    #[test]
+    fn test_reconcile_devkit_is_noop_without_leftovers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let custom = tmp.path().join("custom-runtimes");
+        let share = tmp.path().join("share/kata-containers");
+        // Nothing seeded: reconcile must succeed and create nothing.
+        reconcile_devkit_artifacts_in(&HashSet::new(), &custom, &share, false).unwrap();
+        assert!(!custom.exists());
+        assert!(!share.exists());
     }
 
     #[test]
@@ -1655,5 +2220,77 @@ mod tests {
 
         fs::remove_dir_all(&runtime_dir).unwrap();
         assert!(!runtime_dir.exists());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_disabled_is_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().to_str().unwrap();
+        let mut extracted: HashSet<String> = HashSet::new();
+
+        extract_debug_tools_in(&["kata-ctl"], tmp.path(), dest, false, &mut extracted).unwrap();
+
+        assert!(extracted.is_empty());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_missing_tarball_is_best_effort() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let mut extracted: HashSet<String> = HashSet::new();
+
+        extract_debug_tools_in(
+            &["kata-ctl"],
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            &mut extracted,
+        )
+        .unwrap();
+
+        assert!(extracted.is_empty());
+    }
+
+    #[test]
+    fn test_extract_debug_tools_skips_already_extracted() {
+        let tarballs = tempfile::tempdir().unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let mut extracted: HashSet<String> = ["kata-ctl".to_string()].into_iter().collect();
+
+        extract_debug_tools_in(
+            &["kata-ctl"],
+            tarballs.path(),
+            dest.path().to_str().unwrap(),
+            true,
+            &mut extracted,
+        )
+        .unwrap();
+
+        assert_eq!(extracted.len(), 1);
+        assert!(extracted.contains("kata-ctl"));
+    }
+
+    #[test]
+    fn test_remove_debug_tools_removes_installed_files() {
+        let install = tempfile::tempdir().unwrap();
+        let bin = install.path().join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let kata_ctl = bin.join("kata-ctl");
+        fs::write(&kata_ctl, "binary").unwrap();
+        // A sibling that must be left untouched.
+        let shim = bin.join("containerd-shim-kata-v2");
+        fs::write(&shim, "shim").unwrap();
+
+        remove_debug_tools_in(&["kata-ctl"], install.path());
+
+        assert!(!kata_ctl.exists(), "kata-ctl removed when debug is off");
+        assert!(shim.exists(), "unrelated binaries untouched");
+    }
+
+    #[test]
+    fn test_remove_debug_tools_is_noop_when_absent() {
+        let install = tempfile::tempdir().unwrap();
+        remove_debug_tools_in(&["kata-ctl"], install.path());
+        assert!(!install.path().join("bin/kata-ctl").exists());
     }
 }

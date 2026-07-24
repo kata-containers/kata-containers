@@ -25,6 +25,7 @@ HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
 HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
 HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
 HELM_DEBUG="${HELM_DEBUG:-}"
+HELM_DEVKIT="${HELM_DEVKIT:-}"
 HELM_DEFAULT_SHIM="${HELM_DEFAULT_SHIM:-}"
 HELM_IMAGE_REFERENCE="${HELM_IMAGE_REFERENCE:-}"
 HELM_IMAGE_TAG="${HELM_IMAGE_TAG:-}"
@@ -763,6 +764,16 @@ function helm_helper() {
 				yq -i ".debug = true" "${values_yaml}"
 			else
 				yq -i ".debug = false" "${values_yaml}"
+			fi
+		fi
+
+		# Deploy the devkit debug extension + per-shim kata-<shim>-devkit
+		# RuntimeClasses (only effective together with debug).
+		if [[ -n "${HELM_DEVKIT}" ]]; then
+			if [[ "${HELM_DEVKIT}" == "true" ]]; then
+				yq -i ".devkit = true" "${values_yaml}"
+			else
+				yq -i ".devkit = false" "${values_yaml}"
 			fi
 		fi
 

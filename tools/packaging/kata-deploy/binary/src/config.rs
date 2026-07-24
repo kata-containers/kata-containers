@@ -161,6 +161,9 @@ pub struct CustomRuntime {
     pub containerd_snapshotter: Option<String>,
     /// CRI-O pull type (e.g., "guest-pull")
     pub crio_pull_type: Option<String>,
+    /// Internally-synthesized devkit runtime (kata-<shim>-devkit): gets an extra
+    /// drop-in wiring the extension image and debug console shell.
+    pub devkit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -199,6 +202,11 @@ pub struct Config {
     pub daemonset_name: String,
     pub custom_runtimes_enabled: bool,
     pub custom_runtimes: Vec<CustomRuntime>,
+    /// Install the devkit extension and a kata-<shim>-devkit custom runtime per
+    /// enabled shim. From the DEVKIT env var, honored only when debug is also on:
+    /// the devkit drop-in enables the agent debug console, which must never come
+    /// up without debug.
+    pub devkit_enabled: bool,
     /// EROFS snapshotter rw-layer backing mode ("disk" or "memory").
     pub erofs_snapshotter_mode: Option<String>,
     /// Enable dm-verity integrity for EROFS lower layers.
@@ -238,7 +246,7 @@ impl Config {
         // Parse shims - only use arch-specific variable
         // Use architecture-specific default shims list (only shims supported for this arch)
         let default_shims = get_default_shims_for_arch(&arch);
-        let shims_for_arch = get_arch_var("SHIMS", default_shims, &arch)
+        let shims_for_arch: Vec<String> = get_arch_var("SHIMS", default_shims, &arch)
             .split_whitespace()
             .map(|s| s.to_string())
             .collect();
@@ -346,13 +354,53 @@ impl Config {
                 .collect();
 
         // Parse custom runtimes from ConfigMap
-        let custom_runtimes_enabled =
+        let custom_runtimes_from_configmap =
             env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
-        let custom_runtimes = if custom_runtimes_enabled {
+        let mut custom_runtimes = if custom_runtimes_from_configmap {
             parse_custom_runtimes()?
         } else {
             Vec::new()
         };
+
+        // Model devkit as one custom runtime per shim (kata-<shim>-devkit) to
+        // reuse the whole custom-runtime install/register/cleanup machinery; the
+        // only devkit-specific bit is an extra drop-in (in install.rs).
+        //
+        // Gate it on debug: the devkit drop-in turns on the agent debug console,
+        // so honoring DEVKIT without DEBUG would silently enable it, breaking the
+        // "only effective with debug" contract.
+        let devkit_requested = env::var("DEVKIT").unwrap_or_else(|_| "false".to_string()) == "true";
+        if devkit_requested && !debug {
+            log::warn!("DEVKIT=true ignored: it requires DEBUG=true to take effect");
+        }
+        let devkit_enabled = devkit_requested && debug;
+        if devkit_enabled {
+            for shim in &shims_for_arch {
+                // Inherit the base shim's image-pulling config: the devkit
+                // RuntimeClass shares the base config (same shared_fs), so it must
+                // pull the same way. Otherwise containerd/CRI-O default to
+                // overlayfs/node-pull, which breaks shims running shared_fs = none
+                // (e.g. nvidia runtime-rs) and makes every devkit pod terminate.
+                let containerd_snapshotter = snapshotter_handler_mapping_for_arch
+                    .as_ref()
+                    .and_then(|mapping| lookup_mapping_value(mapping, shim));
+                let crio_pull_type = pull_type_mapping_for_arch
+                    .as_ref()
+                    .and_then(|mapping| lookup_mapping_value(mapping, shim));
+
+                custom_runtimes.push(CustomRuntime {
+                    handler: format!("kata-{shim}-devkit"),
+                    base_config: shim.to_string(),
+                    drop_in_file: None,
+                    containerd_snapshotter,
+                    crio_pull_type,
+                    devkit: true,
+                });
+            }
+        }
+
+        // Enable the custom-runtime code paths if either source produced entries.
+        let custom_runtimes_enabled = !custom_runtimes.is_empty();
 
         let erofs_snapshotter_mode = env::var("EROFS_SNAPSHOTTER_MODE")
             .ok()
@@ -401,6 +449,7 @@ impl Config {
             daemonset_name,
             custom_runtimes_enabled,
             custom_runtimes,
+            devkit_enabled,
             erofs_snapshotter_mode,
             erofs_dmverity,
             startup_taints,
@@ -795,6 +844,21 @@ fn get_arch() -> Result<String> {
     .to_string())
 }
 
+/// Look up `shim`'s value in a comma-separated "shim1:value1,shim2:value2"
+/// mapping (SNAPSHOTTER_HANDLER_MAPPING, PULL_TYPE_MAPPING). None if absent or
+/// empty.
+fn lookup_mapping_value(mapping: &str, shim: &str) -> Option<String> {
+    mapping.split(',').find_map(|entry| {
+        let parts: Vec<&str> = entry.split(':').collect();
+        if parts.len() == 2 && parts[0].trim() == shim {
+            let value = parts[1].trim();
+            (!value.is_empty()).then(|| value.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 /// Parse custom runtimes from the mounted ConfigMap at /custom-configs/
 /// Reads the custom-runtimes.list file which contains entries in the format:
 /// handler:baseConfig:containerd_snapshotter:crio_pulltype
@@ -872,6 +936,7 @@ fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
             drop_in_file,
             containerd_snapshotter,
             crio_pull_type,
+            devkit: false,
         });
     }
 
@@ -987,6 +1052,8 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
             "CONTAINERD_CONFIG_FILE_NAME",
             "STARTUP_TAINTS",
+            "CUSTOM_RUNTIMES_ENABLED",
+            "DEVKIT",
         ];
         for var in &vars {
             std::env::remove_var(var);
@@ -1133,6 +1200,100 @@ mod tests {
         );
 
         cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_disabled_by_default() {
+        setup_minimal_env();
+
+        let config = Config::from_env().unwrap();
+
+        assert!(!config.devkit_enabled);
+        assert!(config.custom_runtimes.iter().all(|r| !r.devkit));
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_requires_debug() {
+        setup_minimal_env();
+        // DEBUG defaults to false in setup_minimal_env.
+        std::env::set_var("DEVKIT", "true");
+
+        let config = Config::from_env().unwrap();
+
+        assert!(!config.devkit_enabled);
+        assert!(config.custom_runtimes.iter().all(|r| !r.devkit));
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_synthesizes_per_shim_runtime() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+
+        let config = Config::from_env().unwrap();
+
+        assert!(config.devkit_enabled);
+        assert!(config.custom_runtimes_enabled);
+
+        // setup_minimal_env configures a single "qemu" shim for this arch.
+        let devkit: Vec<_> = config.custom_runtimes.iter().filter(|r| r.devkit).collect();
+        assert_eq!(devkit.len(), 1);
+        assert_eq!(devkit[0].handler, "kata-qemu-devkit");
+        assert_eq!(devkit[0].base_config, "qemu");
+        assert!(devkit[0].drop_in_file.is_none());
+        // With no snapshotter/pull-type mapping, the devkit runtime inherits
+        // nothing and containerd/CRI-O use their defaults for the base shim.
+        assert!(devkit[0].containerd_snapshotter.is_none());
+        assert!(devkit[0].crio_pull_type.is_none());
+
+        cleanup_env_vars();
+    }
+
+    #[serial]
+    #[test]
+    fn test_devkit_inherits_base_shim_snapshotter_and_pull_type() {
+        setup_minimal_env();
+        std::env::set_var("DEBUG", "true");
+        std::env::set_var("DEVKIT", "true");
+        // The base "qemu" shim is mapped to the erofs snapshotter / guest-pull;
+        // its devkit variant must inherit both so pods on the devkit
+        // RuntimeClass pull images the same way as the base shim (crucial for
+        // shims running with shared_fs = none).
+        set_arch_var("SNAPSHOTTER_HANDLER_MAPPING", "qemu:erofs");
+        set_arch_var("PULL_TYPE_MAPPING", "qemu:guest-pull");
+
+        let config = Config::from_env().unwrap();
+
+        let devkit: Vec<_> = config.custom_runtimes.iter().filter(|r| r.devkit).collect();
+        assert_eq!(devkit.len(), 1);
+        assert_eq!(devkit[0].handler, "kata-qemu-devkit");
+        assert_eq!(devkit[0].containerd_snapshotter.as_deref(), Some("erofs"));
+        assert_eq!(devkit[0].crio_pull_type.as_deref(), Some("guest-pull"));
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_lookup_mapping_value() {
+        let mapping = "qemu:erofs, fc:nydus,clh:";
+        assert_eq!(
+            lookup_mapping_value(mapping, "qemu").as_deref(),
+            Some("erofs")
+        );
+        // Entries may carry surrounding whitespace.
+        assert_eq!(
+            lookup_mapping_value(mapping, "fc").as_deref(),
+            Some("nydus")
+        );
+        // Empty value is treated as absent.
+        assert!(lookup_mapping_value(mapping, "clh").is_none());
+        // Unknown shim.
+        assert!(lookup_mapping_value(mapping, "stratovirt").is_none());
     }
 
     #[serial]

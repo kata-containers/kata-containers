@@ -53,6 +53,8 @@ pub const LOG_LEVEL_OPTION: &str = "agent.log";
 pub const LOG_LEVEL_DEBUG: &str = "debug";
 /// Option of which port will the debug console connect to
 pub const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
+/// Option selecting the guest shell the debug console execs
+pub const DEBUG_CONSOLE_SHELL_OPTION: &str = "agent.debug_console_shell";
 /// Option of which port the agent's log will connect to
 pub const LOG_VPORT_OPTION: &str = "agent.log_vport";
 /// Option of setting the container's pipe size
@@ -246,6 +248,12 @@ impl TomlConfig {
                 kv.insert(
                     DEBUG_CONSOLE_VPORT_OPTION.to_string(),
                     DEFAULT_AGENT_DBG_CONSOLE_PORT.to_string(),
+                );
+            }
+            if !cfg.debug_console_shell.is_empty() {
+                kv.insert(
+                    DEBUG_CONSOLE_SHELL_OPTION.to_string(),
+                    cfg.debug_console_shell.clone(),
                 );
             }
             if cfg.visible_cdi_devices {
@@ -504,6 +512,7 @@ mod tests {
             enable_tracing: true,
             container_pipe_size: 20,
             debug_console_enabled: true,
+            debug_console_shell: "/run/kata-extensions/devkit/bin/devkit-sh".to_string(),
             launch_process_timeout: 60,
             visible_cdi_devices: true,
             ..Default::default()
@@ -518,7 +527,29 @@ mod tests {
         assert_eq!(kv.get("agent.container_pipe_size").unwrap(), "20");
         kv.get("agent.debug_console").unwrap();
         assert_eq!(kv.get("agent.debug_console_vport").unwrap(), "1026"); // 1026 is the default port
+        assert_eq!(
+            kv.get("agent.debug_console_shell").unwrap(),
+            "/run/kata-extensions/devkit/bin/devkit-sh"
+        );
         assert_eq!(kv.get("agent.launch_process_timeout").unwrap(), "60");
         assert_eq!(kv.get("agent.visible_cdi_devices").unwrap(), "true");
+    }
+
+    #[test]
+    fn test_get_agent_kernel_params_no_debug_console_shell() {
+        let mut config = TomlConfig {
+            ..Default::default()
+        };
+        let agent_config = Agent {
+            debug_console_enabled: true,
+            ..Default::default()
+        };
+        let agent_name = "test_agent";
+        config.runtime.agent_name = agent_name.to_string();
+        config.agent.insert(agent_name.to_owned(), agent_config);
+
+        // An empty debug_console_shell must not be emitted on the cmdline.
+        let kv = config.get_agent_kernel_params().unwrap();
+        assert!(kv.get("agent.debug_console_shell").is_none());
     }
 }
