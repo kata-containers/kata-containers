@@ -552,6 +552,43 @@ pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountIn
     Ok(())
 }
 
+/// Records the association between a sandbox and a direct volume by writing an
+/// empty file, named after the `sandbox_id`, into the direct-volume directory of
+/// `volume_path`.
+///
+/// This mirrors runtime-go's `RecordSandboxID` and is required for
+/// `kata-ctl direct-volume {stats,resize}` to work: those commands locate the
+/// owning sandbox by scanning the direct-volume directory for the first file
+/// that is not `mountInfo.json` and using its name as the sandbox id (see
+/// kata-ctl's `get_sandbox_id_for_volume`). Without this file the commands fail
+/// with "no sandbox found for <volume_path>".
+///
+/// The `mountInfo.json` file must already exist (i.e. the volume has been added
+/// via `add_volume_mount_info` / `kata-ctl direct-volume add`); otherwise an
+/// error is returned, matching the Go behaviour.
+#[cfg(feature = "safe-path")]
+pub fn record_sandbox_id(sandbox_id: &str, volume_path: &str) -> Result<()> {
+    let dir = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
+    let mount_info_file_path = dir.join(KATA_MOUNT_INFO_FILE_NAME);
+    if !mount_info_file_path.exists() {
+        return Err(anyhow!(
+            "mount info file {:?} does not exist for volume {}",
+            mount_info_file_path,
+            volume_path
+        ));
+    }
+
+    let sandbox_id_file_path = dir.join(sandbox_id);
+    std::fs::write(&sandbox_id_file_path, b"").with_context(|| {
+        format!(
+            "failed to write sandbox id file {:?}",
+            sandbox_id_file_path
+        )
+    })?;
+
+    Ok(())
+}
+
 /// Returns `true` if a `mountInfo.json` exists for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn is_volume_mounted(volume_path: &str) -> bool {
@@ -833,5 +870,49 @@ mod tests {
         let (_prefix, encoded_vol) = option_str.split_once("io.katacontainers.volume=").unwrap();
 
         assert_eq!(encoded_vol, expected_b64_vol);
+    }
+
+    // Verifies that record_sandbox_id writes a file named after the sandbox id
+    // (which kata-ctl's get_sandbox_id_for_volume relies on) only when a
+    // mountInfo.json already exists. Mirrors runtime-go's TestRecordSandboxID.
+    // The well-known direct-volume root requires root privileges to create, so
+    // the test soft-skips when it cannot be created (e.g. unprivileged CI).
+    #[cfg(feature = "safe-path")]
+    #[test]
+    fn test_record_sandbox_id() {
+        use std::fs;
+
+        let root = kata_direct_volume_root_path();
+        if fs::create_dir_all(&root).is_err() {
+            // Not running as root; cannot exercise the well-known path.
+            return;
+        }
+
+        let volume_path = "/tmp/kata-types-test-record-sandbox-id-volume";
+        let dir = join_path(root.as_str(), volume_path).unwrap();
+        // Ensure a clean state from any previous run.
+        let _ = fs::remove_dir_all(&dir);
+
+        let sandbox_id = "test-sandbox-id";
+
+        // Without mountInfo.json present, recording must fail.
+        fs::create_dir_all(&dir).unwrap();
+        assert!(record_sandbox_id(sandbox_id, volume_path).is_err());
+
+        // With mountInfo.json present, recording must create a file whose name
+        // equals the sandbox id.
+        let mount_info = DirectVolumeMountInfo {
+            volume_type: "block".to_string(),
+            device: "/dev/sda".to_string(),
+            fs_type: "ext4".to_string(),
+            metadata: HashMap::new(),
+            options: vec![],
+        };
+        add_volume_mount_info(volume_path, &mount_info).unwrap();
+        record_sandbox_id(sandbox_id, volume_path).unwrap();
+        assert!(dir.join(sandbox_id).exists());
+
+        // cleanup
+        let _ = fs::remove_dir_all(&dir);
     }
 }
