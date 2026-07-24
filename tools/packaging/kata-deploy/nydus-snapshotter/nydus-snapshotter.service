@@ -9,4 +9,11 @@ Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=containerd.service
+# Use multi-user.target (not containerd.service) so the snapshotter is pulled in
+# at boot on every runtime. On RKE2/k3s containerd is not a standalone
+# containerd.service unit (it runs as a child of rke2-server/k3s), so
+# WantedBy=containerd.service never activates and the snapshotter stays dead
+# after every reboot — breaking all kata guest-pull pods until manually
+# started. Before=containerd.service below still orders us before containerd
+# on standalone-containerd hosts (containerd is itself WantedBy=multi-user.target).
+WantedBy=multi-user.target
