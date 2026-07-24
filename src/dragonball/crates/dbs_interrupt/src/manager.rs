@@ -461,7 +461,7 @@ impl InterruptStatusRegister32 {
     }
 }
 
-#[cfg(all(test, feature = "kvm-legacy-irq", feature = "kvm-msi-irq"))]
+#[cfg(all(test, feature = "legacy-irq", feature = "msi-irq"))]
 pub(crate) mod tests {
     use std::sync::Arc;
 
