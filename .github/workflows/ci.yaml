@@ -560,6 +560,7 @@ jobs:
       matrix:
         params: [
           {containerd_version: latest, vmm: qemu},
+          { containerd_version: active, vmm: qemu-runtime-rs },
         ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-ppc64le-${{ toJSON(matrix) }}
