@@ -1490,11 +1490,10 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
             let tempdir = tempdir().unwrap();
 
-            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
-            defer!({
-                unistd::close(rfd).unwrap();
-                unistd::close(wfd).unwrap();
-            });
+            // Keep the read end open until the end of the iteration so
+            // writes to the log fd cannot fail with EPIPE; both ends
+            // close automatically when the OwnedFds are dropped.
+            let (_rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
 
             let source_path = tempdir.path().join(d.source).to_str().unwrap().to_string();
             if d.make_source_directory {
@@ -1510,7 +1509,7 @@ mod tests {
             mount.set_options(Some(vec![]));
 
             let result = mount_from(
-                wfd,
+                wfd.as_raw_fd(),
                 &mount,
                 tempdir.path().to_str().unwrap(),
                 d.flags,

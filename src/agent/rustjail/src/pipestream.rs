@@ -180,8 +180,10 @@ mod tests {
     #[tokio::test]
     // Shutdown should never close the inner fd.
     async fn test_pipestream_shutdown() {
-        let (_, wfd1) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
-        let mut writer1 = PipeStream::new(wfd1).unwrap();
+        // Keep the read end open for the duration of the test, as the
+        // original raw fd based code leaked it.
+        let (_rfd1, wfd1) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
+        let mut writer1 = PipeStream::new(wfd1.into_raw_fd()).unwrap();
 
         // if close fd in shutdown, the fd will be reused
         // and the test will failed
@@ -191,8 +193,8 @@ mod tests {
 
         let (rfd2, wfd2) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap(); // reuse fd number, rfd2 == wfd1
 
-        let mut reader2 = PipeStream::new(rfd2).unwrap();
-        let mut writer2 = PipeStream::new(wfd2).unwrap();
+        let mut reader2 = PipeStream::new(rfd2.into_raw_fd()).unwrap();
+        let mut writer2 = PipeStream::new(wfd2.into_raw_fd()).unwrap();
 
         // deregister writer1, then reader2 which has the same fd will be deregistered from epoll
         drop(writer1);
