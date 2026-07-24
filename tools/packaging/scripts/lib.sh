@@ -186,7 +186,13 @@ calc_qemu_files_sha256sum() {
 
 get_qemu_image_name() {
 	qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
-	echo "${BUILDER_REGISTRY}:qemu-$(get_last_modification "${qemu_script_dir}")-$(uname -m)"
+	qemu_configure_script="${repo_root_dir}/tools/packaging/scripts/configure-hypervisor.sh"
+
+	qemu_hash=$(merge_two_hashes \
+		"$(get_last_modification "${qemu_script_dir}")" \
+		"$(get_last_modification "${qemu_configure_script}")")
+
+	echo "${BUILDER_REGISTRY}:qemu-${qemu_hash}-$(uname -m)"
 }
 
 get_shim_v2_image_name() {

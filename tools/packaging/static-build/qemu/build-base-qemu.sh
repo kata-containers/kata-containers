@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+CROSS_BUILD="${CROSS_BUILD:-false}"
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
