@@ -516,6 +516,7 @@ endif
     DEFVFIOMODE_NV := guest-kernel
     DEFKUBELETROOTDIR := /var/lib/kubelet
     DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
+    DEFPODRESOURCEDEVICESOURCES_NV := ["device-plugin"]
     # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
     DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)
     # NVIDIA profile: rootfs block driver (avoid virtio-pmem/DAX for this stack)
@@ -848,6 +849,7 @@ USER_VARS += DEFSTATICRESOURCEMGMT_NV
 USER_VARS += DEFVFIOMODE_NV
 USER_VARS += DEFKUBELETROOTDIR
 USER_VARS += DEFPODRESOURCEAPISOCK_NV
+USER_VARS += DEFPODRESOURCEDEVICESOURCES_NV
 USER_VARS += DEFROOTFSTYPE_NV
 USER_VARS += VMROOTFSDRIVER_NV
 USER_VARS += DEFDIALTIMEOUTMS_NV
