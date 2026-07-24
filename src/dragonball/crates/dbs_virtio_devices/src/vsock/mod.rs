@@ -51,6 +51,8 @@ mod defs {
         /// The device processes available buffers in the same order in which
         /// the device offers them.
         pub const VIRTIO_F_IN_ORDER: usize = 35;
+        /// The device uses platform DMA tools to access the memory.
+        pub const VIRTIO_F_ACCESS_PLATFORM: usize = 33;
         /// The device conforms to the virtio spec version 1.0.
         pub const VIRTIO_F_VERSION_1: u32 = 32;
 
@@ -334,6 +336,7 @@ mod tests {
                     Arc::new(defs::QUEUE_SIZES.to_vec()),
                     epoll_manager,
                     TestMuxer::new(),
+                    false,
                 )
                 .unwrap(),
             }
@@ -402,6 +405,7 @@ mod tests {
                     Arc::new(defs::QUEUE_SIZES.to_vec()),
                     EpollManager::default(),
                     TestMuxer::new(),
+                    false,
                 )
                 .unwrap(),
                 mem: Arc::new(self.mem.clone()),

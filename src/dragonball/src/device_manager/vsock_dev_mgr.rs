@@ -18,6 +18,8 @@ use dbs_virtio_devices::Error as VirtioError;
 use serde_derive::{Deserialize, Serialize};
 
 use super::{DeviceMgrError, StartMicroVmError};
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceManager, DeviceOpContext};
 
@@ -207,6 +209,11 @@ impl VsockDeviceMgr {
                 virtio::Error::InvalidInput,
             ))?;
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         for info in self.info_list.iter_mut() {
             slog::info!(
                 ctx.logger(),
@@ -221,6 +228,7 @@ impl VsockDeviceMgr {
                     info.config.guest_cid as u64,
                     Arc::new(info.config.queue_sizes()),
                     epoll_mgr.clone(),
+                    f_access_platform,
                 )
                 .map_err(VirtioError::VirtioVsockError)
                 .map_err(StartMicroVmError::CreateVsockDevice)?,
