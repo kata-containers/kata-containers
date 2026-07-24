@@ -24,6 +24,10 @@ pub struct Settings {
     pub devices: policy::Devices,
     pub kata_config: KataConfig,
     pub cluster_config: policy::ClusterConfig,
+    /// BL-7 (Jiri Feature A): trusted policy fragments (issuer/feed/minimum_svn) composed
+    /// into the allowed container set. Defaults to empty (no fragment composition).
+    #[serde(default)]
+    pub fragments: Vec<policy::FragmentSpec>,
     pub request_defaults: policy::RequestDefaults,
     pub common: policy::CommonData,
     pub mount_destinations: Vec<String>,

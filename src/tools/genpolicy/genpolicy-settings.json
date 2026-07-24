@@ -357,6 +357,7 @@
             "memory_recursiveprot"
         ]
     },
+    "fragments": [],
     "request_defaults": {
         "CreateContainerRequest": {
             "allow_env_regex": [
