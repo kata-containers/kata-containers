@@ -534,6 +534,23 @@ external ledger are flagged and tracked in `docs/cc/backlog.md`.
   hard-disabled in the strict build.
 - **Commits:** `2a6c1c3ae`, `c806264bf`, `109317082`, `54a652dd0`.
 
+### Measured-initdata trust roots (FR-1i / FR-4C / FR-4D provenance) — PR #10
+- **What:** the SRM trust roots — the policy-fragment issuer config (`fragment-issuers.toml`),
+  the verified read-only-layer dm-verity allowlist (`verified-layers.toml`), and the verified
+  guest-pull image-digest allowlist (`verified-images.toml`) — can now be carried in the
+  **measured initdata section** as well-known keys, instead of relying only on files in the
+  measured rootfs. Each is resolved with provenance precedence: the attestation-bound initdata
+  section first, else the measured-rootfs file (a shared `resolve_measured_config` helper logs
+  the chosen source). Seeding runs after initdata is parsed and before the ttRPC server / the
+  boot fragment pull; fail-closed semantics are unchanged (absent config ⇒ no authorized
+  issuer/layer/image).
+- **Guarantee:** the fragment/layer/image trust roots are bound to the **initdata digest**,
+  which is part of the TEE-attested launch measurement — so a host cannot alter the trust root
+  without changing the attestation. The runtime-advancing FR-1i SVN high-water / FR-1j ordering
+  state stays on sealed encrypted-scratch (mutable + monotonic by construction); only the
+  immutable initial trust config is bound into the measured section.
+- **Delivered by:** PR #10 (branch `bl5-initdata-measured`).
+
 ---
 
 ## Deferred / out of scope

@@ -10,9 +10,10 @@ _For the full list of shipped items and their commits/PRs, see
 
 ## Open work items
 
-| ID | Item | Why it's open | Pointers |
-|---|---|---|---|
-| BL-5 | **Bind measured state into initdata** — move the fragment-issuer trust root + SVN/ordering/tree-head state and the verified-layer / verified-image allowlists from measured-rootfs + encrypted-scratch files into the **initdata** measured section proper. | Same trust root today, but tighter provenance/attestation binding. Applies to FR-1i/1j / Stage-2 persisted state, FR-4C (dm-verity allowlist), and FR-4D (image-digest allowlist). Not yet started. | `parma-hardening-features.md` §FR-1, §FR-4C, §FR-4D |
+_None._ All planned execution-integrity work items (BL-1…BL-9) are merged to `coco-parity`.
+BL-5 (bind measured state into initdata) landed in PR #10 (branch `bl5-initdata-measured`) — see
+`parma-hardening-features.md` §"Measured-initdata trust roots". What remains is **live
+validation** of already-merged features (below).
 
 ## Merged, but live end-to-end validation is deployment-time
 

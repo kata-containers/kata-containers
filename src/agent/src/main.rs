@@ -468,30 +468,6 @@ async fn start_sandbox(
         std::process::abort();
     }
 
-    // FR-1b: seed the policy-fragment trust root (authorized issuers, per-issuer SVN floor,
-    // receipt requirement) from measured guest state. Absent config ⇒ no authorized issuer
-    // ⇒ every fragment is rejected (fail-closed).
-    #[cfg(feature = "strict-policy")]
-    if let Err(e) = seed_fragment_trust_root(logger).await {
-        warn!(logger, "FR-1: fragment trust root not seeded: {:?}", e);
-    }
-
-    // FR-4C: seed the verified-layer allowlist (authorized dm-verity root digests) from
-    // measured guest state. When require_verified_layers is set but no layer is authorized,
-    // every read-only layer is rejected (fail-closed).
-    #[cfg(feature = "strict-policy")]
-    if let Err(e) = seed_verified_layers(logger).await {
-        warn!(logger, "FR-4C: verified layers not seeded: {:?}", e);
-    }
-
-    // BL-3: seed the verified guest-pull image allowlist (authorized manifest digests) from
-    // measured guest state. When require_verified_images is set but no image is authorized,
-    // every guest-pull image is rejected (fail-closed).
-    #[cfg(feature = "strict-policy")]
-    if let Err(e) = seed_verified_images(logger).await {
-        warn!(logger, "BL-3: verified images not seeded: {:?}", e);
-    }
-
     let sandbox = Arc::new(Mutex::new(s));
 
     let signal_handler_task = tokio::spawn(setup_signal_handler(
@@ -510,6 +486,32 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     let initdata_return_value = initdata::initialize_initdata(logger).await?;
+
+    // FR-1b / FR-4C / BL-3 (BL-5): seed the SRM trust roots — the policy-fragment issuers,
+    // the verified read-only-layer (dm-verity) allowlist, and the verified guest-pull image
+    // allowlist — from measured guest state, *preferring* the attestation-bound initdata
+    // section over the measured-rootfs file. Seeded after initdata is parsed and before the
+    // ttRPC server (and the BL-8 boot fragment pull) run. Fail-closed semantics are
+    // unchanged: absent config ⇒ no authorized issuer/layer/image.
+    #[cfg(feature = "strict-policy")]
+    {
+        let idrv = initdata_return_value.as_ref();
+        if let Err(e) =
+            seed_fragment_trust_root(logger, idrv.and_then(|r| r._fragment_issuers.as_deref())).await
+        {
+            warn!(logger, "FR-1: fragment trust root not seeded: {:?}", e);
+        }
+        if let Err(e) =
+            seed_verified_layers(logger, idrv.and_then(|r| r._verified_layers.as_deref())).await
+        {
+            warn!(logger, "FR-4C: verified layers not seeded: {:?}", e);
+        }
+        if let Err(e) =
+            seed_verified_images(logger, idrv.and_then(|r| r._verified_images.as_deref())).await
+        {
+            warn!(logger, "BL-3: verified images not seeded: {:?}", e);
+        }
+    }
 
     let gc_procs = config.guest_components_procs;
     let launch_plan = build_coco_launch_plan(config, &initdata_return_value, gc_procs)?;
@@ -946,6 +948,34 @@ async fn initialize_policy() -> Result<()> {
 #[cfg(feature = "strict-policy")]
 const FRAGMENT_ISSUERS_PATH: &str = "/etc/kata/fragment-issuers.toml";
 
+// BL-5: resolve an SRM trust-root config with provenance precedence:
+//   1. the measured **initdata** section (attestation-bound) — preferred;
+//   2. else the measured-rootfs file (env-overridable for tests).
+// Returns None when neither source provides the config (so the caller can fail-closed /
+// leave the feature off, unchanged from before). The chosen source is logged so the
+// provenance of the active trust root is auditable.
+#[cfg(feature = "strict-policy")]
+fn resolve_measured_config(
+    logger: &Logger,
+    label: &str,
+    initdata_cfg: Option<&str>,
+    env_var: &str,
+    default_path: &str,
+) -> Option<String> {
+    if let Some(text) = initdata_cfg {
+        info!(logger, "{}: trust-root config sourced from measured initdata", label);
+        return Some(text.to_string());
+    }
+    let path = std::env::var(env_var).unwrap_or_else(|_| default_path.to_string());
+    match std::fs::read_to_string(&path) {
+        Ok(t) => {
+            info!(logger, "{}: trust-root config sourced from measured rootfs", label; "path" => &path);
+            Some(t)
+        }
+        Err(_) => None,
+    }
+}
+
 // FR-1i: runtime SVN high-water state, persisted so an agent restart cannot reopen a
 // rollback window. Must live on sealed/encrypted-scratch storage (in a confidential guest
 // the writable scratch is memory-/disk-encrypted). Overridable via KATA_FRAGMENT_SVN_STATE.
@@ -1110,12 +1140,16 @@ fn decode_hex_vec(s: &str) -> Result<Vec<u8>> {
 // FR-1b: configure the global fragment store from measured state. Absent/empty config
 // leaves the store with no authorized issuers (fail-closed).
 #[cfg(feature = "strict-policy")]
-async fn seed_fragment_trust_root(logger: &Logger) -> Result<()> {
-    let path = std::env::var("KATA_FRAGMENT_ISSUERS")
-        .unwrap_or_else(|_| FRAGMENT_ISSUERS_PATH.to_string());
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => {
+async fn seed_fragment_trust_root(logger: &Logger, initdata_cfg: Option<&str>) -> Result<()> {
+    let text = match resolve_measured_config(
+        logger,
+        "FR-1",
+        initdata_cfg,
+        "KATA_FRAGMENT_ISSUERS",
+        FRAGMENT_ISSUERS_PATH,
+    ) {
+        Some(t) => t,
+        None => {
             info!(logger, "FR-1: no fragment-issuer config; fragments fail-closed");
             return Ok(());
         }
@@ -1294,12 +1328,16 @@ fn default_layer_algorithm() -> String {
 // leaves verification not required (opt-in); when require_verified_layers is set but no
 // layer is authorized, every read-only layer is rejected (fail-closed).
 #[cfg(feature = "strict-policy")]
-async fn seed_verified_layers(logger: &Logger) -> Result<()> {
-    let path =
-        std::env::var("KATA_VERIFIED_LAYERS").unwrap_or_else(|_| VERIFIED_LAYERS_PATH.to_string());
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => {
+async fn seed_verified_layers(logger: &Logger, initdata_cfg: Option<&str>) -> Result<()> {
+    let text = match resolve_measured_config(
+        logger,
+        "FR-4C",
+        initdata_cfg,
+        "KATA_VERIFIED_LAYERS",
+        VERIFIED_LAYERS_PATH,
+    ) {
+        Some(t) => t,
+        None => {
             info!(logger, "FR-4C: no verified-layers config; layer verification off");
             return Ok(());
         }
@@ -1348,12 +1386,16 @@ struct VerifiedImageConfig {
 // config leaves verification not required (opt-in); when require_verified_images is set but no
 // image is authorized, every guest-pull image is rejected (fail-closed).
 #[cfg(feature = "strict-policy")]
-async fn seed_verified_images(logger: &Logger) -> Result<()> {
-    let path =
-        std::env::var("KATA_VERIFIED_IMAGES").unwrap_or_else(|_| VERIFIED_IMAGES_PATH.to_string());
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => {
+async fn seed_verified_images(logger: &Logger, initdata_cfg: Option<&str>) -> Result<()> {
+    let text = match resolve_measured_config(
+        logger,
+        "BL-3",
+        initdata_cfg,
+        "KATA_VERIFIED_IMAGES",
+        VERIFIED_IMAGES_PATH,
+    ) {
+        Some(t) => t,
+        None => {
             info!(logger, "BL-3: no verified-images config; image verification off");
             return Ok(());
         }
