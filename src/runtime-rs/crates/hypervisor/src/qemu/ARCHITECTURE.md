@@ -126,7 +126,7 @@ pub struct Q35 {
     /// Global IOMMU device for Q35.  Emitted as a top-level -device intel-iommu,
     /// not attached to any pxb-pcie.  Contrast with SmmuV3 on PciRootComplex.
     pub intel_iommu: Option<IntelIommuConfig>,
-    // pub runtime: RuntimeFeatures,  -- Phase 3+
+    // pub runtime: RuntimeFeatures,  -- Phase 4+
 }
 
 pub struct IntelIommuConfig {
@@ -212,12 +212,15 @@ presentation, so `Host` is safe there.
 
 ```rust
 pub struct PciTopology {
-    pub default_bus: Option<String>,    // "pcie.0" when NUMA / multi-RC is active
-    pub roots: Vec<PciRootComplex>,
+    pub default_bus: Option<String>,      // "pcie.0" when NUMA / multi-RC is active
+    pub roots: Vec<PciRootComplex>,       // pxb-pcie GPU complexes (static passthrough)
+    /// Pre-provisioned empty slots on the default bus for cold/hot-plug.
+    /// See "VFIO Device Assignment Model" below.
+    pub pcie_root_port: Vec<PciRootPort>,
 }
 
 pub struct PciRootComplex {
-    pub id: String,              // "pcie.N"
+    pub id: String,
     pub bus_nr: u8,
     /// Maps to pxb-pcie `numa_node=N`.  Required on Grace; omitting it causes
     /// "Unknown NUMA node; performance will be reduced" in the guest kernel.
@@ -226,31 +229,51 @@ pub struct PciRootComplex {
     /// device on Q35 and lives on Machine::Q35, not here.
     pub iommu: Option<BusIommu>,
     /// One entry per passthrough device on this SMMU.
-    /// 1 root port = 1 GPU (1:1 SMMU mapping).
-    /// N root ports = N GPUs sharing the same physical SMMU.
     pub root_ports: Vec<PciRootPort>,
 }
 
 pub struct PciRootPort {
-    pub id: String,       // "pcie.portN"
+    pub id: String,
     pub chassis: u8,
+    pub slot: Option<u8>,            // Q35: Some(N); Grace: None
+    pub multifunction: Option<bool>, // Q35: Some(false); Grace: None
+    pub io_reserve: Option<u32>,     // Grace: Some(0); Q35: None
     pub device: Option<VfioDevice>,
+}
+
+pub struct VfioDevice {
+    pub id: String,
+    pub host: String,
+    pub rombar: Option<bool>,        // Grace: Some(false); Q35 CoCo: None
+    pub kind: VfioDeviceKind,
+    /// Per-device iommufd (CoCo x86); Grace uses shared iommufd0 in Objects.
+    pub iommufd_id: Option<String>,
+    pub pci_vendor_id: Option<u16>,  // CoCo attestation override
+    pub pci_device_id: Option<u16>,
+}
+
+pub enum VfioDeviceKind {
+    Gpu,      // vfio-pci-nohotplug (Grace aarch64)
+    GpuPci,   // vfio-pci           (Q35 / CoCo x86 GPU)
+    NvSwitch, // vfio-pci           (DGX/HGX NVSwitch; same device string as GpuPci)
+    Nic,      // vfio-pci
 }
 
 /// IOMMU that attaches to a specific PCIe expander bus (pxb-pcie).
 /// Intel IOMMU is a Q35-global device and is NOT represented here —
 /// see Machine::Q35::intel_iommu.
 pub enum BusIommu {
-    SmmuV3 {
-        accel: bool,
-        ats: bool,
-        pasid: bool,
-        oas: u8,
-        ril: bool,
-        /// Enable SMMU command-queue virtualisation (vCMDQ).  Requires
-        /// physically contiguous guest memory (hugepages or EGM).
-        cmdqv: bool,
-    },
+    SmmuV3(SmmuV3Config),
+}
+
+pub struct SmmuV3Config {
+    pub id: String,
+    pub accel: bool,
+    pub ats: bool,
+    pub pasid: bool,
+    pub oas: u8,
+    pub ril: bool,
+    pub cmdqv: bool, // vCMDQ: requires hugepages or EGM
 }
 ```
 
@@ -264,19 +287,34 @@ the `2-GPUs-per-SMMU` topology.
 
 ```rust
 pub struct Objects {
+    /// Shared iommufd (Grace); CoCo x86 uses per-device iommufd on VfioDevice.
     pub iommufd: Option<IommufdBackend>,
     pub memory_backends: Vec<MemoryBackend>,
+    pub numa_nodes: Vec<NumaNode>,
+    pub numa_distances: Vec<(u32, u32, u32)>, // (src, dst, val) for -numa dist
     pub thread_contexts: Vec<ThreadContext>,
     pub acpi_links: Vec<AcpiPciNodeLink>,
     pub rng: Option<ObjectRngRandom>,
+    /// CoCo protection object emitted before -machine (sev-snp-guest / tdx-guest).
+    pub protection: Option<ProtectionDevice>,
 }
 
 pub enum MemoryBackend {
-    Ram  { id: String, size: u64 },
-    /// File-backed memory.  Two uses:
-    ///   path = "/dev/hugepages/" → hugepages-backed guest RAM (vCMDQ)
-    ///   path = "/dev/egmN"      → per-socket EGM region (vEGM)
-    File { id: String, size: u64, path: String, prealloc: bool, share: bool },
+    Ram {
+        id: String, size: u64,
+        host_nodes: Option<u32>, // NUMA pinning (Q35 CoCo RAM-backed)
+        policy: Option<String>,  // "bind" when host_nodes is set
+    },
+    /// File-backed memory:
+    ///   mem-path="/dev/shm"        — NUMA-pinned SHM for vanilla Q35
+    ///   mem-path="/dev/hugepages/" — hugepages guest RAM (vCMDQ)
+    ///   mem-path="/dev/egmN"       — per-socket EGM region (vEGM)
+    File {
+        id: String, size: u64, path: String, prealloc: bool, share: bool,
+        host_nodes: Option<u32>,
+        policy: Option<String>,
+        is_egm: bool,
+    },
 }
 
 pub enum AcpiPciNodeLink {
@@ -287,7 +325,7 @@ pub enum AcpiPciNodeLink {
     /// Emitted 1× per passthrough GPU.  Links the GPU to the per-socket EGM
     /// memory-backend file.  `node` is the CpuMem NUMA node for the socket
     /// that holds this GPU's EGM device, not a GPU initiator node.
-    EgmMemory        { id: String, pci_dev: String, node: u32 },
+    EgmMemory { id: String, pci_dev: String, node: u32 },
 }
 ```
 
@@ -304,25 +342,52 @@ pub struct HostTopology {
     pub sockets: Vec<SocketInfo>,
     pub gpu_smmu_groups: Vec<GpuSmmuGroup>,
     pub egm_sockets: Vec<EgmSocketInfo>,
+    pub numa_distances: Vec<(u32, u32, u32)>, // (src, dst, val)
+    /// Minimum pre-provisioned empty root-port count on Q35 pcie.0.
+    /// Mirrors `pcie_root_port =` in kata config.  See "VFIO Device Assignment
+    /// Model" for the distinction between this and gpu_smmu_groups.
+    pub pcie_root_port: u32,
+    pub protection: Option<ProtectionDevice>,
 }
 
 pub struct SocketInfo {
     pub id: u32,
     pub cpu_range: std::ops::Range<u32>,
+    pub host_node: Option<u32>,   // NUMA pinning for Q35 memory backends
+    pub mem_path: Option<String>, // "/dev/shm" or EGM path; None = RAM backend
+    pub mem_size: Option<u64>,    // per-socket size; None = Platform default
 }
 
 /// All GPUs in this group share a physical SMMU and must be placed on the same
 /// pxb-pcie + arm-smmuv3 in the guest.  Derived from /sys/kernel/iommu_groups.
 pub struct GpuSmmuGroup {
-    pub pci_bus_addrs: Vec<String>,   // e.g. ["0008:06:00.0", "0009:06:00.0"]
+    pub pci_bus_addrs: Vec<String>,
     pub socket: u32,
 }
 
 /// One entry per /dev/egmN device (created by the nvgrace-egm kernel module).
 pub struct EgmSocketInfo {
-    pub path: String,    // "/dev/egm4"
+    pub path: String,
     pub socket: u32,
     pub total_size: u64,
+}
+
+/// CoCo hardware protection mode detected by host probe.
+/// Drives: protection object preamble, kernel_irqchip=split on Q35, CpuModel.
+pub enum ProtectionDevice {
+    SevSnp { id: String, cbitpos: u8, reduced_phys_bits: u8,
+             kernel_hashes: bool, policy: u64, host_data: Option<String> },
+    Tdx    { id: String, quote_generation_socket: Option<TdxQuoteSocket> },
+}
+
+/// vsock address for the DCAP quote generation daemon.
+/// Emitted as a JSON sub-object because QEMU's key=value parser cannot
+/// represent nested structures.  The production TDX capture uses
+/// {"type":"vsock","cid":"2","port":"4050"}.
+pub struct TdxQuoteSocket {
+    pub ty: String,   // "vsock"
+    pub cid: String,  // guest CID
+    pub port: String, // port number
 }
 ```
 
@@ -406,23 +471,102 @@ in the `arm-smmuv3` device args when `vCMDQ` is enabled.
 
 ### Emission order
 
-`QemuCmdLine::build()` becomes a thin orchestrator:
+`Platform::to_qemu_args` dispatches by machine type because Q35 and virt require
+different argument ordering.
 
-1. Emit `-object iommufd,id=iommufd0` first (all vfio devices and `SMMU` SID
-   tables reference it).
-2. Emit remaining `Objects` — `memory_backends`, `thread_contexts`, `rng` —
-   all `-object` lines, IDs defined before any reference.
-3. Emit `Machine` — picks up `memory-backend=` from objects, `highmem-mmio-size`.
-4. Emit **CpuMem** `-numa node` entries: one per socket, with `cpus=` + `memdev=`.
-5. Emit **GPU initiator** `-numa node` entries: 8 per GPU, no `cpus`/`memdev`,
-   ordered by GPU index.
-6. Emit **EGM / hotplug** `-numa node` entries: memory-only nodes, no `cpus`.
-7. Emit `PciTopology` in bus-number order: `pxb-pcie` (with `numa_node=`),
-   `arm-smmuv3`, root ports, vfio devices per root complex.
-8. Emit `Objects.acpi_links`: `acpi-generic-initiator` (8 per GPU) then
-   `acpi-egm-memory` (1 per GPU).  These reference device IDs emitted in step 7.
+**virt / Grace (aarch64)** — backends must precede the machine line because virt
+carries `memory-backend=<id>` on the machine flag itself:
+
+1. `-object iommufd,id=iommufd0`
+2. `Objects::memory_backends` (all `-object` lines)
+3. `-machine virt,...,memory-backend=m0`
+4. **CpuMem** `-numa node` entries: one per socket, `cpus=` + `memdev=`
+5. **GPU initiator** `-numa node` entries: 8 per GPU, no `cpus`/`memdev`
+6. **EGM / memory-only** `-numa node` entries
+7. `PciTopology::roots` — `pxb-pcie`, `arm-smmuv3`, root ports, vfio devices
+8. `Objects::acpi_links` — `acpi-generic-initiator` (8×GPU), `acpi-egm-memory` (1×GPU)
 
 Steps 4–6 must be in that order to match Linux ACPI `SRAT` processing.
+
+**Q35 (x86_64)** — machine line carries no memory-backend reference; backends
+follow the machine line, interleaved with their NUMA node:
+
+1. `Objects::protection` — `sev-snp-guest` or `tdx-guest` (must precede `-machine`)
+2. `-machine q35,...`
+3. Per socket: `-object memory-backend-{ram,file}` then `-numa node,memdev=,cpus=`
+4. `-numa dist` entries
+5. `PciTopology::roots` — `pxb-pcie`, root ports, per-device `iommufd`, `vfio-pci`
+6. `PciTopology::pcie_root_port` — pre-provisioned empty ports on `pcie.0`
+
+### VFIO Device Assignment Model
+
+QEMU VFIO passthrough uses two independent configuration axes.
+
+**When the device joins the VM** (kata config: `cold_plug_vfio` / `hot_plug_vfio`):
+- **Cold-plug**: device appears in the static QEMU command line before `qemu-system-*`
+  is exec'd; VM boots with the device already present.
+- **Hot-plug**: device is added to a running VM via QMP `device_add`; requires an
+  empty PCIe slot to have been pre-provisioned at boot.
+
+**What slot topology is used** (values of `cold_plug_vfio` / `hot_plug_vfio`):
+- **`no-port`**: no slot or device emitted; passthrough disabled for this plug type.
+- **`root-port`**: one `pcie-root-port` per device. For cold-plug the port and device
+  are emitted together; for hot-plug reservation N empty ports are emitted at boot.
+- **`switch-port`**: one `pcie-root-port` → one `x3130-upstream` → N `xio3130-downstream`,
+  one downstream port per device. Used for NVSwitch and DAN multi-device fan-out.
+- **`bridge-port`**: legacy PCI bridge (`i82801b11-bridge`). Non-PCIe devices or
+  backward compat.
+
+**Platform coverage by phase:**
+
+| | `no-port` | `root-port` | `switch-port` | `bridge-port` |
+|---|---|---|---|---|
+| **Cold-plug** | implicit (no fields set) | `gpu_smmu_groups` → port+device in static cmdline (Phase 3) | Phase 4+ | — |
+| **Hot-plug reservation** | implicit | `pcie_root_port: u32` → N empty ports at boot (Phase 3) | Phase 4+ | — |
+
+`HostTopology::gpu_smmu_groups` drives cold-plug `root-port`: one `pcie-root-port`
+and one `vfio-pci[/vfio-pci-nohotplug]` per device, emitted together in the static
+command line.  No empty pre-provisioned slots are used; device count is exact.
+
+`HostTopology::pcie_root_port` drives hot-plug slot reservation: N `pcie-root-port`
+devices emitted on `pcie.0` at VM creation, with no device attached.  At runtime,
+devices are plugged into available slots via QMP `device_add`.  DANs and dynamically
+assigned VFIO NICs use this path.  Mirrors the `pcie_root_port =` kata config field.
+
+**Scalability (1–8 GPUs, Q35 root-port topology):**
+
+Any count from 1 to 8 GPUs on a Q35/x86 host is expressed by varying the number
+of entries in `gpu_smmu_groups` and `pci_bus_addrs`.  The model scales linearly:
+each GPU gets exactly one `pcie-root-port` on a `pxb-pcie`; GPUs on the same NUMA
+socket share a pxb complex.  `apply_q35_defaults` assigns:
+
+- `bus_nr = 32 + group_idx × 32` per pxb (32-bus spacing matches production captures)
+- `chassis = 10 + group_idx` per pxb (unique chassis per complex, e.g. 10, 11)
+- `slot = port_index_within_pxb` (0-based, unique per pxb)
+- `id = rp-numa{group}-{port}` (port-relative, not global GPU index)
+
+Example layouts for B200/B300 PCIe (no NVSwitch, no NVLink):
+
+| GPU count | NUMA nodes | pxb layout |
+|-----------|-----------|------------|
+| 1 | 1 | pxb-numa0 (bus_nr=32, chassis=10): slot 0 |
+| 2 | 1 | pxb-numa0: slots 0-1 |
+| 4 | 1 | pxb-numa0: slots 0-3 |
+| 4 | 2 | pxb-numa0 (slots 0-1) + pxb-numa1 (bus_nr=64, chassis=11, slots 0-1) |
+| 8 | 2 | pxb-numa0 (slots 0-3) + pxb-numa1 (slots 0-3) |
+
+**NVSwitch classification is Phase 4:** `apply_q35_defaults` generates `GpuPci` for
+every entry in `gpu_smmu_groups` because `GpuSmmuGroup::pci_bus_addrs` carries no
+device-type information.  NVSwitch passthrough (where NVSwitches share the pxb with
+GPUs on slots 4–7) requires a Phase 4 extension to `HostTopology` — a separate
+`nvswitch_addrs` field or a typed `VfioPassthroughEntry { addr, kind }` — so the
+prober can classify each PCI address before `apply_q35_defaults` is called.
+Until then, callers building an NVSwitch topology construct `Platform` directly
+(as the `q35_coco_tdx_8gpu_4nvswitch` and `q35_vanilla_8gpu_4nvswitch` tests do).
+
+Grace/aarch64 uses `vfio-pci-nohotplug` for cold-plug onto `pxb-pcie`-attached root
+ports with a per-bus `arm-smmuv3` — a distinct topology from Q35 `root-port` cold-plug
+even though both are classified as "cold-plug root-port" in kata config terms.
 
 ---
 
@@ -617,40 +761,41 @@ Nothing in the hot path calls them yet.  Tests assert construction succeeds for
 each supported machine type and that `HostTopology` round-trips through
 `apply_host_defaults` without panic.
 
-### Phase 2 — Strangle bus resolution (one device per PR)
+### Phase 2 — Platform emission for virt / Grace
 
-For each device listed below, pass a resolved `bus: String` instead of
-computing it inside `ToQemuParams`:
+- `Platform::to_qemu_args` implemented for `Machine::Virt`.
+- Emission order: `iommufd` → backends → machine → NUMA nodes → pxb+`smmuv3`+ports+vfio → acpi_links.
+- `Platform::with_hugepages` wires `memory-backend-file` + `cmdqv=on` on `smmuv3`.
+- All 7 Grace fixture tests written; ignored pending Phase 4 (apply_host_defaults).
+- Q35 and s390x/`pseries` emit `todo!()` — unblocked in Phase 3.
 
-- `DeviceVhostUserFs`
-- `DeviceVirtioBlk`
-- `VhostVsock`
-- `DeviceVirtioNet`
-- `DeviceVirtioSerial`
-- `DeviceVirtconsole`
-- `DeviceRng`
-- `DeviceIntelIommu`
-- `DeviceVirtioScsi`
+### Phase 3 — Q35 emission and CoCo support
 
-Each PR removes one `#[cfg(target_arch)]` block and one duplicated comment.
-The golden fixtures validate that the emitted command lines are unchanged.
-
-Final PR in Phase 2: remove all remaining `#[cfg(target_arch)]` blocks from
-`cmdline_generator.rs`.
-
-### Phase 3 — Objects registry
-
-- Lift `MemoryBackendFile` into `Objects::memory_backends` as
-  `MemoryBackend::File`.
-- Wire hugepages via `Platform::with_hugepages`.
-- Lift `ObjectIoThread` / `ObjectRngRandom` into `Objects`.
-- Consider wiring `seccompsandbox` (QEMU `-sandbox`) through `Platform`:
-  the config field `seccomp_sandbox: Option<String>` already maps to
-  `-sandbox` in `cmdline_generator.rs`, but the new path needs a typed
-  `Objects::seccomp_sandbox: Option<SeccompSandbox>` so the emission
-  is controlled by `Platform` rather than the legacy generator.
-
-This is the phase that enables hugepages for `runtime-rs` (issue #12125).
+- `Platform::to_qemu_args` dispatches by machine type; Q35 and virt require
+  different emission ordering (see "Emission order" above).
+- `apply_q35_defaults`: per-socket memory backends (RAM / SHM file), NUMA nodes,
+  NUMA distances, cold-plug GPU root ports + vfio devices, and pre-provisioned
+  empty hot-plug slots (`pcie_root_port`).
+- `HostTopology` extended: `numa_distances`, `pcie_root_port`, `protection`,
+  `SocketInfo::{host_node, mem_path, mem_size}`.
+- `ProtectionDevice` enum: `SevSnp` / `Tdx`; drives `kernel_irqchip=split` and
+  `confidential_guest_support` on Q35.
+- `VfioDevice` extended: `rombar: Option`, `iommufd_id` (per-device CoCo),
+  `pci_vendor_id/device_id` (CoCo attestation).
+- `VfioDeviceKind::GpuPci` added (`vfio-pci` for Q35; existing `Gpu` keeps
+  `vfio-pci-nohotplug` for Grace).
+- `PciRootPort` extended: `slot`, `multifunction`, `io_reserve` — all `Option`
+  to cover both Q35 cold-plug and Grace io-reserve formats.
+- `ProtectionDevice::Tdx` fields added from TDX production capture:
+  `quote_generation_socket: Option<TdxQuoteSocket>` with `ty/cid/port`.
+  TDX protection object is emitted as JSON (`{"qom-type":"tdx-guest",...}`) rather
+  than key=value because QEMU's key=value parser cannot represent nested objects.
+- `VfioDeviceKind::NvSwitch` added; maps to `vfio-pci` (same as `GpuPci`).
+  Production TDX capture shows NVSwitches use `pcie-root-port + vfio-pci` topology
+  (not switch-port hierarchy); distinguished in the type for probe-side classification.
+- Four Q35 fixture tests pass without `#[ignore]`:
+  `q35_vanilla_kata_x86`, `q35_coco_snp_single_gpu`,
+  `q35_coco_tdx_8gpu_4nvswitch`, `q35_vanilla_8gpu_4nvswitch`.
 
 ### Phase 4 — Multi-RC PCIe and NUMA layout
 
@@ -727,8 +872,8 @@ derived from tested deployments.  They anchor the per-machine fixture set.
 ```
 
 Both `machine_accelerators` (the raw KVM option string) and
-`confidential_guest_support` need typed representations before the legacy
-`Machine` struct can be deleted.  Tracked in Phase 3.
+`confidential_guest_support` received typed representations in Phase 3.
+Full deletion of the legacy `Machine` struct is tracked in Phase 6.
 
 ---
 
@@ -750,7 +895,7 @@ non-GPU kata pod on an ARM64 host.
 ### Vanilla kata — Q35 (x86_64)
 
 **Production data captured** (DGX x86 host, 2026-07-07).
-Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (ignored, Phase 3).
+Fixture: `q35_vanilla_kata_x86.args`.  Test: `q35_vanilla_kata_x86` (passing, Phase 3).
 
 Key observations from the production invocation:
 
@@ -760,22 +905,22 @@ Key observations from the production invocation:
   backed by `/dev/shm` (not `/dev/hugepages` or `/dev/egm*`)
 - Two NUMA nodes: socket 0 cpus 0-32 / 36864M, socket 1 cpus 33-65 / 36864M;
   distance 20 between them
-- 8 `pcie-root-port` pre-provisioned on `pcie.0` (slots 0-7) for GPU cold-plug
-  (`cold_plug_vfio=root-port`, `pcie_root_port=8`, `hot_plug_vfio=no-port` in
-  `configuration-qemu-nvidia-gpu.toml.in`); GPU VFIO devices are added to the
-  static QEMU command line before the VM boots, not via QMP after boot
-- No `pxb-pcie`, no `arm-smmuv3` — Q35 GPU passthrough uses cold-plug onto `pcie.0`
-  root ports, not the static `vfio-pci-nohotplug` topology used on Grace
+- 8 `pcie-root-port` pre-provisioned on `pcie.0` (slots 0-7); `pcie_root_port=8`
+  in `configuration-qemu-nvidia-gpu.toml.in`; `hot_plug_vfio=no-port` (hotplug
+  disabled in this config).  These are legacy empty slots for static GPU assignment
+  by the Go runtime; the new Rust Platform models this via `HostTopology::pcie_root_port`
+- No `pxb-pcie`, no `arm-smmuv3` — Q35 GPU passthrough uses `root-port` topology
+  on `pcie.0`, not the `pxb-pcie + vfio-pci-nohotplug` topology used on Grace
 
-New Platform fields required (Phase 3):
+Platform fields added in Phase 3:
 - `MemoryBackend::File { host_nodes: Option<u32>, policy: Option<String> }` for NUMA SHM
 - `Objects::numa_distances: Vec<(u32, u32, u32)>` for `-numa dist` entries
-- `HostTopology` additions for NUMA SHM paths and distances
+- `SocketInfo::{host_node, mem_path, mem_size}` for per-socket NUMA pinning
 
 ### CoCo + GPU passthrough (SEV-SNP or TDX)
 
 **SEV-SNP production data captured** (AMD EPYC host, 2026-07-13).
-Fixture: `q35_coco_snp_single_gpu.args`.  Test: `q35_coco_snp_single_gpu` (ignored, Phase 3).
+Fixture: `q35_coco_snp_single_gpu.args`.  Test: `q35_coco_snp_single_gpu` (passing, Phase 3).
 
 Key observations from the SEV-SNP + GPU invocation:
 
@@ -795,38 +940,76 @@ Key observations from the SEV-SNP + GPU invocation:
 - BIOS: `AMDSEV.fd` (AMD-specific OVMF build, not generic `OVMF.fd`)
 - Binary: `qemu-system-x86_64-snp-experimental` (patched QEMU for SNP support)
 
-New Platform fields required (Phase 3):
+Platform fields added in Phase 3:
 - `Objects::protection: Option<ProtectionDevice>` (`sev-snp-guest` / `tdx-guest`)
-- `Q35::kernel_irqchip: Option<String>` typed field (`"split"` for CoCo, absent for vanilla)
+- `Q35::kernel_irqchip: Option<String>` (`"split"` for CoCo, absent for vanilla)
 - `Q35::confidential_guest_support: Option<String>` referencing the protection object id
-- `MemoryBackend::Ram { host_nodes: Option<u32>, policy: Option<String> }` for NUMA pinning
-- Per-device `iommufd`: `PciRootComplex::iommufd: Option<IommufdRef>` (not shared)
-- `VfioDevice::pci_vendor_id / pci_device_id: Option<u16>` for CoCo attestation overrides
+- `MemoryBackend::Ram { host_nodes, policy }` for NUMA-pinned RAM backend
+- `VfioDevice::iommufd_id: Option<String>` — per-device `iommufd` for CoCo x86
+- `VfioDevice::pci_vendor_id / pci_device_id` for CoCo attestation overrides
 
-**TDX data still needed:** capture from a CoCo + GPU pod on an Intel TDX host.
+**TDX production data captured** (Intel TDX host, 2026-07-15).
+See the `q35_coco_tdx_8gpu_4nvswitch` fixture for full topology details.
+Key differences from SNP: TDX object comes in JSON format; NUMA node 1 is
+memory-only (no `cpus=`); NVSwitches share pxb-numa0 with GPUs.
 
 ### 8 GPUs + 4 NVSwitches (DGX/HGX topology)
 
-NVSwitch passthrough adds a new device kind and a multi-level PCIe hierarchy
-not present in the Grace configs:
+**Production data captured** (Intel TDX host, 2026-07-15 — HGX H100 PPCIE).
+Fixture: `q35_coco_tdx_8gpu_4nvswitch.args`.  Test: `q35_coco_tdx_8gpu_4nvswitch` (passing, Phase 3).
 
-- `VfioDeviceKind::NvSwitch` is not yet defined in `topology.rs` (only `Gpu`
-  and `Nic` exist).
-- NVSwitches currently use `VfioDeviceConfig` (not `VfioDeviceGroup`) in the
-  legacy path (`add_gpu_nvswitch_setup` at cmdline_generator.rs:3373).
-- PCIe hierarchy: root port → `x3130-upstream` → `xio3130-downstream` →
-  device (three levels vs. the two levels used for GPU direct attachment).
-- `add_pcie_switch_ports` (cmdline_generator.rs:3508) emits this hierarchy;
-  `PciTopology` has no equivalent typed representation yet.
+Key observations from the TDX + 8 GPU + 4 NVSwitch invocation:
 
-New types needed before a fixture can be written:
+- 2 `pxb-pcie` complexes: `pxb-numa0` (`bus_nr=32`, `numa_node=0`, chassis=10) and
+  `pxb-numa1` (`bus_nr=64`, `numa_node=1`, chassis=11).  `bus_nr` is 32 apart to
+  reserve space for up to 32 subordinate buses per complex.
+- pxb-numa0 carries both GPUs (slots 0-3, 0x10de:0x2330) and NVSwitches (slots 4-7,
+  0x10de:0x22a3) on the same complex.  NVSwitch NUMA affinity on this host matches
+  GPU NUMA node 0 so they share the pxb.
+- pxb-numa1 carries 4 more GPUs (slots 0-3).  The 4 NVSwitches are fabric chips
+  shared across all GPUs; they are homed on pxb-numa0 regardless.
+- **NVSwitches use `pcie-root-port + vfio-pci` (root-port topology), NOT the
+  `pcie-root-port → x3130-upstream → xio3130-downstream` switch-port hierarchy.**
+  The legacy `add_pcie_switch_ports` path exists in `cmdline_generator.rs:3508`
+  for a different topology variant (DAN / NVSwitch fan-out) but was not used in
+  this TDX production deployment.  Switch-port topology is tracked as Phase 4+.
+- `VfioDeviceKind::NvSwitch` added in Phase 3; emits `vfio-pci` (same device
+  string as `GpuPci`).  The kind distinction is used by probers and higher-level
+  code to classify devices without re-reading PCI IDs.
+- NUMA node 1 is memory-only: the single vCPU (`smp 1`) lives on node 0.
+  NUMA distance 21 (symmetric) between nodes 0 and 1.
+- TDX object emitted as JSON: `{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`.
+  QEMU's key=value parser cannot represent the nested `quote-generation-socket`
+  object, so the entire `-object` value is a JSON string.
+
+Platform fields added in Phase 3 from this capture:
+- `ProtectionDevice::Tdx { quote_generation_socket: Option<TdxQuoteSocket> }`
+- `TdxQuoteSocket { ty, cid, port }` and JSON emission in `emit_protection`
 - `VfioDeviceKind::NvSwitch`
-- `PciSwitchPort { upstream: PcieUpstreamPort, downstream: Vec<PcieDownstreamPort> }` on `PciRootComplex`
-- `HostTopology::nvswitch_addrs` or equivalent probe field
+- Per-pxb `chassis` assignment (chassis=10 for pxb-numa0, chassis=11 for pxb-numa1)
 
-**Data needed:** capture from a DGX/HGX or GB200 NVL system with 8 GPUs and
-4 NVSwitches passed through.  Exact bus_nr arithmetic and PCIe address
-assignments must come from a live invocation, not from inference.
+Phase 4 will wire `apply_host_defaults` end-to-end for TDX + NVSwitch topologies
+and add `HostTopology` fields for NVSwitch device classification.
+
+### Vanilla kata + GPU passthrough (non-CoCo)
+
+**Production data captured** (same host as TDX capture, 2026-07-15).
+Fixture: `q35_vanilla_8gpu_4nvswitch.args`.  Test: `q35_vanilla_8gpu_4nvswitch` (passing, Phase 3).
+
+Same physical topology as the TDX capture (8 GPUs + 4 NVSwitches, 2 NUMA nodes, NUMA
+distance 21) but without CoCo.  Key differences from the TDX capture:
+
+- No protection object; `-machine q35,accel=kvm` without `kernel_irqchip` or
+  `confidential-guest-support`.
+- Memory backend is `memory-backend-file` via `/dev/shm` (same pattern as
+  `q35_vanilla_kata_x86`), not `memory-backend-ram` as in the CoCo captures.
+- Per-device `iommufd` is still present: the modern VFIO `iommufd` interface is used
+  for GPU passthrough regardless of CoCo mode.
+- `x-pci-vendor-id`/`x-pci-device-id` overrides are still present: the kata
+  runtime applies them for any GPU passthrough, not only for CoCo attestation.
+- NUMA node 1 is memory-only (no `cpus=`).  The single vCPU lives on node 0.
+
+No new Platform types were required; the fixture exercises the existing model.
 
 ---
 

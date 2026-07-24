@@ -26,7 +26,7 @@ node,nodeid=7
 -numa
 node,nodeid=8
 -device
-pxb-pcie,id=pcie.1,bus_nr=1,bus=pcie.0,numa_node=0
+pxb-pcie,id=pcie.1,bus=pcie.0,bus_nr=1,numa_node=0
 -device
 arm-smmuv3,primary-bus=pcie.1,id=smmuv3.1,accel=on,ats=on,ril=off,pasid=on,oas=48,cmdqv=on
 -device
