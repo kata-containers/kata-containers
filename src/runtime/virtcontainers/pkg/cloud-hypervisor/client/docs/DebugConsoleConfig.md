@@ -4,15 +4,15 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**File** | Pointer to **string** |  | [optional] 
-**Mode** | **string** |  | 
-**Iobase** | Pointer to **int32** |  | [optional] 
+**File** | Pointer to **string** |  | [optional]
+**Mode** | [**ConsoleMode**](ConsoleMode.md) |  |
+**Iobase** | Pointer to **int32** |  | [optional]
 
 ## Methods
 
 ### NewDebugConsoleConfig
 
-`func NewDebugConsoleConfig(mode string, ) *DebugConsoleConfig`
+`func NewDebugConsoleConfig(mode ConsoleMode, ) *DebugConsoleConfig`
 
 NewDebugConsoleConfig instantiates a new DebugConsoleConfig object
 This constructor will assign default values to properties that have it defined,
@@ -54,20 +54,20 @@ HasFile returns a boolean if a field has been set.
 
 ### GetMode
 
-`func (o *DebugConsoleConfig) GetMode() string`
+`func (o *DebugConsoleConfig) GetMode() ConsoleMode`
 
 GetMode returns the Mode field if non-nil, zero value otherwise.
 
 ### GetModeOk
 
-`func (o *DebugConsoleConfig) GetModeOk() (*string, bool)`
+`func (o *DebugConsoleConfig) GetModeOk() (*ConsoleMode, bool)`
 
 GetModeOk returns a tuple with the Mode field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetMode
 
-`func (o *DebugConsoleConfig) SetMode(v string)`
+`func (o *DebugConsoleConfig) SetMode(v ConsoleMode)`
 
 SetMode sets Mode field to given value.
 
@@ -99,5 +99,3 @@ HasIobase returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

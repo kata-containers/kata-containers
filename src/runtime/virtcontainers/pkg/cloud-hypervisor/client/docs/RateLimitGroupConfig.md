@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | **string** |  | 
-**RateLimiterConfig** | [**RateLimiterConfig**](RateLimiterConfig.md) |  | 
+**Id** | **string** |  |
+**RateLimiterConfig** | [**RateLimiterConfig**](RateLimiterConfig.md) |  |
 
 ## Methods
 
@@ -68,5 +68,3 @@ SetRateLimiterConfig sets RateLimiterConfig field to given value.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

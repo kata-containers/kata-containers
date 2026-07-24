@@ -4,17 +4,19 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | **string** |  | 
+**Path** | Pointer to **string** | Sysfs path of the VFIO device. Exactly one of &#x60;path&#x60; or an externally-opened cdev FD must be supplied; an FD is passed out of band via SCM_RIGHTS on the UNIX domain socket, never in this body.  | [optional]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
-**XNvGpudirectClique** | Pointer to **int32** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**PciDeviceId** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
+**XNvGpudirectClique** | Pointer to **int32** |  | [optional]
+**XExcludeMmapBars** | Pointer to **[]int64** |  | [optional]
 
 ## Methods
 
 ### NewDeviceConfig
 
-`func NewDeviceConfig(path string, ) *DeviceConfig`
+`func NewDeviceConfig() *DeviceConfig`
 
 NewDeviceConfig instantiates a new DeviceConfig object
 This constructor will assign default values to properties that have it defined,
@@ -48,6 +50,11 @@ and a boolean to check if the value has been set.
 
 SetPath sets Path field to given value.
 
+### HasPath
+
+`func (o *DeviceConfig) HasPath() bool`
+
+HasPath returns a boolean if a field has been set.
 
 ### GetIommu
 
@@ -99,6 +106,31 @@ SetPciSegment sets PciSegment field to given value.
 
 HasPciSegment returns a boolean if a field has been set.
 
+### GetPciDeviceId
+
+`func (o *DeviceConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *DeviceConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *DeviceConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *DeviceConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
+
 ### GetId
 
 `func (o *DeviceConfig) GetId() string`
@@ -149,7 +181,30 @@ SetXNvGpudirectClique sets XNvGpudirectClique field to given value.
 
 HasXNvGpudirectClique returns a boolean if a field has been set.
 
+### GetXExcludeMmapBars
+
+`func (o *DeviceConfig) GetXExcludeMmapBars() []int64`
+
+GetXExcludeMmapBars returns the XExcludeMmapBars field if non-nil, zero value otherwise.
+
+### GetXExcludeMmapBarsOk
+
+`func (o *DeviceConfig) GetXExcludeMmapBarsOk() (*[]int64, bool)`
+
+GetXExcludeMmapBarsOk returns a tuple with the XExcludeMmapBars field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetXExcludeMmapBars
+
+`func (o *DeviceConfig) SetXExcludeMmapBars(v []int64)`
+
+SetXExcludeMmapBars sets XExcludeMmapBars field to given value.
+
+### HasXExcludeMmapBars
+
+`func (o *DeviceConfig) HasXExcludeMmapBars() bool`
+
+HasXExcludeMmapBars returns a boolean if a field has been set.
+
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

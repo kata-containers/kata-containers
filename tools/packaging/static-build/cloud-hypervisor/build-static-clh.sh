@@ -74,12 +74,16 @@ build_clh_from_source() {
 		git checkout "${cloud_hypervisor_version}"
 	fi
 
+	# The dev CLI requires a hypervisor selection even though a build does not
+	# use it. Select KVM explicitly so CI runners without /dev/kvm can build.
+	local dev_cli_hypervisor="kvm"
+
 	# shellcheck disable=SC2154
 	if [[ -n "${features}" ]]; then
 		info "Build cloud-hypervisor enabling the following features: ${features}"
-		./scripts/dev_cli.sh build --release --libc "${libc}" --features "${features}"
+		./scripts/dev_cli.sh build --release --libc "${libc}" --features "${features}" --hypervisor "${dev_cli_hypervisor}"
 	else
-		./scripts/dev_cli.sh build --release --libc "${libc}"
+		./scripts/dev_cli.sh build --release --libc "${libc}" --hypervisor "${dev_cli_hypervisor}"
 	fi
 	rm -rf cloud-hypervisor
 	cp "build/cargo_target/$(uname -m)-unknown-linux-${libc}/release/cloud-hypervisor" .

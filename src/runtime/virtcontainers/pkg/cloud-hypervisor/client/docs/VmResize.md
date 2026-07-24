@@ -4,9 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**DesiredVcpus** | Pointer to **int32** |  | [optional] 
-**DesiredRam** | Pointer to **int64** | desired memory ram in bytes | [optional] 
-**DesiredBalloon** | Pointer to **int64** | desired balloon size in bytes | [optional] 
+**DesiredVcpus** | Pointer to **int32** |  | [optional]
+**DesiredRam** | Pointer to **int64** | desired memory ram in bytes | [optional]
+**DesiredBalloon** | Pointer to **int64** | desired balloon size in bytes | [optional]
 
 ## Methods
 
@@ -104,5 +104,3 @@ HasDesiredBalloon returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

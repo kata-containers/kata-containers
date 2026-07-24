@@ -25,6 +25,7 @@ type MemoryConfig struct {
 	Hugepages      *bool               `json:"hugepages,omitempty"`
 	HugepageSize   *int64              `json:"hugepage_size,omitempty"`
 	Prefault       *bool               `json:"prefault,omitempty"`
+	Reserve        *bool               `json:"reserve,omitempty"`
 	Thp            *bool               `json:"thp,omitempty"`
 	Zones          *[]MemoryZoneConfig `json:"zones,omitempty"`
 }
@@ -46,6 +47,8 @@ func NewMemoryConfig(size int64) *MemoryConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var reserve bool = false
+	this.Reserve = &reserve
 	var thp bool = true
 	this.Thp = &thp
 	return &this
@@ -66,6 +69,8 @@ func NewMemoryConfigWithDefaults() *MemoryConfig {
 	this.Hugepages = &hugepages
 	var prefault bool = false
 	this.Prefault = &prefault
+	var reserve bool = false
+	this.Reserve = &reserve
 	var thp bool = true
 	this.Thp = &thp
 	return &this
@@ -351,6 +356,38 @@ func (o *MemoryConfig) SetPrefault(v bool) {
 	o.Prefault = &v
 }
 
+// GetReserve returns the Reserve field value if set, zero value otherwise.
+func (o *MemoryConfig) GetReserve() bool {
+	if o == nil || o.Reserve == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Reserve
+}
+
+// GetReserveOk returns a tuple with the Reserve field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *MemoryConfig) GetReserveOk() (*bool, bool) {
+	if o == nil || o.Reserve == nil {
+		return nil, false
+	}
+	return o.Reserve, true
+}
+
+// HasReserve returns a boolean if a field has been set.
+func (o *MemoryConfig) HasReserve() bool {
+	if o != nil && o.Reserve != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetReserve gets a reference to the given bool and assigns it to the Reserve field.
+func (o *MemoryConfig) SetReserve(v bool) {
+	o.Reserve = &v
+}
+
 // GetThp returns the Thp field value if set, zero value otherwise.
 func (o *MemoryConfig) GetThp() bool {
 	if o == nil || o.Thp == nil {
@@ -443,6 +480,9 @@ func (o MemoryConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Prefault != nil {
 		toSerialize["prefault"] = o.Prefault
+	}
+	if o.Reserve != nil {
+		toSerialize["reserve"] = o.Reserve
 	}
 	if o.Thp != nil {
 		toSerialize["thp"] = o.Thp

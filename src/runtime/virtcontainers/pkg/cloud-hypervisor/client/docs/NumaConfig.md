@@ -4,12 +4,12 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**GuestNumaId** | **int32** |  | 
-**Cpus** | Pointer to **[]int32** |  | [optional] 
-**Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional] 
-**MemoryZones** | Pointer to **[]string** |  | [optional] 
-**PciSegments** | Pointer to **[]int32** |  | [optional] 
-**DeviceId** | Pointer to **string** |  | [optional] 
+**GuestNumaId** | **int32** |  |
+**Cpus** | Pointer to **[]int32** |  | [optional]
+**Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional]
+**MemoryZones** | Pointer to **[]string** |  | [optional]
+**PciSegments** | Pointer to **[]int32** |  | [optional]
+**DeviceId** | Pointer to **string** |  | [optional]
 
 ## Methods
 
@@ -177,5 +177,3 @@ HasDeviceId returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

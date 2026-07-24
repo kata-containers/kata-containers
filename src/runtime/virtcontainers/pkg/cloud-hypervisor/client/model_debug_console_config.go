@@ -16,16 +16,16 @@ import (
 
 // DebugConsoleConfig struct for DebugConsoleConfig
 type DebugConsoleConfig struct {
-	File   *string `json:"file,omitempty"`
-	Mode   string  `json:"mode"`
-	Iobase *int32  `json:"iobase,omitempty"`
+	File   *string     `json:"file,omitempty"`
+	Mode   ConsoleMode `json:"mode"`
+	Iobase *int32      `json:"iobase,omitempty"`
 }
 
 // NewDebugConsoleConfig instantiates a new DebugConsoleConfig object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDebugConsoleConfig(mode string) *DebugConsoleConfig {
+func NewDebugConsoleConfig(mode ConsoleMode) *DebugConsoleConfig {
 	this := DebugConsoleConfig{}
 	this.Mode = mode
 	return &this
@@ -72,9 +72,9 @@ func (o *DebugConsoleConfig) SetFile(v string) {
 }
 
 // GetMode returns the Mode field value
-func (o *DebugConsoleConfig) GetMode() string {
+func (o *DebugConsoleConfig) GetMode() ConsoleMode {
 	if o == nil {
-		var ret string
+		var ret ConsoleMode
 		return ret
 	}
 
@@ -83,7 +83,7 @@ func (o *DebugConsoleConfig) GetMode() string {
 
 // GetModeOk returns a tuple with the Mode field value
 // and a boolean to check if the value has been set.
-func (o *DebugConsoleConfig) GetModeOk() (*string, bool) {
+func (o *DebugConsoleConfig) GetModeOk() (*ConsoleMode, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -91,7 +91,7 @@ func (o *DebugConsoleConfig) GetModeOk() (*string, bool) {
 }
 
 // SetMode sets field value
-func (o *DebugConsoleConfig) SetMode(v string) {
+func (o *DebugConsoleConfig) SetMode(v ConsoleMode) {
 	o.Mode = v
 }
 

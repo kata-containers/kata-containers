@@ -16,14 +16,15 @@ import (
 
 // CpusConfig struct for CpusConfig
 type CpusConfig struct {
-	BootVcpus   int32          `json:"boot_vcpus"`
-	MaxVcpus    int32          `json:"max_vcpus"`
-	Topology    *CpuTopology   `json:"topology,omitempty"`
-	KvmHyperv   *bool          `json:"kvm_hyperv,omitempty"`
-	MaxPhysBits *int32         `json:"max_phys_bits,omitempty"`
-	Nested      *bool          `json:"nested,omitempty"`
-	Affinity    *[]CpuAffinity `json:"affinity,omitempty"`
-	Features    *CpuFeatures   `json:"features,omitempty"`
+	BootVcpus      int32               `json:"boot_vcpus"`
+	MaxVcpus       int32               `json:"max_vcpus"`
+	Topology       *CpuTopology        `json:"topology,omitempty"`
+	KvmHyperv      *bool               `json:"kvm_hyperv,omitempty"`
+	MaxPhysBits    *int32              `json:"max_phys_bits,omitempty"`
+	Nested         *bool               `json:"nested,omitempty"`
+	Affinity       *[]CpuAffinity      `json:"affinity,omitempty"`
+	Features       *CpuFeatures        `json:"features,omitempty"`
+	CoreScheduling *CoreSchedulingMode `json:"core_scheduling,omitempty"`
 }
 
 // NewCpusConfig instantiates a new CpusConfig object
@@ -38,6 +39,8 @@ func NewCpusConfig(bootVcpus int32, maxVcpus int32) *CpusConfig {
 	this.KvmHyperv = &kvmHyperv
 	var nested bool = true
 	this.Nested = &nested
+	var coreScheduling CoreSchedulingMode = VM
+	this.CoreScheduling = &coreScheduling
 	return &this
 }
 
@@ -50,6 +53,8 @@ func NewCpusConfigWithDefaults() *CpusConfig {
 	this.KvmHyperv = &kvmHyperv
 	var nested bool = true
 	this.Nested = &nested
+	var coreScheduling CoreSchedulingMode = VM
+	this.CoreScheduling = &coreScheduling
 	return &this
 }
 
@@ -293,6 +298,38 @@ func (o *CpusConfig) SetFeatures(v CpuFeatures) {
 	o.Features = &v
 }
 
+// GetCoreScheduling returns the CoreScheduling field value if set, zero value otherwise.
+func (o *CpusConfig) GetCoreScheduling() CoreSchedulingMode {
+	if o == nil || o.CoreScheduling == nil {
+		var ret CoreSchedulingMode
+		return ret
+	}
+	return *o.CoreScheduling
+}
+
+// GetCoreSchedulingOk returns a tuple with the CoreScheduling field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CpusConfig) GetCoreSchedulingOk() (*CoreSchedulingMode, bool) {
+	if o == nil || o.CoreScheduling == nil {
+		return nil, false
+	}
+	return o.CoreScheduling, true
+}
+
+// HasCoreScheduling returns a boolean if a field has been set.
+func (o *CpusConfig) HasCoreScheduling() bool {
+	if o != nil && o.CoreScheduling != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetCoreScheduling gets a reference to the given CoreSchedulingMode and assigns it to the CoreScheduling field.
+func (o *CpusConfig) SetCoreScheduling(v CoreSchedulingMode) {
+	o.CoreScheduling = &v
+}
+
 func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -318,6 +355,9 @@ func (o CpusConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Features != nil {
 		toSerialize["features"] = o.Features
+	}
+	if o.CoreScheduling != nil {
+		toSerialize["core_scheduling"] = o.CoreScheduling
 	}
 	return json.Marshal(toSerialize)
 }

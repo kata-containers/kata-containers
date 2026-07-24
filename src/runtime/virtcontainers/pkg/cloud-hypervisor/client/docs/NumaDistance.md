@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Destination** | **int32** |  | 
-**Distance** | **int32** |  | 
+**Destination** | **int32** |  |
+**Distance** | **int32** |  |
 
 ## Methods
 
@@ -68,5 +68,3 @@ SetDistance sets Distance field to given value.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-
