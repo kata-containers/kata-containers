@@ -207,7 +207,6 @@ impl PciBus {
     /// Get PCI bus device resource. This function is use for create PCI_BUS fdt node for arm,
     /// so there is only care about mmio resource. We need to copy mmio resource, because there is
     /// a read write lock, we can't return DeviceResources's address for caller using.
-    #[cfg(target_arch = "aarch64")]
     pub fn get_device_resources(&self) -> DeviceResources {
         let mut device_resources = DeviceResources::new();
         if let Some(resources) = &self
