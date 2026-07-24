@@ -699,11 +699,11 @@ The architecture is designed to support multiple guest extension images:
 
 - **GPU extension** — the NVIDIA GPU userspace (driver libraries, NVML, the
   container-toolkit binaries, kernel modules) lives in a `gpu-extension` image
-  mounted at `/run/kata-extensions/gpu`, carved out of the same build as the
-  driver-agnostic `nvidia` base image. NVRC orchestrates early boot, loads the
-  modules from the extension, and composes the GPU extension with the CoCo extension on
-  confidential GPU guests. This extension is implemented; its interplay with the
-  CoCo extension (NVML resolution, attester selection) is covered in
+  mounted at `/run/kata-extensions/gpu`, assembled from the same pinned package
+  sources used by the monolith. NVRC orchestrates early boot, loads the modules
+  from the extension, and composes the GPU extension with the CoCo extension on
+  confidential GPU guests. This extension is implemented; its interplay with
+  the CoCo extension (NVML resolution, attester selection) is covered in
   "Runtime dependencies" and "Attester variant selection" above.
 
 - **Custom extensions** — users can build their own guest extension images for
@@ -711,19 +711,28 @@ The architecture is designed to support multiple guest extension images:
 
 ### Additive image assembly
 
-Today the NVIDIA images are carved out of a single chiseled monolith tree: the
-`gpu-extension` is assembled additively (an allow-list of GPU userspace is copied
-into a fresh tree), while the `nvidia` base is produced *subtractively* — the same
-allow-list is deleted from the full tree. This keeps the monolith byte-identical
-during the transition, but it means the base build describes what it does *not*
-want rather than what it does.
+The `gpu-extension` is assembled in a dedicated Ubuntu builder container. Its
+image build installs the same pinned NVIDIA packages from the same CUDA, tools,
+and Ubuntu repositories as the monolith, and bakes in the pinned UPX tool. It
+intentionally carries no Rust or Go toolchain. At runtime, the builder uses the
+driver's `sandboxutils-filelist.json` capability map to copy only the required
+GPU userspace into a fresh extension tree, then adds Kata's version-matched
+NVIDIA kernel modules from the kernel build artifact. This path needs no
+`mmdebstrap`, package-install chroot, agent artifact, NVRC artifact, or shared
+driver `stage-one`.
+
+The `nvidia` base is still produced *subtractively*: its GPU allow-list is
+deleted from the full chiseled monolith tree. This keeps the monolith
+byte-identical during the transition, but it means the base build describes what
+it does *not* want rather than what it does.
 
 The intended next step is to invert this into a purely additive flow, so nothing
 is ever subtracted:
 
-1. Build the shared driver `stage-one` (always required).
+1. Build the shared driver `stage-one` for the monolith and `nvidia` base.
 2. Assemble the `nvidia` base additively from `stage-one`.
-3. Assemble the `gpu-extension` additively from `stage-one`.
+3. Keep assembling the `gpu-extension` directly from the pinned package sources
+   and Kata kernel module artifact.
 4. Compose the monolith by combining the base and the extension.
 
 This requires splitting the interleaved `chisseled_*` producers (which today copy
