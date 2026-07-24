@@ -50,10 +50,6 @@ nvidia_stage_one_variant() {
 stage_one="${BUILD_DIR:?}/rootfs-$(nvidia_stage_one_variant)-stage-one"
 readonly stage_one
 
-# The driver ships its own capability-to-file map so we do not have to maintain
-# one ourselves or guess from filename prefixes.
-readonly filelist="${stage_one}/usr/share/nvidia/files.d/sandboxutils-filelist.json"
-
 # sandboxutils-filelist.json schema (one object per file):
 #   { "name": "libcuda.so.570.00",
 #     "type": "LIB",                          # LIB | BINARY | FIRMWARE | ICD | SYMLINK | ...
@@ -64,31 +60,53 @@ readonly filelist="${stage_one}/usr/share/nvidia/files.d/sandboxutils-filelist.j
 # If this schema changes (key renamed, type values altered) jq will return
 # empty output and nvidia_driver_capabilities_validate() will catch it early.
 nvidia_driver_capabilities_validate() {
+	local driver_required_files="${1:?driver required files path required}"
+
 	command -v jq > /dev/null || die "nvidia: jq is required but not installed"
-	[[ -f "${filelist}" ]] || die "sandboxutils filelist not found: ${filelist}"
+	[[ -f "${driver_required_files}" ]] || die "sandboxutils filelist not found: ${driver_required_files}"
 	# Require at least one entry with the mandatory keys (name, type, category).
 	local count
-	count=$(jq '[.[] | select(.name and .type and .category)] | length' "${filelist}") \
+	count=$(jq '[.[] | select(.name and .type and .category)] | length' "${driver_required_files}") \
 		|| die "nvidia: sandboxutils-filelist.json is not valid JSON"
 	[[ "${count}" -gt 0 ]] \
 		|| die "nvidia: sandboxutils-filelist.json missing expected keys (name/type/category) — schema may have changed"
 }
 
-# nvidia_driver_capabilities TYPE CATEGORY [CATEGORY ...]
+# nvidia_driver_capabilities DRIVER_REQUIRED_FILES TYPE CATEGORY [CATEGORY ...]
 #
 # The driver knows better than we do which files belong to which capability.
 # 32-bit compat entries are skipped: kata is 64-bit only.
 nvidia_driver_capabilities() {
-	local filetype="${1:?type required}"; shift
+	local driver_required_files="${1:?driver required files path required}"
+	local filetype="${2:?type required}"
+	shift 2
+
 	command -v jq > /dev/null || die "jq is required for nvidia_driver_capabilities"
-	[[ -f "${filelist}" ]] || die "sandboxutils filelist not found: ${filelist}"
+	[[ -f "${driver_required_files}" ]] || die "sandboxutils filelist not found: ${driver_required_files}"
 
 	jq -r --arg ftype "${filetype}" \
 		'[.[] | select((.is_32bit_compat // false | tostring) != "true")
 		       | select(.type == $ftype)
 		       | select([.category[] | IN($ARGS.positional[])] | any)
 		       | .name] | unique[]' \
-		"${filelist}" --args "$@"
+		"${driver_required_files}" --args "$@"
+}
+
+# Populate the capability arrays introduced by f4b0e1a88c from the driver
+# filelist under the supplied source root.
+nvidia_populate_capability_arrays() {
+	local source="${1:?source root required}"
+	local driver_required_files="${source}/usr/share/nvidia/files.d/sandboxutils-filelist.json"
+
+	nvidia_driver_capabilities_validate "${driver_required_files}"
+	mapfile -t _nvidia_libs < <(nvidia_driver_capabilities "${driver_required_files}" LIB cuda opencl nvml nvpd video nvsandboxutils)
+	mapfile -t _nvidia_bins < <(nvidia_driver_capabilities "${driver_required_files}" BINARY cuda nvml nvpd)
+	mapfile -t _nvidia_icds < <(nvidia_driver_capabilities "${driver_required_files}" ICD opencl)
+
+	# Failures inside process substitutions do not propagate under set -e.
+	(( ${#_nvidia_libs[@]} > 0 )) || die "nvidia: no LIB entries selected from ${driver_required_files}"
+	(( ${#_nvidia_bins[@]} > 0 )) || die "nvidia: no BINARY entries selected from ${driver_required_files}"
+	(( ${#_nvidia_icds[@]} > 0 )) || die "nvidia: no ICD entries selected from ${driver_required_files}"
 }
 
 # Image layout produced from the chiseled tree:
@@ -786,19 +804,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 		tar -C "${stage_one}" -xf "${stage_one}".tar.zst
 
-		# Validate and populate capability arrays after stage-one is extracted
-		# so the filelist is actually present on disk.
-		nvidia_driver_capabilities_validate
-		mapfile -t _nvidia_libs < <(nvidia_driver_capabilities LIB cuda opencl nvml nvpd video nvsandboxutils)
-		mapfile -t _nvidia_bins < <(nvidia_driver_capabilities BINARY cuda nvml nvpd)
-		mapfile -t _nvidia_icds < <(nvidia_driver_capabilities ICD opencl)
-
-		# Failures inside the process substitutions above do not propagate
-		# under set -e; empty arrays are the observable symptom, so fail fast
-		# on them instead of assembling a broken rootfs.
-		(( ${#_nvidia_libs[@]} > 0 )) || die "nvidia: no LIB entries selected from ${filelist}"
-		(( ${#_nvidia_bins[@]} > 0 )) || die "nvidia: no BINARY entries selected from ${filelist}"
-		(( ${#_nvidia_icds[@]} > 0 )) || die "nvidia: no ICD entries selected from ${filelist}"
+		nvidia_populate_capability_arrays "${stage_one}"
 
 		pushd "${stage_two}" >> /dev/null
 
