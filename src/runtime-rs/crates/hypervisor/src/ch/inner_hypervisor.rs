@@ -43,7 +43,6 @@ use nix::unistd::Uid;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::fs;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
@@ -1057,51 +1056,11 @@ fn get_guest_protection() -> Result<GuestProtection> {
     Ok(guest_protection)
 }
 
-// Return a VCPU/TID map from a specified /proc/{pid} path.
+// Return a VCPU/TID map from a specified /proc/{pid} path. Cloud Hypervisor
+// names its vCPU backing threads "vcpu${number}"; the shared scanner in
+// crate::utils reads those names from /proc/<pid>/task/<tid>/comm.
 fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
-    const VCPU_STR: &str = "vcpu";
-
-    let src = std::fs::canonicalize(proc_path)
-        .map_err(|e| anyhow!("Invalid proc path: {proc_path}: {e}"))?;
-
-    let tid_path = src.join("task");
-
-    let mut vcpus = HashMap::new();
-
-    for entry in fs::read_dir(&tid_path)? {
-        let entry = entry?;
-
-        let tid_str = match entry.file_name().into_string() {
-            Ok(id) => id,
-            Err(_) => continue,
-        };
-
-        let tid = tid_str
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("invalid tid."))?;
-
-        let comm_path = tid_path.join(tid_str.clone()).join("comm");
-
-        if !comm_path.exists() {
-            return Err(anyhow!("comm path was not found."));
-        }
-
-        let p_name = fs::read_to_string(comm_path)?;
-
-        // The CH names it's threads with a vcpu${number} to identify them, where
-        // the thread name is located at /proc/${ch_pid}/task/${thread_id}/comm.
-        if !p_name.starts_with(VCPU_STR) {
-            continue;
-        }
-
-        let vcpu_id = p_name
-            .trim_start_matches(VCPU_STR)
-            .trim()
-            .parse::<u32>()
-            .map_err(|e| anyhow!(e).context("Invalid vcpu id."))?;
-
-        vcpus.insert(vcpu_id, tid);
-    }
+    let vcpus = crate::utils::get_vcpu_tids(proc_path, "vcpu")?;
 
     if vcpus.is_empty() {
         return Err(anyhow!("The contents of proc path are not available."));
@@ -1122,7 +1081,7 @@ mod tests {
     use serial_test::serial;
     use test_utils::{assert_result, skip_if_not_root};
 
-    use std::fs::File;
+    use std::fs::{self, File};
     use tempfile::Builder;
 
     fn set_fake_guest_protection(protection: Option<GuestProtection>) {

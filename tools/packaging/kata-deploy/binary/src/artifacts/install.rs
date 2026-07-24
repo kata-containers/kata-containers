@@ -27,6 +27,7 @@ const ALL_SHIMS: &[&str] = &[
     "dragonball",
     "fc",
     "firecracker",
+    "openvmm-azure-runtime-rs",
     "remote",
     // QEMU shims
     "qemu",
@@ -69,6 +70,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
         "clh" | "clh-azure" | "clh-runtime-rs" | "clh-azure-runtime-rs" => Ok("clh"),
         "dragonball" => Ok("dragonball"),
         "fc" | "firecracker" => Ok("firecracker"),
+        "openvmm-azure-runtime-rs" => Ok("openvmm"),
         "remote" => Ok("remote"),
         _ => anyhow::bail!(
             "Unknown shim '{}'. Valid shims are: {}",
@@ -1089,6 +1091,7 @@ fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
         // For non-QEMU shims, use the appropriate hypervisor binary
         let binary = match shim {
             "clh" | "clh-azure" | "clh-runtime-rs" | "clh-azure-runtime-rs" => "cloud-hypervisor",
+            "openvmm-azure-runtime-rs" => "openvmm",
             "fc" | "firecracker" => "firecracker",
             "dragonball" => "dragonball",
             "stratovirt" => "stratovirt",
@@ -1391,6 +1394,7 @@ mod tests {
     #[case("dragonball", "dragonball")]
     #[case("fc", "firecracker")]
     #[case("firecracker", "firecracker")]
+    #[case("openvmm-azure-runtime-rs", "openvmm")]
     #[case("remote", "remote")]
     fn test_get_hypervisor_name_other_hypervisors(#[case] shim: &str, #[case] expected: &str) {
         assert_eq!(get_hypervisor_name(shim).unwrap(), expected);

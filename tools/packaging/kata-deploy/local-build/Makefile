@@ -186,6 +186,9 @@ coco-guest-components-tarball:
 cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
+openvmm-tarball:
+	${MAKE} $@-build
+
 firecracker-tarball:
 	${MAKE} $@-build
 

@@ -16,6 +16,9 @@ use std::{
     process::Command,
 };
 
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Context, Result};
 use kata_types::{
     build_path,
@@ -453,6 +456,59 @@ lazy_static! {
 /// `true` if native CCW bus is detected, `false` otherwise.
 pub fn uses_native_ccw_bus() -> bool {
     *NATIVE_CCW_BUS_CACHE
+}
+
+/// Scan the threads of the process rooted at `proc_path` (for example
+/// "/proc/1234") and return a map of vCPU index to host thread ID.
+///
+/// VMMs that run guest vCPUs on dedicated host threads name those threads
+/// "<prefix><index>" and expose the name via `/proc/<pid>/task/<tid>/comm`
+/// (Cloud Hypervisor uses the prefix "vcpu", OpenVMM uses "vp-"). Threads whose
+/// name does not start with `prefix` are ignored. The returned map may be empty;
+/// callers decide whether that is an error.
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+pub(crate) fn get_vcpu_tids(proc_path: &str, prefix: &str) -> Result<HashMap<u32, u32>> {
+    let src = std::fs::canonicalize(proc_path)
+        .map_err(|e| anyhow!("Invalid proc path: {proc_path}: {e}"))?;
+
+    let tid_path = src.join("task");
+
+    let mut vcpus = HashMap::new();
+
+    for entry in std::fs::read_dir(&tid_path)? {
+        let entry = entry?;
+
+        let tid_str = match entry.file_name().into_string() {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+
+        let tid = tid_str
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("invalid tid."))?;
+
+        let comm_path = tid_path.join(&tid_str).join("comm");
+
+        if !comm_path.exists() {
+            return Err(anyhow!("comm path was not found."));
+        }
+
+        let p_name = std::fs::read_to_string(comm_path)?;
+
+        if !p_name.starts_with(prefix) {
+            continue;
+        }
+
+        let vcpu_id = p_name
+            .trim_start_matches(prefix)
+            .trim()
+            .parse::<u32>()
+            .map_err(|e| anyhow!(e).context("Invalid vcpu id."))?;
+
+        vcpus.insert(vcpu_id, tid);
+    }
+
+    Ok(vcpus)
 }
 
 #[cfg(test)]

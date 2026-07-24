@@ -204,6 +204,11 @@ get_busybox_image_name() {
 	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-$(uname -m)"
 }
 
+get_openvmm_image_name() {
+	openvmm_script_dir="${repo_root_dir}/tools/packaging/static-build/openvmm"
+	echo "${BUILDER_REGISTRY}:openvmm-$(get_last_modification "${openvmm_script_dir}")-$(uname -m)"
+}
+
 get_virtiofsd_image_name() {
 	ARCH=${ARCH:-$(uname -m)}
 	case ${ARCH} in

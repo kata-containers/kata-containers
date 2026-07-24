@@ -31,6 +31,7 @@ readonly busybox_builder="${static_build_dir}/busybox/build.sh"
 readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly coco_guest_components_builder="${static_build_dir}/coco-guest-components/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
+readonly openvmm_builder="${static_build_dir}/openvmm/build.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
@@ -130,6 +131,7 @@ options:
 	boot-image-se
 	coco-guest-components
 	cloud-hypervisor
+	openvmm
 	firecracker
 	genpolicy
 	kata-ctl
@@ -1208,6 +1210,31 @@ install_clh() {
 	install_clh_helper "musl" "${features}"
 }
 
+# Install static openvmm asset.
+#
+# OpenVMM publishes no released binaries, so it is always built from source
+# (see static-build/openvmm/build.sh); there is no pull-released-binary fast
+# path like cloud-hypervisor. Repeat builds are still short-circuited by the
+# cached-artefact tarball via install_cached_tarball_component.
+install_openvmm() {
+	latest_artefact="$(get_from_kata_deps ".assets.hypervisor.openvmm.version")"
+	latest_builder_image="$(get_openvmm_image_name)"
+
+	install_cached_tarball_component \
+		"openvmm" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static openvmm"
+	"${openvmm_builder}"
+	info "Install static openvmm"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	install -D --mode "${default_binary_permissions}" openvmm/openvmm "${destdir}/opt/kata/bin/openvmm"
+}
+
 # Install static stratovirt asset
 install_stratovirt() {
 	local stratovirt_version
@@ -1675,6 +1702,8 @@ handle_build() {
 	coco-guest-components) install_coco_guest_components ;;
 
 	cloud-hypervisor) install_clh ;;
+
+	openvmm) install_openvmm ;;
 
 	firecracker) install_firecracker ;;
 

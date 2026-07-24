@@ -63,6 +63,12 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh-azure-runtime-rs
             instance-type: normal
+          - host_os: cbl-mariner
+            vmm: openvmm-azure-runtime-rs
+            instance-type: small
+          - host_os: cbl-mariner
+            vmm: openvmm-azure-runtime-rs
+            instance-type: normal
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-k8s-tests-aks-${{ toJSON(matrix) }}
       cancel-in-progress: true
