@@ -88,6 +88,90 @@ impl PolicyFragment {
         format!("{}/{}/{}", self.issuer, self.feed, self.svn)
     }
 
+    /// BL-8: reconstruct a `PolicyFragment` from a COSE_Sign1 payload produced by
+    /// [`signing_bytes`](Self::signing_bytes) (the `kata-policy-fragment/v3` statement).
+    ///
+    /// The boot-time OCI-pull path pulls an untrusted COSE envelope whose payload IS the
+    /// signed statement; parsing it back yields the issuer/feed/SVN/grants/module the
+    /// envelope commits to, so the fragment can be run through the SRM verify→apply→commit
+    /// gates (exactly like the runtime ttRPC push path). The detached `signature` field is
+    /// left empty — the COSE envelope carries the authoritative signature, verified by
+    /// [`verify_cose`](FragmentStore::verify_cose) / [`verify_cose_x509`](FragmentStore::verify_cose_x509).
+    /// `receipt`/`receipt_ledger`/`receipt_proof` are NOT part of the signed statement and
+    /// must be supplied by the caller (e.g. from OCI manifest annotations) if the ledger
+    /// issued a transparency receipt.
+    pub fn from_cose_payload(payload: &[u8]) -> Option<Self> {
+        let text = std::str::from_utf8(payload).ok()?;
+        // Split off the FR-1j predecessor-head suffix first (module is the only multi-line
+        // field, so splitting from the tail is unambiguous).
+        let (pre, prevhex) = text.rsplit_once("\n--prevhead--\n")?;
+        let (meta, module) = pre.split_once("--module--\n")?;
+
+        let mut lines = meta.lines();
+        if lines.next()? != "kata-policy-fragment/v3" {
+            return None;
+        }
+        let issuer = lines.next()?.to_string();
+        let feed = lines.next()?.to_string();
+        let svn: u64 = lines.next()?.parse().ok()?;
+
+        let mut grants = Vec::new();
+        let mut includes = Vec::new();
+        let mut requires = Vec::new();
+        // Section state: 0 = grants, 1 = includes, 2 = requires.
+        let mut section = 0u8;
+        for line in lines {
+            match line {
+                "--includes--" => section = 1,
+                "--requires--" => section = 2,
+                other if !other.is_empty() => match section {
+                    0 => grants.push(other.to_string()),
+                    1 => includes.push(other.to_string()),
+                    _ => requires.push(other.to_string()),
+                },
+                _ => {}
+            }
+        }
+
+        let prev_log_head = if prevhex.trim().is_empty() {
+            None
+        } else {
+            Some(hex_to_bytes(prevhex.trim()).ok()?)
+        };
+
+        let policy_module = if module.is_empty() {
+            None
+        } else {
+            Some(module.to_string())
+        };
+
+        Some(PolicyFragment {
+            issuer,
+            feed,
+            svn,
+            grants,
+            policy_module,
+            includes,
+            requires,
+            receipt: None,
+            receipt_ledger: None,
+            prev_log_head,
+            receipt_proof: None,
+            signature: Vec::new(),
+        })
+    }
+
+    /// BL-8: reconstruct a `PolicyFragment` directly from a COSE_Sign1 envelope (as pulled
+    /// from an OCI feed) by decoding it and parsing its payload via
+    /// [`from_cose_payload`](Self::from_cose_payload). The signature is verified later by
+    /// the SRM against these reconstructed fields.
+    pub fn from_cose_envelope(cose_sign1: &[u8]) -> Option<Self> {
+        use coset::CborSerializable;
+        let sign1 = coset::CoseSign1::from_slice(cose_sign1).ok()?;
+        let payload = sign1.payload.as_ref()?;
+        Self::from_cose_payload(payload)
+    }
+
     /// Canonical byte encoding of the fragment *statement* that both the issuer signature
     /// and the transparency receipt cover. Deterministic and binds issuer, feed, SVN,
     /// sorted grants, module, sorted includes, sorted requires, and (FR-1j) the asserted
@@ -1114,6 +1198,55 @@ mod tests {
             signature: Vec::new(),
             ..Default::default()
         }
+    }
+
+    /// BL-8: `from_cose_payload` reconstructs exactly the fields the COSE payload commits
+    /// to (the signed `signing_bytes` statement), so a boot-pulled envelope can be run
+    /// through the SRM gates. Round-trips issuer/feed/SVN/grants/module/includes/requires
+    /// and the FR-1j predecessor head; the reconstructed statement must byte-equal the
+    /// original (proving the envelope binds precisely these fields).
+    #[test]
+    fn from_cose_payload_roundtrips_signing_bytes() {
+        let f = PolicyFragment {
+            issuer: "did:x509:0:sha256:AAAA::CN:signer".into(),
+            feed: "contoso.azurecr.io/frag/infra:1".into(),
+            svn: 7,
+            grants: vec!["exec".into(), "mount".into()],
+            policy_module: Some(
+                "package agent_policy.fragments\nallow := true\n# multi-line\nx := 1".into(),
+            ),
+            includes: vec!["exec".into()],
+            requires: vec!["did:x509:0:sha256:BBBB::CN:dep/feed/2".into()],
+            prev_log_head: Some(vec![0xde, 0xad, 0xbe, 0xef]),
+            ..Default::default()
+        };
+        let payload = f.signing_bytes();
+        let parsed = PolicyFragment::from_cose_payload(&payload).expect("parse payload");
+        assert_eq!(parsed.issuer, f.issuer);
+        assert_eq!(parsed.feed, f.feed);
+        assert_eq!(parsed.svn, f.svn);
+        assert_eq!(parsed.grants, f.grants);
+        assert_eq!(parsed.policy_module, f.policy_module);
+        assert_eq!(parsed.includes, f.includes);
+        assert_eq!(parsed.requires, f.requires);
+        assert_eq!(parsed.prev_log_head, f.prev_log_head);
+        // The reconstructed statement must be byte-identical (the whole point: the SRM will
+        // verify the COSE signature against exactly these bytes).
+        assert_eq!(parsed.signing_bytes(), payload);
+
+        // Minimal fragment (no grants/module/includes/requires/prevhead) also round-trips.
+        let bare = PolicyFragment {
+            issuer: "iss".into(),
+            feed: "feed".into(),
+            svn: 1,
+            ..Default::default()
+        };
+        let bp = PolicyFragment::from_cose_payload(&bare.signing_bytes()).unwrap();
+        assert_eq!(bp.signing_bytes(), bare.signing_bytes());
+        assert!(bp.policy_module.is_none() && bp.prev_log_head.is_none());
+
+        // Not a v3 statement → rejected.
+        assert!(PolicyFragment::from_cose_payload(b"garbage").is_none());
     }
 
     /// TC-F1.5: a declarative minimum-SVN floor (from measured state) is enforced — a
