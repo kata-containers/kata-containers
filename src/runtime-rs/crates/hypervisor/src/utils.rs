@@ -172,9 +172,7 @@ fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
             Err(e) => {
                 fds.clear();
                 return Err(anyhow!(
-                    "It failed with error {:?} when opened the {:?} device.",
-                    e,
-                    i
+                    "Failed to open {device} fd index {i}, with error {e}"
                 ));
             }
         };
