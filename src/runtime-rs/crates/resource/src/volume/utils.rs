@@ -112,7 +112,14 @@ pub(crate) async fn generate_shared_path(
     let guest_path = do_get_guest_path(&mount_name, device_id, true, false);
     // Note: directories should always be created under the rw/ path. The ro/ directory is a
     // read-only bind mount of rw/, so creating directories directly under ro/ would fail with a read-only FS.
-    let host_path = do_get_host_path(&mount_name, sid, device_id, true, read_only);
+    let host_path = do_get_host_path(&mount_name, sid, device_id, true, false);
+    debug!(
+        sl!(),
+        "generate shared path: host_path={}, guest_path={}, volume_read_only={}",
+        host_path,
+        guest_path,
+        read_only
+    );
 
     if get_mount_path(&Some(dest)).starts_with("/dev") {
         fs::File::create(&host_path).context(format!("failed to create file {:?}", &host_path))?;
@@ -275,5 +282,53 @@ mod tests {
                 KATA_MOUNT_BIND_TYPE.to_string(),
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn test_generate_shared_path_readonly_creates_under_rw() {
+        use kata_types::rootless::{rootless_dir, set_rootless};
+        use std::fs;
+        use uuid::Uuid;
+
+        let runtime_dir = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_RUNTIME_DIR", runtime_dir.path());
+
+        set_rootless(true);
+
+        let sid = format!("test-sandbox-{}", Uuid::new_v4());
+        let device_id = "test-device";
+        let destination = PathBuf::from("/data/test-volume");
+        let mount_name = generate_mount_path(device_id, "test-volume");
+
+        let result = generate_shared_path(destination, true, device_id, &sid).await;
+
+        let rw_path = do_get_host_path(&mount_name, &sid, device_id, true, false);
+        let ro_path = do_get_host_path(&mount_name, &sid, device_id, true, true);
+
+        assert!(
+            result.is_ok(),
+            "read-only volume path generation failed: {:?}",
+            result
+        );
+        assert!(
+            Path::new(&rw_path).is_dir(),
+            "mount point was not created under rw/: {}",
+            rw_path
+        );
+        assert!(
+            !Path::new(&ro_path).exists(),
+            "mount point was unexpectedly created under ro/: {}",
+            ro_path
+        );
+
+        let expected_guest_path = do_get_guest_path(&mount_name, device_id, true, false);
+        assert_eq!(result.unwrap(), expected_guest_path);
+
+        let sandbox_path = Path::new(&rootless_dir())
+            .join("run/kata-containers/shared/sandboxes")
+            .join(&sid);
+        let _ = fs::remove_dir_all(sandbox_path);
+
+        set_rootless(false);
     }
 }
