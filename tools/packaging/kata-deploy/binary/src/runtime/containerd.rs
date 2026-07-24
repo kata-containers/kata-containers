@@ -138,6 +138,30 @@ fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
     }
 }
 
+/// Every containerd configuration file [`configure_containerd`] can write, the
+/// effective kata output file first.
+///
+/// All of them, because an unchanged kata drop-in says nothing about the user
+/// drop-in next to it, or about the `imports` entry in the main config that
+/// makes containerd read either of them in the first place.
+pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Option<Vec<PathBuf>> {
+    let paths = config.get_containerd_paths(runtime).await.ok()?;
+
+    let mut files = vec![get_containerd_output_path(&paths)];
+    if let Ok((user_drop_in, _)) = get_user_containerd_drop_in_output_path(&paths) {
+        files.push(user_drop_in);
+    }
+    if let Some(imports_file) = &paths.imports_file {
+        files.push(PathBuf::from(imports_file));
+    }
+
+    // Without drop-in support the output file is the main config, which is also
+    // where imports would go.
+    files.dedup();
+
+    Some(files)
+}
+
 fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
     if !paths.use_drop_in {
         anyhow::bail!(

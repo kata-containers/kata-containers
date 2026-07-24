@@ -9,7 +9,7 @@ use anyhow::Result;
 use log::info;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 struct CrioRuntimeParams<'a> {
     /// Runtime name (e.g., "kata-qemu")
@@ -189,6 +189,15 @@ log_level = "debug""#
     );
 
     Ok(())
+}
+
+/// Every CRI-O configuration file [`configure_crio`] writes, the runtime drop-in
+/// first. The debug one is in there so that toggling debug reads as a change.
+pub(crate) fn kata_cri_config_files(config: &Config) -> Vec<PathBuf> {
+    vec![
+        PathBuf::from(&config.crio_drop_in_conf_file),
+        PathBuf::from(&config.crio_drop_in_conf_file_debug),
+    ]
 }
 
 pub async fn cleanup_crio(config: &Config) -> Result<()> {

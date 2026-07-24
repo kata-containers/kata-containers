@@ -310,7 +310,7 @@ async fn main() -> Result<()> {
             info!("Install artifacts stage completed, exiting");
         }
         Action::InstallStageCri => {
-            install_stage_cri(&config, &runtime).await?;
+            install_stage_cri(&config, &runtime, true).await?;
             info!("Install CRI stage completed, exiting");
         }
         Action::InstallStageLabel => {
@@ -369,7 +369,7 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
     install_stage_host_check(config, runtime).await?;
     install_stage_artifacts(config, runtime).await?;
-    install_stage_cri(config, runtime).await?;
+    install_stage_cri(config, runtime, false).await?;
     install_stage_label(config).await?;
 
     info!("Kata Containers installation completed successfully");
@@ -778,8 +778,36 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
 /// Install stage 2 (cri): write CRI drop-ins, configure snapshotters, restart
 /// the runtime, and wait for the node to become ready. This node-disrupting
 /// stage is kept short-lived.
-async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()> {
+///
+/// `staged` distinguishes the two deployment models, because they survive the
+/// runtime restart very differently:
+///
+///   - DaemonSet (`staged == false`): this runs inside a long-lived, regular
+///     container. When containerd is restarted the kubelet re-attaches to the
+///     still-running container, so the process survives the bounce, reaches the
+///     readiness wait, and goes on to label the node in a single shot. It
+///     therefore always restarts.
+///
+///   - Job (`staged == true`): this runs as a short-lived *init* container in a
+///     `restartPolicy: Never` per-node Job. On some platforms (notably AKS)
+///     restarting the very containerd that manages this pod tears the init
+///     container down (exit 255, no logs) before it can finish - so the Job
+///     retries with a fresh pod. To let the retry converge we skip the restart
+///     once the config we just (idempotently) re-applied is byte-for-byte what
+///     was already on disk *and* systemd says the runtime has been up since it
+///     was written. Neither half is enough alone: an unchanged config also
+///     describes an attempt that died before restarting anything, and a recent
+///     restart says nothing about an upgrade that changes the config. A genuine
+///     change still restarts; if that restart kills the init container again,
+///     the next retry finds both satisfied and takes the skip path.
+async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
+
+    let config_before = if staged {
+        runtime::cri_config_snapshot(config, runtime).await
+    } else {
+        None
+    };
 
     runtime::containerd::setup_containerd_config_files(runtime, config).await?;
 
@@ -794,8 +822,28 @@ async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()>
         }
     }
 
+    if staged {
+        if let Some(before) = config_before {
+            let unchanged =
+                runtime::cri_config_snapshot(config, runtime).await.as_ref() == Some(&before);
+            if unchanged
+                && runtime::lifecycle::cri_serving_config_from(runtime, before.written_at()).await
+            {
+                info!(
+                    "install (cri): CRI config for {runtime} is unchanged from a previous \
+                     attempt, and {runtime} has been running since it was written, so it is \
+                     already serving it. Skipping the (self-terminating) restart and \
+                     checking the runtime is up instead."
+                );
+                runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                info!("install (cri): runtime is up; CRI stage complete without restart");
+                return Ok(());
+            }
+        }
+    }
+
     info!("About to restart runtime: {}", runtime);
-    runtime::lifecycle::restart_runtime(config, runtime).await?;
+    runtime::lifecycle::restart_runtime(config, runtime, staged).await?;
     info!("Runtime restart completed successfully");
 
     Ok(())

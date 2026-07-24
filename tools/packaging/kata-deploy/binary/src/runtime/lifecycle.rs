@@ -10,7 +10,7 @@ use crate::utils;
 use super::manager;
 use anyhow::Result;
 use log::info;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::time::sleep;
 
 pub async fn wait_till_node_is_ready_timeout(
@@ -56,7 +56,80 @@ pub async fn wait_till_node_is_ready_timeout(
     }
 }
 
-pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
+/// Wait until the CRI runtime's systemd unit is active again, up to `timeout_secs`.
+///
+/// Scoped to what this stage is answerable for: the runtime it bounced serving
+/// again. Whether the node as a whole is Ready is checked by the stage that
+/// labels it kata-capable.
+pub async fn wait_till_cri_unit_active(runtime: &str, timeout_secs: u64) -> Result<()> {
+    let unit = manager::cri_systemd_unit(runtime);
+    let start = std::time::Instant::now();
+    let mut attempt = 0;
+
+    loop {
+        attempt += 1;
+        if utils::host_systemctl(&["is-active", "--quiet", &unit])
+            .await
+            .is_ok()
+        {
+            info!("Unit {unit} is active again (attempt {attempt})");
+            return Ok(());
+        }
+
+        if start.elapsed().as_secs() >= timeout_secs {
+            return Err(anyhow::anyhow!(
+                "Timed out after {timeout_secs}s waiting for {unit} to become active again"
+            ));
+        }
+
+        info!("wait_till_cri_unit_active: {unit} not active yet, sleeping 2 seconds...");
+        sleep(Duration::from_secs(2)).await;
+    }
+}
+
+/// Whether the CRI runtime has been running continuously since `written_at`, and
+/// is therefore serving the configuration that was on disk at that moment.
+///
+/// Finding the configuration a job-mode retry would have written proves it was
+/// written, not that anything restarted to read it: an attempt that died in
+/// between leaves the two indistinguishable on disk. Only systemd can tell them
+/// apart, having recorded the restart regardless of who asked for it.
+///
+/// Anything that cannot be established is answered `false`, costing a restart
+/// that may turn out to be unnecessary. The opposite mistake labels a node
+/// kata-capable while its runtime knows nothing about kata.
+pub async fn cri_serving_config_from(runtime: &str, written_at: Option<SystemTime>) -> bool {
+    // k0s reloads without a restart, so there is none for a retry to have missed.
+    if matches!(runtime, "k0s-worker" | "k0s-controller") {
+        return true;
+    }
+
+    let Some(written_at) = written_at else {
+        return false;
+    };
+
+    let unit = manager::cri_systemd_unit(runtime);
+    let active_since = match utils::host_unit_active_since(&unit).await {
+        Ok(Some(active_since)) => active_since,
+        Ok(None) => {
+            info!("{unit} has not been active since boot; a restart is still needed");
+            return false;
+        }
+        Err(e) => {
+            info!("Could not tell when {unit} last started ({e}); assuming a restart is needed");
+            return false;
+        }
+    };
+
+    active_since > written_at
+}
+
+/// Restart the CRI runtime, then wait for it to come back.
+///
+/// `staged` selects how that wait is done: the DaemonSet survives the bounce and
+/// can wait for the node's Ready condition, while a staged per-node Job is torn
+/// down along with the runtime it restarts and waits on the systemd unit instead.
+pub async fn restart_runtime(config: &Config, runtime: &str, staged: bool) -> Result<()> {
     info!("restart_runtime: Starting restart for runtime={}", runtime);
     match runtime {
         "k0s-worker" | "k0s-controller" => {
@@ -71,6 +144,15 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
             utils::host_systemctl(&["restart", &unit]).await?;
             info!("restart_runtime: Successfully restarted {}", unit);
         }
+    }
+
+    if staged {
+        // k0s never restarted anything above, so there is nothing to wait for.
+        if !matches!(runtime, "k0s-worker" | "k0s-controller") {
+            info!("restart_runtime: Waiting for the CRI runtime unit to come back");
+            wait_till_cri_unit_active(runtime, 300).await?;
+        }
+        return Ok(());
     }
 
     info!("restart_runtime: Waiting for node to become ready");
