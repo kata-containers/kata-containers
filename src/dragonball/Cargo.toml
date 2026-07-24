@@ -10,6 +10,7 @@ repository = "https://github.com/kata-containers/kata-containers.git"
 version = "0.1.0"
 
 [dependencies]
+acpi_tables = { workspace = true }
 anyhow = { workspace = true }
 arc-swap = { workspace = true }
 bytes = { workspace = true }
@@ -48,6 +49,7 @@ slog = { workspace = true }
 slog-scope = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uuid = { features = ["v4"], version = "1" }
 vfio-bindings = { optional = true, workspace = true }
 vfio-ioctls = { optional = true, workspace = true }
 virtio-queue = { optional = true, workspace = true }

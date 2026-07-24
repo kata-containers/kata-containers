@@ -123,8 +123,10 @@ impl Sdt {
     }
 }
 
-pub fn create_dsdt_table() -> Sdt {
-    Sdt::new(*b"DSDT", 36, 2)
+pub fn create_dsdt_table(body: &[u8]) -> Sdt {
+    let mut dsdt = Sdt::new(*b"DSDT", 36, 2);
+    dsdt.append_slice(body);
+    dsdt
 }
 
 #[cfg(test)]
