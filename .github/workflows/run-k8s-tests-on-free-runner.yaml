@@ -51,6 +51,8 @@ jobs:
           { vmm: qemu-runtime-rs, containerd_version: latest },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
+          # TODO: Remove k8s_test_union once Cloud Hypervisor supports multi-layer flat VMDK images.
+          { vmm: clh-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged, k8s_test_union: k8s-vm-templating.bats },
           { vmm: clh-runtime-rs, containerd_version: minimum },
           { vmm: qemu-nvidia-cpu, containerd_version: latest },
           { vmm: qemu-nvidia-cpu-runtime-rs, containerd_version: latest, snapshotter: erofs, erofs_mode: memory, erofs_dmverity: dmverity },
@@ -70,6 +72,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: vanilla
       K8S_TEST_HOST_TYPE: baremetal-no-attestation
+      K8S_TEST_UNION: ${{ matrix.environment.k8s_test_union }}
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}

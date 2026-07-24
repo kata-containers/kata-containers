@@ -7,8 +7,8 @@ use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
     guest_protection_is_tdx, ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology,
-    CpusConfig, DiskConfig, MemoryConfig, PayloadConfig, PlatformConfig, PmemConfig, RngConfig,
-    VsockConfig,
+    CpusConfig, DiskConfig, MemoryConfig, MemoryZoneConfig, PayloadConfig, PlatformConfig,
+    PmemConfig, RngConfig, VsockConfig,
 };
 use anyhow::Result;
 use kata_sys_util::protection::GuestProtection;
@@ -19,6 +19,7 @@ use kata_types::config::hypervisor::{
 };
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::errors::*;
@@ -124,6 +125,13 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let host_devices = n.host_devices;
         let protection_dev = n.protection_device;
 
+        let template_memory =
+            if cfg.vm_template.boot_to_be_template || cfg.vm_template.boot_from_template {
+                Some(template_memory_config(&cfg).map_err(VmConfigError::MemoryError)?)
+            } else {
+                None
+            };
+
         let cpus = CpusConfig::try_from((cfg.cpu_info, guest_protection_to_use.clone()))
             .map_err(VmConfigError::CPUError)?;
 
@@ -174,8 +182,11 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let serial = get_serial_cfg(debug, guest_protection_to_use.clone());
         let console = get_console_cfg(debug, guest_protection_to_use.clone());
 
-        let memory = MemoryConfig::try_from((cfg.memory_info, guest_protection_to_use.clone()))
-            .map_err(VmConfigError::MemoryError)?;
+        let memory = match template_memory {
+            Some(memory) => memory,
+            None => MemoryConfig::try_from((cfg.memory_info, guest_protection_to_use.clone()))
+                .map_err(VmConfigError::MemoryError)?,
+        };
 
         std::fs::create_dir_all(sandbox_path.clone())
             .map_err(|e| VmConfigError::SandboxError(sandbox_path, e.to_string()))?;
@@ -297,6 +308,53 @@ impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
 
         Ok(cfg)
     }
+}
+
+fn template_memory_config(cfg: &HypervisorConfig) -> Result<MemoryConfig, MemoryConfigError> {
+    let mem = cfg.memory_info.clone();
+
+    if mem.default_memory == 0 {
+        return Err(MemoryConfigError::NoDefaultMemory);
+    }
+
+    if cfg.vm_template.memory_path.is_empty() {
+        return Err(MemoryConfigError::NoTemplateMemoryPath);
+    }
+
+    fs::metadata(&cfg.vm_template.memory_path).map_err(|e| {
+        MemoryConfigError::TemplateMemoryPathNotAccessible(format!(
+            "{}: {}",
+            cfg.vm_template.memory_path, e
+        ))
+    })?;
+
+    if cfg.shared_fs.shared_fs.is_some() {
+        return Err(MemoryConfigError::TemplateRequiresNoSharedFs);
+    }
+
+    let mem_bytes = MIB
+        .checked_mul(u64::from(mem.default_memory))
+        .ok_or(MemoryConfigError::BadDefaultMemSize(mem.default_memory))?;
+    let shared = cfg.vm_template.boot_to_be_template;
+
+    let zone = MemoryZoneConfig {
+        id: "mem0".to_string(),
+        size: mem_bytes,
+        file: Some(PathBuf::from(&cfg.vm_template.memory_path)),
+        shared,
+        hugepages: mem.enable_hugepages,
+        prefault: mem.enable_mem_prealloc,
+        ..Default::default()
+    };
+
+    Ok(MemoryConfig {
+        size: 0,
+        shared,
+        hugepages: mem.enable_hugepages,
+        prefault: mem.enable_mem_prealloc,
+        zones: Some(vec![zone]),
+        ..Default::default()
+    })
 }
 
 // Return the next multiple of 'multiple' starting from the specified value
@@ -585,6 +643,8 @@ fn get_platform_cfg(guest_protection_to_use: GuestProtection) -> Option<Platform
 
 #[cfg(test)]
 mod tests {
+    use crate::HotplugMethod;
+
     use super::*;
     use kata_sys_util::protection::SevSnpDetails;
     use kata_types::config::hypervisor::{
@@ -1607,6 +1667,49 @@ mod tests {
             assert!(result.is_ok(), "{}", msg);
             assert_eq!(&result.unwrap(), d.result.as_ref().unwrap(), "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_template_memory_config() {
+        let memory_path =
+            std::env::temp_dir().join(format!("kata-clh-template-memory-{}", std::process::id()));
+        fs::write(&memory_path, []).unwrap();
+
+        let mut cfg = HypervisorConfig {
+            memory_info: MemoryInfo {
+                default_memory: 512,
+                default_maxmemory: 0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        cfg.vm_template.boot_to_be_template = true;
+        cfg.vm_template.memory_path = memory_path.to_string_lossy().to_string();
+
+        let memory = template_memory_config(&cfg).unwrap();
+        let zones = memory.zones.as_ref().unwrap();
+
+        assert_eq!(memory.size, 0);
+        assert_eq!(memory.hotplug_method, HotplugMethod::Acpi);
+        assert!(memory.hotplug_size.is_none());
+        assert!(memory.shared);
+        assert_eq!(zones.len(), 1);
+        assert_eq!(zones[0].id, "mem0");
+        assert_eq!(zones[0].size, 512 * MIB);
+        assert_eq!(zones[0].file, Some(memory_path.clone()));
+        assert!(zones[0].shared);
+        assert!(zones[0].hotplug_size.is_none());
+
+        cfg.vm_template.boot_to_be_template = false;
+        cfg.vm_template.boot_from_template = true;
+
+        let restore_memory = template_memory_config(&cfg).unwrap();
+        let restore_zones = restore_memory.zones.as_ref().unwrap();
+
+        assert!(!restore_memory.shared);
+        assert!(!restore_zones[0].shared);
+
+        fs::remove_file(memory_path).unwrap();
     }
 
     #[test]
