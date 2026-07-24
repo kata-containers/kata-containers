@@ -933,7 +933,26 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
 
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
-    fs::write(path, "1")?;
+    // For virtio-mem-ccw (s390x), hotplugged memory blocks must land in the
+    // MOVABLE zone so they can be offlined later during hot-unplug.  Writing
+    // "1" (equivalent to "online") places blocks in NORMAL, which the kernel
+    // refuses to offline.  Check valid_zones first; fall back to "1" when the
+    // file is absent or when only the Normal zone is advertised, preserving
+    // existing behaviour on all other architectures and device types.
+    let valid_zones_path = std::path::Path::new(path)
+        .parent()
+        .map(|p| p.join("valid_zones"));
+    let value = valid_zones_path
+        .and_then(|p| fs::read_to_string(p).ok())
+        .map(|z| {
+            if z.contains("Movable") {
+                "online_movable"
+            } else {
+                "1"
+            }
+        })
+        .unwrap_or("1");
+    fs::write(path, value)?;
     Ok(())
 }
 
@@ -1255,14 +1274,41 @@ mod tests {
         );
     }
 
+    // valid_zones content → expected value written to the online file.
+    // None means the valid_zones file is absent (simulates older kernels or
+    // non-memory hotplug sysfs paths).
+    #[rstest]
+    #[case::movable_only("Movable\n", "online_movable")]
+    #[case::normal_and_movable("Normal Movable\n", "online_movable")]
+    #[case::normal_only("Normal\n", "1")]
+    #[case::empty_file("\n", "1")]
     #[test]
-    fn test_online_device() {
+    fn test_online_device_valid_zones(#[case] zones: &str, #[case] expected: &str) {
         let testdir = tempdir().expect("failed to create tmpdir");
-        let device_path = testdir.path().join("online");
+        let online_path = testdir.path().join("online");
+        let valid_zones_path = testdir.path().join("valid_zones");
 
-        online_device(device_path.to_str().unwrap()).unwrap();
-        assert_eq!(fs::read_to_string(&device_path).unwrap(), "1");
+        fs::write(&valid_zones_path, zones).unwrap();
+        online_device(online_path.to_str().unwrap()).unwrap();
+        assert_eq!(
+            fs::read_to_string(&online_path).unwrap(),
+            expected,
+            "valid_zones={zones:?}"
+        );
+    }
 
+    #[test]
+    fn test_online_device_no_valid_zones_file() {
+        // No valid_zones present — must fall back to "1" safely.
+        let testdir = tempdir().expect("failed to create tmpdir");
+        let online_path = testdir.path().join("online");
+
+        online_device(online_path.to_str().unwrap()).unwrap();
+        assert_eq!(fs::read_to_string(&online_path).unwrap(), "1");
+    }
+
+    #[test]
+    fn test_online_device_bad_path_returns_error() {
         assert!(online_device("/nonexistent/path/to/device").is_err());
     }
 
