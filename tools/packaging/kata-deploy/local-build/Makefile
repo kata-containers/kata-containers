@@ -123,7 +123,7 @@ ifneq ($(NVGPU_BASE_TARBALLS),)
 nvgpu-tarball:
 	${MAKE} -f $(MK_PATH) kata-tarball \
 		BASE_TARBALLS="$(NVGPU_BASE_TARBALLS)" \
-		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball rootfs-image-nvidia-gpu-extension-tarball" \
+		BASE_SERIAL_TARBALLS="rootfs-image-nvidia-gpu-tarball rootfs-image-nvidia-gpu-confidential-tarball rootfs-image-nvidia-tarball" \
 		FINAL_TARBALL_INPUTS="$(NVGPU_FINAL_TARBALL_INPUTS)" \
 		FINAL_TARBALL_MERGE_MODE=passthrough \
 		DEPS=
@@ -282,14 +282,15 @@ DEPS := agent-tarball busybox-tarball pause-image-tarball coco-guest-components-
 rootfs-image-nvidia-gpu-confidential-tarball: $(DEPS)
 	${MAKE} $@-build
 
-# Composable NVIDIA stack: the driver-agnostic nvidia boot image and the
-# driver-versioned gpu extension are both carved out of the same chiseled tree, so
-# they share the monolith's (non-confidential) build dependencies.
+# The driver-agnostic nvidia base is still carved from the chiseled monolith tree,
+# so it keeps the monolith's (non-confidential) build dependencies.
 DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-tarball: $(DEPS)
 	${MAKE} $@-build
 
-DEPS := agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+# The gpu extension is assembled directly from the package-installed rootfs and
+# ships neither the agent nor NVRC/busybox; it only needs the Kata NVIDIA modules.
+DEPS := kernel-nvidia-gpu-tarball
 rootfs-image-nvidia-gpu-extension-tarball: $(DEPS)
 	${MAKE} $@-build
 

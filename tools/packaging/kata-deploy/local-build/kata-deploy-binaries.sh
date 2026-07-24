@@ -452,21 +452,30 @@ install_image() {
 	osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit
 	guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
-	local libs_last_commit
-	libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
-	local gperf_version
-	gperf_version="$(get_from_kata_deps ".externals.gperf.version")"
-	local libseccomp_version
-	libseccomp_version="$(get_from_kata_deps ".externals.libseccomp.version")"
-	local rust_version
-	rust_version="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
-	local agent_last_commit
-	agent_last_commit=$(merge_two_hashes \
-		"$(get_last_modification "${repo_root_dir}/src/agent")" \
-		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
+	# The gpu extension ships neither kata-agent nor NVRC, so its cache key
+	# must not track agent/toolchain inputs that only affect agent-bearing images.
+	if [[ "${variant}" == "nvidia-gpu-extension" ]]; then
+		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${image_type}"
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_nvidia_driver_version)"
+		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
+	else
+		local libs_last_commit
+		libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+		local gperf_version
+		gperf_version="$(get_from_kata_deps ".externals.gperf.version")"
+		local libseccomp_version
+		libseccomp_version="$(get_from_kata_deps ".externals.libseccomp.version")"
+		local rust_version
+		rust_version="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
+		local agent_last_commit
+		agent_last_commit=$(merge_two_hashes \
+			"$(get_last_modification "${repo_root_dir}/src/agent")" \
+			"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
-	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	fi
 	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
@@ -487,10 +496,8 @@ install_image() {
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
-	if [[ "${variant}" == "nvidia-gpu" || "${variant}" == "nvidia-gpu-extension" ]]; then
-		# If we bump the kernel we need to rebuild the image.  The gpu extension
-		# carries the driver userspace carved out of the same chiseled tree,
-		# so it is driver-versioned just like the monolith.
+	if [[ "${variant}" == "nvidia-gpu" ]]; then
+		# Monolith: Kata NVIDIA modules + pinned driver/CTK userspace + NVRC init.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
@@ -546,8 +553,11 @@ install_image() {
 		fi
 	fi
 
-	AGENT_TARBALL=$(get_agent_tarball_path)
-	export AGENT_TARBALL
+	# The gpu extension is GPU userspace only; do not require an agent tarball.
+	if [[ "${variant}" != "nvidia-gpu-extension" ]]; then
+		AGENT_TARBALL=$(get_agent_tarball_path)
+		export AGENT_TARBALL
+	fi
 	export AGENT_POLICY
 
 	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
@@ -926,8 +936,8 @@ install_image_nvidia() {
 	install_image "nvidia"
 }
 
-# Install the gpu extension image: the driver half of the chiseled NVIDIA tree,
-# laid out for /run/kata-extensions/gpu (see
+# Install the gpu extension image: driver userspace selected directly from the
+# package-installed rootfs and laid out for /run/kata-extensions/gpu (see
 # docs/design/composable-vm-images.md).  It is an erofs+verity image
 # (MEASURED_ROOTFS) and is driver-versioned, so multiple driver extensions can
 # coexist against a single nvidia base image.
