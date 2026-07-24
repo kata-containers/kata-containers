@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -426,7 +425,7 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxID stri
 		"sandbox_id": sandboxID,
 	}).Debug("successfully created a non root user for the hypervisor")
 
-	userTmpDir := path.Join("/run/user/", fmt.Sprint(uid))
+	userTmpDir := rootless.VmmUserRuntimeDir(runtimeConfig.HypervisorConfig.Uid)
 	_, err = os.Stat(userTmpDir)
 	// Clean up the directory created by the previous run
 	if !os.IsNotExist(err) {
