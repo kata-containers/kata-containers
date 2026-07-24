@@ -226,6 +226,27 @@ is_runtime_rs() {
 	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
 }
 
+# True for hypervisors that run the guest in a separate VMM process (i.e. not
+# dragonball, which runs the guest in-process in the shim).
+has_separate_vmm() {
+	[[ "${KATA_HYPERVISOR}" != *dragonball* ]]
+}
+
+# Echo the PID of the Kata shim for the pod with UID $2, on node $1.
+# Returns non-zero if no matching shim is found.
+#
+# The UID is matched in both cgroup-path forms (dashed for cgroupfs,
+# underscored for systemd) so a shim from another namespace is not selected.
+# The pgrep pattern is bracketed ("[c]ontainerd") so it doesn't also match the
+# `bash -c` wrapper exec_host runs, whose command line contains the pattern.
+shim_pid_for_pod() {
+	local node_name="$1" uid_dashed="$2" uid_underscored pid
+	uid_underscored="${uid_dashed//-/_}"
+	pid="$(exec_host "${node_name}" "for p in \$(pgrep -f '[c]ontainerd-shim-kata-v2'); do grep -qE 'pod(${uid_dashed}|${uid_underscored})' /proc/\$p/cgroup 2>/dev/null && echo \$p && break; done; true")"
+	[[ -n "${pid}" ]] || return 1
+	echo "${pid}"
+}
+
 # Copy the right combination of drop-ins from drop-in-examples/ into
 # genpolicy-settings.d/. Drop-ins are layered: 10-* for platform base,
 # 20-* for OCI version and other overlays.
