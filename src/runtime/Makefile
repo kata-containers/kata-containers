@@ -62,11 +62,18 @@ IMAGENAME = $(PROJECT_TAG).img
 IMAGECONFIDENTIALNAME = $(PROJECT_TAG)-confidential.img
 INITRDNAME = $(PROJECT_TAG)-initrd.img
 INITRDCONFIDENTIALNAME = $(PROJECT_TAG)-initrd-confidential.img
+# CoCo guest-components extension (attestation-agent, confidential-data-hub, ...),
+# cold-plugged and mounted at /run/kata-extensions/coco on confidential guests.
+COCOIMAGENAME = $(PROJECT_TAG)-coco-extension.img
 
 IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
 IMAGENAME_CONFIDENTIAL_NV = $(PROJECT_TAG)-nvidia-gpu-confidential.img
-# Driver-agnostic NVIDIA base image (no GPU userspace), booted by qemu-nvidia-cpu.
+# Driver-agnostic NVIDIA base image (no GPU userspace), booted by qemu-nvidia-cpu
+# and the composable NVIDIA GPU configs.
 IMAGENAME_NV_BASE = $(PROJECT_TAG)-nvidia.img
+# Driver-versioned GPU extension (GPU userspace), cold-plugged and mounted at
+# /run/kata-extensions/gpu on GPU guests.
+IMAGENAME_NV_EXTENSION = $(PROJECT_TAG)-nvidia-gpu-extension.img
 
 TARGET = $(BIN_PREFIX)-runtime
 RUNTIME_OUTPUT = $(CURDIR)/$(TARGET)
@@ -131,12 +138,20 @@ KERNELDIR := $(PKGDATADIR)
 
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
 IMAGECONFIDENTIALPATH := $(PKGDATADIR)/$(IMAGECONFIDENTIALNAME)
+COCOIMAGEPATH := $(PKGDATADIR)/$(COCOIMAGENAME)
+# dm-verity params for the CoCo extension (root_hash_coco-extension.txt); filled
+# in by the shim-v2 build from the emitted root-hash file.
+COCOVERITYPARAMS :=
 INITRDPATH := $(PKGDATADIR)/$(INITRDNAME)
 INITRDCONFIDENTIALPATH := $(PKGDATADIR)/$(INITRDCONFIDENTIALNAME)
 
 IMAGEPATH_NV := $(PKGDATADIR)/$(IMAGENAME_NV)
 IMAGEPATH_CONFIDENTIAL_NV := $(PKGDATADIR)/$(IMAGENAME_CONFIDENTIAL_NV)
 IMAGEPATH_NV_BASE := $(PKGDATADIR)/$(IMAGENAME_NV_BASE)
+IMAGEPATH_NV_EXTENSION := $(PKGDATADIR)/$(IMAGENAME_NV_EXTENSION)
+# dm-verity params for the gpu extension (root_hash_nvidia-gpu-extension.txt);
+# filled in by the shim-v2 build from the emitted root-hash file.
+NVIDIAGPUEXTENSIONVERITYPARAMS ?=
 
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
@@ -169,8 +184,8 @@ KERNELVERITYPARAMS ?= ""
 KERNELVERITYPARAMS_NV ?= ""
 KERNELVERITYPARAMS_CONFIDENTIAL_NV ?= ""
 # dm-verity params for the driver-agnostic nvidia base image (qemu-nvidia-cpu).
-# The Go runtime maps KERNELVERITYPARAMS_NV to the monolithic nvidia-gpu hash,
-# so qemu-nvidia-cpu needs its own var pointing at the "nvidia" base root hash.
+# Both runtimes now map KERNELVERITYPARAMS_NV to the "nvidia" base root hash, so
+# this mirrors it; kept as its own var to avoid churning the nvidia-cpu config.
 KERNELVERITYPARAMS_NV_BASE ?= ""
 
 # Name of default configuration file the runtime will use.
@@ -676,6 +691,9 @@ USER_VARS += IMAGECONFIDENTIALNAME
 USER_VARS += IMAGEPATH
 USER_VARS += IMAGEPATH_CLH_AZURE
 USER_VARS += IMAGECONFIDENTIALPATH
+USER_VARS += COCOIMAGENAME
+USER_VARS += COCOIMAGEPATH
+USER_VARS += COCOVERITYPARAMS
 USER_VARS += INITRDNAME
 USER_VARS += INITRDCONFIDENTIALNAME
 USER_VARS += INITRDPATH
@@ -686,6 +704,9 @@ USER_VARS += IMAGEPATH_NV
 USER_VARS += IMAGEPATH_CONFIDENTIAL_NV
 USER_VARS += IMAGENAME_NV_BASE
 USER_VARS += IMAGEPATH_NV_BASE
+USER_VARS += IMAGENAME_NV_EXTENSION
+USER_VARS += IMAGEPATH_NV_EXTENSION
+USER_VARS += NVIDIAGPUEXTENSIONVERITYPARAMS
 USER_VARS += KERNELNAME_NV
 USER_VARS += KERNELPATH_NV
 USER_VARS += KERNELNAME_CONFIDENTIAL_NV

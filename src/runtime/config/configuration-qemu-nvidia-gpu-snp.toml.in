@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUSNPPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
-image = "@IMAGEPATH_CONFIDENTIAL_NV@"
+image = "@IMAGEPATH_NV_BASE@"
 
 machine_type = "@MACHINETYPE@"
 
@@ -95,7 +95,7 @@ kernel_params = "@KERNELPARAMS_CONFIDENTIAL_NV@"
 # Optional dm-verity parameters (comma-separated key=value list):
 # root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...
 # These are used by the runtime to assemble dm-verity kernel params.
-kernel_verity_params = "@KERNELVERITYPARAMS_CONFIDENTIAL_NV@"
+kernel_verity_params = "@KERNELVERITYPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -822,3 +822,17 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 #      cold_plug_vfio != no_port AND pod_resource_api_sock != "" => kubelet
 #              based cold plug.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK_NV@"
+
+# GPU guests boot the driver-agnostic nvidia base image plus the driver-versioned
+# GPU extension (GPU userspace), cold-plugged and mounted at /run/kata-extensions/gpu.
+[[hypervisor.qemu.guest_extension_images]]
+name = "gpu"
+path = "@IMAGEPATH_NV_EXTENSION@"
+verity_params = "@NVIDIAGPUEXTENSIONVERITYPARAMS@"
+
+# Confidential GPU guests additionally cold-plug the CoCo guest-components extension
+# (attestation-agent, confidential-data-hub, ...) mounted at /run/kata-extensions/coco.
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"

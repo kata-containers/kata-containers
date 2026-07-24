@@ -75,8 +75,9 @@ destdir="${workdir}/kata-static"
 default_binary_permissions='0744'
 
 # Rootfs image variants that carry a dm-verity root hash (measured rootfs).
-# Their hashes are collected at build time and consumed by the Rust runtime,
-# so this list is walked in a few places - keep it in one spot to avoid drift.
+# Their hashes are collected at build time and consumed by both runtimes
+# (Go and Rust), so this list is walked in a few places - keep it in one spot to
+# avoid drift.
 readonly MEASURED_ROOTFS_VARIANTS=(
 	base
 	confidential
@@ -536,8 +537,10 @@ install_image() {
 		# Both the standard confidential image and the NVIDIA confidential
 		# image bake the CoCo guest components + pause image into the
 		# rootfs, so each stays a usable standalone monolithic CoCo image.
-		# The runtime-rs split path instead ships these in the separate
-		# CoCo extension image (rootfs-image-coco-extension).
+		# These monolithic images are no longer built in CI nor consumed by
+		# the shipped configs (both runtimes now use the composable split
+		# path: base image + CoCo extension, rootfs-image-coco-extension);
+		# they are retained only as manually buildable targets.
 		if [[ "${variant}" == *confidential ]]; then
 			COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export COCO_GUEST_COMPONENTS_TARBALL
@@ -594,12 +597,11 @@ install_image_base() {
 
 #Install guest image for confidential guests
 #
-# During the transition to composable (base + extension) images this monolithic
-# confidential image still bakes in the CoCo guest components and is the image
-# used by the Go runtime. The runtime-rs shims instead use the base image plus
-# the separately built CoCo extension image (rootfs-image-coco-extension),
-# attached as an extra block device. Once the split path is validated for the
-# Go runtime too, the components can stop being baked in here.
+# This monolithic confidential image bakes the CoCo guest components into the
+# rootfs. It is no longer built in CI nor referenced by the shipped configs:
+# both the Go runtime and runtime-rs now boot the measured base image plus the
+# separately built CoCo extension image (rootfs-image-coco-extension), attached
+# as an extra block device. It is kept as a manually buildable standalone image.
 install_image_confidential() {
 	export CONFIDENTIAL_GUEST="yes"
 	if [[ "${ARCH}" == "s390x" ]]; then

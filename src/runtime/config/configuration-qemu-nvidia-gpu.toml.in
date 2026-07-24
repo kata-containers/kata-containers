@@ -14,7 +14,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_NV@"
-image = "@IMAGEPATH_NV@"
+image = "@IMAGEPATH_NV_BASE@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -796,3 +796,10 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 #      cold_plug_vfio != no_port AND pod_resource_api_sock != "" => kubelet
 #              based cold plug.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK_NV@"
+
+# GPU guests boot the driver-agnostic nvidia base image plus the driver-versioned
+# GPU extension (GPU userspace), cold-plugged and mounted at /run/kata-extensions/gpu.
+[[hypervisor.qemu.guest_extension_images]]
+name = "gpu"
+path = "@IMAGEPATH_NV_EXTENSION@"
+verity_params = "@NVIDIAGPUEXTENSIONVERITYPARAMS@"

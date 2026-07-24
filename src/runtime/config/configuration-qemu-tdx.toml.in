@@ -14,7 +14,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELCONFIDENTIALPATH@"
-image = "@IMAGECONFIDENTIALPATH@"
+image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
@@ -761,3 +761,11 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 #      cold_plug_vfio != no_port AND pod_resource_api_sock != "" => kubelet
 #              based cold plug.
 pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK@"
+
+# Confidential guests boot the measured base image plus the CoCo guest-components
+# extension (attestation-agent, confidential-data-hub, ...), cold-plugged and
+# mounted at /run/kata-extensions/coco.
+[[hypervisor.qemu.guest_extension_images]]
+name = "coco"
+path = "@COCOIMAGEPATH@"
+verity_params = "@COCOVERITYPARAMS@"
