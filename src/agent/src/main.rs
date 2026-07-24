@@ -182,6 +182,17 @@ lazy_static! {
         Mutex::new(kata_security_reference_monitor::VerifiedLayerStore::new(false));
 }
 
+// BL-3: measured allowlist of authorized guest-pull image manifest digests. The image-pull
+// storage handler authorizes each image reference against this store before asking the CDH to
+// pull it — the image-path analogue of FR-4C. Configured from measured state; when
+// verification is required but no image is authorized, every image is rejected (fail-closed).
+// Strict builds only.
+#[cfg(feature = "strict-policy")]
+lazy_static! {
+    pub(crate) static ref VERIFIED_IMAGES: Mutex<kata_security_reference_monitor::VerifiedImageStore> =
+        Mutex::new(kata_security_reference_monitor::VerifiedImageStore::new(false));
+}
+
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(disable_version_flag = true)]
@@ -471,6 +482,14 @@ async fn start_sandbox(
     #[cfg(feature = "strict-policy")]
     if let Err(e) = seed_verified_layers(logger).await {
         warn!(logger, "FR-4C: verified layers not seeded: {:?}", e);
+    }
+
+    // BL-3: seed the verified guest-pull image allowlist (authorized manifest digests) from
+    // measured guest state. When require_verified_images is set but no image is authorized,
+    // every guest-pull image is rejected (fail-closed).
+    #[cfg(feature = "strict-policy")]
+    if let Err(e) = seed_verified_images(logger).await {
+        warn!(logger, "BL-3: verified images not seeded: {:?}", e);
     }
 
     let sandbox = Arc::new(Mutex::new(s));
@@ -1297,6 +1316,59 @@ async fn seed_verified_layers(logger: &Logger) -> Result<()> {
     }
     info!(logger, "FR-4C: verified-layer allowlist configured";
         "required" => store.is_required(), "layers" => store.len());
+    Ok(())
+}
+
+// BL-3: measured guest path listing the authorized guest-pull image manifest digests. It
+// lives in the measured rootfs; overridable via KATA_VERIFIED_IMAGES for tests. Format (TOML):
+//   require_verified_images = true
+//   [[image]]
+//   digest = "sha256:<hex>"
+#[cfg(feature = "strict-policy")]
+const VERIFIED_IMAGES_PATH: &str = "/etc/kata/verified-images.toml";
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize, Default)]
+struct VerifiedImagesConfig {
+    /// When true, every guest-pull image must be pinned by an allowlisted digest (fail-closed).
+    #[serde(default)]
+    require_verified_images: Option<bool>,
+    #[serde(default)]
+    image: Vec<VerifiedImageConfig>,
+}
+
+#[cfg(feature = "strict-policy")]
+#[derive(serde::Deserialize)]
+struct VerifiedImageConfig {
+    /// Image manifest digest (`algorithm:hex`, e.g. "sha256:...").
+    digest: String,
+}
+
+// BL-3: configure the verified guest-pull image allowlist from measured state. Absent/empty
+// config leaves verification not required (opt-in); when require_verified_images is set but no
+// image is authorized, every guest-pull image is rejected (fail-closed).
+#[cfg(feature = "strict-policy")]
+async fn seed_verified_images(logger: &Logger) -> Result<()> {
+    let path =
+        std::env::var("KATA_VERIFIED_IMAGES").unwrap_or_else(|_| VERIFIED_IMAGES_PATH.to_string());
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(_) => {
+            info!(logger, "BL-3: no verified-images config; image verification off");
+            return Ok(());
+        }
+    };
+    let cfg: VerifiedImagesConfig = toml::from_str(&text).context("parse verified-images.toml")?;
+
+    let mut store = VERIFIED_IMAGES.lock().await;
+    if let Some(req) = cfg.require_verified_images {
+        store.set_require(req);
+    }
+    for img in &cfg.image {
+        store.authorize_image(&img.digest);
+    }
+    info!(logger, "BL-3: verified-image allowlist configured";
+        "required" => store.is_required(), "images" => store.len());
     Ok(())
 }
 

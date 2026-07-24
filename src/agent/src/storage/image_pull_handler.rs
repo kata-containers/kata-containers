@@ -68,6 +68,20 @@ impl StorageHandler for ImagePullHandler {
 
         // generated bundles with rootfs and config.json will store under CONTAINER_BASE/cid/images.
         let bundle_path = scoped_join(CONTAINER_BASE, &cid)?;
+
+        // BL-3: authorize the guest-pull image against the measured allowlist BEFORE pulling.
+        // The registry/CDH verify content↔digest when pulling by digest; this gate proves the
+        // manifest digest is one the tenant approved, so a host cannot substitute a different
+        // (self-consistent) image. Fail-closed in strict builds; opt-in (no enforcement) when
+        // no allowlist is configured.
+        #[cfg(feature = "strict-policy")]
+        {
+            let store = crate::VERIFIED_IMAGES.lock().await;
+            store
+                .verify(image_name)
+                .map_err(|e| anyhow!("BL-3: guest-pull image not authorized: {}", e))?;
+        }
+
         let bundle_path = match confidential_data_hub::pull_image(image_name, bundle_path).await {
             Ok(path) => {
                 info!(
