@@ -17,7 +17,11 @@ $ sudo chmod 660 /dev/kvm
 ## Configure rootless VMM
 By default, the VMM process still runs as the root user. There are two ways to enable rootless VMM:
 1. Set the `rootless` flag to `true` in the hypervisor section of `configuration.toml`.
-2. Set the Kubernetes annotation `io.katacontainers.hypervisor.rootless` to `true`.
+2. Set the Kubernetes annotation `io.katacontainers.config.hypervisor.rootless` to `true`.
+
+Shipped configurations do not enable the `rootless` annotation by default, so
+it must be included in the hypervisor's `enable_annotations` list before the
+annotation can be used.
 
 ## Implementation details
 When `rootless` flag is enabled, upon a request to create a Pod, Kata Containers runtime creates a random user and group (e.g. `kata-123`), and uses them to start the hypervisor process.

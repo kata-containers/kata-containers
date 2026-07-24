@@ -100,6 +100,7 @@ else
 		"k8s-port-forward.bats" \
 		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
+		"k8s-qemu-rootless-sandbox.bats" \
 		"k8s-replication.bats" \
 		"k8s-sandbox-cgroup.bats" \
 		"k8s-sandbox-cgroup-placement.bats" \

@@ -168,6 +168,33 @@ exec_host() {
 	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
 }
 
+# Return the QEMU PID for a running pod.
+#
+# Parameters:
+#	$1 - pod name in the current Kubernetes namespace
+get_qemu_pid_for_pod() {
+	local pod_name="$1"
+	local node
+	local qemu_pid
+	local sandbox_id
+
+	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
+	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
+	exec_host "${node}" "command -v crictl >/dev/null" || \
+		die "crictl is required on Kubernetes node ${node}"
+
+	sandbox_id="$(exec_host "${node}" \
+		"crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
+		pods --name \"${pod_name}\" -q | head -1")"
+	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
+
+	qemu_pid="$(exec_host "${node}" \
+		"pgrep -f \"qemu.*${sandbox_id}\" | head -1")"
+	[[ -n "${qemu_pid}" ]] || die "No QEMU PID found for sandbox ${sandbox_id}"
+
+	echo "${qemu_pid}"
+}
+
 # Check the logged messages on host have a given message.
 #
 # Parameters:

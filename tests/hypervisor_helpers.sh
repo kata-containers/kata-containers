@@ -15,6 +15,13 @@ FIRECRACKER_HYPERVISORS=("firecracker" "fc")
 NVIDIA_CPU_HYPERVISORS=("qemu-nvidia-cpu" "qemu-nvidia-cpu-runtime-rs")
 # All non-confidential NVIDIA classes (CPU-only + plain GPU passthrough).
 NVIDIA_HYPERVISORS=("${NVIDIA_CPU_HYPERVISORS[@]}" "qemu-nvidia-gpu" "qemu-nvidia-gpu-runtime-rs")
+# Runtime classes configured with shared_fs=none.
+SHARED_FS_NONE_HYPERVISORS=(
+	"${TEE_HYPERVISORS[@]}"
+	"${NON_TEE_HYPERVISORS[@]}"
+	"qemu-nvidia-cpu-runtime-rs"
+	"qemu-nvidia-gpu-runtime-rs"
+)
 
 ALL_HYPERVISORS=(
 	"clh"
@@ -117,15 +124,10 @@ function is_confidential_runtime_class() {
 # Runtime classes that boot with shared_fs=none, where the host cannot read
 # guest files directly. Data such as a container's termination log must then be
 # retrieved over the agent GetDiagnosticData RPC instead of a shared filesystem.
-# This covers the confidential runtime classes and the non-confidential NVIDIA
-# CPU runtime-rs handler. The plain qemu-nvidia-cpu (Go) class still uses
-# virtio-fs, so it is intentionally excluded.
 function is_shared_fs_none_runtime_class() {
 	local hypervisor="${1:-${KATA_HYPERVISOR}}"
-	if is_confidential_runtime_class "${hypervisor}"; then
-		return 0
-	fi
-	[[ "${hypervisor}" == "qemu-nvidia-cpu-runtime-rs" ]] && return 0
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	[[ " ${SHARED_FS_NONE_HYPERVISORS[*]} " =~ " ${hypervisor} " ]] && return 0
 	return 1
 }
 
