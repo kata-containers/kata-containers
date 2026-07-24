@@ -113,8 +113,9 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     add_sandbox_name_to_state := state_allows("sandbox_name", sandbox_name)
     ops_builder1 := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
-    # Check if any element from the policy_data.containers array allows the input request.
-    some idx, p_container in policy_data.containers
+    # Check if any element from the allowed-container set (base + composed fragment
+    # containers) allows the input request.
+    some idx, p_container in all_policy_containers
     print("======== CreateContainerRequest: trying next policy container")
 
     p_pidns := p_container.sandbox_pidns
@@ -1669,7 +1670,7 @@ allow_interactive_exec(p_container, i_process) if {
 
 get_state_container(container_id):= p_container if {
     idx := get_state_val(container_id)
-    p_container := policy_data.containers[idx]
+    p_container := all_policy_containers[idx]
 }
 
 ExecProcessRequest if {
@@ -1892,3 +1893,28 @@ TtyWinResizeRequest if {
     allow_known_container(input.container_id)
     print("TtyWinResizeRequest: true")
 }
+
+# ---- BL-7 (Jiri Feature A): policy fragment composition (issuer + feed + minimum SVN gate) ----
+# Fragments are separate signed modules that the guest agent's Security Reference Monitor
+# verifies (COSE/did:x509 + SVN + feed + ordering/transparency gates) and then applies into
+# the reserved `agent_policy.fragments` namespace (see docs/cc/fr1-fragments.md FR-1c). The
+# base policy declares which fragments it trusts in `policy_data.fragments[]`
+# (issuer/feed/minimum_svn); those declarations are measured into HostData, so composition is
+# attested.
+#
+# Runtime data contract: a verified fragment for feed F contributes, under this namespace, a
+# keyed entry `data.agent_policy.fragments[F] == {"issuer": <did/id>, "svn": <n>,
+# "containers": [<container-policy>, ...]}`. At genpolicy generation time no fragment is loaded
+# (`data.agent_policy.fragments` is empty) and an unloaded / under-versioned / wrong-issuer
+# fragment contributes nothing => behaviour identical to a monolithic policy (no regression).
+fragment_containers := [c |
+    some spec in policy_data.fragments
+    mod := data.agent_policy.fragments[spec.feed]
+    mod.issuer == spec.issuer
+    to_number(mod.svn) >= spec.minimum_svn
+    some c in mod.containers
+]
+
+# The full allowed-container set: base policy containers plus verified fragment-contributed
+# containers. All container-matching rules iterate this set.
+all_policy_containers := array.concat(policy_data.containers, fragment_containers)
