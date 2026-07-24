@@ -1160,8 +1160,21 @@ VERIFICATION_POD_EOF
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	# Ensure any potential leftover is cleaned up ... and this secret usually is not in case of previous failures
-	kubectl delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
+	# Start from a clean slate. On persistent runners (e.g. ppc64le/s390x bare
+	# metal) a previous job can leave the release in a non-deployed state: a
+	# failed post-install/upgrade hook (the job-mode dispatcher) marks the newest
+	# revision failed/pending, and the failed job never gets to `helm uninstall`.
+	# `helm upgrade --install` then refuses with `"kata-deploy" has no deployed
+	# releases`. Deleting only the v1 release secret (as we used to) is not enough
+	# once more than one revision exists, so remove any leftover release wholesale:
+	# a best-effort hook-less uninstall (skip the possibly-broken pre-delete
+	# dispatcher; the fresh install re-applies node state idempotently) followed by
+	# dropping any orphaned helm release secrets for this release.
+	if helm status kata-deploy -n kube-system >/dev/null 2>&1; then
+		echo "Found a leftover kata-deploy release; removing it before install"
+		helm uninstall kata-deploy -n kube-system --no-hooks || true
+	fi
+	kubectl delete secret -n kube-system -l "owner=helm,name=kata-deploy" 2>/dev/null || true
 
 	max_tries=3
 	interval=10
