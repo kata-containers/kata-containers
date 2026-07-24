@@ -20,6 +20,7 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 	defer func() {
 		if retErr != nil {
 			// notify the wait goroutine to continue
+			c.status = task.StatusStopped
 			c.exitCh <- exitCode255
 		}
 	}()
