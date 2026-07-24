@@ -18,8 +18,8 @@ dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
 dbs-interrupt = { features = [
   "kvm-irq",
-  "kvm-legacy-irq",
-  "kvm-msi-irq",
+  "legacy-irq",
+  "msi-irq",
 ], workspace = true }
 dbs-virtio-devices = { workspace = true }
 log = "0.4.14"
