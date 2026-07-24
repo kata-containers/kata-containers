@@ -39,15 +39,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Go runtime covers the minimum supported containerd only, except
+        # for EROFS tests, which require the latest containerd.
+        # runtime-rs covers both minimum and latest containerd.
         environment: [
-          { vmm: clh, containerd_version: latest },
-          { vmm: clh, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
-          { vmm: clh, containerd_version: minimum },
           { vmm: dragonball, containerd_version: latest },
+          { vmm: clh, containerd_version: minimum },
+          { vmm: clh, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: dragonball, containerd_version: minimum },
-          { vmm: qemu, containerd_version: latest },
-          { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: qemu, containerd_version: minimum },
+          { vmm: qemu, containerd_version: latest, snapshotter: erofs, erofs_mode: disk, erofs_merge_mode: unmerged },
           { vmm: qemu-runtime-rs, containerd_version: latest },
           { vmm: qemu-runtime-rs, containerd_version: minimum },
           { vmm: clh-runtime-rs, containerd_version: latest },
