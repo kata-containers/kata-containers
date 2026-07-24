@@ -16,9 +16,12 @@ deploymentMode: job
 snapshotter:
   setup: ["nydus", "erofs"]
   # The NVIDIA GPU runtime-rs handler runs with shared_fs=none and uses the
-  # EROFS snapshotter with memory-backed rw layers. TEE handlers keep
-  # nydus/guest-pull separately.
+  # EROFS snapshotter with memory-backed rw layers and dm-verity for lower
+  # (image) layer integrity. TEE handlers keep nydus/guest-pull separately.
+  # Nodes upgrading from an earlier profile must recreate cached EROFS layers
+  # that do not contain dm-verity metadata.
   erofsSnapshotterMode: "memory"
+  erofsDmverity: true
 
 # EROFS fs-verity requires the backing filesystem to support fs-verity, and we
 # cannot guarantee that on an arbitrary node. Rather than gate this profile on a
