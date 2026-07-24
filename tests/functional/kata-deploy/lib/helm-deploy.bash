@@ -48,6 +48,12 @@ job:
   dispatcherImage:
     reference: ${dispatcher_image}
     tag: ${DOCKER_TAG}
+  # CI clusters are typically single-node, where the only node carries the
+  # control-plane label. The dispatcher's default selector targets worker
+  # (non-control-plane) nodes, which would match nothing here, so clear the
+  # role filter to target every discovered node (matching the single-node/CI
+  # setup documented in values.yaml and mirrored in gha-run-k8s-common.sh).
+  nodeSelectorExpressions: []
 
 k8sDistribution: "${KUBERNETES}"
 debug: true
