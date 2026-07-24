@@ -27,6 +27,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
+pub mod ccf;
 pub mod cdi;
 pub mod cose_keys;
 pub mod did_x509;

@@ -686,7 +686,27 @@ impl FragmentStore {
 
             // Stage 2: transparency inclusion + consistency proof.
             if !proof.is_empty() {
-                let tp = TransparencyProof::parse(proof).ok_or(FragmentError::InvalidInclusionProof)?;
+                // BL-6: external SCITT CCF-profile receipt. Recompute the CCF Merkle root
+                // from the inclusion proof, require it binds SHA-256(statement), and verify
+                // the ledger's signature over that root. CCF proofs carry no signed tree
+                // head, so cross-fragment append-only ordering remains governed by FR-1j
+                // (`prev_log_head`), not by the external ledger.
+                if proof.trim_start().starts_with("kata-ccf-proof/v1") {
+                    let ccf = CcfReceipt::parse(proof).ok_or(FragmentError::InvalidReceipt)?;
+                    let stmt_hash: [u8; 32] = Sha256::digest(statement).into();
+                    let root = crate::ccf::verify_ccf_inclusion(&ccf.proof_cbor, &stmt_hash)
+                        .ok_or(FragmentError::InvalidInclusionProof)?;
+                    if !keys
+                        .iter()
+                        .any(|(k, alg)| k.verify_cose(*alg, &root, &ccf.sig).is_ok())
+                    {
+                        return Err(FragmentError::InvalidReceipt);
+                    }
+                    // CCF receipts satisfy the transparency gate on their own; the native
+                    // RFC 6962 tree-head/consistency checks below are skipped, and no native
+                    // `ttl_head` is recorded (external ledger owns its own consistency).
+                } else {
+                    let tp = TransparencyProof::parse(proof).ok_or(FragmentError::InvalidInclusionProof)?;
                 // (a) the signed tree head must be signed by a current ledger key.
                 let sth = sth_signing_bytes(ledger, tp.size, &tp.root);
                 if !keys
@@ -728,6 +748,7 @@ impl FragmentStore {
                     }
                 }
                 ttl_head = Some((ledger.to_string(), tp.size, tp.root));
+                }
             }
         }
 
@@ -986,6 +1007,46 @@ impl TransparencyProof {
             index: index?,
             incl,
             cons,
+        })
+    }
+}
+
+/// BL-6: a parsed `kata-ccf-proof/v1` receipt — a SCITT CCF-profile inclusion proof
+/// (`proof`, CBOR `ccf-inclusion-proof`) plus the ledger's signature (`sig`) over the
+/// recomputed 32-byte Merkle root. Interoperates with external transparency ledgers
+/// (Azure Confidential Ledger / CCF-based SCITT), unlike the native `kata-ttl-proof/v1`.
+struct CcfReceipt {
+    proof_cbor: Vec<u8>,
+    sig: Vec<u8>,
+}
+
+impl CcfReceipt {
+    fn parse(s: &str) -> Option<Self> {
+        let mut proof_cbor = None;
+        let mut sig = None;
+        let mut header_ok = false;
+        for line in s.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if line == "kata-ccf-proof/v1" {
+                header_ok = true;
+                continue;
+            }
+            let (k, v) = line.split_once('=')?;
+            match k {
+                "proof" => proof_cbor = hex_to_bytes(v).ok(),
+                "sig" => sig = hex_to_bytes(v).ok(),
+                _ => {}
+            }
+        }
+        if !header_ok {
+            return None;
+        }
+        Some(CcfReceipt {
+            proof_cbor: proof_cbor?,
+            sig: sig?,
         })
     }
 }
@@ -1810,6 +1871,82 @@ mod tests {
         let mut bad = f.clone();
         bad.receipt_proof = Some(ttl_proof(&tree, &evil_sk, "ttl", 0, None)); // signed by untrusted key
         assert_eq!(store.verify(&bad).unwrap_err(), FragmentError::InvalidReceipt);
+    }
+
+    /// BL-6 (Stage 2, CCF profile): a SCITT CCF-profile inclusion proof whose recomputed
+    /// Merkle root is signed by a trusted ledger key and whose leaf `data-hash` binds the
+    /// fragment statement is accepted; a proof for a different statement, or one whose root
+    /// is signed by an untrusted key, is rejected.
+    fn ccf_receipt(statement: &[u8], led_sk: &SigningKey, bind_stmt: &[u8]) -> String {
+        let tx = [7u8; 32];
+        let sib = [0x11u8; 32];
+        let data_hash: [u8; 32] = Sha256::digest(bind_stmt).into();
+        let leaf = crate::ccf::ccf_leaf_hash(&tx, b"ccf-evidence", &data_hash);
+        // Single right sibling (left=false): root = SHA-256(leaf || sib).
+        let mut h = Sha256::new();
+        h.update(leaf);
+        h.update(sib);
+        let root: [u8; 32] = h.finalize().into();
+        let proof = ciborium::value::Value::Map(vec![
+            (
+                ciborium::value::Value::Integer(1.into()),
+                ciborium::value::Value::Array(vec![
+                    ciborium::value::Value::Bytes(tx.to_vec()),
+                    ciborium::value::Value::Text("ccf-evidence".into()),
+                    ciborium::value::Value::Bytes(data_hash.to_vec()),
+                ]),
+            ),
+            (
+                ciborium::value::Value::Integer(2.into()),
+                ciborium::value::Value::Array(vec![ciborium::value::Value::Array(vec![
+                    ciborium::value::Value::Bool(false),
+                    ciborium::value::Value::Bytes(sib.to_vec()),
+                ])]),
+            ),
+        ]);
+        let mut cbor = Vec::new();
+        ciborium::into_writer(&proof, &mut cbor).unwrap();
+        let sig = led_sk.sign(&root).to_bytes();
+        let _ = statement;
+        format!(
+            "kata-ccf-proof/v1\nproof={}\nsig={}\n",
+            bytes_to_hex(&cbor),
+            bytes_to_hex(&sig)
+        )
+    }
+
+    #[test]
+    fn stage2_ccf_receipt_verified() {
+        let (issuer_sk, issuer_pk) = keypair(1);
+        let (led_sk, led_pk) = keypair(30);
+        let (evil_sk, _evil_pk) = keypair(31);
+        let mut store = FragmentStore::new(false);
+        store.authorize_issuer("issuerA", &issuer_pk).unwrap();
+        store.load_transparency_trust_list(&[("ttl".into(), vec![led_pk])]).unwrap();
+
+        let f = ttl_frag(&issuer_sk, 1, "ttl");
+        let stmt = f.signing_bytes();
+
+        // Valid: CCF proof binds this statement, root signed by trusted ledger key.
+        let mut ok = f.clone();
+        ok.receipt_proof = Some(ccf_receipt(&stmt, &led_sk, &stmt));
+        assert!(store.verify(&ok).is_ok());
+
+        // Wrong statement bound in the proof -> inclusion (data-hash) mismatch.
+        let mut wrong = f.clone();
+        wrong.receipt_proof = Some(ccf_receipt(&stmt, &led_sk, b"different-statement"));
+        assert_eq!(
+            store.verify(&wrong).unwrap_err(),
+            FragmentError::InvalidInclusionProof
+        );
+
+        // Root signed by an untrusted key -> receipt rejected.
+        let mut untrusted = f.clone();
+        untrusted.receipt_proof = Some(ccf_receipt(&stmt, &evil_sk, &stmt));
+        assert_eq!(
+            store.verify(&untrusted).unwrap_err(),
+            FragmentError::InvalidReceipt
+        );
     }
 
     /// TC-F1.34 (Stage 2): the tree head is monotonic — a growing log with a valid
