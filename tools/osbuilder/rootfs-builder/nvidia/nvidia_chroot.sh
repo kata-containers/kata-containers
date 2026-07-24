@@ -123,10 +123,13 @@ setup_apt_repositories() {
 	curl -fsSL -O "${cuda_repo_url}/${cuda_repo_pkg}"
 	dpkg -i "${cuda_repo_pkg}" && rm -f "${cuda_repo_pkg}"
 
-	# Copy keyring if local repo was installed
-	keyring="/var/cuda-repo-*-local/cuda-*-keyring.gpg"
-	# shellcheck disable=SC2128 # Intentional: expect exactly one match
-	[[ -e "${keyring}" ]] && cp "${keyring}" /usr/share/keyrings/
+	# A local repo ships its signing key inside its own tree, but apt only
+	# trusts keys under /usr/share/keyrings - without this copy `apt update`
+	# rejects the repo as unsigned. A loop because [[ -e ]] would test the
+	# glob literally (nullglob: remote-repo flow matches nothing, skips).
+	for keyring in /var/cuda-repo-*-local/cuda-*-keyring.gpg; do
+		cp "${keyring}" /usr/share/keyrings/
+	done
 
 	# Set priorities: CUDA repos highest, Ubuntu non-driver next, Ubuntu blocked for driver packages
 	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
