@@ -128,10 +128,10 @@ chart to achieve the same results.
 The chart can install Kata on nodes in one of two ways, selected with the
 top-level `deploymentMode` value:
 
-- **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
+- **`daemonset`**: the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
   uninstall). This is the historical behavior and is unchanged.
-- **`job`**: there is **no always-on component**. A tiny *dispatcher* Job (the
+- **`job`** (default): there is **no always-on component**. A tiny *dispatcher* Job (the
   dispatcher, `kata-deploy-job-dispatcher`) runs as a `post-install`/`post-upgrade` hook,
   enumerates the selected nodes **live** via the Kubernetes API, and creates one
   node-pinned install `Job` per node. Each per-node Job runs the staged install
