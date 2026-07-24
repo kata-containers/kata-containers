@@ -34,7 +34,7 @@ use dbs_utils::epoll_manager::{
 use dbs_utils::metric::{IncMetric, SharedIncMetric, SharedStoreMetric, StoreMetric};
 use log::{debug, error, info, trace};
 use serde::Serialize;
-use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::{VIRTIO_F_ACCESS_PLATFORM, VIRTIO_F_VERSION_1};
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{
     ByteValued, Bytes, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion,
@@ -515,8 +515,16 @@ pub struct BalloonConfig {
 
 impl<AS: GuestAddressSpace> Balloon<AS> {
     // Create a new virtio-balloon.
-    pub fn new(epoll_mgr: EpollManager, cfg: BalloonConfig) -> Result<Self> {
+    pub fn new(
+        epoll_mgr: EpollManager,
+        cfg: BalloonConfig,
+        f_access_platform: bool,
+    ) -> Result<Self> {
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
+
+        if f_access_platform {
+            avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
+        }
 
         let mut queue_sizes = QUEUE_SIZES.to_vec();
 
@@ -757,7 +765,7 @@ pub(crate) mod tests {
             f_reporting: true,
         };
 
-        let mut dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config).unwrap();
+        let mut dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config, false).unwrap();
 
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
@@ -815,7 +823,8 @@ pub(crate) mod tests {
                 f_reporting: true,
             };
 
-            let mut dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr.clone(), config).unwrap();
+            let mut dev =
+                Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr.clone(), config, false).unwrap();
             let queues = vec![
                 VirtioQueueConfig::<QueueSync>::create(16, 0).unwrap(),
                 VirtioQueueConfig::<QueueSync>::create(16, 0).unwrap(),
@@ -844,7 +853,7 @@ pub(crate) mod tests {
                 f_reporting: true,
             };
 
-            let mut dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config).unwrap();
+            let mut dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config, false).unwrap();
 
             let queues = vec![
                 VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap(),
@@ -879,7 +888,7 @@ pub(crate) mod tests {
             f_reporting: true,
         };
 
-        let dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config).unwrap();
+        let dev = Balloon::<Arc<GuestMemoryMmap>>::new(epoll_mgr, config, false).unwrap();
         let size = 1024;
         assert!(dev.set_size(size).is_ok());
     }
