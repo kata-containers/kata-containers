@@ -325,11 +325,16 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 	mustCopyEmptyDir := !caps.IsFsSharingSupported() && IsDiskEmptyDir(m.Source)
 
 	filename := shareFileName(c.id, m.Source, m.Destination, randHex, mustCopyEmptyDir)
-	guestPath := filepath.Join(kataGuestSharedDir(), filename)
+	var guestPath string
 
 	// copy file to container's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
 	if !caps.IsFsSharingSupported() {
+		// CopyFile writes into the guest filesystem and the agent confines its
+		// destinations to this fixed directory. Unlike filesystem-sharing paths,
+		// this guest path must not be adjusted when rootless mode is enabled.
+		guestPath = filepath.Join(defaultKataGuestSharedDir, filename)
+
 		if mustCopyEmptyDir {
 			f.srcGuestMapLock.Lock()
 			defer f.srcGuestMapLock.Unlock()
@@ -422,6 +427,11 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			f.srcGuestMap[m.Source] = guestPath
 		}
 	} else {
+		// Filesystem sharing must use this mount path. It is the standard guest
+		// shared directory normally and the required rootless-adjusted path when
+		// rootless mode is enabled.
+		guestPath = filepath.Join(kataGuestSharedDir(), filename)
+
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(getMountPath(f.sandbox.ID()), filename)
 		if !m.ReadOnly {

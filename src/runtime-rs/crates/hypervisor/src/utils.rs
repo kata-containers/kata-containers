@@ -36,7 +36,7 @@ use crate::device::Tap;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
-pub fn remove_dir_all_if_exists(path: &str) -> Result<()> {
+pub fn remove_dir_all_if_exists(path: impl AsRef<Path>) -> Result<()> {
     match std::fs::remove_dir_all(path) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -116,13 +116,12 @@ pub fn enter_netns(netns_path: &str) -> Result<()> {
 }
 
 pub fn set_groups(groups: &[u32]) -> Result<()> {
-    if !groups.is_empty() {
-        let group = groups
-            .iter()
-            .map(|gid| Gid::from_raw(*gid))
-            .collect::<Vec<_>>();
-        setgroups(&group).context("set groups failed")?;
-    }
+    let group = groups
+        .iter()
+        .map(|gid| Gid::from_raw(*gid))
+        .collect::<Vec<_>>();
+    // An empty list intentionally clears inherited supplementary groups.
+    setgroups(&group).context("set groups failed")?;
 
     Ok(())
 }
@@ -252,6 +251,16 @@ fn first_valid_executable_path(paths: &[&str]) -> Result<String> {
         }
     }
     Err(anyhow!("No valid executable found in paths: {:?}", paths))
+}
+
+const VMM_USER_RUNTIME_BASE_DIR: &str = "/run/user";
+
+pub fn vmm_user_runtime_dir(uid: u32) -> PathBuf {
+    Path::new(VMM_USER_RUNTIME_BASE_DIR).join(uid.to_string())
+}
+
+pub fn remove_vmm_user_runtime_dir(uid: u32) -> Result<()> {
+    remove_dir_all_if_exists(vmm_user_runtime_dir(uid))
 }
 
 pub fn create_vmm_user() -> Result<String> {
@@ -473,6 +482,8 @@ mod tests {
     use crate::utils::first_valid_executable_path;
 
     use super::create_fds;
+    use super::remove_dir_all_if_exists;
+    use super::vmm_user_runtime_dir;
     use super::SocketAddress;
 
     #[test]
@@ -482,6 +493,23 @@ mod tests {
         let fds = create_fds(device, num_fds);
         assert!(fds.is_ok());
         assert_eq!(fds.unwrap().len(), num_fds);
+    }
+
+    #[test]
+    fn test_vmm_user_runtime_dir() {
+        assert_eq!(vmm_user_runtime_dir(1000), PathBuf::from("/run/user/1000"));
+    }
+
+    #[test]
+    fn test_remove_dir_all_if_exists_is_idempotent() {
+        let parent = TempDir::new().unwrap();
+        let runtime_dir = parent.path().join("runtime");
+        fs::create_dir_all(&runtime_dir).unwrap();
+
+        remove_dir_all_if_exists(&runtime_dir).unwrap();
+        assert!(!runtime_dir.exists());
+
+        remove_dir_all_if_exists(&runtime_dir).unwrap();
     }
 
     #[test]

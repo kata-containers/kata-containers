@@ -11,13 +11,24 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"syscall"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+type noFSSharingHypervisor struct {
+	mockHypervisor
+}
+
+func (*noFSSharingHypervisor) Capabilities(context.Context) types.Capabilities {
+	return types.Capabilities{}
+}
 
 func TestSandboxSharedFilesystem(t *testing.T) {
 	if os.Getuid() != 0 {
@@ -214,4 +225,40 @@ func TestShareFileName(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, shareFileName(tc.containerID, tc.source, tc.destination, tc.randHex, tc.sandboxScoped))
 		})
 	}
+}
+
+func TestShareFileCopyGuestPath(t *testing.T) {
+	originalKataGuestSharedDir := kataGuestSharedDir
+	kataGuestSharedDir = func() string {
+		return "/run/user/1002" + defaultKataGuestSharedDir
+	}
+	t.Cleanup(func() {
+		kataGuestSharedDir = originalKataGuestSharedDir
+	})
+
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         "sandbox-id",
+		agent:      newMockAgent(),
+		hypervisor: &noFSSharingHypervisor{},
+	}
+	fsShare, err := NewFilesystemShare(sandbox)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		fsShare.watcher.Close()
+	})
+
+	source := filepath.Join(t.TempDir(), "resolv.conf")
+	require.NoError(t, os.WriteFile(source, []byte("nameserver 192.0.2.1\n"), 0o644))
+
+	sharedFile, err := fsShare.ShareFile(context.Background(), &Container{id: "container-id"}, &Mount{
+		Source:      source,
+		Destination: "/etc/resolv.conf",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, sharedFile)
+
+	expected := "^" + regexp.QuoteMeta(defaultKataGuestSharedDir) +
+		`container-id-[0-9a-f]{16}-resolv\.conf$`
+	assert.Regexp(t, expected, sharedFile.guestPath)
 }
