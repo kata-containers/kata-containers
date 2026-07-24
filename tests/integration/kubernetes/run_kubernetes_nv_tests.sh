@@ -62,6 +62,101 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Delete known NVIDIA GPU test pods from a namespace if they exist.
+# Only touches pods created directly by the NVIDIA GPU test suite; never --all.
+# Does not fail when none of the pods are present.
+#
+# Parameters:
+#	$1 - (optional) namespace. Defaults to "default".
+#
+delete_nvidia_gpu_test_pods_if_any_exist() {
+	local namespace="${1:-default}"
+	local pods=(
+		"aa-test-cc"
+		"nvidia-cuda-vectoradd"
+		"nvidia-nim-llama-3-1-8b-instruct"
+		"nvidia-nim-llama-3-1-8b-instruct-tee"
+		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
+		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
+		"numa-topology-test"
+		"numa-topology-gpu-test"
+	)
+	local -a existing_pods=()
+	local pod
+
+	for pod in "${pods[@]}"; do
+		if kubectl get pod "${pod}" -n "${namespace}" &>/dev/null; then
+			existing_pods+=("${pod}")
+		fi
+	done
+
+	if [[ "${#existing_pods[@]}" -eq 0 ]]; then
+		info "NVIDIA GPU leak cleanup: no-op (no known test pods in namespace ${namespace})"
+		return 0
+	fi
+
+	info "NVIDIA GPU leak cleanup: deleting leaked test pods in namespace ${namespace}: ${existing_pods[*]}"
+	kubectl delete pod -n "${namespace}" --ignore-not-found=true "${existing_pods[@]}" || true
+}
+
+# Clean up resources created through the NIM operator using the same procedure
+# as the NIMService test teardown: delete the owning NIMService first so the
+# operator cleans its dependents, then uninstall the operator.
+cleanup_nvidia_nim_operator_resources() {
+	local namespace
+	local namespaces=("default")
+	local release_name="${NIM_OPERATOR_RELEASE_NAME:-nim-operator}"
+	local operator_namespace="${NIM_OPERATOR_NAMESPACE:-nim-operator}"
+	local cleaned=false
+	local -a existing_nimservices=()
+	local nimservice
+
+	if [[ -n "${TEST_CLUSTER_NAMESPACE:-}" && "${TEST_CLUSTER_NAMESPACE}" != "default" ]]; then
+		namespaces+=("${TEST_CLUSTER_NAMESPACE}")
+	fi
+
+	for namespace in "${namespaces[@]}"; do
+		existing_nimservices=()
+		for nimservice in "meta-llama-3-2-1b-instruct" "meta-llama-3-2-1b-instruct-tee"; do
+			if kubectl get nimservice "${nimservice}" -n "${namespace}" &>/dev/null; then
+				existing_nimservices+=("${nimservice}")
+			fi
+		done
+
+		if [[ "${#existing_nimservices[@]}" -eq 0 ]]; then
+			info "NVIDIA GPU leak cleanup: no-op (no NIMService resources in namespace ${namespace})"
+			continue
+		fi
+
+		info "NVIDIA GPU leak cleanup: deleting leaked NIMService resources in namespace ${namespace}: ${existing_nimservices[*]}"
+		kubectl delete nimservice -n "${namespace}" --ignore-not-found=true \
+			"${existing_nimservices[@]}" || true
+		cleaned=true
+	done
+
+	if helm status "${release_name}" -n "${operator_namespace}" &>/dev/null; then
+		info "NVIDIA GPU leak cleanup: uninstalling leaked NIM operator (release: ${release_name}, namespace: ${operator_namespace})"
+		helm uninstall "${release_name}" -n "${operator_namespace}" || true
+		kubectl delete namespace "${operator_namespace}" --ignore-not-found=true --timeout=60s || true
+		cleaned=true
+	else
+		info "NVIDIA GPU leak cleanup: no-op (NIM operator release not found in namespace ${operator_namespace})"
+	fi
+
+	if [[ "${cleaned}" == "true" ]]; then
+		info "NVIDIA GPU leak cleanup: NIM operator resource cleanup finished"
+	fi
+}
+
+# Remove leftover NVIDIA GPU test resources before starting a new suite/file so
+# stale pods cannot retain GPUs across shared CI runners.
+cleanup_leaked_nvidia_gpu_test_resources() {
+	info "NVIDIA GPU leak cleanup: starting pre-test cleanup"
+	delete_nvidia_gpu_test_pods_if_any_exist "default" || true
+	cleanup_nvidia_nim_operator_resources || true
+	info "NVIDIA GPU leak cleanup: pre-test cleanup complete"
+}
+
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 
@@ -94,6 +189,36 @@ fi
 # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
 setup_genpolicy_registry_auth "nvcr.io" "\$oauthtoken" "${NGC_API_KEY:-}" "${kubernetes_dir}/.docker-genpolicy"
 
-# Use common bats test runner with proper reporting
+# Clean before each bats file so a previous file's leaked resources cannot
+# starve later tests of GPUs on shared runners.
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
-run_bats_tests "${kubernetes_dir}" K8S_TEST_NV
+report_dir="${kubernetes_dir}/reports/$(date +'%F-%T')"
+mkdir -p "${report_dir}"
+info "Running NVIDIA GPU tests with bats version: $(bats --version). Save outputs to ${report_dir}"
+
+tests_fail=()
+for test_entry in "${K8S_TEST_NV[@]}"; do
+	test_entry=$(echo "${test_entry}" | tr -d '[:space:][:cntrl:]')
+	[[ -z "${test_entry}" ]] && continue
+
+	cleanup_leaked_nvidia_gpu_test_resources || true
+
+	info "Executing ${test_entry}"
+	out_file="${report_dir}/${test_entry}.out"
+
+	pushd "${kubernetes_dir}" > /dev/null || exit 1
+	if ! bats --timing --show-output-of-passing-tests "${test_entry}" | tee "${out_file}"; then
+		tests_fail+=("${test_entry}")
+		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
+		[[ "${K8S_TEST_FAIL_FAST}" == "yes" ]] && break
+	else
+		mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
+	fi
+	popd > /dev/null || exit 1
+done
+
+if [[ ${#tests_fail[@]} -ne 0 ]]; then
+	die "Tests FAILED from suites: ${tests_fail[*]}"
+fi
+
+info "All tests SUCCEEDED"
