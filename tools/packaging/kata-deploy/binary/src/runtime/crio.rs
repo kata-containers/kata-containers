@@ -191,6 +191,29 @@ log_level = "debug""#
     Ok(())
 }
 
+/// Current on-disk content of the kata-deploy CRI-O drop-in file(s).
+///
+/// Returns `None` when the runtime drop-in does not exist yet. Callers use this
+/// to tell whether re-applying the config actually changed anything, and
+/// therefore whether a runtime restart is required. The debug drop-in is folded
+/// in so a debug-flag change is also detected.
+pub(crate) fn kata_cri_config_content(config: &Config) -> Option<String> {
+    read_kata_crio_config(
+        &config.crio_drop_in_conf_file,
+        &config.crio_drop_in_conf_file_debug,
+    )
+}
+
+/// Pure core of [`kata_cri_config_content`]: fold the runtime and debug drop-in
+/// files into a single fingerprint. `None` iff the runtime drop-in is absent
+/// (a missing debug drop-in is treated as empty so toggling debug is still
+/// detected as a change).
+fn read_kata_crio_config(runtime_file: &str, debug_file: &str) -> Option<String> {
+    let runtime = fs::read_to_string(runtime_file).ok()?;
+    let debug = fs::read_to_string(debug_file).unwrap_or_default();
+    Some(format!("{runtime}\n{debug}"))
+}
+
 pub async fn cleanup_crio(config: &Config) -> Result<()> {
     if Path::new(&config.crio_drop_in_conf_file).exists() {
         fs::remove_file(&config.crio_drop_in_conf_file)?;
@@ -201,4 +224,68 @@ pub async fn cleanup_crio(config: &Config) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_kata_crio_config;
+    use std::fs;
+    use tempfile::tempdir;
+
+    // The CRI-config fingerprint underpins the job-mode "skip the
+    // self-terminating restart when nothing changed" decision in
+    // install_stage_cri: equal fingerprints across per-node Job retries mean the
+    // runtime was already restarted with this config, so the retry can converge
+    // instead of restarting (and getting killed) again.
+
+    #[test]
+    fn absent_runtime_drop_in_is_none() {
+        let dir = tempdir().unwrap();
+        let runtime = dir.path().join("99-kata-deploy");
+        let debug = dir.path().join("100-debug");
+
+        assert_eq!(
+            read_kata_crio_config(runtime.to_str().unwrap(), debug.to_str().unwrap()),
+            None,
+            "no runtime drop-in on disk yet must read as None (fresh install -> restart)"
+        );
+    }
+
+    #[test]
+    fn present_runtime_absent_debug_folds_empty_debug() {
+        let dir = tempdir().unwrap();
+        let runtime = dir.path().join("99-kata-deploy");
+        let debug = dir.path().join("100-debug");
+        fs::write(&runtime, "runtime-config").unwrap();
+
+        assert_eq!(
+            read_kata_crio_config(runtime.to_str().unwrap(), debug.to_str().unwrap()),
+            Some("runtime-config\n".to_string()),
+        );
+    }
+
+    #[test]
+    fn identical_config_is_stable_but_debug_change_is_detected() {
+        let dir = tempdir().unwrap();
+        let runtime = dir.path().join("99-kata-deploy");
+        let debug = dir.path().join("100-debug");
+        fs::write(&runtime, "runtime-config").unwrap();
+        fs::write(&debug, "log_level = \"debug\"").unwrap();
+
+        let before =
+            read_kata_crio_config(runtime.to_str().unwrap(), debug.to_str().unwrap()).unwrap();
+
+        // Re-reading the same bytes yields the same fingerprint: the retry sees
+        // "unchanged" and takes the skip-restart path.
+        let after_unchanged =
+            read_kata_crio_config(runtime.to_str().unwrap(), debug.to_str().unwrap()).unwrap();
+        assert_eq!(before, after_unchanged);
+
+        // An upgrade that toggles debug must be observed as a change so the
+        // runtime is restarted to pick it up.
+        fs::write(&debug, "log_level = \"info\"").unwrap();
+        let after_changed =
+            read_kata_crio_config(runtime.to_str().unwrap(), debug.to_str().unwrap()).unwrap();
+        assert_ne!(before, after_changed);
+    }
 }
