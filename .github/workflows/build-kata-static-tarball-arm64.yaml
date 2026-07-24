@@ -201,9 +201,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
-          - rootfs-image-confidential
           - rootfs-image-coco-extension
-          - rootfs-image-nvidia-gpu
           - rootfs-image-nvidia
           - rootfs-image-nvidia-gpu-extension
           - rootfs-initrd
