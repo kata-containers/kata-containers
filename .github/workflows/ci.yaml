@@ -153,20 +153,6 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  build-kata-static-tarball-s390x:
-    permissions:
-      contents: read
-      packages: write # needed to push build artifacts to ghcr.io
-      id-token: write # needed to sign images and generate attestations
-      attestations: write # needed to generate artifact attestations
-    uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
   build-kata-static-tarball-ppc64le:
     permissions:
       contents: read
@@ -176,43 +162,6 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-  publish-kata-deploy-image-s390x:
-    needs: build-kata-static-tarball-s390x
-    permissions:
-      contents: read
-      packages: write # needed to push build artifacts to ghcr.io
-    uses: ./.github/workflows/publish-kata-images.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-s390x
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-s390x
-      arch: s390x
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-  publish-kata-monitor-image-s390x:
-    needs: build-kata-static-tarball-s390x
-    permissions:
-      contents: read
-      packages: write # needed to push build artifacts to ghcr.io
-    uses: ./.github/workflows/publish-kata-images.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-monitor-ci
-      tag: ${{ inputs.tag }}-s390x
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-s390x
-      arch: s390x
-      image-kind: monitor
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -292,7 +241,7 @@ jobs:
           tags: ghcr.io/kata-containers/test-images:unencrypted-${{ inputs.pr-number }}
           push: true
           context: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/
-          platforms: linux/amd64, linux/arm64, linux/s390x
+          platforms: linux/amd64, linux/arm64
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   run-kata-monitor-tests:
@@ -441,21 +390,6 @@ jobs:
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
-  run-k8s-tests-on-zvsi:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-image-s390x, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-s390x
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-      vmm: ${{ (inputs.pr-number == 'nightly' || inputs.pr-number == 'dev') && '["qemu", "qemu-runtime-rs", "qemu-coco-dev", "qemu-coco-dev-runtime-rs"]' || '["qemu", "qemu-runtime-rs", "qemu-coco-dev"]' }}
-    secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-image-ppc64le
@@ -489,15 +423,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-basic-s390x-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/basic-ci-s390x.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
   run-cri-containerd-tests-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
@@ -526,29 +451,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
-
-  run-cri-containerd-tests-s390x:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-s390x
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          {containerd_version: latest, vmm: qemu},
-          {containerd_version: latest, vmm: qemu-runtime-rs},
-        ]
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
-      cancel-in-progress: true
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: s390x-large
-      arch: s390x
       containerd_version: ${{ matrix.params.containerd_version }}
       vmm: ${{ matrix.params.vmm }}
 
