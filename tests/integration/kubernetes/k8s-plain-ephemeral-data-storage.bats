@@ -55,7 +55,7 @@ setup() {
 	yaml_template="${pod_config_dir}/pod-plain-ephemeral-data-storage.yaml.in"
 	yaml_file="${pod_config_dir}/pod-plain-ephemeral-data-storage.yaml"
 
-	RUNTIMECLASS="kata-${KATA_HYPERVISOR}" envsubst "\${RUNTIMECLASS}" \
+	RUNTIMECLASS="$(get_test_runtime_class)" envsubst "\${RUNTIMECLASS}" \
 		< "${yaml_template}" > "${yaml_file}"
 
 	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-plain-ephemeral-data-storage.toml"
@@ -71,7 +71,7 @@ EOF
 	if [[ "${PULL_TYPE:-default}" == "guest-pull" ]] && is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
 		set_metadata_annotation "${yaml_file}" \
 			"io.containerd.cri.runtime-handler" \
-			"kata-${KATA_HYPERVISOR}"
+			"$(get_test_runtime_class)"
 	fi
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"

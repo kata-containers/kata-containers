@@ -55,9 +55,11 @@ DROPIN
 	dropin_path="$(set_kata_runtime_config_dropin_file "$node" "${runtime_config_dropin_file}")" \
 		|| die "Failed to install Kata runtime config drop-in on node $node"
 
-	# kata-runtime defaults to the QEMU config; point it at the active
-	# hypervisor so that factory init/destroy use the correct configuration.
-	kata_config_path="/opt/kata/share/defaults/kata-containers/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
+	# kata-runtime defaults to the QEMU config; point it at the configuration
+	# backing the RuntimeClass under test so that factory init/destroy read the
+	# same settings, and the same config.d drop-in installed above, as the pod.
+	kata_config_path="$(get_kata_runtime_config_file "$node")" \
+		|| die "Failed to resolve the Kata runtime config file on node $node"
 }
 
 @test "Pod can be created with a templated VM" {
@@ -104,8 +106,10 @@ teardown() {
 	# Destroy the VM template and remove the config drop-in on the target node.
 	# factory destroy must run in PID 1's mount namespace to unmount the template
 	# tmpfs that factory init created there (see the @test for details).
-	exec_host "$node" "nsenter --mount=/proc/1/ns/mnt /opt/kata/bin/kata-runtime --config ${kata_config_path} factory destroy" \
-		|| echo "Warning: Failed to destroy VM template on node $node"
+	if [[ -n "${kata_config_path:-}" ]]; then
+		exec_host "$node" "nsenter --mount=/proc/1/ns/mnt /opt/kata/bin/kata-runtime --config ${kata_config_path} factory destroy" \
+			|| echo "Warning: Failed to destroy VM template on node $node"
+	fi
 
 	remove_kata_runtime_config_dropin_file "$node" "${dropin_path:-}" \
 		|| echo "Warning: Failed to remove Kata runtime config drop-in on node $node"

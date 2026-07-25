@@ -72,6 +72,37 @@ get_pod_config_dir() {
 	info "k8s configured to use runtimeclass"
 }
 
+# Return the RuntimeClass (and containerd runtime handler) the tests run on.
+#
+# kata-deploy applies the guest debug settings (enable_debug, the debug console,
+# agent.log=debug and initcall_debug on the kernel cmdline) solely to the extra
+# kata-<shim>-debug RuntimeClass it creates when deployed with debug enabled, so
+# that the plain kata-<shim> class keeps the kernel cmdline, and therefore the
+# guest measurements, of a non-debug installation. The tests depend on those
+# guest logs to triage failures, hence they run on the debug class whenever it
+# is deployed.
+#
+# A multi-install names every class after its own suffix (kata-<shim>-<suffix>,
+# and kata-<shim>-<suffix>-debug for the variant), so build the name from the
+# same MULTI_INSTALL_SUFFIX kata-deploy was given rather than assuming the plain
+# one, which is not deployed at all in that case.
+get_test_runtime_class() {
+	if [[ -z "${test_runtime_class:-}" ]]; then
+		test_runtime_class="kata-${KATA_HYPERVISOR}${MULTI_INSTALL_SUFFIX:+-${MULTI_INSTALL_SUFFIX}}"
+		if kubectl get runtimeclass "${test_runtime_class}-debug" &>/dev/null; then
+			test_runtime_class="${test_runtime_class}-debug"
+		fi
+		export test_runtime_class
+	fi
+
+	echo "${test_runtime_class}"
+}
+
+# Whether the tests run on a RuntimeClass that carries the guest debug settings.
+test_runtime_class_has_guest_debug() {
+	[[ "$(get_test_runtime_class)" == *-debug ]]
+}
+
 # Return the first worker found that is kata-runtime labeled.
 get_one_kata_node() {
 	local resource_name
@@ -127,19 +158,26 @@ get_kubelet_data_dir() {
 	esac
 }
 
-# Return the per-shim Kata runtime config directory on a k8s node.
+# Return the Kata runtime config directory of the RuntimeClass under test.
 #
 # This is the directory that holds configuration-<shim>.toml and config.d/.
+# kata-deploy gives every handler it derives from a shim, the kata-<shim>-debug
+# one included, a private copy of the configuration under custom-runtimes/, so
+# look there first: a drop-in written elsewhere would not reach the pods.
 # Probe the filesystem instead of parsing the shim name, since some runtime-rs
 # shims like dragonball do not use the -runtime-rs suffix.
 get_kata_runtime_config_dir() {
 	local node_name="$1"
 	local base="/opt/kata/share/defaults/kata-containers"
+	local handler_dir
+	handler_dir="${base}/custom-runtimes/$(get_test_runtime_class)"
 	local rs_dir="${base}/runtime-rs/runtimes/${KATA_HYPERVISOR}"
 	local go_dir="${base}/runtimes/${KATA_HYPERVISOR}"
 	local legacy_dir="${base}"
 
-	if exec_host "${node_name}" "test -d '${rs_dir}'" >/dev/null 2>&1; then
+	if exec_host "${node_name}" "test -d '${handler_dir}'" >/dev/null 2>&1; then
+		echo "${handler_dir}"
+	elif exec_host "${node_name}" "test -d '${rs_dir}'" >/dev/null 2>&1; then
 		echo "${rs_dir}"
 	elif exec_host "${node_name}" "test -d '${go_dir}'" >/dev/null 2>&1; then
 		echo "${go_dir}"
