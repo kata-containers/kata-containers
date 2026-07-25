@@ -307,6 +307,12 @@ resources:
     cpu: 25m
     memory: 16Mi
 
+# When true, kata-deploy enables host-side debug logging (containerd/CRI-O/kata-deploy)
+# and creates an extra `kata-<shim>-debug` RuntimeClass per enabled shim. Guest debug
+# settings (enable_debug, debug console, agent.log=debug, initcall_debug on the kernel
+# cmdline) are applied only on that class so the normal `kata-<shim>` RuntimeClass
+# keeps a stable measurement profile. Use runtimeClassName: kata-<shim>-debug for
+# pods that need guest debugging.
 debug: false
 
 # Optional CLI log level override for kata-deploy.
