@@ -6,6 +6,8 @@
 use crate::config::Config;
 use crate::k8s;
 use crate::utils;
+
+use super::manager;
 use anyhow::Result;
 use log::info;
 use std::time::Duration;
@@ -61,20 +63,13 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
             // k0s automatically loads config on the fly
             info!("k0s runtime - no restart needed");
         }
-        "microk8s" => {
-            info!("restart_runtime: Restarting microk8s containerd service");
-            utils::host_systemctl(&["restart", "snap.microk8s.daemon-containerd.service"])?;
-            info!("restart_runtime: Successfully restarted microk8s containerd");
-        }
         _ => {
+            let unit = manager::cri_systemd_unit(runtime);
             info!("restart_runtime: Running daemon-reload");
             utils::host_systemctl(&["daemon-reload"])?;
-            info!("restart_runtime: Restarting {} service", runtime);
-            utils::host_systemctl(&["restart", runtime])?;
-            info!(
-                "restart_runtime: Successfully restarted {} service",
-                runtime
-            );
+            info!("restart_runtime: Restarting {}", unit);
+            utils::host_systemctl(&["restart", &unit])?;
+            info!("restart_runtime: Successfully restarted {}", unit);
         }
     }
 
@@ -90,12 +85,9 @@ pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> 
             // k0s automatically unloads config on the fly
             info!("k0s runtime - no restart needed");
         }
-        "microk8s" => {
-            utils::host_systemctl(&["restart", "snap.microk8s.daemon-containerd.service"])?;
-        }
         _ => {
             utils::host_systemctl(&["daemon-reload"])?;
-            utils::host_systemctl(&["restart", runtime])?;
+            utils::host_systemctl(&["restart", &manager::cri_systemd_unit(runtime)])?;
         }
     }
 

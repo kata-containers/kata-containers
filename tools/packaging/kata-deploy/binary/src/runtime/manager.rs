@@ -85,6 +85,22 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     Ok(runtime)
 }
 
+/// Returns the systemd unit that runs the node's CRI runtime.
+///
+/// For most runtimes the detected runtime name doubles as the unit name, but k3s,
+/// RKE2 and k0s embed containerd in their own daemon instead of running a
+/// standalone `containerd.service`, and microk8s ships containerd as a snap
+/// daemon.  Note that the k0s units carry no dash: the `k0s-controller` and
+/// `k0s-worker` names above are ours, the units are `k0scontroller`/`k0sworker`.
+pub fn cri_systemd_unit(runtime: &str) -> String {
+    match runtime {
+        "k0s-controller" => "k0scontroller.service".to_string(),
+        "k0s-worker" => "k0sworker.service".to_string(),
+        "microk8s" => "snap.microk8s.daemon-containerd.service".to_string(),
+        _ => format!("{runtime}.service"),
+    }
+}
+
 /// Returns true if containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1", "containerd://2.2.2-bd1.34") indicates
 /// containerd 2.x or newer, false for 1.x or unparseable. Used for drop-in support
 /// and for K3s/RKE2 template selection (config-v3.toml.tmpl vs config.toml.tmpl).
@@ -248,6 +264,28 @@ mod tests {
             "version: {}",
             version
         );
+    }
+
+    // --- cri_systemd_unit ---
+
+    /// The runtime name doubles as the unit name everywhere except k0s (no dash in
+    /// the unit) and microk8s (snap daemon), which are the cases worth pinning down.
+    #[rstest]
+    #[case::vanilla_containerd("containerd", "containerd.service")]
+    #[case::crio("crio", "crio.service")]
+    #[case::k3s_server("k3s", "k3s.service")]
+    #[case::k3s_agent("k3s-agent", "k3s-agent.service")]
+    #[case::rke2_server("rke2-server", "rke2-server.service")]
+    #[case::rke2_agent("rke2-agent", "rke2-agent.service")]
+    #[case::k0s_controller_unit_has_no_dash("k0s-controller", "k0scontroller.service")]
+    #[case::k0s_worker_unit_has_no_dash("k0s-worker", "k0sworker.service")]
+    #[case::microk8s_containerd_is_a_snap_daemon(
+        "microk8s",
+        "snap.microk8s.daemon-containerd.service"
+    )]
+    #[case::unknown_runtime_falls_back_to_its_own_name("something-else", "something-else.service")]
+    fn test_cri_systemd_unit(#[case] runtime: &str, #[case] expected: &str) {
+        assert_eq!(cri_systemd_unit(runtime), expected, "runtime: {}", runtime);
     }
 
     // --- is_containerd_capable_of_drop_in (pure version) ---

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{Config, NYDUS_FOR_KATA_TEE};
+use crate::runtime;
 use crate::runtime::containerd;
 use crate::utils;
 use crate::utils::toml as toml_utils;
@@ -254,7 +255,7 @@ pub async fn configure_snapshotter(
     Ok(())
 }
 
-pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
+pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result<()> {
     info!("Deploying {NYDUS_FOR_KATA_TEE}");
 
     let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
@@ -264,6 +265,12 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
 
     // Stop the service if it is currently running so we can replace the binaries safely.
     let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]);
+
+    // Disable it as well: the [Install] section we are about to write may name a
+    // different CRI unit than the one currently installed (e.g. after a kata-deploy
+    // upgrade), and `systemctl disable` is the only thing that removes the stale
+    // <old-cri-unit>.service.wants/ symlink.
+    let _ = utils::host_systemctl(&["disable", &format!("{nydus_snapshotter}.service")]);
 
     // The nydus data directory (/var/lib/nydus-for-kata-tee) is intentionally preserved
     // across reinstalls.  Removing it would create a split-brain state: the nydus backend
@@ -332,6 +339,11 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
                 .unwrap_or(&config.host_install_dir)
         ),
     );
+
+    // Hook the snapshotter onto whichever unit actually runs containerd on this node.
+    let cri_service = runtime::cri_systemd_unit(runtime);
+    info!("Binding {nydus_snapshotter}.service to {cri_service}");
+    service_content = service_content.replace("@CRI_SERVICE@", &cri_service);
 
     fs::create_dir_all(format!("{}/{NYDUS_FOR_KATA_TEE}", config.host_install_dir))?;
 
@@ -416,13 +428,13 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn install_snapshotter(snapshotter: &str, config: &Config) -> Result<()> {
+pub async fn install_snapshotter(snapshotter: &str, config: &Config, runtime: &str) -> Result<()> {
     match snapshotter {
         "erofs" => {
             // erofs is a containerd built-in snapshotter, no installation needed
         }
         "nydus" => {
-            install_nydus_snapshotter(config).await?;
+            install_nydus_snapshotter(config, runtime).await?;
         }
         _ => {
             return Err(anyhow::anyhow!("Unsupported snapshotter: {snapshotter}"));
