@@ -379,14 +379,14 @@ externals:
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.13.3"
+    version: "v1.14.0"
     toolchain: "1.85.1"
     meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.13.1,
-      # this is the link labelled virtiofsd-v1.13.1.zip
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.14.0,
+      # this is the link labelled virtiofsd-v1.14.0.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/-/project/21523468/uploads/05d4925181301a59b8c322cd9f9d44a7/virtiofsd-v1.13.1.zip"
+      binary: "https://gitlab.com/-/project/21523468/uploads/f505704014ae7a816e515f2a05a93d8b/virtiofsd-v1.14.0.zip"
 
 languages:
   description: |
