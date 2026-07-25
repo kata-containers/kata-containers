@@ -27,6 +27,7 @@ IFS=' ' read -r -a JOB_DISPATCHER_REGISTRIES <<< "${KATA_DEPLOY_JOB_DISPATCHER_R
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
+KATA_GO_STATIC_TARBALL="${KATA_GO_STATIC_TARBALL:-}"
 
 function _die()
 {
@@ -44,6 +45,7 @@ function _check_required_env_var()
 		GH_TOKEN) env_var="${GH_TOKEN}" ;;
 		ARCHITECTURE) env_var="${ARCHITECTURE}" ;;
 		KATA_STATIC_TARBALL) env_var="${KATA_STATIC_TARBALL}" ;;
+		KATA_GO_STATIC_TARBALL) env_var="${KATA_GO_STATIC_TARBALL}" ;;
 		KATA_DEPLOY_IMAGE_TAGS) env_var="${KATA_DEPLOY_IMAGE_TAGS}" ;;
 		KATA_DEPLOY_REGISTRIES) env_var="${KATA_DEPLOY_REGISTRIES}" ;;
 		KATA_TOOLS_STATIC_TARBALL) env_var="${KATA_TOOLS_STATIC_TARBALL}" ;;
@@ -202,6 +204,20 @@ function _upload_kata_static_tarball()
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
 }
 
+function _upload_kata_go_static_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+	_check_required_env_var "ARCHITECTURE"
+	_check_required_env_var "KATA_GO_STATIC_TARBALL"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	new_tarball_name="kata-go-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
+	mv "${KATA_GO_STATIC_TARBALL}" "${new_tarball_name}"
+	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
+	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
+}
+
 function _upload_kata_tools_static_tarball()
 {
 	_check_required_env_var "GH_TOKEN"
@@ -276,6 +292,7 @@ function main()
 		release-version) _release_version;;
 		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
+		upload-kata-go-static-tarball) _upload_kata_go_static_tarball ;;
 		upload-kata-tools-static-tarball) _upload_kata_tools_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;

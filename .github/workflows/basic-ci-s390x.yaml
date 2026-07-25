@@ -79,7 +79,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
+          name: ${{ endsWith(matrix.vmm, '-runtime-rs') && format('kata-static-tarball-s390x{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-s390x{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -124,7 +124,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
+          name: ${{ endsWith(matrix.vmm, '-runtime-rs') && format('kata-static-tarball-s390x{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-s390x{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -167,7 +167,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
+          name: ${{ endsWith(matrix.vmm, '-runtime-rs') && format('kata-static-tarball-s390x{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-s390x{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata

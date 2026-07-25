@@ -72,7 +72,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -118,11 +118,20 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
 
       - name: Install kata
         run: bash tests/stability/gha-run.sh install-kata kata-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/stability/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run containerd-stability tests
         timeout-minutes: 15
@@ -167,7 +176,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: get-kata-tools-tarball
@@ -225,7 +234,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -279,7 +288,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: ${{ (matrix.vmm == 'dragonball' || endsWith(matrix.vmm, '-runtime-rs')) && format('kata-static-tarball-amd64{0}', inputs.tarball-suffix) || format('kata-go-static-tarball-amd64{0}', inputs.tarball-suffix) }}
           path: kata-artifacts
 
       - name: Install kata
@@ -329,8 +338,18 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
+          # No VMM matrix: the pod VM tests boot the default runtime-rs
+          # package.
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
+
+      - name: get-kata-agent-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          # The host agent binary lives in the per-component agent artifact:
+          # the merged tarballs only ship the agent inside the guest images.
+          name: kata-artifacts-amd64-agent${{ inputs.tarball-suffix }}
+          path: kata-agent-artifacts
 
       - name: get-kata-tools-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -338,9 +357,10 @@ jobs:
           name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-tools-artifacts
 
-      - name: Install kata & kata-tools
+      - name: Install kata, kata-agent & kata-tools
         run: |
           bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+          bash tests/functional/kata-agent-apis/gha-run.sh install-kata-agent kata-agent-artifacts
           bash tests/functional/kata-agent-apis/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run kata agent api tests with agent-ctl
