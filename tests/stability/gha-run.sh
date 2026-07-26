@@ -36,6 +36,11 @@ function install_dependencies() {
 }
 
 function run() {
+	# Without this the tests run whatever configuration.toml the tarball
+	# happens to ship with, so every entry of the vmm matrix exercises the
+	# same hypervisor instead of the one it is named after.
+	enabling_hypervisor
+
 	# shellcheck disable=SC2154
 	info "Running soak parallel stability tests using ${KATA_HYPERVISOR} hypervisor"
 
