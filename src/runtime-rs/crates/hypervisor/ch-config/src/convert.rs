@@ -326,16 +326,14 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
             return Err(CpusConfigError::BootVCPUsTooSmall);
         }
 
-        let default_vcpus = u8::try_from(cpu.default_vcpus.ceil() as u32)
-            .map_err(CpusConfigError::BootVCPUsTooBig)?;
+        let default_vcpus = cpu.default_vcpus.ceil() as u32;
 
         // This can only happen if runtime-rs fails to set default values.
         if cpu.default_maxvcpus == 0 {
             return Err(CpusConfigError::MaxVCPUsTooSmall);
         }
 
-        let default_max_vcpus =
-            u8::try_from(cpu.default_maxvcpus).map_err(CpusConfigError::MaxVCPUsTooBig)?;
+        let default_max_vcpus = cpu.default_maxvcpus;
 
         let boot_vcpus = default_vcpus;
 
@@ -351,8 +349,11 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
             return Err(CpusConfigError::BootVPUsGtThanMaxVCPUs);
         }
 
+        let cores_per_die = u16::try_from(max_vcpus)
+            .map_err(CpusConfigError::MaxVCPUsExceedsTopology)?;
+
         let topology = CpuTopology {
-            cores_per_die: max_vcpus,
+            cores_per_die,
             threads_per_core: 1,
             dies_per_package: 1,
             packages: 1,
@@ -636,11 +637,11 @@ mod tests {
         }
     }
 
-    fn make_cpu_objects(cpu_default: u8, cpu_max: u8, tdx: bool) -> (CpuInfo, CpusConfig) {
+    fn make_cpu_objects(cpu_default: u32, cpu_max: u32, tdx: bool) -> (CpuInfo, CpusConfig) {
         let default_maxvcpus = if tdx {
-            cpu_default as u32
+            cpu_default
         } else {
-            cpu_max as u32
+            cpu_max
         };
 
         let cpu_info = CpuInfo {
@@ -653,15 +654,18 @@ mod tests {
         let max_vcpus = if tdx {
             cpu_default
         } else {
-            default_maxvcpus as u8
+            default_maxvcpus
         };
+
+        let cores_per_die =
+            u16::try_from(max_vcpus).expect("test max_vcpus must fit CpuTopology u16 fields");
 
         let cpus_config = CpusConfig {
             boot_vcpus: cpu_default,
             max_vcpus,
             nested: cpu_nested_config(),
             topology: Some(CpuTopology {
-                cores_per_die: max_vcpus,
+                cores_per_die,
 
                 ..make_bare_topology()
             }),
@@ -1285,6 +1289,38 @@ mod tests {
                     ..Default::default()
                 }),
             },
+            TestData {
+                cpu_info: CpuInfo {
+                    default_vcpus: 1.0,
+                    default_maxvcpus: 256,
+                    ..Default::default()
+                },
+                guest_protection: GuestProtection::NoProtection,
+                result: Ok(CpusConfig {
+                    boot_vcpus: 1,
+                    max_vcpus: 256,
+                    nested: cpu_nested_config(),
+                    topology: Some(CpuTopology {
+                        cores_per_die: 256,
+
+                        ..topology
+                    }),
+                    max_phys_bits: DEFAULT_CH_MAX_PHYS_BITS,
+
+                    ..Default::default()
+                }),
+            },
+            TestData {
+                cpu_info: CpuInfo {
+                    default_vcpus: 1.0,
+                    default_maxvcpus: u16::MAX as u32 + 1,
+                    ..Default::default()
+                },
+                guest_protection: GuestProtection::NoProtection,
+                result: Err(CpusConfigError::MaxVCPUsExceedsTopology(
+                    u16::try_from(u16::MAX as u32 + 1).unwrap_err(),
+                )),
+            },
         ];
 
         for (i, d) in tests.iter().enumerate() {
@@ -1697,8 +1733,8 @@ mod tests {
         let valid_vsock =
             VsockConfig::try_from((vsock_socket_path.to_string(), DEFAULT_VSOCK_CID)).unwrap();
 
-        let (cpu_info, cpus_config) = make_cpu_objects(7, u8::MAX, false);
-        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8::MAX, true);
+        let (cpu_info, cpus_config) = make_cpu_objects(7, 255, false);
+        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, 255, true);
 
         let (memory_info_std, mem_config_std) =
             make_memory_objects(79, usable_max_mem_bytes, false);

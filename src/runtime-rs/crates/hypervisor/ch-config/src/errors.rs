@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::TryFrom;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq)]
@@ -70,17 +69,14 @@ pub enum CpusConfigError {
     #[error("Boot vCPUs cannot be zero or negative")]
     BootVCPUsTooSmall,
 
-    #[error("Too many boot vCPUs specified: {0}")]
-    BootVCPUsTooBig(<u8 as TryFrom<i32>>::Error),
-
-    #[error("Max vCPUs cannot be zero or negative")]
+    #[error("Max vCPUs cannot be zero")]
     MaxVCPUsTooSmall,
-
-    #[error("Too many max vCPUs specified: {0}")]
-    MaxVCPUsTooBig(<u8 as TryFrom<u32>>::Error),
 
     #[error("Boot vCPUs cannot be larger than max vCPUs")]
     BootVPUsGtThanMaxVCPUs,
+
+    #[error("Max vCPUs exceeds topology field capacity: {0}")]
+    MaxVCPUsExceedsTopology(<u16 as std::convert::TryFrom<u32>>::Error),
 }
 
 #[derive(Error, Debug, PartialEq)]
