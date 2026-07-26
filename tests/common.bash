@@ -264,6 +264,7 @@ function extract_kata_env() {
 	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_semver}" | cut -d'"' -f4)"
 	# shellcheck disable=SC2034
 	RUNTIME_COMMIT="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_commit}" | cut -d'"' -f4)"
+	# shellcheck disable=SC2034
 	RUNTIME_PATH="$(echo "${kata_env}" | jq -r "${runtime_path}")"
 	# shellcheck disable=SC2034
 	SHARED_FS="$(echo "${kata_env}" | jq -r "${shared_fs}")"
@@ -302,21 +303,6 @@ function extract_kata_env() {
 # Checks that processes are not running
 function check_processes() {
 	extract_kata_env
-
-	# Only check the kata-env if we have managed to find the kata executable...
-	if [[ -x "${RUNTIME_PATH}" ]]; then
-		local vsock_configured
-		# shellcheck disable=SC2034
-		vsock_configured=$(${RUNTIME_PATH} env | awk '/UseVSock/ {print $3}')
-		local vsock_supported
-		# shellcheck disable=SC2034
-		vsock_supported=$(${RUNTIME_PATH} env | awk '/SupportVSock/ {print $3}')
-	else
-		# shellcheck disable=SC2034
-		local vsock_configured="false"
-		# shellcheck disable=SC2034
-		local vsock_supported="false"
-	fi
 
 	general_processes=( "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 
