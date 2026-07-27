@@ -21,8 +21,8 @@ OS_VERSION=$(sort -r /etc/*-release | gawk 'match($0, /^(VERSION_ID=(.*))$/, a) 
 SHIM_CONFIG_FILE_NAME_RUNTIME_GO="configuration-clh.toml"
 SHIM_DBG_CONFIG_FILE_NAME_RUNTIME_GO="configuration-clh-debug.toml"
 CONFIG_DIR_RUNTIME_GO="src/runtime/config"
-SHIM_CONFIG_FILE_NAME_RUNTIME_RS="configuration-clh-runtime-rs.toml"
-SHIM_DBG_CONFIG_FILE_NAME_RUNTIME_RS="configuration-clh-runtime-rs-debug.toml"
+SHIM_CONFIG_FILE_NAME_RUNTIME_RS="configuration-clh-azure-runtime-rs.toml"
+SHIM_DBG_CONFIG_FILE_NAME_RUNTIME_RS="configuration-clh-azure-runtime-rs-debug.toml"
 CONFIG_DIR_RUNTIME_RS="src/runtime-rs/config"
 
 if [[ "${CONF_PODS}" == "yes" ]]; then
