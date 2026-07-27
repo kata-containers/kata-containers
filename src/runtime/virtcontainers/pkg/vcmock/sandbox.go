@@ -173,6 +173,9 @@ func (s *Sandbox) WaitProcess(ctx context.Context, containerID, processID string
 
 // SignalProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) SignalProcess(ctx context.Context, containerID, processID string, signal syscall.Signal, all bool) error {
+	if s.SignalProcessFunc != nil {
+		return s.SignalProcessFunc(ctx, containerID, processID, signal, all)
+	}
 	return nil
 }
 
