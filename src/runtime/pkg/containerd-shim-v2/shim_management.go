@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 
@@ -41,12 +43,52 @@ const (
 	PolicyURL             = "/policy"
 	IP6TablesURL          = "/ip6tables"
 	MetricsURL            = "/metrics"
+
+	agentMetricsRetryInterval = 30 * time.Second
 )
 
 var (
-	ifSupportAgentMetricsAPI = true
-	shimMgtLog               = shimLog.WithField("subsystem", "shim-management")
+	shimMgtLog = shimLog.WithField("subsystem", "shim-management")
 )
+
+type agentMetricsState struct {
+	mu sync.Mutex
+
+	inFlight    bool
+	unsupported bool
+	retryAfter  time.Time
+}
+
+func (s *agentMetricsState) tryStart(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.inFlight || s.unsupported || now.Before(s.retryAfter) {
+		return false
+	}
+
+	s.inFlight = true
+	return true
+}
+
+func (s *agentMetricsState) finish(now time.Time, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.inFlight = false
+
+	if err == nil {
+		s.retryAfter = time.Time{}
+		return
+	}
+
+	if isGRPCErrorCode(codes.NotFound, err) {
+		s.unsupported = true
+		return
+	}
+
+	s.retryAfter = now.Add(agentMetricsRetryInterval)
+}
 
 type ResizeRequest struct {
 	VolumePath string
@@ -86,21 +128,22 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 		encoder.Encode(mf)
 	}
 
-	// if using an old agent, only collect shim/sandbox metrics.
-	if !ifSupportAgentMetricsAPI {
+	// Allow at most one guest request per sandbox. If a transport ignores
+	// cancellation and remains stuck, the in-flight bit deliberately stays set
+	// so later scrapes cannot accumulate more blocked calls.
+	if !s.agentMetrics.tryStart(time.Now()) {
 		return
 	}
 
 	// get metrics from agent
-	// can not pass context to serveMetrics, so use background context
-	agentMetrics, err := s.sandbox.GetAgentMetrics(context.Background())
+	agentMetrics, err := s.sandbox.GetAgentMetrics(r.Context())
+	s.agentMetrics.finish(time.Now(), err)
 	if err != nil {
 		shimMgtLog.WithError(err).Error("failed GetAgentMetrics")
 		if isGRPCErrorCode(codes.NotFound, err) {
-			shimMgtLog.Warn("metrics API not supportted by this agent.")
-			ifSupportAgentMetricsAPI = false
-			return
+			shimMgtLog.Warn("metrics API not supported by this agent.")
 		}
+		return
 	}
 
 	// decode and parse metrics from agent
