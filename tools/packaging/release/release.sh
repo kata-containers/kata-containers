@@ -182,7 +182,6 @@ function _publish_multiarch_manifest()
 			docker buildx imagetools create --tag "${registry}:${tag}" \
 				"${registry}:${tag}-amd64" \
 				"${registry}:${tag}-arm64" \
-				"${registry}:${tag}-s390x" \
 				"${registry}:${tag}-ppc64le"
 		done
 	done
