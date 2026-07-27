@@ -1859,6 +1859,12 @@ handle_build() {
 	fi
 	tar --zstd -tvf "${final_tarball_path}"
 
+	# Every component ends up merged into kata-static.tar.zst, which is
+	# unpacked with "tar -C /", so a component carrying (say) etc/resolv.conf
+	# takes the resolver of whatever machine installs it down with it.
+	"${repo_root_dir}/tools/packaging/scripts/assert-tarball-host-safe.sh" \
+		"${final_tarball_path}"
+
 	case ${build_target} in
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"

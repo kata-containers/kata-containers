@@ -390,7 +390,10 @@ merge-builds:
 install-prebuilt-artifacts:
 	mv kata-artifacts $(MK_DIR)/build
 
+# The payload is unpacked straight onto this machine's root, so vet it first:
+# a stray etc/resolv.conf in there would replace the local resolver.
 install-tarball:
+	$(MK_DIR)/../../scripts/assert-tarball-host-safe.sh ./kata-static.tar.zst
 	tar --zstd -xf ./kata-static.tar.zst -C /
 
 # Push the kata-deploy image and helm chart for the host arch. Caller is
