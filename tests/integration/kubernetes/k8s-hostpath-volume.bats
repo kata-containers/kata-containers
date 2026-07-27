@@ -34,7 +34,14 @@ setup() {
 	# Check the mount info.
 
 	mount_info="$(kubectl exec "${pod_name}" -- "${cmd_mountinfo[@]}")"
-	read root mountpoint fstype < <(awk '{print $4, $5, $9}' <<< "$mount_info")
+	# /proc/self/mountinfo has a variable number of optional fields before
+	# the "-" separator, so fstype is not always at $9. Find "-" and take
+	# the immediately following field, which is always the fstype.
+	read root mountpoint fstype < <(awk '{
+		for (i = 1; i <= NF; i++) {
+			if ($i == "-") { print $4, $5, $(i+1); break }
+		}
+	}' <<< "$mount_info")
 
 	[ "$root" == "/kmsg" ] # Would look like "/<CONTAINER_ID>-<RANDOM_ID>-kmsg" with virtio-fs.
 	[ "$mountpoint" == "/dev/kmsg" ]
