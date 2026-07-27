@@ -160,10 +160,15 @@ containerd:
   # Optional user-provided containerd drop-in TOML content.
   # This is written as an extra drop-in loaded after kata-deploy's generated drop-in,
   # so user keys can override kata-deploy defaults.
-  # Example: set erofs snapshotter default size to zero:
+  # NOTE: default_size = "0" selects memory-backed rw layers even when
+  # erofsSnapshotterMode is "disk"; do not set it when disk backing is intended.
+  # Example: disable erofs fs-verity when the host backing filesystem may not
+  # support it, and/or adjust the disk-backed rw-layer size (kata-deploy's
+  # default for disk/empty erofsSnapshotterMode is "10G"):
   # userDropIn: |
   #   [plugins.'io.containerd.snapshotter.v1.erofs']
-  #     default_size = 0
+  #     enable_fsverity = false
+  #     default_size = "20G"
   userDropIn: ""
 
 # Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
@@ -362,8 +367,14 @@ snapshotter:
   # erofs snapshotter. When empty, kata-deploy uses its built-in default
   # (merged).
   erofsMergeMode: ""
-  # EROFS snapshotter mode. Controls the rw-layer backing strategy.
+  # EROFS snapshotter mode. Controls the rw-layer backing strategy via
+  # containerd's default_size:
+  #   - "memory" → default_size = "0"  (in-memory rw layer)
+  #   - "disk"   → default_size = "10G" (disk-backed rw layer)
+  #   - ""       → same as "disk"
   # Valid values: "" (default), "disk", or "memory".
+  # containerd.userDropIn is loaded later and can override default_size. Do not
+  # set default_size to "0" there when disk backing is intended.
   erofsSnapshotterMode: ""
   # Enable dm-verity integrity verification for EROFS lower layers.
   # Independent of erofsSnapshotterMode — works with both disk and memory.

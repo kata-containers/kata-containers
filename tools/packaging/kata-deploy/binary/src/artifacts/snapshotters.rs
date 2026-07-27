@@ -12,6 +12,17 @@ use log::{info, warn};
 use std::fs;
 use std::path::Path;
 
+fn erofs_default_size(mode: Option<&str>) -> Result<&'static str> {
+    match mode {
+        Some("memory") => Ok("\"0\""),
+        Some("disk") | None => Ok("\"10G\""),
+        Some(other) => Err(anyhow::anyhow!(
+            "Unsupported EROFS_SNAPSHOTTER_MODE: '{}'. Supported values: disk, memory",
+            other
+        )),
+    }
+}
+
 pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &Path) -> Result<()> {
     info!("Configuring erofs-snapshotter");
 
@@ -76,8 +87,7 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
 
     // dm-verity is orthogonal to rw-layer backing — it verifies lower (erofs)
     // layers via device-mapper regardless of whether the upper rw-layer lives on
-    // disk or in memory. When dm-verity is enabled, fsverity and immutable are
-    // disabled on the snapshotter side in favor of dm-verity.
+    // disk or in memory.
     let use_dmverity = config.erofs_dmverity;
     let dmverity_mode = if use_dmverity { "\"on\"" } else { "\"off\"" };
     let enable_dmverity = if use_dmverity { "true" } else { "false" };
@@ -116,10 +126,14 @@ pub async fn configure_erofs_snapshotter(config: &Config, configuration_file: &P
         "false",
     )?;
 
+    // Map EROFS_SNAPSHOTTER_MODE to containerd's default_size:
+    // - "memory" uses an in-memory rw layer (default_size = 0)
+    // - "disk" (or unset) uses a disk-backed rw layer (default_size = 10G)
+    let default_size = erofs_default_size(config.erofs_snapshotter_mode.as_deref())?;
     toml_utils::set_toml_value(
         configuration_file,
         ".plugins.\"io.containerd.snapshotter.v1.erofs\".default_size",
-        "\"10G\"",
+        default_size,
     )?;
     // In the default "merged" mode, force containerd to merge all layers into a
     // single fsmeta.erofs (max_unmerged_layers = 0). In "unmerged" mode we delete
@@ -429,4 +443,26 @@ pub async fn uninstall_snapshotter(snapshotter: &str, config: &Config) -> Result
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::erofs_default_size;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(None, "\"10G\"")]
+    #[case(Some("disk"), "\"10G\"")]
+    #[case(Some("memory"), "\"0\"")]
+    fn test_erofs_default_size(#[case] mode: Option<&str>, #[case] expected: &str) {
+        assert_eq!(erofs_default_size(mode).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_erofs_default_size_rejects_unknown_mode() {
+        let error = erofs_default_size(Some("unknown")).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Unsupported EROFS_SNAPSHOTTER_MODE"));
+    }
 }

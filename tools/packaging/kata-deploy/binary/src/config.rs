@@ -630,6 +630,11 @@ impl Config {
         );
         info!("* EROFS_MERGE_MODE: {:?}", self.erofs_merge_mode);
         info!(
+            "* EROFS_SNAPSHOTTER_MODE: {:?}",
+            self.erofs_snapshotter_mode
+        );
+        info!("* EROFS_DMVERITY: {}", self.erofs_dmverity);
+        info!(
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
