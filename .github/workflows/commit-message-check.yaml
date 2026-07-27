@@ -96,6 +96,6 @@ jobs:
       uses: tim-actions/commit-message-checker-with-regex@d6d9770051dd6460679d1cab1dcaa8cffc5c2bbd # v0.3.1
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^[\s\t]*[^:\s\t]+[\s\t]*:'
+        pattern: '^(fixup! )?[\s\t]*[^:\s\t]+[\s\t]*:'
         error: 'Failed to find subsystem in subject'
         post_error: ${{ env.error_msg }}
