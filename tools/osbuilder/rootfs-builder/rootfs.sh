@@ -889,7 +889,9 @@ EOF
 	fi
 
 	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
-	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
+	# An empty ROOTFS_DIR here would make the lines below unlink and recreate
+	# the build machine's own resolver, so refuse to run rather than guess.
+	dns_file="${ROOTFS_DIR:?}/etc/resolv.conf"
 	if [[ -L "${dns_file}" ]]; then
 		# if /etc/resolv.conf is a link, it cannot be used for bind mount
 		rm -f "${dns_file}"
