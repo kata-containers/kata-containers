@@ -5,7 +5,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use agent::{kata::KataAgent, Agent, AGENT_KATA};
+use agent::{kata::KataAgent, Agent, AgentManager, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 use hypervisor::device::driver::{VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_PCI};
@@ -320,6 +320,30 @@ impl TemplateVm {
             hypervisor_config.cpu_info.default_vcpus,
             hypervisor_config.memory_info.default_memory,
         );
+
+        let readiness_result: Result<()> = async {
+            let address = hypervisor
+                .get_agent_socket()
+                .await
+                .context("get template VM agent socket")?;
+            agent
+                .start(&address)
+                .await
+                .context("connect to template VM agent")
+        }
+        .await;
+
+        if let Err(readiness_error) = readiness_result {
+            if let Err(teardown_error) = vm.teardown().await {
+                warn!(
+                    sl!(),
+                    "failed to tear down template VM after agent readiness failed: {}",
+                    teardown_error
+                );
+            }
+            return Err(readiness_error);
+        }
+
         Ok(vm)
     }
 
