@@ -8,4 +8,4 @@ CairoSVG==2.9.0
 pillow==12.3.0
 click==8.3.3
 idna==3.15
-pymdown-extensions==10.21.3
+pymdown-extensions==11.0
