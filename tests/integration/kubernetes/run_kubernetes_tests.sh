@@ -12,11 +12,15 @@ kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck source=/dev/null
 source "${kubernetes_dir}/../../common.bash"
 # shellcheck source=/dev/null
+source "${kubernetes_dir}/lib.sh"
+# shellcheck source=/dev/null
 source "${kubernetes_dir}/tests_common.sh"
 # shellcheck source=/dev/null
 source "${kubernetes_dir}/k8s_bats_runner.sh"
 
 cleanup() {
+	cleanup_qemu_sandbox_feature_discovery
+
 	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
 	pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
 		| grep '^custom-node-debugger' || true)
@@ -34,6 +38,16 @@ K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
+# Apply rootless and seccomp sandbox settings for the duration of this test run.
+QEMU_SANDBOX_FEATURE_DISCOVERY="${QEMU_SANDBOX_FEATURE_DISCOVERY:-false}"
+
+# This branch uses ci-devel as a focused integration run for the combined
+# rootless and QEMU seccomp-sandbox work. The BATS file manages its own
+# temporary drop-in, so do not also enable job-wide feature discovery.
+if [[ "${GH_PR_NUMBER:-}" == "dev" ]]; then
+	K8S_TEST_UNION="k8s-qemu-rootless-sandbox.bats"
+	QEMU_SANDBOX_FEATURE_DISCOVERY=false
+fi
 
 if [[ -n "${K8S_TEST_UNION:-}" ]]; then
 	# shellcheck disable=SC2206
@@ -162,7 +176,13 @@ fi
 
 ensure_yq
 
-# Use common bats test runner with proper reporting, plain RuntimeClass by
-# default, and triage-only -debug re-runs for failed cases.
+case "${QEMU_SANDBOX_FEATURE_DISCOVERY}" in
+	false) ;;
+	true) enable_qemu_sandbox_feature_discovery ;;
+	*) die "QEMU_SANDBOX_FEATURE_DISCOVERY must be true or false" ;;
+esac
+
+# Use the common bats test runner with plain RuntimeClasses by default and
+# triage-only -debug re-runs for failed cases.
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
 run_kubernetes_bats_tests "${kubernetes_dir}" K8S_TEST_UNION

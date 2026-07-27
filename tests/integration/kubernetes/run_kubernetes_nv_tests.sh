@@ -12,6 +12,8 @@ kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
 # shellcheck disable=SC1091
+source "${kubernetes_dir}/lib.sh"
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/tests_common.sh"
 # shellcheck disable=SC1091
 source "${kubernetes_dir}/k8s_bats_runner.sh"
@@ -73,7 +75,7 @@ EOF
 }
 
 cleanup() {
-	true
+	cleanup_qemu_sandbox_feature_discovery
 }
 
 trap cleanup EXIT
@@ -126,6 +128,17 @@ cleanup_leaked_nvidia_gpu_test_resources() {
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 
+# Apply rootless and seccomp sandbox settings for the duration of this test run.
+QEMU_SANDBOX_FEATURE_DISCOVERY="${QEMU_SANDBOX_FEATURE_DISCOVERY:-false}"
+
+# This branch uses ci-devel as a focused integration run for the combined
+# rootless and QEMU seccomp-sandbox work. The BATS file manages its own
+# temporary drop-in, so do not also enable job-wide feature discovery.
+if [[ "${GH_PR_NUMBER:-}" == "dev" ]]; then
+	K8S_TEST_NV="k8s-qemu-rootless-sandbox.bats"
+	QEMU_SANDBOX_FEATURE_DISCOVERY=false
+fi
+
 # Enable NVRC trace logging by default for NVIDIA GPU tests
 ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
 
@@ -147,6 +160,12 @@ if [[ ! " ${SUPPORTED_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
 fi
 
 ensure_yq
+
+case "${QEMU_SANDBOX_FEATURE_DISCOVERY}" in
+	false) ;;
+	true) enable_qemu_sandbox_feature_discovery ;;
+	*) die "QEMU_SANDBOX_FEATURE_DISCOVERY must be true or false" ;;
+esac
 
 if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
 	enable_nvrc_trace

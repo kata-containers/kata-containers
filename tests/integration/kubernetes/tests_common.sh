@@ -332,6 +332,46 @@ remove_kata_runtime_config_dropin_file() {
 	echo "# Removed drop-in ${dropin_path}"
 }
 
+# Enable rootless QEMU and its complete seccomp sandbox for an entire test
+# suite. This is an opt-in feature-discovery aid, not a shipped configuration.
+enable_qemu_sandbox_feature_discovery() {
+	case "${KATA_HYPERVISOR}" in
+		qemu|qemu-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-snp-runtime-rs|qemu-tdx-runtime-rs|qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs|qemu-nvidia-gpu-snp-runtime-rs|qemu-nvidia-gpu-tdx-runtime-rs) ;;
+		*) die "QEMU sandbox feature discovery does not support ${KATA_HYPERVISOR}" ;;
+	esac
+
+	local seccomp_key="seccompsandbox"
+	if is_runtime_rs; then
+		seccomp_key="seccomp_sandbox"
+	fi
+
+	qemu_sandbox_feature_discovery_node="$(get_one_kata_node)"
+	qemu_sandbox_feature_discovery_local_dropin="$(
+		mktemp -t 90-qemu-sandbox-feature-discovery.XXXXXX.toml
+	)"
+	printf '[hypervisor.qemu]\nrootless = true\n%s = "%s"\n' \
+		"${seccomp_key}" \
+		"on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny" \
+		> "${qemu_sandbox_feature_discovery_local_dropin}"
+	qemu_sandbox_feature_discovery_dropin="$(
+		set_kata_runtime_config_dropin_file \
+			"${qemu_sandbox_feature_discovery_node}" \
+			"${qemu_sandbox_feature_discovery_local_dropin}"
+	)"
+	rm -f "${qemu_sandbox_feature_discovery_local_dropin}"
+	qemu_sandbox_feature_discovery_local_dropin=""
+	info "Enabled QEMU sandbox feature discovery with ${qemu_sandbox_feature_discovery_dropin}"
+}
+
+cleanup_qemu_sandbox_feature_discovery() {
+	if [[ -n "${qemu_sandbox_feature_discovery_dropin:-}" ]]; then
+		remove_kata_runtime_config_dropin_file \
+			"${qemu_sandbox_feature_discovery_node}" \
+			"${qemu_sandbox_feature_discovery_dropin}" || true
+	fi
+	rm -f "${qemu_sandbox_feature_discovery_local_dropin:-}"
+}
+
 is_runtime_rs() {
 	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]] || [[ "${KATA_HYPERVISOR}" == "dragonball" ]]
 }

@@ -83,8 +83,8 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       AUTO_GENERATE_POLICY: "yes"
     steps:
-      - name: Skip non-nightly TDX runtime-rs
-        if: ${{ matrix.vmm == 'qemu-tdx-runtime-rs' && inputs.pr-number != 'nightly' }}
+      - name: Skip TDX runtime-rs outside nightly and ci-devel
+        if: ${{ matrix.vmm == 'qemu-tdx-runtime-rs' && inputs.pr-number != 'nightly' && inputs.pr-number != 'dev' }}
         run: echo "SKIP_JOB=true" >> "${GITHUB_ENV}"
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
