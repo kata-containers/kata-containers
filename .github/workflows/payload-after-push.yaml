@@ -41,19 +41,19 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
-  #build-assets-s390x:
-  #  permissions:
-  #    contents: read
-  #    packages: write # needed to push build artifacts to ghcr.io
-  #    id-token: write # needed to sign images and generate attestations
-  #    attestations: write # needed to generate artifact attestations
-  #  uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
-  #  with:
-  #    commit-hash: ${{ github.sha }}
-  #    push-to-registry: yes
-  #    target-branch: ${{ github.ref_name }}
-  #  secrets:
-  #    QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+  build-assets-s390x:
+    permissions:
+      contents: read
+      packages: write # needed to push build artifacts to ghcr.io
+      id-token: write # needed to sign images and generate attestations
+      attestations: write # needed to generate artifact attestations
+    uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      push-to-registry: yes
+      target-branch: ${{ github.ref_name }}
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-ppc64le:
     permissions:
@@ -103,23 +103,23 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  #publish-kata-deploy-image-s390x:
-  #  needs: build-assets-s390x
-  #  permissions:
-  #    contents: read
-  #    packages: write # needed to push build artifacts to ghcr.io
-  #  uses: ./.github/workflows/publish-kata-images.yaml
-  #  with:
-  #    commit-hash: ${{ github.sha }}
-  #    registry: quay.io
-  #    repo: kata-containers/kata-deploy-ci
-  #    tag: kata-containers-latest-s390x
-  #    target-branch: ${{ github.ref_name }}
-  #    runner: ubuntu-24.04-s390x
-  #    arch: s390x
-  #    image-kind: deploy
-  #  secrets:
-  #    QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+  publish-kata-deploy-image-s390x:
+    needs: build-assets-s390x
+    permissions:
+      contents: read
+      packages: write # needed to push build artifacts to ghcr.io
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
+      tag: kata-containers-latest-s390x
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-s390x
+      arch: s390x
+      image-kind: deploy
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-image-ppc64le:
     needs: build-assets-ppc64le
@@ -175,23 +175,23 @@ jobs:
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  #publish-kata-monitor-image-s390x:
-  #  needs: build-assets-s390x
-  #  permissions:
-  #    contents: read
-  #    packages: write # needed to push build artifacts to ghcr.io
-  #  uses: ./.github/workflows/publish-kata-images.yaml
-  #  with:
-  #    commit-hash: ${{ github.sha }}
-  #    registry: quay.io
-  #    repo: kata-containers/kata-monitor-ci
-  #    tag: kata-monitor-latest-s390x
-  #    target-branch: ${{ github.ref_name }}
-  #    runner: ubuntu-24.04-s390x
-  #    arch: s390x
-  #    image-kind: monitor
-  #  secrets:
-  #    QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+  publish-kata-monitor-image-s390x:
+    needs: build-assets-s390x
+    permissions:
+      contents: read
+      packages: write # needed to push build artifacts to ghcr.io
+    uses: ./.github/workflows/publish-kata-images.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-monitor-ci
+      tag: kata-monitor-latest-s390x
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-s390x
+      arch: s390x
+      image-kind: monitor
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-monitor-image-ppc64le:
     needs: build-assets-ppc64le
@@ -217,7 +217,7 @@ jobs:
     permissions:
       contents: read
       packages: write # needed to push manifest images to ghcr.io
-    needs: [publish-kata-deploy-image-amd64, publish-kata-deploy-image-arm64, publish-kata-deploy-image-ppc64le]
+    needs: [publish-kata-deploy-image-amd64, publish-kata-deploy-image-arm64, publish-kata-deploy-image-s390x, publish-kata-deploy-image-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -244,7 +244,7 @@ jobs:
     permissions:
       contents: read
       packages: write # needed to push manifest images to ghcr.io
-    needs: [publish-kata-monitor-image-amd64, publish-kata-monitor-image-arm64, publish-kata-monitor-image-ppc64le]
+    needs: [publish-kata-monitor-image-amd64, publish-kata-monitor-image-arm64, publish-kata-monitor-image-s390x, publish-kata-monitor-image-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
