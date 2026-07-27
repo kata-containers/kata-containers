@@ -1753,14 +1753,13 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "get_metrics", req);
         is_allowed(&req).await?;
 
-        let s = get_metrics(&req).await.map_err(|err| {
-            let code = if is_collection_in_progress(&err) {
-                ttrpc::Code::UNAVAILABLE
-            } else {
-                ttrpc::Code::INTERNAL
-            };
-            ttrpc_error(code, err)
-        })?;
+        let result = get_metrics(&req).await;
+        if let Err(err) = &result {
+            if is_collection_in_progress(err) {
+                return Err(ttrpc_error(ttrpc::Code::UNAVAILABLE, err));
+            }
+        }
+        let s = result.map_ttrpc_err(same)?;
         let mut metrics = Metrics::new();
         metrics.set_metrics(s);
         Ok(metrics)
