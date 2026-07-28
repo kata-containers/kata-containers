@@ -31,7 +31,7 @@ const PMEM_ALIGN_BYTES: u64 = 2 * MIB;
 
 const DEFAULT_CH_MAX_PHYS_BITS: u8 = 46;
 
-const DEFAULT_VSOCK_CID: u64 = 3;
+const DEFAULT_VSOCK_CID: u32 = 3;
 
 pub const DEFAULT_NUM_PCI_SEGMENTS: u16 = 1;
 
@@ -226,10 +226,10 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
     }
 }
 
-impl TryFrom<(String, u64)> for VsockConfig {
+impl TryFrom<(String, u32)> for VsockConfig {
     type Error = VsockConfigError;
 
-    fn try_from(args: (String, u64)) -> Result<Self, Self::Error> {
+    fn try_from(args: (String, u32)) -> Result<Self, Self::Error> {
         let vsock_socket_path = args.0;
         let cid = args.1;
 
@@ -380,16 +380,12 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
             return Err(CpusConfigError::BootVCPUsTooSmall);
         }
 
-        let default_vcpus = u8::try_from(cpu.default_vcpus.ceil() as u32)
-            .map_err(CpusConfigError::BootVCPUsTooBig)?;
+        let default_vcpus = cpu.default_vcpus.ceil() as u32;
 
         // This can only happen if runtime-rs fails to set default values.
         if cpu.default_maxvcpus == 0 {
             return Err(CpusConfigError::MaxVCPUsTooSmall);
         }
-
-        let default_max_vcpus =
-            u8::try_from(cpu.default_maxvcpus).map_err(CpusConfigError::MaxVCPUsTooBig)?;
 
         let boot_vcpus = default_vcpus;
 
@@ -398,15 +394,18 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
             // cpus.
             default_vcpus
         } else {
-            default_max_vcpus
+            cpu.default_maxvcpus
         };
 
         if boot_vcpus > max_vcpus {
             return Err(CpusConfigError::BootVPUsGtThanMaxVCPUs);
         }
 
+        let cores_per_die =
+            u16::try_from(max_vcpus).map_err(CpusConfigError::MaxVCPUsTooBigForTopology)?;
+
         let topology = CpuTopology {
-            cores_per_die: max_vcpus,
+            cores_per_die,
             threads_per_core: 1,
             dies_per_package: 1,
             packages: 1,
@@ -643,6 +642,7 @@ mod tests {
 
     use super::*;
     use kata_sys_util::protection::SevSnpDetails;
+    use kata_types::config::default::MAX_CH_VCPUS;
     use kata_types::config::hypervisor::{
         BlockDeviceInfo, Hypervisor as HypervisorConfig, SecurityInfo,
     };
@@ -692,12 +692,8 @@ mod tests {
         }
     }
 
-    fn make_cpu_objects(cpu_default: u8, cpu_max: u8, tdx: bool) -> (CpuInfo, CpusConfig) {
-        let default_maxvcpus = if tdx {
-            cpu_default as u32
-        } else {
-            cpu_max as u32
-        };
+    fn make_cpu_objects(cpu_default: u32, cpu_max: u32, tdx: bool) -> (CpuInfo, CpusConfig) {
+        let default_maxvcpus = if tdx { cpu_default } else { cpu_max };
 
         let cpu_info = CpuInfo {
             default_vcpus: cpu_default as f32,
@@ -706,18 +702,14 @@ mod tests {
             ..Default::default()
         };
 
-        let max_vcpus = if tdx {
-            cpu_default
-        } else {
-            default_maxvcpus as u8
-        };
+        let max_vcpus = if tdx { cpu_default } else { default_maxvcpus };
 
         let cpus_config = CpusConfig {
             boot_vcpus: cpu_default,
             max_vcpus,
             nested: cpu_nested_config(),
             topology: Some(CpuTopology {
-                cores_per_die: max_vcpus,
+                cores_per_die: u16::try_from(max_vcpus).unwrap(),
 
                 ..make_bare_topology()
             }),
@@ -1323,6 +1315,27 @@ mod tests {
             TestData {
                 cpu_info: CpuInfo {
                     default_vcpus: 1.0,
+                    default_maxvcpus: 256,
+                    ..Default::default()
+                },
+                guest_protection: GuestProtection::NoProtection,
+                result: Ok(CpusConfig {
+                    boot_vcpus: 1,
+                    max_vcpus: 256,
+                    nested: cpu_nested_config(),
+                    topology: Some(CpuTopology {
+                        cores_per_die: 256,
+
+                        ..topology
+                    }),
+                    max_phys_bits: DEFAULT_CH_MAX_PHYS_BITS,
+
+                    ..Default::default()
+                }),
+            },
+            TestData {
+                cpu_info: CpuInfo {
+                    default_vcpus: 1.0,
                     default_maxvcpus: 13,
                     ..Default::default()
                 },
@@ -1707,7 +1720,7 @@ mod tests {
         #[derive(Debug)]
         struct TestData<'a> {
             vsock_socket_path: &'a str,
-            cid: u64,
+            cid: u32,
             result: Result<VsockConfig, VsockConfigError>,
         }
 
@@ -1790,8 +1803,8 @@ mod tests {
         let valid_vsock =
             VsockConfig::try_from((vsock_socket_path.to_string(), DEFAULT_VSOCK_CID)).unwrap();
 
-        let (cpu_info, cpus_config) = make_cpu_objects(7, u8::MAX, false);
-        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8::MAX, true);
+        let (cpu_info, cpus_config) = make_cpu_objects(7, MAX_CH_VCPUS, false);
+        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, MAX_CH_VCPUS, true);
 
         let (memory_info_std, mem_config_std) =
             make_memory_objects(79, usable_max_mem_bytes, false);
