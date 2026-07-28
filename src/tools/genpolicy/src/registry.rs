@@ -68,6 +68,7 @@ pub struct DockerRootfs {
 
 /// This application's image layer properties.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ImageLayer {
     pub diff_id: String,
     pub passwd: String,
