@@ -70,14 +70,11 @@ pub enum CpusConfigError {
     #[error("Boot vCPUs cannot be zero or negative")]
     BootVCPUsTooSmall,
 
-    #[error("Too many boot vCPUs specified: {0}")]
-    BootVCPUsTooBig(<u8 as TryFrom<i32>>::Error),
-
     #[error("Max vCPUs cannot be zero or negative")]
     MaxVCPUsTooSmall,
 
-    #[error("Too many max vCPUs specified: {0}")]
-    MaxVCPUsTooBig(<u8 as TryFrom<u32>>::Error),
+    #[error("Max vCPUs cannot be represented in CPU topology: {0}")]
+    MaxVCPUsTooBigForTopology(<u16 as TryFrom<u32>>::Error),
 
     #[error("Boot vCPUs cannot be larger than max vCPUs")]
     BootVPUsGtThanMaxVCPUs,

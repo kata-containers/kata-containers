@@ -264,7 +264,7 @@ impl CloudHypervisorInner {
         let hvsock_config = device.config.clone();
 
         let vsock_config = VsockConfig {
-            cid: hvsock_config.guest_cid.into(),
+            cid: hvsock_config.guest_cid,
             socket: hvsock_config.uds_path.into(),
             ..Default::default()
         };
