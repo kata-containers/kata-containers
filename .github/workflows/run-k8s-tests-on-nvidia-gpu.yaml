@@ -115,7 +115,14 @@ jobs:
 
       - name: Run tests ${{ matrix.environment.vmm }}
         timeout-minutes: 60
-        run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
+        run: |
+          if [[ "${KBS}" == "true" ]]; then
+            cache_dir="${HOME}/.cache/kata-containers/genpolicy"
+            mkdir -p "${cache_dir}"
+            export GENPOLICY_LAYERS_CACHE_FILE_PATH="${cache_dir}/layers-cache.json"
+          fi
+
+          bash tests/integration/kubernetes/gha-run.sh run-nv-tests
         env:
           NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
           ENABLE_NVRC_TRACE: ${{ inputs.enable-nvrc-trace }}
