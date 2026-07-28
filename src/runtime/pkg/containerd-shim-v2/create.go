@@ -11,6 +11,7 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -429,23 +430,38 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxID stri
 		return nil, err
 	}
 
-	uid, err := strconv.Atoi(u.Uid)
+	parsedUID, err := strconv.ParseInt(u.Uid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	gid, err := strconv.Atoi(u.Gid)
+	if parsedUID < 0 || parsedUID > math.MaxUint32 {
+		return nil, fmt.Errorf("rootless UID %q is outside the uint32 range", u.Uid)
+	}
+	if parsedUID > math.MaxInt {
+		return nil, fmt.Errorf("rootless UID %q exceeds the platform int range", u.Uid)
+	}
+	parsedGID, err := strconv.ParseInt(u.Gid, 10, 64)
 	if err != nil {
 		return nil, err
 	}
-	runtimeConfig.HypervisorConfig.Uid = uint32(uid)
+	if parsedGID < 0 || parsedGID > math.MaxUint32 {
+		return nil, fmt.Errorf("rootless GID %q is outside the uint32 range", u.Gid)
+	}
+	if parsedGID > math.MaxInt {
+		return nil, fmt.Errorf("rootless GID %q exceeds the platform int range", u.Gid)
+	}
+	runtimeUIDValue := uint32(parsedUID)
+	runtimeGIDValue := uint32(parsedGID)
+	chownUID := int(parsedUID)
+	chownGID := int(parsedGID)
+	runtimeConfig.HypervisorConfig.Uid = runtimeUIDValue
 	runtimeConfig.HypervisorConfig.User = userName
-	runtimeConfig.HypervisorConfig.Gid = uint32(gid)
-	uidValue := uint32(uid)
-	runtimeUID = &uidValue
+	runtimeConfig.HypervisorConfig.Gid = runtimeGIDValue
+	runtimeUID = &runtimeUIDValue
 	shimLog.WithFields(logrus.Fields{
 		"user_name":  userName,
-		"uid":        uid,
-		"gid":        gid,
+		"uid":        runtimeUIDValue,
+		"gid":        runtimeGIDValue,
 		"sandbox_id": sandboxID,
 	}).Debug("successfully created a non root user for the hypervisor")
 
@@ -461,7 +477,7 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxID stri
 	if err = os.Mkdir(userTmpDir, virtcontainers.DirMode); err != nil {
 		return nil, err
 	}
-	if err = syscall.Chown(userTmpDir, uid, gid); err != nil {
+	if err = syscall.Chown(userTmpDir, chownUID, chownGID); err != nil {
 		return nil, err
 	}
 
