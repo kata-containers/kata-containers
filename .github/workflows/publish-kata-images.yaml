@@ -119,11 +119,11 @@ jobs:
           path: tools/packaging/kata-deploy/local-build/build
           merge-multiple: true
 
-      - name: get-kata-static-tarball for ${{ inputs.arch }}
+      - name: get-kata-go-static-tarball for ${{ inputs.arch }}
         if: ${{ inputs.artifact-name == '' && matrix.image-kind == 'monitor' }}
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
+          name: kata-go-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
           path: tools/packaging/kata-deploy/local-build/build
 
       - name: get-kata-artifact by name for ${{ inputs.arch }}
@@ -185,15 +185,19 @@ jobs:
               fi
 
               build_dir="tools/packaging/kata-deploy/local-build/build"
-              monitor_tarball="${build_dir}/kata-static.tar.zst"
+              monitor_tarball="${build_dir}/kata-go-static.tar.zst"
+
+              if [ ! -f "${monitor_tarball}" ] && [ -f "${build_dir}/kata-static.tar.zst" ]; then
+                # Backward compatibility with older artifacts.
+                monitor_tarball="${build_dir}/kata-static.tar.zst"
+              fi
 
               if [ ! -f "${monitor_tarball}" ] && [ -f "${build_dir}/kata-static-shim-v2-go.tar.zst" ]; then
-                # Backward compatibility with older artifacts.
                 monitor_tarball="${build_dir}/kata-static-shim-v2-go.tar.zst"
               fi
 
               if [ ! -f "${monitor_tarball}" ]; then
-                echo "Neither kata-static.tar.zst nor kata-static-shim-v2-go.tar.zst found" >&2
+                echo "No kata-go-static, legacy kata-static, or shim-v2-go tarball found" >&2
                 exit 1
               fi
 

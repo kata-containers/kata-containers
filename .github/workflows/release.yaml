@@ -146,6 +146,11 @@ jobs:
           tarball=$(pwd)/kata-static.tar.zst
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
+      - name: Set KATA_GO_STATIC_TARBALL env var
+        run: |
+          tarball=$(pwd)/kata-go-static.tar.zst
+          echo "KATA_GO_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
+
       - name: Download amd64 artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -154,6 +159,18 @@ jobs:
       - name: Upload amd64 static tarball to GitHub
         run: |
           ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
+
+      - name: Download amd64 Go runtime artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-go-static-tarball-amd64
+
+      - name: Upload amd64 Go runtime tarball to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-go-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: amd64
@@ -170,6 +187,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: arm64
 
+      - name: Download arm64 Go runtime artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-go-static-tarball-arm64
+
+      - name: Upload arm64 Go runtime tarball to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-go-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: arm64
+
       - name: Download s390x artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
@@ -182,14 +211,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: s390x
 
-      - name: Download ppc64le artifacts
+      - name: Download s390x Go runtime artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-ppc64le
+          name: kata-go-static-tarball-s390x
 
-      - name: Upload ppc64le static tarball to GitHub
+      - name: Upload s390x Go runtime tarball to GitHub
         run: |
-          ./tools/packaging/release/release.sh upload-kata-static-tarball
+          ./tools/packaging/release/release.sh upload-kata-go-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: s390x
+
+      - name: Download ppc64le Go runtime artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-go-static-tarball-ppc64le
+
+      - name: Upload ppc64le Go runtime tarball to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-go-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: ppc64le

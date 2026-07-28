@@ -229,7 +229,7 @@ function extract_kata_env() {
 	local req_num_vcpus
 
 	case "${KATA_HYPERVISOR}" in
-		dragonball)
+		dragonball|*-runtime-rs)
 			cmd=kata-ctl
 			config_path=".runtime.config.path"
 			runtime_version=".runtime.version"
@@ -264,6 +264,7 @@ function extract_kata_env() {
 	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_semver}" | cut -d'"' -f4)"
 	# shellcheck disable=SC2034
 	RUNTIME_COMMIT="$(echo "${kata_env}" | jq -r "${runtime_version}" | grep "${runtime_version_commit}" | cut -d'"' -f4)"
+	# shellcheck disable=SC2034
 	RUNTIME_PATH="$(echo "${kata_env}" | jq -r "${runtime_path}")"
 	# shellcheck disable=SC2034
 	SHARED_FS="$(echo "${kata_env}" | jq -r "${shared_fs}")"
@@ -302,21 +303,6 @@ function extract_kata_env() {
 # Checks that processes are not running
 function check_processes() {
 	extract_kata_env
-
-	# Only check the kata-env if we have managed to find the kata executable...
-	if [[ -x "${RUNTIME_PATH}" ]]; then
-		local vsock_configured
-		# shellcheck disable=SC2034
-		vsock_configured=$(${RUNTIME_PATH} env | awk '/UseVSock/ {print $3}')
-		local vsock_supported
-		# shellcheck disable=SC2034
-		vsock_supported=$(${RUNTIME_PATH} env | awk '/SupportVSock/ {print $3}')
-	else
-		# shellcheck disable=SC2034
-		local vsock_configured="false"
-		# shellcheck disable=SC2034
-		local vsock_supported="false"
-	fi
 
 	general_processes=( "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 
@@ -759,15 +745,35 @@ function install_kata_tools() {
 	done
 }
 
+# Install the standalone agent component tarball (provides /usr/bin/kata-agent).
+# This is not part of the merged release tarballs; CI jobs that need a host
+# agent binary must download kata-artifacts-*-agent separately.
+function install_kata_agent() {
+	declare -r tarballdir="${1:-kata-agent-artifacts}"
+
+	install_tarball "/" "${tarballdir}" "kata-static-agent.tar.zst" false
+}
+
 function install_kata() {
 	declare -r katadir="/opt/kata"
 	declare -r tarballdir="kata-artifacts"
 	declare -r local_bin_dir="/usr/local/bin/"
+	local tarball="kata-static.tar.zst"
 
-	install_tarball "${katadir}" "${tarballdir}" "kata-static.tar.zst" true
+	case "${KATA_HYPERVISOR:-qemu-runtime-rs}" in
+		dragonball|*-runtime-rs) ;;
+		*)
+			if [[ -f "${tarballdir}/kata-go-static.tar.zst" ]]; then
+				tarball="kata-go-static.tar.zst"
+			fi
+			;;
+	esac
+
+	install_tarball "${katadir}" "${tarballdir}" "${tarball}" true
 
 	# create symbolic links to kata components
-	for b in "${katadir}"/bin/* ; do
+	for b in "${katadir}"/bin/* "${katadir}"/runtime-rs/bin/* ; do
+		[[ -e "${b}" ]] || continue
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename "${b}")"
 	done
 

@@ -33,22 +33,16 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-mariner-tarball \
+	rootfs-image-nvidia-gpu-tarball \
+	rootfs-image-nvidia-gpu-confidential-tarball \
+	rootfs-image-nvidia-tarball \
+	rootfs-image-nvidia-gpu-extension-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
-	kernel-debug-tarball \
-	kernel-tarball \
-	qemu-tarball \
-	shim-v2-go-tarball \
-	shim-v2-rust-tarball \
-	virtiofsd-tarball
-BASE_SERIAL_TARBALLS = rootfs-image-tarball \
-	rootfs-image-coco-extension-tarball \
-	rootfs-initrd-tarball
-else ifeq ($(ARCH), aarch64)
-BASE_TARBALLS = serial-targets \
+	boot-image-se-tarball \
 	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
@@ -58,7 +52,41 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball
+else ifeq ($(ARCH), aarch64)
+BASE_TARBALLS = serial-targets \
+	firecracker-tarball \
+	kernel-debug-tarball \
+	kernel-dragonball-experimental-tarball \
+	kernel-tarball \
+	nydus-tarball \
+	ovmf-tarball \
+	qemu-tarball \
+	shim-v2-go-tarball \
+	shim-v2-rust-tarball \
+	virtiofsd-tarball
+BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-confidential-tarball \
+	rootfs-image-coco-extension-tarball \
+	rootfs-image-nvidia-gpu-tarball \
+	rootfs-image-nvidia-tarball \
+	rootfs-image-nvidia-gpu-extension-tarball \
+	rootfs-initrd-tarball \
+	cloud-hypervisor-tarball
+else ifeq ($(ARCH), ppc64le)
+BASE_TARBALLS = serial-targets \
+	kernel-tarball \
+	qemu-tarball \
+	shim-v2-go-tarball \
+	virtiofsd-tarball
+BASE_SERIAL_TARBALLS = rootfs-initrd-tarball
+endif
+
+ifeq ($(ARCH), ppc64le)
+SHIM_TARBALLS = shim-v2-go-tarball
+else
+SHIM_TARBALLS = shim-v2-go-tarball shim-v2-rust-tarball
 endif
 
 PUBLISH_COMPONENT_TARBALLS = \
@@ -145,7 +173,40 @@ define DUMMY
 	mv $(MK_DIR)/build/kata-static-dummy.tar.zst $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.zst
 endef
 
+ifneq ($(filter $(ARCH),x86_64 aarch64 s390x ppc64le),)
+ifneq ($(ARCH), ppc64le)
+KATA_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-inputs.sh kata-static $(ARCH) | tr '\n' ' ')
+endif
+KATA_GO_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-inputs.sh kata-go-static $(ARCH) | tr '\n' ' ')
+endif
+
+ifeq ($(ARCH), ppc64le)
+kata-tarball:
+	@echo "kata-tarball: runtime-rs is unsupported on $(ARCH); use kata-go-static-tarball"; exit 1
+else ifneq ($(KATA_STATIC_FINAL_TARBALL_INPUTS),)
+kata-tarball: FINAL_TARBALL_INPUTS=$(KATA_STATIC_FINAL_TARBALL_INPUTS)
+kata-tarball: FINAL_TARBALL_NAME=kata-static.tar.zst
+kata-tarball: | all-parallel
+	$(MAKE) -f $(MK_PATH) merge-builds \
+		FINAL_TARBALL_NAME="$(FINAL_TARBALL_NAME)" \
+		FINAL_TARBALL_INPUTS="$(FINAL_TARBALL_INPUTS)" \
+		FINAL_TARBALL_MERGE_MODE="$(FINAL_TARBALL_MERGE_MODE)"
+else
 kata-tarball: | all-parallel merge-builds
+endif
+
+ifneq ($(KATA_GO_STATIC_FINAL_TARBALL_INPUTS),)
+kata-go-static-tarball: FINAL_TARBALL_INPUTS=$(KATA_GO_STATIC_FINAL_TARBALL_INPUTS)
+kata-go-static-tarball: FINAL_TARBALL_NAME=kata-go-static.tar.zst
+kata-go-static-tarball: | all-parallel
+	$(MAKE) -f $(MK_PATH) merge-builds \
+		FINAL_TARBALL_NAME="$(FINAL_TARBALL_NAME)" \
+		FINAL_TARBALL_INPUTS="$(FINAL_TARBALL_INPUTS)" \
+		FINAL_TARBALL_MERGE_MODE="$(FINAL_TARBALL_MERGE_MODE)"
+else
+kata-go-static-tarball:
+	@echo "kata-go-static-tarball: unsupported on $(ARCH)"; exit 1
+endif
 
 copy-scripts-for-the-agent-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "agent"
@@ -155,7 +216,7 @@ copy-scripts-for-the-tools-build:
 
 all-parallel:
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc) --output-sync=target V=
-	${MAKE} -f $(MK_PATH) shim-v2-go-tarball shim-v2-rust-tarball V=
+	${MAKE} -f $(MK_PATH) $(SHIM_TARBALLS) V=
 
 all: ${BASE_TARBALLS}
 
@@ -164,8 +225,9 @@ serial-targets: $(filter-out serial-targets,$(BASE_TARBALLS))
 	${BASE_SERIAL_TARBALLS}
 
 # Optional explicit allowlist for merge-builds input tarballs.
-# Keep empty for normal targets; set explicitly for NVIDIA flow.
+# Release and NVIDIA targets set this to keep their contents deterministic.
 FINAL_TARBALL_INPUTS ?=
+FINAL_TARBALL_NAME ?= kata-static.tar.zst
 
 %-tarball-build:
 	$(call BUILD,$*)
@@ -320,7 +382,7 @@ merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh \
 		build \
 		"$(MK_DIR)/../../../../versions.yaml" \
-		kata-static.tar.zst \
+		"$(FINAL_TARBALL_NAME)" \
 		"$(FINAL_TARBALL_INPUTS)" \
 		"$(FINAL_TARBALL_MERGE_MODE)"
 

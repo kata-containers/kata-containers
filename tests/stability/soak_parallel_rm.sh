@@ -30,10 +30,6 @@ MEM_CUTOFF="${MEM_CUTOFF:-(2*1024*1024*1024)}"
 # do we need a command argument for this payload?
 COMMAND="${COMMAND:-tail -f /dev/null}"
 
-# Runtime path
-# shellcheck disable=SC2154
-RUNTIME_PATH=$(command -v "${RUNTIME}")
-
 # The place where virtcontainers keeps its active pod info
 # This is ultimately what 'kata-runtime list' uses to get its info, but
 # we can also check it for sanity directly
@@ -44,16 +40,6 @@ VC_POD_DIR="${VC_POD_DIR:-/run/vc/sbs}"
 MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
-
-function check_vsock_active() {
-	vsock_configured=$("${RUNTIME_PATH}" kata-env | awk '/UseVSock/ {print $3}')
-	vsock_supported=$("${RUNTIME_PATH}" kata-env | awk '/SupportVSock/ {print $3}')
-	if [[ "${vsock_configured}" == true ]] && [[ "${vsock_supported}" == true ]]; then
-		return 0
-	else
-		return 1
-	fi
-}
 
 function count_containers() {
 	# shellcheck disable=SC2154
@@ -96,6 +82,7 @@ function check_all_running() {
 		fi
 
 		# if this is kata-runtime, check how many pods virtcontainers thinks we have
+		# shellcheck disable=SC2154
 		if [[ "${RUNTIME}" == "containerd-shim-kata-v2" ]]; then
 			if [[ -d "${VC_POD_DIR}" ]]; then
 				num_vc_pods=$(sudo ls -1 "${VC_POD_DIR}" | wc -l)

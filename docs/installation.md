@@ -221,24 +221,40 @@ case "$(uname -m)" in
     ;;
 esac
 
-curl -fsSL -o kata-static.tar.zst \
-  "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-${ARCH}.tar.zst"
+if [[ "${ARCH}" != "ppc64le" ]]; then
+  curl -fsSL -o kata-static.tar.zst \
+    "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-${ARCH}.tar.zst"
 
-# The archive uses an /opt/kata/ prefix.
-sudo tar -xvf kata-static.tar.zst -C /
+  # The archive uses an /opt/kata/ prefix.
+  sudo tar -xvf kata-static.tar.zst -C /
+fi
 ```
 
-The release installs both runtimes side by side:
+The `kata-static` archive contains runtime-rs, its configurations, composable
+guest images, and the shared host components:
 
 | Path | Runtime |
 |-|-|
 | `/opt/kata/runtime-rs/bin/containerd-shim-kata-v2` | runtime-rs (default) |
-| `/opt/kata/bin/containerd-shim-kata-v2` | Go runtime (deprecated) |
 
 Packaged configuration files live under
 `/opt/kata/share/defaults/kata-containers/`. The `runtime-rs` configurations
 use the `-runtime-rs` suffix (for example `configuration-qemu-runtime-rs.toml`),
 and `configuration-dragonball.toml` selects the built-in Dragonball VMM.
+
+!!! warning "The Go runtime is deprecated"
+    Users who still require the Go runtime or monolithic guest images must
+    install the separate `kata-go-static` archive. This is also the only release
+    tarball available for `ppc64le`, where runtime-rs is not supported.
+
+```sh
+curl -fsSL -o kata-go-static.tar.zst \
+  "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-go-static-${VERSION}-${ARCH}.tar.zst"
+
+sudo tar -xvf kata-go-static.tar.zst -C /
+```
+
+The Go shim is installed at `/opt/kata/bin/containerd-shim-kata-v2`.
 
 ## Use Kata Containers with Docker
 

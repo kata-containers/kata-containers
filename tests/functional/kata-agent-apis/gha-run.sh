@@ -45,6 +45,7 @@ function main() {
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
 		install-kata) install_kata ;;
+		install-kata-agent) install_kata_agent "${2:-}" ;;
 		install-kata-tools) install_kata_tools "${2:-}" ;;
 		run) run ;;
 		*) >&2 die "Invalid argument" ;;

@@ -69,7 +69,7 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: kata-go-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
