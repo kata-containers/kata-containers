@@ -9,7 +9,7 @@ use crate::k8s::runtimeclasses;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
-use log::info;
+use log::{info, warn};
 use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -120,6 +120,10 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
         install_custom_runtime_configs(config, container_runtime)?;
     }
 
+    // Drop stale kata-<shim>-debug handler dirs left by a previous deploy with
+    // DEBUG=true when this one no longer wants them.
+    reconcile_debug_variant_artifacts(config)?;
+
     let expand_runtime_classes_for_nfd = nfd::setup_nfd_rules(config).await?;
 
     if expand_runtime_classes_for_nfd {
@@ -155,11 +159,14 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
 
 /// Write the common drop-in configuration files for a shim.
 /// This is shared between standard runtimes and custom runtimes.
+/// Guest debug settings are applied only when `apply_guest_debug` is true
+/// (debug variant custom runtimes); normal RuntimeClasses stay measurement-stable.
 fn write_common_drop_ins(
     config: &Config,
     shim: &str,
     config_d_dir: &str,
     container_runtime: &str,
+    apply_guest_debug: bool,
 ) -> Result<()> {
     info!("Generating drop-in configuration files for shim: {}", shim);
 
@@ -170,11 +177,11 @@ fn write_common_drop_ins(
         write_drop_in_file(config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
     }
 
-    // 2. Debug configuration (boolean flags only via drop-in)
-    if config.debug {
-        info!("  - Debug mode: enabled");
-        let debug_content = generate_debug_drop_in(shim)?;
-        write_drop_in_file(config_d_dir, "20-debug.toml", &debug_content)?;
+    // 2. Guest debug configuration (boolean flags via drop-in)
+    if apply_guest_debug {
+        apply_guest_debug_drop_ins(shim, config_d_dir)?;
+    } else {
+        reconcile_stale_drop_in(config_d_dir, "20-debug.toml")?;
     }
 
     // 2b. k0s: set kubelet root dir so ConfigMap/Secret volume propagation works (non-Rust shims only)
@@ -186,9 +193,9 @@ fn write_common_drop_ins(
         write_drop_in_file(config_d_dir, "22-k0s-kubelet-root.toml", &k0s_content)?;
     }
 
-    // 3. Combined kernel_params (proxy, debug, etc.)
+    // 3. Combined kernel_params (proxy, and guest debug when requested)
     // Reads base kernel_params from original config and combines with new params
-    let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
+    let kernel_params_content = generate_kernel_params_drop_in(config, shim, apply_guest_debug)?;
     if !kernel_params_content.is_empty() {
         info!("  - Kernel parameters: configured");
         write_drop_in_file(
@@ -196,8 +203,35 @@ fn write_common_drop_ins(
             "30-kernel-params.toml",
             &kernel_params_content,
         )?;
+    } else {
+        reconcile_stale_drop_in(config_d_dir, "30-kernel-params.toml")?;
     }
 
+    Ok(())
+}
+
+/// Apply the full guest debug drop-in set (enable_debug flags + debug kernel params).
+fn apply_guest_debug_drop_ins(shim: &str, config_d_dir: &str) -> Result<()> {
+    info!("  - Guest debug mode: enabled");
+    let debug_content = generate_debug_drop_in(shim)?;
+    write_drop_in_file(config_d_dir, "20-debug.toml", &debug_content)?;
+    Ok(())
+}
+
+/// Remove a drop-in a previous deploy wrote that the current configuration no
+/// longer generates.
+///
+/// Installs only ever add files to config.d, so a drop-in that is no longer
+/// generated keeps applying forever. That matters most for the guest debug
+/// settings: left behind, they keep the debug kernel cmdline (and the
+/// measurements it changes) on a RuntimeClass that is meant to be production.
+fn reconcile_stale_drop_in(config_d_dir: &str, filename: &str) -> Result<()> {
+    let drop_in_path = format!("{config_d_dir}/{filename}");
+    if Path::new(&drop_in_path).exists() {
+        info!("  - Removing stale drop-in: {}", drop_in_path);
+        fs::remove_file(&drop_in_path)
+            .with_context(|| format!("Failed to remove stale drop-in: {drop_in_path}"))?;
+    }
     Ok(())
 }
 
@@ -295,12 +329,15 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             );
         }
 
-        // Generate the common drop-in files (shared with standard runtimes)
+        // Generate the common drop-in files (shared with standard runtimes).
+        // Debug variant handlers carry guest debug settings; other custom runtimes
+        // inherit the same measurement-stable profile as the normal RuntimeClass.
         write_common_drop_ins(
             config,
             &runtime.base_config,
             &config_d_dir,
             container_runtime,
+            runtime.debug_variant,
         )?;
 
         // Copy user-provided drop-in file if provided (at 50-overrides.toml).
@@ -367,6 +404,73 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
     }
 
     info!("Successfully removed custom runtime config files");
+    Ok(())
+}
+
+/// Remove on-node debug variant artifacts the current configuration no longer wants.
+///
+/// Debug variants are materialized as kata-<shim>-debug custom runtimes only while
+/// DEBUG=true. When a redeploy disables debug (or drops a shim) those runtimes vanish
+/// from `config.custom_runtimes`, so the normal custom-runtime cleanup never touches
+/// their leftovers. Installs only ever add files, so reconcile explicitly: drop stale
+/// kata-<shim>-debug handler directories.
+///
+/// Removing every unknown kata-*-debug directory is safe under a multi-install
+/// because the scan never leaves this installation: MULTI_INSTALL_SUFFIX is part
+/// of `dest_dir`, so a concurrent kata-deploy keeps its own custom-runtimes
+/// directory under a tree of its own and is never a candidate here.
+fn reconcile_debug_variant_artifacts(config: &Config) -> Result<()> {
+    let known: HashSet<&str> = config
+        .custom_runtimes
+        .iter()
+        .map(|r| r.handler.as_str())
+        .collect();
+
+    let custom_runtimes_dir = format!(
+        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        config.dest_dir
+    );
+    let custom_runtimes_path = Path::new(&custom_runtimes_dir);
+    if !custom_runtimes_path.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(custom_runtimes_path)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let handler = entry.file_name();
+        let handler_str = handler.to_string_lossy();
+        if handler_str.starts_with("kata-")
+            && handler_str.ends_with("-debug")
+            && !known.contains(handler_str.as_ref())
+        {
+            let handler_dir = entry.path();
+            info!(
+                "Removing stale debug variant runtime directory: {}",
+                handler_dir.display()
+            );
+            if let Err(e) = fs::remove_dir_all(&handler_dir) {
+                warn!(
+                    "Failed to remove stale debug variant directory {}: {}",
+                    handler_dir.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    if custom_runtimes_path.exists() {
+        if let Ok(entries) = fs::read_dir(custom_runtimes_path) {
+            if entries.count() == 0 {
+                let _ = fs::remove_dir(custom_runtimes_path);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -963,8 +1067,9 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
         ));
     }
 
-    // Generate common drop-in files (shared with custom runtimes)
-    write_common_drop_ins(config, shim, &config_d_dir, container_runtime)?;
+    // Generate common drop-in files (shared with custom runtimes).
+    // Normal RuntimeClasses never carry guest debug settings.
+    write_common_drop_ins(config, shim, &config_d_dir, container_runtime, false)?;
 
     // Apply user-provided drop-in for default runtimes, if present.
     install_default_runtime_drop_in(shim, &config_d_dir)?;
@@ -1247,7 +1352,11 @@ fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
 /// This reads the base kernel_params from the original config and combines
 /// with proxy settings, debug settings, and any other kernel_params.
 /// Using a single drop-in file avoids the TOML merge replacing behavior.
-fn generate_kernel_params_drop_in(config: &Config, shim: &str) -> Result<String> {
+fn generate_kernel_params_drop_in(
+    config: &Config,
+    shim: &str,
+    include_debug_params: bool,
+) -> Result<String> {
     let mut additional_params = Vec::new();
 
     // Add proxy settings
@@ -1258,8 +1367,8 @@ fn generate_kernel_params_drop_in(config: &Config, shim: &str) -> Result<String>
         additional_params.push(format!("agent.no_proxy={}", no_proxy));
     }
 
-    // Add debug settings
-    if config.debug {
+    // Guest debug kernel cmdline params (debug variant runtimes only)
+    if include_debug_params {
         additional_params.push("agent.log=debug".to_string());
         additional_params.push("initcall_debug".to_string());
     }
@@ -1655,5 +1764,82 @@ mod tests {
 
         fs::remove_dir_all(&runtime_dir).unwrap();
         assert!(!runtime_dir.exists());
+    }
+
+    #[test]
+    fn test_generate_debug_drop_in_contains_full_guest_debug_set() {
+        let content = generate_debug_drop_in("qemu").unwrap();
+        assert!(content.contains("[hypervisor.qemu]"));
+        assert!(content.contains("enable_debug = true"));
+        assert!(content.contains("[runtime]"));
+        assert!(content.contains("[agent.kata]"));
+        assert!(content.contains("debug_console_enabled = true"));
+    }
+
+    #[test]
+    fn test_generate_kernel_params_drop_in_guest_debug_only_when_requested() {
+        let config = crate::config::Config {
+            node_name: "test".to_string(),
+            debug: true,
+            shims_for_arch: vec!["qemu".to_string()],
+            default_shim_for_arch: "qemu".to_string(),
+            allowed_hypervisor_annotations_for_arch: vec![],
+            snapshotter_handler_mapping_for_arch: None,
+            agent_https_proxy: None,
+            agent_no_proxy: None,
+            pull_type_mapping_for_arch: None,
+            installation_prefix: None,
+            multi_install_suffix: None,
+            helm_post_delete_hook: false,
+            experimental_setup_snapshotter: None,
+            erofs_merge_mode: None,
+            experimental_force_guest_pull_for_arch: vec![],
+            dest_dir: "/opt/kata".to_string(),
+            host_install_dir: "/host/opt/kata".to_string(),
+            crio_drop_in_conf_dir: String::new(),
+            crio_drop_in_conf_file: String::new(),
+            crio_drop_in_conf_file_debug: String::new(),
+            containerd_conf_file: String::new(),
+            containerd_conf_file_backup: String::new(),
+            containerd_drop_in_conf_file: String::new(),
+            containerd_user_drop_in_source_file: None,
+            daemonset_name: "kata-deploy".to_string(),
+            custom_runtimes_enabled: false,
+            custom_runtimes: vec![],
+            erofs_snapshotter_mode: None,
+            erofs_dmverity: false,
+            startup_taints: vec![],
+        };
+
+        let without_debug = generate_kernel_params_drop_in(&config, "qemu", false).unwrap();
+        assert!(without_debug.is_empty());
+
+        let with_debug = generate_kernel_params_drop_in(&config, "qemu", true).unwrap();
+        assert!(with_debug.contains("agent.log=debug"));
+        assert!(with_debug.contains("initcall_debug"));
+    }
+
+    #[rstest]
+    #[case("20-debug.toml")]
+    #[case("30-kernel-params.toml")]
+    fn test_reconcile_stale_drop_in_removes_file(#[case] filename: &str) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+        let drop_in = config_d_dir.join(filename);
+        fs::write(&drop_in, "stale").unwrap();
+
+        reconcile_stale_drop_in(config_d_dir.to_str().unwrap(), filename).unwrap();
+
+        assert!(!drop_in.exists());
+    }
+
+    #[test]
+    fn test_reconcile_stale_drop_in_is_noop_when_absent() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        reconcile_stale_drop_in(config_d_dir.to_str().unwrap(), "20-debug.toml").unwrap();
     }
 }

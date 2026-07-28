@@ -137,14 +137,17 @@ function create_coco_pod_yaml() {
 
 	kernel_params_value+=" agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
 
+	local runtime_class
+	runtime_class="$(get_test_runtime_class)"
+
 	# Note: this is not local as we use it in the caller test
-	kata_pod="$(new_pod_config "${image}" "kata-${KATA_HYPERVISOR}" "${run_as_user}" "${run_as_group}" "${supplemental_groups}")"
+	kata_pod="$(new_pod_config "${image}" "${runtime_class}" "${run_as_user}" "${run_as_group}" "${supplemental_groups}")"
 	set_container_command "${kata_pod}" "0" "sleep" "30"
 
 	# Set annotations
 	set_metadata_annotation "${kata_pod}" \
 		"io.containerd.cri.runtime-handler" \
-		"kata-${KATA_HYPERVISOR}"
+		"${runtime_class}"
 	set_metadata_annotation "${kata_pod}" \
 		"${kernel_params_annotation}" \
 		"${kernel_params_value}"
@@ -174,14 +177,17 @@ function create_coco_pod_yaml_with_annotations() {
 	kernel_params_annotation_key="io.katacontainers.config.hypervisor.kernel_params"
 	cc_initdata_annotation_key="io.katacontainers.config.hypervisor.cc_init_data"
 
+	local runtime_class
+	runtime_class="$(get_test_runtime_class)"
+
 	# Note: this is not local as we use it in the caller test
-	kata_pod="$(new_pod_config "${image}" "kata-${KATA_HYPERVISOR}" "${run_as_user}" "${run_as_group}" "${supplemental_groups}")"
+	kata_pod="$(new_pod_config "${image}" "${runtime_class}" "${run_as_user}" "${run_as_group}" "${supplemental_groups}")"
 	set_container_command "${kata_pod}" "0" "sleep" "30"
 
 	# Set annotations
 	set_metadata_annotation "${kata_pod}" \
 		"io.containerd.cri.runtime-handler" \
-		"kata-${KATA_HYPERVISOR}"
+		"${runtime_class}"
 	set_metadata_annotation "${kata_pod}" \
 		"${kernel_params_annotation_key}" \
 		"${kernel_params_annotation_value}"

@@ -11,7 +11,6 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 export KBS="${KBS:-false}"
 export test_key="aatest"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-runtime-rs}"
-export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {
@@ -22,6 +21,10 @@ setup() {
 	fi
 
 	setup_common || die "setup_common failed"
+
+	# Consumed by the pod templates below through envsubst.
+	RUNTIME_CLASS_NAME="$(get_test_runtime_class)"
+	export RUNTIME_CLASS_NAME
 
 	# install SNP measurement dependencies
 	if [[ "${KATA_HYPERVISOR}" == *snp* ]]; then
