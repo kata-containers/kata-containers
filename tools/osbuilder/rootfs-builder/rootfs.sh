@@ -412,6 +412,67 @@ check_env_variables()
 	[[ -n "${OSBUILDER_VERSION}" ]] || die "need osbuilder version"
 }
 
+build_nvidia_gpu_extension_in_container()
+{
+	local container_engine
+	local image_name="nvidia-gpu-extension-osbuilder"
+	local nvidia_dir="${script_dir}/nvidia"
+	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
+	local tools_repo_url tools_repo_pkg
+	local -a build_args run_args
+
+	if [[ -n "${USE_DOCKER}" ]]; then
+		container_engine="docker"
+	elif [[ -n "${USE_PODMAN}" ]]; then
+		container_engine="podman"
+	else
+		die "nvidia-gpu-extension requires USE_DOCKER or USE_PODMAN"
+	fi
+
+	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${ARCH}.url")
+	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${ARCH}.pkg")
+	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.${ARCH}.nvidia-gpu.version")
+	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.url")
+	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${ARCH}.pkg")
+	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+
+	[[ -n "${IMAGE_REGISTRY}" ]] \
+		&& build_args+=(--build-arg "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
+	[[ "${container_engine}" == "podman" ]] \
+		&& build_args+=(--runtime "${DOCKER_RUNTIME}")
+
+	generate_dockerfile "${nvidia_dir}"
+	"${container_engine}" build \
+		"${build_args[@]}" \
+		--build-arg "http_proxy=${http_proxy}" \
+		--build-arg "https_proxy=${https_proxy}" \
+		--build-arg "ARCH=${ARCH}" \
+		--build-arg "NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK}" \
+		--build-arg "CUDA_REPO_OS_VERSION=${gpu_base_os_version}" \
+		--build-arg "CUDA_REPO_URL=${cuda_repo_url}" \
+		--build-arg "CUDA_REPO_PKG=${cuda_repo_pkg}" \
+		--build-arg "TOOLS_REPO_URL=${tools_repo_url}" \
+		--build-arg "TOOLS_REPO_PKG=${tools_repo_pkg}" \
+		--build-arg "CTK_VERSION=${ctk_version}" \
+		-t "${image_name}" "${nvidia_dir}"
+
+	run_args=(
+		--rm
+		--runtime "${DOCKER_RUNTIME}"
+		--env "ARCH=${ARCH}"
+		--env "BUILD_VARIANT=${BUILD_VARIANT}"
+		--env "DEBUG=${DEBUG}"
+		--env "NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK}"
+		--env "NVIDIA_GPU_EXTENSION_CONTAINER=yes"
+		--env "ROOTFS_DIR=/rootfs"
+		--volume "${repo_dir}:/kata-containers"
+		--volume "${ROOTFS_DIR}:/rootfs"
+	)
+
+	"${container_engine}" run "${run_args[@]}" "${image_name}" \
+		bash /kata-containers/tools/osbuilder/rootfs-builder/rootfs.sh
+}
+
 # Builds a rootfs based on the distro name provided as argument
 build_rootfs_distro()
 {
@@ -460,6 +521,11 @@ build_rootfs_distro()
 		if [[ "${distro}" != "centos" ]]; then
 			die "The guest rootfs must be CentOS to enable guest SELinux"
 		fi
+	fi
+
+	if [[ "${BUILD_VARIANT}" == "nvidia-gpu-extension" ]]; then
+		build_nvidia_gpu_extension_in_container
+		exit $?
 	fi
 
 	if [[ -z "${USE_DOCKER}" ]] && [[ -z "${USE_PODMAN}" ]]; then
@@ -898,6 +964,17 @@ delete_unnecessary_files()
 
 main()
 {
+	# The dedicated GPU-extension image already contains the pinned NVIDIA
+	# packages. It needs no distro bootstrap or generic agent/rootfs setup.
+	if [[ "${NVIDIA_GPU_EXTENSION_CONTAINER:-no}" == "yes" ]]; then
+		[[ "${BUILD_VARIANT}" == "nvidia-gpu-extension" ]] \
+			|| die "NVIDIA_GPU_EXTENSION_CONTAINER requires nvidia-gpu-extension"
+		[[ -d "${ROOTFS_DIR}" ]] \
+			|| die "Invalid rootfs directory: '${ROOTFS_DIR}'"
+		setup_nvidia_gpu_extension_rootfs
+		return $?
+	fi
+
 	parse_arguments "$@"
 	check_env_variables
 
@@ -912,19 +989,18 @@ main()
 		prepare_overlay
 	fi
 
+	# Extension assembly is only valid inside its dedicated package-baked image.
+	if [[ "${BUILD_VARIANT}" == "nvidia-gpu-extension" ]]; then
+		die "nvidia-gpu-extension must be built with USE_DOCKER or USE_PODMAN"
+	fi
+
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
 
-	# The nvidia base and nvidia-gpu-extension layouts are carved from the same
-	# chiseled tree as the monolith (sharing its driver stage-one); confidential
-	# only differs in the rootfs type passed down. They all drive the same
-	# stage-one/two and differ in the final partition step (see
-	# nvidia_image_layout in nvidia_rootfs.sh).
 	if is_nvidia_variant; then
-		local rootfs_type=""
-		is_nvidia_confidential_variant && rootfs_type="confidential"
-		setup_nvidia_gpu_rootfs_stage_one "${rootfs_type}"
-		setup_nvidia_gpu_rootfs_stage_two "${rootfs_type}"
+		# The monolith and nvidia base continue to share stage-one.
+		setup_nvidia_gpu_rootfs_stage_one
+		setup_nvidia_gpu_rootfs_stage_two
 		return $?
 	fi
 }

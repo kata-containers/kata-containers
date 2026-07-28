@@ -1,0 +1,64 @@
+# Copyright (c) Kata Containers community
+#
+# SPDX-License-Identifier: Apache-2.0
+
+ARG IMAGE_REGISTRY=docker.io
+FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
+@SET_PROXY@
+
+ARG ARCH
+ARG NVIDIA_GPU_STACK
+ARG CUDA_REPO_OS_VERSION
+ARG CUDA_REPO_URL
+ARG CUDA_REPO_PKG
+ARG TOOLS_REPO_URL
+ARG TOOLS_REPO_PKG
+ARG CTK_VERSION
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# This image only installs and selects NVIDIA extension content. It does not
+# build the agent or any Go binaries, so it intentionally carries no Rust or Go
+# toolchain.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install --no-install-recommends -y \
+        binutils \
+        ca-certificates \
+        curl \
+        file \
+        jq \
+        kmod \
+        xz-utils \
+        zstd && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY nvidia_chroot.sh /usr/local/bin/install-nvidia-packages
+
+RUN chmod +x /usr/local/bin/install-nvidia-packages && \
+    /usr/local/bin/install-nvidia-packages \
+        "${ARCH}" \
+        "${NVIDIA_GPU_STACK}" \
+        "${CUDA_REPO_OS_VERSION}" \
+        "${CUDA_REPO_URL}" \
+        "${CUDA_REPO_PKG}" \
+        "${TOOLS_REPO_URL}" \
+        "${TOOLS_REPO_PKG}" \
+        "${CTK_VERSION}" && \
+    rm -f /usr/local/bin/install-nvidia-packages
+
+# Keep UPX pinned exactly as the existing NVIDIA rootfs build did, but bake it
+# into this image so extension assembly performs no tool download at runtime.
+ARG UPX_VERSION=4.2.4
+RUN case "${ARCH}" in \
+        x86_64) upx_arch=amd64 ;; \
+        aarch64) upx_arch=arm64 ;; \
+        *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSLO \
+        "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-${upx_arch}_linux.tar.xz" && \
+    tar -xJf "upx-${UPX_VERSION}-${upx_arch}_linux.tar.xz" && \
+    install -m0755 "upx-${UPX_VERSION}-${upx_arch}_linux/upx" /usr/local/bin/upx && \
+    rm -rf "upx-${UPX_VERSION}-${upx_arch}_linux" \
+        "upx-${UPX_VERSION}-${upx_arch}_linux.tar.xz"
