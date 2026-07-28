@@ -1,7 +1,7 @@
 [Unit]
 Description=Nydus snapshotter
 After=network.target local-fs.target
-Before=containerd.service
+Before=@CRI_SERVICE@
 
 [Service]
 ExecStart=@CONTAINERD_NYDUS_GRPC_BINARY@ --config @CONFIG_GUEST_PULLING@ --log-to-stdout
@@ -9,4 +9,4 @@ Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=containerd.service
+WantedBy=@CRI_SERVICE@

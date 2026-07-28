@@ -744,7 +744,7 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
     if runtime != "crio" {
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
             for snapshotter in snapshotters {
-                artifacts::snapshotters::install_snapshotter(snapshotter, config).await?;
+                artifacts::snapshotters::install_snapshotter(snapshotter, config, runtime).await?;
             }
         }
     }
