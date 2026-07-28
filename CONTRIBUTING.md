@@ -56,6 +56,11 @@ process documented here.
 > out of date were corrected on the way in. Process changes should land in both
 > places.
 
+[`AGENTS.md`](AGENTS.md) is a companion to this document aimed at AI coding
+agents. It describes the layout of this repository, the checks to run locally
+before submitting a pull request, and the traps that catch newcomers. Anybody
+sending a first patch may find it a useful quick reference.
+
 ## Code of Conduct
 
 All contributors must agree to the project [code of conduct](CODE_OF_CONDUCT.md).
