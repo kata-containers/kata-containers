@@ -38,6 +38,18 @@ fi
 yq eval ".version = \"${CHART_VERSION}\" | .appVersion = \"${CHART_VERSION}\"" -i "${tmp}/kata-deploy/Chart.yaml"
 yq eval ".image.reference = \"${REGISTRY}\" | .image.tag = \"${TAG}\"" -i "${tmp}/kata-deploy/values.yaml"
 yq eval ".job.dispatcherImage.reference = \"${JOB_DISPATCHER_IMAGE_REFERENCE}\" | .job.dispatcherImage.tag = \"${TAG}\"" -i "${tmp}/kata-deploy/values.yaml"
+
+# Optional values overlay baked into the packaged chart's defaults, so a
+# plain `helm install` of the published chart gives the intended profile
+# without every consumer having to pass -f. Relative paths resolve inside
+# the chart, so the bundled try-*.values.yaml presets work as-is.
+if [[ -n "${CHART_VALUES_OVERLAY:-}" ]]; then
+	overlay="${CHART_VALUES_OVERLAY}"
+	[[ "${overlay}" == /* ]] || overlay="${tmp}/kata-deploy/${overlay}"
+	[[ -f "${overlay}" ]] || { echo "CHART_VALUES_OVERLAY: no such values file: ${overlay}" >&2; exit 1; }
+	yq eval-all -i 'select(fileIndex == 0) * select(fileIndex == 1)' \
+		"${tmp}/kata-deploy/values.yaml" "${overlay}"
+fi
 helm dependencies update "${tmp}/kata-deploy"
 helm package "${tmp}/kata-deploy" -d "${tmp}"
 helm push "${tmp}/kata-deploy-${CHART_VERSION}.tgz" "oci://${CHART_REGISTRY}"
