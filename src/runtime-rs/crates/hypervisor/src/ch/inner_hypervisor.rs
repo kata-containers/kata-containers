@@ -935,7 +935,7 @@ impl CloudHypervisorInner {
         }
 
         let vmresize = VmResize {
-            desired_vcpus: Some(new_vcpus as u8),
+            desired_vcpus: Some(new_vcpus),
             ..Default::default()
         };
 

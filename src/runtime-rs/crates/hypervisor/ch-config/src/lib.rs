@@ -15,8 +15,6 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::RateLimiterConfig;
 pub use net_util::MacAddr;
 
-pub const MAX_NUM_PCI_SEGMENTS: u16 = 16;
-
 mod errors;
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -62,14 +60,14 @@ pub enum ConsoleOutputMode {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct CpuAffinity {
-    pub vcpu: u8,
-    pub host_cpus: Vec<u8>,
+    pub vcpu: u32,
+    pub host_cpus: Vec<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct CpusConfig {
-    pub boot_vcpus: u8,
-    pub max_vcpus: u8,
+    pub boot_vcpus: u32,
+    pub max_vcpus: u32,
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topology: Option<CpuTopology>,
@@ -96,10 +94,10 @@ pub struct CpuFeatures {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct CpuTopology {
-    pub threads_per_core: u8,
-    pub cores_per_die: u8,
-    pub dies_per_package: u8,
-    pub packages: u8,
+    pub threads_per_core: u16,
+    pub cores_per_die: u16,
+    pub dies_per_package: u16,
+    pub packages: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -338,7 +336,7 @@ pub struct NumaConfig {
     #[serde(default)]
     pub guest_numa_id: u32,
     #[serde(default)]
-    pub cpus: Option<Vec<u8>>,
+    pub cpus: Option<Vec<u32>>,
     #[serde(default)]
     pub distances: Option<Vec<NumaDistance>>,
     #[serde(default)]
@@ -503,7 +501,7 @@ pub struct VmConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct VsockConfig {
-    pub cid: u64,
+    pub cid: u32,
     pub socket: PathBuf,
     #[serde(default)]
     pub iommu: bool,
@@ -555,7 +553,7 @@ pub struct NamedHypervisorConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct VmResize {
-    pub desired_vcpus: Option<u8>,
+    pub desired_vcpus: Option<u32>,
     pub desired_ram: Option<u64>,
     pub desired_balloon: Option<u64>,
 }
@@ -588,6 +586,23 @@ pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool
 mod tests {
     use super::*;
     use kata_sys_util::protection::SevSnpDetails;
+
+    #[test]
+    fn test_vm_resize_serialization_preserves_256_vcpus() {
+        let resize = VmResize {
+            desired_vcpus: Some(256),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            serde_json::to_value(resize).unwrap(),
+            serde_json::json!({
+                "desired_vcpus": 256,
+                "desired_ram": null,
+                "desired_balloon": null,
+            })
+        );
+    }
 
     #[test]
     fn test_guest_protection_is_tdx() {
