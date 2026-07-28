@@ -505,7 +505,7 @@ jobs:
           { containerd_version: minimum, vmm: qemu-runtime-rs  },
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ toJSON(matrix) }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-amd64-${{ matrix.params.containerd_version }}-${{ matrix.params.vmm }}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
@@ -528,7 +528,7 @@ jobs:
           {containerd_version: latest, vmm: qemu-runtime-rs},
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-s390x-${{ matrix.params.containerd_version }}-${{ matrix.params.vmm }}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
@@ -550,7 +550,7 @@ jobs:
           {containerd_version: latest, vmm: qemu},
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-ppc64le-${{ toJSON(matrix) }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-ppc64le-${{ matrix.params.containerd_version }}-${{ matrix.params.vmm }}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
