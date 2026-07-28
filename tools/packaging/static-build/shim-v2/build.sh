@@ -131,12 +131,12 @@ case "${RUNTIME_CHOICE}" in
 		;;
 esac
 
-# When STATIC_RUNTIME=yes the Go host binaries (kata-runtime,
-# containerd-shim-kata-v2 and kata-monitor) are built as fully static,
-# cgo-free executables so the payload runs on musl-only hosts that have no
-# glibc dynamic loader. Default builds are unchanged.
-if [[ "${STATIC_RUNTIME:-}" == "yes" ]]; then
-	GO_EXTRA_OPTS+=" STATIC=yes"
+# The Go host binaries (kata-runtime, containerd-shim-kata-v2 and kata-monitor)
+# are built as fully static, cgo-free executables by default so the payload
+# runs on musl-only hosts that have no glibc dynamic loader. Set
+# STATIC_RUNTIME=no to opt out and restore the previous cgo + PIE build.
+if [[ "${STATIC_RUNTIME:-}" == "no" ]]; then
+	GO_EXTRA_OPTS+=" STATIC=no"
 fi
 
 case "${RUNTIME_CHOICE}" in
