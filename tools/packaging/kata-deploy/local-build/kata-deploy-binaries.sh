@@ -433,6 +433,20 @@ get_latest_nvidia_nvat_version() {
 	get_from_kata_deps ".externals.nvidia.nvat.version"
 }
 
+# The CUDA and tools APT repositories feed setup_apt_repositories() in the
+# rootfs chroot; overriding them in versions.yaml (e.g. to point at an
+# internal release-candidate mirror) must invalidate the cached rootfs.
+get_latest_nvidia_repo_version() {
+	local arch
+	arch="$(uname -m)"
+
+	echo "$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.url")" \
+		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${arch}.pkg")" \
+		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.url")" \
+		"$(get_from_kata_deps ".externals.nvidia.tools.repo.${arch}.pkg")" \
+		| sha256sum | cut -c1-9
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -476,6 +490,7 @@ install_image() {
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
+			latest_artefact+="-$(get_latest_nvidia_repo_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -495,6 +510,7 @@ install_image() {
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+		latest_artefact+="-$(get_latest_nvidia_repo_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia" ]]; then
@@ -788,6 +804,7 @@ install_initrd() {
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvat_version)"
+			latest_artefact+="-$(get_latest_nvidia_repo_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -801,6 +818,7 @@ install_initrd() {
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
+		latest_artefact+="-$(get_latest_nvidia_repo_version)"
 	fi
 
 	latest_builder_image=""

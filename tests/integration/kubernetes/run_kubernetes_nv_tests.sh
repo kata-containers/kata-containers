@@ -14,12 +14,24 @@ source "${kubernetes_dir}/../../common.bash"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime via drop-in config
 enable_nvrc_trace() {
-	local kata_config_base="/opt/kata/share/defaults/kata-containers"
-	case "${KATA_HYPERVISOR}" in
-		*-runtime-rs) kata_config_base="${kata_config_base}/runtime-rs" ;;
-	esac
+	# A multi-install appends its suffix to the installation directory and to
+	# every handler name alike, so follow MULTI_INSTALL_SUFFIX for both or the
+	# drop-in lands where the pods under test never look.
+	local install_suffix="${MULTI_INSTALL_SUFFIX:+-${MULTI_INSTALL_SUFFIX}}"
+	local kata_config_base="/opt/kata${install_suffix}/share/defaults/kata-containers"
 
-	local config_dir="${kata_config_base}/runtimes/${KATA_HYPERVISOR}/config.d"
+	# The tests run on the kata-<shim>-debug RuntimeClass whenever kata-deploy
+	# creates it, and that handler reads its configuration from a directory of
+	# its own under custom-runtimes/.
+	local runtime_dir="${kata_config_base}/custom-runtimes/kata-${KATA_HYPERVISOR}${install_suffix}-debug"
+	if [[ ! -d "${runtime_dir}" ]]; then
+		case "${KATA_HYPERVISOR}" in
+			*-runtime-rs) kata_config_base="${kata_config_base}/runtime-rs" ;;
+		esac
+		runtime_dir="${kata_config_base}/runtimes/${KATA_HYPERVISOR}"
+	fi
+
+	local config_dir="${runtime_dir}/config.d"
 	local drop_in_file="${config_dir}/90-nvrc-trace.toml"
 	local kernel_params_drop_in="${config_dir}/30-kernel-params.toml"
 
@@ -35,7 +47,7 @@ enable_nvrc_trace() {
 	if [[ -f "${kernel_params_drop_in}" ]]; then
 		base_params=$(grep -E '^kernel_params\s*=' "${kernel_params_drop_in}" | sed 's/^kernel_params\s*=\s*"\(.*\)"/\1/' || true)
 	else
-		local runtime_config="${kata_config_base}/runtimes/${KATA_HYPERVISOR}/configuration-${KATA_HYPERVISOR}.toml"
+		local runtime_config="${runtime_dir}/configuration-${KATA_HYPERVISOR}.toml"
 		if [[ -f "${runtime_config}" ]]; then
 			base_params=$(grep -E '^kernel_params\s*=' "${runtime_config}" | sed 's/^kernel_params\s*=\s*"\(.*\)"/\1/' || true)
 		fi
