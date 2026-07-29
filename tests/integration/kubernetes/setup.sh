@@ -104,29 +104,6 @@ add_annotations_to_yaml() {
 	esac
 }
 
-# Point the workloads at the RuntimeClass the tests are meant to run on.
-#
-# They ship with the `kata` RuntimeClass, an alias for the deployment's default
-# shim. Rewrite it whenever the guest debug settings live on a class of their
-# own (see get_test_runtime_class), so that a failing test still comes with the
-# guest logs needed to triage it.
-set_workloads_runtime_class() {
-	local runtime_class
-
-	if ! test_runtime_class_has_guest_debug; then
-		info "Keeping the default RuntimeClass in the test workloads"
-		return
-	fi
-
-	runtime_class="$(get_test_runtime_class)"
-	info "Running the test workloads with the ${runtime_class} RuntimeClass"
-
-	find "${runtimeclass_workloads_work_dir}" -type f \
-		\( -name '*.yaml' -o -name '*.yaml.in' \) -print0 |
-		xargs -0 --no-run-if-empty sed -i -E \
-			"s/^([[:space:]]*runtimeClassName:[[:space:]]+)kata[[:space:]]*$/\1${runtime_class}/"
-}
-
 add_runtime_handler_annotation_to_yaml() {
 	local -r yaml_file="$1"
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
@@ -157,7 +134,9 @@ add_runtime_handler_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	set_workloads_runtime_class
+	# Default to the plain RuntimeClass; triage retries flip to debug on failure.
+	export KATA_TEST_RUNTIME_CLASS_MODE="${KATA_TEST_RUNTIME_CLASS_MODE:-plain}"
+	set_workloads_runtime_class "${runtimeclass_workloads_work_dir}"
 	add_runtime_handler_annotations
 }
 

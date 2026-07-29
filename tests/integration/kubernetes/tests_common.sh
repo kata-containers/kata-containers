@@ -78,9 +78,12 @@ get_pod_config_dir() {
 # agent.log=debug and initcall_debug on the kernel cmdline) solely to the extra
 # kata-<shim>-debug RuntimeClass it creates when deployed with debug enabled, so
 # that the plain kata-<shim> class keeps the kernel cmdline, and therefore the
-# guest measurements, of a non-debug installation. The tests depend on those
-# guest logs to triage failures, hence they run on the debug class whenever it
-# is deployed.
+# guest measurements, of a non-debug installation.
+#
+# By default the suites run on the plain class (KATA_TEST_RUNTIME_CLASS_MODE=plain).
+# Set KATA_TEST_RUNTIME_CLASS_MODE=debug to target the debug class — used for
+# tests that hard-require guest console forwarding, and for triage re-runs after
+# a plain failure (see run_kubernetes_bats_tests).
 #
 # A multi-install names every class after its own suffix (kata-<shim>-<suffix>,
 # and kata-<shim>-<suffix>-debug for the variant), so build the name from the
@@ -88,19 +91,87 @@ get_pod_config_dir() {
 # one, which is not deployed at all in that case.
 get_test_runtime_class() {
 	if [[ -z "${test_runtime_class:-}" ]]; then
-		test_runtime_class="kata-${KATA_HYPERVISOR}${MULTI_INSTALL_SUFFIX:+-${MULTI_INSTALL_SUFFIX}}"
-		if kubectl get runtimeclass "${test_runtime_class}-debug" &>/dev/null; then
-			test_runtime_class="${test_runtime_class}-debug"
-		fi
+		local base="kata-${KATA_HYPERVISOR}${MULTI_INSTALL_SUFFIX:+-${MULTI_INSTALL_SUFFIX}}"
+		local mode="${KATA_TEST_RUNTIME_CLASS_MODE:-plain}"
+
+		case "${mode}" in
+			debug)
+				if kubectl get runtimeclass "${base}-debug" &>/dev/null; then
+					test_runtime_class="${base}-debug"
+				else
+					test_runtime_class="${base}"
+				fi
+				;;
+			plain | *)
+				test_runtime_class="${base}"
+				;;
+		esac
 		export test_runtime_class
 	fi
 
 	echo "${test_runtime_class}"
 }
 
+# Drop the cached RuntimeClass so the next get_test_runtime_class() call
+# re-reads KATA_TEST_RUNTIME_CLASS_MODE.
+clear_test_runtime_class_cache() {
+	unset test_runtime_class
+}
+
 # Whether the tests run on a RuntimeClass that carries the guest debug settings.
 test_runtime_class_has_guest_debug() {
 	[[ "$(get_test_runtime_class)" == *-debug ]]
+}
+
+# Point the workloads at the RuntimeClass the tests are meant to run on.
+#
+# Fixtures ship with `runtimeClassName: kata` (alias for the deployment default
+# shim). Rewrite them to the explicit class from get_test_runtime_class so plain
+# and debug modes both land on the right handler. Idempotent: also matches an
+# already-rewritten kata-<shim>[-debug] name so triage retries can flip modes.
+#
+# Optional $1 overrides the workloads work directory; defaults to the k8s test
+# suite's runtimeclass_workloads_work.
+set_workloads_runtime_class() {
+	local workloads_dir="${1:-${K8S_TEST_DIR}/runtimeclass_workloads_work}"
+	local runtime_class
+
+	clear_test_runtime_class_cache
+	runtime_class="$(get_test_runtime_class)"
+	info "Running the test workloads with the ${runtime_class} RuntimeClass (mode=${KATA_TEST_RUNTIME_CLASS_MODE:-plain})"
+
+	find "${workloads_dir}" -type f \
+		\( -name '*.yaml' -o -name '*.yaml.in' \) -print0 |
+		xargs -0 --no-run-if-empty sed -i -E \
+			"s/^([[:space:]]*runtimeClassName:[[:space:]]+)kata(-[^[:space:]]*)?[[:space:]]*$/\1${runtime_class}/"
+}
+
+# Re-apply RuntimeClass and (when present) the matching containerd
+# runtime-handler annotation after KATA_TEST_RUNTIME_CLASS_MODE changes.
+apply_test_runtime_class_mode() {
+	local mode="${1:-${KATA_TEST_RUNTIME_CLASS_MODE:-plain}}"
+	local workloads_dir="${2:-${K8S_TEST_DIR}/runtimeclass_workloads_work}"
+	local runtime_class
+
+	export KATA_TEST_RUNTIME_CLASS_MODE="${mode}"
+	clear_test_runtime_class_cache
+	set_workloads_runtime_class "${workloads_dir}"
+
+	runtime_class="$(get_test_runtime_class)"
+
+	# Keep guest-pull handler annotations in sync when setup.sh already added them.
+	local -a annotated_yamls=()
+	mapfile -t annotated_yamls < <(
+		find "${workloads_dir}" -type f -name '*.yaml' -print0 2>/dev/null |
+			xargs -0 --no-run-if-empty grep -l 'io\.containerd\.cri\.runtime-handler' 2>/dev/null || true
+	)
+	local yaml_file
+	for yaml_file in "${annotated_yamls[@]}"; do
+		[[ -z "${yaml_file}" ]] && continue
+		sed -i -E \
+			"s|^([[:space:]]*io\.containerd\.cri\.runtime-handler:[[:space:]]*).*$|\1\"${runtime_class}\"|" \
+			"${yaml_file}"
+	done
 }
 
 # Return the first worker found that is kata-runtime labeled.

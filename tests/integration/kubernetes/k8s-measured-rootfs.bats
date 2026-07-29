@@ -20,13 +20,6 @@ check_and_skip() {
 	if [[ "$(uname -m)" == "s390x" ]]; then
 		skip "measured rootfs tests not implemented for s390x"
 	fi
-
-	# The dm-verity failure is reported on the guest console, which the
-	# hypervisor only forwards to the host journal when it runs with
-	# enable_debug, and that is exclusive to the kata-<shim>-debug RuntimeClass.
-	if ! test_runtime_class_has_guest_debug; then
-		skip "kata-${KATA_HYPERVISOR}-debug RuntimeClass not deployed (kata-deploy debug disabled)"
-	fi
 }
 
 setup() {

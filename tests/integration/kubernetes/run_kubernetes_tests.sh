@@ -11,6 +11,10 @@ set -o pipefail
 kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck source=/dev/null
 source "${kubernetes_dir}/../../common.bash"
+# shellcheck source=/dev/null
+source "${kubernetes_dir}/tests_common.sh"
+# shellcheck source=/dev/null
+source "${kubernetes_dir}/k8s_bats_runner.sh"
 
 cleanup() {
 	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
@@ -155,6 +159,7 @@ fi
 
 ensure_yq
 
-# Use common bats test runner with proper reporting
+# Use common bats test runner with proper reporting, plain RuntimeClass by
+# default, and triage-only -debug re-runs for failed cases.
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
-run_bats_tests "${kubernetes_dir}" K8S_TEST_UNION
+run_kubernetes_bats_tests "${kubernetes_dir}" K8S_TEST_UNION
