@@ -484,7 +484,7 @@ function main() {
 	if [[ -z "${AUTO_GENERATE_POLICY}" ]]; then
 		# https://github.com/kata-containers/kata-containers/issues/12839
 		if [[ "${KATA_HOST_OS}" = "cbl-mariner" && \
-			  "${KATA_HYPERVISOR}" = "clh" ]]; then
+			  "${KATA_HYPERVISOR}" =~ ^clh(-azure)?$ ]]; then
 			AUTO_GENERATE_POLICY="yes"
 		elif [[ "${KATA_HYPERVISOR}" = qemu-coco-dev* && \
 		        ( "${TARGET_ARCH}" = "x86_64" || "${TARGET_ARCH}" = "aarch64" ) && \
