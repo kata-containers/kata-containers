@@ -162,3 +162,37 @@ impl Settings {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use regex::Regex;
+
+    #[test]
+    fn shared_container_path_supports_rootless() {
+        let settings = Settings::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/genpolicy-settings.json"
+        ));
+        let pattern = Regex::new(&format!("^{}$", settings.common.cpath)).unwrap();
+
+        for path in [
+            "/run/kata-containers/shared/containers",
+            "/run/kata-containers/shared/containers/passthrough",
+            "/run/user/1002/run/kata-containers/shared/containers",
+            "/run/user/1002/run/kata-containers/shared/containers/passthrough",
+        ] {
+            assert!(pattern.is_match(path), "{path}");
+        }
+
+        for path in [
+            "/tmp/run/kata-containers/shared/containers",
+            "/run/user/not-a-uid/run/kata-containers/shared/containers",
+            "/run/user/0/run/kata-containers/shared/containers",
+            "/run/user/01002/run/kata-containers/shared/containers",
+            "/run/user/1002/tmp/run/kata-containers/shared/containers",
+        ] {
+            assert!(!pattern.is_match(path), "{path}");
+        }
+    }
+}

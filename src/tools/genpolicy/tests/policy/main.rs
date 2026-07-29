@@ -76,6 +76,7 @@ mod tests {
     /// should be exactly one entry with a PodSpec. The test case file must contain
     /// a JSON list of [TestCase] instances. Each instance will be of type enum TestRequest,
     /// with the tag `type` listing the exact type of request.
+    /// An optional settings-patch.json is applied as a settings drop-in.
     async fn runtests(test_case_dir: &str) {
         // Check if config_map.yaml exists.
         // If it does, we need to copy it to the workdir.
@@ -104,6 +105,19 @@ mod tests {
             None
         };
 
+        let settings_patch = testdata_dir.join("settings-patch.json");
+        let settings_path = if settings_patch.exists() {
+            let drop_in_dir = workdir.join("genpolicy-settings.d");
+            fs::create_dir(&drop_in_dir).expect("creating the drop-in directory should not fail");
+            let target = drop_in_dir.join("10-test-settings.json");
+            fs::copy(&settings_patch, &target)
+                .context(format!("{settings_patch:?} --> {target:?}"))
+                .expect("copying the settings drop-in should not fail");
+            workdir.clone()
+        } else {
+            workdir.join("genpolicy-settings.json")
+        };
+
         let config = genpolicy::utils::Config {
             base64_out: false,
             config_files,
@@ -113,9 +127,7 @@ mod tests {
             raw_out: false,
             rego_rules_path: workdir.join("rules.rego").to_str().unwrap().to_string(),
             runtime_class_names: Vec::new(),
-            settings: genpolicy::settings::Settings::new(
-                workdir.join("genpolicy-settings.json").to_str().unwrap(),
-            ),
+            settings: genpolicy::settings::Settings::new(settings_path.to_str().unwrap()),
             silent_unsupported_fields: false,
             use_cache: false,
             version: false,
@@ -217,7 +229,11 @@ mod tests {
         // Make sure that workdir is empty.
         for entry in fs::read_dir(&workdir).expect("should be able to read directories") {
             let entry = entry.expect("should be able to read directory entries");
-            fs::remove_file(entry.path()).expect("should be able to remove files");
+            if entry.path().is_dir() {
+                fs::remove_dir_all(entry.path()).expect("should be able to remove directories");
+            } else {
+                fs::remove_file(entry.path()).expect("should be able to remove files");
+            }
         }
 
         for file in files_to_copy {
@@ -253,6 +269,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_sandbox() {
         runtests("createsandbox").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_sandbox_rootless() {
+        runtests("createsandbox/rootless").await;
     }
 
     #[tokio::test]

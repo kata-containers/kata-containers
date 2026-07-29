@@ -1,0 +1,196 @@
+[
+  {
+    "allowed": true,
+    "description": "guest-local sandbox shm",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "ephemeral",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "tmpfs",
+          "mount_point": "/run/kata-containers/sandbox/shm",
+          "options": [
+            "noexec",
+            "nosuid",
+            "nodev",
+            "mode=1777",
+            "size=67108864"
+          ],
+          "shared": false,
+          "source": "shm"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": true,
+    "description": "regular virtio-fs path",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/kata-containers/shared/containers/",
+          "options": [],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": true,
+    "description": "rootless virtio-fs path",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/user/1002/run/kata-containers/shared/containers/",
+          "options": [],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "host-only sandbox shm path",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "ephemeral",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "tmpfs",
+          "mount_point": "/run/user/1002/run/kata-containers/sandbox/shm",
+          "options": [
+            "noexec",
+            "nosuid",
+            "nodev",
+            "mode=1777",
+            "size=67108864"
+          ],
+          "shared": false,
+          "source": "shm"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "malformed rootless uid",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/user/not-a-uid/run/kata-containers/shared/containers/",
+          "options": [],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unexpected path component",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/user/1002/tmp/run/kata-containers/shared/containers/",
+          "options": [],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "literal mount-point pattern",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "^$(cpath)/?$",
+          "options": [],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unexpected storage source",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/user/1002/run/kata-containers/shared/containers/",
+          "options": [],
+          "shared": false,
+          "source": "attackerControlled"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "unexpected storage options",
+    "kind": "CreateSandboxRequest",
+    "request": {
+      "sandbox_pidns": false,
+      "storages": [
+        {
+          "driver": "virtio-fs",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "virtiofs",
+          "mount_point": "/run/user/1002/run/kata-containers/shared/containers/",
+          "options": [
+            "unexpected"
+          ],
+          "shared": false,
+          "source": "kataShared"
+        }
+      ]
+    }
+  }
+]

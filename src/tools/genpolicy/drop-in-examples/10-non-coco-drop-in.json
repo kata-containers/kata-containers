@@ -12,7 +12,7 @@
   {
     "op": "replace",
     "path": "/common/root_path",
-    "value": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"
+    "value": "^$(cpath)/$(bundle-id)/rootfs$"
   },
   {
     "op": "replace",
@@ -48,7 +48,7 @@
         "driver_options": [],
         "fs_group": null,
         "fstype": "virtiofs",
-        "mount_point": "/run/kata-containers/shared/containers/",
+        "mount_point": "^$(cpath)/?$",
         "options": [],
         "source": "kataShared"
       }
