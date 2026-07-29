@@ -9,7 +9,6 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::build_rootless_path;
 use kata_types::mount::ImagePullVolume;
 use oci_spec::runtime as oci;
 use serde_json;
@@ -27,7 +26,7 @@ use kata_types::{
 const KUBERNETES_CRI_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const KUBERNETES_CRIO_IMAGE_NAME: &str = "io.kubernetes.cri-o.ImageName";
 const KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS: &str = "overlay";
-const DEFAULT_KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
+const KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
 
 const CRI_CONTAINER_TYPE_KEY_LIST: &[&str] = &[
     // cri containerd
@@ -35,11 +34,6 @@ const CRI_CONTAINER_TYPE_KEY_LIST: &[&str] = &[
     // cri-o
     annotations::crio::CONTAINER_TYPE_LABEL_KEY,
 ];
-
-/// Get Kata guest root shared filesystem path.
-fn kata_guest_root_shared_fs() -> String {
-    build_rootless_path(DEFAULT_KATA_GUEST_ROOT_SHARED_FS)
-}
 
 /// Retrieves the image reference from OCI spec annotations.
 ///
@@ -140,7 +134,7 @@ fn handle_virtual_volume_storage(
                 KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, image_pull_info
             )],
             fs_type: KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS.to_string(),
-            mount_point: Path::new(kata_guest_root_shared_fs().as_str())
+            mount_point: Path::new(KATA_GUEST_ROOT_SHARED_FS)
                 .join(cid)
                 .join("rootfs")
                 .display()
@@ -188,7 +182,7 @@ impl VirtualVolume {
             }
         }
 
-        let guest_path = Path::new(kata_guest_root_shared_fs().as_str())
+        let guest_path = Path::new(KATA_GUEST_ROOT_SHARED_FS)
             .join(cid)
             .join("rootfs")
             .to_path_buf();
@@ -232,9 +226,9 @@ pub fn is_kata_virtual_volume(m: &kata_types::mount::Mount) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::rootfs::virtual_volume::kata_guest_root_shared_fs;
     use crate::rootfs::virtual_volume::{
-        KATA_VIRTUAL_VOLUME_PREFIX, KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS,
+        KATA_GUEST_ROOT_SHARED_FS, KATA_VIRTUAL_VOLUME_PREFIX,
+        KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS,
     };
 
     use super::get_image_reference;
@@ -331,7 +325,7 @@ mod tests {
         let virt_vol_obj = result.unwrap();
 
         // 1. Verify guest_path
-        let expected_guest_path = Path::new(kata_guest_root_shared_fs().as_str())
+        let expected_guest_path = Path::new(KATA_GUEST_ROOT_SHARED_FS)
             .join(cid)
             .join("rootfs");
         assert_eq!(virt_vol_obj.guest_path, expected_guest_path);
@@ -346,7 +340,7 @@ mod tests {
         assert_eq!(storage.driver, KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL);
         assert_eq!(storage.fs_type, KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS);
 
-        let expected_mount_point = Path::new(kata_guest_root_shared_fs().as_str())
+        let expected_mount_point = Path::new(KATA_GUEST_ROOT_SHARED_FS)
             .join(cid)
             .join("rootfs")
             .display()
