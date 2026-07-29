@@ -111,61 +111,11 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 	kubectl delete pod -n "${namespace}" --ignore-not-found=true "${existing_pods[@]}" || true
 }
 
-# Clean up resources created through the NIM operator using the same procedure
-# as the NIMService test teardown: delete the owning NIMService first so the
-# operator cleans its dependents, then uninstall the operator.
-cleanup_nvidia_nim_operator_resources() {
-	local namespace
-	local namespaces=("default")
-	local release_name="${NIM_OPERATOR_RELEASE_NAME:-nim-operator}"
-	local operator_namespace="${NIM_OPERATOR_NAMESPACE:-nim-operator}"
-	local cleaned=false
-	local -a existing_nimservices=()
-	local nimservice
-
-	if [[ -n "${TEST_CLUSTER_NAMESPACE:-}" && "${TEST_CLUSTER_NAMESPACE}" != "default" ]]; then
-		namespaces+=("${TEST_CLUSTER_NAMESPACE}")
-	fi
-
-	for namespace in "${namespaces[@]}"; do
-		existing_nimservices=()
-		for nimservice in "meta-llama-3-2-1b-instruct" "meta-llama-3-2-1b-instruct-tee"; do
-			if kubectl get nimservice "${nimservice}" -n "${namespace}" &>/dev/null; then
-				existing_nimservices+=("${nimservice}")
-			fi
-		done
-
-		if [[ "${#existing_nimservices[@]}" -eq 0 ]]; then
-			info "NVIDIA GPU leak cleanup: no-op (no NIMService resources in namespace ${namespace})"
-			continue
-		fi
-
-		info "NVIDIA GPU leak cleanup: deleting leaked NIMService resources in namespace ${namespace}: ${existing_nimservices[*]}"
-		kubectl delete nimservice -n "${namespace}" --ignore-not-found=true \
-			"${existing_nimservices[@]}" || true
-		cleaned=true
-	done
-
-	if helm status "${release_name}" -n "${operator_namespace}" &>/dev/null; then
-		info "NVIDIA GPU leak cleanup: uninstalling leaked NIM operator (release: ${release_name}, namespace: ${operator_namespace})"
-		helm uninstall "${release_name}" -n "${operator_namespace}" || true
-		kubectl delete namespace "${operator_namespace}" --ignore-not-found=true --timeout=60s || true
-		cleaned=true
-	else
-		info "NVIDIA GPU leak cleanup: no-op (NIM operator release not found in namespace ${operator_namespace})"
-	fi
-
-	if [[ "${cleaned}" == "true" ]]; then
-		info "NVIDIA GPU leak cleanup: NIM operator resource cleanup finished"
-	fi
-}
-
 # Remove leftover NVIDIA GPU test resources before starting a new suite/file so
 # stale pods cannot retain GPUs across shared CI runners.
 cleanup_leaked_nvidia_gpu_test_resources() {
 	info "NVIDIA GPU leak cleanup: starting pre-test cleanup"
 	delete_nvidia_gpu_test_pods_if_any_exist "default" || true
-	cleanup_nvidia_nim_operator_resources || true
 	info "NVIDIA GPU leak cleanup: pre-test cleanup complete"
 }
 
@@ -181,8 +131,7 @@ else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
-		"k8s-nvidia-nim.bats" \
-		"k8s-nvidia-nim-service.bats")
+		"k8s-nvidia-nim.bats")
 fi
 
 SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-runtime-rs" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")
