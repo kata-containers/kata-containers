@@ -26,7 +26,7 @@ use hypervisor::{
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation,
-    build_path,
+    build_rootless_path,
     config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
     mount::SHM_DEVICE,
     rootless::{is_rootless, rootless_dir, set_rootless},
@@ -1052,7 +1052,8 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
 
     // Update the rootless dir prefix for guest_swap_path
-    config.memory_info.guest_swap_path = build_path("/run/kata-containers/swap");
+    config.memory_info.guest_swap_path =
+        build_rootless_path("/run/kata-containers/swap");
 
     let mut rootless_user = RootlessUser {
         uid,

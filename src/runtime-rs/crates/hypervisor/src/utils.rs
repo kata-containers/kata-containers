@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::{
-    build_path,
+    build_rootless_path,
     config::{hypervisor::RootlessUser, Hypervisor, KATA_PATH},
 };
 use lazy_static::lazy_static;
@@ -70,7 +70,7 @@ pub fn get_child_threads(pid: u32) -> HashSet<u32> {
 // Return the path for a _hypothetical_ sandbox: the path does *not* exist
 // yet, and for this reason safe-path cannot be used.
 pub fn get_sandbox_path(sid: &str) -> String {
-    Path::new(build_path(KATA_PATH).as_str())
+    Path::new(build_rootless_path(KATA_PATH).as_str())
         .join(sid)
         .to_string_lossy()
         .to_string()

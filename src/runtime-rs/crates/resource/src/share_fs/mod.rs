@@ -31,7 +31,7 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::{build_path, config::hypervisor::SharedFsInfo};
+use kata_types::{build_rootless_path, config::hypervisor::SharedFsInfo};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -56,16 +56,16 @@ pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
 pub fn kata_host_shared_dir() -> String {
-    build_path(DEFAULT_KATA_HOST_SHARED_DIR)
+    build_rootless_path(DEFAULT_KATA_HOST_SHARED_DIR)
 }
 
 pub fn kata_guest_share_dir() -> String {
-    build_path(DEFAULT_KATA_GUEST_SHARE_DIR)
+    build_rootless_path(DEFAULT_KATA_GUEST_SHARE_DIR)
 }
 
 /// The virtiofs mount point in the guest for nydusd mode.
 pub fn kata_guest_nydus_root_dir() -> String {
-    build_path(DEFAULT_KATA_GUEST_ROOT_DIR)
+    build_rootless_path(DEFAULT_KATA_GUEST_ROOT_DIR)
 }
 
 #[async_trait]

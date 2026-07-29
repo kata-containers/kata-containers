@@ -61,7 +61,9 @@ const X_KATA_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 
 /// Create the per-container directory under the shared filesystem root.
 pub(crate) fn ensure_container_dir(sid: &str, cid: &str) -> Result<PathBuf> {
-    let dir = PathBuf::from(kata_types::build_path(DEFAULT_KATA_GUEST_ROOT_SHARED_FS))
+    let dir = PathBuf::from(kata_types::build_rootless_path(
+        DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
+    ))
         .join(sid)
         .join(cid);
     fs::create_dir_all(&dir).context(format!(
@@ -861,7 +863,7 @@ impl ErofsMultiLayerRootfs {
             rwlayer_storage,
             erofs_storages,
             gpt_metadata_paths,
-            generated_artifacts_dir: PathBuf::from(kata_types::build_path(
+            generated_artifacts_dir: PathBuf::from(kata_types::build_rootless_path(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
             ))
             .join(sid)

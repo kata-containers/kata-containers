@@ -23,7 +23,7 @@ use crate::utils::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
-use kata_types::build_path;
+use kata_types::build_rootless_path;
 use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::rootless::is_rootless;
 use kata_types::{
@@ -101,7 +101,8 @@ impl QemuInner {
             }
         }
 
-        let vm_path = Path::new(build_path(KATA_PATH).as_str()).join(self.id.as_str());
+        let vm_path =
+            Path::new(build_rootless_path(KATA_PATH).as_str()).join(self.id.as_str());
         create_dir_all_with_inherit_owner(vm_path, 0o750)?;
 
         Ok(())
@@ -731,7 +732,11 @@ impl QemuInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
-        let vm_path = [build_path(KATA_PATH).as_str(), self.id.as_str()].join("/");
+        let vm_path = [
+            build_rootless_path(KATA_PATH).as_str(),
+            self.id.as_str(),
+        ]
+        .join("/");
         vm_cleanup(&self.config, vm_path.as_str())
     }
 
