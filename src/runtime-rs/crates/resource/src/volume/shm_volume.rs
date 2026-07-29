@@ -57,3 +57,23 @@ pub(crate) fn is_shm_volume(m: &oci::Mount) -> bool {
     get_mount_path(&Some(m.destination().clone())).as_str() == SHM_DEVICE
         && get_mount_type(m).as_str() != KATA_EPHEMERAL_VOLUME_TYPE
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_types::mount::DEFAULT_KATA_GUEST_SANDBOX_DIR;
+
+    #[test]
+    fn test_shm_volume_uses_guest_sandbox_path() {
+        let mut mount = oci::Mount::default();
+        mount.set_destination(PathBuf::from(SHM_DEVICE));
+
+        let volume = ShmVolume::new(&mount).unwrap();
+        let mounts = volume.get_volume_mount().unwrap();
+
+        assert_eq!(
+            mounts[0].source(),
+            &Some(PathBuf::from(DEFAULT_KATA_GUEST_SANDBOX_DIR).join(SHM_DIR))
+        );
+    }
+}
