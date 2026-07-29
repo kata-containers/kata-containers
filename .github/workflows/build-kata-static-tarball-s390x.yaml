@@ -47,6 +47,7 @@ jobs:
           - coco-guest-components
           - fake-boot-image-se
           - kernel
+          - pause-image
           - qemu
           - virtiofsd
     concurrency:
