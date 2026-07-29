@@ -91,7 +91,7 @@ pub fn kata_direct_volume_root_path() -> String {
 
 /// Get the sandbox bind mounts directory.
 pub fn kata_guest_sandbox_dir() -> String {
-    build_rootless_path(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+    DEFAULT_KATA_GUEST_SANDBOX_DIR.to_string()
 }
 
 /// Information about a mount.
@@ -635,6 +635,12 @@ pub fn adjust_rootfs_mounts() -> Result<Vec<Mount>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_kata_guest_sandbox_dir() {
+        assert_eq!(kata_guest_sandbox_dir(), DEFAULT_KATA_GUEST_SANDBOX_DIR);
+    }
+
     #[test]
     fn test_is_kata_special_volume() {
         assert!(is_kata_special_volume("kata:guest-mount:nfs"));
