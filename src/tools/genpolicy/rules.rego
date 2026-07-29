@@ -803,12 +803,13 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     i_root := i_oci.Root.Path
     p_root_pattern1 := p_oci.Root.Path
     p_root_pattern2 := replace(p_root_pattern1, "$(root_path)", policy_data.common.root_path)
+    p_root_pattern3 := replace(p_root_pattern2, "$(cpath)", policy_data.common.cpath)
     # Bundle path segment can be a 64-char hex (OCI bundle ID) or the runtime's container/bundle identifier used in paths (e.g. short ID or CRI container ID).
-    p_root_pattern3 := replace(p_root_pattern2, "$(bundle-id)", "([0-9a-f]{64}|[a-z0-9][a-z0-9.-]*)")
-    print("allow_by_bundle_or_sandbox_id: i_root =", i_root, "regex =", p_root_pattern3)
+    p_root_pattern4 := replace(p_root_pattern3, "$(bundle-id)", "([0-9a-f]{64}|[a-z0-9][a-z0-9.-]*)")
+    print("allow_by_bundle_or_sandbox_id: i_root =", i_root, "regex =", p_root_pattern4)
 
     # Verify that the root path matches the substituted pattern and extract the bundle-id.
-    bundle_id := regex.find_all_string_submatch_n(p_root_pattern3, i_root, 1)[0][1]
+    bundle_id := regex.find_all_string_submatch_n(p_root_pattern4, i_root, 1)[0][1]
 
     # Match each input mount with a Policy mount.
     # Reject possible attempts to match multiple input mounts with a single Policy mount.
@@ -1547,9 +1548,26 @@ allow_sandbox_storage(p_storages, i_storage) if {
 
     some p_storage in p_storages
     print("allow_sandbox_storage: p_storage =", p_storage)
-    i_storage == p_storage
+
+    p_storage_without_mount := object.remove(p_storage, {"mount_point"})
+    i_storage_without_mount := object.remove(i_storage, {"mount_point"})
+    p_storage_without_mount == i_storage_without_mount
+
+    allow_sandbox_mount_point(p_storage.mount_point, i_storage.mount_point)
 
     print("allow_sandbox_storage: true")
+}
+
+allow_sandbox_mount_point(p_mount_point, i_mount_point) if {
+    not startswith(p_mount_point, "^")
+    p_mount_point == i_mount_point
+}
+# Regex matching is opt-in and requires an anchored settings value.
+allow_sandbox_mount_point(p_mount_point, i_mount_point) if {
+    mount_pattern := replace(p_mount_point, "$(cpath)", policy_data.common.cpath)
+    startswith(mount_pattern, "^")
+    endswith(mount_pattern, "$")
+    regex.match(mount_pattern, i_mount_point)
 }
 
 CopyFileRequest if {
