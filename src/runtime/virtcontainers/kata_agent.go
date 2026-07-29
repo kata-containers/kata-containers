@@ -279,10 +279,6 @@ var kataGuestSharedDir = func() string {
 
 // The function is declared this way for mocking in unit tests
 var kataGuestSandboxDir = func() string {
-	if rootless.IsRootless() {
-		// filepath.Join removes trailing slashes, but it is necessary for mounting
-		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestSandboxDir) + "/"
-	}
 	return defaultKataGuestSandboxDir
 }
 
@@ -291,9 +287,6 @@ var kataGuestSandboxStorageDir = func() string {
 }
 
 func ephemeralPath() string {
-	if rootless.IsRootless() {
-		return filepath.Join(kataGuestSandboxDir(), kataEphemeralDevType)
-	}
 	return defaultEphemeralPath
 }
 
