@@ -8,7 +8,7 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::mount::{bind_remount, umount_all, umount_timeout};
-use kata_types::{build_path, k8s::is_watchable_mount};
+use kata_types::{prefix_with_rootless_dir, k8s::is_watchable_mount};
 use std::fs;
 use std::path::Path;
 
@@ -28,7 +28,7 @@ use super::{
 };
 
 pub fn ephemeral_path() -> String {
-    build_path(DEFAULT_EPHEMERAL_PATH)
+    prefix_with_rootless_dir(DEFAULT_EPHEMERAL_PATH)
 }
 
 #[derive(Debug)]

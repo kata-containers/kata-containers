@@ -9,7 +9,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::build_path;
+use kata_types::prefix_with_rootless_dir;
 use kata_types::mount::ImagePullVolume;
 use oci_spec::runtime as oci;
 use serde_json;
@@ -38,7 +38,7 @@ const CRI_CONTAINER_TYPE_KEY_LIST: &[&str] = &[
 
 /// Get Kata guest root shared filesystem path.
 fn kata_guest_root_shared_fs() -> String {
-    build_path(DEFAULT_KATA_GUEST_ROOT_SHARED_FS)
+    prefix_with_rootless_dir(DEFAULT_KATA_GUEST_ROOT_SHARED_FS)
 }
 
 /// Retrieves the image reference from OCI spec annotations.

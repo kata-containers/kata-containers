@@ -9,8 +9,8 @@ use base64::Engine as _;
 use std::convert::TryFrom;
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::build_path;
 use crate::handler::HandlerManager;
+use crate::prefix_with_rootless_dir;
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -86,12 +86,12 @@ pub type StorageHandlerManager<H> = HandlerManager<H>;
 
 /// Get the root path used for concatenating with the direct-volume mount info file path.
 pub fn kata_direct_volume_root_path() -> String {
-    build_path(DEFAULT_KATA_DIRECT_VOLUME_ROOT_PATH)
+    prefix_with_rootless_dir(DEFAULT_KATA_DIRECT_VOLUME_ROOT_PATH)
 }
 
 /// Get the sandbox bind mounts directory.
 pub fn kata_guest_sandbox_dir() -> String {
-    build_path(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+    prefix_with_rootless_dir(DEFAULT_KATA_GUEST_SANDBOX_DIR)
 }
 
 /// Information about a mount.

@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use anyhow::{Ok, Result};
-use kata_types::build_path;
+use kata_types::prefix_with_rootless_dir;
 
 use crate::{utils::get_sandbox_path, JAILER_ROOT};
 
@@ -40,7 +40,7 @@ pub fn get_vsock_path(id: &str) -> Result<String> {
 
 /// Returns the symlink path of the sandbox for the virtio-fs socket in rootless mode.
 pub fn get_rootless_symlink_sandbox_path(id: &str) -> String {
-    Path::new(build_path(id).as_str())
+    Path::new(prefix_with_rootless_dir(id).as_str())
         .to_string_lossy()
         .to_string()
 }
