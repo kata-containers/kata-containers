@@ -83,23 +83,23 @@ setup() {
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout="$timeout" pod "${pod_name}"
 
-	# pod-attestable-gpu becomes Ready once curl is installed; CDH fetch and GPU
-	# attestation (e.g. remote NRAS) run afterward and routinely exceed a short
-	# fixed sleep. Poll logs until the resource appears (or timeout).
+	# On confidential GPU, CDH fetch and GPU attestation (e.g. remote NRAS)
+	# routinely exceed a short fixed sleep after Ready. Poll until both
+	# containers have produced the expected output (or timeout).
 	if is_confidential_gpu_hardware; then
-		waitForProcess "180" "5" "kubectl logs ${pod_name} 2>/dev/null | grep -q \"${test_key}\""
-		waitForProcess "120" "5" "kubectl logs ${pod_name} 2>/dev/null | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
+		waitForProcess "180" "5" "kubectl logs --all-containers=true ${pod_name} 2>/dev/null | grep -q \"${test_key}\""
+		waitForProcess "120" "5" "kubectl logs --all-containers=true ${pod_name} 2>/dev/null | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
 	else
 		sleep 5
 	fi
 
-	kubectl logs "${pod_name}"
-	cmd="kubectl logs ${pod_name} | grep -q ${test_key}"
+	kubectl logs --all-containers=true "${pod_name}"
+	cmd="kubectl logs --all-containers=true ${pod_name} | grep -q ${test_key}"
 	run bash -c "$cmd"
 	[ "$status" -eq 0 ]
 
 	if is_confidential_gpu_hardware; then
-		cmd="kubectl logs ${pod_name} | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
+		cmd="kubectl logs --all-containers=true ${pod_name} | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
 		run bash -c "$cmd"
 		[ "$status" -eq 0 ]
 	fi
@@ -117,8 +117,8 @@ setup() {
 
 	sleep 5
 
-	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	kubectl logs --all-containers=true "${pod_name}"
+	cmd="kubectl logs --all-containers=true ${pod_name} | grep -q ${test_key}"
 	run bash -c "$cmd"
 	[ "$status" -eq 1 ]
 }
@@ -151,8 +151,8 @@ setup() {
 
 	sleep 5
 
-	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	kubectl logs --all-containers=true "${pod_name}"
+	cmd="kubectl logs --all-containers=true ${pod_name} | grep -q ${test_key}"
 	run bash -c "$cmd"
 	[ "$status" -eq 1 ]
 }
@@ -222,10 +222,17 @@ setup() {
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout="$timeout" pod "${pod_name}"
 
-	sleep 5
+	# Same as "Get CDH resource": on confidential GPU, CDH fetch and GPU attestation
+	# can exceed a short fixed sleep after Ready.
+	if is_confidential_gpu_hardware; then
+		waitForProcess "180" "5" "kubectl logs --all-containers=true ${pod_name} 2>/dev/null | grep -q \"${test_key}\""
+		waitForProcess "120" "5" "kubectl logs --all-containers=true ${pod_name} 2>/dev/null | grep -iq 'Confidential Compute GPUs Ready state:[[:space:]]*ready'"
+	else
+		sleep 5
+	fi
 
-	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	kubectl logs --all-containers=true "${pod_name}"
+	cmd="kubectl logs --all-containers=true ${pod_name} | grep -q ${test_key}"
 	run bash -c "$cmd"
 	result=$status
 
