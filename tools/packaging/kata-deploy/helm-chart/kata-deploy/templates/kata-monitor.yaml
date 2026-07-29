@@ -32,6 +32,11 @@ spec:
       tolerations:
 {{- toYaml . | nindent 8 }}
 {{- end }}
+{{- $dsAffinity := include "kata-deploy.daemonsetAffinity" . | trim -}}
+{{- if $dsAffinity }}
+      affinity:
+{{- $dsAffinity | nindent 8 }}
+{{- end }}
 {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
 {{- end }}
