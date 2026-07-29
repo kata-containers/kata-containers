@@ -924,8 +924,11 @@ install_initrd() {
 			export COCO_GUEST_COMPONENTS_TARBALL
 		fi
 	else
-		# Vanilla initrd uses kata-agent as /sbin/init (no systemd).
-		export AGENT_INIT=yes
+		# Vanilla initrd uses kata-agent as /sbin/init (no systemd), except on s390x.
+		unset AGENT_INIT
+		if [[ "${ARCH}" != "s390x" ]]; then
+			export AGENT_INIT=yes
+		fi
 	fi
 
 	AGENT_TARBALL=$(get_agent_tarball_path)
