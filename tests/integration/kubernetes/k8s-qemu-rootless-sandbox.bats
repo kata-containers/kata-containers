@@ -111,8 +111,14 @@ setup() {
 	set_container_command "${pod_config}" 0 sleep 30
 	request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
 
+	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
+	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
+	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
+	set_node "${watchable_pod_config}" "${node}"
+
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
+	auto_generate_policy "${policy_settings_dir}" "${watchable_pod_config}"
 
 	if is_runtime_rs; then
 		seccomp_key="seccomp_sandbox"
@@ -165,6 +171,38 @@ EOF
 	wait_for_rootless_host_resources "${host_resources}"
 }
 
+@test "QEMU propagates ConfigMap updates while rootless" {
+	local arch
+	local pod_termination_wait_time=180
+
+	# k8s-inotify.bats is excluded on these architectures. Apply the same
+	# scope only here because the per-architecture filters skip whole files,
+	# and the rootless QEMU launch test above is supported.
+	arch="$(uname -m)"
+	case "${arch}" in
+		aarch64|ppc64le|s390x)
+			skip "ConfigMap inotify testing is not enabled on ${arch}"
+			;;
+	esac
+
+	pod_name="inotify-configmap-testing"
+	pod_config="${watchable_pod_config}"
+
+	retry_kubectl_apply "${pod_config_dir}/inotify-configmap.yaml"
+	retry_kubectl_apply "${pod_config}"
+	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
+
+	retry_kubectl_apply "${pod_config_dir}/inotify-updated-configmap.yaml"
+
+	command="kubectl describe pod ${pod_name} | grep \"State: \+Terminated\""
+	info "Waiting ${pod_termination_wait_time} seconds for: ${command}"
+	waitForProcess "${pod_termination_wait_time}" "${sleep_time}" "${command}"
+
+	result=$(kubectl get pod "${pod_name}" \
+		--output="jsonpath={.status.containerStatuses[]}")
+	echo "${result}" | grep -vq Error
+}
+
 teardown() {
 	qemu_rootless_sandbox_supported || return 0
 
@@ -178,6 +216,7 @@ teardown() {
 	delete_tmp_policy_settings_dir "${policy_settings_dir:-}"
 
 	[ -f "${pod_config:-}" ] && kubectl delete -f "${pod_config}" --ignore-not-found=true
+	kubectl delete configmap cm --ignore-not-found=true
 
 	print_node_journal_since_test_start \
 		"${node}" \
