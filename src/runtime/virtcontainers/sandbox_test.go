@@ -473,6 +473,45 @@ func TestGetAllContainers(t *testing.T) {
 	}
 }
 
+func TestContainerLookupsConcurrentWithMutation(t *testing.T) {
+	const (
+		containerID = "container"
+		iterations  = 1000
+		readers     = 3
+	)
+
+	sandbox := Sandbox{
+		containers: map[string]*Container{
+			containerID: {id: containerID},
+		},
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(readers + 1)
+
+	go func() {
+		defer wg.Done()
+		for range iterations {
+			assert.NoError(t, sandbox.removeContainer(containerID))
+			assert.NoError(t, sandbox.addContainer(&Container{id: containerID}))
+		}
+	}()
+
+	for range readers {
+		go func() {
+			defer wg.Done()
+			for range iterations {
+				sandbox.GetContainer(containerID)
+				sandbox.GetAllContainers()
+				_, _ = sandbox.findContainer(containerID)
+			}
+		}()
+	}
+
+	wg.Wait()
+	assert.NotNil(t, sandbox.GetContainer(containerID))
+}
+
 func TestSetAnnotations(t *testing.T) {
 	assert := assert.New(t)
 	sandbox := Sandbox{
