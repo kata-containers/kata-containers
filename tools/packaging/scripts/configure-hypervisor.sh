@@ -208,6 +208,14 @@ show_array() {
 
 generate_qemu_options() {
 	#---------------------------------------------------------------------
+	# Start from nothing: allnoconfig semantics for both features and
+	# devices.  Every device Kata needs is allowlisted per architecture in
+	# static-build/qemu/build-qemu.sh (CONFIG_* entries in default.mak) and
+	# verified against the built binary before it is packaged.
+	qemu_options+=(minimal:--without-default-features)
+	qemu_options+=(minimal:--without-default-devices)
+
+	#---------------------------------------------------------------------
 	# Disabled options
 
 	# braille support not required
@@ -412,6 +420,13 @@ generate_qemu_options() {
 
 	# Required for fast network access
 	qemu_options+=(speed:--enable-vhost-net)
+
+	# vhost-kernel and vhost-user are "auto" features in meson, so
+	# --without-default-features turns them off.  Ask for them back
+	# explicitly: vhost-net needs the kernel backend, and virtiofsd and
+	# vhost-user-vsock need the vhost-user protocol.
+	qemu_options+=(speed:--enable-vhost-kernel)
+	qemu_options+=(functionality:--enable-vhost-user)
 
 	# Support Linux AIO (native)
 	qemu_options+=(size:--enable-linux-aio)
