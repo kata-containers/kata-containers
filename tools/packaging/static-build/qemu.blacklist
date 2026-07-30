@@ -127,3 +127,38 @@ ppc64le)
     )
     ;;
 esac
+
+# The runtime classes this build serves always name the firmware they want:
+# either none at all, for a direct kernel boot, or the OVMF that the ovmf
+# artifact installs.  None of the UEFI images QEMU bundles is ever loaded, so
+# drop them along with the descriptors pointing at them; SeaBIOS and the
+# direct-boot option ROMs stay, x86_64 still boots through them.
+if [[ "${BUILD_SUFFIX:-}" == "no-shared-fs" ]]; then
+    qemu_black_list+=(
+        */share/*/edk2-*
+        */share/*/firmware
+    )
+    # q35 is the only machine the allowlist builds, and it boots through
+    # bios-256k.bin: the 128K SeaBIOS, the microvm firmware and qboot are left
+    # without a machine to serve, and multiboot only loads non-Linux kernels.
+    # efi-virtio.rom stays: it is the class default romfile of virtio-net-pci,
+    # which neither runtime overrides, and QEMU refuses to realise the device
+    # when the file is missing.
+    qemu_black_list+=(
+        */share/*/bios.bin
+        */share/*/bios-microvm.bin
+        */share/*/multiboot_dma.bin
+        */share/*/qboot.rom
+    )
+    # Nothing here is reachable at run time either: the Windows installer
+    # artwork, the empty directory the *.dtb removal above leaves behind, and
+    # the headers, static library and pkg-config file the bundled dtc
+    # subproject installs.  The build enables no QEMU module, so include/ and
+    # lib/ hold those build-time leftovers and nothing else.
+    qemu_black_list+=(
+        */share/*/qemu-nsis.bmp
+        */share/*/dtb
+        */include
+        */lib
+    )
+fi
