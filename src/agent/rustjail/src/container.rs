@@ -1002,7 +1002,8 @@ impl BaseContainer for LinuxContainer {
             .map_err(|e| warn!(logger, "fcntl pfd log FD_CLOEXEC {:?}", e));
 
         let child_logger = logger.new(o!("action" => "child process log"));
-        let log_handler = setup_child_logger(pfd_log.as_fd().as_raw_fd(), child_logger);
+        let log_stream = PipeStream::new(pfd_log.into_raw_fd())?;
+        let log_handler = setup_child_logger(log_stream, child_logger);
 
         let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
         let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
@@ -1013,8 +1014,8 @@ impl BaseContainer for LinuxContainer {
         let _ = fcntl::fcntl(&pwfd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
             .map_err(|e| warn!(logger, "fcntl pwfd FD_COLEXEC {:?}", e));
 
-        let mut pipe_r = PipeStream::from_fd(prfd.as_fd().as_raw_fd());
-        let mut pipe_w = PipeStream::from_fd(pwfd.as_fd().as_raw_fd());
+        let mut pipe_r = PipeStream::new(prfd.into_raw_fd())?;
+        let mut pipe_w = PipeStream::new(pwfd.into_raw_fd())?;
 
         let child_stdin: std::process::Stdio;
         let child_stdout: std::process::Stdio;
@@ -1492,9 +1493,11 @@ fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
         .collect()
 }
 
-pub fn setup_child_logger(fd: RawFd, child_logger: Logger) -> tokio::task::JoinHandle<()> {
+pub fn setup_child_logger(
+    log_file_stream: PipeStream,
+    child_logger: Logger,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let log_file_stream = PipeStream::from_fd(fd);
         let buf_reader_stream = tokio::io::BufReader::new(log_file_stream);
         let mut lines = buf_reader_stream.lines();
 
