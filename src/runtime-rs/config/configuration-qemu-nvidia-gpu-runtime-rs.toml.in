@@ -14,7 +14,7 @@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUPATH@"
+path = "@QEMUNOSHAREDFSPATH@"
 kernel = "@KERNELPATH_NV@"
 image = "@IMAGEPATH_NV_BASE@"
 machine_type = "@MACHINETYPE@"
@@ -43,8 +43,8 @@ enable_annotations = @DEFENABLEANNOTATIONS_NVIDIA@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
+# Your distribution recommends: @QEMUNOSHAREDFSVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUNOSHAREDFSVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having

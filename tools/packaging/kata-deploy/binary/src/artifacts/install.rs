@@ -1420,6 +1420,8 @@ fn get_qemu_artifact_name(shim: &str) -> Option<String> {
     }
 
     let artifact_name = match shim {
+        "qemu-nvidia-cpu-runtime-rs" => "qemu-no-shared-fs",
+        "qemu-nvidia-gpu-runtime-rs" => "qemu-no-shared-fs",
         "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-snp-runtime-rs" => "qemu-snp-experimental",
         "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
@@ -1957,7 +1959,8 @@ mod tests {
     #[case("qemu", "qemu")]
     #[case("qemu-runtime-rs", "qemu")]
     #[case("qemu-nvidia-cpu", "qemu")]
-    #[case("qemu-nvidia-cpu-runtime-rs", "qemu")]
+    #[case("qemu-nvidia-cpu-runtime-rs", "qemu-no-shared-fs")]
+    #[case("qemu-nvidia-gpu-runtime-rs", "qemu-no-shared-fs")]
     #[case("qemu-nvidia-gpu-snp", "qemu-snp-experimental")]
     #[case("qemu-nvidia-gpu-snp-runtime-rs", "qemu-snp-experimental")]
     #[case("qemu-nvidia-gpu-tdx", "qemu-tdx-experimental")]
