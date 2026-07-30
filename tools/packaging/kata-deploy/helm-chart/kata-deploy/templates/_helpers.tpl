@@ -741,10 +741,136 @@ Returns the comma-joined selector string (possibly empty, meaning "all nodes").
 {{- else if eq $op "NotIn" -}}
 {{- $parts = append $parts (printf "%s notin (%s)" $expr.key (join "," ($expr.values | default list))) -}}
 {{- else -}}
-{{- fail (printf "nodeSelectorExpressions: unsupported operator %q for key %q (use In, NotIn, Exists, DoesNotExist)" $op $expr.key) -}}
+{{- fail (printf "affinity.nodeAffinity matchExpressions: unsupported operator %q for key %q. Node selection compiles to a label selector, which supports In, NotIn, Exists and DoesNotExist only - Gt and Lt cannot be expressed." $op $expr.key) -}}
 {{- end -}}
 {{- end -}}
 {{- join "," $parts -}}
+{{- end -}}
+
+{{/*
+Reject the job-mode-specific node-selection keys that used to exist, rather than
+silently ignoring them: an ignored node-selection rule means installing Kata on
+nodes the operator never intended.
+
+Note that `nodeSelector` and `affinity.nodeAffinity` may be combined freely, just
+as they can on any pod spec - Kubernetes ANDs them, and so do we.
+*/}}
+{{- define "kata-deploy.failOnRemovedJobSelectionKeys" -}}
+{{- $job := .Values.job | default dict -}}
+{{- range $key := (list "nodeSelector" "nodeAffinity" "nodeSelectorExpressions") -}}
+{{- if hasKey $job $key -}}
+{{- fail (printf "job.%s has been removed. Node selection is now expressed once, at the top level, and applies to both deployment modes: use `nodeSelector` for exact label matches and/or `affinity.nodeAffinity` for match expressions. Use `job.nodes` to name nodes explicitly." $key) -}}
+{{- end -}}
+{{- end -}}
+{{- if hasKey ($job.cleanup | default dict) "nodeSelectorExpressions" -}}
+{{- fail "job.cleanup.nodeSelectorExpressions has been renamed to job.cleanup.nodeAffinity, which takes the standard Kubernetes nodeAffinity shape. Move each entry into job.cleanup.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[].matchExpressions." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Compile node selection into the list of label-selector STRINGS handed to the
+dispatcher as repeated `--node-selector` flags (job mode). The dispatcher unions
+the matches, which is what preserves nodeAffinity's OR semantics:
+nodeSelectorTerms are OR-ed, while the matchExpressions inside one term are
+AND-ed - and a single label selector is exactly one AND-group, hence one selector
+string per term.
+
+Selection comes from the same `nodeSelector` / `affinity.nodeAffinity` the
+DaemonSet uses, plus the NFD virtualization requirements when NFD is
+chart-managed (AND-ed as a cross-product, exactly as
+`kata-deploy.daemonsetAffinity` does), so both modes target the same nodes.
+
+`nodeSelector` and `affinity.nodeAffinity` may be set together, exactly as on a
+pod spec: the DaemonSet lets Kubernetes AND the two, and we reproduce that by
+folding the `nodeSelector` equalities into EVERY term, which is the same thing by
+distribution - `eq AND (t1 OR t2)` is `(eq AND t1) OR (eq AND t2)`.
+
+`preferredDuringSchedulingIgnoredDuringExecution` is intentionally ignored rather
+than rejected: it never restricts which nodes a DaemonSet may land on, so
+honouring only the required terms keeps the two modes in agreement.
+
+Returns the selector strings joined by newlines. EMPTY output means "every node",
+and the call site then passes no `--node-selector` at all. Note that this is not
+the same as "every node gets Kata": the dispatcher still drops nodes whose taints
+the install does not tolerate, mirroring what the scheduler does for a DaemonSet.
+*/}}
+{{- define "kata-deploy.installNodeSelectors" -}}
+{{- include "kata-deploy.failOnRemovedJobSelectionKeys" . -}}
+{{- $eq := .Values.nodeSelector | default dict -}}
+{{- $terms := list -}}
+{{- $nodeAffinity := (.Values.affinity | default dict).nodeAffinity | default dict -}}
+{{- with $nodeAffinity -}}
+{{- $required := .requiredDuringSchedulingIgnoredDuringExecution | default dict -}}
+{{- $terms = $required.nodeSelectorTerms | default list -}}
+{{- end -}}
+{{- range $term := $terms -}}
+{{- if $term.matchFields -}}
+{{- fail "affinity.nodeAffinity: matchFields cannot be used with deploymentMode: job. Node selection is a label-selector LIST against the Kubernetes API server, which cannot match on fields. To target nodes by name, use job.nodes instead." -}}
+{{- end -}}
+{{- end -}}
+{{- if index .Values "node-feature-discovery" "enabled" -}}
+{{- $nfd := include "kata-deploy.nfdVirtualizationNodeAffinity" . | fromYaml -}}
+{{- $nfdTerms := $nfd.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms | default list -}}
+{{- $merged := list -}}
+{{- range $nfdTerm := $nfdTerms -}}
+{{- if $terms -}}
+{{- range $userTerm := $terms -}}
+{{- $merged = append $merged (dict "matchExpressions" (concat ($nfdTerm.matchExpressions | default list) ($userTerm.matchExpressions | default list))) -}}
+{{- end -}}
+{{- else -}}
+{{- $merged = append $merged $nfdTerm -}}
+{{- end -}}
+{{- end -}}
+{{- $terms = $merged -}}
+{{- end -}}
+{{- $selectors := list -}}
+{{- if $terms -}}
+{{- range $term := $terms -}}
+{{- $selectors = append $selectors (include "kata-deploy.nodeLabelSelector" (dict "eq" $eq "exprs" ($term.matchExpressions | default list))) -}}
+{{- end -}}
+{{- else -}}
+{{- $selectors = append $selectors (include "kata-deploy.nodeLabelSelector" (dict "eq" $eq "exprs" list)) -}}
+{{- end -}}
+{{- $selectors = $selectors | uniq -}}
+{{- /* An empty selector matches every node, so it subsumes all the others. */ -}}
+{{- if not (has "" $selectors) -}}
+{{- join "\n" $selectors -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Compile the UNINSTALL dispatcher's node selection (job.cleanup.*).
+
+Kept separate from install on purpose: cleanup must reach every node the install
+ever labeled - not the nodes currently selected - so it defaults to "nodes
+carrying katacontainers.io/kata-runtime" and is never narrowed by the top-level
+selection or by the NFD requirements.
+
+Same return contract as `kata-deploy.installNodeSelectors`.
+*/}}
+{{- define "kata-deploy.cleanupNodeSelectors" -}}
+{{- $cleanup := (.Values.job | default dict).cleanup | default dict -}}
+{{- $eq := $cleanup.nodeSelector | default dict -}}
+{{- $terms := list -}}
+{{- with $cleanup.nodeAffinity -}}
+{{- $required := .requiredDuringSchedulingIgnoredDuringExecution | default dict -}}
+{{- $terms = $required.nodeSelectorTerms | default list -}}
+{{- end -}}
+{{- $selectors := list -}}
+{{- if $terms -}}
+{{- range $term := $terms -}}
+{{- if $term.matchFields -}}
+{{- fail "job.cleanup.nodeAffinity: matchFields is not supported; use job.cleanup.nodes to name nodes explicitly." -}}
+{{- end -}}
+{{- $selectors = append $selectors (include "kata-deploy.nodeLabelSelector" (dict "eq" $eq "exprs" ($term.matchExpressions | default list))) -}}
+{{- end -}}
+{{- else -}}
+{{- $selectors = append $selectors (include "kata-deploy.nodeLabelSelector" (dict "eq" $eq "exprs" list)) -}}
+{{- end -}}
+{{- $selectors = $selectors | uniq -}}
+{{- if not (has "" $selectors) -}}
+{{- join "\n" $selectors -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1286,6 +1412,7 @@ product: each NFD term is AND-ed with each user term. NFD virtualization
 requirements cannot be bypassed by user affinity.
 */}}
 {{- define "kata-deploy.daemonsetAffinity" -}}
+{{- include "kata-deploy.failOnRemovedJobSelectionKeys" . -}}
 {{- $affinity := .Values.affinity | default dict | deepCopy -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
 {{- $nfd := include "kata-deploy.nfdVirtualizationNodeAffinity" . | fromYaml -}}

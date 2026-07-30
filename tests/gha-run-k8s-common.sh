@@ -717,13 +717,12 @@ function helm_helper() {
 	local deployment_mode
 	deployment_mode="$(yq -r '.deploymentMode // "daemonset"' "${values_yaml}")"
 
-	# In "job" mode, the dispatcher's default node selector targets only worker
-	# (non-control-plane) nodes. Our CI clusters are typically single-node, where
-	# the only node carries the control-plane label, so clear the role filter to
-	# target every discovered node (matching the documented single-node/CI setup).
-	if [[ "${deployment_mode}" == "job" ]]; then
-		yq -i ".job.nodeSelectorExpressions = []" "${values_yaml}"
-	fi
+	# No node-selection override is needed for "job" mode: with an empty
+	# nodeSelector the dispatcher targets every node whose taints the install
+	# tolerates, which is exactly the set a DaemonSet would land on. Our
+	# single-node CI clusters keep that node schedulable (deploy_vanilla_k8s
+	# untaints it, k3s/k0s --single never taint it), so it is selected in both
+	# deployment modes without any special casing.
 
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
