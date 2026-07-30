@@ -5,6 +5,7 @@
 
 kubernetes:
   - k8s-block-volume
+  - k8s-dead-agent-block-teardown
   - k8s-inotify
   - k8s-memory
   # Confidential Computing not supported

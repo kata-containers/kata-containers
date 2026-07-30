@@ -142,6 +142,7 @@ const (
 	balloonID                = "balloon0"
 
 	qemuStopSandboxTimeoutSecs = 15
+	qmpDeviceDeleteTimeout     = 15 * time.Second
 
 	qomPathPrefix = "/machine/peripheral/"
 
@@ -2044,6 +2045,13 @@ func (q *qemu) ResolveColdPlugVFIOGuestPciPaths(ctx context.Context, vfioDevs []
 }
 
 func (q *qemu) qmpSetup() error {
+	return q.qmpSetupContext(q.qmpMonitorCh.ctx)
+}
+
+// qmpSetupContext connects to the QMP monitor unless a connection already
+// exists. ctx bounds only the connection and capability negotiation: the
+// connection itself outlives it, so callers can pass a short-lived context.
+func (q *qemu) qmpSetupContext(ctx context.Context) error {
 	q.qmpMonitorCh.Lock()
 	defer q.qmpMonitorCh.Unlock()
 
@@ -2062,13 +2070,13 @@ func (q *qemu) qmpSetup() error {
 	// Auto-closed by QMPStart().
 	disconnectCh := make(chan struct{})
 
-	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+	qmp, _, err := govmmQemu.QMPStart(ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
 		return err
 	}
 
-	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
+	err = qmp.ExecuteQMPCapabilities(ctx)
 	if err != nil {
 		qmp.Shutdown()
 		q.Logger().WithError(err).Error(qmpCapErrMsg)
@@ -2417,36 +2425,44 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 }
 
 func (q *qemu) hotplugBlockDevice(ctx context.Context, drive *config.BlockDrive, op Operation) error {
-	if err := q.qmpSetup(); err != nil {
-		return err
-	}
-
 	devID := "virtio-" + drive.ID
 
 	if op == AddDevice {
+		if err := q.qmpSetup(); err != nil {
+			return err
+		}
 		return q.hotplugAddBlockDevice(ctx, drive, op, devID)
 	}
+
+	// The deadline covers connecting to QMP too, which a QEMU that stopped
+	// answering would otherwise block forever.
+	deleteCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+	defer cancel()
+
+	if err := q.qmpSetupContext(deleteCtx); err != nil {
+		return err
+	}
+
 	if !drive.Swap && q.config.BlockDeviceDriver == config.VirtioBlock {
 		if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
 			return err
 		}
 	}
 
-	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(deleteCtx, devID); err != nil {
 		return err
 	}
 
-	return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
+	return q.qmpMonitorCh.qmp.ExecuteBlockdevDel(deleteCtx, drive.ID)
 }
 
 func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUserDeviceAttrs, op Operation) error {
-	if err := q.qmpSetup(); err != nil {
-		return err
-	}
-
 	devID := "virtio-" + vAttr.DevID
 
 	if op == AddDevice {
+		if err := q.qmpSetup(); err != nil {
+			return err
+		}
 		switch vAttr.Type {
 		case config.VhostUserBlk:
 			return q.hotplugAddVhostUserBlkDevice(ctx, vAttr, op, devID)
@@ -2454,6 +2470,12 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 			return fmt.Errorf("Incorrect vhost-user device type found")
 		}
 	} else {
+		deleteCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+		defer cancel()
+
+		if err := q.qmpSetupContext(deleteCtx); err != nil {
+			return err
+		}
 
 		machineType := q.HypervisorConfig().HypervisorMachineType
 
@@ -2463,11 +2485,11 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 			}
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(deleteCtx, devID); err != nil {
 			return err
 		}
 
-		return q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID)
+		return q.qmpMonitorCh.qmp.ExecuteChardevDel(deleteCtx, vAttr.DevID)
 	}
 }
 
@@ -2524,11 +2546,11 @@ func (q *qemu) executeVFIODeviceAdd(device *config.VFIODev) error {
 }
 
 func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op Operation) (err error) {
-	if err = q.qmpSetup(); err != nil {
-		return err
-	}
-
 	if op == AddDevice {
+		if err = q.qmpSetup(); err != nil {
+			return err
+		}
+
 		buf, _ := json.Marshal(device)
 		q.Logger().WithFields(logrus.Fields{
 			"machine-type":  q.HypervisorConfig().HypervisorMachineType,
@@ -2565,13 +2587,20 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 
 		q.Logger().WithField("dev-id", device.ID).Info("Start hot-unplug VFIO device")
 
+		deleteCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+		defer cancel()
+
+		if err = q.qmpSetupContext(deleteCtx); err != nil {
+			return err
+		}
+
 		if q.state.HotPlugVFIO == config.BridgePort {
 			if err := q.arch.removeDeviceFromBridge(device.ID); err != nil {
 				return err
 			}
 		}
 
-		return q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, device.ID)
+		return q.qmpMonitorCh.qmp.ExecuteDeviceDel(deleteCtx, device.ID)
 	}
 }
 
@@ -2599,9 +2628,6 @@ func (q *qemu) hotAddNetDevice(name, hardAddr string, VMFds, VhostFds []*os.File
 }
 
 func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Operation) (err error) {
-	if err = q.qmpSetup(); err != nil {
-		return err
-	}
 	var tap TapInterface
 
 	switch endpoint.Type() {
@@ -2617,6 +2643,10 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 	devID := "virtio-" + tap.ID
 	machineType := q.HypervisorConfig().HypervisorMachineType
 	if op == AddDevice {
+		if err = q.qmpSetup(); err != nil {
+			return err
+		}
+
 		if err = q.hotAddNetDevice(tap.Name, endpoint.HardwareAddr(), tap.VMFds, tap.VhostFds); err != nil {
 			return err
 		}
@@ -2662,15 +2692,22 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
 	}
 
+	deleteCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+	defer cancel()
+
+	if err := q.qmpSetupContext(deleteCtx); err != nil {
+		return err
+	}
+
 	if err := q.arch.removeDeviceFromBridge(tap.ID); err != nil {
 		return err
 	}
 
-	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(deleteCtx, devID); err != nil {
 		return err
 	}
 
-	return q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
+	return q.qmpMonitorCh.qmp.ExecuteNetdevDel(deleteCtx, tap.Name)
 }
 
 func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType DeviceType, op Operation) (interface{}, error) {
@@ -2680,7 +2717,7 @@ func (q *qemu) hotplugDevice(ctx context.Context, devInfo interface{}, devType D
 		return nil, q.hotplugBlockDevice(ctx, drive, op)
 	case CpuDev:
 		vcpus := devInfo.(uint32)
-		return q.hotplugCPUs(vcpus, op)
+		return q.hotplugCPUs(ctx, vcpus, op)
 	case VfioDev:
 		device := devInfo.(*config.VFIODev)
 		return nil, q.hotplugVFIODevice(ctx, device, op)
@@ -2716,6 +2753,21 @@ func (q *qemu) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, dev
 	katatrace.AddTags(span, "sandbox_id", q.id, "device", devInfo)
 	defer span.End()
 
+	// There is nothing left to hot-unplug after StopVM. Treat removal as
+	// successful so the device manager can discard its host-side bookkeeping
+	// without reconnecting to QMP or waiting for guest cooperation.
+	if atomic.LoadInt32(&q.stopped) != 0 {
+		q.Logger().WithField("device-type", devType).Info("VM is stopped, skipping device hot-unplug")
+		switch devType {
+		case CpuDev:
+			return devInfo.(uint32), nil
+		case MemoryDev:
+			return 0, nil
+		default:
+			return nil, nil
+		}
+	}
+
 	data, err := q.hotplugDevice(ctx, devInfo, devType, RemoveDevice)
 	if err != nil {
 		return data, err
@@ -2724,21 +2776,28 @@ func (q *qemu) HotplugRemoveDevice(ctx context.Context, devInfo interface{}, dev
 	return data, nil
 }
 
-func (q *qemu) hotplugCPUs(vcpus uint32, op Operation) (uint32, error) {
+func (q *qemu) hotplugCPUs(ctx context.Context, vcpus uint32, op Operation) (uint32, error) {
 	if vcpus == 0 {
 		q.Logger().Warnf("cannot hotplug 0 vCPUs")
 		return 0, nil
 	}
 
-	if err := q.qmpSetup(); err != nil {
-		return 0, err
-	}
-
 	if op == AddDevice {
+		if err := q.qmpSetup(); err != nil {
+			return 0, err
+		}
 		return q.hotplugAddCPUs(vcpus)
 	}
 
-	return q.hotplugRemoveCPUs(vcpus)
+	// Each vCPU removal gets its own deadline; this one bounds connecting.
+	setupCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+	err := q.qmpSetupContext(setupCtx)
+	cancel()
+	if err != nil {
+		return 0, err
+	}
+
+	return q.hotplugRemoveCPUs(ctx, vcpus)
 }
 
 // try to hot add an amount of vCPUs, returns the number of vCPUs added
@@ -2808,7 +2867,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 }
 
 // try to  hot remove an amount of vCPUs, returns the number of vCPUs removed
-func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
+func (q *qemu) hotplugRemoveCPUs(ctx context.Context, amount uint32) (uint32, error) {
 	hotpluggedVCPUs := uint32(len(q.state.HotpluggedVCPUs))
 
 	// we can only remove hotplugged vCPUs
@@ -2819,7 +2878,10 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 	for i := uint32(0); i < amount; i++ {
 		// get the last vCPUs and try to remove it
 		cpu := q.state.HotpluggedVCPUs[len(q.state.HotpluggedVCPUs)-1]
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, cpu.ID); err != nil {
+		deleteCtx, cancel := context.WithTimeout(ctx, qmpDeviceDeleteTimeout)
+		err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(deleteCtx, cpu.ID)
+		cancel()
+		if err != nil {
 			return i, fmt.Errorf("failed to hotunplug CPUs, only %d CPUs were hotunplugged: %v", i, err)
 		}
 

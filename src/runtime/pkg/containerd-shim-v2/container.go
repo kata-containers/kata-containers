@@ -40,6 +40,11 @@ type container struct {
 	status      task.Status
 	terminal    bool
 	mounted     bool
+
+	// teardownMu is held by wait() from publishing the exit of the init
+	// process until StopContainer has finished, and taken by Delete, so
+	// Delete never acts on a container that is still being stopped.
+	teardownMu sync.Mutex
 }
 
 func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec, mounted bool) (*container, error) {

@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
@@ -846,6 +847,112 @@ func startTestQMPServer(t *testing.T, serverConn net.Conn, responses []string) {
 		for scanner.Scan() {
 		}
 	}()
+}
+
+func TestHotplugRemoveBlockDeviceHonorsCallerContext(t *testing.T) {
+	assert := assert.New(t)
+
+	serverConn, clientConn := net.Pipe()
+	// QEMU accepts device_del, but deliberately never emits DEVICE_DELETED.
+	startTestQMPServer(t, serverConn, []string{`{"return":{}}`})
+
+	qmpCtx, cancelQMP := context.WithCancel(context.Background())
+	defer cancelQMP()
+
+	disconnectedCh := make(chan struct{})
+	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+	qmp, _, err := govmmQemu.QMPStartWithConn(qmpCtx, clientConn, cfg, disconnectedCh)
+	assert.NoError(err)
+	defer func() {
+		qmp.Shutdown()
+		<-disconnectedCh
+	}()
+
+	q := &qemu{
+		config: HypervisorConfig{
+			BlockDeviceDriver: config.VirtioSCSI,
+		},
+		qmpMonitorCh: qmpChannel{
+			qmp: qmp,
+			ctx: qmpCtx,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = q.hotplugBlockDevice(ctx, &config.BlockDrive{
+		ID:   "drive-test",
+		File: "/dev/dm-9",
+	}, RemoveDevice)
+
+	assert.ErrorIs(err, context.DeadlineExceeded)
+	assert.Less(time.Since(start), time.Second)
+}
+
+func TestHotplugRemoveBlockDeviceBoundsQMPSetup(t *testing.T) {
+	assert := assert.New(t)
+
+	// A monitor that accepts connections but, like a stopped QEMU, never
+	// sends its greeting.
+	socket := filepath.Join(t.TempDir(), "qmp.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatalf("failed to listen on %s: %v", socket, err)
+	}
+	defer listener.Close()
+	go func() {
+		var conns []net.Conn
+		defer func() {
+			for _, conn := range conns {
+				conn.Close()
+			}
+		}()
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conns = append(conns, conn)
+		}
+	}()
+
+	// No connection yet, and a monitor context without a deadline: only the
+	// caller's context can end the wait for the greeting.
+	q := &qemu{
+		config: HypervisorConfig{
+			BlockDeviceDriver: config.VirtioSCSI,
+		},
+		qmpMonitorCh: qmpChannel{
+			ctx:  context.Background(),
+			path: socket,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = q.hotplugBlockDevice(ctx, &config.BlockDrive{
+		ID:   "drive-test",
+		File: "/dev/dm-9",
+	}, RemoveDevice)
+
+	assert.Error(err)
+	assert.Less(time.Since(start), time.Second)
+	assert.Nil(q.qmpMonitorCh.qmp)
+}
+
+func TestHotplugRemoveDeviceSkipsQMPAfterStopVM(t *testing.T) {
+	q := &qemu{stopped: 1}
+
+	_, err := q.HotplugRemoveDevice(context.Background(), &config.BlockDrive{
+		ID:   "drive-test",
+		File: "/dev/dm-9",
+	}, BlockDev)
+
+	assert.NoError(t, err)
 }
 
 // TestHotplugAddMemoryVirtioMem verifies that when VirtioMem is enabled,

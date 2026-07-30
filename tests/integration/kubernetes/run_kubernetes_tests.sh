@@ -79,6 +79,7 @@ else
 		"k8s-credentials-secrets.bats" \
 		"k8s-cron-job.bats" \
 		"k8s-custom-dns.bats" \
+		"k8s-dead-agent-block-teardown.bats" \
 		"k8s-devkit-debug-console.bats" \
 		"k8s-direct-volume.bats" \
 		"k8s-empty-dirs.bats" \

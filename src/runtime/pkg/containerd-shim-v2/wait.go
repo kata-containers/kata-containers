@@ -63,16 +63,27 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	timeStamp := time.Now()
 
 	if execID == "" {
+		// Hold the container's own teardown lock from the shim-visible exit
+		// until StopContainer has updated the virtcontainers state. Delete
+		// takes it first, so it cannot observe STOPPED and call
+		// DeleteContainer too early. Being per container, it never delays
+		// this exit behind the teardown of another container.
+		c.teardownMu.Lock()
+		defer c.teardownMu.Unlock()
+
 		s.mu.Lock()
 		c.status = task.Status_STOPPED
 		c.exit = uint32(ret)
 		c.exitTime = timeStamp
 
-		// Cancel the sandbox watcher while holding s.mu so we do not race
-		// with watchSandbox()'s own (killed-VMM) teardown path.
-		if c.cType.IsSandbox() && s.monitor != nil {
-			shimLog.WithField("sandbox", s.sandbox.ID()).Info("cancel watcher")
-			s.monitor <- nil
+		if c.cType.IsSandbox() {
+			// Cancel the sandbox watcher while holding s.mu so we do not
+			// race with watchSandbox()'s own (killed-VMM) teardown path.
+			if s.monitor != nil {
+				shimLog.WithField("sandbox", s.sandbox.ID()).Info("cancel watcher")
+				s.monitor <- nil
+			}
+			s.tearingDown = true
 		}
 
 		// Register the teardown before publishing the exit below.  Otherwise
@@ -96,6 +107,11 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
 
 		go cReap(s, int(ret), c.id, execID, timeStamp)
+
+		// Container cleanup, sandbox cleanup and Delete must not run
+		// concurrently: virtcontainers is not safe for concurrent use.
+		s.teardownMu.Lock()
+		defer s.teardownMu.Unlock()
 
 		// Tear the sandbox down synchronously but *without* holding s.mu.
 		// Holding s.mu across the (slow) guest shutdown blocks the Delete()
@@ -154,14 +170,22 @@ func watchSandbox(ctx context.Context, s *service) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	s.monitor = nil
+	s.tearingDown = true
+	containers := make([]*container, 0, len(s.containers))
+	for _, c := range s.containers {
+		containers = append(containers, c)
+	}
+	s.mu.Unlock()
 
 	// sandbox malfunctioning, cleanup as much as we can.
 	// teardownOnce serializes with wait()'s teardown so the (not internally
-	// synchronized) Sandbox.Stop/Delete never run concurrently.
+	// synchronized) Sandbox.Stop/Delete never run concurrently. teardownMu
+	// also prevents a per-container StopContainer from racing this full
+	// sandbox cleanup, without blocking unrelated shim RPCs on s.mu.
 	shimLog.WithError(err).Warn("sandbox stopped unexpectedly")
+	s.teardownMu.Lock()
+	defer s.teardownMu.Unlock()
 	s.teardownOnce.Do(func() {
 		if serr := s.sandbox.Stop(ctx, true); serr != nil {
 			shimLog.WithError(serr).Warn("stop sandbox failed")
@@ -171,7 +195,7 @@ func watchSandbox(ctx context.Context, s *service) {
 		}
 	})
 
-	for _, c := range s.containers {
+	for _, c := range containers {
 		if !c.mounted {
 			continue
 		}
