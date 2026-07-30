@@ -398,11 +398,7 @@ fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
 pub fn apply_pod_fs_group_and_supplemental_groups(
     process: &mut policy::KataProcess,
     security_context: Option<&pod::PodSecurityContext>,
-    is_pause_container: bool,
 ) {
-    if is_pause_container {
-        return;
-    }
     let Some(context) = security_context else {
         return;
     };
@@ -452,7 +448,6 @@ pub fn get_process_fields(
             // 1. The securityContext runAsGroup field - applied below.
             // 2. /etc/passwd - parsed in policy::get_container_process().
             // 3. From the container image configuration - read from registry::get_process().
-            // 4. From genpolicy-settings.json.
             //
             // This behavior comes from the containerd runtime implementation:
             // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592

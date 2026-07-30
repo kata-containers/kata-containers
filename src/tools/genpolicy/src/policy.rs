@@ -455,25 +455,16 @@ pub struct CommonData {
 /// Configuration from "kubectl config".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
-    /// Pause container image reference.
+    /// Pause container image used by the target cluster.
+    ///
+    /// Policy may be generated on a system whose local runtime uses a different
+    /// pause image. This setting identifies the cluster's image so that
+    /// genpolicy can inspect its configuration and layers and derive the OCI
+    /// fields needed to generate the `CreateContainerRequest` policy.
     pub pause_container_image: String,
 
     /// Whether or not the cluster uses the guest pull mechanism.
     pub guest_pull: bool,
-
-    /// Supported values:
-    ///
-    /// "v1" - Pause container UID/GID/AdditionalGids handled as in AKS pre-October 2025:
-    ///         - Example container image reference: mcr.microsoft.com/oss/kubernetes/pause:3.6
-    ///         - Defaults: UID=65535, GID=65535, AdditionalGids=[65535].
-    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *replaces*
-    ///           the default value from AdditionalGids.
-    /// "v2" - Pause container UID/GID/AdditionalGids handled as in AKS post-October 2025:
-    ///         - Example container image reference: mcr.microsoft.com/oss/v2/kubernetes/pause:3.6
-    ///         - Defaults: UID=0, GID=0, AdditionalGids=[].
-    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *gets added
-    ///           as the only value* in AdditionalGids.
-    pub pause_container_id_policy: String,
 
     /// How emptyDirs are represented in the policy.
     /// Supported values are "shared-fs", "block-encrypted", and "block-plain".
@@ -980,13 +971,23 @@ impl AgentPolicy {
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // Container image settings.
-        yaml_container
-            .registry
-            .get_process(&mut process, yaml_has_command, yaml_has_args);
+        yaml_container.registry.get_process(
+            &mut process,
+            yaml_has_command,
+            yaml_has_args,
+            is_pause_container,
+        );
         debug!(
             "get_container_process: after registry.get_processs: process = {:?}",
             &process
         );
+
+        // containerd applies WithAdditionalGIDs to workload containers even
+        // when no user is configured. That always includes the process's
+        // primary GID, including GID 0 for the default root user.
+        if !is_pause_container {
+            process.User.AdditionalGids.insert(process.User.GID);
+        }
 
         if let Some(tty) = yaml_container.tty {
             process.Terminal = tty;
@@ -1032,31 +1033,10 @@ impl AgentPolicy {
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // genpolicy-settings.json information.
-        let v1_policy = self
-            .config
-            .settings
-            .cluster_config
-            .pause_container_id_policy
-            == "v1";
-        if !v1_policy {
-            let v2_policy = self
-                .config
-                .settings
-                .cluster_config
-                .pause_container_id_policy
-                == "v2";
-            if !v2_policy {
-                panic!(
-                    "Unsupported pause_container_id_policy = {} - must be v1 or v2 in the settings file",
-                    self.config.settings.cluster_config.pause_container_id_policy
-                );
-            }
-        }
-        let update_additional_gids = !is_pause_container || v1_policy;
-        c_settings.get_process_fields(&mut process, update_additional_gids);
+        c_settings.apply_process_defaults(&mut process);
         debug!(
-            "get_container_process: after c_settings.get_process_fields: User = {:?}",
-            &process.User
+            "get_container_process: after c_settings.apply_process_defaults: Args = {:?}, Env = {:?}",
+            &process.Args, &process.Env
         );
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -1098,10 +1078,11 @@ impl AgentPolicy {
             );
         }
 
-        yaml::apply_pod_fs_group_and_supplemental_groups(
+        apply_pod_groups_to_process(
             &mut process,
             resource.get_pod_security_context(),
             is_pause_container,
+            yaml_container.registry.has_configured_user(),
         );
         debug!(
             "get_container_process: after apply_pod_fs_group_and_supplemental_groups: User = {:?}",
@@ -1130,6 +1111,24 @@ impl AgentPolicy {
     }
 }
 
+fn apply_pod_groups_to_process(
+    process: &mut KataProcess,
+    security_context: Option<&pod::PodSecurityContext>,
+    is_pause_container: bool,
+    image_has_configured_user: bool,
+) {
+    let pause_user_is_overridden = is_pause_container
+        && security_context
+            .is_some_and(|context| context.runAsUser.is_some() || context.runAsGroup.is_some());
+
+    // Resolving either the pause image user or an explicit sandbox user
+    // replaces AdditionalGids with that user's primary GID. If neither
+    // supplies a user, the pod's fsGroup and supplementalGroups remain.
+    if !is_pause_container || (!image_has_configured_user && !pause_user_is_overridden) {
+        yaml::apply_pod_fs_group_and_supplemental_groups(process, security_context);
+    }
+}
+
 impl KataSpec {
     fn add_annotations(&self, annotations: &mut BTreeMap<String, String>) {
         for a in &self.Annotations {
@@ -1137,31 +1136,7 @@ impl KataSpec {
         }
     }
 
-    fn get_process_fields(&self, process: &mut KataProcess, update_additional_gids: bool) {
-        if process.User.UID == 0 {
-            process.User.UID = self.Process.User.UID;
-            debug!(
-                "get_process_fields: set UID = {}: User = {:?}",
-                process.User.UID, &process.User
-            );
-        }
-        if process.User.GID == 0 {
-            process.User.GID = self.Process.User.GID;
-            debug!(
-                "get_process_fields: set GID = {}: User = {:?}",
-                process.User.GID, &process.User
-            );
-
-            if update_additional_gids {
-                process.User.AdditionalGids.insert(process.User.GID);
-                debug!(
-                    "get_process_fields: inserted process.User.GID = {} into AdditionalGids: User = {:?}",
-                    process.User.GID, &process.User
-                );
-            }
-        }
-
-        process.User.Username = String::from(&self.Process.User.Username);
+    fn apply_process_defaults(&self, process: &mut KataProcess) {
         add_missing_strings(&self.Process.Args, &mut process.Args);
 
         add_missing_strings(&self.Process.Env, &mut process.Env);
@@ -1408,4 +1383,81 @@ pub fn get_kata_namespaces(
     });
 
     namespaces
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pod_security_context(yaml: &str) -> pod::PodSecurityContext {
+        serde_yaml::from_str(yaml).unwrap()
+    }
+
+    fn additional_gids(process: &KataProcess) -> Vec<u32> {
+        process.User.AdditionalGids.iter().copied().collect()
+    }
+
+    #[test]
+    fn pause_without_image_or_pod_user_keeps_pod_groups() {
+        let context = pod_security_context(
+            "fsGroup: 997\n\
+             supplementalGroups: [998, 999]\n",
+        );
+        let mut process = KataProcess::default();
+
+        apply_pod_groups_to_process(&mut process, Some(&context), true, false);
+
+        assert_eq!(additional_gids(&process), vec![997, 998, 999]);
+    }
+
+    #[test]
+    fn pause_with_pod_user_keeps_only_resolved_primary_gid() {
+        for user_override in ["runAsUser: 2000", "runAsGroup: 2000"] {
+            let context = pod_security_context(&format!(
+                "{user_override}\n\
+                 fsGroup: 997\n\
+                 supplementalGroups: [998, 999]\n"
+            ));
+            let mut process = KataProcess::default();
+            process.User.AdditionalGids.insert(2000);
+
+            apply_pod_groups_to_process(&mut process, Some(&context), true, false);
+
+            assert_eq!(
+                additional_gids(&process),
+                vec![2000],
+                "override: {user_override}"
+            );
+        }
+    }
+
+    #[test]
+    fn pause_with_image_user_keeps_only_image_primary_gid() {
+        let context = pod_security_context(
+            "fsGroup: 997\n\
+             supplementalGroups: [998, 999]\n",
+        );
+        let mut process = KataProcess::default();
+        process.User.AdditionalGids.insert(65535);
+
+        apply_pod_groups_to_process(&mut process, Some(&context), true, true);
+
+        assert_eq!(additional_gids(&process), vec![65535]);
+    }
+
+    #[test]
+    fn workload_process_still_receives_pod_groups() {
+        let context = pod_security_context(
+            "runAsUser: 2000\n\
+             runAsGroup: 2000\n\
+             fsGroup: 997\n\
+             supplementalGroups: [998, 999]\n",
+        );
+        let mut process = KataProcess::default();
+        process.User.AdditionalGids.insert(2000);
+
+        apply_pod_groups_to_process(&mut process, Some(&context), false, true);
+
+        assert_eq!(additional_gids(&process), vec![997, 998, 999, 2000]);
+    }
 }

@@ -229,6 +229,15 @@ impl Container {
         }
     }
 
+    /// Whether the image configuration explicitly selects a process user.
+    pub fn has_configured_user(&self) -> bool {
+        self.config_layer
+            .config
+            .User
+            .as_ref()
+            .is_some_and(|user| !user.is_empty())
+    }
+
     pub fn get_uid_gid_from_passwd_user(&self, user: String) -> Result<(u32, u32)> {
         if user.is_empty() {
             return Err(anyhow!("User is empty"));
@@ -326,12 +335,35 @@ impl Container {
         }
     }
 
+    /// Parses the group component of an image's `Config.User`.
+    ///
+    /// Numeric groups are used directly and named groups are resolved through
+    /// the image's `/etc/group`. An empty or unresolvable group returns `None`,
+    /// leaving the caller to resolve the user's primary GID through
+    /// `/etc/passwd`.
+    fn parse_group_string(&self, group: &str) -> Option<u32> {
+        if group.is_empty() {
+            return None;
+        }
+
+        if let Ok(gid) = group.parse::<u32>() {
+            return Some(gid);
+        }
+
+        parse_group_file(&self.group)
+            .ok()?
+            .iter()
+            .find(|record| record.name == group)
+            .map(|record| record.gid)
+    }
+
     // Convert Docker image config to policy data.
     pub fn get_process(
         &self,
         process: &mut policy::KataProcess,
         yaml_has_command: bool,
         yaml_has_args: bool,
+        is_pause_container: bool,
     ) {
         let docker_config = &self.config_layer.config;
         debug!(
@@ -349,14 +381,36 @@ impl Container {
          * 5. Contain a user name:group name pair
          * 6. Be erroneous, somehow
          *
-         * For Kubernetes, containerd CRI ImageStatus strips any group component
-         * before kubelet maps the image user into a CRI security context. Keep
-         * genpolicy aligned with that path: USER user:group behaves like USER
-         * user, and USER uid:gid behaves like USER uid. Direct ctr/crictl paths
-         * can resolve the group component differently because they bypass kubelet.
+         * Kubernetes constructs workload and pause container users through
+         * different paths:
+         *
+         * For a workload container, kubelet's getImageUser calls CRI
+         * ImageStatus, which exposes only a UID or user name. Kubelet copies
+         * that value into the container's CRI security context. containerd
+         * prioritizes this CRI value over the original imageConfig.User, so an
+         * image group component is no longer available. Keep genpolicy aligned
+         * with this path: USER user:group behaves like USER user, and USER
+         * uid:gid behaves like USER uid.
+         *
+         * Kubelet does not resolve the pause image user. In
+         * sandboxContainerSpecOpts, containerd falls back directly to the full
+         * imageConfig.User and passes it to oci.WithUser. oci.WithUser parses
+         * and applies both user and group components, so genpolicy must retain
+         * the image group for a pause container.
+         *
+         * The presence of Config.User matters even when the resulting IDs are
+         * the same. With no pod-level user, an absent Config.User and
+         * Config.User="0:0" both produce UID=0 and GID=0, but only the explicit
+         * value invokes oci.WithUser and replaces the pod's supplemental groups
+         * with the primary GID.
+         *
+         * Relevant upstream functions:
+         * - Kubernetes: getImageUser and determineEffectiveSecurityContext
+         * - containerd: sandboxContainerSpecOpts and oci.WithUser
          */
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
+                let mut image_gid = None;
                 if image_user.contains(':') {
                     debug!(
                         "Container::get_process: splitting Docker config user = {:?}",
@@ -376,9 +430,17 @@ impl Container {
                         );
                         process.User.UID = self.parse_user_string(user[0]);
 
-                        debug!(
-                            "Container::get_process: overriding OCI container GID with UID:GID mapping from /etc/passwd"
-                        );
+                        if is_pause_container {
+                            image_gid = self.parse_group_string(user[1]);
+                            debug!(
+                                "Container::get_process: parsed pause GID = {:?} from image user",
+                                image_gid
+                            );
+                        } else {
+                            debug!(
+                                "Container::get_process: overriding OCI container GID with UID:GID mapping from /etc/passwd"
+                            );
+                        }
                     }
                 } else {
                     debug!(
@@ -390,7 +452,10 @@ impl Container {
                     debug!("Container::get_process: Using UID:GID mapping from /etc/passwd");
                 }
 
-                match self.get_gid_from_passwd_uid(process.User.UID) {
+                let gid = image_gid
+                    .map(Ok)
+                    .unwrap_or_else(|| self.get_gid_from_passwd_uid(process.User.UID));
+                match gid {
                     Ok(gid) => {
                         process.User.GID = gid;
                         debug!(
@@ -839,7 +904,7 @@ mod tests {
             let container = container_with_image_user(image_user);
             let mut process = policy::KataProcess::default();
 
-            container.get_process(&mut process, false, false);
+            container.get_process(&mut process, false, false, false);
 
             assert_eq!(process.User.UID, 33, "image user: {image_user}");
             assert_eq!(process.User.GID, 33, "image user: {image_user}");
@@ -854,6 +919,37 @@ mod tests {
                 "image user: {image_user}"
             );
         }
+    }
+
+    #[test]
+    fn pause_image_user_retains_group_component() {
+        for (image_user, expected_gid) in [("33:10", 10), ("www-data:staff", 50)] {
+            let container = container_with_image_user(image_user);
+            let mut process = policy::KataProcess::default();
+
+            container.get_process(&mut process, false, false, true);
+
+            assert_eq!(process.User.UID, 33, "image user: {image_user}");
+            assert_eq!(process.User.GID, expected_gid, "image user: {image_user}");
+            assert_eq!(
+                process
+                    .User
+                    .AdditionalGids
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                vec![expected_gid],
+                "image user: {image_user}"
+            );
+        }
+    }
+
+    #[test]
+    fn detects_whether_image_config_selects_a_user() {
+        assert!(!Container::default().has_configured_user());
+        assert!(!container_with_image_user("").has_configured_user());
+        assert!(container_with_image_user("0").has_configured_user());
+        assert!(container_with_image_user("65535:65535").has_configured_user());
     }
 
     #[test]
