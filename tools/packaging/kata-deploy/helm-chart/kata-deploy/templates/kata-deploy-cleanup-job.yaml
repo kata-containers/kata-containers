@@ -28,7 +28,7 @@ ConfigMap still exist; they are torn down only after pre-delete hooks complete.
 {{- $dispatcherName := printf "%s-cleanup-dispatcher" $base | trunc 63 | trimSuffix "-" }}
 {{- $cleanup := .Values.job.cleanup | default dict }}
 {{- $cNodes := $cleanup.nodes | default list }}
-{{- $cSelector := include "kata-deploy.nodeLabelSelector" (dict "eq" ($cleanup.nodeSelector | default dict) "exprs" ($cleanup.nodeSelectorExpressions | default list)) }}
+{{- $cSelectors := include "kata-deploy.cleanupNodeSelectors" . | splitList "\n" | compact }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -93,9 +93,19 @@ spec:
             - "--parallelism={{ $root.Values.job.parallelism }}"
 {{- if $cNodes }}
             - "--nodes={{ join "," $cNodes }}"
-{{- else if $cSelector }}
-            - "--node-selector={{ $cSelector }}"
+{{- else }}
+{{- /* One flag per nodeSelectorTerm; the dispatcher unions the matches (OR). */}}
+{{- range $selector := $cSelectors }}
+            - "--node-selector={{ $selector }}"
 {{- end }}
+{{- end }}
+{{- /*
+  Uninstall must reach every node the install ever labeled, including any that
+  have since been tainted, so the dispatcher's DaemonSet-equivalent taint check
+  is disabled here. The per-node cleanup Jobs are pinned by nodeName and so are
+  admitted regardless of taints.
+*/}}
+            - "--ignore-node-taints"
           env:
             - name: POD_NAMESPACE
               valueFrom:
