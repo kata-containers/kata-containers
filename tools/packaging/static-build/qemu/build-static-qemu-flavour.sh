@@ -3,6 +3,10 @@
 # Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
+#
+# Builds a suffixed QEMU flavour: the binaries and the share directory carry
+# ${qemu_suffix}, so the tarball installs alongside the full build rather than
+# replacing it.  The caller picks the sources, the suffix and the tarball name.
 
 set -o errexit
 set -o nounset
