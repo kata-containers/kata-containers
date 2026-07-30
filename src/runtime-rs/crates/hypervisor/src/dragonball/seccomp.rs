@@ -111,6 +111,8 @@ pub fn get_process_seccomp_rules() -> Vec<(i64, Vec<seccompiler::SeccompRule>)> 
         (libc::SYS_umount2, vec![]),
         (libc::SYS_gettid, vec![]),
         (libc::SYS_getxattr, vec![]),
+        (libc::SYS_listxattr, vec![]),
+        (libc::SYS_name_to_handle_at, vec![]),
         (libc::SYS_tkill, vec![]),
         (libc::SYS_futex, vec![]),
         (libc::SYS_sched_setaffinity, vec![]),
