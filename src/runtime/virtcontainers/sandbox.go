@@ -1672,6 +1672,16 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 	return s.hypervisor.StopVM(ctx, s.disableVMShutdown)
 }
 
+// stopVMForDeadAgent forcibly stops the VM without asking the unavailable
+// agent to perform guest-side sandbox cleanup first.
+func (s *Sandbox) stopVMForDeadAgent(ctx context.Context) error {
+	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVMForDeadAgent", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
+	defer span.End()
+
+	s.Logger().Warn("agent is dead, stopping VM before device cleanup")
+	return s.hypervisor.StopVM(ctx, false)
+}
+
 func (s *Sandbox) addContainer(c *Container) error {
 	if _, ok := s.containers[c.id]; ok {
 		return fmt.Errorf("Duplicated container: %s", c.id)
@@ -1789,6 +1799,15 @@ func (s *Sandbox) StopContainer(ctx context.Context, containerID string, force b
 	c, err := s.findContainer(containerID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Once the agent has been declared dead there is no guest-side cleanup
+	// left to preserve. Stop the VM before detaching devices so teardown does
+	// not wait for cooperative hot-unplug events from an unresponsive guest.
+	if force && s.agent.isDead() {
+		if err := s.stopVMForDeadAgent(ctx); err != nil {
+			s.Logger().WithError(err).Warn("failed to stop VM before forced container cleanup")
+		}
 	}
 
 	// Stop it.
@@ -2104,14 +2123,28 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 
+	vmStopped := false
+	if s.agent.isDead() {
+		if err := s.stopVMForDeadAgent(ctx); err != nil {
+			if !force {
+				return err
+			}
+			s.Logger().WithError(err).Warn("failed to stop VM before forced sandbox cleanup")
+		} else {
+			vmStopped = true
+		}
+	}
+
 	for _, c := range s.containers {
 		if err := c.stop(ctx, force); err != nil {
 			return err
 		}
 	}
 
-	if err := s.stopVM(ctx); err != nil && !force {
-		return err
+	if !vmStopped {
+		if err := s.stopVM(ctx); err != nil && !force {
+			return err
+		}
 	}
 
 	// shutdown console watcher if exists
