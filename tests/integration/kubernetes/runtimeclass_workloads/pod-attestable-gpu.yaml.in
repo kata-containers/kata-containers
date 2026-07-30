@@ -10,27 +10,39 @@ metadata:
 spec:
   runtimeClassName: ${RUNTIME_CLASS_NAME}
   containers:
+    # Same image as pod-attestable.yaml.in. Kept separate from the CUDA
+    # container so Ready does not depend on apt-installing curl inside the
+    # guest (which routinely blows the 90s wait on 1-vCPU SNP sandboxes).
     - name: bash-curl
-      image: nvcr.io/nvidia/cuda:12.2.0-base-ubuntu22.04
+      image: quay.io/kata-containers/alpine-bash-curl:latest
       imagePullPolicy: Always
       command:
         - sh
         - -c
         - |
           set -e
-          apt update && apt install -y curl
-          curl http://127.0.0.1:8006/cdh/resource/default/aa/key
-          nvidia-smi conf-compute -grs
+          attempts=60
+          while ! curl -fsS http://127.0.0.1:8006/cdh/resource/default/aa/key; do
+            attempts=$((attempts-1))
+            [ "$attempts" -gt 0 ] || exit 1
+            sleep 1
+          done
           sleep 1000
-      readinessProbe:
-        exec:
-          command:
-            - sh
-            - -c
-            - test -x /usr/bin/curl
-        initialDelaySeconds: 10
-        periodSeconds: 5
       resources:
         limits:
+          cpu: "1"
+          memory: 512Mi
+    - name: nvidia-smi
+      image: nvcr.io/nvidia/cuda:12.2.0-base-ubuntu22.04
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - |
+          nvidia-smi conf-compute -grs
+          sleep 1000
+      resources:
+        limits:
+          cpu: "2"
           nvidia.com/pgpu: "1"
           memory: 16Gi
