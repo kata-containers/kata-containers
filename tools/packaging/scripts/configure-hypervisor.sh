@@ -268,6 +268,11 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-usb-redir)
 
 	# Disable TCG support
+	#
+	# aarch64 is deliberately left out: Kata only runs it with KVM, so TCG
+	# should be removable there as well, but neither the build nor the
+	# TCG-dependent QEMU paths have been audited on aarch64 yet.
+	# TODO: check with the aarch64 maintainers, then disable it here too.
 	case "${arch}" in
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
@@ -413,6 +418,19 @@ generate_qemu_options() {
 
 	#---------------------------------------------------------------------
 	# Enabled options
+
+	# Strip debug symbols from the installed binaries
+	qemu_options+=(size:--enable-strip)
+
+	# Link-Time Optimization drops the code that only becomes unreachable
+	# once everything is linked together, which is a lot with a device set
+	# this small: expect 15-25% off the binary, at 2-3x the build time.
+	#
+	# ppc64le is excluded: LTO turns a __builtin_memcpy bound check in
+	# qemu-system-ppc64 into a -Werror=stringop-overflow build failure.
+	if [[ "${arch}" != "ppc64le" ]]; then
+		qemu_options+=(size:--enable-lto)
+	fi
 
 	# Enable kernel Virtual Machine support.
 	# This is the default, but be explicit to avoid any future surprises
