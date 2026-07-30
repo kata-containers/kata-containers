@@ -133,7 +133,7 @@ func (n *mockAgent) check(ctx context.Context) error {
 }
 
 // statsContainer is the Noop agent Container stats implementation. It does nothing.
-func (n *mockAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Container) (*ContainerStats, error) {
+func (n *mockAgent) statsContainer(_ context.Context, _ string) (*ContainerStats, error) {
 	return &ContainerStats{}, nil
 }
 

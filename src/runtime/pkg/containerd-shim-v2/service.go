@@ -1049,7 +1049,17 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
 	shimLog.WithField("container", r.ID).Debug("Stats() start")
 	defer shimLog.WithField("container", r.ID).Debug("Stats() end")
-	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Stats", shimTracingTags)
+
+	// Preserve the sandbox-lifetime trace parent while deriving cancellation,
+	// deadlines, and request values from the incoming RPC context.
+	traceCtx := ctx
+	if s.rootCtx != nil {
+		rootSpan := otelTrace.SpanFromContext(s.rootCtx)
+		if rootSpan.SpanContext().IsValid() {
+			traceCtx = otelTrace.ContextWithSpan(ctx, rootSpan)
+		}
+	}
+	span, spanCtx := katatrace.Trace(traceCtx, shimLog, "Stats", shimTracingTags)
 	defer span.End()
 
 	start := time.Now()
@@ -1059,14 +1069,21 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 	}()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 
-	data, err := marshalMetrics(spanCtx, s, c.id)
+	// StatsContainer can block on an agent or cgroup read. Retain only immutable
+	// values after unlocking so a slow stats request cannot starve lifecycle
+	// operations that also need the service mutex.
+	sandbox := s.sandbox
+	containerID := c.id
+	s.mu.Unlock()
+
+	data, err := marshalMetrics(spanCtx, sandbox, containerID)
 	if err != nil {
 		return nil, err
 	}

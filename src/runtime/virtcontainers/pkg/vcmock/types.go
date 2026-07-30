@@ -47,7 +47,7 @@ type Sandbox struct {
 	StopContainerFunc        func(contID string, force bool) (vc.VCContainer, error)
 	KillContainerFunc        func(contID string, signal syscall.Signal, all bool) error
 	StatusContainerFunc      func(contID string) (vc.ContainerStatus, error)
-	StatsContainerFunc       func(contID string) (vc.ContainerStats, error)
+	StatsContainerFunc       func(ctx context.Context, contID string) (vc.ContainerStats, error)
 	PauseContainerFunc       func(contID string) error
 	ResumeContainerFunc      func(contID string) error
 	StatusFunc               func() vc.SandboxStatus

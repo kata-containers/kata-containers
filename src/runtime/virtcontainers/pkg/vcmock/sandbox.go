@@ -131,7 +131,7 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 // StatsContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatsContainer(ctx context.Context, contID string) (vc.ContainerStats, error) {
 	if s.StatsContainerFunc != nil {
-		return s.StatsContainerFunc(contID)
+		return s.StatsContainerFunc(ctx, contID)
 	}
 	return vc.ContainerStats{}, nil
 }
