@@ -42,6 +42,23 @@ scripts/git-submodule.sh update meson capstone
 # The post-build verify_devices check below fails the build if any device
 # Kata can emit is missing from the resulting binary.
 #
+# The no-shared-fs tarball (make qemu-no-shared-fs-tarball) narrows the
+# allowlist further: it is built from the same QEMU, but only for the runtime
+# classes that boot a block rootfs with shared_fs="none" and never resize the
+# guest (enable_virtio_mem and reclaim_guest_freed_memory are both off).
+# Memory hot-plug, the balloon, a shared filesystem, a DAX rootfs, a vIOMMU and
+# the confidential-guest backends are all left out of it, and only x86_64 and
+# aarch64 build it.  Device assignment is untouched: vfio-pci, IOMMUFD and the
+# whole PCIe topology (_PCIE_DEVS below) stay in.
+_no_shared_fs=false
+if [[ "${HYPERVISOR_NAME}" == "kata-qemu-no-shared-fs" ]]; then
+	_no_shared_fs=true
+	if [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
+		echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64 and aarch64, not ${ARCH}" >&2
+		exit 1
+	fi
+fi
+
 # Transport-independent device models used by Kata on every architecture
 # (the PCI/CCW transport variant is built when the transport is enabled):
 #   VIRTIO_BLK  – rootfs / container block device
@@ -138,6 +155,15 @@ CONFIG_TDX=y
 CONFIG_SEV=y
 CONFIG_SGX=y
 '
+
+if [[ "${_no_shared_fs}" == "true" ]]; then
+	_MEM_DEVS=
+	_BALLOON_DEVS=
+	_SHARED_FS_DEVS=
+	_DAX_DEVS=
+	_IOMMU_DEVS=
+	_TEE_DEVS=
+fi
 
 if [[ "${ARCH}" == "x86_64" ]]; then
 	# PVPANIC_ISA provides the pvpanic device (guest kernel panic reporting).
@@ -239,6 +265,14 @@ _shared_fs_devs=(virtio-9p-pci vhost-user-fs-pci)
 _dax_devs=(nvdimm)
 _iommu_devs=(intel-iommu amd-iommu)
 _tee_objs=(tdx-guest sev-snp-guest)
+if [[ "${_no_shared_fs}" == "true" ]]; then
+	_mem_devs=()
+	_balloon_devs=()
+	_shared_fs_devs=()
+	_dax_devs=()
+	_iommu_devs=()
+	_tee_objs=()
+fi
 
 case "${ARCH}" in
 x86_64)
@@ -268,7 +302,7 @@ s390x)
 esac
 unset _pci_devs _pcie_topology _mem_devs _balloon_devs _shared_fs_devs
 unset _dax_devs _iommu_devs _tee_objs
-unset _qemu_target
+unset _no_shared_fs _qemu_target
 
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
