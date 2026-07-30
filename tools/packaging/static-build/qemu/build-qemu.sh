@@ -49,12 +49,8 @@ scripts/git-submodule.sh update meson capstone
 #   VIRTIO_NET  – container networking (accelerated by vhost-kernel)
 #   VIRTIO_SERIAL / VIRTIO_CONSOLE – agent tty / console
 #   VIRTIO_RNG  – guest entropy source
-#   VIRTIO_BALLOON – memory pressure management
-#   VIRTIO_MEM  – memory hot-plug
-#   VHOST_USER_FS – virtiofsd shared filesystem (vhost-user)
 #   VHOST_USER_BLK – vhost-user block (SPDK and friends)
 #   VHOST_USER_SCSI – vhost-user SCSI
-#   VIRTIO_9P   – fallback 9P shared filesystem
 #   VHOST_VSOCK – VM↔host socket for the Kata agent (kernel vhost)
 
 _COMMON_DEVS='
@@ -63,13 +59,34 @@ CONFIG_VIRTIO_SCSI=y
 CONFIG_VIRTIO_NET=y
 CONFIG_VIRTIO_SERIAL=y
 CONFIG_VIRTIO_RNG=y
-CONFIG_VIRTIO_BALLOON=y
-CONFIG_VIRTIO_MEM=y
-CONFIG_VHOST_USER_FS=y
 CONFIG_VHOST_USER_BLK=y
 CONFIG_VHOST_USER_SCSI=y
-CONFIG_VIRTIO_9P=y
 CONFIG_VHOST_VSOCK=y
+'
+
+# VIRTIO_MEM – memory hot-plug (enable_virtio_mem).  It depends on
+# VIRTIO_MEM_SUPPORTED, which is only selected on arm, i386 and s390x, so ppc64
+# PSeries cannot compose it.
+
+_MEM_DEVS='
+CONFIG_VIRTIO_MEM=y
+'
+
+# VIRTIO_BALLOON – reclaim of guest-freed memory (reclaim_guest_freed_memory).
+# A group of its own, and not part of _MEM_DEVS, because ppc64 supports the
+# balloon but not virtio-mem.
+
+_BALLOON_DEVS='
+CONFIG_VIRTIO_BALLOON=y
+'
+
+# The shared filesystem, also transport-independent:
+#   VHOST_USER_FS – virtiofsd shared filesystem (vhost-user)
+#   VIRTIO_9P   – fallback 9P shared filesystem
+
+_SHARED_FS_DEVS='
+CONFIG_VHOST_USER_FS=y
+CONFIG_VIRTIO_9P=y
 '
 
 # PCI transport plus the PCIe slot topology Kata builds for device
@@ -83,7 +100,6 @@ CONFIG_VHOST_VSOCK=y
 #   PCI_BRIDGE  – pci-bridge (bridge-port topology)
 #   PCIE_PCI_BRIDGE – pcie-pci-bridge
 #   PXB         – pxb-pcie expander bridge (NUMA-pinned GPU root complexes)
-#   NVDIMM      – rootfs image as DAX-capable persistent memory
 
 _PCIE_DEVS='
 CONFIG_VIRTIO_PCI=y
@@ -94,47 +110,71 @@ CONFIG_XIO3130=y
 CONFIG_PCI_BRIDGE=y
 CONFIG_PCIE_PCI_BRIDGE=y
 CONFIG_PXB=y
+'
+
+# NVDIMM – rootfs image as DAX-capable persistent memory
+
+_DAX_DEVS='
 CONFIG_NVDIMM=y
 '
 
+# x86_64 only.  VTD_ACCEL enables IOMMUFD-backed VT-d for high-performance
+# passthrough:
+
+_IOMMU_DEVS='
+CONFIG_VTD=y
+CONFIG_VTD_ACCEL=y
+CONFIG_AMD_IOMMU=y
+'
+
+# x86_64 only.  TDX, SEV and SGX are only implied by CONFIG_PC, so allnoconfig
+# drops them and the -object types the runtimes emit for confidential guests
+# (tdx-guest, sev-snp-guest) and for SGX enclaves (memory-backend-epc) are gone
+# from the binary.  CONFIG_SEV is QEMU's shared gate for both classic SEV and
+# SEV-SNP; Kata only uses the SNP object.
+
+_TEE_DEVS='
+CONFIG_TDX=y
+CONFIG_SEV=y
+CONFIG_SGX=y
+'
+
 if [[ "${ARCH}" == "x86_64" ]]; then
-	# VTD_ACCEL enables IOMMUFD-backed VT-d for high-performance passthrough.
 	# PVPANIC_ISA provides the pvpanic device (guest kernel panic reporting).
 	# CONFIG_CXL is required because CONFIG_PXB (in _PCIE_DEVS) links against
 	# CXL component symbols; omitting it produces undefined-reference link errors.
-	# TDX, SEV and SGX are only implied by CONFIG_PC, so allnoconfig drops them
-	# and the -object types the runtimes emit for confidential guests
-	# (tdx-guest, sev-snp-guest) and for SGX enclaves (memory-backend-epc)
-	# are gone from the binary.  CONFIG_SEV is QEMU's shared gate for both
-	# classic SEV and SEV-SNP; Kata only uses the SNP object.
-	printf 'CONFIG_Q35=y\n%s\n%s\nCONFIG_VTD=y\nCONFIG_VTD_ACCEL=y\nCONFIG_AMD_IOMMU=y\nCONFIG_PVPANIC_ISA=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\nCONFIG_TDX=y\nCONFIG_SEV=y\nCONFIG_SGX=y\n' \
-		"${_COMMON_DEVS}" "${_PCIE_DEVS}" \
+	printf 'CONFIG_Q35=y\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\nCONFIG_PVPANIC_ISA=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n' \
+		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
+		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" \
+		"${_DAX_DEVS}" "${_IOMMU_DEVS}" "${_TEE_DEVS}" \
 		>> configs/devices/i386-softmmu/default.mak
 elif [[ "${ARCH}" == "s390x" ]]; then
 	# s390x uses CCW bus (no PCI virtio); VIRTIO_CCW replaces VIRTIO_PCI and
 	# selects VIRTIO_MD_SUPPORTED.  Passthrough is via VFIO_CCW / VFIO_AP.
 	# VFIO_PCI is still required: the VFIO core references its symbols.
-	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\nCONFIG_VFIO_PCI=y\n' \
-		"${_COMMON_DEVS}" \
+	printf 'CONFIG_S390_CCW_VIRTIO=y\n%s\n%s\n%s\n%s\nCONFIG_VIRTIO_CCW=y\nCONFIG_VFIO_CCW=y\nCONFIG_VFIO_AP=y\nCONFIG_VFIO_PCI=y\n' \
+		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
+		"${_SHARED_FS_DEVS}" \
 		>> configs/devices/s390x-softmmu/default.mak
 elif [[ "${ARCH}" == "aarch64" ]]; then
 	# CONFIG_CXL is required by CONFIG_ACPI_CXL (auto-selected by ARM_VIRT) for Rubin vCXL.
 	# CONFIG_PXB (in _PCIE_DEVS) is a dependency of CONFIG_CXL.
 	# arm-smmuv3 comes via ARM_VIRT (selects ARM_SMMUV3).
-	printf 'CONFIG_ARM_VIRT=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n%s\n%s\n' \
-		"${_COMMON_DEVS}" "${_PCIE_DEVS}" \
+	printf 'CONFIG_ARM_VIRT=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
+		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" "${_DAX_DEVS}" \
 		>> configs/devices/aarch64-softmmu/default.mak
 elif [[ "${ARCH}" == "ppc64le" ]]; then
-	# VIRTIO_MEM depends on VIRTIO_MEM_SUPPORTED, which is only selected on
-	# arm/i386/s390x — ppc64 PSeries does not support virtio-mem.
-	# PSeries PHBs are conventional PCI: no PCIe root/switch ports, no PXB.
-	_PPC64_DEVS=$(printf '%s' "${_COMMON_DEVS}" | grep -v 'CONFIG_VIRTIO_MEM=')
-	printf 'CONFIG_PSERIES=y\n%s\nCONFIG_VIRTIO_PCI=y\nCONFIG_VFIO_PCI=y\nCONFIG_IOMMUFD=y\nCONFIG_PCI_BRIDGE=y\nCONFIG_NVDIMM=y\n' \
-		"${_PPC64_DEVS}" \
+	# PSeries composes neither _MEM_DEVS (no VIRTIO_MEM_SUPPORTED) nor the
+	# PCIe topology: its PHBs are conventional PCI, with no root/switch
+	# ports and no PXB.
+	printf 'CONFIG_PSERIES=y\n%s\n%s\n%s\nCONFIG_VIRTIO_PCI=y\nCONFIG_VFIO_PCI=y\nCONFIG_IOMMUFD=y\nCONFIG_PCI_BRIDGE=y\n%s\n' \
+		"${_COMMON_DEVS}" "${_BALLOON_DEVS}" "${_SHARED_FS_DEVS}" \
+		"${_DAX_DEVS}" \
 		>> configs/devices/ppc64-softmmu/default.mak
-	unset _PPC64_DEVS
 fi
-unset _COMMON_DEVS _PCIE_DEVS
+unset _COMMON_DEVS _MEM_DEVS _BALLOON_DEVS _SHARED_FS_DEVS _PCIE_DEVS
+unset _DAX_DEVS _IOMMU_DEVS _TEE_DEVS
 
 PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 
@@ -186,27 +226,37 @@ verify_objects() {
 
 _pci_devs=(
 	virtio-blk-pci virtio-scsi-pci scsi-hd virtio-net-pci
-	virtio-serial-pci virtconsole virtio-rng-pci virtio-balloon-pci
-	virtio-9p-pci vhost-vsock-pci vhost-user-fs-pci vhost-user-blk-pci
-	nvdimm vfio-pci pci-bridge
+	virtio-serial-pci virtconsole virtio-rng-pci
+	vhost-vsock-pci vhost-user-blk-pci vfio-pci pci-bridge
 )
 _pcie_topology=(
 	pcie-root-port x3130-upstream xio3130-downstream pcie-pci-bridge pxb-pcie
-	virtio-mem-pci
 )
+# Mirrors the grouping of the allowlist above.
+_mem_devs=(virtio-mem-pci)
+_balloon_devs=(virtio-balloon-pci)
+_shared_fs_devs=(virtio-9p-pci vhost-user-fs-pci)
+_dax_devs=(nvdimm)
+_iommu_devs=(intel-iommu amd-iommu)
+_tee_objs=(tdx-guest sev-snp-guest)
 
 case "${ARCH}" in
 x86_64)
-	verify_devices "${_pci_devs[@]}" "${_pcie_topology[@]}" \
-		intel-iommu amd-iommu pvpanic
-	verify_objects tdx-guest sev-snp-guest
+	verify_devices "${_pci_devs[@]}" "${_mem_devs[@]}" "${_balloon_devs[@]}" \
+		"${_shared_fs_devs[@]}" "${_dax_devs[@]}" "${_pcie_topology[@]}" \
+		"${_iommu_devs[@]}" pvpanic
+	if [[ "${#_tee_objs[@]}" -gt 0 ]]; then
+		verify_objects "${_tee_objs[@]}"
+	fi
 	;;
 aarch64)
-	verify_devices "${_pci_devs[@]}" "${_pcie_topology[@]}" \
+	verify_devices "${_pci_devs[@]}" "${_mem_devs[@]}" "${_balloon_devs[@]}" \
+		"${_shared_fs_devs[@]}" "${_dax_devs[@]}" "${_pcie_topology[@]}" \
 		arm-smmuv3
 	;;
 ppc64le)
-	verify_devices "${_pci_devs[@]}"
+	verify_devices "${_pci_devs[@]}" "${_balloon_devs[@]}" \
+		"${_shared_fs_devs[@]}" "${_dax_devs[@]}"
 	;;
 s390x)
 	verify_devices \
@@ -216,7 +266,9 @@ s390x)
 		vfio-ccw vfio-ap
 	;;
 esac
-unset _pci_devs _pcie_topology _qemu_target
+unset _pci_devs _pcie_topology _mem_devs _balloon_devs _shared_fs_devs
+unset _dax_devs _iommu_devs _tee_objs
+unset _qemu_target
 
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
