@@ -11,6 +11,10 @@ set -o pipefail
 kubernetes_dir="${kubernetes_dir:-$(dirname "$(readlink -f "$0")")}"
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
+# shellcheck disable=SC1091
+source "${kubernetes_dir}/tests_common.sh"
+# shellcheck disable=SC1091
+source "${kubernetes_dir}/k8s_bats_runner.sh"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime via drop-in config
 enable_nvrc_trace() {
@@ -151,35 +155,8 @@ fi
 setup_genpolicy_registry_auth "nvcr.io" "\$oauthtoken" "${NGC_API_KEY:-}" "${kubernetes_dir}/.docker-genpolicy"
 
 # Clean before each bats file so a previous file's leaked resources cannot
-# starve later tests of GPUs on shared runners.
+# starve later tests of GPUs on shared runners. Use the shared k8s bats runner
+# (plain RuntimeClass by default, triage -debug re-run on failure).
 export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
-report_dir="${kubernetes_dir}/reports/$(date +'%F-%T')"
-mkdir -p "${report_dir}"
-info "Running NVIDIA GPU tests with bats version: $(bats --version). Save outputs to ${report_dir}"
-
-tests_fail=()
-for test_entry in "${K8S_TEST_NV[@]}"; do
-	test_entry=$(echo "${test_entry}" | tr -d '[:space:][:cntrl:]')
-	[[ -z "${test_entry}" ]] && continue
-
-	cleanup_leaked_nvidia_gpu_test_resources || true
-
-	info "Executing ${test_entry}"
-	out_file="${report_dir}/${test_entry}.out"
-
-	pushd "${kubernetes_dir}" > /dev/null || exit 1
-	if ! bats --timing --show-output-of-passing-tests "${test_entry}" | tee "${out_file}"; then
-		tests_fail+=("${test_entry}")
-		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
-		[[ "${K8S_TEST_FAIL_FAST}" == "yes" ]] && break
-	else
-		mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
-	fi
-	popd > /dev/null || exit 1
-done
-
-if [[ ${#tests_fail[@]} -ne 0 ]]; then
-	die "Tests FAILED from suites: ${tests_fail[*]}"
-fi
-
-info "All tests SUCCEEDED"
+export K8S_BATS_BEFORE_FILE="cleanup_leaked_nvidia_gpu_test_resources"
+run_kubernetes_bats_tests "${kubernetes_dir}" K8S_TEST_NV
