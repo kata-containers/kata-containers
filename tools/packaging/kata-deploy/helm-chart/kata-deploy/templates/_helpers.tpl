@@ -773,6 +773,9 @@ spec:
   template:
     metadata:
       labels:
+{{- with $root.Values.podLabels }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
         app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
         app.kubernetes.io/instance: {{ $root.Release.Name }}
         kata-deploy/stage: {{ $stage }}
