@@ -188,11 +188,10 @@ show_array() {
 		if [[ "${action}" = "dump" ]]; then
 			printf "%s\t\t%s\n" "${tags}" "${elem}"
 		elif [[ "${action}" = "multi" ]]; then
-			if [[ ${i} -eq ${size} ]]; then
+			if [[ "${i}" -eq "${size}" ]]; then
 				suffix=""
 			else
-				# shellcheck disable=SC1003
-				suffix=' \'
+				suffix=" \\"
 			fi
 
 			printf '%s%s\n' "${elem}" "${suffix}"
@@ -208,6 +207,14 @@ show_array() {
 }
 
 generate_qemu_options() {
+	#---------------------------------------------------------------------
+	# Start from nothing: allnoconfig semantics for both features and
+	# devices.  Every device Kata needs is allowlisted per architecture in
+	# static-build/qemu/build-qemu.sh (CONFIG_* entries in default.mak) and
+	# verified against the built binary before it is packaged.
+	qemu_options+=(minimal:--without-default-features)
+	qemu_options+=(minimal:--without-default-devices)
+
 	#---------------------------------------------------------------------
 	# Disabled options
 
@@ -228,7 +235,7 @@ generate_qemu_options() {
 	# Disable graphical network access
 	qemu_options+=(size:--disable-vnc)
 	qemu_options+=(size:--disable-vnc-jpeg)
-	if ! gt_eq "${qemu_version}" "7.0.50" ; then
+	if ! gt_eq "${qemu_version}" "7.0.50"; then
 		qemu_options+=(size:--disable-vnc-png)
 	else
 		qemu_options+=(size:--disable-png)
@@ -261,6 +268,11 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-usb-redir)
 
 	# Disable TCG support
+	#
+	# aarch64 is deliberately left out: Kata only runs it with KVM, so TCG
+	# should be removable there as well, but neither the build nor the
+	# TCG-dependent QEMU paths have been audited on aarch64 yet.
+	# TODO: check with the aarch64 maintainers, then disable it here too.
 	case "${arch}" in
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
@@ -274,8 +286,7 @@ generate_qemu_options() {
 
 	# Disable debug is always passed to the qemu binary so not required.
 	case "${arch}" in
-	aarch64)
-		;;
+	aarch64) ;;
 	x86_64)
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
@@ -316,9 +327,9 @@ generate_qemu_options() {
 	# of QEMU.
 	#
 	# qemu configure does not support virtiofsd if qemu version >= 8.0.0.
-        if ! gt_eq "${qemu_version}" "8.0.0" ; then
+	if ! gt_eq "${qemu_version}" "8.0.0"; then
 		qemu_options+=(functionality:--disable-virtiofsd)
-        fi
+	fi
 
 	qemu_options+=(functionality:--enable-virtfs)
 
@@ -333,7 +344,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vde)
 
 	# Don't build other options which can't be depent on build server.
-	if ! gt_eq "${qemu_version}" "7.0.50" ; then
+	if ! gt_eq "${qemu_version}" "7.0.50"; then
 		qemu_options+=(size:--disable-xfsctl)
 		qemu_options+=(size:--disable-libxml2)
 	fi
@@ -377,15 +388,12 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-pixman)
 	qemu_options+=(size:--disable-relocatable)
 	qemu_options+=(size:--disable-rutabaga-gfx)
-	if ! gt_eq "${qemu_version}" "10.1.0" ; then
-		qemu_options+=(size:--disable-avx512bw)
-	fi
 	qemu_options+=(size:--disable-vpc)
 	qemu_options+=(size:--disable-vhdx)
 	qemu_options+=(size:--disable-hv-balloon)
 
 	# Disable various features based on the qemu_version
-	if gt_eq "${qemu_version}" "9.1.0" ; then
+	if gt_eq "${qemu_version}" "9.1.0"; then
 		# Disable Query Processing Library support
 		qemu_options+=(size:--disable-qpl)
 		# Disable UADK Library support
@@ -411,12 +419,32 @@ generate_qemu_options() {
 	#---------------------------------------------------------------------
 	# Enabled options
 
+	# Strip debug symbols from the installed binaries
+	qemu_options+=(size:--enable-strip)
+
+	# Link-Time Optimization drops the code that only becomes unreachable
+	# once everything is linked together, which is a lot with a device set
+	# this small: expect 15-25% off the binary, at 2-3x the build time.
+	#
+	# ppc64le is excluded: LTO turns a __builtin_memcpy bound check in
+	# qemu-system-ppc64 into a -Werror=stringop-overflow build failure.
+	if [[ "${arch}" != "ppc64le" ]]; then
+		qemu_options+=(size:--enable-lto)
+	fi
+
 	# Enable kernel Virtual Machine support.
 	# This is the default, but be explicit to avoid any future surprises
 	qemu_options+=(speed:--enable-kvm)
 
 	# Required for fast network access
 	qemu_options+=(speed:--enable-vhost-net)
+
+	# vhost-kernel and vhost-user are "auto" features in meson, so
+	# --without-default-features turns them off.  Ask for them back
+	# explicitly: vhost-net needs the kernel backend, and virtiofsd and
+	# vhost-user-vsock need the vhost-user protocol.
+	qemu_options+=(speed:--enable-vhost-kernel)
+	qemu_options+=(functionality:--enable-vhost-user)
 
 	# Support Linux AIO (native)
 	qemu_options+=(size:--enable-linux-aio)
@@ -440,7 +468,7 @@ generate_qemu_options() {
 
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
-	if ! gt_eq "${qemu_version}" "10.1.0" ; then
+	if ! gt_eq "${qemu_version}" "10.1.0"; then
 		if [[ "${arch}" == x86_64 ]]; then
 			qemu_options+=(speed:--enable-avx2)
 			qemu_options+=(speed:--enable-avx512bw)
@@ -451,7 +479,7 @@ generate_qemu_options() {
 
 	# Disable passt support, as it'd bring glibc 2.40.x dependency,
 	# and it is only available on Ubuntu 25.04 or newer.
-	if gt_eq "${qemu_version}" "10.1.0" ; then
+	if gt_eq "${qemu_version}" "10.1.0"; then
 		qemu_options+=(functionality:--disable-passt)
 	fi
 
@@ -489,7 +517,7 @@ generate_qemu_options() {
 	# Improve code quality by assuming identical semantics for interposed
 	# synmbols.
 	# Only enable if gcc is 5.3 or newer
-	if gt_eq "${gcc_version}" "5.3.0" ; then
+	if gt_eq "${gcc_version}" "5.3.0"; then
 		_qemu_cflags+=" -fno-semantic-interposition"
 	fi
 
@@ -501,8 +529,7 @@ generate_qemu_options() {
 	_qemu_cflags+=" -D_FORTIFY_SOURCE=2"
 
 	# Set compile options
-	# shellcheck disable=SC2054
-	qemu_options+=(functionality,security,speed,size:"--extra-cflags=\"${_qemu_cflags}\"")
+	qemu_options+=("functionality,security,speed,size:--extra-cflags=\"${_qemu_cflags}\"")
 
 	unset _qemu_cflags
 
@@ -524,16 +551,16 @@ generate_qemu_options() {
 	unset _qemu_ldflags
 
 	# Where to install qemu helper binaries
-	qemu_options+=("misc:--prefix=${prefix}")
+	qemu_options+=(misc:--prefix="${prefix}")
 
 	# Where to install qemu libraries
-	qemu_options+=("arch:--libdir=${prefix}/lib/${hypervisor}")
+	qemu_options+=(arch:--libdir="${prefix}"/lib/"${hypervisor}")
 
 	# Where to install qemu helper binaries
-	qemu_options+=("misc:--libexecdir=${prefix}/libexec/${hypervisor}")
+	qemu_options+=(misc:--libexecdir="${prefix}"/libexec/"${hypervisor}")
 
 	# Where to install data files
-	qemu_options+=("misc:--datadir=${prefix}/share/${hypervisor}")
+	qemu_options+=(misc:--datadir="${prefix}"/share/"${hypervisor}")
 
 }
 
@@ -570,7 +597,7 @@ main() {
 	hypervisor="$1"
 
 	local qemu_version_file="VERSION"
-	[[ -f ${qemu_version_file} ]] || die "QEMU version file '${qemu_version_file}' not found"
+	[[ -f "${qemu_version_file}" ]] || die "QEMU version file '${qemu_version_file}' not found"
 
 	# Remove any pre-release identifier so that it returns the version on
 	# major.minor.patch format (e.g 5.2.0-rc4 becomes 5.2.0)
@@ -579,7 +606,7 @@ main() {
 	[[ -n "${qemu_version}" ]] ||
 		die "cannot determine qemu version from file ${qemu_version_file}"
 
-	if ! gt_eq "${qemu_version}" "6.1.0" ; then
+	if ! gt_eq "${qemu_version}" "6.1.0"; then
 		die "Kata requires QEMU >= 6.1.0"
 	fi
 
@@ -589,7 +616,7 @@ main() {
 		die "cannot determine gcc major version, please ensure it is installed"
 	# -dumpversion only returns the major version since GCC 7.0
 	local gcc_version_minor
-	if gt_eq "${gcc_version_major}" "7.0.0" ; then
+	if gt_eq "${gcc_version_major}" "7.0.0"; then
 		gcc_version_minor=$(gcc -dumpfullversion | cut -f2 -d.)
 	else
 		gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
