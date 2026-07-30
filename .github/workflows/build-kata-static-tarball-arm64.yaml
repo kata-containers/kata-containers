@@ -57,6 +57,7 @@ jobs:
           - ovmf
           - pause-image
           - qemu
+          - qemu-no-shared-fs
           - virtiofsd
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
