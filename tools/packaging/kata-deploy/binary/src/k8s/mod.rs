@@ -4,7 +4,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod client;
-pub mod nfd;
-pub mod runtimeclasses;
 
 pub use client::*;
