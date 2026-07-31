@@ -841,30 +841,41 @@ function enabling_hypervisor() {
 	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
-# Docker and nerdctl smoke tests exercise Kata through the default overlayfs
-# snapshotter path. Keep NVIDIA runtime-rs on virtio-fs for those tests; the
-# shared_fs=none + EROFS snapshotter path is covered by Kubernetes CI instead.
-function configure_nvidia_runtime_rs_shared_fs_dropin() {
+# True when KATA_HYPERVISOR takes the container rootfs as a block device: the
+# NVIDIA runtime classes ship shared_fs = "none" and emptydir_mode =
+# "block-plain", and run a QEMU that has neither virtio-fs nor virtio-9p in it.
+function kata_hypervisor_runs_without_shared_fs() {
 	case "${KATA_HYPERVISOR:-}" in
-		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) ;;
-		*) return 0 ;;
+		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) return 0 ;;
+		*) return 1 ;;
 	esac
+}
+
+# Puts a runtime class that runs without a shared filesystem back on virtio-fs,
+# which also means putting it back on the generic QEMU: the one it ships with
+# has no vhost-user-fs device.  Only for harnesses that cannot hand a block
+# rootfs over; the block path is covered elsewhere.
+function configure_nvidia_runtime_rs_shared_fs_dropin() {
+	kata_hypervisor_runs_without_shared_fs || return 0
 
 	local -r cfg="${KATA_CONFIG_PATH:-}"
 	[[ -z "${cfg}" || ! -e "${cfg}" ]] && return 0
 
+	local -r qemu="/opt/kata/bin/qemu-system-$(uname -m)"
 	local -r dropin_dir="$(dirname "${cfg}")/config.d"
 	local -r dropin_path="${dropin_dir}/99-nvidia-runtime-rs-shared-fs.toml"
 
 	info "Configuring NVIDIA runtime-rs shared-fs smoke test via ${dropin_path}"
 	sudo mkdir -p "${dropin_dir}"
-	sudo tee "${dropin_path}" >/dev/null <<EOF
-[hypervisor.qemu]
-shared_fs = "virtio-fs"
+	sudo tee "${dropin_path}" > /dev/null <<-EOF
+	[hypervisor.qemu]
+	path = "${qemu}"
+	valid_hypervisor_paths = ["${qemu}"]
+	shared_fs = "virtio-fs"
 
-[runtime]
-emptydir_mode = "shared-fs"
-EOF
+	[runtime]
+	emptydir_mode = "shared-fs"
+	EOF
 }
 
 # Installs erofs-utils and loads the erofs module.
