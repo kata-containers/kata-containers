@@ -414,6 +414,9 @@ set_metadata_annotation() {
 			>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
 			return 1
 		fi
+		if [[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]]; then
+			export SE_COMPOSABLE="yes"
+		fi
 		repack_secure_image "${value}" "${IBM_SE_CREDS_DIR}" "true"
 	fi
 }

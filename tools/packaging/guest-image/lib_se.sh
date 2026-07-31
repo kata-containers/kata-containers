@@ -30,12 +30,17 @@ build_secure_image() {
 	install_src_dir="${2:-}"
 	install_dest_dir="${3:-}"
 
-	# Check if FAKE_SE_IMAGE mode is enabled
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		se_image_name="kata-containers-se-runtime-rs.img"
+	else
+		se_image_name="kata-containers-se.img"
+	fi
+
 	if [[ "${FAKE_SE_IMAGE:-}" == "true" ]]; then
-		echo "FAKE_SE_IMAGE mode enabled: Creating dummy kata-containers-se.img via touch command"
+		echo "FAKE_SE_IMAGE mode enabled: Creating dummy ${se_image_name} via touch command"
 		echo "FAKE_SE_IMAGE mode: Skipping kernel, initrd, parmfile, and host key document checks"
 		mkdir -p "${install_dest_dir}"
-		touch "${install_dest_dir}/kata-containers-se.img"
+		touch "${install_dest_dir}/${se_image_name}"
 		return 0
 	fi
 
@@ -53,17 +58,27 @@ build_secure_image() {
 		echo "No certificate specified. Using --no-verify option"
 	fi
 
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		initrd_name="kata-containers-initrd.img"
+	else
+		initrd_name="kata-containers-initrd-confidential.img"
+	fi
+
 	if [[ ! -f "${install_src_dir}/vmlinuz.container" ]] ||
-		[[ ! -f "${install_src_dir}/kata-containers-initrd-confidential.img" ]]; then
+		[[ ! -f "${install_src_dir}/${initrd_name}" ]]; then
 		cat << EOF >&2
 Either kernel or initrd does not exist or is mistakenly named
 A file name for kernel must be vmlinuz.container (raw binary)
-A file name for initrd must be kata-containers-initrd-confidential.img
+A file name for initrd must be ${initrd_name}
 EOF
 		return 1
 	fi
 
-	cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026"
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026 kata.extension.coco.verity_params"
+	else
+		cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026"
+	fi
 	parmfile="$(mktemp --suffix=-cmdline)"
 	echo "${cmdline}" > "${parmfile}"
 	chmod 600 "${parmfile}"
@@ -86,9 +101,9 @@ EOF
 	eval genprotimg \
 		"${extra_arguments}" \
 		"${hkd_options}" \
-		--output="${install_dest_dir}/kata-containers-se.img" \
+		--output="${install_dest_dir}/${se_image_name}" \
 		--image="${install_src_dir}/vmlinuz.container" \
-		--ramdisk="${install_src_dir}/kata-containers-initrd-confidential.img" \
+		--ramdisk="${install_src_dir}/${initrd_name}" \
 		--parmfile="${parmfile}" \
 		"${key_verify_option}"
 
@@ -109,7 +124,11 @@ function repack_secure_image() {
 		>&2 echo "ERROR: build_dir for secure image is not specified"
 		return 1
 	fi
-	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		config_file_path="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-qemu-se-runtime-rs.toml"
+	else
+		config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	fi
 	if [[ ! -f "${config_file_path}" ]]; then
 		>&2 echo "ERROR: config file not found: ${config_file_path}"
 		return 1
@@ -119,22 +138,36 @@ function repack_secure_image() {
 	mkdir -p "${build_dir}/hdr"
 	# Prepare required files for building the secure image
 	cp "${kernel_base_dir}/vmlinuz.container" "${build_dir}/hdr/"
-	cp "${kernel_base_dir}/kata-containers-initrd-confidential.img" "${build_dir}/hdr/"
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		cp "${kernel_base_dir}/kata-containers-initrd.img" "${build_dir}/hdr/"
+	else
+		cp "${kernel_base_dir}/kata-containers-initrd-confidential.img" "${build_dir}/hdr/"
+	fi
 	# Build the secure image
 	build_secure_image "${kernel_params_value}" "${build_dir}/hdr" "${build_dir}/hdr"
 	# Get the secure image updated back to the kernel base directory
-	if [[ ! -f "${build_dir}/hdr/kata-containers-se.img" ]]; then
-		>&2 echo "ERROR: secure image not found: ${build_dir}/hdr/kata-containers-se.img"
+	local se_img_name
+	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+		se_img_name="kata-containers-se-runtime-rs.img"
+	else
+		se_img_name="kata-containers-se.img"
+	fi
+	if [[ ! -f "${build_dir}/hdr/${se_img_name}" ]]; then
+		>&2 echo "ERROR: secure image not found: ${build_dir}/hdr/${se_img_name}"
 		return 1
 	fi
-	sudo cp "${build_dir}/hdr/kata-containers-se.img" "${kernel_base_dir}/"
+	sudo cp "${build_dir}/hdr/${se_img_name}" "${kernel_base_dir}/"
 	if [[ "${for_kbs}" == "true" ]]; then
-		# Rename kata-containers-se.img to hdr.bin and clean up kernel and initrd
-		mv "${build_dir}/hdr/kata-containers-se.img" "${build_dir}/hdr/hdr.bin"
+		# Rename the SE image to hdr.bin and clean up kernel and initrd
+		mv "${build_dir}/hdr/${se_img_name}" "${build_dir}/hdr/hdr.bin"
 		# The Attestation Service reads hdr.bin as a non-root user via a group
 		# (fsGroup) mount, so make sure it is group/other readable.
 		chmod +r "${build_dir}/hdr/hdr.bin"
-		rm -f "${build_dir}"/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
+		if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
+			rm -f "${build_dir}"/hdr/{vmlinuz.container,kata-containers-initrd.img}
+		else
+			rm -f "${build_dir}"/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
+		fi
 	else
 		# Clean up the build directory completely
 		rm -rf "${build_dir}"

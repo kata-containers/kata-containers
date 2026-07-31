@@ -75,7 +75,7 @@ EOF
 			;;
 		s390x)
 			cat <<'EOF'
-kata-static-boot-image-se.tar.zst
+kata-static-boot-image-se-runtime-rs.tar.zst
 kata-static-kernel.tar.zst
 kata-static-qemu.tar.zst
 kata-static-rootfs-image-coco-extension.tar.zst
