@@ -1659,6 +1659,25 @@ func (clh *cloudHypervisor) Check() error {
 	// longer than usual specially if there is a hot-plug request in progress.
 	running, err := clh.isClhRunning(10)
 	if !running {
+		// An unanswered ping does not on its own mean the VMM is gone. CLH
+		// serves its API from a single-threaded micro_http server, so one
+		// long-running request stops it answering anything else.
+		// vm.send-migration is the clearest case: it holds the server for the
+		// whole migration while the VMM event loop streams the guest state
+		// out, and vmm.ping queues behind it until it times out. Reporting the
+		// VMM dead there makes the monitor tear down a sandbox whose
+		// hypervisor is working normally.
+		//
+		// Ask the kernel instead, using the same kill(pid, 0) probe that
+		// isClhRunning already performs before it pings. A process that is
+		// still there is busy rather than dead; only its absence is
+		// conclusive.
+		if pid := clh.state.PID; pid > 0 {
+			if killErr := syscall.Kill(pid, syscall.Signal(0)); killErr == nil {
+				clh.Logger().WithField("pid", pid).WithError(err).Warn("clh API ping failed but the VMM process is alive, treating it as running")
+				return nil
+			}
+		}
 		return fmt.Errorf("clh is not running: %s", err)
 	}
 	return err
