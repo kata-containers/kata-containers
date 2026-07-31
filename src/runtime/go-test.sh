@@ -23,8 +23,17 @@ if [[ -z "${go_test_flags}" ]]; then
     # "go test -timeout X"
     go_test_flags="-timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
 
-    # -race flag is not supported on s390x and riscv64
-    [[ "$(go env GOARCH)" != "s390x" ]] && [[ "$(go env GOARCH)" != "riscv64" ]] && go_test_flags+=" -race"
+    # Enable -race only when the arch supports it (Go does not offer it on
+    # s390x or riscv64) and when cgo is on (Go's race detector requires
+    # cgo). Under the default STATIC=yes build CGO_ENABLED=0, so this leg
+    # is off and `make test` runs the same toolchain as the shipped
+    # binary. Run `make test STATIC=no` locally if you need the race
+    # detector for concurrency-bug hunting.
+    if [[ "$(go env GOARCH)" != "s390x" ]] \
+        && [[ "$(go env GOARCH)" != "riscv64" ]] \
+        && [[ "$(go env CGO_ENABLED)" != "0" ]]; then
+        go_test_flags+=" -race"
+    fi
 
     # s390x requires special linker flags
     # shellcheck disable=SC2089
