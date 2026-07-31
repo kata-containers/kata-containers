@@ -3,9 +3,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
-use std::os::unix::process::CommandExt;
-use std::process::Command;
+use anyhow::Result;
+use std::path::{Path, PathBuf};
 
 pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
@@ -22,47 +21,31 @@ pub const RUST_SHIMS: &[&str] = &[
     "qemu-tdx-runtime-rs",
 ];
 
+/// Host binary directories mounted read-only into the container (see Helm chart).
+///
+/// kata-deploy cannot *run* the binaries it finds there: they are linked
+/// against a dynamic loader and libraries that only exist in the host's mount
+/// namespace, which the container no longer has access to. It can inspect
+/// them, which is enough to tell what a host tool supports.
+const HOST_BIN_DIRS: &[&str] = &[
+    "/host-usr/bin",
+    "/host-usr/sbin",
+    "/host-usr-local/bin",
+    "/host-usr-local/sbin",
+    "/host-bin",
+    "/host-sbin",
+];
+
 pub fn is_rust_shim(shim: &str) -> bool {
     RUST_SHIMS.contains(&shim)
 }
 
-/// Execute a command with the host filesystem as its root.
-pub fn host_exec(command: &[&str]) -> Result<String> {
-    let (program, args) = command
-        .split_first()
-        .context("Cannot execute an empty host command")?;
-
-    let mut host_command = Command::new(program);
-    host_command.args(args);
-
-    // SAFETY: pre_exec only invokes the async-signal-safe chroot and chdir
-    // syscalls. Both calls affect the child after fork and before exec.
-    unsafe {
-        host_command.pre_exec(|| {
-            let host_root = c"/host";
-            if libc::chroot(host_root.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-
-            let root = c"/";
-            if libc::chdir(root.as_ptr()) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-
-            Ok(())
-        });
-    }
-
-    let output = host_command
-        .output()
-        .with_context(|| format!("Failed to execute host command `{}`", command.join(" ")))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("Command failed: {stderr}"));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+/// Locate a host program among the binary directories mounted into the container.
+pub fn find_host_program(program: &str) -> Option<PathBuf> {
+    HOST_BIN_DIRS
+        .iter()
+        .map(|dir| Path::new(dir).join(program))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Perform a systemctl-equivalent operation through the host systemd D-Bus API.

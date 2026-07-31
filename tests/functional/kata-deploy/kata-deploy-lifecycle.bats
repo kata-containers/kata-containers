@@ -215,11 +215,14 @@ EOF
 	echo "# Node label after uninstall: '${label}'" >&3
 	[[ -z "${label}" ]]
 
-	# Kata artifacts must be removed from the host filesystem
+	# Kata artifacts must be removed from the host filesystem. The install
+	# directory itself is the kata-deploy pod's hostPath mount point, created
+	# by the kubelet and impossible to unlink from inside the container, so it
+	# is expected to survive the uninstall as an empty directory.
 	echo "# Checking host filesystem for leftover artifacts..." >&3
-	run run_on_host "test -d /host/opt/kata && echo EXISTS || echo REMOVED"
+	run run_on_host "test -d /host/opt/kata && ls -A /host/opt/kata | grep -q . && echo LEFTOVERS || echo CLEAN"
 	echo "# /opt/kata: ${output}" >&3
-	[[ "${output}" == *"REMOVED"* ]]
+	[[ "${output}" == *"CLEAN"* ]]
 
 	# Containerd must still be healthy and reporting a valid version.
 	# After a CRI restart the kubelet may briefly report "Unknown" until it

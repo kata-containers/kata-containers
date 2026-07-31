@@ -303,7 +303,9 @@ impl Config {
             dest_dir
         };
 
-        let host_install_dir = format!("/host{dest_dir}");
+        // Install dir is mounted into the container at the same absolute path as
+        // on the host (see kata-deploy.installDir in the Helm chart).
+        let host_install_dir = dest_dir.clone();
 
         let crio_drop_in_conf_dir = "/etc/crio/crio.conf.d/".to_string();
         let crio_drop_in_conf_file = if let Some(ref suffix) = multi_install_suffix {

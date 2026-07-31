@@ -113,9 +113,6 @@ spec:
           value: {{ $health.port | quote }}
         securityContext:
           privileged: false
-          capabilities:
-            add:
-            - SYS_CHROOT
 {{- if $health.startupProbe.enabled }}
         startupProbe:
           httpGet:
