@@ -879,10 +879,26 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonEnv" .root | nindent 4 }}
   securityContext:
     privileged: {{ .privileged }}
-{{- if .mountHost }}
+    readOnlyRootFilesystem: true
   volumeMounts:
+{{- if .mountHost }}
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
+{{- else }}
+{{- include "kata-deploy.tmpVolumeMount" . | nindent 4 }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Writable /tmp for readOnlyRootFilesystem containers (host tools / libraries).
+*/}}
+{{- define "kata-deploy.tmpVolumeMount" -}}
+- name: tmp
+  mountPath: /tmp
+{{- end -}}
+
+{{- define "kata-deploy.tmpVolume" -}}
+- name: tmp
+  emptyDir: {}
 {{- end -}}
 
 {{/*
@@ -890,6 +906,7 @@ Common volumeMounts for any pod that runs the kata-deploy binary against the
 host. Emitted at column 0; indent with `nindent` at the call site.
 */}}
 {{- define "kata-deploy.commonVolumeMounts" -}}
+{{ include "kata-deploy.tmpVolumeMount" . }}
 - name: crio-conf
   mountPath: /etc/crio/
 - name: containerd-conf
@@ -938,6 +955,7 @@ Common host/configMap volumes backing the mounts above. Emitted at column 0;
 indent with `nindent` at the call site.
 */}}
 {{- define "kata-deploy.commonVolumes" -}}
+{{ include "kata-deploy.tmpVolume" . }}
 - name: crio-conf
   hostPath:
     path: /etc/crio/

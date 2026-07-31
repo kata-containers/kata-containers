@@ -113,6 +113,7 @@ spec:
           value: {{ $health.port | quote }}
         securityContext:
           privileged: false
+          readOnlyRootFilesystem: true
 {{- if $health.startupProbe.enabled }}
         startupProbe:
           httpGet:
