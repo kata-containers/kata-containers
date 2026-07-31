@@ -79,7 +79,9 @@ use resource::coco_data::initdata::{
 };
 use resource::coco_data::initdata_block;
 use resource::manager::ManagerArgs;
-use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
+use resource::network::{
+    dan_config_path, dan_vfio_device_count, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig,
+};
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::collections::HashSet;
@@ -325,12 +327,42 @@ impl VirtSandbox {
             resource_configs.push(ResourceConfig::Protection(protection_dev_config));
         }
 
+        // Has to run before the port pool below is turned into command line
+        // arguments.
+        self.reserve_dan_pcie_root_ports()
+            .await
+            .context("failed to reserve PCIe root ports for DAN")?;
+
         // prepare pcie port device config
         if let Some(port_dev_config) = self.prepare_pcie_port_devices().await {
             resource_configs.push(ResourceConfig::PortDevice(port_dev_config));
         }
 
         Ok(resource_configs)
+    }
+
+    async fn reserve_dan_pcie_root_ports(&self) -> Result<()> {
+        let config = self.resource_manager.config().await;
+        let dan_path = dan_config_path(&config, &self.sid);
+        if !dan_path.exists() {
+            return Ok(());
+        }
+
+        let count = dan_vfio_device_count(&dan_path)
+            .await
+            .context("count DAN VFIO devices")?;
+        if count == 0 {
+            return Ok(());
+        }
+
+        info!(sl!(), "reserving {} PCIe root port(s) for DAN VFIO", count);
+        let device_manager = self.resource_manager.get_device_manager().await;
+        device_manager
+            .write()
+            .await
+            .reserve_pcie_root_ports(count as u32)?;
+
+        Ok(())
     }
 
     async fn prepare_pcie_port_devices(&self) -> Option<PortDeviceConfig> {
