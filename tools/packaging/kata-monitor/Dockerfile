@@ -7,14 +7,20 @@
 # Expected file in context:
 #   ./opt/kata/bin/kata-monitor
 #
-# The kata-monitor binary is built inside an Ubuntu (glibc) toolchain
-# as part of the shim-v2-go static build, so it is dynamically linked
-# against glibc. We assemble its runtime dependencies via `ldd` from
-# a glibc base image and copy them into a distroless/static runtime
-# image, matching the same pattern used by
-# tools/packaging/kata-deploy/Dockerfile.
+# The kata-monitor binary can be either statically or dynamically linked
+# depending on the arch it was built for (see src/runtime/Makefile):
+#
+#   * amd64, arm64, riscv64: fully static, cgo-free (STATIC=yes default).
+#   * s390x, ppc64le:        cgo + PIE, glibc-linked (STATIC=no default).
+#
+# For the static case there are no runtime dependencies to assemble, and
+# distroless/static already provides everything the binary needs. For the
+# glibc case we use `ldd` to discover the required shared libraries and
+# the dynamic linker, and copy them into the runtime image, matching the
+# pattern used by tools/packaging/kata-deploy/Dockerfile.
 
-# Stage 1: discover and copy the glibc libraries the binary needs.
+# Stage 1: discover and copy the glibc libraries the binary needs
+# (skipped when the binary is statically linked).
 # hadolint ignore=DL3007
 FROM debian:trixie-slim AS runtime-assembler
 
@@ -25,6 +31,16 @@ COPY opt/kata/bin/kata-monitor /tmp/kata-monitor
 RUN \
 	set -eux; \
 	mkdir -p /output/lib /output/lib64; \
+	# `ldd` on a static ELF prints "not a dynamic executable" to stderr and
+	# exits 1. Capture both streams into a variable so the detection does
+	# not go through a pipeline (with `set -o pipefail` a failing ldd would
+	# otherwise mask a matching grep and the check would silently miss the
+	# static case).
+	ldd_output="$(ldd /tmp/kata-monitor 2>&1 || true)"; \
+	if [[ "${ldd_output}" == *"not a dynamic executable"* ]]; then \
+		echo "kata-monitor is statically linked on $(uname -m); no glibc libraries or dynamic linker to copy"; \
+		exit 0; \
+	fi; \
 	echo "Libraries needed by kata-monitor on $(uname -m):"; \
 	ldd /tmp/kata-monitor || true; \
 	# Copy each shared library reported by ldd ("=>" lines).
@@ -38,7 +54,9 @@ RUN \
 		fi; \
 	done; \
 	# Copy the dynamic linker too: ldd does not include it in the "=>"
-	# lines. Cover all four target architectures:
+	# lines. Cover all glibc target architectures: s390x and ppc64le
+	# under the default settings, plus amd64/arm64 for opt-out
+	# STATIC=no builds.
 	#   x86_64  -> /lib64/ld-linux-x86-64.so.2
 	#   aarch64 -> /lib/ld-linux-aarch64.so.1
 	#   s390x   -> /lib/ld64.so.1

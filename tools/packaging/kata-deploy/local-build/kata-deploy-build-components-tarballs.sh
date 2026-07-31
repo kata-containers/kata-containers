@@ -84,10 +84,11 @@ build_kata_deploy_job_dispatcher() {
 }
 
 build_nydus_snapshotter_for_coco_guest_pull() {
-	# STATIC_RUNTIME=yes is the umbrella flag for a musl-compatible payload: it
-	# builds the kata Go host binaries static (see static-build/shim-v2) and here
-	# pulls the statically linked nydus-snapshotter binaries instead of the
-	# glibc-linked per-arch ones.
+	# The kata Go host binaries are built static by default (see
+	# static-build/shim-v2). STATIC_RUNTIME=yes additionally pulls the
+	# statically linked nydus-snapshotter binaries instead of the glibc-linked
+	# per-arch ones, producing a fully musl-compatible payload. The static
+	# nydus asset is published for amd64 only.
 	local static_nydus_snapshotter="${STATIC_RUNTIME:-}"
 
 	docker buildx build \
