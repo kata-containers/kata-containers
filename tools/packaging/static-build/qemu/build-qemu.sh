@@ -50,13 +50,26 @@ scripts/git-submodule.sh update meson capstone
 # the confidential-guest backends are all left out of it, and only x86_64 and
 # aarch64 build it.  Device assignment is untouched: vfio-pci, IOMMUFD and the
 # whole PCIe topology (_PCIE_DEVS below) stay in.
+#
+# The snp-experimental and tdx-experimental tarballs get that same trim plus
+# the confidential-guest backends: those classes run with shared_fs="none"
+# too, a confidential guest cannot boot an nvdimm rootfs, and neither of them
+# resizes the guest.  SGX is not part of it, as nothing emits an EPC backend
+# on a TEE guest.
 _no_shared_fs=false
-if [[ "${HYPERVISOR_NAME}" == "kata-qemu-no-shared-fs" ]]; then
+_tee=false
+case "${HYPERVISOR_NAME}" in
+kata-qemu-no-shared-fs)
 	_no_shared_fs=true
-	if [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
-		echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64 and aarch64, not ${ARCH}" >&2
-		exit 1
-	fi
+	;;
+kata-qemu-snp-experimental | kata-qemu-tdx-experimental)
+	_no_shared_fs=true
+	_tee=true
+	;;
+esac
+if [[ "${_no_shared_fs}" == "true" ]] && [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
+	echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64 and aarch64, not ${ARCH}" >&2
+	exit 1
 fi
 
 # Transport-independent device models used by Kata on every architecture
@@ -144,15 +157,22 @@ CONFIG_VTD_ACCEL=y
 CONFIG_AMD_IOMMU=y
 '
 
-# x86_64 only.  TDX, SEV and SGX are only implied by CONFIG_PC, so allnoconfig
-# drops them and the -object types the runtimes emit for confidential guests
-# (tdx-guest, sev-snp-guest) and for SGX enclaves (memory-backend-epc) are gone
-# from the binary.  CONFIG_SEV is QEMU's shared gate for both classic SEV and
-# SEV-SNP; Kata only uses the SNP object.
+# x86_64 only.  TDX and SEV are only implied by CONFIG_PC, so allnoconfig drops
+# them and the -object types the runtimes emit for confidential guests
+# (tdx-guest, sev-snp-guest) are gone from the binary.  CONFIG_SEV is QEMU's
+# shared gate for both classic SEV and SEV-SNP; Kata only uses the SNP object.
 
 _TEE_DEVS='
 CONFIG_TDX=y
 CONFIG_SEV=y
+'
+
+# x86_64 only.  SGX backs the memory-backend-epc object the Go runtime emits
+# for the sgx.intel.com/epc resource.  A group of its own, and not part of
+# _TEE_DEVS, because the confidential-guest builds keep the TEE backends but
+# have no use for an enclave.
+
+_SGX_DEVS='
 CONFIG_SGX=y
 '
 
@@ -162,17 +182,18 @@ if [[ "${_no_shared_fs}" == "true" ]]; then
 	_SHARED_FS_DEVS=
 	_DAX_DEVS=
 	_IOMMU_DEVS=
-	_TEE_DEVS=
+	_SGX_DEVS=
+	[[ "${_tee}" == "true" ]] || _TEE_DEVS=
 fi
 
 if [[ "${ARCH}" == "x86_64" ]]; then
 	# PVPANIC_ISA provides the pvpanic device (guest kernel panic reporting).
 	# CONFIG_CXL is required because CONFIG_PXB (in _PCIE_DEVS) links against
 	# CXL component symbols; omitting it produces undefined-reference link errors.
-	printf 'CONFIG_Q35=y\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\nCONFIG_PVPANIC_ISA=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n' \
+	printf 'CONFIG_Q35=y\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\nCONFIG_PVPANIC_ISA=y\nCONFIG_CXL=y\nCONFIG_CXL_MEM_DEVICE=y\n' \
 		"${_COMMON_DEVS}" "${_MEM_DEVS}" "${_BALLOON_DEVS}" \
 		"${_SHARED_FS_DEVS}" "${_PCIE_DEVS}" \
-		"${_DAX_DEVS}" "${_IOMMU_DEVS}" "${_TEE_DEVS}" \
+		"${_DAX_DEVS}" "${_IOMMU_DEVS}" "${_TEE_DEVS}" "${_SGX_DEVS}" \
 		>> configs/devices/i386-softmmu/default.mak
 elif [[ "${ARCH}" == "s390x" ]]; then
 	# s390x uses CCW bus (no PCI virtio); VIRTIO_CCW replaces VIRTIO_PCI and
@@ -200,7 +221,7 @@ elif [[ "${ARCH}" == "ppc64le" ]]; then
 		>> configs/devices/ppc64-softmmu/default.mak
 fi
 unset _COMMON_DEVS _MEM_DEVS _BALLOON_DEVS _SHARED_FS_DEVS _PCIE_DEVS
-unset _DAX_DEVS _IOMMU_DEVS _TEE_DEVS
+unset _DAX_DEVS _IOMMU_DEVS _TEE_DEVS _SGX_DEVS
 
 PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 
@@ -271,7 +292,7 @@ if [[ "${_no_shared_fs}" == "true" ]]; then
 	_shared_fs_devs=()
 	_dax_devs=()
 	_iommu_devs=()
-	_tee_objs=()
+	[[ "${_tee}" == "true" ]] || _tee_objs=()
 fi
 
 case "${ARCH}" in
@@ -302,7 +323,7 @@ s390x)
 esac
 unset _pci_devs _pcie_topology _mem_devs _balloon_devs _shared_fs_devs
 unset _dax_devs _iommu_devs _tee_objs
-unset _no_shared_fs _qemu_target
+unset _no_shared_fs _tee _qemu_target
 
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
