@@ -346,7 +346,7 @@ fn validate_group_basic(devices: &[DeviceInfo]) -> bool {
             // filter host or PCI bridge
             let bdf_str = bdf.to_string();
             // Filter out devices that cannot be passed through (bridges, audio, etc.)
-            if filter_bridge_device(&bdf_str, IOMMU_IGNORE).is_some() {
+            if filter_bridge_device(&bdf_str, IOMMU_IGNORE_CLASSES).is_some() {
                 continue;
             }
         }
@@ -367,13 +367,20 @@ fn get_device_property(device_bdf: &str, property: &str) -> Result<String> {
     Ok(cfg_path.trim().to_string())
 }
 
-/// PCI class bitmasks for devices that must be ignored when enumerating an IOMMU group.
-/// Host Bridge: 0x0600, Audio device: 0x0403.
-const IOMMU_IGNORE: &[u64] = &[0x0600, 0x403];
+/// Exact (base+sub) PCI class codes for devices that must be ignored when enumerating
+/// a legacy IOMMU group: they share the group with a GPU but cannot be passed through.
+///
+/// 0x0600 = Host Bridge, 0x0604 = PCI-to-PCI Bridge, 0x0403 = Audio device.
+///
+/// NVSwitches (0x0680, Other Bridge) are intentionally absent: they are
+/// passthrough-capable and the device plugin binds them to vfio-pci on purpose.
+const IOMMU_IGNORE_CLASSES: &[u16] = &[0x0600, 0x0604, 0x0403];
 
-/// Filters for devices that cannot or should not be passed through within an IOMMU group
-/// (Host/PCI bridges, audio controllers that share the GPU's IOMMU group, etc.).
-fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
+/// Filters for devices that cannot or should not be passed through within a legacy
+/// IOMMU group (Host/PCI bridges, audio controllers that share the GPU's group).
+///
+/// Returns the base+sub class code if the device matches, None if it should be kept.
+fn filter_bridge_device(bdf: &str, ignored: &[u16]) -> Option<u16> {
     let device_class = get_device_property(bdf, "class").unwrap_or_default();
 
     if device_class.is_empty() {
@@ -383,18 +390,12 @@ fn filter_bridge_device(bdf: &str, bitmasks: &[u64]) -> Option<u64> {
     // The sysfs `class` attribute is a hex string (e.g. "0x040300"), so it must
     // be parsed base-16. Parsing it as decimal always fails, which previously
     // caused every device to be treated as passthrough-capable.
-    match parse_class_code_u32(&device_class) {
-        Some(cid_u32) => {
-            // PCI class code is 24 bits, shift right 8 to get base+sub class
-            let class_code = u64::from(cid_u32) >> 8;
-            for &bitmask in bitmasks {
-                if class_code & bitmask == bitmask {
-                    return Some(class_code);
-                }
-            }
-            None
-        }
-        None => None,
+    let class_code = parse_class_code_u32(&device_class)? >> 8;
+    let class_u16 = class_code as u16;
+    if ignored.contains(&class_u16) {
+        Some(class_u16)
+    } else {
+        None
     }
 }
 
@@ -451,11 +452,6 @@ fn is_char_dev(p: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Extracts the IOMMU group ID from a PCI device's sysfs link.
-fn vfio_group_id_from_pci(bdf: &str) -> Option<u32> {
-    let link = fs::read_link(Path::new(SYS_PCI_DEVS).join(bdf).join("iommu_group")).ok()?;
-    link.file_name()?.to_string_lossy().parse::<u32>().ok()
-}
 
 /// Locates the VFIO character device (cdev) for a given PCI BDF.
 /// Path: /sys/bus/pci/devices/<bdf>/vfio-dev/vfioX
@@ -509,44 +505,96 @@ fn discover_vfio_cdev_by_name(
     })
 }
 
-/// Discovers the VFIO device context based on a /dev/vfio/devices/vfio<X> path.
+/// Discovers a VFIO device from an IOMMUFD per-device cdev (`/dev/vfio/devices/vfioX`).
+///
+/// IOMMUFD manages devices individually via `/dev/iommu`; there is no IOMMU group
+/// container.  The device plugin already chose this specific device by binding it to
+/// vfio-pci and handing us its cdev, so no class-based filtering is applied here.
 pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
-    if vfio_device.exists() && is_char_dev(vfio_device) {
-        let vfio_name = vfio_device
-            .file_name()
-            .ok_or_else(|| anyhow!("Invalid vfio device path"))?
-            .to_string_lossy()
-            .to_string();
-
-        // Resolve VFIO name to BDF via sysfs symlink
-        let dev_link = fs::read_link(
-            Path::new(SYS_CLASS_VFIO_DEV)
-                .join(&vfio_name)
-                .join("device"),
-        )
-        .with_context(|| format!("failed to read sysfs device link for {}", vfio_name))?;
-
-        let bdf = dev_link
-            .file_name()
-            .ok_or_else(|| anyhow!("Malformed vfio-dev symlink for {}", vfio_name))?
-            .to_string_lossy()
-            .to_string();
-
-        // Resolve BDF to IOMMU group. On iommufd-first hosts there is often no legacy
-        // /dev/vfio/<gid> node — only /dev/vfio/devices/vfioX cdevs exist — so use the
-        // cdev we were given as the group char dev when legacy is absent.
-        let gid = vfio_group_id_from_pci(&bdf)
-            .ok_or_else(|| anyhow!("could not resolve IOMMU group for {}", bdf))?;
-        let legacy = Path::new(DEV_VFIO).join(gid.to_string());
-        let group_devnode = if legacy.exists() && is_char_dev(&legacy) {
-            legacy
-        } else {
-            vfio_device.to_path_buf()
-        };
-        discover_vfio_device_for_iommu_group(gid, group_devnode)
-    } else {
-        Err(anyhow!("vfio device {} not found", vfio_device.display()))
+    if !vfio_device.exists() || !is_char_dev(vfio_device) {
+        return Err(anyhow!("vfio device {} not found", vfio_device.display()));
     }
+
+    let vfio_name = vfio_device
+        .file_name()
+        .ok_or_else(|| anyhow!("Invalid vfio device path"))?
+        .to_string_lossy()
+        .to_string();
+
+    // /sys/class/vfio-dev/<name>/device -> .../0000:01:00.0
+    let dev_link = fs::read_link(
+        Path::new(SYS_CLASS_VFIO_DEV)
+            .join(&vfio_name)
+            .join("device"),
+    )
+    .with_context(|| format!("failed to read sysfs device link for {}", vfio_name))?;
+
+    let bdf_str = dev_link
+        .file_name()
+        .ok_or_else(|| anyhow!("Malformed vfio-dev symlink for {}", vfio_name))?
+        .to_string_lossy()
+        .to_string();
+
+    let bdf = parse_bdf_str(&bdf_str)?;
+    let pci_path = Path::new(SYS_PCI_DEVS).join(&bdf_str);
+
+    let vendor_id = read_trim(pci_path.join("vendor"));
+    let device_id = read_trim(pci_path.join("device"));
+    let class_code = read_trim(pci_path.join("class"))
+        .as_deref()
+        .and_then(parse_class_code_u32);
+    let driver = driver_name(&pci_path);
+    let numa_node =
+        parse_i32(pci_path.join("numa_node")).and_then(|n| if n < 0 { None } else { Some(n) });
+
+    let cdev = discover_vfio_cdev_by_name(&vfio_name, Some(bdf_str.clone()), None);
+
+    let device_info = DeviceInfo {
+        addr: DeviceAddress::Pci(bdf),
+        vendor_id,
+        device_id,
+        class_code,
+        driver,
+        iommu_group_id: None,
+        numa_node,
+        sysfs_path: pci_path,
+        vfio_cdev: cdev.clone(),
+    };
+
+    let labels = build_group_labels(&[device_info.clone()]);
+    let primary = device_info.clone();
+
+    let iommufd_backend = {
+        let iommu_dev = PathBuf::from(DEV_IOMMU);
+        if is_char_dev(&iommu_dev) {
+            cdev.map(|c| VfioIommufdBackend {
+                iommufd_dev: iommu_dev,
+                cdevs: vec![c],
+            })
+        } else {
+            None
+        }
+    };
+
+    let health = if iommufd_backend.is_some() {
+        Health::Healthy
+    } else {
+        Health::Unhealthy
+    };
+
+    Ok(VfioDevice {
+        id: format!("vfio-iommufd-{}", vfio_name),
+        device_type: VfioDeviceType::Normal,
+        bus_mode: VfioBusMode::Pci,
+        iommu_group: None,
+        iommu_group_id: None,
+        iommufd: iommufd_backend,
+        devices: vec![device_info],
+        primary,
+        labels,
+        health,
+        ap_devices: Vec::new(),
+    })
 }
 
 fn parse_dev_vfio_group_id(s: &str) -> Option<u32> {
@@ -608,15 +656,15 @@ fn discover_vfio_device_for_iommu_group(gid: u32, group_devnode: PathBuf) -> Res
         }
     }
 
-    // Drop functions that only share the GPU's IOMMU group but must not be
-    // passed through (audio controllers, bridges), reusing the same
-    // IOMMU_IGNORE classification as validate_group_basic. Everything derived
-    // below (vfio_cdevs, the IOMMUFD backend cdevs and the primary device) is
-    // built from this filtered list. Passing such a function would otherwise
-    // emit an extra vfio-pci entry reusing the GPU's cold-plug root-port and
-    // IOMMUFD object ids, making QEMU abort with a duplicate-id error.
+    // Drop PCI functions that share the GPU's IOMMU group but must not be passed
+    // through (host bridges, PCI bridges, audio companions).  Everything derived
+    // below (vfio_cdevs and the primary device) is built from this filtered list.
+    // Passing such a function would otherwise emit an extra vfio-pci entry reusing
+    // the GPU's cold-plug root-port, making QEMU abort with a duplicate-id error.
     devices.retain(|d| match &d.addr {
-        DeviceAddress::Pci(bdf) => filter_bridge_device(&bdf.to_string(), IOMMU_IGNORE).is_none(),
+        DeviceAddress::Pci(bdf) => {
+            filter_bridge_device(&bdf.to_string(), IOMMU_IGNORE_CLASSES).is_none()
+        }
         _ => true,
     });
     if devices.is_empty() {
