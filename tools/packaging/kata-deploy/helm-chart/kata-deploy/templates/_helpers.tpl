@@ -794,7 +794,6 @@ spec:
 {{- end }}
       serviceAccountName: {{ include "kata-deploy.serviceAccountName" $root }}
       restartPolicy: Never
-      hostPID: true
 {{- with $root.Values.tolerations }}
       tolerations:
 {{- toYaml . | nindent 8 }}
@@ -804,17 +803,17 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" true "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "label" "action" "install-stage-label" "privileged" false "mountHost" false) | nindent 8 }}
 {{- else }}
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "unlabel" "action" "cleanup-stage-unlabel" "privileged" false "mountHost" false) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
@@ -853,7 +852,7 @@ Arguments (dict):
   root        - the top-level context (.)
   name        - container name
   action      - kata-deploy subcommand (e.g. install-stage-cri)
-  privileged  - bool, whether the container runs privileged (host nsenter/restart)
+  privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/host)
 
 Emitted at column 0; indent with `nindent` at the call site.
@@ -867,6 +866,11 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonEnv" .root | nindent 4 }}
   securityContext:
     privileged: {{ .privileged }}
+{{- if .mountHost }}
+    capabilities:
+      add:
+      - SYS_CHROOT
+{{- end }}
 {{- if .mountHost }}
   volumeMounts:
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
@@ -884,6 +888,8 @@ host. Emitted at column 0; indent with `nindent` at the call site.
   mountPath: /etc/containerd/
 - name: host
   mountPath: /host/
+- name: systemd-private
+  mountPath: /run/systemd/private
 {{- if .Values.containerd.userDropIn | trim }}
 - name: custom-containerd-config
   mountPath: /custom-containerd-config/
@@ -910,6 +916,10 @@ indent with `nindent` at the call site.
 - name: host
   hostPath:
     path: /
+- name: systemd-private
+  hostPath:
+    path: /run/systemd/private
+    type: Socket
 {{- if .Values.containerd.userDropIn | trim }}
 - name: custom-containerd-config
   configMap:

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
+use std::os::unix::process::CommandExt;
 use std::process::Command;
 
 pub const RUST_SHIMS: &[&str] = &[
@@ -25,17 +26,36 @@ pub fn is_rust_shim(shim: &str) -> bool {
     RUST_SHIMS.contains(&shim)
 }
 
-/// Execute a command in the host namespace (equivalent to nsenter --target 1 --mount)
+/// Execute a command with the host filesystem as its root.
 pub fn host_exec(command: &[&str]) -> Result<String> {
-    // Use nsenter (copied from Alpine) to execute command in host's mount namespace
-    // Since we have hostPID: true, PID 1 is the host's init
-    let mut nsenter_cmd = vec!["nsenter", "--target", "1", "--mount", "--"];
-    nsenter_cmd.extend(command);
+    let (program, args) = command
+        .split_first()
+        .context("Cannot execute an empty host command")?;
 
-    let output = Command::new(nsenter_cmd[0])
-        .args(&nsenter_cmd[1..])
+    let mut host_command = Command::new(program);
+    host_command.args(args);
+
+    // SAFETY: pre_exec only invokes the async-signal-safe chroot and chdir
+    // syscalls. Both calls affect the child after fork and before exec.
+    unsafe {
+        host_command.pre_exec(|| {
+            let host_root = c"/host";
+            if libc::chroot(host_root.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            let root = c"/";
+            if libc::chdir(root.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+
+            Ok(())
+        });
+    }
+
+    let output = host_command
         .output()
-        .context("Failed to execute command with nsenter")?;
+        .with_context(|| format!("Failed to execute host command `{}`", command.join(" ")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -45,12 +65,9 @@ pub fn host_exec(command: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Execute systemctl command in host namespace
-pub fn host_systemctl(args: &[&str]) -> Result<()> {
-    let mut cmd = vec!["systemctl"];
-    cmd.extend(args);
-    let _output = host_exec(&cmd)?;
-    Ok(())
+/// Perform a systemctl-equivalent operation through the host systemd D-Bus API.
+pub async fn host_systemctl(args: &[&str]) -> Result<()> {
+    super::systemd::systemctl(args).await
 }
 
 /// Get kata containers config path based on shim type.

@@ -81,7 +81,6 @@ spec:
       affinity:
 {{- $dsAffinity | nindent 8 }}
 {{- end }}
-      hostPID: true
       # Allow SIGTERM cleanup (uninstall) to complete before force-kill.
       # Cleanup restarts the CRI runtime and waits for the node to become
       # ready again, which can take several minutes on k3s/rke2.
@@ -113,7 +112,10 @@ spec:
         - name: HEALTH_PORT
           value: {{ $health.port | quote }}
         securityContext:
-          privileged: true
+          privileged: false
+          capabilities:
+            add:
+            - SYS_CHROOT
 {{- if $health.startupProbe.enabled }}
         startupProbe:
           httpGet:

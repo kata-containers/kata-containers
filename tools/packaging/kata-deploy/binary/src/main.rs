@@ -64,12 +64,11 @@ enum Action {
     InstallStageHostCheck,
     /// Stage 1 of a staged (JobSet) install: install kata artifacts/config on
     /// the host and set up configured snapshotters. Does not touch CRI
-    /// configuration, but is still privileged (host writes + snapshotter setup
-    /// shell into the host via nsenter).
+    /// configuration.
     #[clap(name = "install-stage-artifacts")]
     InstallStageArtifacts,
     /// Stage 2 of a staged (JobSet) install: write CRI drop-ins, restart the
-    /// runtime, and wait for node readiness. Privileged + short-lived.
+    /// runtime, and wait for node readiness.
     #[clap(name = "install-stage-cri")]
     InstallStageCri,
     /// Stage 3 of a staged (JobSet) install: apply the kata-runtime node label.
@@ -82,12 +81,11 @@ enum Action {
     #[clap(name = "cleanup-stage-unlabel")]
     CleanupStageUnlabel,
     /// Cleanup stage 2 of a staged (JobSet) uninstall: remove CRI drop-ins,
-    /// restart the runtime, and wait for readiness. Privileged + short-lived.
+    /// restart the runtime, and wait for readiness.
     #[clap(name = "cleanup-stage-revert-cri")]
     CleanupStageRevertCri,
     /// Cleanup stage 3 of a staged (JobSet) uninstall: remove kata
-    /// artifacts/config/symlinks from the host. Privileged (mutates the host
-    /// filesystem under the install dir).
+    /// artifacts/config/symlinks from the host.
     #[clap(name = "cleanup-stage-remove-artifacts")]
     CleanupStageRemoveArtifacts,
     /// Internal: entered via re-exec after install completes. Holds the
@@ -109,8 +107,8 @@ const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
 // DaemonSet pod's VmData reservation (~440 MiB). Two workers is plenty:
 //
 //   - the install path is overwhelmingly I/O-bound,
-//   - it shells out to `nsenter ... systemctl restart …` (synchronous,
-//     blocking calls that wedge the thread they run on for tens of seconds);
+//   - host command and systemd D-Bus operations are synchronous and may block
+//     for tens of seconds;
 //     a second worker keeps the health server able to answer kubelet probes
 //     within timeoutSeconds while the first is blocked.
 //
@@ -733,9 +731,7 @@ fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
 }
 
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
-/// up any configured snapshotters. This does not touch CRI configuration, but it
-/// still needs privileged host access: writing under the host install dir and
-/// the snapshotter setup (e.g. nydus) shell into the host via nsenter.
+/// up any configured snapshotters. This does not touch CRI configuration.
 async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (artifacts): installing kata artifacts on host");
 
@@ -754,8 +750,8 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
 }
 
 /// Install stage 2 (cri): write CRI drop-ins, configure snapshotters, restart
-/// the runtime, and wait for the node to become ready. This is the privileged,
-/// node-disrupting stage and is kept short-lived.
+/// the runtime, and wait for the node to become ready. This node-disrupting
+/// stage is kept short-lived.
 async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
 
@@ -1142,7 +1138,7 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
     k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
     runtime::lifecycle::restart_cri_runtime(config, runtime).await?;
     if matches!(runtime, "crio" | "containerd") {
-        utils::host_systemctl(&["restart", "kubelet"])?;
+        utils::host_systemctl(&["restart", "kubelet"]).await?;
     }
     runtime::lifecycle::wait_till_node_is_ready_timeout(config, Some(300)).await?;
 

@@ -242,7 +242,7 @@ pub async fn configure_snapshotter(
                 _ => NYDUS_FOR_KATA_TEE.to_string(),
             };
 
-            utils::host_systemctl(&["restart", &nydus_snapshotter])?;
+            utils::host_systemctl(&["restart", &nydus_snapshotter]).await?;
         }
         "erofs" => {
             configure_erofs_snapshotter(config, &configuration_file).await?;
@@ -264,13 +264,13 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
     };
 
     // Stop the service if it is currently running so we can replace the binaries safely.
-    let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]);
+    let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]).await;
 
     // Disable it as well: the [Install] section we are about to write may name a
     // different CRI unit than the one currently installed (e.g. after a kata-deploy
     // upgrade), and `systemctl disable` is the only thing that removes the stale
     // <old-cri-unit>.service.wants/ symlink.
-    let _ = utils::host_systemctl(&["disable", &format!("{nydus_snapshotter}.service")]);
+    let _ = utils::host_systemctl(&["disable", &format!("{nydus_snapshotter}.service")]).await;
 
     // The nydus data directory (/var/lib/nydus-for-kata-tee) is intentionally preserved
     // across reinstalls.  Removing it would create a split-brain state: the nydus backend
@@ -393,8 +393,8 @@ pub async fn install_nydus_snapshotter(config: &Config, runtime: &str) -> Result
         service_content,
     )?;
 
-    utils::host_systemctl(&["daemon-reload"])?;
-    utils::host_systemctl(&["enable", &format!("{nydus_snapshotter}.service")])?;
+    utils::host_systemctl(&["daemon-reload"]).await?;
+    utils::host_systemctl(&["enable", &format!("{nydus_snapshotter}.service")]).await?;
 
     Ok(())
 }
@@ -407,7 +407,7 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
         _ => NYDUS_FOR_KATA_TEE.to_string(),
     };
 
-    utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")])?;
+    utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")]).await?;
 
     fs::remove_file(format!(
         "/host/etc/systemd/system/{nydus_snapshotter}.service"
@@ -423,7 +423,7 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
     // snapshot records in meta.db are completely dormant — nothing will use them.  If nydus
     // is reinstalled later the data directory is still present and both sides remain in sync.
 
-    utils::host_systemctl(&["daemon-reload"])?;
+    utils::host_systemctl(&["daemon-reload"]).await?;
 
     Ok(())
 }
