@@ -696,6 +696,12 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CUSTOM_RUNTIMES_ENABLED
   value: "true"
 {{- end }}
+{{- /* Devkit debug extension: only effective together with debug (the debug
+       console must be enabled for it to be reachable). */ -}}
+{{- if and .Values.debug .Values.devkit }}
+- name: DEVKIT
+  value: "true"
+{{- end }}
 {{- with .Values.startupTaints }}
 - name: STARTUP_TAINTS
   value: {{ join "," . | quote }}

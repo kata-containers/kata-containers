@@ -64,6 +64,11 @@ KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
 BUILD_VARIANT=${BUILD_VARIANT:-""}
 
+# When set to "yes", build only the distro rootfs and skip the agent/systemd
+# setup. Used to assemble shell/agent-less guest extension rootfses (e.g. the
+# devkit debug extension) that ship no kata-agent.
+ROOTFS_ONLY=${ROOTFS_ONLY:-""}
+
 # All NVIDIA build variants (nvidia, nvidia-gpu, nvidia-gpu-confidential,
 # nvidia-gpu-extension) are handled by the NVIDIA rootfs builder.
 is_nvidia_variant() { [[ "${BUILD_VARIANT}" == "nvidia" || "${BUILD_VARIANT}" == "nvidia-"* ]]; }
@@ -303,7 +308,7 @@ docker_extra_args()
 		# shellcheck disable=SC2154
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-	debian | ubuntu | suse)
+	debian | ubuntu | suse | devkit)
 		source /etc/os-release
 
 		case "${ID}" in
@@ -638,6 +643,7 @@ build_rootfs_distro()
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
 			--env BUILD_VARIANT="${BUILD_VARIANT}" \
+			--env ROOTFS_ONLY="${ROOTFS_ONLY}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
@@ -889,7 +895,9 @@ EOF
 	fi
 
 	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
-	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
+	# An empty ROOTFS_DIR here would make the lines below unlink and recreate
+	# the build machine's own resolver, so refuse to run rather than guess.
+	dns_file="${ROOTFS_DIR:?}/etc/resolv.conf"
 	if [[ -L "${dns_file}" ]]; then
 		# if /etc/resolv.conf is a link, it cannot be used for bind mount
 		rm -f "${dns_file}"
@@ -992,6 +1000,14 @@ main()
 	# Extension assembly is only valid inside its dedicated package-baked image.
 	if [[ "${BUILD_VARIANT}" == "nvidia-gpu-extension" ]]; then
 		die "nvidia-gpu-extension must be built with USE_DOCKER or USE_PODMAN"
+	fi
+
+	# Guest extension rootfses (e.g. the devkit debug extension) ship no
+	# kata-agent, so stop after the distro rootfs is built and skip the
+	# agent/systemd setup below.
+	if [[ "${ROOTFS_ONLY}" == "yes" ]]; then
+		info "ROOTFS_ONLY set: skipping agent and systemd setup"
+		return 0
 	fi
 
 	init="${ROOTFS_DIR}/sbin/init"

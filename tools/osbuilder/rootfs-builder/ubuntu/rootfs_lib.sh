@@ -5,7 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 build_rootfs() {
-	local rootfs_dir=$1
+	# Several steps below write to paths derived from this one, one of them the
+	# resolver: an empty rootfs_dir would target the build machine's own /etc.
+	local rootfs_dir="${1:?rootfs_dir is required}"
+	[[ "${rootfs_dir}" != "/" ]] || die "refusing to build a rootfs at /"
 
 	# This fixes the spurious error
 	# E: Can't find a source to download version '2021.03.26' of 'ubuntu-keyring:amd64'

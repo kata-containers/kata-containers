@@ -32,6 +32,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-image-mariner-tarball \
 	rootfs-image-nvidia-gpu-tarball \
 	rootfs-image-nvidia-gpu-confidential-tarball \
@@ -69,6 +70,7 @@ BASE_TARBALLS = serial-targets \
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
+	rootfs-image-devkit-extension-tarball \
 	rootfs-image-nvidia-gpu-tarball \
 	rootfs-image-nvidia-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
@@ -323,6 +325,12 @@ rootfs-image-confidential-tarball: $(DEPS)
 rootfs-image-coco-extension-tarball:
 	${MAKE} $@-build
 
+# Self-contained debug rootfs (no kata-agent, kernel or driver tree), so it has
+# no build-time dependency on any other target.
+DEPS :=
+rootfs-image-devkit-extension-tarball: $(DEPS)
+	${MAKE} $@-build
+
 DEPS := agent-tarball
 rootfs-image-mariner-tarball: $(DEPS)
 	${MAKE} $@-build
@@ -390,7 +398,10 @@ merge-builds:
 install-prebuilt-artifacts:
 	mv kata-artifacts $(MK_DIR)/build
 
+# The payload is unpacked straight onto this machine's root, so vet it first:
+# a stray etc/resolv.conf in there would replace the local resolver.
 install-tarball:
+	$(MK_DIR)/../../scripts/assert-tarball-host-safe.sh ./kata-static.tar.zst
 	tar --zstd -xf ./kata-static.tar.zst -C /
 
 # Push the kata-deploy image and helm chart for the host arch. Caller is

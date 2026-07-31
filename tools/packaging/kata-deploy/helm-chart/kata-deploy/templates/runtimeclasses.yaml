@@ -42,7 +42,8 @@
 {{- /*
   Render a single RuntimeClass. Params (dict): root (.), shim, config, shimConfig,
   nameOverride (optional; if set, use as metadata.name for default RC),
-  variant (optional; e.g. "debug" -> name/handler kata-<shim>-debug),
+  variant (optional; e.g. "debug" -> name/handler kata-<shim>-debug, or
+  "devkit" -> kata-<shim>-devkit),
   useShimNodeSelectors.
 
   Name/handler precedence: variant > multiInstallSuffix > nameOverride > default.
@@ -188,6 +189,24 @@ scheduling:
 {{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
 {{- end }}
 {{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "variant" "debug" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- /* Devkit debug RuntimeClasses: an extra kata-<shim>-devkit per enabled shim,
+       matching the handler kata-deploy registers when DEVKIT=true. Gated by
+       debug (reachable only with the debug console) and devkit; reuses each
+       shim's overhead/nodeSelectors. */ -}}
+{{- if and .Values.debug .Values.devkit }}
+{{- range $shim := $enabledShims }}
+{{- $config := index $runtimeClassConfigs $shim }}
+{{- $shimConfig := index $.Values.shims $shim }}
+{{- if $config }}
+{{- $effectiveConfig := deepCopy $config }}
+{{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
+{{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
+{{- end }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "variant" "devkit" "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- end }}
 {{- end }}
 {{- end }}
