@@ -1082,11 +1082,15 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 
         let comm_path = tid_path.join(tid_str.clone()).join("comm");
 
-        if !comm_path.exists() {
-            return Err(anyhow!("comm path was not found."));
-        }
-
-        let p_name = fs::read_to_string(comm_path)?;
+        // Threads can exit while iterating /proc; missing comm is transient.
+        let p_name = match fs::read_to_string(&comm_path) {
+            Ok(name) => name,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                return Err(anyhow!(err)
+                    .context(format!("failed to read comm from {}", comm_path.display())));
+            }
+        };
 
         // The CH names it's threads with a vcpu${number} to identify them, where
         // the thread name is located at /proc/${ch_pid}/task/${thread_id}/comm.
@@ -1626,5 +1630,32 @@ mod tests {
             !vcpus.contains_key(&1000),
             "non-vcpu thread should not be in the map"
         );
+    }
+
+    #[actix_rt::test]
+    async fn test_get_ch_vcpu_tids_missing_comm() {
+        let tmp_dir = Builder::new().prefix("fake-proc-pid").tempdir().unwrap();
+        let task_dir = tmp_dir.path().join("task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        let vcpu_tid_dir = task_dir.join("3001");
+        fs::create_dir_all(&vcpu_tid_dir).unwrap();
+        fs::write(vcpu_tid_dir.join("comm"), "vcpu0\n").unwrap();
+
+        // Simulates a thread that exited mid-scan.
+        let missing_comm_dir = task_dir.join("9999");
+        fs::create_dir_all(&missing_comm_dir).unwrap();
+
+        let proc_path = tmp_dir.path().to_str().unwrap();
+        let result = get_ch_vcpu_tids(proc_path);
+        let vcpus = result.unwrap();
+
+        // Should only contain the valid vcpu thread; the missing-comm tid is skipped.
+        assert_eq!(
+            vcpus.len(),
+            1,
+            "only vcpu threads with comm should be mapped"
+        );
+        assert_eq!(vcpus[&0], 3001);
     }
 }
