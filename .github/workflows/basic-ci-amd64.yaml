@@ -263,7 +263,9 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-nerdctl-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
-    runs-on: ubuntu-22.04
+    # 24.04 is what the erofs snapshotter legs need: the erofs-utils backport
+    # they install comes from Ubuntu 25.10 and does not install on 22.04.
+    runs-on: ubuntu-24.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
