@@ -44,8 +44,8 @@ setup() {
 	local pod_yaml_in="${pod_config_dir}/${POD_TEMPLATE_BASENAME}.yaml.in"
 	export K8S_TEST_YAML="${pod_config_dir}/${POD_TEMPLATE_BASENAME}.yaml"
 
-	# Substitute environment variables in the YAML template
-	envsubst < "${pod_yaml_in}" > "${K8S_TEST_YAML}"
+	# Substitute the runtime class name variable in the YAML template
+	envsubst '${RUNTIME_CLASS_NAME}' < "${pod_yaml_in}" > "${K8S_TEST_YAML}"
 
 	# Schedule on a known node so that later it can print the system's logs for
 	# debugging.
