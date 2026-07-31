@@ -573,6 +573,33 @@ EOF
 	fi
 }
 
+# containerd only picks up the conf.d fragments if its main configuration file
+# imports them, and whether "containerd config default" already does that varies
+# with the release, so make sure the import is there without disturbing anything
+# else in the file.
+#
+# Nothing to do for containerd 1.x (schema v2), which does not honour conf.d.
+function ensure_containerd_conf_d_imported() {
+	local -r config="/etc/containerd/config.toml"
+	local -r conf_d="/etc/containerd/conf.d"
+	local schema
+
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || return 0
+
+	sudo mkdir -p "${conf_d}"
+	if sudo grep -qF "${conf_d}/*.toml" "${config}"; then
+		return 0
+	fi
+
+	if sudo grep -qE "^imports[[:space:]]*=" "${config}"; then
+		sudo sed -i -E "s|^imports[[:space:]]*=.*|imports = ['${conf_d}/*.toml']|" "${config}"
+	else
+		# A top-level key has to come before the first table header.
+		sudo sed -i "1i imports = ['${conf_d}/*.toml']" "${config}"
+	fi
+}
+
 # Rootful systemd must own API sockets (see containerd "config default" using non-root
 # uid/gid under listeners on newer releases, e.g. 2.3 on amd64).
 #
@@ -647,6 +674,7 @@ function overwrite_containerd_config() {
 		cd_bin="$(command -v containerd)"
 		sudo mkdir -p "${conf_dir}"
 		sudo "${cd_bin}" config default | sudo tee "${containerd_config}" > /dev/null
+		ensure_containerd_conf_d_imported
 		ensure_containerd_conf_d_rootful_api_sockets
 
 		# containerd v2.x (schema v3+): io.containerd.cri.v1.runtime plugin path,
