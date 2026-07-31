@@ -67,9 +67,8 @@ spec:
         runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-{{- with $root.Values.tolerations }}
-      tolerations:
-{{- toYaml . | nindent 8 }}
+{{- with include "kata-deploy.dispatcherPlacement" $root | trim }}
+{{- . | nindent 6 }}
 {{- end }}
 {{- with $root.Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
