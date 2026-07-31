@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 mod dan;
 mod endpoint;
-pub use dan::{dan_config_path, Dan, DanNetworkConfig};
+pub use dan::{dan_config_path, dan_vfio_device_count, Dan, DanNetworkConfig};
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
