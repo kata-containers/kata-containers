@@ -563,43 +563,16 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				# Install erofs-utils >= 1.8 from Ubuntu 25.10
-				# (Questing Quokka) so that mkfs.erofs supports the
-				# flags containerd's erofs differ needs (e.g. -T0,
-				# --mkfs-time, --sort).  Ubuntu 24.04 ships 1.7.1
-				# which is too old.
-				sudo apt-get -y install --no-install-recommends \
-					software-properties-common
-				sudo add-apt-repository -y \
-					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
-				# Pin questing packages low so only explicitly
-				# requested packages are pulled from that release.
-				sudo tee /etc/apt/preferences.d/questing-pin > /dev/null <<-'APTPIN'
-				Package: *
-				Pin: release n=questing
-				Pin-Priority: 100
-				APTPIN
-				sudo apt-get update
-				sudo apt-get -y install --no-install-recommends \
-					-t questing erofs-utils fsverity
-				sudo rm -f /etc/apt/preferences.d/questing-pin
-				sudo add-apt-repository -y --remove \
-					'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+				install_erofs_utils
 
-				# Load the erofs module
-				sudo modprobe erofs
+				# fsverity is only needed here because, unlike
+				# the docker and nerdctl jobs, these do enable
+				# fs-verity on the layer blobs.
+				sudo apt-get -y install --no-install-recommends fsverity
 
 				# Load device-mapper and dm-verity kernel modules.
 				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
-					sudo modprobe dm-mod
-					sudo modprobe dm-verity
-
-					# Verify modules loaded successfully
-					if [[ ! -d /sys/module/dm_verity ]]; then
-						>&2 echo "ERROR: dm_verity kernel module not available after modprobe"
-						>&2 echo "dm-verity support requires dm-mod and dm-verity kernel modules"
-						exit 1
-					fi
+					load_dm_verity_modules
 				fi
 
 				# Ensure fsverity is enabled on the disk, otherwise

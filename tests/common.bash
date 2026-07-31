@@ -867,6 +867,107 @@ emptydir_mode = "shared-fs"
 EOF
 }
 
+# Installs erofs-utils and loads the erofs module.
+#
+# mkfs.erofs has to be >= 1.8 for the flags containerd's erofs differ passes
+# (-T0, --mkfs-time, --sort).  Ubuntu 24.04 still ships 1.7.1, so where the host
+# has nothing recent enough - the GitHub-hosted runners have nothing at all -
+# take it from Ubuntu 25.10 (Questing Quokka), pinned low enough that nothing
+# else gets pulled in from that release.
+function install_erofs_utils() {
+	local version
+
+	if version="$(dpkg-query -W -f='${Version}' erofs-utils 2>/dev/null)" && \
+		dpkg --compare-versions "${version}" ge 1.8; then
+		info "erofs-utils ${version} is already installed"
+	else
+		sudo apt-get -y install --no-install-recommends software-properties-common
+		sudo add-apt-repository -y 'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+		sudo tee /etc/apt/preferences.d/questing-pin > /dev/null <<-'APTPIN'
+		Package: *
+		Pin: release n=questing
+		Pin-Priority: 100
+		APTPIN
+		sudo apt-get update
+		sudo apt-get -y install --no-install-recommends -t questing erofs-utils
+		sudo rm -f /etc/apt/preferences.d/questing-pin
+		sudo add-apt-repository -y --remove 'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+	fi
+
+	sudo modprobe erofs
+}
+
+# dm-verity hashes the erofs layers through device-mapper, which needs both the
+# device-mapper core and the verity target loaded on the host.
+function load_dm_verity_modules() {
+	sudo modprobe dm-mod
+	sudo modprobe dm-verity
+
+	[[ -d /sys/module/dm_verity ]] || \
+		die "the dm_verity kernel module is not available after modprobe"
+}
+
+# Points containerd at the erofs differ and snapshotter, as a conf.d drop-in.
+#
+# This is the non-Kubernetes counterpart of what kata-deploy writes on the k8s
+# jobs, and it keeps dm-verity on so that the smoke tests cover the same layer
+# integrity path.  fs-verity is the one thing left out: it needs the host root
+# filesystem prepared up front (tune2fs -O verity) and it protects the layer
+# blobs on the host rather than anything the guest sees.
+#
+# max_unmerged_layers = 0 collapses the layers into a single fsmeta.erofs, which
+# only runtime-rs can consume - and runtime-rs is all this is used with.
+function configure_containerd_erofs_snapshotter() {
+	local -r drop_in="/etc/containerd/conf.d/60-kata-ci-erofs-snapshotter.toml"
+	local schema dump
+
+	load_dm_verity_modules
+
+	# The erofs snapshotter is a containerd 2.2 plugin, and conf.d drop-ins are
+	# only read from containerd 2.x (schema v3+) onwards anyway.
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || die "the erofs snapshotter needs containerd 2.2 or newer"
+
+	info "Configuring the containerd erofs snapshotter via ${drop_in}"
+	ensure_containerd_conf_d_imported
+	sudo mkdir -p "$(dirname "${drop_in}")"
+	sudo tee "${drop_in}" > /dev/null <<-'EOF'
+	[plugins.'io.containerd.cri.v1.images']
+	  discard_unpacked_layers = false
+
+	[plugins.'io.containerd.service.v1.diff-service']
+	  default = ['erofs', 'walking']
+
+	[plugins.'io.containerd.differ.v1.erofs']
+	  mkfs_options = ['-T0', '--mkfs-time', '--sort=none']
+	  enable_tar_index = false
+	  enable_dmverity = true
+
+	[plugins.'io.containerd.snapshotter.v1.erofs']
+	  set_immutable = true
+	  enable_fsverity = false
+	  dmverity_mode = 'on'
+	  default_size = '0'
+	  max_unmerged_layers = 0
+	EOF
+
+	restart_containerd_service
+
+	# Complain here, rather than at container creation time, if this containerd
+	# is too old to carry the erofs plugins.
+	if ! sudo ctr plugins ls | \
+		awk '$1 == "io.containerd.snapshotter.v1" && $2 == "erofs" && $NF == "ok" { ok = 1 } END { exit !ok }'; then
+		sudo ctr plugins ls || true
+		die "containerd has no working erofs snapshotter plugin"
+	fi
+
+	# ... and likewise if the drop-in was written but never read.
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump)"
+	if ! tr -d " '\"" <<< "${dump}" | grep -q '^default=\[erofs,walking\]$'; then
+		die "the erofs differ is missing from the running containerd configuration"
+	fi
+}
+
 function check_containerd_config_for_kata() {
 	declare -r containerd_path="/etc/containerd/config.toml"
 	local hv dump
