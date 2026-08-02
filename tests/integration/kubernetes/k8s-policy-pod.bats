@@ -122,8 +122,8 @@ create_and_wait_for_pod_ready() {
 @test "Successful pod with auto-generated policy and custom layers cache path" {
 	tmp_path=$(mktemp -d)
 
-	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
-		"--layers-cache-file-path=${tmp_path}/cache.json"
+	GENPOLICY_LAYERS_CACHE_FILE_PATH="${tmp_path}/cache.json" \
+		auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}"
 
 	[ -f "${tmp_path}/cache.json" ]
 	rm -r "${tmp_path}"

@@ -51,6 +51,9 @@ Depending on the size of the container images and the speed of the network conne
 
 **Warning** Using cached image layers can lead to undesirable results. For example, if one or more locally cached layers have been modified (e.g., by an attacker) then the auto-generated Policy will allow those modified container images to be executed on the Guest VM.
 
+The cache file format is internal to `genpolicy`. If a cache file is incompatible
+with the current `genpolicy` version, the tool deletes it and rebuilds the cache.
+
 To enable caching, use the `-u` command line parameter - e.g.,
 
 ```bash

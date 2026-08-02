@@ -43,6 +43,7 @@ AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
 GENPOLICY_BINARY="${GENPOLICY_BINARY:-"/opt/kata/bin/genpolicy"}"
 GENPOLICY_SETTINGS_DIR="${GENPOLICY_SETTINGS_DIR:-"/opt/kata/share/defaults/kata-containers"}"
+GENPOLICY_LAYERS_CACHE_FILE_PATH="${GENPOLICY_LAYERS_CACHE_FILE_PATH:-}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
@@ -457,8 +458,14 @@ auto_generate_policy_no_added_flags() {
 
 	auto_generate_policy_enabled || return 0
 	local genpolicy_command="RUST_LOG=info ${GENPOLICY_BINARY} -u -y ${yaml_file}"
+	local quoted_layers_cache_file_path
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}"
+
+	if [[ -n "${GENPOLICY_LAYERS_CACHE_FILE_PATH}" ]]; then
+		printf -v quoted_layers_cache_file_path "%q" "${GENPOLICY_LAYERS_CACHE_FILE_PATH}"
+		genpolicy_command+=" --layers-cache-file-path=${quoted_layers_cache_file_path}"
+	fi
 
 	if [[ -n "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
