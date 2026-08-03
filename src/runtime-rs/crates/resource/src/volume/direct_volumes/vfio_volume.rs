@@ -9,11 +9,9 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    device::{
-        device_manager::{do_handle_device, DeviceManager},
-        DeviceConfig, DeviceType,
-    },
-    get_vfio_device, VfioConfig,
+    VfioDeviceBase, device::{
+        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device},
+    }, get_vfio_device, vfio_device::VfioDeviceType,
 };
 use kata_sys_util::mount::{get_mount_options, get_mount_type};
 use kata_types::mount::DirectVolumeMountInfo;
@@ -46,15 +44,16 @@ impl VfioVolume {
         // support both /dev/vfio/X and BDF<DDDD:BB:DD.F> or BDF<BB:DD.F>
         let vfio_device =
             get_vfio_device(mount_info.device.clone()).context("get vfio device failed.")?;
-        let vfio_dev_config = &mut VfioConfig {
+        let vfio_dev_config = VfioDeviceBase {
             host_path: vfio_device.clone(),
             dev_type: "b".to_string(),
+            bus_type: "pci".to_string(),
             hostdev_prefix: "vfio_vol".to_owned(),
             ..Default::default()
         };
 
         // create and insert block device into Kata VM
-        let device_info = do_handle_device(d, &DeviceConfig::VfioCfg(vfio_dev_config.clone()))
+        let device_info = do_handle_device(d, &DeviceConfig::VfioModernCfg(vfio_dev_config))
             .await
             .context("do handle device failed.")?;
 
@@ -74,13 +73,25 @@ impl VfioVolume {
             ..Default::default()
         };
 
-        let mut device_id = String::new();
-        if let DeviceType::Vfio(device) = device_info {
-            device_id = device.device_id;
-            storage.driver = device.driver_type;
-            // safe here, device_info is correct and only unwrap it.
-            storage.source = device.config.virt_path.unwrap().1;
-        }
+        let device_id = if let DeviceType::VfioModern(device_mod) = device_info {
+            let device = device_mod.lock().await;
+            let (device_type, dev_type, bus_type) = (
+                &device.device.device_type, 
+                &device.config.dev_type, 
+                &device.config.bus_type
+            );
+            storage.driver = agent_driver_type(device_type, dev_type, bus_type).to_string();
+            storage.source = device
+                .config
+                .virt_path
+                .as_ref()
+                .context("VFIO volume has no guest block path")?
+                .1
+                .clone();
+            device.device_id.clone()
+        } else {
+            return Err(anyhow::anyhow!("unexpected non-modern VFIO volume device"));
+        };
 
         // generate host guest shared path
         let guest_path = generate_shared_path(m.destination().clone(), &device_id, sid)
@@ -137,5 +148,17 @@ impl Volume for VfioVolume {
 
     fn get_device_id(&self) -> Result<Option<String>> {
         Ok(Some(self.device_id.clone()))
+    }
+}
+
+/// Driver name consumed by kata-agent. Keep the legacy mapping while the
+/// underlying representation is migrated to VfioDeviceModern.
+pub fn agent_driver_type(device_type: &VfioDeviceType, bus_type: &str, dev_type: &str) -> &'static str {
+    if device_type.clone() == VfioDeviceType::MediatedAp || bus_type == "ccw" {
+        "vfio-ap"
+    } else if dev_type == "b" {
+        "mmioblk"
+    } else {
+        "vfio-pci"
     }
 }
