@@ -18,7 +18,8 @@ mod manager_inner;
 pub mod network;
 pub mod resource_persist;
 use hypervisor::{
-    BlockConfigModern, HybridVsockConfig, PortDeviceConfig, ProtectionDeviceConfig, VsockConfig, vfio_device::VfioDeviceBase,
+    vfio_device::VfioDeviceBase, BlockConfigModern, HybridVsockConfig, PortDeviceConfig,
+    ProtectionDeviceConfig, VsockConfig,
 };
 use network::NetworkConfig;
 pub mod rootfs;

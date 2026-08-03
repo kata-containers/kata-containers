@@ -4,8 +4,6 @@
 
 include ../../utils.mk
 
-PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
-
 ifeq ($(ARCH), $(filter $(ARCH), s390x powerpc64le))
 default build check test clippy:
 	@echo "$(ARCH) is not support currently"
@@ -39,10 +37,7 @@ clean:
 
 test:
 ifdef SUPPORT_VIRTUALIZATION
-	@set -e; \
-	for dir in $(PROJECT_DIRS); do \
-		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) --no-fail-fast -- --nocapture --test-threads=1 --skip bindgen && popd"; \
-	done
+	RUST_BACKTRACE=1 cargo test $(PACKAGE_FLAGS) --all-features --target $(TRIPLE) --no-fail-fast -- --nocapture --test-threads=1 --skip bindgen
 else
 	@echo "INFO: skip testing dragonball, it need virtualization support."
 	exit 0

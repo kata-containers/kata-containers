@@ -164,10 +164,19 @@ TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
 
 CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
+# Find all packages of the component make was invoked from, i.e. the
+# packages whose manifests live under $(CURDIR). Used to scope cargo
+# commands to the component's crates instead of the whole workspace.
+# Deliberately lazy so that `cargo metadata` only runs when a target
+# actually expands $(PACKAGE_FLAGS).
+PACKAGES ?= $(shell cargo metadata --no-deps --format-version 1 | \
+                jq -r --arg d "$(CURDIR)/" '.packages[] | select(.manifest_path | startswith($$d)) | .name')
+PACKAGE_FLAGS = $(patsubst %,-p %,$(PACKAGES))
+
 standard_rust_check:
 	@echo "standard rust check..."
-	cargo fmt -- --check
-	cargo clippy --all-targets --all-features --release --locked \
+	cargo fmt $(PACKAGE_FLAGS) -- --check
+	cargo clippy $(PACKAGE_FLAGS) --all-targets --all-features --release --locked \
 		-- \
 		-D warnings
 

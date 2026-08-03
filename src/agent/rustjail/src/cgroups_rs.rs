@@ -10,9 +10,9 @@
 //! root; this module preserves the old paths.
 
 pub use cgroups::fs::{
-    blkio, cpu, cpuacct, cpuset, devices, hierarchies, hugetlb, memory, pid,
-    BlkIoDeviceResource, BlkIoDeviceThrottleResource, Cgroup, Controller, DeviceResource,
-    DeviceResources, Hierarchy, HugePageResource, MaxValue, NetworkPriority, Resources,
+    blkio, cpu, cpuacct, cpuset, devices, hierarchies, hugetlb, memory, pid, BlkIoDeviceResource,
+    BlkIoDeviceThrottleResource, Cgroup, Controller, DeviceResource, DeviceResources, Hierarchy,
+    HugePageResource, MaxValue, NetworkPriority, Resources,
 };
 pub use cgroups::CgroupPid;
 pub use cgroups::FreezerState;

@@ -74,10 +74,12 @@ impl BlockVolume {
         };
 
         // create and insert block device into Kata VM
-        let device_info =
-            do_handle_device(d, &DeviceConfig::BlockCfgModern(block_device_config.clone()))
-                .await
-                .context("do handle device failed.")?;
+        let device_info = do_handle_device(
+            d,
+            &DeviceConfig::BlockCfgModern(block_device_config.clone()),
+        )
+        .await
+        .context("do handle device failed.")?;
 
         let block_volume =
             handle_block_volume(device_info, m, read_only, sid, DEFAULT_VOLUME_FS_TYPE, None)

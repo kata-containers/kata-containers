@@ -29,8 +29,7 @@ impl FcInner {
         match device {
             DeviceType::BlockModern(block_mod) => {
                 let block = block_mod.lock().await.clone();
-                self
-                    .hotplug_block_device(block.config.path_on_host.as_str(), block.config.index)
+                self.hotplug_block_device(block.config.path_on_host.as_str(), block.config.index)
                     .await
                     .context("add block device")
             }

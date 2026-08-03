@@ -32,8 +32,8 @@ use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
 
-use crate::log_child;
 use crate::cgroups_rs as cgroups;
+use crate::log_child;
 use safe_path::scoped_join;
 
 // Info reveals information about a particular mounted filesystem. This
@@ -1490,11 +1490,10 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
             let tempdir = tempdir().unwrap();
 
-            let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
-            defer!({
-                unistd::close(rfd).unwrap();
-                unistd::close(wfd).unwrap();
-            });
+            // Keep the read end open until the end of the iteration so
+            // writes to the log fd cannot fail with EPIPE; both ends
+            // close automatically when the OwnedFds are dropped.
+            let (_rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
 
             let source_path = tempdir.path().join(d.source).to_str().unwrap().to_string();
             if d.make_source_directory {
@@ -1510,7 +1509,7 @@ mod tests {
             mount.set_options(Some(vec![]));
 
             let result = mount_from(
-                wfd,
+                wfd.as_raw_fd(),
                 &mount,
                 tempdir.path().to_str().unwrap(),
                 d.flags,
@@ -1646,7 +1645,7 @@ mod tests {
             },
             TestData {
                 mountinfo_data: Some(
-                    "22 933 0:20 /foo\x20-\x20bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
+                    r"22 933 0:20 /foo\040-\040bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
                 ),
                 result: Ok(vec![Info {
                     mount_point: "/sys".to_string(),

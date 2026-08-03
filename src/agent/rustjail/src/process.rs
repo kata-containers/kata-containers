@@ -292,6 +292,8 @@ mod tests {
     }
 
     fn get_pipe_size(fd: RawFd) -> i32 {
+        // SAFETY: the fd stays open for the duration of the call.
+        let fd = unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) };
         fcntl(fd, FcntlArg::F_GETPIPE_SZ).unwrap()
     }
 
