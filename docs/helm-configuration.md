@@ -128,10 +128,10 @@ chart to achieve the same results.
 The chart can install Kata on nodes in one of two ways, selected with the
 top-level `deploymentMode` value:
 
-- **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
+- **`daemonset`**: the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
   uninstall). This is the historical behavior and is unchanged.
-- **`job`**: there is **no always-on component**. A tiny *dispatcher* Job (the
+- **`job`** (default): there is **no always-on component**. A tiny *dispatcher* Job (the
   dispatcher, `kata-deploy-job-dispatcher`) runs as a `post-install`/`post-upgrade` hook,
   enumerates the selected nodes **live** via the Kubernetes API, and creates one
   node-pinned install `Job` per node. Each per-node Job runs the staged install
@@ -227,44 +227,156 @@ already-installed nodes are fast no-ops. Coverage converges on the re-run.
 
 ### Choosing which nodes get a Job
 
-In `job` mode, node selection is configured under the `job` key, with the
-following precedence (highest first):
+Node selection is **not** configured per deployment mode. Both modes read the
+same [`nodeSelector`](#nodeselector) / [`affinity`](#affinity) and
+[`tolerations`](#tolerations), so one values file installs Kata on the same nodes
+whichever mode you deploy with.
 
-1. `job.nodes`: an explicit list of node names, passed to the dispatcher verbatim.
-2. `job.nodeSelector` (an equality map) **ANDed with**
-   `job.nodeSelectorExpressions` (Kubernetes label-selector requirements using
-   the operators `In`, `NotIn`, `Exists`, `DoesNotExist`). These are compiled
-   into a single label-selector string that the dispatcher resolves live.
-3. If both are empty, **all** nodes are targeted.
+In `daemonset` mode the scheduler applies those rules when it places the
+kata-deploy pods. In `job` mode there is no pod to place — the dispatcher pins
+each per-node Job to a node by name — so the dispatcher applies the same rules
+itself while enumerating nodes:
 
-By **default the expressions target worker (non-control-plane) nodes**, so no
-custom node labeling is required (this differs from the DaemonSet `nodeSelector`
-examples above, which rely on you labeling nodes). Override as needed:
+1. `nodeSelector` and `affinity.nodeAffinity` are compiled into node queries, which
+   the dispatcher resolves live against the API server. Each `nodeSelectorTerm`
+   becomes one query and their results are combined with OR, matching Kubernetes'
+   own semantics; the `nodeSelector` labels are ANDed into every query, which is
+   how Kubernetes combines the two.
+2. Nodes carrying a taint your `tolerations` do not cover are then dropped,
+   exactly as the scheduler would refuse to place a DaemonSet pod there.
+3. `job.nodes` overrides all of the above with an explicit list of node names,
+   used verbatim.
+
+An empty `nodeSelector` therefore does **not** mean "every node": step 2 still
+applies, and that is what keeps Kata off control-plane nodes by default without
+any label filtering.
 
 ```yaml title="values.yaml"
-# Target nodes carrying a specific label:
-job:
-  nodeSelector:
-    kata-containers: "enabled"
+# Install on nodes carrying a specific label:
+nodeSelector:
+  kata-containers: "enabled"
 
-# Target every node, including control-plane (e.g. single-node clusters / CI):
-job:
-  nodeSelectorExpressions: []
+# Richer selection - Linux workers that are either GPU- or SNP-capable
+# (a node matching either term is selected):
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - { key: kubernetes.io/os, operator: In, values: ["linux"] }
+            - { key: nvidia.com/gpu.present, operator: In, values: ["true"] }
+        - matchExpressions:
+            - { key: kubernetes.io/os, operator: In, values: ["linux"] }
+            - { key: feature.node.kubernetes.io/cpu-cpuid.SEV_SNP, operator: In, values: ["true"] }
 
-# Richer expressions:
-job:
-  nodeSelectorExpressions:
-    - { key: kubernetes.io/os, operator: In, values: ["linux"] }
-    - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
-
-# Pin to explicit nodes:
+# Pin to explicit nodes (job mode only; tainted nodes included, since naming a
+# node is unambiguous):
 job:
   nodes: ["worker-1", "worker-2"]
 ```
 
+!!! warning "The `job.*` node-selection keys have been removed"
+    Earlier releases selected nodes with `job.nodeSelector`,
+    `job.nodeSelectorExpressions` and `job.nodeAffinity`, separately from the
+    DaemonSet's own knobs. Having two sources of truth meant a values file that
+    pinned Kata to a few nodes in `daemonset` mode could silently install it
+    everywhere in `job` mode. Rendering now **fails with a migration hint** if any
+    of those keys is still set: move the rule to the top-level `nodeSelector` or
+    `affinity.nodeAffinity`, and keep `job.nodes` for explicit node names.
+
+!!! note "Not every affinity rule can be expressed as a node query"
+    Job mode resolves nodes with a label-selector `LIST` against the API server,
+    so `matchFields` and the `Gt`/`Lt` operators cannot be represented and are
+    rejected at render time — use `job.nodes` to target nodes by name.
+    `preferredDuringSchedulingIgnoredDuringExecution` is accepted but ignored: a
+    preference never restricts where a DaemonSet may land either, so honouring
+    only the required terms keeps both modes in agreement.
+
 Use `job.parallelism` to pace the rollout — it caps how many per-node Jobs run
 concurrently (e.g. to limit how many CRI runtimes restart at once on a big
 fleet). It is effectively capped at the number of targeted nodes.
+
+#### Nodes that become eligible late
+
+A DaemonSet is level-triggered: it installs a node whenever that node becomes
+eligible, however long that takes. The dispatcher instead resolves nodes once,
+at install time, and eligibility frequently arrives seconds later — the
+`feature.node.kubernetes.io/*` labels that `affinity.nodeAffinity` matches are
+written by node-feature-discovery, which the chart can install in the very same
+release, and a freshly joined node clears its start-up taints only once it
+settles.
+
+So the install dispatcher keeps re-resolving for `job.waitForNodesSeconds`
+(default `120`) while nothing is eligible yet, and fails if the wait expires
+with no eligible node. Failing is deliberate: in `job` mode an empty selection
+is permanent — nothing installs the node later — so a silent success would leave
+the fleet without Kata and nothing to point at.
+
+```yaml title="values.yaml"
+job:
+  # Give a slow-labelling cluster longer (see the timeout warning below)...
+  waitForNodesSeconds: 300
+  # ...or resolve once and treat "no eligible node" as a no-op, the way a
+  # DaemonSet with no matching node quietly installs nothing.
+  # waitForNodesSeconds: 0
+```
+
+!!! warning "Raise `helm --timeout` alongside it"
+    The wait is spent inside the dispatcher hook, and Helm bounds that hook by
+    the release timeout (`--timeout`, 5 minutes by default) — the same budget
+    that has to cover extracting the artifacts and restarting the CRI runtime on
+    every node. Raising `waitForNodesSeconds` on its own only trades a
+    dispatcher error naming the selectors it tried for Helm's opaque
+    `timed out waiting for the condition`, which leaves the release failed and
+    the dispatcher Job orphaned.
+
+The uninstall dispatcher never waits: it has to run to completion on a release
+that may never have labeled a node.
+
+#### Installing on control-plane nodes
+
+Control-plane nodes are normally tainted, which is what keeps Kata off them in
+both modes. Reaching them takes a matching toleration — and, if you want *only*
+those nodes, a selector as well:
+
+=== "Control-plane nodes only"
+    ```yaml title="values.yaml"
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: ""
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+    ```
+
+=== "Control-plane nodes and workers"
+    ```yaml title="values.yaml"
+    # No selector: every node is eligible, and the toleration lets the tainted
+    # control-plane nodes through as well.
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+    ```
+
+!!! tip "Single-node clusters usually need nothing"
+    Single-node distributions (k3s, k0s `--single`) do not taint their node, and
+    `kubeadm` clusters used for local testing are typically untainted with
+    `kubectl taint nodes --all node-role.kubernetes.io/control-plane-`. In both
+    cases the node is selected by default. On older clusters the label and taint
+    key may be `node-role.kubernetes.io/master` instead.
+
+In `job` mode, a node skipped for a taint it does not tolerate is named in the
+dispatcher log along with the taint responsible, so an unexpectedly small rollout
+is easy to explain:
+
+```sh title="$ kubectl logs job/kata-deploy-install-dispatcher"
+skipping node cp-1: it carries the taint node-role.kubernetes.io/control-plane:NoSchedule,
+which this install does not tolerate (a DaemonSet would not have been scheduled there either)
+```
+
+If *every* selected node is skipped this way the dispatcher fails rather than
+reporting success with nothing done, and its error quotes the toleration to add.
 
 ### Choosing which nodes are cleaned up on uninstall
 
@@ -275,9 +387,8 @@ cleanup selector can simply be "nodes carrying the
 `katacontainers.io/kata-runtime` label"** — i.e. exactly the nodes the install
 actually labeled, regardless of how the install selector has drifted since.
 
-Override it under `job.cleanup`, with the same precedence/semantics as install
-(`cleanup.nodes`, then `cleanup.nodeSelector` ANDed with
-`cleanup.nodeSelectorExpressions`, else all nodes):
+Override it under `job.cleanup` (`cleanup.nodes`, then `cleanup.nodeSelector`
+ANDed with `cleanup.nodeAffinity`, else all nodes):
 
 ```yaml title="values.yaml"
 # Only uninstall from specific nodes:
@@ -288,9 +399,18 @@ job:
 # Use an explicit selector instead of the kata-runtime label default:
 job:
   cleanup:
-    nodeSelectorExpressions:
-      - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
 ```
+
+!!! note "Uninstall is deliberately independent of install"
+    Cleanup is **not** narrowed by the top-level `nodeSelector`/`affinity`, and
+    tainted nodes are cleaned rather than skipped. It has to be able to revert
+    every node the install ever touched, even one whose labels or taints have
+    changed since — so it targets what was installed, not what is selected now.
 
 See the default [`values.yaml`](#parameters) for the remaining `job.*` options
 (e.g. `dispatcherImage`, `parallelism`, `ttlSecondsAfterFinished`,
@@ -382,6 +502,47 @@ nodeSelector:
 $ helm install kata-deploy -f values.yaml "${CHART}" --version "${VERSION}"
 ```
 
+!!! info "Applies to both deployment modes"
+    `nodeSelector` selects nodes in `daemonset` and `job` mode alike — see
+    [Choosing which nodes get a Job](#choosing-which-nodes-get-a-job) for how job
+    mode applies it. Note that leaving it empty does not mean "every node": nodes
+    carrying a taint you do not tolerate are still excluded, which is what keeps
+    Kata off control-plane nodes.
+
+!!! info "Combining it with `affinity.nodeAffinity`"
+    Both may be set at once and are **ANDed**, exactly as they would be on any pod
+    spec: a node has to satisfy the `nodeSelector` labels *and* match one of the
+    `nodeSelectorTerms`. Job mode reproduces this by folding the `nodeSelector`
+    equalities into every term, so the two modes select the same nodes.
+
+### `tolerations`
+
+Tolerations decide which **tainted** nodes Kata may be installed on. Selecting a
+node is not enough on its own: if the node carries a `NoSchedule` or `NoExecute`
+taint that your tolerations do not cover, it is excluded — in `daemonset` mode by
+the scheduler, and in `job` mode by the dispatcher applying the same rule.
+
+That default is what keeps Kata off control-plane nodes, and off nodes your
+platform has reserved for something else, without you having to exclude them by
+label.
+
+```yaml title="values.yaml"
+tolerations:
+  - key: "reservedFor"
+    operator: "Exists"
+    effect: "NoSchedule"
+```
+
+To install on control-plane nodes, see
+[Installing on control-plane nodes](#installing-on-control-plane-nodes).
+
+!!! note "Cordoned and pressured nodes are still installed on"
+    Kubernetes gives every DaemonSet pod an implicit set of tolerations so that
+    node conditions — `unschedulable` (a cordoned node), plus disk, memory and PID
+    pressure — never stop a node agent from running. Job mode applies the same
+    implicit set, so cordoning a node does not make it silently miss the install
+    in either mode.
+
 ### `podLabels`
 
 You can add extra labels to the kata-deploy DaemonSet pods. These are applied
@@ -432,6 +593,15 @@ node; affinity gives you `matchExpressions` (e.g. `In`, `NotIn`) and rules
 about other pods on the same node. For example, you might want kata-deploy on
 nodes reserved for your platform team but *not* on nodes that run the GPU
 operator.
+
+!!! info "`nodeAffinity` selects nodes in both modes; pod affinity only in `daemonset` mode"
+    `affinity.nodeAffinity` is the match-expression form of `nodeSelector` and, like
+    it, decides which nodes get Kata in **both** deployment modes. The two can be
+    combined, and are ANDed. `podAffinity`/`podAntiAffinity` describe how to
+    *schedule a pod*, so they only apply in `daemonset` mode; job mode pins each
+    per-node Job to a node by name and has no scheduling decision to influence. See
+    [Choosing which nodes get a Job](#choosing-which-nodes-get-a-job) for which
+    `nodeAffinity` constructs job mode can and cannot express.
 
 ```sh
 # First, label the nodes where kata-deploy should run

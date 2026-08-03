@@ -86,7 +86,9 @@ setup_file() {
 	echo "# Hypervisor: ${KATA_HYPERVISOR}" >&3
 	echo "# K8s distribution: ${KUBERNETES}" >&3
 	echo "# Deploying kata-deploy..." >&3
-	deploy_kata
+	# This suite exercises DaemonSet-specific behavior (rolling restart
+	# resilience), so pin it to daemonset mode regardless of the chart default.
+	deploy_kata "" --set deploymentMode=daemonset
 	echo "# kata-deploy deployed successfully" >&3
 }
 

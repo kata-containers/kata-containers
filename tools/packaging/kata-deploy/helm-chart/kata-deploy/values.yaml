@@ -1,7 +1,7 @@
 # Deployment model for installing/cleaning up Kata on nodes.
-#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
+#   daemonset: the long-running kata-deploy DaemonSet installs Kata on
 #              every matching node and reverts it on pod termination (uninstall).
-#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
+#   job:       (default) no always-on component. A tiny dispatcher Job (the dispatcher,
 #              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
 #              the selected nodes LIVE, and creates one node-pinned install Job
 #              per node - paced to job.parallelism and guaranteeing one install
@@ -22,7 +22,7 @@
 #   and installs the new nodes (the staged actions are idempotent, so already-
 #   installed nodes are skipped). This is intentional: it avoids an always-on
 #   privileged component on every node.
-deploymentMode: daemonset  # daemonset | job
+deploymentMode: job  # daemonset | job
 
 # Settings specific to deploymentMode: job
 job:
@@ -38,62 +38,68 @@ job:
   # pace the rollout (e.g. limit how many CRI runtimes restart at once on a big
   # fleet); raise it to install faster. Effectively capped at the node count.
   parallelism: 100
-  # How to choose which nodes get a per-node INSTALL Job. Precedence:
-  #   1. job.nodes (explicit list of node names) - if non-empty, used verbatim
-  #      (passed to the dispatcher as --nodes).
-  #   2. otherwise a label selector built from job.nodeSelector (equality) ANDed
-  #      with job.nodeSelectorExpressions (In/NotIn/Exists/DoesNotExist) is
-  #      passed to the dispatcher, which resolves matching nodes LIVE at run time.
-  #   3. if both are empty, ALL nodes are targeted.
+  # Which nodes get a per-node INSTALL Job is NOT configured here: it comes from
+  # the top-level `nodeSelector` / `affinity.nodeAffinity` (see below), the very
+  # same knobs the DaemonSet uses, so both deployment modes install Kata on the
+  # same nodes. Selected nodes whose taints the install does not tolerate are
+  # skipped, mirroring how the scheduler admits a DaemonSet pod - which is what
+  # keeps Kata off control-plane nodes unless you tolerate their taint.
   #
-  # DEFAULT: target worker (non-control-plane) nodes, so no custom labeling is
-  # required. Override these freely:
-  #   - Target nodes with a specific label:
-  #       job:
-  #         nodeSelector: { kata-containers: "enabled" }
-  #   - Target every node (including control-plane), e.g. single-node clusters/CI:
-  #       job:
-  #         nodeSelectorExpressions: []
-  #   - Richer expressions:
-  #       job:
-  #         nodeSelectorExpressions:
-  #           - { key: kubernetes.io/os, operator: In, values: ["linux"] }
-  #           - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }
-  #   - Pin to explicit nodes:
-  #       job:
-  #         nodes: ["worker-1", "worker-2"]
+  # The only job-mode-specific override is an explicit list of node names, which
+  # takes precedence over the selection above and is used verbatim (including
+  # tainted nodes, since naming a node is unambiguous):
+  #   job:
+  #     nodes: ["worker-1", "worker-2"]
   nodes: []
-  # Equality label selector (ANDed with nodeSelectorExpressions). Ignored when
-  # job.nodes is set. Empty by default.
-  nodeSelector: {}
-  # Kubernetes-style label selector requirements (ANDed with nodeSelector).
-  # Each entry: { key, operator, values }. operator is one of:
-  #   In | NotIn (values required) | Exists | DoesNotExist (values must be empty).
-  # Default selects nodes that are NOT control-plane/master (i.e. worker nodes).
-  # Set to [] to disable role filtering and target all discovered nodes.
-  nodeSelectorExpressions:
-    - key: node-role.kubernetes.io/control-plane
-      operator: DoesNotExist
-    - key: node-role.kubernetes.io/master
-      operator: DoesNotExist
-  # Node selection for the UNINSTALL (pre-delete hook) dispatcher. Same precedence
-  # and semantics as install (cleanup.nodes, else cleanup.nodeSelector ANDed with
-  # cleanup.nodeSelectorExpressions, else all nodes).
+  # How long the install dispatcher keeps re-checking for eligible nodes before
+  # giving up (seconds).
+  #
+  # A DaemonSet is level-triggered and installs a node whenever it becomes
+  # eligible; the dispatcher runs once, at install time, so it needs to give the
+  # cluster a moment to converge. Nodes commonly become eligible seconds AFTER
+  # the dispatcher starts: `affinity.nodeAffinity` matches labels written by
+  # node-feature-discovery, which this chart can install in the same release,
+  # and a freshly joined node clears its start-up taints only once it settles.
+  #
+  # Because this says "at least one node is expected", the install FAILS rather
+  # than quietly doing nothing if the wait expires with no eligible node - in
+  # job mode an empty selection is permanent, not a state that later heals.
+  # Set it to 0 on clusters that may legitimately have no eligible node, which
+  # resolves once and treats an empty selection as a no-op.
+  #
+  # The default leaves room for the rest of the install: this wait is spent
+  # inside the dispatcher hook, which Helm bounds by the release timeout
+  # (`--timeout`, 5m by default) TOGETHER with extracting the artifacts and
+  # restarting the CRI runtime on every node. Raise both or neither - raising
+  # this alone just trades a dispatcher error that names the selectors it tried
+  # for Helm's opaque "timed out waiting for the condition".
+  waitForNodesSeconds: 120
+  # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
+  #
+  # Deliberately independent of the install selection: uninstall has to reach
+  # every node the install ever labeled, not the nodes currently selected, so it
+  # is never narrowed by the top-level nodeSelector/affinity, and tainted nodes
+  # are cleaned rather than skipped.
   #
   # The cleanup dispatcher resolves nodes LIVE when it runs at `helm uninstall`
   # (the dispatcher does the lookup), so - unlike a frozen Helm-rendered hook -
   # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime",
-  # i.e. exactly the nodes install actually labeled. Override to clean a
-  # different set, e.g.:
+  # i.e. exactly the nodes install actually labeled.
+  #
+  # Precedence: cleanup.nodes, else cleanup.nodeSelector (equality) ANDed with
+  # cleanup.nodeAffinity, else all nodes. Override to clean a different set, e.g.:
   #   job:
   #     cleanup:
   #       nodes: ["worker-1"]
   cleanup:
     nodes: []
     nodeSelector: {}
-    nodeSelectorExpressions:
-      - key: katacontainers.io/kata-runtime
-        operator: Exists
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: katacontainers.io/kata-runtime
+                operator: Exists
   # How long finished per-node Jobs are retained before automatic garbage
   # collection (seconds). Applies to both install and cleanup per-node Jobs.
   ttlSecondsAfterFinished: 600
@@ -171,7 +177,22 @@ containerd:
   #     default_size = "20G"
   userDropIn: ""
 
-# Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
+# Which nodes Kata is installed on, and which taints that installation tolerates.
+#
+# These apply to BOTH deployment modes. In daemonset mode they are set on the
+# kata-deploy DaemonSet pods and the scheduler decides where those land; in job
+# mode the dispatcher applies the same rules itself when it enumerates nodes
+# (nodeSelector/affinity to select, tolerations to decide which tainted nodes are
+# still eligible). One values file therefore targets the same nodes either way.
+#
+# nodeSelector matches exact label key/value pairs. For match expressions, use
+# `affinity.nodeAffinity` below. Both may be set at once and are ANDed, exactly as
+# Kubernetes ANDs them on any pod spec.
+#
+# An empty nodeSelector does NOT mean "every node": nodes whose taints are not
+# tolerated are still excluded, which is what keeps Kata off control-plane nodes
+# by default.
+#
 # Examples:
 # nodeSelector:
 #   kata-containers: "enabled"
@@ -180,6 +201,19 @@ containerd:
 #   - key: "reservedFor"
 #     operator: "Exists"
 #     effect: "NoSchedule"
+#
+# Install on control-plane nodes ONLY (select them, and tolerate their taint -
+# both parts are required, in either deployment mode):
+# nodeSelector:
+#   node-role.kubernetes.io/control-plane: ""
+# tolerations:
+#   - key: node-role.kubernetes.io/control-plane
+#     operator: Exists
+#     effect: NoSchedule
+#
+# Install on control-plane nodes IN ADDITION to workers: keep nodeSelector empty
+# and set only the toleration above. On older clusters the label and taint key may
+# be node-role.kubernetes.io/master instead.
 nodeSelector: {}
 tolerations: []
 
@@ -225,9 +259,25 @@ podLabels: {}
 #   prometheus.io/scrape: "false"
 podAnnotations: {}
 
-# Affinity rules for the kata-deploy DaemonSet.
+# Affinity rules for kata-deploy.
 # nodeSelector matches exact key/value pairs; affinity supports matchExpressions
 # and rules about other pods on the same node (e.g. podAntiAffinity).
+#
+# `nodeAffinity` is the match-expression form of `nodeSelector` and, like it,
+# selects nodes in BOTH deployment modes. Setting both is fine: they are ANDed,
+# just as Kubernetes ANDs them for a pod. In job mode the nodeSelector equalities
+# are folded into every affinity term to get the same result.
+#
+# podAffinity/podAntiAffinity describe how to schedule a POD, so they only apply
+# in daemonset mode; job mode pins each per-node Job to a node by name and has no
+# scheduling decision to influence.
+#
+# In job mode only the `required...` node affinity terms are used - each term
+# becomes one node query and their results are OR-ed, matching Kubernetes'
+# semantics. `preferred...` terms are ignored there (they never restrict which
+# nodes a DaemonSet may land on either), and `matchFields` plus the Gt/Lt
+# operators are rejected because a node query cannot express them; use `job.nodes`
+# to target nodes by name.
 # When node-feature-discovery.enabled=true, the chart merges in a virtualization
 # nodeAffinity rule. User required nodeSelectorTerms are AND-combined with the
 # built-in virtualization terms; multiple user required terms remain OR among
