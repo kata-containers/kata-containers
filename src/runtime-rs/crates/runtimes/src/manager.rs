@@ -647,6 +647,7 @@ impl RuntimeHandlerManager {
 
                 Ok(SandboxResponse::ShutdownSandbox)
             }
+            SandboxRequest::SandboxMetrics(_) => todo!()
         }
     }
 
