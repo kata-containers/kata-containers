@@ -13,7 +13,7 @@ use futures_lite::stream::StreamExt;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::DeviceConfig;
 use hypervisor::{device::driver, Hypervisor};
-use hypervisor::{get_vfio_device, VfioConfig};
+use hypervisor::{get_vfio_device, VfioDeviceBase, VfioDeviceResourceType};
 use kata_sys_util::netns::NetnsGuard;
 use netlink_packet_core::{NetlinkMessage, NLM_F_ACK, NLM_F_CREATE, NLM_F_EXCL, NLM_F_REQUEST};
 use netlink_packet_route::{
@@ -154,30 +154,29 @@ impl Endpoint for PhysicalEndpoint {
         .with_context(|| format!("bind physical endpoint from {} to vfio", &self.driver))?;
 
         let vfio_device = get_vfio_device(self.bdf.clone()).context("get vfio device failed.")?;
-        let vfio_dev_config = &mut VfioConfig {
+        let vfio_dev_config = VfioDeviceBase {
             host_path: vfio_device.clone(),
             dev_type: "pci".to_string(),
+            bus_type: "pci".to_string(),
             hostdev_prefix: "physical_nic_".to_owned(),
+            resource_type: VfioDeviceResourceType::PhysicalEndpoint,
             ..Default::default()
         };
 
         // create and insert VFIO device into Kata VM; do_handle_device returns
-        // the DeviceType with guest_pci_path already computed by
-        // do_add_pcie_endpoint() inside VfioDevice::register().
-        let device_type =
-            do_handle_device(&self.d, &DeviceConfig::VfioCfg(vfio_dev_config.clone()))
-                .await
-                .context("do handle device failed.")?;
+        // the modern DeviceType with its topology assignment completed.
+        let device_type = do_handle_device(&self.d, &DeviceConfig::VfioModernCfg(vfio_dev_config))
+            .await
+            .context("do handle device failed.")?;
 
         // Store the QEMU hostdev_id for later QMP-based PCI path resolution.
         // The topology-computed guest_pci_path from do_add_pcie_endpoint() is
         // WRONG for physical endpoints (root port has no explicit addr so QEMU
         // auto-assigns its slot; the correct path requires QMP after VM boot).
-        if let hypervisor::device::DeviceType::Vfio(vfio_dev) = device_type {
-            if let Some(hostdev) = vfio_dev.devices.first() {
-                if let Ok(mut guard) = self.hostdev_id.lock() {
-                    *guard = Some(hostdev.hostdev_id.clone());
-                }
+        if let hypervisor::device::DeviceType::VfioModern(vfio_dev) = device_type {
+            let device_id = vfio_dev.lock().await.device_id.clone();
+            if let Ok(mut guard) = self.hostdev_id.lock() {
+                *guard = Some(device_id);
             }
         }
 
