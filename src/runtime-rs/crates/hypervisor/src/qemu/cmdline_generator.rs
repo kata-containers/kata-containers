@@ -3686,7 +3686,16 @@ impl<'a> QemuCmdLine<'a> {
             .with_addr(format!("0x{:02x}", config.port));
         info!(sl!(), "PCIe Root Port: {:?}", root_port.clone());
 
-        let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, iommufd_name);
+        let mut vfio_device = if fd_config.is_some() {
+            PCIeVfioDevice::new(&config.host_bdf, &root_port_id, iommufd_name)
+        } else {
+            PCIeVfioDevice::new_without_iommufd(&config.host_bdf, &root_port_id)
+        }
+        .with_addr(&config.vfio_addr);
+        if let Some(id) = &config.qdev_id {
+            vfio_device = vfio_device.with_id(id);
+        }
+
         if let Some(fd_config) = fd_config {
             vfio_device = vfio_device
                 .with_id(&fd_config.qemu_device_id)
