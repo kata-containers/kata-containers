@@ -5,10 +5,12 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use agent::{kata::KataAgent, Agent, AGENT_KATA};
+use agent::{kata::KataAgent, Agent, AgentManager, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
 use hypervisor::device::driver::{VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_PCI};
+#[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
+use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
 use kata_types::config::{
     default, Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig,
@@ -27,6 +29,9 @@ const MESSAGE_BUFFER_SIZE: usize = 8;
 /// VM is an abstraction of a virtual machine.
 #[derive(Clone)]
 pub struct TemplateVm {
+    /// Sandbox that owns the VM and its host-side resources.
+    sandbox: VirtSandbox,
+
     /// The hypervisor responsible for managing the virtual machine lifecycle.
     pub hypervisor: Arc<dyn Hypervisor>,
 
@@ -168,16 +173,13 @@ impl VmConfig {
 }
 
 impl TemplateVm {
-    /// Creates a new TemplateVm instance with the provided components and resources.
-    /// Currently, only QEMU is supported; other hypervisors are not yet implemented.
-    pub fn new(
-        id: String,
-        hypervisor: Arc<dyn Hypervisor>,
-        agent: Arc<dyn Agent>,
-        cpu: f32,
-        memory: u32,
-    ) -> Self {
+    /// Creates a new TemplateVm instance from its owning sandbox.
+    pub fn new(sandbox: VirtSandbox, cpu: f32, memory: u32) -> Self {
+        let id = sandbox.get_sid();
+        let hypervisor = sandbox.get_hypervisor();
+        let agent = sandbox.get_agent();
         Self {
+            sandbox,
             id,
             hypervisor,
             agent,
@@ -187,8 +189,11 @@ impl TemplateVm {
         }
     }
 
-    /// Initializes the QEMU hypervisor for Kata
-    async fn new_hypervisor(config: &VmConfig) -> Result<Arc<dyn Hypervisor>> {
+    /// Initializes the configured hypervisor for Kata.
+    async fn new_hypervisor(
+        config: &VmConfig,
+        _toml_config: &TomlConfig,
+    ) -> Result<Arc<dyn Hypervisor>> {
         let hypervisor: Arc<dyn Hypervisor> = match config.hypervisor_name.as_str() {
             HYPERVISOR_QEMU => {
                 let h = Qemu::new();
@@ -196,7 +201,17 @@ impl TemplateVm {
                     .await;
                 Arc::new(h)
             }
-            // TODO: Add support for additional hypervisors or proper error handling here.
+            #[cfg(all(feature = "dragonball", target_arch = "x86_64"))]
+            HYPERVISOR_DRAGONBALL => {
+                let h = Dragonball::new();
+                h.set_hypervisor_config(config.hypervisor_config.clone())
+                    .await;
+                if _toml_config.runtime.use_passfd_io {
+                    h.set_passfd_listener_port(_toml_config.runtime.passfd_listener_port)
+                        .await;
+                }
+                Arc::new(h)
+            }
             _ => return Err(anyhow!("Unsupported hypervisor {}", config.hypervisor_name)),
         };
         Ok(hypervisor)
@@ -243,7 +258,7 @@ impl TemplateVm {
 
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
 
-        let hypervisor = Self::new_hypervisor(&config)
+        let hypervisor = Self::new_hypervisor(&config, &toml_config)
             .await
             .context("new hypervisor")?;
 
@@ -288,26 +303,87 @@ impl TemplateVm {
         .await
         .context("build sandbox")?;
 
-        sandbox.start_template().await.context("start template")?;
-        info!(sl!(), "VM has been started from template");
+        if let Err(start_error) = sandbox.start_template().await {
+            if let Err(teardown_error) = Self::teardown_sandbox(&sandbox).await {
+                warn!(
+                    sl!(),
+                    "failed to tear down template VM after startup failed: {}", teardown_error
+                );
+            }
+            return Err(start_error).context("start template");
+        }
+        info!(sl!(), "template VM has been started");
 
         let hypervisor_config = sandbox.get_hypervisor().hypervisor_config().await;
         let vm = TemplateVm::new(
-            sandbox.get_sid(),
-            sandbox.get_hypervisor(),
-            sandbox.get_agent(),
+            sandbox,
             hypervisor_config.cpu_info.default_vcpus,
             hypervisor_config.memory_info.default_memory,
         );
+
+        let readiness_result: Result<()> = async {
+            let address = hypervisor
+                .get_agent_socket()
+                .await
+                .context("get template VM agent socket")?;
+            agent
+                .start(&address)
+                .await
+                .context("connect to template VM agent")
+        }
+        .await;
+
+        if let Err(readiness_error) = readiness_result {
+            if let Err(teardown_error) = vm.teardown().await {
+                warn!(
+                    sl!(),
+                    "failed to tear down template VM after agent readiness failed: {}",
+                    teardown_error
+                );
+            }
+            return Err(readiness_error);
+        }
+
         Ok(vm)
     }
 
     /// Stop a VM
     pub async fn stop(&self) -> Result<()> {
-        self.hypervisor
-            .stop_vm()
+        self.sandbox.stop().await.context("stop template sandbox")
+    }
+
+    /// Remove sandbox-owned and hypervisor resources after the VM has stopped.
+    pub async fn cleanup(&self) -> Result<()> {
+        self.sandbox
+            .cleanup()
             .await
-            .map_err(|e| anyhow::anyhow!("failed to stop vm: {}", e))
+            .context("cleanup template sandbox")
+    }
+
+    /// Stop the template VM and release all resources created for its sandbox.
+    pub async fn teardown(&self) -> Result<()> {
+        Self::teardown_sandbox(&self.sandbox).await
+    }
+
+    async fn teardown_sandbox(sandbox: &VirtSandbox) -> Result<()> {
+        sandbox.get_agent().stop().await;
+
+        let stop_result = sandbox.stop().await;
+        let cleanup_result = sandbox.cleanup().await;
+
+        match (stop_result, cleanup_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(stop_error), Ok(())) => {
+                Err(stop_error).context("stop template sandbox during teardown")
+            }
+            (Ok(()), Err(cleanup_error)) => {
+                Err(cleanup_error).context("cleanup template sandbox during teardown")
+            }
+            (Err(stop_error), Err(cleanup_error)) => Err(anyhow!(
+                "stop template sandbox during teardown: {stop_error:#}; \
+                 cleanup template sandbox during teardown: {cleanup_error:#}"
+            )),
+        }
     }
 
     /// Disconnect agent

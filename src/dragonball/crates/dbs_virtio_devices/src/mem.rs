@@ -1340,7 +1340,6 @@ where
 pub(crate) mod tests {
     use std::ffi::CString;
     use std::fs::File;
-    use std::os::unix::io::FromRawFd;
     use test_utils::skip_if_kvm_unaccessable;
 
     use dbs_device::resources::DeviceResources;

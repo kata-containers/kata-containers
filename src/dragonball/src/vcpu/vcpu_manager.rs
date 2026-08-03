@@ -39,6 +39,8 @@ use crate::vcpu::vcpu_impl::{
     Vcpu, VcpuError, VcpuEvent, VcpuHandle, VcpuResizeResult, VcpuResponse, VcpuStateEvent,
 };
 use crate::vcpu::VcpuConfig;
+#[cfg(target_arch = "x86_64")]
+use crate::vcpu::VcpuState;
 use crate::vm::VmConfigInfo;
 use crate::IoManagerCached;
 
@@ -79,6 +81,10 @@ pub enum VcpuManagerError {
     /// vCPU save failed.
     #[error("failure while save vCPU state")]
     VcpuSave,
+
+    /// SaveState was requested while the vCPU was not paused.
+    #[error("cannot save vCPU state: the vCPU is not paused")]
+    SaveStateNotAllowed,
 
     /// Vcpu is in unexpected state.
     #[error("Vcpu is in unexpected state")]
@@ -491,7 +497,106 @@ impl VcpuManager {
     pub fn revalidate_all_vcpus_cache(&mut self) -> Result<()> {
         self.revalidate_vcpus_cache(&self.present_vcpus())
     }
+}
 
+#[cfg(target_arch = "x86_64")]
+impl<'a> dbs_snapshot::Persist<'a> for VcpuManager {
+    type State = Vec<VcpuState>;
+    type SaveArgs = &'a [u32];
+    type RestoreArgs = ();
+    type Error = VcpuManagerError;
+
+    /// Save the states of all started vCPUs.
+    ///
+    /// All vCPUs must be paused (see [`VcpuManager::pause_all_vcpus`])
+    /// before calling this.
+    ///
+    /// # Arguments
+    ///
+    /// * `msr_index_list` - Indices of the MSRs to save, typically
+    ///   `KvmContext::supported_msrs()` (pre-filtered for serializability).
+    #[cfg(target_arch = "x86_64")]
+    fn save_state(&mut self, msr_index_list: &'a [u32]) -> Result<Vec<VcpuState>> {
+        let cpu_indexes = self.present_vcpus();
+        let mut first_error = None;
+        for cpu_id in &cpu_indexes {
+            if let Some(handle) = &self.vcpu_infos[*cpu_id as usize].handle {
+                if let Err(e) = handle.send_event(VcpuEvent::SaveState(msr_index_list.to_vec())) {
+                    first_error.get_or_insert(VcpuManagerError::VcpuEvent(e));
+                }
+            } else {
+                first_error.get_or_insert(VcpuManagerError::VcpuNotFound(*cpu_id));
+            }
+        }
+
+        let mut states = Vec::with_capacity(cpu_indexes.len());
+        for cpu_id in &cpu_indexes {
+            if let Some(handle) = &self.vcpu_infos[*cpu_id as usize].handle {
+                let deadline =
+                    std::time::Instant::now() + Duration::from_millis(CPU_RECV_TIMEOUT_MS);
+                loop {
+                    let remaining = deadline
+                        .checked_duration_since(std::time::Instant::now())
+                        .unwrap_or_default();
+                    match handle.response_receiver().recv_timeout(remaining) {
+                        Ok(VcpuResponse::SavedState(state)) => {
+                            states.push(*state);
+                            break;
+                        }
+                        // Pause/resume acknowledgements are fire-and-forget
+                        // and may still sit in the channel; drain them.
+                        Ok(VcpuResponse::Paused) | Ok(VcpuResponse::Resumed) => continue,
+                        Ok(VcpuResponse::Error(e)) => {
+                            first_error.get_or_insert(VcpuManagerError::Vcpu(e));
+                            break;
+                        }
+                        Ok(VcpuResponse::NotAllowed) => {
+                            first_error.get_or_insert(VcpuManagerError::SaveStateNotAllowed);
+                            break;
+                        }
+                        Ok(_) => {
+                            first_error.get_or_insert(VcpuManagerError::UnexpectedVcpuResponse);
+                            break;
+                        }
+                        Err(e) => {
+                            error!("vCPU save state error! {e:?}");
+                            first_error.get_or_insert(VcpuManagerError::VcpuResponseTimeout(e));
+                            break;
+                        }
+                    }
+                }
+            } else {
+                first_error.get_or_insert(VcpuManagerError::VcpuNotFound(*cpu_id));
+            }
+        }
+
+        match first_error {
+            Some(e) => Err(e),
+            None => Ok(states),
+        }
+    }
+
+    /// Restore previously saved vCPU states.
+    ///
+    /// The target vCPUs must have been created (see
+    /// [`VcpuManager::create_vcpus`]) but not started yet: the state is
+    /// applied before the vCPU threads spawn.
+    #[cfg(target_arch = "x86_64")]
+    fn restore_state(&mut self, states: &Vec<VcpuState>, _args: ()) -> Result<()> {
+        for state in states {
+            let info = self
+                .vcpu_infos
+                .get_mut(state.id as usize)
+                .ok_or(VcpuManagerError::VcpuNotFound(state.id))?;
+            let vcpu = info.vcpu.as_mut().ok_or(VcpuManagerError::VcpuNotCreate)?;
+            dbs_snapshot::Persist::restore_state(vcpu, state, ())
+                .map_err(VcpuManagerError::Vcpu)?;
+        }
+        Ok(())
+    }
+}
+
+impl VcpuManager {
     /// return all present vcpus
     pub fn present_vcpus(&self) -> Vec<u8> {
         self.vcpu_infos
@@ -1119,6 +1224,8 @@ impl MutEventSubscriber for VcpuEpollHandler {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "x86_64")]
+    use dbs_snapshot::Persist;
     use std::os::unix::io::AsRawFd;
     use std::sync::{Arc, RwLock};
 
@@ -1126,6 +1233,7 @@ mod tests {
     #[cfg(feature = "hotplug")]
     use dbs_virtio_devices::vsock::backend::VsockInnerBackend;
     use seccompiler::BpfProgram;
+    use serial_test::serial;
     use test_utils::skip_if_kvm_unaccessable;
     use vmm_sys_util::eventfd::EventFd;
 
@@ -1295,6 +1403,7 @@ mod tests {
             .is_ok());
     }
     #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_manager_pause_resume_vcpus() {
         skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
@@ -1336,7 +1445,60 @@ mod tests {
         assert!(vcpu_manager.resume_all_vcpus().is_ok());
     }
 
+    #[cfg(target_arch = "x86_64")]
     #[test]
+    #[serial(emulate_res)]
+    fn test_vcpu_manager_save_restore_states() {
+        skip_if_kvm_unaccessable!();
+        *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
+
+        let vm = get_vm();
+        // An in-kernel irqchip is required for LAPIC state access, and it
+        // must be created before the vCPUs. Tolerate EEXIST: the test VM
+        // setup may already have created it.
+        let _ = vm.vm_fd().create_irq_chip();
+        let msr_list = crate::kvm_context::KvmContext::new(None)
+            .unwrap()
+            .supported_msrs(0)
+            .unwrap();
+
+        let mut vcpu_manager = vm.vcpu_manager().unwrap();
+        assert!(vcpu_manager
+            .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
+            .is_ok());
+
+        // Save directly from the not-yet-started vCPU and restore into it:
+        // exercises the pre-start restore path.
+        let state = vcpu_manager.vcpu_infos[0]
+            .vcpu
+            .as_mut()
+            .unwrap()
+            .save_state(msr_list.as_slice())
+            .unwrap();
+        assert_eq!(state.id, 0);
+        vcpu_manager.restore_state(&vec![state], ()).unwrap();
+
+        // Threaded save: start, pause, save via the event round-trip.
+        assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+
+        // Saving while running is refused with the precondition error.
+        let res = vcpu_manager.save_state(msr_list.as_slice());
+        assert!(
+            matches!(res, Err(VcpuManagerError::SaveStateNotAllowed)),
+            "expected SaveStateNotAllowed, got {:?}",
+            res.as_ref().map(|states| states.len())
+        );
+
+        assert!(vcpu_manager.pause_all_vcpus().is_ok());
+        let states = vcpu_manager.save_state(msr_list.as_slice()).unwrap();
+        assert_eq!(states.len(), 1);
+        assert_eq!(states[0].id, 0);
+        assert!(!states[0].msrs.is_empty());
+        assert!(vcpu_manager.resume_all_vcpus().is_ok());
+    }
+
+    #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_manager_exit_vcpus() {
         skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
@@ -1368,6 +1530,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_manager_exit_all_vcpus() {
         skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
@@ -1394,6 +1557,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_manager_revalidate_vcpus_cache() {
         skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
@@ -1425,6 +1589,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(emulate_res)]
     fn test_vcpu_manager_revalidate_all_vcpus_cache() {
         skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);

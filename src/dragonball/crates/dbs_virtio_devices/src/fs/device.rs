@@ -726,6 +726,29 @@ fn set_default_rlimit_nofile() -> Result<()> {
     }
 }
 
+impl<'a, AS: GuestAddressSpace> crate::persist::VirtioDevicePersist<'a> for VirtioFs<AS> {
+    type State = crate::persist::VirtioDeviceInfoState;
+    type SaveArgs = ();
+    type RestoreArgs = ();
+    type Error = crate::Error;
+
+    /// Capture the guest-negotiated state of this device.
+    ///
+    /// Backend filesystem state (open handles, inodes, DAX mappings) is not
+    /// captured: a snapshot must be taken at a clean quiesce point.
+    fn save_state(&mut self, _args: ()) -> crate::Result<Self::State> {
+        Ok(self.device_info.save_state())
+    }
+
+    /// Restore the guest-negotiated state of this device.
+    ///
+    /// The device must have been re-created with the same configuration and
+    /// must not have been activated yet.
+    fn restore_state(&mut self, state: &Self::State, _args: ()) -> crate::Result<()> {
+        self.device_info.restore_state(state)
+    }
+}
+
 impl<AS, Q> VirtioDevice<AS, Q, GuestRegionMmap> for VirtioFs<AS>
 where
     AS: 'static + GuestAddressSpace + Clone + Send + Sync,

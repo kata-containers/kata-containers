@@ -171,6 +171,61 @@ where
         self.driver_status.load(Ordering::SeqCst)
     }
 
+    /// Capture the transport state of this MMIO virtio device.
+    ///
+    /// The virtual machine must be paused when this is called.
+    pub fn save_state(&self) -> crate::persist::MmioV2TransportState {
+        let mut state = self.state();
+        crate::persist::MmioV2TransportState {
+            driver_status: self.driver_status(),
+            config_generation: self.config_generation.load(Ordering::SeqCst),
+            interrupt_status: self.interrupt_status.read(),
+            features_select: state.features_select(),
+            acked_features_select: state.acked_features_select(),
+            queue_select: state.queue_select(),
+            queues: state.queues().iter().map(|q| q.save_state()).collect(),
+            device_activated: state.device_activated(),
+            msi_enabled: state.msi_enabled(),
+            msi_vectors: state.get_msi_vectors(),
+        }
+    }
+
+    /// Restore the transport state of this MMIO virtio device, replaying
+    /// device activation if the guest had activated it.
+    ///
+    /// `self` must be a freshly created, never-activated device built from
+    /// the same configuration the state was saved with. Must be called
+    /// before the guest vCPUs resume.
+    pub fn restore_state(&self, state: &crate::persist::MmioV2TransportState) -> Result<()> {
+        let mut inner = self.state();
+        inner.set_features_select(state.features_select);
+        inner.set_acked_features_select(state.acked_features_select);
+        inner.set_queue_select(state.queue_select);
+        // Replay the guest's MSI setup before activation: activation enables
+        // the interrupt manager, which commits the vector configuration.
+        if state.msi_enabled {
+            inner.restore_msi(&state.msi_vectors)?;
+        }
+        {
+            let queues = inner.queues_mut();
+            if queues.len() != state.queues.len() {
+                return Err(Error::InvalidInput);
+            }
+            for (queue, queue_state) in queues.iter_mut().zip(state.queues.iter()) {
+                queue.restore_state(queue_state)?;
+            }
+        }
+        self.interrupt_status.write(state.interrupt_status);
+        self.config_generation
+            .store(state.config_generation, Ordering::SeqCst);
+        self.driver_status
+            .store(state.driver_status, Ordering::SeqCst);
+        if state.device_activated {
+            inner.activate(self)?;
+        }
+        Ok(())
+    }
+
     #[inline]
     fn check_driver_status(&self, set: u32, clr: u32) -> bool {
         self.driver_status() & (set | clr) == set

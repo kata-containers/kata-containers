@@ -217,6 +217,26 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
     }
 }
 
+impl<'a, AS: DbsGuestAddressSpace> crate::persist::VirtioDevicePersist<'a> for Block<AS> {
+    type State = crate::persist::VirtioDeviceInfoState;
+    type SaveArgs = ();
+    type RestoreArgs = ();
+    type Error = crate::Error;
+
+    /// Capture the guest-negotiated state of this device.
+    fn save_state(&mut self, _args: ()) -> crate::Result<Self::State> {
+        Ok(self.device_info.save_state())
+    }
+
+    /// Restore the guest-negotiated state of this device.
+    ///
+    /// The device must have been re-created with the same configuration and
+    /// must not have been activated yet.
+    fn restore_state(&mut self, state: &Self::State, _args: ()) -> crate::Result<()> {
+        self.device_info.restore_state(state)
+    }
+}
+
 impl<AS, Q, R> VirtioDevice<AS, Q, R> for Block<AS>
 where
     AS: DbsGuestAddressSpace,
