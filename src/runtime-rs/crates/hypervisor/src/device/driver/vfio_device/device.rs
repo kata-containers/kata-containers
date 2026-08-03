@@ -334,7 +334,15 @@ impl PCIeDevice for VfioDeviceModernHandle {
         }
 
         let device_id = self.device_id().await;
-        let port_type = self.with(|d| d.config.port).await;
+        let configured_port = self.with(|d| d.config.port).await;
+        // Legacy Vfio selected the active topology mode at registration time.
+        let port_type = if configured_port == PCIePort::NoPort {
+            topo.get_pcie_port()
+                .map(|(port, _)| port)
+                .unwrap_or(PCIePort::NoPort)
+        } else {
+            configured_port
+        };
 
         // Reserve the bus based on the specified port type
         let bus_port_id = match topo.reserve_bus_for_device(&device_id, port_type)? {
