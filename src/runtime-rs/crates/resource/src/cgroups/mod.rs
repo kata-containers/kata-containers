@@ -18,6 +18,12 @@ use kata_types::config::TomlConfig;
 
 use crate::cgroups::cgroup_persist::CgroupState;
 
+#[derive(Debug)]
+pub enum SandboxCgroupStats {
+    V1(Box<cgroups::CgroupStats>),
+    V2(std::path::PathBuf),
+}
+
 const SANDBOXED_CGROUP_PATH: &str = "kata_sandboxed_pod";
 
 pub struct CgroupArgs {
