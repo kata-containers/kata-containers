@@ -21,8 +21,8 @@ use crate::{
     vfio_device::{VfioDeviceModernHandle, VfioDeviceType},
     vhost_user_blk::VhostUserBlkDevice,
     BlockConfigModern, BlockDeviceModernHandle, HybridVsockDevice, Hypervisor, NetworkDevice,
-    PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
-    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    PCIePortDevice, ProtectionDevice, ShareFsDevice, VhostUserConfig, VhostUserNetDevice,
+    VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
     VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
@@ -148,13 +148,12 @@ impl DeviceManager {
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
-                DeviceType::Vfio(device) => {
-                    // safe here:
-                    // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
-                    // and needs do release_device_index. otherwise, let it go.
-                    if device.config.dev_type == DEVICE_TYPE_BLOCK {
-                        self.shared_info
-                            .release_device_index(device.config.virt_path.unwrap().0, false);
+                DeviceType::VfioModern(device) => {
+                    let config = &device.lock().await.config;
+                    if config.dev_type == DEVICE_TYPE_BLOCK {
+                        if let Some((index, _)) = config.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
                     }
                 }
                 DeviceType::VhostUserBlk(device) => {
@@ -240,11 +239,6 @@ impl DeviceManager {
     async fn find_device(&self, host_path: String) -> Option<String> {
         for (device_id, dev) in &self.devices {
             match dev.lock().await.get_device_info().await {
-                DeviceType::Vfio(device) => {
-                    if device.config.host_path == host_path {
-                        return Some(device_id.to_string());
-                    }
-                }
                 DeviceType::VhostUserBlk(device) => {
                     if device.config.socket_path == host_path {
                         return Some(device_id.to_string());
@@ -324,20 +318,6 @@ impl DeviceManager {
                     .await
                     .context("failed to create block device modern")?
             }
-            DeviceConfig::VfioCfg(config) => {
-                let mut vfio_dev_config = config.clone();
-                let dev_host_path = vfio_dev_config.host_path.clone();
-                if let Some(device_matched_id) = self.find_device(dev_host_path).await {
-                    return Ok(device_matched_id);
-                }
-                let virt_path = self.get_dev_virt_path(vfio_dev_config.dev_type.as_str(), false)?;
-                vfio_dev_config.virt_path = virt_path;
-
-                Arc::new(Mutex::new(VfioDevice::new(
-                    device_id.clone(),
-                    &vfio_dev_config,
-                )?))
-            }
             DeviceConfig::VfioModernCfg(config) => {
                 let dev_host_path = config.host_path.clone();
                 if let Some(device_matched_id) = self.find_device(dev_host_path.clone()).await {
@@ -349,10 +329,15 @@ impl DeviceManager {
                 vfio_base.iommu_group_devnode = PathBuf::from(dev_host_path);
                 vfio_base.virt_path = virt_path;
 
-                Arc::new(Mutex::new(VfioDeviceModernHandle::new(
-                    device_id.clone(),
-                    &vfio_base,
-                )?))
+                match VfioDeviceModernHandle::new(device_id.clone(), &vfio_base) {
+                    Ok(device) => Arc::new(Mutex::new(device)),
+                    Err(err) => {
+                        if let Some((index, _)) = vfio_base.virt_path.as_ref() {
+                            self.shared_info.release_device_index(*index, false);
+                        }
+                        return Err(err);
+                    }
+                }
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
@@ -775,6 +760,8 @@ mod tests {
         d.write().await.try_remove_device(&device_id).await.unwrap();
 
         let device_info = d.read().await.get_device_info(&device_id).await.unwrap();
-        assert!(matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1));
+        assert!(
+            matches!(device_info, DeviceType::BlockModern(device) if device.lock().await.attach_count == 1)
+        );
     }
 }
