@@ -64,7 +64,7 @@ setup() {
 	local shim_pid vmm_pid vfsd_pid
 	shim_pid="$(shim_pid_for_pod "${node}" "${pod_uid}")"
 
-	vmm_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} -f 'cloud-hypervisor|qemu-system|firecracker|stratovirt'")"
+	vmm_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} -f 'cloud-hypervisor|qemu-system|firecracker|stratovirt|openvmm'")"
 
 	vfsd_pid="$(exec_host "${node}" "pgrep -P ${shim_pid} virtiofsd || true")"
 

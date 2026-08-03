@@ -54,6 +54,7 @@ jobs:
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
           - nydus
+          - openvmm
           - ovmf
           - ovmf-sev
           - ovmf-tdx

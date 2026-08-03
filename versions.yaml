@@ -75,6 +75,13 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       version: "v51.1"
 
+    openvmm:
+      description: >-
+        OpenVMM is a modular, cross-platform Virtual Machine Monitor written
+        in Rust
+      url: "https://github.com/microsoft/openvmm"
+      version: "00693a5d2e4db2484c576abd0c3dee95632c9fcc"
+
     firecracker:
       description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"

@@ -68,3 +68,4 @@ wasm = ["wasm_container"]
 
 dragonball = ["virt_container/dragonball"]
 cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+openvmm = ["virt_container/openvmm"]

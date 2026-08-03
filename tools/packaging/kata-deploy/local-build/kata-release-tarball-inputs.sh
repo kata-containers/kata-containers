@@ -34,6 +34,7 @@ kata-static-kernel-dragonball-experimental.tar.zst
 kata-static-kernel-nvidia-gpu.tar.zst
 kata-static-kernel.tar.zst
 kata-static-nydus.tar.zst
+kata-static-openvmm.tar.zst
 kata-static-ovmf-sev.tar.zst
 kata-static-ovmf-tdx.tar.zst
 kata-static-ovmf.tar.zst
