@@ -1100,6 +1100,7 @@ dependencies = [
  "agent",
  "anyhow",
  "async-trait",
+ "cgroups-rs",
  "containerd-shim-protos",
  "kata-sys-util",
  "kata-types",
