@@ -9,9 +9,9 @@ use common::{
     config::load_config,
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxMetricsInfo,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest,
+        TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -649,7 +649,14 @@ impl RuntimeHandlerManager {
 
                 Ok(SandboxResponse::ShutdownSandbox)
             }
-            SandboxRequest::SandboxMetrics(_) => todo!()
+            SandboxRequest::SandboxMetrics(req) => {
+                let stats = sandbox.metrics().await.context("get sandbox metrics")?;
+                Ok(SandboxResponse::SandboxMetrics(SandboxMetricsInfo {
+                    sandbox_id: req.sandbox_id,
+                    timestamp: SystemTime::now(),
+                    stats,
+                }))
+            }
         }
     }
 
@@ -1125,6 +1132,9 @@ mod tests {
             unimplemented!()
         }
         async fn wait(&self) -> Result<common::types::SandboxExitInfo> {
+            unimplemented!()
+        }
+        async fn metrics(&self) -> Result<common::types::StatsInfo> {
             unimplemented!()
         }
         async fn set_iptables(&self, _is_ipv6: bool, _data: Vec<u8>) -> Result<Vec<u8>> {
