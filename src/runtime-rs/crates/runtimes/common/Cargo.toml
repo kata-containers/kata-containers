@@ -11,6 +11,7 @@ license = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 containerd-shim-protos = { workspace = true, features = ["sandbox"] }
+cgroups = { workspace = true }
 nix = { workspace = true }
 protobuf = { workspace = true }
 strum = { workspace = true }
