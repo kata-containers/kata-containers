@@ -157,6 +157,7 @@ pub enum SandboxRequest {
     SandboxStatus(SandboxStatusRequest),
     Ping(SandboxID),
     ShutdownSandbox(SandboxID),
+    SandboxMetrics(SandboxID),
 }
 
 /// Response: sandbox response to shim
@@ -171,6 +172,7 @@ pub enum SandboxResponse {
     SandboxStatus(SandboxStatusInfo),
     Ping,
     ShutdownSandbox,
+    SandboxMetrics(SandboxMetricsInfo),
 }
 
 #[derive(Clone, Debug)]
@@ -235,6 +237,13 @@ pub struct SandboxStatusInfo {
     pub state: String,
     pub created_at: Option<std::time::SystemTime>,
     pub exited_at: Option<std::time::SystemTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxMetricsInfo {
+    pub sandbox_id: String,
+    pub timestamp: std::time::SystemTime,
+    pub stats: StatsInfo,
 }
 
 #[derive(Default, Clone, Debug)]
