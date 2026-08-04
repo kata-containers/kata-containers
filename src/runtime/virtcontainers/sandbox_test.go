@@ -1695,7 +1695,7 @@ func TestCheckVCPUsPinningNUMAMemoryOnly(t *testing.T) {
 		{HostNodes: "0", HostCPUs: "0-3"},
 		{HostNodes: "1", HostCPUs: "4-7"},
 	}
-	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7})
+	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7}, true)
 	if err != nil {
 		// The only permissible failure here is a low-level affinity syscall
 		// error (no real thread in the test process).  A NUMA-topology error
@@ -1715,9 +1715,174 @@ func TestCheckVCPUsPinningNUMABadHostCPUs(t *testing.T) {
 		{HostNodes: "0", HostCPUs: "not-valid"},
 		{HostNodes: "1", HostCPUs: "4-7"},
 	}
-	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7})
+	err := s.checkVCPUsPinningNUMA(context.Background(), vCPUThreadsMap, numaNodes, []int{0, 1, 2, 3, 4, 5, 6, 7}, true)
 	assert.Error(err)
 	assert.Contains(err.Error(), "failed to parse HostCPUs")
+}
+
+// assertDistinctPins checks that a plan gives every vCPU exactly one host
+// CPU and that no host CPU is handed out twice — two vCPU threads hard-pinned
+// to one host CPU each get about half of it while other CPUs sit idle.
+func assertDistinctPins(t *testing.T, affinities [][]int) []int {
+	t.Helper()
+	assert := assert.New(t)
+
+	pins := make([]int, 0, len(affinities))
+	seen := make(map[int]bool, len(affinities))
+	for vcpuIdx, cpus := range affinities {
+		assert.Len(cpus, 1, "vcpu %d is not pinned to a single host CPU", vcpuIdx)
+		assert.False(seen[cpus[0]], "host CPU %d pinned to more than one vcpu", cpus[0])
+		seen[cpus[0]] = true
+		pins = append(pins, cpus[0])
+	}
+
+	return pins
+}
+
+func TestNUMAAffinityPlanPinsEachVCPUToItsOwnNodeCPU(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3, 4, 5, 6, 7}
+
+	nodeCPUs, detached, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+	assert.Empty(detached)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{4, 4}, cpuSetSlice, true)
+	assert.True(pinned)
+	assert.Equal([]int{0, 1, 2, 3, 4, 5, 6, 7}, assertDistinctPins(t, affinities))
+}
+
+// Two guest nodes mapped onto the same host node (numa_mapping = ["0", "0"])
+// used to make a sandbox pin its own vCPUs in pairs: 0 1 0 1.
+func TestNUMAAffinityPlanSharedHostNode(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "0", HostCPUs: "0-3"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3}
+
+	nodeCPUs, _, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{2, 2}, cpuSetSlice, true)
+	assert.True(pinned)
+	assert.Equal([]int{0, 1, 2, 3}, assertDistinctPins(t, affinities))
+}
+
+// A node holding fewer cpuset CPUs than the vCPUs assigned to it used to wrap
+// around its own CPU list; the surplus vCPUs must borrow unused CPUs instead.
+func TestNUMAAffinityPlanBorrowsFromOtherNodes(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	// The kubelet handed the sandbox only two CPUs of host node 0.
+	cpuSetSlice := []int{0, 1, 4, 5, 6, 7}
+
+	nodeCPUs, detached, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+	assert.Empty(detached)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{3, 3}, cpuSetSlice, true)
+	assert.True(pinned)
+	pins := assertDistinctPins(t, affinities)
+	assert.Equal([]int{0, 1}, pins[:2], "node 0 vCPUs should stay on node 0 CPUs")
+	assert.Subset([]int{4, 5, 6, 7}, pins[2:])
+}
+
+// Without enough CPUs for a 1:1 assignment, the threads get their node as an
+// affinity mask: the host scheduler spreads them instead of several of them
+// time-sharing a single CPU.
+func TestNUMAAffinityPlanFallsBackToNodeMask(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-1"},
+		{HostNodes: "1", HostCPUs: "2-3"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3}
+
+	nodeCPUs, _, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{3, 3}, cpuSetSlice, true)
+	assert.False(pinned)
+	assert.Equal([][]int{
+		{0, 1}, {0, 1}, {0, 1},
+		{2, 3}, {2, 3}, {2, 3},
+	}, affinities)
+}
+
+// A cpuset the sandbox does not own alone (cpuManagerPolicy=none) is shared
+// with every other sandbox on the host, so pinning to single CPUs would make
+// all of them land on the same ones.
+func TestNUMAAffinityPlanNonExclusiveCPUSet(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3, 4, 5, 6, 7}
+
+	nodeCPUs, _, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{2, 2}, cpuSetSlice, false)
+	assert.False(pinned)
+	assert.Equal([][]int{
+		{0, 1, 2, 3}, {0, 1, 2, 3},
+		{4, 5, 6, 7}, {4, 5, 6, 7},
+	}, affinities)
+}
+
+// Memory-only nodes carry no vCPU and must not consume any host CPU.
+func TestNUMAAffinityPlanSkipsNodesWithoutVCPUs(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "4-7"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3, 4, 5, 6, 7}
+
+	nodeCPUs, _, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{1, 0}, cpuSetSlice, true)
+	assert.True(pinned)
+	assert.Equal([][]int{{0}}, affinities)
+}
+
+func TestNUMANodeCPUsDetachedNode(t *testing.T) {
+	assert := assert.New(t)
+
+	numaNodes := []types.GuestNUMANode{
+		{HostNodes: "0", HostCPUs: "0-3"},
+		{HostNodes: "1", HostCPUs: "8-11"},
+	}
+	cpuSetSlice := []int{0, 1, 2, 3, 4, 5}
+
+	nodeCPUs, detached, err := numaNodeCPUs(numaNodes, cpuSetSlice)
+	assert.NoError(err)
+	assert.Equal([]int{1}, detached)
+	assert.Equal([]int{0, 1, 2, 3}, nodeCPUs[0])
+	assert.Equal(cpuSetSlice, nodeCPUs[1])
+
+	// A node with no CPUs of its own inside the cpuset must still not push
+	// its vCPUs onto CPUs another node's vCPUs already hold.
+	affinities, pinned := numaAffinityPlan(nodeCPUs, []uint32{3, 2}, cpuSetSlice, true)
+	assert.True(pinned)
+	assert.Equal([]int{0, 1, 2, 3, 4}, assertDistinctPins(t, affinities))
 }
 
 func TestHotplugVfioNetworkDeviceAlreadyAttached(t *testing.T) {
