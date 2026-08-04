@@ -115,7 +115,13 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	} else {
 		vol, err = dv.createVolume(volumeID, req.GetName(), capacity, kind)
 		if err != nil {
-			klog.Errorf("created volume %s at path %s failed with error: %v", vol.VolID, vol.VolPath, err.Error())
+			// createVolume returns (nil, err) on every error path (size limit,
+			// capacity tracking, mkdir, state update), so vol is nil here.
+			// Dereferencing vol.VolID/vol.VolPath panics with a nil-pointer
+			// dereference that masks the real error and crashes the driver
+			// (CrashLoopBackOff blocks all provisioning on the node). Log the
+			// non-nil fields + err instead.
+			klog.Errorf("createVolume %s (name %q, capacity %d) failed: %v", volumeID, req.GetName(), capacity, err)
 			return nil, err
 		}
 		klog.Infof("created volume %s at path %s", vol.VolID, vol.VolPath)

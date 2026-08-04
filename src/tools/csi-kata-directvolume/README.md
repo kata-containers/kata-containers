@@ -16,6 +16,26 @@ This repository houses the `Direct Volume CSI driver`, along with all build and 
 
 The driver can provision volumes based on direct block devices, eliminating the need for loop devices and relying solely on single files stored on the host.
 
+## Configuration
+
+The `directvolplugin` binary exposes a few flags (run `directvolplugin --help` for the full list):
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--max-volume-size` | `1024*1024*1024*1024` (1 TiB) | Maximum size of a volume, in bytes (inclusive). A PVC requesting more than this is rejected with a CSI `OutOfRange` error. |
+| `--capacity` | (disabled) | Simulated storage capacity per `kind`, given as `<kind>=<quantity>` (bytes). May be set multiple times for different kinds. |
+| `--enable-topology` | `true` | Advertise the `VOLUME_ACCESSIBILITY_CONSTRAINTS` topology capability. |
+
+### Volume size limit
+
+The default per-volume maximum is **1 TiB** (`--max-volume-size`, in bytes, inclusive). To provision larger volumes — e.g. large model checkpoints that exceed 1 TiB — raise the limit by passing the flag to the plugin. For example, to allow volumes up to 4 TiB:
+
+```shell
+directvolplugin --max-volume-size=4398046511104   # 4 TiB
+```
+
+A PVC that requests more than the configured maximum is rejected with a graceful gRPC `OutOfRange` error (`Requested capacity <n> exceeds maximum allowed <max>`); the driver does **not** allocate or format anything for a rejected request.
+
 ## Deployment
 
 [Deployment for K8S 1.20+](docs/deploy-csi-kata-directvol.md)
