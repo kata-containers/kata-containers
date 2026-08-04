@@ -247,8 +247,9 @@ impl QemuInner {
                 }
                 DeviceType::VfioModern(vfio_dev) => {
                     // Snapshot parameters under the lock; release before doing cmdline work.
-                    let (device_type, ap_sysfs_path, devices, bus_port_id) = {
+                    let (vfio_device_id, device_type, ap_sysfs_path, devices, iommufd, bus_port_id) = {
                         let vfio_device = vfio_dev.lock().await;
+                        let vfio_device_id = vfio_device.device_id.clone();
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
@@ -262,9 +263,11 @@ impl QemuInner {
                             .map(|g| g.devices.clone())
                             .unwrap_or_else(|| vfio_device.device.devices.clone());
                         (
+                            vfio_device_id,
                             device_type,
                             ap_sysfs_path,
                             devices,
+                            vfio_device.device.iommufd.clone(),
                             vfio_device.config.bus_port_id.clone(),
                         )
                     };
@@ -279,15 +282,24 @@ impl QemuInner {
                         );
                     } else {
                         // PCI cold plug devices
-                        for dev in devices.iter() {
+                        for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
 
-                            let vfio_cfg = VfioDeviceConfig::new(
+                            let mut vfio_cfg = VfioDeviceConfig::new(
                                 host_bdf,
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
                             .with_vfio_bus(bus_port_id.0.clone());
+                            if let (Some(iommufd), Some(cdev)) =
+                                (iommufd.as_ref(), dev.vfio_cdev.as_ref())
+                            {
+                                vfio_cfg = vfio_cfg.with_device_fds(
+                                    &iommufd.iommufd_dev,
+                                    &cdev.devnode,
+                                    format!("vfio-{vfio_device_id}-{index}"),
+                                );
+                            }
 
                             cmdline.add_pcie_vfio_device(vfio_cfg)?;
                         }
