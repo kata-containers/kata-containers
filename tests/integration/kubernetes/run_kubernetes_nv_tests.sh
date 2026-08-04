@@ -96,6 +96,7 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
 		"numa-topology-test"
+		"numa-topology-test-b"
 		"numa-topology-gpu-test"
 		"vllm-qwen2-5-0-5b-instruct"
 		"vllm-qwen2-5-0-5b-instruct-tee"
