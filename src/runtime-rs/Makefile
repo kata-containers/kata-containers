@@ -223,7 +223,9 @@ DEFNETQUEUES := 1
 # Security note: do not enable "virtio_fs_extra_args" by default.
 # Allowing pods to pass arbitrary virtiofsd arguments can be abused for malicious host-side behavior.
 DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_NVIDIA := []
 DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+DEFENABLEANNOTATIONS_COCO_NVIDIA := [\"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFEMPTYDIRMODE := shared-fs
 DEFEMPTYDIRMODE_COCO := block-encrypted
@@ -831,7 +833,9 @@ USER_VARS += DEFVIRTIOFSCACHE
 USER_VARS += DEFVIRTIOFSQUEUESIZE
 USER_VARS += DEFVIRTIOFSEXTRAARGS
 USER_VARS += DEFENABLEANNOTATIONS
+USER_VARS += DEFENABLEANNOTATIONS_NVIDIA
 USER_VARS += DEFENABLEANNOTATIONS_COCO
+USER_VARS += DEFENABLEANNOTATIONS_COCO_NVIDIA
 USER_VARS += DEFENABLEIOTHREADS
 USER_VARS += DEFINDEPIOTHREADS
 USER_VARS += DEFSECCOMPSANDBOXPARAM

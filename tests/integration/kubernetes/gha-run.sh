@@ -211,6 +211,18 @@ function deploy_kata() {
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
 		ANNOTATIONS="image initrd kernel default_vcpus"
 	fi
+	# The NVIDIA runtime classes ship with the hypervisor annotations disabled,
+	# so the ones a few tests depend on have to be opted into here.
+	if is_nvidia_hypervisor "${KATA_HYPERVISOR}" || is_confidential_gpu_hypervisor "${KATA_HYPERVISOR}"; then
+		if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+			# k8s-confidential-attestation.bats and the NIM TEE pods pass the
+			# KBS address and the guest components setup on the kernel cmdline.
+			ANNOTATIONS+=" kernel_params"
+		elif is_verity_enabled_runtime_class "${KATA_HYPERVISOR}"; then
+			# k8s-measured-rootfs.bats corrupts the verity root hash.
+			ANNOTATIONS+=" kernel_verity_params"
+		fi
+	fi
 
 	SNAPSHOTTER_HANDLER_MAPPING=""
 	if [[ -n "${SNAPSHOTTER}" ]]; then
