@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod block_source;
 mod cmdline_generator;
 mod inner;
 mod qmp;
