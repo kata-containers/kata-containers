@@ -2914,6 +2914,7 @@ pub struct QemuCmdLine<'a> {
     ccw_subchannel: Option<CcwSubChannel>,
     block_fdsets: HashMap<String, Vec<i64>>,
     next_fdset_id: i64,
+    requires_memlock: bool,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -2937,6 +2938,7 @@ impl<'a> QemuCmdLine<'a> {
             ccw_subchannel,
             block_fdsets: HashMap::new(),
             next_fdset_id: 1,
+            requires_memlock: false,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -3018,6 +3020,10 @@ impl<'a> QemuCmdLine<'a> {
     /// the descriptors if one of those devices is subsequently unplugged.
     pub fn take_block_fdsets(&mut self) -> HashMap<String, Vec<i64>> {
         std::mem::take(&mut self.block_fdsets)
+    }
+
+    pub fn requires_memlock(&self) -> bool {
+        self.requires_memlock
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
@@ -3601,6 +3607,7 @@ impl<'a> QemuCmdLine<'a> {
         let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, &iommufd_name);
         if let Some((_, vfio_cdev, qemu_device_id)) = external_fds {
             vfio_device = vfio_device.with_id(qemu_device_id).with_fd(vfio_cdev)?;
+            self.requires_memlock = true;
         }
 
         if let Some(vendor_id) = &config.x_pci_vendor_id {
@@ -4085,6 +4092,7 @@ mod tests {
         assert!(contains_param(&vfio[1..2], "iommufd=iommufdrp0"));
         assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
         assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
+        assert!(cmdline.requires_memlock());
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
     }
 
