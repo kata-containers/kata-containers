@@ -40,7 +40,7 @@ func TestStatNetworkMetric(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	sandbox.StatsContainerFunc = func(contID string) (vc.ContainerStats, error) {
+	sandbox.StatsContainerFunc = func(_ context.Context, contID string) (vc.ContainerStats, error) {
 		return vc.ContainerStats{
 			NetworkStats: mockNetwork,
 		}, nil
