@@ -26,7 +26,7 @@ pub mod dragonball;
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub mod firecracker;
 mod kernel_param;
-#[cfg(feature = "openvmm")]
+#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 pub mod openvmm;
 pub mod qemu;
 pub mod remote;
@@ -49,7 +49,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
-#[cfg(feature = "openvmm")]
+#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_OPENVMM;
 
 // Config which driver to use as vm root dev

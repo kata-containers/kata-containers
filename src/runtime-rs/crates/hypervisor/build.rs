@@ -45,8 +45,8 @@ fn replace_in_file(path: &str, from: &str, to: &str) -> std::io::Result<()> {
 
 fn main() {
     // The generated bindings are only needed for the OpenVMM backend, whose
-    // module is `#[cfg(feature = "openvmm")]`. When the feature is off the
-    // gitignored output is never referenced, so skip codegen entirely.
+    // module also requires `target_arch = "x86_64"`. When the feature is off,
+    // the gitignored output is never referenced, so skip codegen entirely.
     if std::env::var("CARGO_FEATURE_OPENVMM").is_err() {
         return;
     }

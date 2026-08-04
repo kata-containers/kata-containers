@@ -53,9 +53,9 @@ use hypervisor::ch::CloudHypervisor;
 ))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
-#[cfg(feature = "openvmm")]
+#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
-#[cfg(feature = "openvmm")]
+#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 use kata_types::config::OpenVmmConfig;
 
 use crate::factory::vm::VmConfig;
@@ -107,7 +107,7 @@ impl RuntimeHandler for VirtContainer {
         let remote_config = Arc::new(RemoteConfig::new());
         register_hypervisor_plugin("remote", remote_config);
 
-        #[cfg(feature = "openvmm")]
+        #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
         {
             let openvmm_config = Arc::new(OpenVmmConfig::new());
             register_hypervisor_plugin(HYPERVISOR_NAME_OPENVMM, openvmm_config);
@@ -269,7 +269,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
-        #[cfg(feature = "openvmm")]
+        #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
         HYPERVISOR_NAME_OPENVMM => {
             let hypervisor = OpenVmm::new();
             hypervisor

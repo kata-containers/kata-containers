@@ -43,7 +43,7 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
-#[cfg(feature = "openvmm")]
+#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
@@ -1496,7 +1496,7 @@ impl Persist for VirtSandbox {
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
-                #[cfg(feature = "openvmm")]
+                #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
                 HYPERVISOR_NAME_OPENVMM => Ok(Some(hypervisor_state)),
                 _ => Err(anyhow!(
                     "Unsupported hypervisor {}",
@@ -1560,7 +1560,7 @@ impl Persist for VirtSandbox {
                 let hypervisor = Arc::new(Remote::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
-            #[cfg(feature = "openvmm")]
+            #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
             HYPERVISOR_NAME_OPENVMM => {
                 let hypervisor = Arc::new(OpenVmm::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
