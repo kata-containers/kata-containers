@@ -45,17 +45,16 @@ wait_for_rootless_host_resources() {
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
 
-	# Additional QEMU configurations are tracked in:
-	# https://github.com/kata-containers/kata-containers/issues/13424
-	# Rootless QEMU cannot access EROFS layers below root-owned
-	# snapshot directories.
-	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && return 1
-
 	# CoCo-dev does not enable a TEE or require TEE device nodes. Keep
 	# actual confidential handlers excluded until rootless QEMU can access
 	# resources such as /dev/sev and /dev/tdx_guest.
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
 		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
+		return 1
+	fi
+	# Runtime-go does not pass EROFS layers to rootless QEMU by file
+	# descriptor and therefore cannot traverse their snapshot directories.
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]] && ! is_runtime_rs; then
 		return 1
 	fi
 	return 0
@@ -76,6 +75,19 @@ setup() {
 		"quay.io/prometheus/busybox:latest" \
 		"$(get_test_runtime_class)")"
 	set_node "${pod_config}" "${node}"
+	# /dev/loop* remains covered by k8s-block-volume.bats. Init-data will be
+	# covered when confidential RuntimeClasses are enabled for this test.
+	# Do not request a disk-backed emptyDir from runtime-go with shared_fs=none;
+	# only runtime-rs implements the block-source file-descriptor path.
+	if is_runtime_rs || ! is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
+		yq -i '
+			.spec.volumes += [{"name": "rootless-emptydir", "emptyDir": {}}] |
+			.spec.containers[0].volumeMounts += [{
+				"name": "rootless-emptydir",
+				"mountPath": "/mnt/rootless-emptydir"
+			}]
+		' "${pod_config}"
+	fi
 	set_container_command "${pod_config}" 0 sleep 30
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
