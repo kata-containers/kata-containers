@@ -177,16 +177,11 @@ define DUMMY
 endef
 
 ifneq ($(filter $(ARCH),x86_64 aarch64 s390x ppc64le),)
-ifneq ($(ARCH), ppc64le)
 KATA_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-inputs.sh kata-static $(ARCH) | tr '\n' ' ')
-endif
 KATA_GO_STATIC_FINAL_TARBALL_INPUTS := $(shell $(MK_DIR)/kata-release-tarball-inputs.sh kata-go-static $(ARCH) | tr '\n' ' ')
 endif
 
-ifeq ($(ARCH), ppc64le)
-kata-tarball:
-	@echo "kata-tarball: runtime-rs is unsupported on $(ARCH); use kata-go-static-tarball"; exit 1
-else ifneq ($(KATA_STATIC_FINAL_TARBALL_INPUTS),)
+ifneq ($(KATA_STATIC_FINAL_TARBALL_INPUTS),)
 kata-tarball: FINAL_TARBALL_INPUTS=$(KATA_STATIC_FINAL_TARBALL_INPUTS)
 kata-tarball: FINAL_TARBALL_NAME=kata-static.tar.zst
 kata-tarball: | all-parallel

@@ -87,8 +87,13 @@ kata-static-virtiofsd.tar.zst
 EOF
 			;;
 		ppc64le)
-			echo "runtime-rs tarball is not produced on ppc64le" >&2
-			return 1
+			cat <<'EOF'
+kata-static-kernel.tar.zst
+kata-static-qemu.tar.zst
+kata-static-rootfs-initrd.tar.zst
+kata-static-shim-v2-rust.tar.zst
+kata-static-virtiofsd.tar.zst
+EOF
 			;;
 	esac
 }
