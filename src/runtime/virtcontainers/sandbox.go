@@ -2582,7 +2582,11 @@ func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, erro
 					continue
 				}
 
-				mountOptions := []string{"remount", fmt.Sprintf("size=%dM", memoryMB)}
+				mountOptions := []string{
+					"remount",
+					fmt.Sprintf("size=%dM", memoryMB),
+					fmt.Sprintf("nr_inodes=%d", utils.TmpfsMaxInodes(memoryMB)),
+				}
 
 				origin_src := mount.Source
 				stat := syscall.Stat_t{}
