@@ -35,6 +35,12 @@ fn is_containerd_based(runtime: &str) -> bool {
     CONTAINERD_BASED_RUNTIMES.contains(&runtime)
 }
 
+async fn is_unit_active(unit: &str) -> bool {
+    utils::host_systemctl(&["is-active", "--quiet", unit])
+        .await
+        .is_ok()
+}
+
 pub async fn get_container_runtime(config: &Config) -> Result<String> {
     let runtime_version = k8s::get_container_runtime_version(config)
         .await
@@ -55,23 +61,23 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     // Detect k3s/rke2 via systemd services rather than the containerd version
     // string, which no longer reliably contains "k3s" in newer releases
     // (e.g. "containerd://2.2.2-bd1.34").
-    if utils::host_systemctl(&["is-active", "--quiet", "rke2-agent"]).is_ok() {
+    if is_unit_active("rke2-agent").await {
         return Ok("rke2-agent".to_string());
     }
-    if utils::host_systemctl(&["is-active", "--quiet", "rke2-server"]).is_ok() {
+    if is_unit_active("rke2-server").await {
         return Ok("rke2-server".to_string());
     }
-    if utils::host_systemctl(&["is-active", "--quiet", "k3s-agent"]).is_ok() {
+    if is_unit_active("k3s-agent").await {
         return Ok("k3s-agent".to_string());
     }
-    if utils::host_systemctl(&["is-active", "--quiet", "k3s"]).is_ok() {
+    if is_unit_active("k3s").await {
         return Ok("k3s".to_string());
     }
 
-    if utils::host_systemctl(&["is-active", "--quiet", "k0scontroller"]).is_ok() {
+    if is_unit_active("k0scontroller").await {
         return Ok("k0s-controller".to_string());
     }
-    if utils::host_systemctl(&["is-active", "--quiet", "k0sworker"]).is_ok() {
+    if is_unit_active("k0sworker").await {
         return Ok("k0s-worker".to_string());
     }
 

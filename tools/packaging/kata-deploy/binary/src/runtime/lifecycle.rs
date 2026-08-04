@@ -66,9 +66,9 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
         _ => {
             let unit = manager::cri_systemd_unit(runtime);
             info!("restart_runtime: Running daemon-reload");
-            utils::host_systemctl(&["daemon-reload"])?;
+            utils::host_systemctl(&["daemon-reload"]).await?;
             info!("restart_runtime: Restarting {}", unit);
-            utils::host_systemctl(&["restart", &unit])?;
+            utils::host_systemctl(&["restart", &unit]).await?;
             info!("restart_runtime: Successfully restarted {}", unit);
         }
     }
@@ -86,8 +86,8 @@ pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> 
             info!("k0s runtime - no restart needed");
         }
         _ => {
-            utils::host_systemctl(&["daemon-reload"])?;
-            utils::host_systemctl(&["restart", &manager::cri_systemd_unit(runtime)])?;
+            utils::host_systemctl(&["daemon-reload"]).await?;
+            utils::host_systemctl(&["restart", &manager::cri_systemd_unit(runtime)]).await?;
         }
     }
 

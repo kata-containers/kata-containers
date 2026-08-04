@@ -12,8 +12,9 @@ mod utils;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use flate2::read::GzDecoder;
 use log::{error, info};
-use semver::Version;
+use std::io::BufRead;
 
 /// Env var name used to thread the detected container runtime through the
 /// post-install re-exec. Avoids re-querying the apiserver after we've already
@@ -64,12 +65,11 @@ enum Action {
     InstallStageHostCheck,
     /// Stage 1 of a staged (JobSet) install: install kata artifacts/config on
     /// the host and set up configured snapshotters. Does not touch CRI
-    /// configuration, but is still privileged (host writes + snapshotter setup
-    /// shell into the host via nsenter).
+    /// configuration.
     #[clap(name = "install-stage-artifacts")]
     InstallStageArtifacts,
     /// Stage 2 of a staged (JobSet) install: write CRI drop-ins, restart the
-    /// runtime, and wait for node readiness. Privileged + short-lived.
+    /// runtime, and wait for node readiness.
     #[clap(name = "install-stage-cri")]
     InstallStageCri,
     /// Stage 3 of a staged (JobSet) install: apply the kata-runtime node label.
@@ -82,12 +82,11 @@ enum Action {
     #[clap(name = "cleanup-stage-unlabel")]
     CleanupStageUnlabel,
     /// Cleanup stage 2 of a staged (JobSet) uninstall: remove CRI drop-ins,
-    /// restart the runtime, and wait for readiness. Privileged + short-lived.
+    /// restart the runtime, and wait for readiness.
     #[clap(name = "cleanup-stage-revert-cri")]
     CleanupStageRevertCri,
     /// Cleanup stage 3 of a staged (JobSet) uninstall: remove kata
-    /// artifacts/config/symlinks from the host. Privileged (mutates the host
-    /// filesystem under the install dir).
+    /// artifacts/config/symlinks from the host.
     #[clap(name = "cleanup-stage-remove-artifacts")]
     CleanupStageRemoveArtifacts,
     /// Internal: entered via re-exec after install completes. Holds the
@@ -101,7 +100,13 @@ enum Action {
 /// install/cleanup label stages so the key stays consistent.
 const KATA_RUNTIME_LABEL: &str = "katacontainers.io/kata-runtime";
 const SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS: u64 = 10 * 60;
+const MKFS_EROFS: &str = "mkfs.erofs";
 const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
+/// The `mkfs.erofs` options kata-deploy configures containerd's EROFS differ to
+/// use: `--mkfs-time` and `--sort=none`, both added in erofs-utils 1.8.2. The
+/// leading dashes are left out because that is how the option names appear
+/// inside the binary, which is where `validate_mkfs_erofs_options` looks.
+const REQUIRED_MKFS_EROFS_OPTIONS: &[&str] = &["mkfs-time", "sort"];
 
 // Cap the tokio runtime to a small fixed number of worker threads. The default
 // multi-thread runtime allocates `num_cpus()` workers (each with a ~2 MiB
@@ -109,8 +114,8 @@ const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
 // DaemonSet pod's VmData reservation (~440 MiB). Two workers is plenty:
 //
 //   - the install path is overwhelmingly I/O-bound,
-//   - it shells out to `nsenter ... systemctl restart …` (synchronous,
-//     blocking calls that wedge the thread they run on for tens of seconds);
+//   - host command and systemd D-Bus operations are synchronous and may block
+//     for tens of seconds;
 //     a second worker keeps the health server able to answer kubelet probes
 //     within timeoutSeconds while the first is blocked.
 //
@@ -478,7 +483,7 @@ async fn validate_erofs_prerequisites(config: &config::Config) -> Result<()> {
         )?;
     }
 
-    validate_mkfs_erofs_version()?;
+    validate_mkfs_erofs_options()?;
 
     // kata-deploy currently configures the EROFS snapshotter with
     // enable_fsverity=true, but this host check does not know the final
@@ -546,84 +551,103 @@ fn validate_host_kernel_feature_available(
 }
 
 fn host_module_visible(module_name: &str) -> bool {
-    let sys_module_path = format!("/sys/module/{module_name}");
-    if utils::host_exec(&["test", "-d", &sys_module_path]).is_ok() {
+    if std::path::Path::new(&format!("/sys/module/{module_name}")).is_dir() {
         return true;
     }
 
-    let proc_modules_pattern = format!("^{module_name} ");
-    utils::host_exec(&["grep", "-q", &proc_modules_pattern, "/proc/modules"]).is_ok()
+    std::fs::read_to_string("/proc/modules")
+        .map(|content| {
+            content.lines().any(|line| {
+                line.split_whitespace()
+                    .next()
+                    .is_some_and(|name| name == module_name)
+            })
+        })
+        .unwrap_or(false)
 }
 
 fn host_proc_config_has_builtin_feature(config_symbol: &str) -> bool {
-    let config_value = format!("{config_symbol}=y");
-
-    if utils::host_exec(&["test", "-r", "/proc/config.gz"]).is_err() {
-        return false;
-    }
-
-    let Ok(output) = utils::host_exec(&["gzip", "-dc", "/proc/config.gz"]) else {
+    let Ok(config_gz) = std::fs::File::open("/proc/config.gz") else {
         return false;
     };
 
-    output.lines().any(|line| line == config_value)
+    let config_value = format!("{config_symbol}=y");
+    std::io::BufReader::new(GzDecoder::new(config_gz))
+        .lines()
+        .map_while(Result::ok)
+        .any(|line| line == config_value)
 }
 
 fn host_boot_config_has_builtin_feature(config_symbol: &str) -> bool {
-    let config_pattern = format!("^{config_symbol}=y");
-
-    let output = utils::host_exec(&["uname", "-r"]);
-    let Ok(kernel_release) = output else {
+    let config_value = format!("{config_symbol}=y");
+    let Ok(kernel_release) = std::fs::read_to_string("/proc/sys/kernel/osrelease") else {
         return false;
     };
 
     let kernel_config_path = format!("/boot/config-{}", kernel_release.trim());
-    utils::host_exec(&["grep", "-Eq", &config_pattern, &kernel_config_path]).is_ok()
+    std::fs::read_to_string(kernel_config_path)
+        .map(|content| content.lines().any(|line| line == config_value))
+        .unwrap_or(false)
 }
 
-fn validate_mkfs_erofs_version() -> Result<()> {
-    let output = utils::host_exec(&["mkfs.erofs", "--version"]).with_context(|| {
-        "Required host command `mkfs.erofs` is not available. Install \
-         erofs-utils >= 1.8.2 before enabling the EROFS snapshotter."
+/// Verify that the host's `mkfs.erofs` accepts the options containerd's EROFS
+/// differ will pass to it (see `configure_erofs_snapshotter`).
+///
+/// Running the host binary to ask it is not possible: it is linked against the
+/// host's loader and libraries, which the container does not have. So this
+/// searches the binary for the option names, which `getopt_long` keeps as
+/// plain strings. Their presence says exactly what the tool accepts, which is
+/// what we care about — the erofs-utils version only ever stood in for it.
+fn validate_mkfs_erofs_options() -> Result<()> {
+    let mkfs_erofs = utils::find_host_program(MKFS_EROFS).with_context(|| {
+        format!(
+            "Required host command `{MKFS_EROFS}` is not available. Install \
+             erofs-utils >= {MIN_EROFS_UTILS_VERSION} before enabling the \
+             EROFS snapshotter."
+        )
     })?;
 
-    let version = parse_erofs_utils_version(&output).with_context(|| {
-        format!("Could not parse erofs-utils version from `mkfs.erofs --version`: {output}")
-    })?;
-    let minimum_version = Version::parse(MIN_EROFS_UTILS_VERSION)?;
+    let binary = std::fs::read(&mkfs_erofs)
+        .with_context(|| format!("Failed to read host command {}", mkfs_erofs.display()))?;
 
-    if version < minimum_version {
+    let missing: Vec<&str> = REQUIRED_MKFS_EROFS_OPTIONS
+        .iter()
+        .copied()
+        .filter(|option| !contains_c_string(&binary, option))
+        .collect();
+
+    if !missing.is_empty() {
         anyhow::bail!(
-            "Host erofs-utils version {} is too old. kata-deploy configures \
-             EROFS fsmerge mkfs_options that require erofs-utils >= {}.",
-            version,
+            "Host {} does not support the --{} option(s) that kata-deploy \
+             configures the EROFS differ to use. Install erofs-utils >= {}.",
+            mkfs_erofs.display(),
+            missing.join(", --"),
             MIN_EROFS_UTILS_VERSION
         );
     }
 
     info!(
-        "host erofs-utils version {} satisfies minimum {}",
-        version, MIN_EROFS_UTILS_VERSION
+        "host {} supports the required mkfs options",
+        mkfs_erofs.display()
     );
 
     Ok(())
 }
 
-fn parse_erofs_utils_version(output: &str) -> Result<Version> {
-    let version_re = regex::Regex::new(r"([0-9]+)\.([0-9]+)(?:\.([0-9]+))?")?;
-    let captures = version_re
-        .captures(output)
-        .ok_or_else(|| anyhow::anyhow!("erofs-utils version not found"))?;
+/// Whether `haystack` holds `needle` as a whole NUL-terminated string, the way
+/// a C string literal is stored in a binary. This is the `strings | grep -x` of
+/// the probe: matching a substring would accept `sort` inside `qsort`.
+fn contains_c_string(haystack: &[u8], needle: &str) -> bool {
+    let needle = needle.as_bytes();
 
-    let major = captures[1].parse::<u64>()?;
-    let minor = captures[2].parse::<u64>()?;
-    let patch = captures
-        .get(3)
-        .map(|patch| patch.as_str().parse::<u64>())
-        .transpose()?
-        .unwrap_or(0);
-
-    Version::parse(&format!("{major}.{minor}.{patch}")).map_err(Into::into)
+    haystack
+        .windows(needle.len() + 1)
+        .enumerate()
+        .any(|(start, window)| {
+            window[..needle.len()] == *needle
+                && window[needle.len()] == 0
+                && (start == 0 || !haystack[start - 1].is_ascii_graphic())
+        })
 }
 
 fn warn_if_erofs_fsverity_may_be_unavailable() {
@@ -733,9 +757,7 @@ fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
 }
 
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
-/// up any configured snapshotters. This does not touch CRI configuration, but it
-/// still needs privileged host access: writing under the host install dir and
-/// the snapshotter setup (e.g. nydus) shell into the host via nsenter.
+/// up any configured snapshotters. This does not touch CRI configuration.
 async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (artifacts): installing kata artifacts on host");
 
@@ -754,8 +776,8 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
 }
 
 /// Install stage 2 (cri): write CRI drop-ins, configure snapshotters, restart
-/// the runtime, and wait for the node to become ready. This is the privileged,
-/// node-disrupting stage and is kept short-lived.
+/// the runtime, and wait for the node to become ready. This node-disrupting
+/// stage is kept short-lived.
 async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
 
@@ -1089,13 +1111,25 @@ async fn cleanup_stage_revert_cri(config: &config::Config, runtime: &str) -> Res
 }
 
 /// Cleanup stage 3 (remove-artifacts): delete kata artifacts/config/symlinks
-/// from the host. Skips when the install directory is already gone.
+/// from the host. Skips when the install directory is already gone or empty.
 async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
     info!("cleanup (remove-artifacts): removing kata artifacts from host");
 
-    if !std::path::Path::new(&config.host_install_dir).exists() {
+    // The install dir is bind mounted into this pod, so it always exists and
+    // outlives the artifacts it holds: an empty one means there is nothing
+    // left to remove. Anything other than an absent directory is a reason to
+    // stop, since we cannot tell an empty install from one we failed to read.
+    let empty_or_absent = match std::fs::read_dir(&config.host_install_dir) {
+        Ok(mut entries) => entries.next().is_none(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("Failed to read install dir {}", config.host_install_dir))
+        }
+    };
+    if empty_or_absent {
         info!(
-            "cleanup (remove-artifacts): install dir {} already absent, skipping",
+            "cleanup (remove-artifacts): install dir {} already empty, skipping",
             config.host_install_dir
         );
         return Ok(());
@@ -1117,15 +1151,7 @@ async fn cri_drop_in_present(config: &config::Config, runtime: &str) -> bool {
     }
 
     match config.get_containerd_paths(runtime).await {
-        Ok(paths) => {
-            // /etc/containerd is mounted directly; other paths live under /host.
-            let resolved = if paths.drop_in_file.starts_with("/etc/containerd/") {
-                std::path::PathBuf::from(&paths.drop_in_file)
-            } else {
-                std::path::Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
-            };
-            resolved.exists()
-        }
+        Ok(paths) => std::path::Path::new(&paths.drop_in_file).exists(),
         Err(e) => {
             log::warn!(
                 "cleanup (revert-cri): could not resolve containerd paths to check drop-in \
@@ -1142,7 +1168,7 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
     k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
     runtime::lifecycle::restart_cri_runtime(config, runtime).await?;
     if matches!(runtime, "crio" | "containerd") {
-        utils::host_systemctl(&["restart", "kubelet"])?;
+        utils::host_systemctl(&["restart", "kubelet"]).await?;
     }
     runtime::lifecycle::wait_till_node_is_ready_timeout(config, Some(300)).await?;
 
@@ -1211,20 +1237,23 @@ mod tests {
         );
     }
 
+    /// The option probe reads a binary, so it has to match whole strings the
+    /// way `strings | grep -x` does: a `getopt_long` name is NUL terminated and
+    /// never the tail of a longer word.
     #[rstest]
-    #[case("mkfs.erofs (erofs-utils) 1.9\navailable compressors: lz4\n", "1.9.0")]
-    #[case("mkfs.erofs (erofs-utils) 1.8.2\n", "1.8.2")]
-    #[case("erofs-utils 1.8\n", "1.8.0")]
-    fn test_parse_erofs_utils_version(#[case] output: &str, #[case] expected: &str) {
-        assert_eq!(
-            parse_erofs_utils_version(output).unwrap(),
-            Version::parse(expected).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_parse_erofs_utils_version_rejects_invalid_output() {
-        assert!(parse_erofs_utils_version("mkfs.erofs unknown").is_err());
+    #[case(b"\0mkfs-time\0", "mkfs-time", true)]
+    #[case(b"sort\0", "sort", true)]
+    #[case(b"--sort\0", "sort", false)]
+    #[case(b"\0qsort\0", "sort", false)]
+    #[case(b"\0sorted\0", "sort", false)]
+    #[case(b"\0sort", "sort", false)]
+    #[case(b"\0mkfs-timestamp\0", "mkfs-time", false)]
+    fn test_contains_c_string(
+        #[case] haystack: &[u8],
+        #[case] needle: &str,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(contains_c_string(haystack, needle), expected);
     }
 
     /// All non-internal staged actions remain visible in `--help` so operators

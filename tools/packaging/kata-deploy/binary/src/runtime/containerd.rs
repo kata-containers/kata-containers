@@ -132,12 +132,7 @@ pub(crate) fn pluginid_for_snapshotter_annotations(
 
 fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
     if paths.use_drop_in {
-        if paths.drop_in_file.starts_with("/etc/containerd/") {
-            Path::new(&paths.drop_in_file).to_path_buf()
-        } else {
-            let drop_in_path = paths.drop_in_file.trim_start_matches('/');
-            Path::new("/host").join(drop_in_path)
-        }
+        Path::new(&paths.drop_in_file).to_path_buf()
     } else {
         Path::new(&paths.config_file).to_path_buf()
     }
@@ -150,17 +145,8 @@ fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(P
         );
     }
 
-    let (base_drop_in, base_import_path) = if paths.drop_in_file.starts_with("/etc/containerd/") {
-        (
-            Path::new(&paths.drop_in_file).to_path_buf(),
-            paths.drop_in_file.clone(),
-        )
-    } else {
-        (
-            Path::new("/host").join(paths.drop_in_file.trim_start_matches('/')),
-            paths.drop_in_file.clone(),
-        )
-    };
+    let base_drop_in = Path::new(&paths.drop_in_file).to_path_buf();
+    let base_import_path = paths.drop_in_file.clone();
 
     let parent = base_drop_in.parent().ok_or_else(|| {
         anyhow::anyhow!("Failed to resolve parent directory for {:?}", base_drop_in)
@@ -456,12 +442,7 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
     } else {
         // Create the drop-in file directory and file
-        // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
-        let drop_in_file = if paths.drop_in_file.starts_with("/etc/containerd/") {
-            paths.drop_in_file.clone()
-        } else {
-            format!("/host{}", paths.drop_in_file)
-        };
+        let drop_in_file = paths.drop_in_file.clone();
         log::info!("Creating drop-in file at: {}", drop_in_file);
 
         if let Some(parent) = Path::new(&drop_in_file).parent() {
@@ -626,11 +607,7 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
             )?;
         }
         // Remove the drop-in file
-        let drop_in_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
-            Path::new(&paths.drop_in_file).to_path_buf()
-        } else {
-            Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
-        };
+        let drop_in_path = Path::new(&paths.drop_in_file).to_path_buf();
         if drop_in_path.exists() {
             fs::remove_file(&drop_in_path)?;
         }
@@ -666,11 +643,7 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             // K3s/RKE2: rendered config must already import the drop-in dir (checked in get_containerd_paths).
             // Create the drop-in dir and empty file only.
             let paths = config.get_containerd_paths(runtime).await?;
-            let drop_in_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
-                Path::new(&paths.drop_in_file).to_path_buf()
-            } else {
-                Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
-            };
+            let drop_in_path = Path::new(&paths.drop_in_file).to_path_buf();
             if let Some(parent) = drop_in_path.parent() {
                 fs::create_dir_all(parent).with_context(|| {
                     format!("Failed to create K3s/RKE2 drop-in dir: {parent:?}")
@@ -683,7 +656,7 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            // k0s uses /etc/containerd/containerd.d/ for drop-ins (no /host prefix needed)
+            // k0s uses /etc/containerd/containerd.d/ for drop-ins.
             // Path is fixed for k0s, so we can hardcode it here
             let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
             if let Some(parent) = Path::new(drop_in_file_path).parent() {
@@ -694,9 +667,12 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
         "containerd" if !Path::new(&config.containerd_conf_file).exists() => {
             if let Some(parent) = Path::new(&config.containerd_conf_file).parent() {
                 if parent.exists() {
-                    // Write output to file
-                    let output = utils::host_exec(&["containerd", "config", "default"])?;
-                    fs::write(&config.containerd_conf_file, output)?;
+                    let runtime_version = k8s::get_container_runtime_version(config).await?;
+                    let schema = schema_version_for_containerd_release(&runtime_version)?;
+                    fs::write(
+                        &config.containerd_conf_file,
+                        format!("version = {schema}\n"),
+                    )?;
                 }
             }
         }
@@ -704,6 +680,31 @@ pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Re
     }
 
     Ok(())
+}
+
+/// The configuration schema a containerd release reads: 3 since containerd 2.0,
+/// 2 before it.
+///
+/// A node can run containerd without a configuration file at all, but
+/// kata-deploy needs one to hang its runtime handlers and imports off. It
+/// writes just the schema version, which leaves containerd on its own built-in
+/// defaults rather than freezing the defaults of whichever containerd happens
+/// to be installed the day kata is deployed.
+fn schema_version_for_containerd_release(container_runtime_version: &str) -> Result<u32> {
+    let version = container_runtime_version
+        .strip_prefix("containerd://")
+        .unwrap_or(container_runtime_version);
+
+    let major: u32 = version
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .parse()
+        .with_context(|| {
+            format!("Failed to parse containerd version: {container_runtime_version}")
+        })?;
+
+    Ok(if major >= 2 { 3 } else { 2 })
 }
 
 /// Check if containerd version supports snapshotter configuration
@@ -873,6 +874,23 @@ mod tests {
             get_containerd_pluginid(f.path().to_str().unwrap(), "containerd").unwrap(),
             CONTAINERD_V3_RUNTIME_PLUGIN_ID
         );
+    }
+
+    #[rstest]
+    #[case("containerd://2.2.0", 3)]
+    #[case("containerd://2.0.0-rc.1", 3)]
+    #[case("containerd://1.7.29", 2)]
+    #[case("1.6.28", 2)]
+    fn test_schema_version_for_containerd_release(#[case] version: &str, #[case] expected: u32) {
+        assert_eq!(
+            schema_version_for_containerd_release(version).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn test_schema_version_for_containerd_release_rejects_garbage() {
+        assert!(schema_version_for_containerd_release("containerd://unknown").is_err());
     }
 
     #[test]

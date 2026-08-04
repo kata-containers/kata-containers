@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use log::{info, warn};
 use std::collections::HashSet;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use toml_edit::{value, ArrayOfTables, DocumentMut, Item, Table};
 #[cfg(test)]
@@ -158,13 +158,61 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
         remove_custom_runtime_configs(config)?;
     }
 
-    if Path::new(&config.host_install_dir).exists() {
-        fs::remove_dir_all(&config.host_install_dir)?;
+    let install_dir = Path::new(&config.host_install_dir);
+    if install_dir.exists() {
+        remove_tree_keeping_mount_points(install_dir)?;
     }
 
     nfd::remove_nfd_rules(config).await?;
 
     Ok(())
+}
+
+/// Recursively delete `dir`, emptying but keeping any mount point in it.
+///
+/// The install directory is bind mounted into the pod from the host, so it
+/// cannot be unlinked from inside the container: emptying it is all the
+/// cleanup can do, and the kubelet recreates it on the next install anyway.
+fn remove_tree_keeping_mount_points(dir: &Path) -> Result<()> {
+    for entry in
+        fs::read_dir(dir).with_context(|| format!("Failed to read directory: {}", dir.display()))?
+    {
+        let entry = entry
+            .with_context(|| format!("Failed to read an entry of directory: {}", dir.display()))?;
+        let path = entry.path();
+
+        // read_dir's file type does not follow symlinks, so a symlink to a
+        // directory is unlinked rather than descended into.
+        if entry.file_type()?.is_dir() {
+            remove_tree_keeping_mount_points(&path)?;
+        } else {
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove file: {}", path.display()))?;
+        }
+    }
+
+    if is_mount_point(dir) {
+        info!(
+            "{} is a mount point, keeping the (now empty) directory",
+            dir.display()
+        );
+        return Ok(());
+    }
+
+    fs::remove_dir(dir).with_context(|| format!("Failed to remove directory: {}", dir.display()))
+}
+
+/// Whether `dir` is the root of a mount, i.e. it lives on a different device
+/// than the directory it is linked into.
+fn is_mount_point(dir: &Path) -> bool {
+    let Some(parent) = dir.parent() else {
+        return true;
+    };
+
+    match (fs::symlink_metadata(dir), fs::symlink_metadata(parent)) {
+        (Ok(dir), Ok(parent)) => dir.dev() != parent.dev(),
+        _ => false,
+    }
 }
 
 /// Write the common drop-in configuration files for a shim.
@@ -298,7 +346,7 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
     for runtime in &config.custom_runtimes {
         // Create isolated directory for this handler
         let handler_dir = format!(
-            "/host/{}/share/defaults/kata-containers/custom-runtimes/{}",
+            "{}/share/defaults/kata-containers/custom-runtimes/{}",
             config.dest_dir, runtime.handler
         );
         let config_d_dir = format!("{}/config.d", handler_dir);
@@ -311,7 +359,7 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
         let base_config_filename = format!("configuration-{}.toml", runtime.base_config);
         let config_base =
             utils::get_kata_containers_original_config_path(&runtime.base_config, &config.dest_dir);
-        let original_config = format!("/host{}/{}", config_base, base_config_filename);
+        let original_config = format!("{}/{}", config_base, base_config_filename);
         let dest_config = format!("{}/{}", handler_dir, base_config_filename);
 
         if Path::new(&original_config).exists() {
@@ -422,7 +470,7 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
     info!("Removing custom runtime configuration files");
 
     let custom_runtimes_dir = format!(
-        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        "{}/share/defaults/kata-containers/custom-runtimes",
         config.dest_dir
     );
 
@@ -475,7 +523,7 @@ fn reconcile_debug_variant_artifacts(config: &Config) -> Result<()> {
         .collect();
 
     let custom_runtimes_dir = format!(
-        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        "{}/share/defaults/kata-containers/custom-runtimes",
         config.dest_dir
     );
     let custom_runtimes_path = Path::new(&custom_runtimes_dir);
@@ -544,7 +592,7 @@ fn reconcile_devkit_artifacts(config: &Config) -> Result<()> {
         .collect();
 
     let custom_runtimes_dir = format!(
-        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        "{}/share/defaults/kata-containers/custom-runtimes",
         config.dest_dir
     );
     let share_dir = format!("{}/share/kata-containers", config.host_install_dir);
@@ -1193,14 +1241,9 @@ fn atomic_symlink_replace(file_path: &str, symlink_target: &str) -> Result<()> {
 /// to the runtime copy. This way the runtime's ResolvePath / EvalSymlinks resolves
 /// the symlink and finds config.d next to the real file in the per-shim directory.
 fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
-    let original_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
-    );
-    let runtime_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_config_path(shim, &config.dest_dir)
-    );
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+    let runtime_config_dir = utils::get_kata_containers_config_path(shim, &config.dest_dir);
     let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
     info!("Setting up runtime directory for shim: {}", shim);
@@ -1255,10 +1298,8 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
 /// by setup_runtime_directory.
 fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     // Remove the symlink at the original config location (if present)
-    let original_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
-    );
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
     let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
     let original_path = Path::new(&original_config_file);
     if original_path.is_symlink() {
@@ -1268,10 +1309,7 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         log::debug!("Removed config symlink: {}", original_config_file);
     }
 
-    let runtime_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_config_path(shim, &config.dest_dir)
-    );
+    let runtime_config_dir = utils::get_kata_containers_config_path(shim, &config.dest_dir);
 
     if Path::new(&runtime_config_dir).exists() {
         fs::remove_dir_all(&runtime_config_dir).with_context(|| {
@@ -1299,10 +1337,7 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
     // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
-    let runtime_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_config_path(shim, &config.dest_dir)
-    );
+    let runtime_config_dir = utils::get_kata_containers_config_path(shim, &config.dest_dir);
     let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
     let kata_config_file =
@@ -1404,7 +1439,7 @@ fn create_qemu_wrapper_script(config: &Config, shim: &str) -> Result<Option<Stri
 
     let qemu_binary = format!("{}/bin/qemu-system-x86_64", config.dest_dir);
     let wrapper_script_path = format!("{}-installation-prefix", qemu_binary);
-    let host_wrapper_path = format!("/host{}", wrapper_script_path);
+    let host_wrapper_path = wrapper_script_path.clone();
 
     // Create wrapper script if it doesn't exist
     if !Path::new(&host_wrapper_path).exists() {
@@ -1561,7 +1596,7 @@ enable_debug = true
 /// mounted unverified.
 fn devkit_verity_params(dest_dir: &str) -> Option<String> {
     let root_hash_file = format!(
-        "/host{}/share/kata-containers/root_hash_devkit-extension.txt",
+        "{}/share/kata-containers/root_hash_devkit-extension.txt",
         dest_dir
     );
     match fs::read_to_string(&root_hash_file) {
@@ -1724,10 +1759,8 @@ fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<St
 /// Read base kernel_params from the original configuration file.
 fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
     let hypervisor_name = get_hypervisor_name(shim)?;
-    let original_config_dir = format!(
-        "/host{}",
-        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
-    );
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
     let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
     let config_path = Path::new(&original_config_file);
 
@@ -2382,7 +2415,7 @@ mod tests {
             erofs_merge_mode: None,
             experimental_force_guest_pull_for_arch: vec![],
             dest_dir: "/opt/kata".to_string(),
-            host_install_dir: "/host/opt/kata".to_string(),
+            host_install_dir: "/opt/kata".to_string(),
             crio_drop_in_conf_dir: String::new(),
             crio_drop_in_conf_file: String::new(),
             crio_drop_in_conf_file_debug: String::new(),

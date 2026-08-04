@@ -13,7 +13,7 @@ ARG DESTINATION=/opt/kata-artifacts
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
-RUN apk add --no-cache util-linux-misc zstd
+RUN apk add --no-cache zstd
 
 COPY ${KATA_ARTIFACTS_DIR}/kata-static-*.tar.zst ${DESTINATION}/tarballs/
 COPY ${KATA_ARTIFACTS_DIR}/kata-deploy-static-*.tar.zst ${DESTINATION}/tarballs/
@@ -25,28 +25,21 @@ RUN \
 	zstd -dc "${DESTINATION}/tarballs/kata-deploy-static-kata-deploy-binary.tar.zst" | tar -xf - -C /opt/prebuilt && \
 	zstd -dc "${DESTINATION}/tarballs/kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst" | tar -xf - -C /opt/prebuilt
 
-#### Prepare runtime dependencies (nsenter and required libraries)
-# This stage assembles all runtime dependencies based on architecture
-# using ldd to find exact library dependencies
+#### Prepare runtime libraries
+# The kata-deploy binary is dynamically linked on ppc64le and s390x.
 FROM debian:trixie-slim AS runtime-assembler
 
 ARG DESTINATION=/opt/kata-artifacts
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN \
-	apt-get update && \
-	apt-get --no-install-recommends -y install \
-		util-linux && \
-	apt-get clean && rm -rf /var/lib/apt/lists/
-
 # Copy the prebuilt binary to analyze its dependencies
 COPY --from=artifact-stage /opt/prebuilt/usr/bin/kata-deploy /tmp/kata-deploy
 
 # Create output directories
-RUN mkdir -p /output/lib /output/lib64 /output/usr/bin
+RUN mkdir -p /output/lib /output/lib64
 
-# Use ldd to find and copy all required libraries for the kata-deploy binary and nsenter
+# Use ldd to find and copy all required libraries for the kata-deploy binary.
 RUN \
 	HOST_ARCH="$(uname -m)"; \
 	echo "Preparing runtime dependencies for ${HOST_ARCH}"; \
@@ -54,27 +47,18 @@ RUN \
 		"ppc64le"|"s390x") \
 			echo "Using glibc - copying libraries based on ldd output"; \
 			\
-			# Copy nsenter \
-			cp /usr/bin/nsenter /output/usr/bin/nsenter; \
-			\
-			# Show what the binaries need \
+			# Show what the binary needs \
 			echo "Libraries needed by kata-deploy:"; \
 			ldd /tmp/kata-deploy || echo "ldd failed"; \
-			echo "Libraries needed by nsenter:"; \
-			ldd /usr/bin/nsenter || echo "ldd failed"; \
 			\
-			# Extract and copy all library paths from both binaries \
-			for binary in /tmp/kata-deploy /usr/bin/nsenter; do \
-				echo "Processing ${binary}..."; \
-				# Get libraries with "=>" (shared libs) \
-				ldd "${binary}" 2>/dev/null | grep "=>" | awk '{print $3}' | sort -u | while read -r lib; do \
-					if [ -n "${lib}" ] && [ -f "${lib}" ]; then \
-						dest_dir="/output$(dirname "${lib}")"; \
-						mkdir -p "${dest_dir}"; \
-						cp -Ln "${lib}" "${dest_dir}/" 2>/dev/null || true; \
-						echo "  Copied lib: ${lib}"; \
-					fi; \
-				done; \
+			# Extract and copy all shared library paths \
+			ldd /tmp/kata-deploy 2>/dev/null | grep "=>" | awk '{print $3}' | sort -u | while read -r lib; do \
+				if [ -n "${lib}" ] && [ -f "${lib}" ]; then \
+					dest_dir="/output$(dirname "${lib}")"; \
+					mkdir -p "${dest_dir}"; \
+					cp -Ln "${lib}" "${dest_dir}/" 2>/dev/null || true; \
+					echo "  Copied lib: ${lib}"; \
+				fi; \
 			done; \
 			\
 			# Copy the dynamic linker - it's at /lib/ld64.so.1 (not /lib64/) \
@@ -88,26 +72,9 @@ RUN \
 		*) \
 			echo "amd64/arm64: will use musl-based static binaries"; \
 			echo "musl" > /output/.libc-type; \
-			# Create placeholder so COPY doesn't fail \
+			# Create placeholders so COPY doesn't fail \
 			touch /output/lib/.placeholder; \
 			touch /output/lib64/.placeholder; \
-			touch /output/usr/bin/.placeholder; \
-			;; \
-	esac
-
-# Copy musl nsenter from alpine for amd64/arm64
-COPY --from=artifact-stage /usr/bin/nsenter /output/usr/bin/nsenter-musl
-COPY --from=artifact-stage /lib/ld-musl-*.so.1 /output/lib/
-
-# For amd64/arm64, use the musl nsenter; for ppc64le/s390x, keep the glibc one
-RUN \
-	HOST_ARCH="$(uname -m)"; \
-	case "${HOST_ARCH}" in \
-		"x86_64"|"aarch64") \
-			mv /output/usr/bin/nsenter-musl /output/usr/bin/nsenter; \
-			;; \
-		*) \
-			rm -f /output/usr/bin/nsenter-musl; \
 			;; \
 	esac
 
@@ -125,8 +92,7 @@ COPY --from=artifact-stage ${DESTINATION} ${DESTINATION}
 # Copy Rust binary
 COPY --from=artifact-stage /opt/prebuilt/usr/bin/kata-deploy /usr/bin/kata-deploy
 
-# Copy nsenter and required libraries (assembled based on architecture)
-COPY --from=runtime-assembler /output/usr/bin/nsenter /usr/bin/nsenter
+# Copy required libraries (assembled based on architecture)
 COPY --from=runtime-assembler /output/lib/ /lib/
 COPY --from=runtime-assembler /output/lib64/ /lib64/
 

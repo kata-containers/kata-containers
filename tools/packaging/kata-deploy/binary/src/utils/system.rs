@@ -3,8 +3,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
-use std::process::Command;
+use anyhow::Result;
+use std::path::{Path, PathBuf};
 
 pub const RUST_SHIMS: &[&str] = &[
     "clh-azure-runtime-rs",
@@ -22,36 +22,36 @@ pub const RUST_SHIMS: &[&str] = &[
     "qemu-tdx-runtime-rs",
 ];
 
+/// Host binary directories mounted read-only into the container (see Helm chart).
+///
+/// kata-deploy cannot *run* the binaries it finds there: they are linked
+/// against a dynamic loader and libraries that only exist in the host's mount
+/// namespace, which the container no longer has access to. It can inspect
+/// them, which is enough to tell what a host tool supports.
+const HOST_BIN_DIRS: &[&str] = &[
+    "/host-usr/bin",
+    "/host-usr/sbin",
+    "/host-usr-local/bin",
+    "/host-usr-local/sbin",
+    "/host-bin",
+    "/host-sbin",
+];
+
 pub fn is_rust_shim(shim: &str) -> bool {
     RUST_SHIMS.contains(&shim)
 }
 
-/// Execute a command in the host namespace (equivalent to nsenter --target 1 --mount)
-pub fn host_exec(command: &[&str]) -> Result<String> {
-    // Use nsenter (copied from Alpine) to execute command in host's mount namespace
-    // Since we have hostPID: true, PID 1 is the host's init
-    let mut nsenter_cmd = vec!["nsenter", "--target", "1", "--mount", "--"];
-    nsenter_cmd.extend(command);
-
-    let output = Command::new(nsenter_cmd[0])
-        .args(&nsenter_cmd[1..])
-        .output()
-        .context("Failed to execute command with nsenter")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("Command failed: {stderr}"));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+/// Locate a host program among the binary directories mounted into the container.
+pub fn find_host_program(program: &str) -> Option<PathBuf> {
+    HOST_BIN_DIRS
+        .iter()
+        .map(|dir| Path::new(dir).join(program))
+        .find(|candidate| candidate.is_file())
 }
 
-/// Execute systemctl command in host namespace
-pub fn host_systemctl(args: &[&str]) -> Result<()> {
-    let mut cmd = vec!["systemctl"];
-    cmd.extend(args);
-    let _output = host_exec(&cmd)?;
-    Ok(())
+/// Perform a systemctl-equivalent operation through the host systemd D-Bus API.
+pub async fn host_systemctl(args: &[&str]) -> Result<()> {
+    super::systemd::systemctl(args).await
 }
 
 /// Get kata containers config path based on shim type.

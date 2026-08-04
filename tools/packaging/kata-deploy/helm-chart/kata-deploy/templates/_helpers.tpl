@@ -794,7 +794,6 @@ spec:
 {{- end }}
       serviceAccountName: {{ include "kata-deploy.serviceAccountName" $root }}
       restartPolicy: Never
-      hostPID: true
 {{- with $root.Values.tolerations }}
       tolerations:
 {{- toYaml . | nindent 8 }}
@@ -804,17 +803,17 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" true "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "label" "action" "install-stage-label" "privileged" false "mountHost" false) | nindent 8 }}
 {{- else }}
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "unlabel" "action" "cleanup-stage-unlabel" "privileged" false "mountHost" false) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" true "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
@@ -846,6 +845,19 @@ manage Jobs) and must NOT carry the privileged kata-deploy host-mutation rights.
 {{- end -}}
 
 {{/*
+Compute the host install directory (must match Config::from_env in the binary):
+  {installationPrefix}/opt/kata[-{multiInstallSuffix}]
+*/}}
+{{- define "kata-deploy.installDir" -}}
+{{- $prefix := .Values.env.installationPrefix | default "" -}}
+{{- $dir := printf "%s/opt/kata" $prefix -}}
+{{- if .Values.env.multiInstallSuffix -}}
+{{- $dir = printf "%s-%s" $dir .Values.env.multiInstallSuffix -}}
+{{- end -}}
+{{- $dir -}}
+{{- end -}}
+
+{{/*
 Render a single staged-pipeline container that runs one kata-deploy stage action.
 Used by the per-node staged install/cleanup Jobs (deploymentMode: job).
 
@@ -853,8 +865,8 @@ Arguments (dict):
   root        - the top-level context (.)
   name        - container name
   action      - kata-deploy subcommand (e.g. install-stage-cri)
-  privileged  - bool, whether the container runs privileged (host nsenter/restart)
-  mountHost   - bool, whether to mount the host paths (crio/containerd/host)
+  privileged  - bool, whether the container runs privileged
+  mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
 
 Emitted at column 0; indent with `nindent` at the call site.
 */}}
@@ -867,10 +879,26 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonEnv" .root | nindent 4 }}
   securityContext:
     privileged: {{ .privileged }}
-{{- if .mountHost }}
+    readOnlyRootFilesystem: true
   volumeMounts:
+{{- if .mountHost }}
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
+{{- else }}
+{{- include "kata-deploy.tmpVolumeMount" . | nindent 4 }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Writable /tmp for readOnlyRootFilesystem containers (host tools / libraries).
+*/}}
+{{- define "kata-deploy.tmpVolumeMount" -}}
+- name: tmp
+  mountPath: /tmp
+{{- end -}}
+
+{{- define "kata-deploy.tmpVolume" -}}
+- name: tmp
+  emptyDir: {}
 {{- end -}}
 
 {{/*
@@ -878,12 +906,38 @@ Common volumeMounts for any pod that runs the kata-deploy binary against the
 host. Emitted at column 0; indent with `nindent` at the call site.
 */}}
 {{- define "kata-deploy.commonVolumeMounts" -}}
+{{ include "kata-deploy.tmpVolumeMount" . }}
 - name: crio-conf
   mountPath: /etc/crio/
 - name: containerd-conf
   mountPath: /etc/containerd/
-- name: host
-  mountPath: /host/
+- name: kata-install
+  mountPath: {{ include "kata-deploy.installDir" . | quote }}
+- name: systemd-system
+  mountPath: /etc/systemd/system
+- name: systemd-private
+  mountPath: /run/systemd/private
+- name: boot
+  mountPath: /boot
+  readOnly: true
+- name: host-usr-bin
+  mountPath: /host-usr/bin
+  readOnly: true
+- name: host-usr-sbin
+  mountPath: /host-usr/sbin
+  readOnly: true
+- name: host-usr-local-bin
+  mountPath: /host-usr-local/bin
+  readOnly: true
+- name: host-usr-local-sbin
+  mountPath: /host-usr-local/sbin
+  readOnly: true
+- name: host-bin
+  mountPath: /host-bin
+  readOnly: true
+- name: host-sbin
+  mountPath: /host-sbin
+  readOnly: true
 {{- if .Values.containerd.userDropIn | trim }}
 - name: custom-containerd-config
   mountPath: /custom-containerd-config/
@@ -901,15 +955,46 @@ Common host/configMap volumes backing the mounts above. Emitted at column 0;
 indent with `nindent` at the call site.
 */}}
 {{- define "kata-deploy.commonVolumes" -}}
+{{ include "kata-deploy.tmpVolume" . }}
 - name: crio-conf
   hostPath:
     path: /etc/crio/
 - name: containerd-conf
   hostPath:
     path: '{{- template "containerdConfPath" .Values }}'
-- name: host
+- name: kata-install
   hostPath:
-    path: /
+    path: {{ include "kata-deploy.installDir" . | quote }}
+    type: DirectoryOrCreate
+- name: systemd-system
+  hostPath:
+    path: /etc/systemd/system
+    type: DirectoryOrCreate
+- name: systemd-private
+  hostPath:
+    path: /run/systemd/private
+    type: Socket
+- name: boot
+  hostPath:
+    path: /boot
+- name: host-usr-bin
+  hostPath:
+    path: /usr/bin
+- name: host-usr-sbin
+  hostPath:
+    path: /usr/sbin
+- name: host-usr-local-bin
+  hostPath:
+    path: /usr/local/bin
+- name: host-usr-local-sbin
+  hostPath:
+    path: /usr/local/sbin
+- name: host-bin
+  hostPath:
+    path: /bin
+- name: host-sbin
+  hostPath:
+    path: /sbin
 {{- if .Values.containerd.userDropIn | trim }}
 - name: custom-containerd-config
   configMap:
