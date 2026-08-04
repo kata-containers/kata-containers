@@ -1,5 +1,6 @@
 **/*.tar.gz
 image-builder/nsdax
+dracut_overlay
 dracut/Dockerfile
 dracut/dracut.conf.d/15-extra-libs.conf
 /.*.done
