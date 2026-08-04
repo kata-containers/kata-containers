@@ -12,16 +12,6 @@ load "${BATS_TEST_DIRNAME}/emptydir_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-skip_unsupported_runtime() {
-	# OpenVMM can hotplug BlockModern devices, but block-plain emptyDir
-	# filesystem setup is not yet supported end to end.
-	case "${KATA_HYPERVISOR}" in
-		openvmm-azure-runtime-rs)
-			skip "block-plain emptyDir is not yet supported for ${KATA_HYPERVISOR}"
-			;;
-	esac
-}
-
 # Return the full mountinfo row whose field 5 is the tested mount point.
 mountinfo_for_mountpoint() {
 	pod_exec "${pod_name}" sh -c \
@@ -57,7 +47,6 @@ guest_discard_max_bytes() {
 setup() {
 	local runtime_config_dropin_file
 
-	skip_unsupported_runtime
 	setup_common || die "setup_common failed"
 
 	pod_name="plain-ephemeral-data-storage"
@@ -173,8 +162,6 @@ EOF
 }
 
 teardown() {
-	skip_unsupported_runtime
-
 	echo "=== Plain ephemeral data storage pod describe ==="
 	kubectl describe pod "${pod_name:-plain-ephemeral-data-storage}" || true
 
