@@ -321,6 +321,11 @@ enable_vhost_user_store = @DEFENABLEVHOSTUSERSTORE@
 # simulated block device nodes for vhost-user devices to live.
 vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
+
 # Enable vIOMMU, default false
 # Enabling this will result in the VM having a vIOMMU device
 # This will also add the following options to the kernel's
