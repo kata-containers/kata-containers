@@ -73,6 +73,21 @@ build_image() {
 	for tarball_id in kernel "${initrd_tarball_id}"; do
 		tar --zstd -xvf "kata-static-${tarball_id}.tar.zst" -C "${image_source_dir}"
 	done
+
+	# For the composable path, extract the CoCo extension root hash so the
+	# sealed SE kernel cmdline carries the verity params.
+	# COCO_VERITY_PARAMS must be set; lib_se.sh will die if it is absent.
+	if [[ "${SE_COMPOSABLE}" == "yes" ]]; then
+		local coco_ext_tarball="kata-static-rootfs-image-coco-extension.tar.zst"
+		local root_hash_path="./opt/kata/share/kata-containers/root_hash_coco-extension.txt"
+		tar --zstd -tf "${coco_ext_tarball}" "${root_hash_path}" >/dev/null 2>&1 \
+			|| die "root_hash_coco-extension.txt not found in ${coco_ext_tarball}"
+		local root_hash_tmp
+		root_hash_tmp="$(tar --zstd -xOf "${coco_ext_tarball}" "${root_hash_path}")"
+		root_hash_tmp="${root_hash_tmp%$'\r'}"
+		[[ -n "${root_hash_tmp}" ]] || die "Empty root_hash_coco-extension.txt in ${coco_ext_tarball}"
+		export COCO_VERITY_PARAMS="${root_hash_tmp}"
+	fi
 	popd
 
 	protimg_source_dir="${image_source_dir}${prefix}/share/kata-containers"

@@ -74,10 +74,10 @@ EOF
 		return 1
 	fi
 
+	cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026"
 	if [[ "${SE_COMPOSABLE:-no}" == "yes" ]]; then
-		cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026 kata.extension.coco.verity_params"
-	else
-		cmdline="${kernel_params} panic=1 scsi_mod.scan=none swiotlb=262144 agent.debug_console agent.debug_console_vport=1026"
+		[[ -n "${COCO_VERITY_PARAMS:-}" ]] || die "COCO_VERITY_PARAMS must be set for composable SE image builds"
+		cmdline+=" kata.extension.coco.verity_params=${COCO_VERITY_PARAMS}"
 	fi
 	parmfile="$(mktemp --suffix=-cmdline)"
 	echo "${cmdline}" > "${parmfile}"

@@ -416,6 +416,15 @@ set_metadata_annotation() {
 		fi
 		if [[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]]; then
 			export SE_COMPOSABLE="yes"
+			# Seed the CoCo extension verity params so the rebuilt SE image seals
+			# the actual root hash into its kernel cmdline.  The file is absent on
+			# s390x (unmeasured extension); the bare-key fallback in lib_se.sh
+			# handles that case correctly.
+			local root_hash_file="/opt/kata/share/kata-containers/root_hash_coco-extension.txt"
+			if [[ -f "${root_hash_file}" ]]; then
+				COCO_VERITY_PARAMS="$(< "${root_hash_file}")"
+				export COCO_VERITY_PARAMS
+			fi
 		fi
 		repack_secure_image "${value}" "${IBM_SE_CREDS_DIR}" "true"
 	fi

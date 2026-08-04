@@ -647,6 +647,27 @@ Confidential Containers:
   without changing the measurement, which would be detected during
   attestation.
 
+- IBM Secure Execution achieves equivalent integrity through a different mechanism.
+  `genprotimg` seals the full kernel command line — including
+  `kata.extension.coco.verity_params=root_hash=...,salt=...,data_blocks=...,...`
+  — into the SE image header at build time, encrypted under the host key. The sealed
+  contents are integrity-protected and cannot be altered without rebuilding the image.
+  The build-time dependency on
+  `rootfs-image-coco-extension-tarball` ensures the root hash published at the
+  pinned `versions.yaml` commit is locked into the SE image at creation time.
+  Substituting the extension image at runtime would be detected by dm-verity verification
+  during boot.
+
+- **Unmeasured extensions** — when `kata.extension.coco.verity_params` carries no
+  value (a bare key), the mount script performs a raw mount without dm-verity
+  verification. This is the correct path when the extension image was intentionally
+  built without a hash partition (e.g. because the surrounding platform already
+  provides a different integrity guarantee). The mount script cross-checks the
+  cmdline against the on-disk partition layout to prevent a measured extension from
+  being silently downgraded: if a hash partition is present on disk but
+  `verity_params` is bare, the mount is refused and the VM shuts down. See the
+  [integrity policy table](#mount-script) above.
+
 - **Mount failure = VM shutdown** — `OnFailure=poweroff.target` ensures the
   VM does not proceed with missing or tampered components.
 

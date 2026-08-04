@@ -279,7 +279,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "fff3a966b7b1d1654d172a7cd81c0f563721ff0b"
+    version: "d4dce5ce62294cfa741225f7e5b4527ea276f326"
     # Scratch OCI container image (guest-components "Publish OCI container
     # image" step). Consumed by monolithic confidential rootfs builds.
     # yamllint disable-line rule:line-length

@@ -319,7 +319,7 @@ boot-image-se-tarball: $(DEPS)
 ifeq ($(FAKE_SE_IMAGE),true)
 DEPS :=
 else
-DEPS := kernel-tarball rootfs-initrd-tarball
+DEPS := kernel-tarball rootfs-initrd-tarball rootfs-image-coco-extension-tarball
 endif
 boot-image-se-runtime-rs-tarball: $(DEPS)
 	${MAKE} $@-build
