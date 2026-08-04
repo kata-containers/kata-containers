@@ -9,8 +9,9 @@ use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
 use slog::Logger;
 
-use anyhow::{anyhow, Result};
-use netlink_sys::{protocols, SocketAddr, TokioSocket};
+use anyhow::{anyhow, Context, Result};
+use netlink_sys::{SocketAddr, TokioSocket};
+use nix::sys::socket::{socket, AddressFamily, SockFlag, SockProtocol, SockType};
 use std::fmt::Debug;
 use std::os::unix::io::FromRawFd;
 use std::sync::Arc;
@@ -159,6 +160,18 @@ pub async fn wait_for_uevent(
     Ok(uev)
 }
 
+fn new_uevent_socket() -> Result<TokioSocket> {
+    let fd = socket(
+        AddressFamily::Netlink,
+        SockType::Datagram,
+        SockFlag::SOCK_CLOEXEC,
+        Some(SockProtocol::NetlinkKObjectUEvent),
+    )
+    .context("failed to create uevent netlink socket")?;
+
+    Ok(unsafe { TokioSocket::from_raw_fd(fd) })
+}
+
 #[instrument]
 pub async fn watch_uevents(
     sandbox: Arc<Mutex<Sandbox>>,
@@ -173,17 +186,7 @@ pub async fn watch_uevents(
 
     info!(logger, "starting uevents handler");
 
-    let mut socket;
-
-    unsafe {
-        let fd = libc::socket(
-            libc::AF_NETLINK,
-            libc::SOCK_DGRAM | libc::SOCK_CLOEXEC,
-            protocols::NETLINK_KOBJECT_UEVENT as libc::c_int,
-        );
-        socket = TokioSocket::from_raw_fd(fd);
-    }
-
+    let mut socket = new_uevent_socket()?;
     socket.bind(&SocketAddr::new(0, 1))?;
 
     loop {
