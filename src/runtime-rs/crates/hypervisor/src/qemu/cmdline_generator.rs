@@ -4,6 +4,9 @@
 //
 
 use crate::device::topology::{TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
+use crate::qemu::block_source::{
+    block_fd_opaque, block_source_fd_count, prepare_block_source, MAX_QEMU_BLOCK_FDSETS,
+};
 use crate::qemu::qmp::get_qmp_socket_path;
 use crate::utils::{
     chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
@@ -1018,6 +1021,28 @@ struct BlockBackend {
     cache_no_flush: bool,
     read_only: bool,
     discard_unmap: bool,
+}
+
+#[derive(Debug)]
+struct AddFd {
+    file: File,
+    fdset_id: i64,
+    opaque: String,
+}
+
+#[async_trait]
+impl ToQemuParams for AddFd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-add-fd".to_string(),
+            format!(
+                "fd={},set={},opaque={}",
+                self.file.as_raw_fd(),
+                self.fdset_id,
+                self.opaque
+            ),
+        ])
+    }
 }
 
 impl BlockBackend {
@@ -2812,6 +2837,8 @@ pub struct QemuCmdLine<'a> {
 
     devices: Vec<Box<dyn ToQemuParams>>,
     ccw_subchannel: Option<CcwSubChannel>,
+    block_fdsets: HashMap<String, Vec<i64>>,
+    next_fdset_id: i64,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -2833,6 +2860,8 @@ impl<'a> QemuCmdLine<'a> {
             bios: None,
             devices: Vec::new(),
             ccw_subchannel,
+            block_fdsets: HashMap::new(),
+            next_fdset_id: 1,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -2908,6 +2937,12 @@ impl<'a> QemuCmdLine<'a> {
     /// Used to transfer boot-time CCW state to Qmp for hotplug allocation.
     pub fn take_ccw_subchannel(&mut self) -> Option<CcwSubChannel> {
         self.ccw_subchannel.take()
+    }
+
+    /// Takes ownership of cold-plug block fdset bookkeeping so QMP can remove
+    /// the descriptors if one of those devices is subsequently unplugged.
+    pub fn take_block_fdsets(&mut self) -> HashMap<String, Vec<i64>> {
+        std::mem::take(&mut self.block_fdsets)
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
@@ -3144,13 +3179,44 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         device_id: &str,
         path: &str,
+        format: &crate::BlockDeviceFormat,
+        vmdk: Option<&crate::VmdkConfig>,
         is_direct: bool,
         is_readonly: bool,
         is_scsi: bool,
         discard_unmap: bool,
         serial_override: Option<&str>,
     ) -> Result<()> {
-        let mut backend = BlockBackend::new(device_id, path, is_direct);
+        if self.block_fdsets.contains_key(device_id) {
+            return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
+        }
+        let fd_count = block_source_fd_count(format, vmdk)?;
+        let current_fd_count = self
+            .block_fdsets
+            .values()
+            .try_fold(0_usize, |total, ids| total.checked_add(ids.len()))
+            .ok_or_else(|| anyhow!("QEMU block fdset count overflow"))?;
+        if current_fd_count
+            .checked_add(fd_count)
+            .is_none_or(|count| count > MAX_QEMU_BLOCK_FDSETS)
+        {
+            return Err(anyhow!(
+                "QEMU block descriptors exceed the per-VM limit of {MAX_QEMU_BLOCK_FDSETS}"
+            ));
+        }
+
+        let mut fdset_ids = Vec::with_capacity(fd_count);
+        let path =
+            prepare_block_source(path, format, vmdk, is_readonly, is_direct, |file, label| {
+                let (path, fdset_id) =
+                    self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
+                fdset_ids.push(fdset_id);
+                Ok(path)
+            })?
+            .filename;
+        self.block_fdsets.insert(device_id.to_string(), fdset_ids);
+
+        let mut backend = BlockBackend::new(device_id, &path, is_direct);
         backend.set_read_only(is_readonly);
         backend.set_discard_unmap(discard_unmap);
         self.devices.push(Box::new(backend));
@@ -3168,6 +3234,23 @@ impl<'a> QemuCmdLine<'a> {
         }
 
         Ok(())
+    }
+
+    fn add_block_source_fd(&mut self, file: File, label: &str) -> Result<(String, i64)> {
+        clear_cloexec(file.as_raw_fd()).context("clear O_CLOEXEC on QEMU block source")?;
+
+        let fdset_id = self.next_fdset_id;
+        self.next_fdset_id = self
+            .next_fdset_id
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("QEMU block fdset ID exhausted"))?;
+        self.devices.push(Box::new(AddFd {
+            file,
+            fdset_id,
+            opaque: label.to_string(),
+        }));
+
+        Ok((format!("/dev/fdset/{fdset_id}"), fdset_id))
     }
 
     #[allow(dead_code)]
@@ -3781,7 +3864,9 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BlockDeviceFormat;
     use serial_test::serial;
+    use tempfile::tempdir;
 
     fn contains_param(params: &[String], expected: &str) -> bool {
         params
@@ -3874,15 +3959,83 @@ mod tests {
 
     #[actix_rt::test]
     #[serial]
+    async fn test_block_source_uses_inherited_fdset() {
+        let dir = tempdir().unwrap();
+        let image = dir.path().join("image.raw");
+        std::fs::write(&image, vec![0u8; 4096]).unwrap();
+
+        let config = test_qemu_config(Some("none"), false);
+        let mut cmdline = QemuCmdLine::new("rootless-block-fd", &config).unwrap();
+        let result = cmdline.add_block_device(
+            "rootfs",
+            image.to_str().unwrap(),
+            &BlockDeviceFormat::Raw,
+            None,
+            false,
+            true,
+            false,
+            false,
+            None,
+        );
+        result.unwrap();
+
+        let params = cmdline.build().await.unwrap();
+        let add_fd = params
+            .windows(2)
+            .find(|args| args[0] == "-add-fd")
+            .expect("missing inherited block fd");
+        assert!(add_fd[1].contains("set=1"));
+        assert!(add_fd[1].contains("opaque=kata-block:rootfs:block-source"));
+
+        let blockdev = params
+            .windows(2)
+            .find(|args| args[0] == "-blockdev")
+            .expect("missing block backend");
+        assert!(blockdev[1].contains("filename=/dev/fdset/1"));
+        assert!(!blockdev[1].contains(image.to_str().unwrap()));
+
+        assert_eq!(
+            cmdline.take_block_fdsets(),
+            HashMap::from([("rootfs".to_string(), vec![1])])
+        );
+    }
+
+    #[actix_rt::test]
+    #[serial]
     async fn test_qemu_block_backend_read_only_params() {
+        let dir = tempdir().unwrap();
+        let readonly = dir.path().join("readonly.img");
+        let writable = dir.path().join("writable.img");
+        std::fs::write(&readonly, vec![0_u8; 4096]).unwrap();
+        std::fs::write(&writable, vec![0_u8; 4096]).unwrap();
         let config = test_qemu_config(Some("none"), false);
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
         let mut cmdline = QemuCmdLine::new("block-read-only", &config).unwrap();
         cmdline
-            .add_block_device("readonly", "/tmp/readonly.img", true, true, false, false, None)
+            .add_block_device(
+                "readonly",
+                readonly.to_str().unwrap(),
+                &BlockDeviceFormat::Raw,
+                None,
+                true,
+                true,
+                false,
+                false,
+                None,
+            )
             .unwrap();
         cmdline
-            .add_block_device("writable", "/tmp/writable.img", true, false, false, false, None)
+            .add_block_device(
+                "writable",
+                writable.to_str().unwrap(),
+                &BlockDeviceFormat::Raw,
+                None,
+                true,
+                false,
+                false,
+                false,
+                None,
+            )
             .unwrap();
 
         let params = cmdline.build().await.unwrap();

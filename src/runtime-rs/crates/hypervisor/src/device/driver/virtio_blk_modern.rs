@@ -63,6 +63,47 @@ pub enum BlockDeviceFormat {
     Vmdk,
 }
 
+const MAX_VMDK_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmdkExtent {
+    pub path_on_host: String,
+    pub sectors: u64,
+    pub file_offset: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VmdkConfig {
+    pub extents: Vec<VmdkExtent>,
+}
+
+impl VmdkConfig {
+    pub fn push_extent(&mut self, path_on_host: &str, sectors: u64, file_offset: u64) {
+        self.extents.push(VmdkExtent {
+            path_on_host: path_on_host.to_string(),
+            sectors,
+            file_offset,
+        });
+    }
+
+    pub fn push_extent_chunked(&mut self, path_on_host: &str, total_sectors: u64) {
+        let mut remaining = total_sectors;
+        let mut file_offset = 0;
+        while remaining > 0 {
+            let sectors = remaining.min(MAX_VMDK_EXTENT_SECTORS);
+            self.push_extent(path_on_host, sectors, file_offset);
+            file_offset += sectors;
+            remaining -= sectors;
+        }
+    }
+
+    pub fn total_sectors(&self) -> Option<u64> {
+        self.extents
+            .iter()
+            .try_fold(0_u64, |total, extent| total.checked_add(extent.sectors))
+    }
+}
+
 impl std::fmt::Display for BlockDeviceFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let to_string = match *self {
@@ -90,6 +131,10 @@ pub struct BlockConfigModern {
 
     /// raw, vmdk, etc. And default to raw if not set.
     pub format: BlockDeviceFormat,
+
+    /// Structured VMDK layout. The hypervisor serializes this after preparing
+    /// the backing extents for its block transport.
+    pub vmdk: Option<VmdkConfig>,
 
     /// Specifies cache-related options for block devices.
     /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
