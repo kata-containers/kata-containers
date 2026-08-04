@@ -44,7 +44,7 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 	}
 	span.SetAttributes(otelLabel.String("source_after_eval", absSource))
 
-	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {
+	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
 	}
 
