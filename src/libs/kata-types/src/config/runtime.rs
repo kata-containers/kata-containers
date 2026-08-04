@@ -79,8 +79,7 @@ pub struct Runtime {
     /// This option may have some potential impacts to your host. It should only be used when you
     /// know what you're doing.
     ///
-    /// `disable_new_netns` conflicts with `internetworking_model=tcfilter` and
-    /// `internetworking_model=macvtap`. It works only with `internetworking_model=none`.
+    /// `disable_new_netns` only works with `internetworking_model=none`.
     /// The tap device will be in the host network namespace and can connect to a bridge (like OVS)
     /// directly.
     ///
@@ -271,6 +270,16 @@ impl ConfigOps for Runtime {
             )));
         }
 
+        // `disable_new_netns` leaves the runtime operating in whichever network
+        // namespace it is started in (typically the host netns), so it is only
+        // safe with `internetworking_model=none`, which does not touch that
+        // namespace.
+        if conf.runtime.disable_new_netns && net_model != "none" {
+            return Err(std::io::Error::other(format!(
+                "disable_new_netns only works with internetworking_model=none, not `{net_model}`",
+            )));
+        }
+
         let vfio_mode = &conf.runtime.vfio_mode;
         if !vfio_mode.is_empty() && vfio_mode != "vfio" && vfio_mode != "guest-kernel" {
             return Err(std::io::Error::other(format!(
@@ -361,6 +370,45 @@ internetworking_model = "macvtap,none"
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap_err();
 
+        // disable_new_netns is only valid with internetworking_model=none.
+        let content = r#"
+[runtime]
+enable_debug = true
+internetworking_model = "tcfilter"
+disable_new_netns = true
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+
+        let content = r#"
+[runtime]
+enable_debug = true
+internetworking_model = "macvtap"
+disable_new_netns = true
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+
+        // An empty internetworking_model defaults to tcfilter, so
+        // disable_new_netns must be rejected there too.
+        let content = r#"
+[runtime]
+enable_debug = true
+disable_new_netns = true
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap_err();
+
+        // disable_new_netns with internetworking_model=none is allowed.
+        let content = r#"
+[runtime]
+enable_debug = true
+internetworking_model = "none"
+disable_new_netns = true
+"#;
+        let config: TomlConfig = TomlConfig::load(content).unwrap();
+        config.validate().unwrap();
+
         let content = r#"
 [runtime]
 enable_debug = true
@@ -440,7 +488,7 @@ emptydir_mode = "block-plain"
 name = "virt-container"
 enable_debug = true
 experimental = ["a", "b"]
-internetworking_model = "macvtap"
+internetworking_model = "none"
 disable_new_netns = true
 sandbox_bind_mounts = []
 sandbox_cgroup_only = true
@@ -461,7 +509,7 @@ field_should_be_ignored = true
         assert_eq!(config.runtime.experimental.len(), 2);
         assert_eq!(&config.runtime.experimental[0], "a");
         assert_eq!(&config.runtime.experimental[1], "b");
-        assert_eq!(&config.runtime.internetworking_model, "macvtap");
+        assert_eq!(&config.runtime.internetworking_model, "none");
         assert!(config.runtime.disable_new_netns);
         assert_eq!(config.runtime.sandbox_bind_mounts.len(), 0);
         assert!(config.runtime.sandbox_cgroup_only);
