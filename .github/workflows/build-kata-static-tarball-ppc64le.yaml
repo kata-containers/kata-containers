@@ -325,20 +325,29 @@ jobs:
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-release-tarballs.sh kata-artifacts versions.yaml ppc64le
         env:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
-      - name: Check kata-go-static tarball size (GitHub release asset limit)
+      - name: Check kata tarball sizes (GitHub release asset limit)
         run: |
           # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
           GITHUB_ASSET_MAX_BYTES=2147483648
-          tarball_size=$(stat -c "%s" kata-go-static.tar.zst)
-          if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
-            echo "::error::kata-go-static.tar.zst size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
-            exit 1
-          fi
-          echo "kata-go-static.tar.zst size: ${tarball_size} bytes"
+          for tarball in kata-static.tar.zst kata-go-static.tar.zst; do
+            tarball_size=$(stat -c "%s" "${tarball}")
+            if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
+              echo "::error::${tarball} size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
+              exit 1
+            fi
+            echo "${tarball} size: ${tarball_size} bytes"
+          done
+      - name: store runtime-rs artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
+          path: kata-static.tar.zst
+          retention-days: 15
+          if-no-files-found: error
       - name: store Go runtime artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-go-static-tarball-ppc64le${{ inputs.tarball-suffix }}
           path: kata-go-static.tar.zst
-          retention-days: 1
+          retention-days: 15
           if-no-files-found: error

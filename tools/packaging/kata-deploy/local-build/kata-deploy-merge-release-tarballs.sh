@@ -33,10 +33,8 @@ merge_with_allowlist() {
 
 normalized_arch="$(normalize_arch "${arch}")"
 
-if [[ "${normalized_arch}" != "ppc64le" ]]; then
-	allowlist="$(kata_static_tarball_inputs "${arch}" | tr '\n' ' ')"
-	merge_with_allowlist "kata-static.tar.zst" "${allowlist}"
-fi
+allowlist="$(kata_static_tarball_inputs "${arch}" | tr '\n' ' ')"
+merge_with_allowlist "kata-static.tar.zst" "${allowlist}"
 
 allowlist="$(kata_go_tarball_inputs "${arch}" | tr '\n' ' ')"
 merge_with_allowlist "kata-go-static.tar.zst" "${allowlist}"
