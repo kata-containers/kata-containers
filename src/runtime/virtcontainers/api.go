@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"runtime"
+	"strings"
 
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -131,6 +132,14 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 
 	unlock, err := rwLockSandbox(sandboxID)
 	if err != nil {
+		if strings.Contains(err.Error(), "no such file or directory") {
+			// the sandbox store may be destroyed
+			// when the monitor watches that sandbox stopped unexpectedly
+			// here can ignore this error
+			virtLog.WithField("sandboxId", sandboxID).WithField(
+				"containerID", containerID).Info("sandbox was already been destroyed")
+			return nil
+		}
 		return err
 	}
 	defer unlock()
