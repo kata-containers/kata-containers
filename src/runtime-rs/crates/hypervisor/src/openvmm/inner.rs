@@ -76,7 +76,11 @@ impl std::fmt::Debug for OpenVmmInner {
 impl OpenVmmInner {
     pub(crate) fn new(exit_notify: watch::Sender<Option<i32>>) -> Self {
         let mut capabilities = Capabilities::new();
-        capabilities.set(CapabilityBits::BlockDeviceSupport | CapabilityBits::FsSharingSupport);
+        capabilities.set(
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
+                | CapabilityBits::FsSharingSupport,
+        );
 
         OpenVmmInner {
             id: String::new(),
