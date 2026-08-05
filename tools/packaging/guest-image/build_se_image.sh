@@ -31,9 +31,13 @@ Usage:
 
 Options:
   --builddir=\${builddir}
+  --composable
   --destdir=\${destdir}
 
 Environment variables:
+  SE_COMPOSABLE    : If set to "yes", builds a composable SE image using a standard initrd (runtime-rs based).
+                     If set to "no" (default), builds a standalone confidential SE image using a confidential initrd.
+                     Set automatically from the --composable flag; override only if calling lib_se.sh directly.
   HKD_PATH (required unless FAKE_SE_IMAGE=true): a path for a directory which includes at least one host key document
                   for Secure Execution, generally specific to your machine. See
                   https://www.ibm.com/docs/en/linux-on-systems?topic=tasks-verify-host-key-document
@@ -41,7 +45,7 @@ Environment variables:
   SIGNING_KEY_CERT_PATH: a path for the IBM zSystem signing key certificate
   INTERMEDIATE_CA_CERT_PATH: a path for the intermediate CA certificate signed by the root CA
   HOST_KEY_CRL_PATH: a path for the host key CRL
-  FAKE_SE_IMAGE : If set to "true", creates a dummy kata-containers-se.img via touch command
+  FAKE_SE_IMAGE : If set to "true", creates a dummy SE image via touch command
                   instead of using genprotimg. Useful for testing without real SE setup.
   DEBUG         : If set, display debug information.
 EOF
@@ -61,9 +65,29 @@ build_image() {
 	image_source_dir="${builddir}/secure-image"
 	mkdir -p "${image_source_dir}"
 	pushd "${tarball_dir}"
-	for tarball_id in kernel rootfs-initrd-confidential; do
+	if [[ "${SE_COMPOSABLE}" == "yes" ]]; then
+		initrd_tarball_id="rootfs-initrd"
+	else
+		initrd_tarball_id="rootfs-initrd-confidential"
+	fi
+	for tarball_id in kernel "${initrd_tarball_id}"; do
 		tar --zstd -xvf "kata-static-${tarball_id}.tar.zst" -C "${image_source_dir}"
 	done
+
+	# For the composable path, extract the CoCo extension root hash so the
+	# sealed SE kernel cmdline carries the verity params.
+	# COCO_VERITY_PARAMS must be set; lib_se.sh will die if it is absent.
+	if [[ "${SE_COMPOSABLE}" == "yes" ]]; then
+		local coco_ext_tarball="kata-static-rootfs-image-coco-extension.tar.zst"
+		local root_hash_path="./opt/kata/share/kata-containers/root_hash_coco-extension.txt"
+		tar --zstd -tf "${coco_ext_tarball}" "${root_hash_path}" >/dev/null 2>&1 \
+			|| die "root_hash_coco-extension.txt not found in ${coco_ext_tarball}"
+		local root_hash_tmp
+		root_hash_tmp="$(tar --zstd -xOf "${coco_ext_tarball}" "${root_hash_path}")"
+		root_hash_tmp="${root_hash_tmp%$'\r'}"
+		[[ -n "${root_hash_tmp}" ]] || die "Empty root_hash_coco-extension.txt in ${coco_ext_tarball}"
+		export COCO_VERITY_PARAMS="${root_hash_tmp}"
+	fi
 	popd
 
 	protimg_source_dir="${image_source_dir}${prefix}/share/kata-containers"
@@ -77,12 +101,16 @@ main() {
 	readonly prefix="/opt/kata"
 	builddir="${PWD}"
 	tarball_dir="${builddir}/../.."
+	export SE_COMPOSABLE="no"
 	while getopts "h-:" opt; do
 		case "${opt}" in
 		-)
 			case "${OPTARG}" in
 			builddir=*)
 				builddir=${OPTARG#*=}
+				;;
+			composable)
+				export SE_COMPOSABLE="yes"
 				;;
 			destdir=*)
 				destdir=${OPTARG#*=}

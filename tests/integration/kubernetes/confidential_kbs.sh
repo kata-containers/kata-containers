@@ -831,7 +831,13 @@ prepare_credentials_for_qemu_se() {
 		>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
 		return 1
 	fi
-	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	if [[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]]; then
+		config_file_path="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-qemu-se-runtime-rs.toml"
+		se_img_name="kata-containers-se-runtime-rs.img"
+	else
+		config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+		se_img_name="kata-containers-se.img"
+	fi
 	kata_base_dir=$(dirname "$(kata-runtime --config "${config_file_path}" env --json | jq -r '.Kernel.Path')")
 	if [[ -z "${HKD_PATH:-}" || ! -d "${HKD_PATH}" ]]; then
 		>&2 echo "ERROR: HKD_PATH is not set"
@@ -842,7 +848,7 @@ prepare_credentials_for_qemu_se() {
 	openssl genrsa -aes256 -passout pass:test1234 -out encrypt_key-psw.pem 4096
 	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -pubout -out rsa/encrypt_key.pub
 	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -out rsa/encrypt_key.pem
-	cp "${kata_base_dir}/kata-containers-se.img" hdr/hdr.bin
+	cp "${kata_base_dir}/${se_img_name}" hdr/hdr.bin
 	cp "${HKD_PATH}"/HKD-*.crt hkds/
 	cp "${HKD_PATH}/ibm-z-host-key-gen2.crl" crls/
 	cp "${HKD_PATH}/DigiCertCA.crt" "${HKD_PATH}/ibm-z-host-key-signing-gen2.crt" certs/

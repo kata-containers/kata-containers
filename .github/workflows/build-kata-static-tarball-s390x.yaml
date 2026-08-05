@@ -46,6 +46,7 @@ jobs:
           - agent
           - coco-guest-components
           - fake-boot-image-se
+          - fake-boot-image-se-runtime-rs
           - kernel
           - pause-image
           - qemu
@@ -82,6 +83,9 @@ jobs:
           if [ "${KATA_ASSET}" = "fake-boot-image-se" ]; then
             make FAKE_SE_IMAGE=true boot-image-se-tarball
             TARBALL_NAME="boot-image-se"
+          elif [ "${KATA_ASSET}" = "fake-boot-image-se-runtime-rs" ]; then
+            make FAKE_SE_IMAGE=true boot-image-se-runtime-rs-tarball
+            TARBALL_NAME="boot-image-se-runtime-rs"
           else
             make "${KATA_ASSET}-tarball"
             TARBALL_NAME="${KATA_ASSET}"
@@ -103,7 +107,7 @@ jobs:
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' }}
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' && matrix.asset != 'fake-boot-image-se-runtime-rs' }}
         env:
           ASSET: ${{ matrix.asset }}
         run: |
@@ -120,7 +124,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' }}
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' && matrix.asset != 'fake-boot-image-se' && matrix.asset != 'fake-boot-image-se-runtime-rs' }}
         with:
           subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
           subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
@@ -130,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset == 'fake-boot-image-se' && 'boot-image-se' || matrix.asset }}.tar.zst
+          path: kata-build/kata-static-${{ matrix.asset == 'fake-boot-image-se' && 'boot-image-se' || matrix.asset == 'fake-boot-image-se-runtime-rs' && 'boot-image-se-runtime-rs' || matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 

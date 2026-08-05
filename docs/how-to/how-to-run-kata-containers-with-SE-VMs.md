@@ -70,16 +70,12 @@ kata-ubuntu-20.04-confidential.initrd
 kata-ubuntu-latest.image
 kata-ubuntu-latest-confidential.image
 vmlinux-6.1.62-121
-vmlinux-6.1.62-121-confidential
 vmlinux.container
-vmlinux-confidential.container
 vmlinuz-6.1.62-121
-vmlinuz-6.1.62-121-confidential
 vmlinuz.container
-vmlinuz-confidential.container
 ```
 
-The output indicates the deployment of the kernel (`vmlinux-6.1.62-121-confidential`, though the version
+The output indicates the deployment of the kernel (`vmlinux-6.1.62-121`, though the version
 may vary at the time of testing), rootfs-image (`kata-ubuntu-latest-confidential.image`), and rootfs-initrd (`kata-ubuntu-20.04-confidential.initrd`).
 In this scenario, the available kernel and initrd can be utilized for a secure image.
 However, if any of these components are absent, they must be built from the
@@ -89,18 +85,18 @@ However, if any of these components are absent, they must be built from the
 $ # Assume that the project is cloned at $GOPATH/src/github.com/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ make rootfs-initrd-confidential-tarball
-$ tar --zstd -tf build/kata-static-kernel-confidential.tar.zst | grep vmlinuz
-./opt/kata/share/kata-containers/vmlinuz-confidential.container
-./opt/kata/share/kata-containers/vmlinuz-6.7-136-confidential
+$ tar --zstd -tf build/kata-static-kernel.tar.zst | grep vmlinuz
+./opt/kata/share/kata-containers/vmlinuz.container
+./opt/kata/share/kata-containers/vmlinuz-6.7-136
 $ kernel_version=6.7-136
 $ tar --zstd -tf build/kata-static-rootfs-initrd-confidential.tar.zst | grep initrd
 ./opt/kata/share/kata-containers/kata-containers-initrd-confidential.img
 ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ mkdir artifacts
-$ tar --zstd -xvf build/kata-static-kernel-confidential.tar.zst -C artifacts ./opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
+$ tar --zstd -xvf build/kata-static-kernel.tar.zst -C artifacts ./opt/kata/share/kata-containers/vmlinuz-${kernel_version}
 $ tar --zstd -xvf build/kata-static-rootfs-initrd-confidential.tar.zst -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ ls artifacts/opt/kata/share/kata-containers/
-kata-ubuntu-20.04-confidential.initrd  vmlinuz-${kernel_version}-confidential
+kata-ubuntu-20.04-confidential.initrd  vmlinuz-${kernel_version}
 ```
 
 3. Secure Image Generation Tool
@@ -150,13 +146,25 @@ and two certificates and one revocation list at `$HOME/certificates`:
 - `DigiCert` intermediate CA certificate as `DigiCertCA.crt`
 - IBM Z host key certificate revocation list as `ibm-z-host-key-gen2.crl`
 
+There are two distinct image variants, corresponding to the two supported
+runtime classes:
+
+- **`qemu-se`** (Go runtime) — uses a monolithic confidential initrd that
+  bundles all CoCo guest components.
+- **`qemu-se-runtime-rs`** (Rust runtime, composable) — uses a lean base
+  initrd plus a separately-attached
+  [CoCo extension image](../design/composable-vm-images.md).
+
+The instructions below apply to both variants unless a variant is called out
+explicitly.
+
 you can construct a secure image using the following procedure:
 
 ```
 $ # Change a directory to the project root
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
-$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
+$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-${kernel_version}
 $ initrd_image=artifacts/opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ echo "panic=1 scsi_mod.scan=none swiotlb=262144 agent.log=debug" > parmfile
 $ genprotimg --host-key-document=${host_key_document} \
@@ -183,10 +191,12 @@ $ genprotimg --host-key-document=${host_key_document} \
 --cert=${cacert} --cert=${signcert} --crl=${crl} --parmfile=parmfile
 ```
 
-The steps with no verification, including the dependencies for the kernel and initrd,
-can be easily accomplished by issuing the following make target:
+The steps with no verification, including the dependencies for the kernel and
+initrd, can be easily accomplished by issuing the following make target.
 
-```
+=== `qemu-se` (Go runtime, monolithic)
+
+```bash
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
 $ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-tarball
@@ -194,7 +204,29 @@ $ ls build/kata-static-boot-image-se.tar.zst
 build/kata-static-boot-image-se.tar.zst
 ```
 
-`SE_KERNEL_PARAMS` could be used to add any extra kernel parameters. If no additional kernel configuration is required, this can be omitted.
+=== `qemu-se-runtime-rs` (Rust runtime, composable)
+
+ This target automatically builds `rootfs-image-coco-extension-tarball` as a
+ prerequisite. The CoCo extension image is pinned to the commit in
+ `versions.yaml` (`.externals.coco-guest-components.version`), and its
+ dm-verity root hash (`root_hash_coco-extension.txt`) is bundled inside the
+ extension tarball and published by the [guest-components](https://github.com/confidential-containers/guest-components) project. The build
+ extracts this hash and seals it into the SE kernel command line as
+ `kata.extension.coco.verity_params=root_hash=...,salt=...,data_blocks=...,...`
+ via `genprotimg`. Any substitution of the extension image is therefore
+ detected at boot time — the sealed hash will not match.
+
+```bash
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers
+$ mkdir hkd_dir && cp $host_key_document hkd_dir
+$ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-runtime-rs-tarball
+$ ls build/kata-static-boot-image-se-runtime-rs.tar.zst build/kata-static-rootfs-image-coco-extension.tar.zst
+build/kata-static-boot-image-se-runtime-rs.tar.zst
+build/kata-static-rootfs-image-coco-extension.tar.zst
+```
+
+`SE_KERNEL_PARAMS` can be used to inject extra kernel parameters into both
+variants. It can be omitted if no additional configuration is needed.
 
 In production, you could build an image by running the same command, but with the
 following environment variables for key verification:
@@ -327,15 +359,19 @@ please refer to the
 for confidential containers.
 
 
-```
+The following examples show the build commands for each runtime class.
+
+=== `qemu-se` (Go runtime, monolithic)
+
+```bash
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
-$ # kernel-confidential and rootfs-initrd-confidential are built automactially by the command below
+$ # kernel and rootfs-initrd-confidential are built automatically by the command below
 $ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-tarball
 $ make qemu-tarball
 $ make virtiofsd-tarball
-$ make shim-v2-tarball
+$ make shim-v2-go-tarball
 $ mkdir kata-artifacts
 $ build_dir=$(readlink -f build)
 $ cp -r $build_dir/*.tar.zst kata-artifacts
@@ -343,12 +379,40 @@ $ ls -1 kata-artifacts
 kata-static-agent.tar.zst
 kata-static-boot-image-se.tar.zst
 kata-static-coco-guest-components.tar.zst
-kata-static-kernel-confidential-modules.tar.zst
-kata-static-kernel-confidential.tar.zst
+kata-static-kernel.tar.zst
 kata-static-pause-image.tar.zst
 kata-static-qemu.tar.zst
 kata-static-rootfs-initrd-confidential.tar.zst
-kata-static-shim-v2.tar.zst
+kata-static-shim-v2-go.tar.zst
+kata-static-virtiofsd.tar.zst
+$ ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+```
+
+=== `qemu-se-runtime-rs` (Rust runtime, composable)
+
+`boot-image-se-runtime-rs-tarball` automatically builds the CoCo extension
+tarball as a prerequisite, so `kata-static-rootfs-image-coco-extension.tar.zst`
+is produced alongside the SE image and must be included in the payload.
+
+```bash
+$ cd $GOPATH/src/github.com/kata-containers/kata-containers
+$ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
+$ mkdir hkd_dir && cp $host_key_document hkd_dir
+$ # kernel and rootfs-initrd are built automatically by the command below
+$ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-runtime-rs-tarball
+$ make qemu-tarball
+$ make virtiofsd-tarball
+$ make shim-v2-rust-tarball
+$ mkdir kata-artifacts
+$ build_dir=$(readlink -f build)
+$ cp -r $build_dir/*.tar.zst kata-artifacts
+$ ls -1 kata-artifacts
+kata-static-boot-image-se-runtime-rs.tar.zst
+kata-static-kernel.tar.zst
+kata-static-qemu.tar.zst
+kata-static-rootfs-image-coco-extension.tar.zst
+kata-static-rootfs-initrd.tar.zst
+kata-static-shim-v2-rust.tar.zst
 kata-static-virtiofsd.tar.zst
 $ ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
 ```
