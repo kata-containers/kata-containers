@@ -324,23 +324,44 @@ impl Container {
         let mut inner = self.inner.write().await;
         match process.process_type {
             ProcessType::Container => {
-                if let Err(err) = inner.start_container(&process.container_id).await {
+                let res: Result<()> = async {
+                    inner.start_container(&process.container_id).await?;
+
+                    if process_uses_passfd_io(&inner, process)? {
+                        inner
+                            .init_process
+                            .passfd_io_wait(containers, self.agent.clone())
+                            .await?;
+                    } else {
+                        let container_io = inner.new_container_io(process).await?;
+                        inner
+                            .init_process
+                            .start_io_and_wait(containers, self.agent.clone(), container_io)
+                            .await?;
+                    }
+                    Ok(())
+                }
+                .await;
+
+                if let Err(err) = res {
                     let device_manager = self.resource_manager.get_device_manager().await;
                     let _ = inner.stop_process(process, true, &device_manager).await;
-                    return Err(err);
-                }
 
-                if process_uses_passfd_io(&inner, process)? {
-                    inner
-                        .init_process
-                        .passfd_io_wait(containers, self.agent.clone())
-                        .await?;
-                } else {
-                    let container_io = inner.new_container_io(process).await?;
-                    inner
-                        .init_process
-                        .start_io_and_wait(containers, self.agent.clone(), container_io)
-                        .await?;
+                    if let Err(e) = self
+                        .resource_manager
+                        .update_linux_resource(
+                            &self.config.container_id,
+                            inner.linux_resources.as_ref(),
+                            ResourceUpdateOp::Del,
+                        )
+                        .await
+                    {
+                        warn!(
+                            self.logger,
+                            "failed to release linux resources after start failure: {:?}", e
+                        );
+                    }
+                    return Err(err);
                 }
             }
             ProcessType::Exec => {
@@ -752,13 +773,27 @@ impl Container {
     pub async fn cleanup(&mut self) -> Result<()> {
         let mut inner = self.inner.write().await;
         let device_manager = self.resource_manager.get_device_manager().await;
-        inner
+        let res = inner
             .cleanup_container(
                 self.container_id.container_id.as_str(),
                 true,
                 &device_manager,
             )
+            .await;
+
+        if let Err(e) = self
+            .resource_manager
+            .update_linux_resource(
+                &self.config.container_id,
+                inner.linux_resources.as_ref(),
+                ResourceUpdateOp::Del,
+            )
             .await
+        {
+            warn!(self.logger, "failed to cleanup linux resources: {:?}", e);
+        }
+
+        res
     }
 }
 
