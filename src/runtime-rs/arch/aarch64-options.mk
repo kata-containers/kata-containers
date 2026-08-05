@@ -14,6 +14,9 @@ CPUFEATURES := pmu=off
 QEMUCMD := qemu-system-aarch64
 QEMUFW := AAVMF_CODE.fd
 
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor
+
 # dragonball binary name
 DBCMD := dragonball
 FCCMD := firecracker
