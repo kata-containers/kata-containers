@@ -8,10 +8,13 @@ use super::platform::{
     BaseMachine, CpuConfig, CpuModel, Machine, MemoryBackend, NumaNode, Objects, Platform,
 };
 use super::probe::{
-    EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice, SocketInfo, TdxQuoteSocket,
+    probe_host_topology_at, EgmSocketInfo, GpuSmmuGroup, HostTopology, ProtectionDevice,
+    SocketInfo, TdxQuoteSocket,
 };
 use super::q35::Q35;
-use super::topology::{PciRootComplex, PciRootPort, PciTopology, VfioDevice, VfioDeviceKind};
+use super::topology::{
+    BusIommu, PciRootComplex, PciRootPort, PciTopology, SmmuV3Config, VfioDevice, VfioDeviceKind,
+};
 
 // Each fixture file contains one Vec<String> element per line.
 // Blank lines and lines starting with '#' are ignored.
@@ -316,6 +319,7 @@ fn q35_coco_snp_single_gpu() {
                         pci_vendor_id: Some(0x10de),
                         pci_device_id: Some(0x2321),
                     }),
+                    switch_downstreams: vec![],
                 }],
             }],
             pcie_root_port: vec![],
@@ -393,6 +397,7 @@ fn q35_vanilla_8gpu_4nvswitch() {
                 pci_vendor_id: Some(0x10de),
                 pci_device_id: Some(device_id),
             }),
+            switch_downstreams: vec![],
         }
     }
 
@@ -524,6 +529,7 @@ fn q35_coco_tdx_8gpu_4nvswitch() {
                 pci_vendor_id: Some(0x10de),
                 pci_device_id: Some(device_id),
             }),
+            switch_downstreams: vec![],
         }
     }
 
@@ -651,4 +657,116 @@ fn q35_vanilla_kata_x86() {
     let got = platform.to_qemu_args().expect("to_qemu_args");
     let want = load_fixture("q35_vanilla_kata_x86.args");
     assert_eq!(want, got);
+}
+
+// ---- Phase 6: PlatformProbe unit test ----
+//
+// Builds a minimal synthetic sysfs tree to exercise probe_host_topology_at().
+// Verifies that GPU and NIC devices are classified correctly and grouped by
+// IOMMU group into GpuSmmuGroup entries.
+
+#[test]
+fn probe_synthetic_sysfs() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let pci = tmp.path().join("pci_devices");
+    let cpu = tmp.path().join("cpu");
+    let dev = tmp.path().join("dev");
+    fs::create_dir_all(&pci).unwrap();
+    fs::create_dir_all(&cpu).unwrap();
+    fs::create_dir_all(&dev).unwrap();
+
+    // iommu_groups/<N> directory (the symlink target)
+    let iommu_groups = tmp.path().join("iommu_groups");
+
+    let make_dev = |bdf: &str, vendor: &str, class: &str, numa: i32, iommu_group: u32| {
+        let d = pci.join(bdf);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("vendor"), format!("{vendor}\n")).unwrap();
+        fs::write(d.join("class"), format!("{class}\n")).unwrap();
+        fs::write(d.join("numa_node"), format!("{numa}\n")).unwrap();
+        let gdir = iommu_groups.join(iommu_group.to_string());
+        fs::create_dir_all(&gdir).unwrap();
+        // symlink: <pci>/<bdf>/iommu_group → <iommu_groups>/<N>
+        let link = d.join("iommu_group");
+        let _ = fs::remove_file(&link);
+        symlink(&gdir, &link).unwrap();
+    };
+
+    // GPU 0 in group 10, NUMA 0
+    make_dev("0008:06:00.0", "0x10de", "0x030200", 0, 10);
+    // GPU 1 in the same group 10, NUMA 0 (2-per-SMMU config)
+    make_dev("0009:06:00.0", "0x10de", "0x030200", 0, 10);
+    // NIC in its own group 20, NUMA 0
+    make_dev("0008:00:00.0", "0x10de", "0x020000", 0, 20);
+    // Non-NVIDIA device — should be ignored
+    make_dev("0000:00:01.0", "0x8086", "0x060400", 0, 99);
+
+    let topo = probe_host_topology_at(&pci, &cpu, &dev).expect("probe");
+
+    assert_eq!(topo.gpu_smmu_groups.len(), 1, "one GPU SMMU group");
+    let gpu_group = &topo.gpu_smmu_groups[0];
+    assert_eq!(gpu_group.pci_bus_addrs.len(), 2);
+    assert_eq!(gpu_group.pci_bus_addrs[0], "0008:06:00.0");
+    assert_eq!(gpu_group.pci_bus_addrs[1], "0009:06:00.0");
+
+    assert_eq!(topo.nic_smmu_groups.len(), 1, "one NIC SMMU group");
+    let nic_group = &topo.nic_smmu_groups[0];
+    assert_eq!(nic_group.pci_bus_addrs.len(), 1);
+    assert_eq!(nic_group.pci_bus_addrs[0], "0008:00:00.0");
+}
+
+// ---- Phase 6: switch-port topology emission test ----
+//
+// Verifies that a PciRootPort with switch_downstreams emits the correct
+// x3130-upstream + xio3130-downstream hierarchy.
+
+#[test]
+fn grace_switch_port_emission() {
+
+    let topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    };
+
+    // Build a Platform with the normal GPU root-port, then manually replace the
+    // single root-port's device with a switch_downstreams fan-out.
+    let mut platform =
+        Platform::from_config_defaults("virt", 16 << 30).expect("from_config_defaults");
+    platform.apply_host_defaults(&topo);
+
+    // Swap the single root-port into a switch-port with two downstream GPUs.
+    assert_eq!(platform.pci.roots.len(), 1);
+    let root = &mut platform.pci.roots[0];
+    assert_eq!(root.root_ports.len(), 1);
+    let port = &mut root.root_ports[0];
+    // Move the GPU into switch_downstreams and clear device.
+    let existing_gpu = port.device.take().unwrap();
+    port.switch_downstreams.push(existing_gpu);
+    port.switch_downstreams.push(VfioDevice {
+        id: "dev1".to_owned(),
+        host: "0009:06:00.0".to_owned(),
+        rombar: Some(false),
+        kind: VfioDeviceKind::Gpu,
+        iommufd_id: None,
+        pci_vendor_id: None,
+        pci_device_id: None,
+    });
+
+    let args = platform.to_qemu_args().expect("to_qemu_args");
+
+    // Verify the switch hierarchy appears
+    let joined = args.join(" ");
+    assert!(joined.contains("x3130-upstream"), "upstream switch missing: {joined}");
+    assert!(joined.contains("xio3130-downstream"), "downstream port missing: {joined}");
+    // Both GPUs should be present
+    assert!(joined.contains("0008:06:00.0"), "GPU 0 missing: {joined}");
+    assert!(joined.contains("0009:06:00.0"), "GPU 1 missing: {joined}");
 }
