@@ -18,8 +18,8 @@ use common::{
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::{
     utils::{
-        create_dir_all_with_inherit_owner, create_vmm_user, remove_dir_all_if_exists,
-        remove_vmm_user, vmm_user_runtime_dir,
+        authorize_rootless_device, create_dir_all_with_inherit_owner, create_vmm_user,
+        remove_dir_all_if_exists, remove_vmm_user, vmm_user_runtime_dir,
     },
     Param,
 };
@@ -49,7 +49,7 @@ use std::{
     collections::HashMap,
     env,
     ops::Deref,
-    os::unix::fs::{chown, MetadataExt},
+    os::unix::fs::chown,
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -1054,16 +1054,15 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
 
-    let kvm_path = PathBuf::from("/dev/kvm");
-    let metadata = std::fs::metadata(&kvm_path)?;
-    let kvm_gid = metadata.gid();
-
-    config.security_info.rootless_user = Some(RootlessUser {
+    let mut rootless_user = RootlessUser {
         uid,
         gid,
-        groups: vec![kvm_gid],
+        groups: Vec::new(),
         user_name,
-    });
+    };
+    authorize_rootless_device(Path::new("/dev/kvm"), &mut rootless_user, 0o6)?;
+
+    config.security_info.rootless_user = Some(rootless_user);
 
     Ok(guard)
 }

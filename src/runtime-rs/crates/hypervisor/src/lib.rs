@@ -48,7 +48,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
-use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, RootlessUser};
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
@@ -173,6 +173,12 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn set_guest_memory_block_size(&self, size: u32);
     async fn guest_memory_block_size(&self) -> u32;
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)>;
+
+    async fn set_rootless_user(&self, _user: RootlessUser) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "updating the rootless user is not supported for this hypervisor"
+        ))
+    }
 
     /// Resolve the in-guest PCIe path for a cold-plugged physical-endpoint VF
     /// by querying QMP (query-pci + device search by QEMU device ID).
