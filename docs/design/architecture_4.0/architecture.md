@@ -327,7 +327,7 @@ graph LR
     RM --> Volume
 
     Network --> Endpoint["endpoint\n(veth / physical)"]
-    Network --> NetModel["model\n(tcfilter / route)"]
+    Network --> NetModel["model\n(tcfilter / l3forwarding)"]
     SharedFs --> InlineVirtioFs["inline virtiofs"]
     SharedFs --> StandaloneVirtioFs["standalone virtiofs"]
 
