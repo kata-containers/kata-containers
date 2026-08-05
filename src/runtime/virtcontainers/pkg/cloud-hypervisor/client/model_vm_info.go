@@ -17,7 +17,7 @@ import (
 // VmInfo Virtual Machine information
 type VmInfo struct {
 	Config           VmConfig               `json:"config"`
-	State            string                 `json:"state"`
+	State            VmState                `json:"state"`
 	MemoryActualSize *int64                 `json:"memory_actual_size,omitempty"`
 	DeviceTree       *map[string]DeviceNode `json:"device_tree,omitempty"`
 }
@@ -26,7 +26,7 @@ type VmInfo struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewVmInfo(config VmConfig, state string) *VmInfo {
+func NewVmInfo(config VmConfig, state VmState) *VmInfo {
 	this := VmInfo{}
 	this.Config = config
 	this.State = state
@@ -66,9 +66,9 @@ func (o *VmInfo) SetConfig(v VmConfig) {
 }
 
 // GetState returns the State field value
-func (o *VmInfo) GetState() string {
+func (o *VmInfo) GetState() VmState {
 	if o == nil {
-		var ret string
+		var ret VmState
 		return ret
 	}
 
@@ -77,7 +77,7 @@ func (o *VmInfo) GetState() string {
 
 // GetStateOk returns a tuple with the State field value
 // and a boolean to check if the value has been set.
-func (o *VmInfo) GetStateOk() (*string, bool) {
+func (o *VmInfo) GetStateOk() (*VmState, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -85,7 +85,7 @@ func (o *VmInfo) GetStateOk() (*string, bool) {
 }
 
 // SetState sets field value
-func (o *VmInfo) SetState(v string) {
+func (o *VmInfo) SetState(v VmState) {
 	o.State = v
 }
 

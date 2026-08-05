@@ -4,21 +4,22 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Tap** | Pointer to **string** |  | [optional] 
+**Tap** | Pointer to **string** |  | [optional]
 **Ip** | Pointer to **string** | IPv4 or IPv6 address | [optional] [default to "192.168.249.1"]
 **Mask** | Pointer to **string** | Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address. | [optional] [default to "255.255.255.0"]
-**Mac** | Pointer to **string** |  | [optional] 
-**HostMac** | Pointer to **string** |  | [optional] 
-**Mtu** | Pointer to **int32** |  | [optional] 
+**Mac** | Pointer to **string** |  | [optional]
+**HostMac** | Pointer to **string** |  | [optional]
+**Mtu** | Pointer to **int32** |  | [optional]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 2]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 256]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
-**VhostSocket** | Pointer to **string** |  | [optional] 
+**VhostSocket** | Pointer to **string** |  | [optional]
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
-**Id** | Pointer to **string** |  | [optional] 
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
+**Id** | Pointer to **string** |  | [optional]
+**PciSegment** | Pointer to **int32** |  | [optional]
+**PciDeviceId** | Pointer to **int32** |  | [optional]
+**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional]
 **OffloadTso** | Pointer to **bool** |  | [optional] [default to true]
 **OffloadUfo** | Pointer to **bool** |  | [optional] [default to true]
 **OffloadCsum** | Pointer to **bool** |  | [optional] [default to true]
@@ -392,6 +393,31 @@ SetPciSegment sets PciSegment field to given value.
 
 HasPciSegment returns a boolean if a field has been set.
 
+### GetPciDeviceId
+
+`func (o *NetConfig) GetPciDeviceId() int32`
+
+GetPciDeviceId returns the PciDeviceId field if non-nil, zero value otherwise.
+
+### GetPciDeviceIdOk
+
+`func (o *NetConfig) GetPciDeviceIdOk() (*int32, bool)`
+
+GetPciDeviceIdOk returns a tuple with the PciDeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciDeviceId
+
+`func (o *NetConfig) SetPciDeviceId(v int32)`
+
+SetPciDeviceId sets PciDeviceId field to given value.
+
+### HasPciDeviceId
+
+`func (o *NetConfig) HasPciDeviceId() bool`
+
+HasPciDeviceId returns a boolean if a field has been set.
+
 ### GetRateLimiterConfig
 
 `func (o *NetConfig) GetRateLimiterConfig() RateLimiterConfig`
@@ -494,5 +520,3 @@ HasOffloadCsum returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

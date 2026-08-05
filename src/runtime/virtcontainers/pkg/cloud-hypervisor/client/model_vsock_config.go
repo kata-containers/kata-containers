@@ -19,10 +19,11 @@ type VsockConfig struct {
 	// Guest Vsock CID
 	Cid int64 `json:"cid"`
 	// Path to UNIX domain socket, used to proxy vsock connections.
-	Socket     string  `json:"socket"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	PciSegment *int32  `json:"pci_segment,omitempty"`
-	Id         *string `json:"id,omitempty"`
+	Socket      string  `json:"socket"`
+	Iommu       *bool   `json:"iommu,omitempty"`
+	PciSegment  *int32  `json:"pci_segment,omitempty"`
+	PciDeviceId *int32  `json:"pci_device_id,omitempty"`
+	Id          *string `json:"id,omitempty"`
 }
 
 // NewVsockConfig instantiates a new VsockConfig object
@@ -160,6 +161,38 @@ func (o *VsockConfig) SetPciSegment(v int32) {
 	o.PciSegment = &v
 }
 
+// GetPciDeviceId returns the PciDeviceId field value if set, zero value otherwise.
+func (o *VsockConfig) GetPciDeviceId() int32 {
+	if o == nil || o.PciDeviceId == nil {
+		var ret int32
+		return ret
+	}
+	return *o.PciDeviceId
+}
+
+// GetPciDeviceIdOk returns a tuple with the PciDeviceId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VsockConfig) GetPciDeviceIdOk() (*int32, bool) {
+	if o == nil || o.PciDeviceId == nil {
+		return nil, false
+	}
+	return o.PciDeviceId, true
+}
+
+// HasPciDeviceId returns a boolean if a field has been set.
+func (o *VsockConfig) HasPciDeviceId() bool {
+	if o != nil && o.PciDeviceId != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciDeviceId gets a reference to the given int32 and assigns it to the PciDeviceId field.
+func (o *VsockConfig) SetPciDeviceId(v int32) {
+	o.PciDeviceId = &v
+}
+
 // GetId returns the Id field value if set, zero value otherwise.
 func (o *VsockConfig) GetId() string {
 	if o == nil || o.Id == nil {
@@ -205,6 +238,9 @@ func (o VsockConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.PciSegment != nil {
 		toSerialize["pci_segment"] = o.PciSegment
+	}
+	if o.PciDeviceId != nil {
+		toSerialize["pci_device_id"] = o.PciDeviceId
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id

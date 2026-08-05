@@ -4,10 +4,10 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**ThreadsPerCore** | Pointer to **int32** |  | [optional] 
-**CoresPerDie** | Pointer to **int32** |  | [optional] 
-**DiesPerPackage** | Pointer to **int32** |  | [optional] 
-**Packages** | Pointer to **int32** |  | [optional] 
+**ThreadsPerCore** | Pointer to **int32** |  | [optional]
+**CoresPerDie** | Pointer to **int32** |  | [optional]
+**DiesPerPackage** | Pointer to **int32** |  | [optional]
+**Packages** | Pointer to **int32** |  | [optional]
 
 ## Methods
 
@@ -130,5 +130,3 @@ HasPackages returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

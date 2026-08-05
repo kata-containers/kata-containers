@@ -4,14 +4,24 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**NumPciSegments** | Pointer to **int32** |  | [optional] 
-**IommuSegments** | Pointer to **[]int32** |  | [optional] 
-**IommuAddressWidth** | Pointer to **int32** |  | [optional] 
-**SerialNumber** | Pointer to **string** |  | [optional] 
-**Uuid** | Pointer to **string** |  | [optional] 
-**OemStrings** | Pointer to **[]string** |  | [optional] 
+**NumPciSegments** | Pointer to **int32** |  | [optional]
+**IommuSegments** | Pointer to **[]int32** |  | [optional]
+**IommuAddressWidthBits** | Pointer to **int32** |  | [optional]
+**SystemSerialNumber** | Pointer to **string** |  | [optional]
+**SerialNumber** | Pointer to **string** |  | [optional]
+**SystemUuid** | Pointer to **string** |  | [optional]
+**Uuid** | Pointer to **string** |  | [optional]
+**OemStrings** | Pointer to **[]string** |  | [optional]
+**SystemManufacturer** | Pointer to **string** |  | [optional]
+**SystemProductName** | Pointer to **string** |  | [optional]
+**SystemVersion** | Pointer to **string** |  | [optional]
+**SystemFamily** | Pointer to **string** |  | [optional]
+**SystemSkuNumber** | Pointer to **string** |  | [optional]
+**ChassisAssetTag** | Pointer to **string** |  | [optional]
 **Tdx** | Pointer to **bool** |  | [optional] [default to false]
 **SevSnp** | Pointer to **bool** |  | [optional] [default to false]
+**Iommufd** | Pointer to **bool** |  | [optional] [default to false]
+**VfioP2pDma** | Pointer to **bool** |  | [optional] [default to true]
 
 ## Methods
 
@@ -82,30 +92,55 @@ SetIommuSegments sets IommuSegments field to given value.
 
 HasIommuSegments returns a boolean if a field has been set.
 
-### GetIommuAddressWidth
+### GetIommuAddressWidthBits
 
-`func (o *PlatformConfig) GetIommuAddressWidth() int32`
+`func (o *PlatformConfig) GetIommuAddressWidthBits() int32`
 
-GetIommuAddressWidth returns the IommuAddressWidth field if non-nil, zero value otherwise.
+GetIommuAddressWidthBits returns the IommuAddressWidthBits field if non-nil, zero value otherwise.
 
-### GetIommuAddressWidthOk
+### GetIommuAddressWidthBitsOk
 
-`func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool)`
+`func (o *PlatformConfig) GetIommuAddressWidthBitsOk() (*int32, bool)`
 
-GetIommuAddressWidthOk returns a tuple with the IommuAddressWidth field if it's non-nil, zero value otherwise
+GetIommuAddressWidthBitsOk returns a tuple with the IommuAddressWidthBits field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetIommuAddressWidth
+### SetIommuAddressWidthBits
 
-`func (o *PlatformConfig) SetIommuAddressWidth(v int32)`
+`func (o *PlatformConfig) SetIommuAddressWidthBits(v int32)`
 
-SetIommuAddressWidth sets IommuAddressWidth field to given value.
+SetIommuAddressWidthBits sets IommuAddressWidthBits field to given value.
 
-### HasIommuAddressWidth
+### HasIommuAddressWidthBits
 
-`func (o *PlatformConfig) HasIommuAddressWidth() bool`
+`func (o *PlatformConfig) HasIommuAddressWidthBits() bool`
 
-HasIommuAddressWidth returns a boolean if a field has been set.
+HasIommuAddressWidthBits returns a boolean if a field has been set.
+
+### GetSystemSerialNumber
+
+`func (o *PlatformConfig) GetSystemSerialNumber() string`
+
+GetSystemSerialNumber returns the SystemSerialNumber field if non-nil, zero value otherwise.
+
+### GetSystemSerialNumberOk
+
+`func (o *PlatformConfig) GetSystemSerialNumberOk() (*string, bool)`
+
+GetSystemSerialNumberOk returns a tuple with the SystemSerialNumber field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemSerialNumber
+
+`func (o *PlatformConfig) SetSystemSerialNumber(v string)`
+
+SetSystemSerialNumber sets SystemSerialNumber field to given value.
+
+### HasSystemSerialNumber
+
+`func (o *PlatformConfig) HasSystemSerialNumber() bool`
+
+HasSystemSerialNumber returns a boolean if a field has been set.
 
 ### GetSerialNumber
 
@@ -131,6 +166,31 @@ SetSerialNumber sets SerialNumber field to given value.
 `func (o *PlatformConfig) HasSerialNumber() bool`
 
 HasSerialNumber returns a boolean if a field has been set.
+
+### GetSystemUuid
+
+`func (o *PlatformConfig) GetSystemUuid() string`
+
+GetSystemUuid returns the SystemUuid field if non-nil, zero value otherwise.
+
+### GetSystemUuidOk
+
+`func (o *PlatformConfig) GetSystemUuidOk() (*string, bool)`
+
+GetSystemUuidOk returns a tuple with the SystemUuid field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemUuid
+
+`func (o *PlatformConfig) SetSystemUuid(v string)`
+
+SetSystemUuid sets SystemUuid field to given value.
+
+### HasSystemUuid
+
+`func (o *PlatformConfig) HasSystemUuid() bool`
+
+HasSystemUuid returns a boolean if a field has been set.
 
 ### GetUuid
 
@@ -182,6 +242,156 @@ SetOemStrings sets OemStrings field to given value.
 
 HasOemStrings returns a boolean if a field has been set.
 
+### GetSystemManufacturer
+
+`func (o *PlatformConfig) GetSystemManufacturer() string`
+
+GetSystemManufacturer returns the SystemManufacturer field if non-nil, zero value otherwise.
+
+### GetSystemManufacturerOk
+
+`func (o *PlatformConfig) GetSystemManufacturerOk() (*string, bool)`
+
+GetSystemManufacturerOk returns a tuple with the SystemManufacturer field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemManufacturer
+
+`func (o *PlatformConfig) SetSystemManufacturer(v string)`
+
+SetSystemManufacturer sets SystemManufacturer field to given value.
+
+### HasSystemManufacturer
+
+`func (o *PlatformConfig) HasSystemManufacturer() bool`
+
+HasSystemManufacturer returns a boolean if a field has been set.
+
+### GetSystemProductName
+
+`func (o *PlatformConfig) GetSystemProductName() string`
+
+GetSystemProductName returns the SystemProductName field if non-nil, zero value otherwise.
+
+### GetSystemProductNameOk
+
+`func (o *PlatformConfig) GetSystemProductNameOk() (*string, bool)`
+
+GetSystemProductNameOk returns a tuple with the SystemProductName field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemProductName
+
+`func (o *PlatformConfig) SetSystemProductName(v string)`
+
+SetSystemProductName sets SystemProductName field to given value.
+
+### HasSystemProductName
+
+`func (o *PlatformConfig) HasSystemProductName() bool`
+
+HasSystemProductName returns a boolean if a field has been set.
+
+### GetSystemVersion
+
+`func (o *PlatformConfig) GetSystemVersion() string`
+
+GetSystemVersion returns the SystemVersion field if non-nil, zero value otherwise.
+
+### GetSystemVersionOk
+
+`func (o *PlatformConfig) GetSystemVersionOk() (*string, bool)`
+
+GetSystemVersionOk returns a tuple with the SystemVersion field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemVersion
+
+`func (o *PlatformConfig) SetSystemVersion(v string)`
+
+SetSystemVersion sets SystemVersion field to given value.
+
+### HasSystemVersion
+
+`func (o *PlatformConfig) HasSystemVersion() bool`
+
+HasSystemVersion returns a boolean if a field has been set.
+
+### GetSystemFamily
+
+`func (o *PlatformConfig) GetSystemFamily() string`
+
+GetSystemFamily returns the SystemFamily field if non-nil, zero value otherwise.
+
+### GetSystemFamilyOk
+
+`func (o *PlatformConfig) GetSystemFamilyOk() (*string, bool)`
+
+GetSystemFamilyOk returns a tuple with the SystemFamily field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemFamily
+
+`func (o *PlatformConfig) SetSystemFamily(v string)`
+
+SetSystemFamily sets SystemFamily field to given value.
+
+### HasSystemFamily
+
+`func (o *PlatformConfig) HasSystemFamily() bool`
+
+HasSystemFamily returns a boolean if a field has been set.
+
+### GetSystemSkuNumber
+
+`func (o *PlatformConfig) GetSystemSkuNumber() string`
+
+GetSystemSkuNumber returns the SystemSkuNumber field if non-nil, zero value otherwise.
+
+### GetSystemSkuNumberOk
+
+`func (o *PlatformConfig) GetSystemSkuNumberOk() (*string, bool)`
+
+GetSystemSkuNumberOk returns a tuple with the SystemSkuNumber field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSystemSkuNumber
+
+`func (o *PlatformConfig) SetSystemSkuNumber(v string)`
+
+SetSystemSkuNumber sets SystemSkuNumber field to given value.
+
+### HasSystemSkuNumber
+
+`func (o *PlatformConfig) HasSystemSkuNumber() bool`
+
+HasSystemSkuNumber returns a boolean if a field has been set.
+
+### GetChassisAssetTag
+
+`func (o *PlatformConfig) GetChassisAssetTag() string`
+
+GetChassisAssetTag returns the ChassisAssetTag field if non-nil, zero value otherwise.
+
+### GetChassisAssetTagOk
+
+`func (o *PlatformConfig) GetChassisAssetTagOk() (*string, bool)`
+
+GetChassisAssetTagOk returns a tuple with the ChassisAssetTag field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetChassisAssetTag
+
+`func (o *PlatformConfig) SetChassisAssetTag(v string)`
+
+SetChassisAssetTag sets ChassisAssetTag field to given value.
+
+### HasChassisAssetTag
+
+`func (o *PlatformConfig) HasChassisAssetTag() bool`
+
+HasChassisAssetTag returns a boolean if a field has been set.
+
 ### GetTdx
 
 `func (o *PlatformConfig) GetTdx() bool`
@@ -232,7 +442,55 @@ SetSevSnp sets SevSnp field to given value.
 
 HasSevSnp returns a boolean if a field has been set.
 
+### GetIommufd
+
+`func (o *PlatformConfig) GetIommufd() bool`
+
+GetIommufd returns the Iommufd field if non-nil, zero value otherwise.
+
+### GetIommufdOk
+
+`func (o *PlatformConfig) GetIommufdOk() (*bool, bool)`
+
+GetIommufdOk returns a tuple with the Iommufd field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetIommufd
+
+`func (o *PlatformConfig) SetIommufd(v bool)`
+
+SetIommufd sets Iommufd field to given value.
+
+### HasIommufd
+
+`func (o *PlatformConfig) HasIommufd() bool`
+
+HasIommufd returns a boolean if a field has been set.
+
+### GetVfioP2pDma
+
+`func (o *PlatformConfig) GetVfioP2pDma() bool`
+
+GetVfioP2pDma returns the VfioP2pDma field if non-nil, zero value otherwise.
+
+### GetVfioP2pDmaOk
+
+`func (o *PlatformConfig) GetVfioP2pDmaOk() (*bool, bool)`
+
+GetVfioP2pDmaOk returns a tuple with the VfioP2pDma field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetVfioP2pDma
+
+`func (o *PlatformConfig) SetVfioP2pDma(v bool)`
+
+SetVfioP2pDma sets VfioP2pDma field to given value.
+
+### HasVfioP2pDma
+
+`func (o *PlatformConfig) HasVfioP2pDma() bool`
+
+HasVfioP2pDma returns a boolean if a field has been set.
+
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

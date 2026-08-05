@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Vcpu** | **int32** |  | 
-**HostCpus** | **[]int32** |  | 
+**Vcpu** | **int32** |  |
+**HostCpus** | **[]int32** |  |
 
 ## Methods
 
@@ -68,5 +68,3 @@ SetHostCpus sets HostCpus field to given value.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-

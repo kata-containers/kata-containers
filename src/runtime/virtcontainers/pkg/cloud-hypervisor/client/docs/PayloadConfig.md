@@ -4,12 +4,12 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Firmware** | Pointer to **string** |  | [optional] 
-**Kernel** | Pointer to **string** |  | [optional] 
-**Cmdline** | Pointer to **string** |  | [optional] 
-**Initramfs** | Pointer to **string** |  | [optional] 
-**Igvm** | Pointer to **string** |  | [optional] 
-**HostData** | Pointer to **string** |  | [optional] 
+**Firmware** | Pointer to **string** |  | [optional]
+**Kernel** | Pointer to **string** |  | [optional]
+**Cmdline** | Pointer to **string** |  | [optional]
+**Initramfs** | Pointer to **string** |  | [optional]
+**Igvm** | Pointer to **string** |  | [optional]
+**HostData** | Pointer to **string** |  | [optional]
 
 ## Methods
 
@@ -182,5 +182,3 @@ HasHostData returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
-
-
