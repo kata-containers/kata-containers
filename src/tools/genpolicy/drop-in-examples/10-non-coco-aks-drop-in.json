@@ -11,11 +11,6 @@
   },
   {
     "op": "replace",
-    "path": "/cluster_config/pause_container_id_policy",
-    "value": "v2"
-  },
-  {
-    "op": "replace",
     "path": "/cluster_config/pause_container_image",
     "value": "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6"
   },
@@ -28,16 +23,6 @@
     "op": "replace",
     "path": "/kata_config/enable_configmap_secret_storages",
     "value": true
-  },
-  {
-    "op": "replace",
-    "path": "/pause_container/Process/User/UID",
-    "value": 0
-  },
-  {
-    "op": "replace",
-    "path": "/pause_container/Process/User/GID",
-    "value": 0
   },
   {
     "op": "replace",

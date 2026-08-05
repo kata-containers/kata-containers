@@ -35,12 +35,6 @@
         },
         "Process": {
             "NoNewPrivileges": true,
-            "User": {
-                "UID": 65535,
-                "GID": 65535,
-                "AdditionalGids": [],
-                "Username": ""
-            },
             "Args": [
                 "/pause"
             ]
@@ -350,7 +344,6 @@
     "cluster_config": {
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
         "guest_pull": true,
-        "pause_container_id_policy": "v1",
         "emptydir_type": "block-encrypted",
         "cgroup_mount_extras_allowed": [
             "nsdelegate",
