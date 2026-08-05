@@ -12,6 +12,7 @@ MACHINEACCELERATORS := usb=off,gic-version=host
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
+QEMUNOSHAREDFSCMD := qemu-system-aarch64-no-shared-fs
 QEMUFW := AAVMF_CODE.fd
 
 # dragonball binary name

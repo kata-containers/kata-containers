@@ -11,6 +11,7 @@ MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-x86_64
+QEMUNOSHAREDFSCMD := qemu-system-x86_64-no-shared-fs
 QEMUSNPCMD := qemu-system-x86_64-snp-experimental
 QEMUTDXCMD := qemu-system-x86_64-tdx-experimental
 

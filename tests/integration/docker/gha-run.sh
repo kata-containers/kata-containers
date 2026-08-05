@@ -92,6 +92,9 @@ function run() {
 	info "Running docker smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
+	# Docker hands the container rootfs over as an overlay mount, so the
+	# classes that ship without a shared filesystem have to be put back on
+	# virtio-fs here.
 	configure_nvidia_runtime_rs_shared_fs_dropin
 	enable_kata_debug
 

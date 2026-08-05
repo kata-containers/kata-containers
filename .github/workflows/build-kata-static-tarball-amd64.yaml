@@ -60,6 +60,7 @@ jobs:
           - ovmf-tdx
           - pause-image
           - qemu
+          - qemu-no-shared-fs
           - qemu-snp-experimental
           - qemu-tdx-experimental
           - virtiofsd

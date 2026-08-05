@@ -573,6 +573,33 @@ EOF
 	fi
 }
 
+# containerd only picks up the conf.d fragments if its main configuration file
+# imports them, and whether "containerd config default" already does that varies
+# with the release, so make sure the import is there without disturbing anything
+# else in the file.
+#
+# Nothing to do for containerd 1.x (schema v2), which does not honour conf.d.
+function ensure_containerd_conf_d_imported() {
+	local -r config="/etc/containerd/config.toml"
+	local -r conf_d="/etc/containerd/conf.d"
+	local schema
+
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || return 0
+
+	sudo mkdir -p "${conf_d}"
+	if sudo grep -qF "${conf_d}/*.toml" "${config}"; then
+		return 0
+	fi
+
+	if sudo grep -qE "^imports[[:space:]]*=" "${config}"; then
+		sudo sed -i -E "s|^imports[[:space:]]*=.*|imports = ['${conf_d}/*.toml']|" "${config}"
+	else
+		# A top-level key has to come before the first table header.
+		sudo sed -i "1i imports = ['${conf_d}/*.toml']" "${config}"
+	fi
+}
+
 # Rootful systemd must own API sockets (see containerd "config default" using non-root
 # uid/gid under listeners on newer releases, e.g. 2.3 on amd64).
 #
@@ -647,6 +674,7 @@ function overwrite_containerd_config() {
 		cd_bin="$(command -v containerd)"
 		sudo mkdir -p "${conf_dir}"
 		sudo "${cd_bin}" config default | sudo tee "${containerd_config}" > /dev/null
+		ensure_containerd_conf_d_imported
 		ensure_containerd_conf_d_rootful_api_sockets
 
 		# containerd v2.x (schema v3+): io.containerd.cri.v1.runtime plugin path,
@@ -813,30 +841,142 @@ function enabling_hypervisor() {
 	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
-# Docker and nerdctl smoke tests exercise Kata through the default overlayfs
-# snapshotter path. Keep NVIDIA runtime-rs on virtio-fs for those tests; the
-# shared_fs=none + EROFS snapshotter path is covered by Kubernetes CI instead.
-function configure_nvidia_runtime_rs_shared_fs_dropin() {
+# True when KATA_HYPERVISOR takes the container rootfs as a block device: the
+# NVIDIA runtime classes ship shared_fs = "none" and emptydir_mode =
+# "block-plain", and run a QEMU that has neither virtio-fs nor virtio-9p in it.
+function kata_hypervisor_runs_without_shared_fs() {
 	case "${KATA_HYPERVISOR:-}" in
-		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) ;;
-		*) return 0 ;;
+		qemu-nvidia-cpu-runtime-rs|qemu-nvidia-gpu-runtime-rs) return 0 ;;
+		*) return 1 ;;
 	esac
+}
+
+# Puts a runtime class that runs without a shared filesystem back on virtio-fs,
+# which also means putting it back on the generic QEMU: the one it ships with
+# has no vhost-user-fs device.  Only for harnesses that cannot hand a block
+# rootfs over; the block path is covered elsewhere.
+function configure_nvidia_runtime_rs_shared_fs_dropin() {
+	kata_hypervisor_runs_without_shared_fs || return 0
 
 	local -r cfg="${KATA_CONFIG_PATH:-}"
 	[[ -z "${cfg}" || ! -e "${cfg}" ]] && return 0
 
+	local -r qemu="/opt/kata/bin/qemu-system-$(uname -m)"
 	local -r dropin_dir="$(dirname "${cfg}")/config.d"
 	local -r dropin_path="${dropin_dir}/99-nvidia-runtime-rs-shared-fs.toml"
 
 	info "Configuring NVIDIA runtime-rs shared-fs smoke test via ${dropin_path}"
 	sudo mkdir -p "${dropin_dir}"
-	sudo tee "${dropin_path}" >/dev/null <<EOF
-[hypervisor.qemu]
-shared_fs = "virtio-fs"
+	sudo tee "${dropin_path}" > /dev/null <<-EOF
+	[hypervisor.qemu]
+	path = "${qemu}"
+	valid_hypervisor_paths = ["${qemu}"]
+	shared_fs = "virtio-fs"
 
-[runtime]
-emptydir_mode = "shared-fs"
-EOF
+	[runtime]
+	emptydir_mode = "shared-fs"
+	EOF
+}
+
+# Installs erofs-utils and loads the erofs module.
+#
+# mkfs.erofs has to be >= 1.8 for the flags containerd's erofs differ passes
+# (-T0, --mkfs-time, --sort).  Ubuntu 24.04 still ships 1.7.1, so where the host
+# has nothing recent enough - the GitHub-hosted runners have nothing at all -
+# take it from Ubuntu 25.10 (Questing Quokka), pinned low enough that nothing
+# else gets pulled in from that release.
+function install_erofs_utils() {
+	local version
+
+	if version="$(dpkg-query -W -f='${Version}' erofs-utils 2>/dev/null)" && \
+		dpkg --compare-versions "${version}" ge 1.8; then
+		info "erofs-utils ${version} is already installed"
+	else
+		sudo apt-get -y install --no-install-recommends software-properties-common
+		sudo add-apt-repository -y 'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+		sudo tee /etc/apt/preferences.d/questing-pin > /dev/null <<-'APTPIN'
+		Package: *
+		Pin: release n=questing
+		Pin-Priority: 100
+		APTPIN
+		sudo apt-get update
+		sudo apt-get -y install --no-install-recommends -t questing erofs-utils
+		sudo rm -f /etc/apt/preferences.d/questing-pin
+		sudo add-apt-repository -y --remove 'deb https://archive.ubuntu.com/ubuntu/ questing universe'
+	fi
+
+	sudo modprobe erofs
+}
+
+# dm-verity hashes the erofs layers through device-mapper, which needs both the
+# device-mapper core and the verity target loaded on the host.
+function load_dm_verity_modules() {
+	sudo modprobe dm-mod
+	sudo modprobe dm-verity
+
+	[[ -d /sys/module/dm_verity ]] || \
+		die "the dm_verity kernel module is not available after modprobe"
+}
+
+# Points containerd at the erofs differ and snapshotter, as a conf.d drop-in.
+#
+# This is the non-Kubernetes counterpart of what kata-deploy writes on the k8s
+# jobs, and it keeps dm-verity on so that the smoke tests cover the same layer
+# integrity path.  fs-verity is the one thing left out: it needs the host root
+# filesystem prepared up front (tune2fs -O verity) and it protects the layer
+# blobs on the host rather than anything the guest sees.
+#
+# max_unmerged_layers = 0 collapses the layers into a single fsmeta.erofs, which
+# only runtime-rs can consume - and runtime-rs is all this is used with.
+function configure_containerd_erofs_snapshotter() {
+	local -r drop_in="/etc/containerd/conf.d/60-kata-ci-erofs-snapshotter.toml"
+	local schema dump
+
+	load_dm_verity_modules
+
+	# The erofs snapshotter is a containerd 2.2 plugin, and conf.d drop-ins are
+	# only read from containerd 2.x (schema v3+) onwards anyway.
+	schema="$(_containerd_resolved_schema_version)"
+	[[ "${schema}" -ge 3 ]] || die "the erofs snapshotter needs containerd 2.2 or newer"
+
+	info "Configuring the containerd erofs snapshotter via ${drop_in}"
+	ensure_containerd_conf_d_imported
+	sudo mkdir -p "$(dirname "${drop_in}")"
+	sudo tee "${drop_in}" > /dev/null <<-'EOF'
+	[plugins.'io.containerd.cri.v1.images']
+	  discard_unpacked_layers = false
+
+	[plugins.'io.containerd.service.v1.diff-service']
+	  default = ['erofs', 'walking']
+
+	[plugins.'io.containerd.differ.v1.erofs']
+	  mkfs_options = ['-T0', '--mkfs-time', '--sort=none']
+	  enable_tar_index = false
+	  enable_dmverity = true
+
+	[plugins.'io.containerd.snapshotter.v1.erofs']
+	  set_immutable = true
+	  enable_fsverity = false
+	  dmverity_mode = 'on'
+	  default_size = '0'
+	  max_unmerged_layers = 0
+	EOF
+
+	restart_containerd_service
+
+	# Complain here, rather than at container creation time, if this containerd
+	# is too old to carry the erofs plugins.
+	if ! sudo ctr plugins ls | \
+		awk '$1 == "io.containerd.snapshotter.v1" && $2 == "erofs" && $NF == "ok" { ok = 1 } END { exit !ok }'; then
+		sudo ctr plugins ls || true
+		die "containerd has no working erofs snapshotter plugin"
+	fi
+
+	# ... and likewise if the drop-in was written but never read.
+	dump="$(PATH="${PATH}:/usr/local/bin:/usr/local/sbin" containerd config dump)"
+	if ! tr -d " '\"" <<< "${dump}" | grep -q '^default=\[erofs,walking\]$'; then
+		die "the erofs differ is missing from the running containerd configuration"
+	fi
 }
 
 function check_containerd_config_for_kata() {

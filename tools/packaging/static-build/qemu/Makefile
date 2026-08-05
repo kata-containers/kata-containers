@@ -9,8 +9,8 @@ CONFIG_DIR := $(MK_DIR)/../../scripts/
 build:
 	"$(MK_DIR)/build-static-qemu.sh"
 
-build-experimental:
-	"$(MK_DIR)/build-static-qemu-experimental.sh"
+build-flavour:
+	"$(MK_DIR)/build-static-qemu-flavour.sh"
 
 clean:
 	rm -f kata-qemu-static.tar.gz
