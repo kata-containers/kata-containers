@@ -33,7 +33,6 @@ use hypervisor::ch::CloudHypervisor;
 use hypervisor::device::topology::PCIePort;
 use hypervisor::device::util::{get_host_path, DEVICE_TYPE_CHAR};
 use hypervisor::remote::Remote;
-use hypervisor::{BlockConfigModern, Hypervisor, VfioDeviceBase, is_vfio_ap_device};
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(all(
@@ -43,12 +42,14 @@ use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
+use hypervisor::{is_vfio_ap_device, BlockConfigModern, Hypervisor, VfioDeviceBase};
 #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{
-        get_hvsock_path, remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
+        authorize_rootless_device, get_hvsock_path, remove_vmm_user_runtime_dir,
+        uses_native_ccw_bus, vmm_user_runtime_dir,
     },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
@@ -67,6 +68,7 @@ use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
+use kata_types::rootless::is_rootless;
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use pod_resources_rs::handle_cdi_devices;
@@ -318,6 +320,9 @@ impl VirtSandbox {
             .await
             .context("failed to prepare protection device config")?
         {
+            self.prepare_rootless_protection_access(&protection_dev_config)
+                .await
+                .context("failed to prepare rootless protection access")?;
             resource_configs.push(ResourceConfig::Protection(protection_dev_config));
         }
 
@@ -822,6 +827,35 @@ impl VirtSandbox {
             GuestProtection::NoProtection => Ok(None),
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
+    }
+
+    async fn prepare_rootless_protection_access(
+        &self,
+        protection: &ProtectionDeviceConfig,
+    ) -> Result<()> {
+        // Protection-specific host resources are known only after the host
+        // protection mechanism has been detected.
+        if !is_rootless() {
+            return Ok(());
+        }
+
+        let mut user = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .security_info
+            .rootless_user
+            .ok_or_else(|| anyhow!("rootless user must be specified for a rootless VMM"))?;
+
+        match protection {
+            ProtectionDeviceConfig::SevSnp(config) if config.is_snp => {
+                authorize_rootless_device(Path::new("/dev/sev"), &mut user, 0o6)?;
+            }
+            _ => return Ok(()),
+        }
+
+        // Update the user with groups discovered after initial rootless setup.
+        self.hypervisor.set_rootless_user(user).await
     }
 
     async fn prepare_initdata_device_config(
