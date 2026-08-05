@@ -10,12 +10,10 @@ pub(crate) struct PciTopology {
 pub(crate) struct PciRootComplex {
     pub id: String,
     pub bus_nr: u8,
-    /// Written as pxb-pcie `numa_node=N`. Required on Grace; omitting it
-    /// triggers "Unknown NUMA node; performance will be reduced" in the guest.
+    /// Omitting this triggers "Unknown NUMA node; performance will be reduced" in the guest kernel.
     pub numa_node: Option<u32>,
-    /// Bus-attached IOMMU. Intel IOMMU is a Q35-global device; see Q35::intel_iommu.
+    /// Intel IOMMU is Q35-global, not bus-attached; see Q35::intel_iommu.
     pub iommu: Option<BusIommu>,
-    /// One entry per passthrough device sharing this SMMU.
     pub root_ports: Vec<PciRootPort>,
 }
 
@@ -33,14 +31,11 @@ pub(crate) struct VfioDevice {
 }
 
 pub(crate) enum VfioDeviceKind {
-    /// Emits 8 acpi-generic-initiator objects after the device.
     Gpu,
-    /// No acpi-generic-initiator objects.
     Nic,
 }
 
-/// IOMMU that attaches to a specific PCIe expander bus (pxb-pcie).
-/// Intel IOMMU is a Q35-global device and is not represented here.
+/// Intel IOMMU is Q35-global and is not represented here; see Q35::intel_iommu.
 pub(crate) enum BusIommu {
     SmmuV3(SmmuV3Config),
 }
@@ -51,8 +46,7 @@ pub(crate) struct SmmuV3Config {
     pub pasid: bool,
     pub oas: u8,
     pub ril: bool,
-    /// Enable SMMU command-queue virtualisation. Requires physically
-    /// contiguous guest memory (hugepages or EGM).
+    /// Requires physically contiguous guest memory (hugepages or EGM).
     pub cmdqv: bool,
 }
 

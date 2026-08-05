@@ -2,11 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 use super::{
-    probe::HostTopology, pseries::Pseries, q35::Q35, s390x::S390xCcwVirtio, topology::PciTopology,
+    probe::{HostTopology, SocketInfo},
+    pseries::Pseries,
+    q35::Q35,
+    s390x::S390xCcwVirtio,
+    topology::{BusIommu, PciRootComplex, PciRootPort, PciTopology, SmmuV3Config, VfioDevice, VfioDeviceKind},
     virt::Virt,
 };
 
@@ -23,7 +27,6 @@ pub(crate) enum Machine {
     S390xCcwVirtio(S390xCcwVirtio),
 }
 
-/// Fields common to all machine types.
 pub(crate) struct BaseMachine {
     pub accel: String,
     /// ID of the primary memory backend, written as `-machine memory-backend=<id>`.
@@ -138,38 +141,168 @@ pub(crate) struct ObjectRngRandom {
     pub filename: String,
 }
 
+const PRIMARY_RAM_ID: &str = "ram0";
+
 impl Platform {
-    pub fn from_config(_config: &HypervisorConfig) -> Result<Self> {
-        todo!("Phase 1")
+    pub fn from_config(config: &HypervisorConfig) -> Result<Self> {
+        let memory_size = u64::from(config.memory_info.default_memory) << 20;
+        Self::build(&config.machine_info.machine_type, memory_size)
     }
 
-    /// Test-only constructor; produces a minimal Virt platform with RAM-backed
-    /// memory. Replaced in Phase 1 by from_config once the builder exists.
     #[cfg(test)]
-    pub(crate) fn from_config_defaults(_memory_size: u64) -> Result<Self> {
-        todo!("Phase 1")
+    pub(crate) fn from_config_defaults(memory_size: u64) -> Result<Self> {
+        Self::build("virt", memory_size)
     }
 
-    pub fn apply_host_defaults(&mut self, _topo: &HostTopology) {
-        todo!("Phase 4")
+    fn build(machine_type: &str, memory_size: u64) -> Result<Self> {
+        let base = BaseMachine {
+            accel: "kvm".to_owned(),
+            memory_backend: Some(PRIMARY_RAM_ID.to_owned()),
+            cpu: CpuConfig {
+                model: CpuModel::Host { extra_features: vec![] },
+            },
+        };
+
+        let machine = match machine_type {
+            "q35" => Machine::Q35(Q35 {
+                base,
+                kernel_irqchip: Some("on".to_owned()),
+                intel_iommu: None,
+            }),
+            "virt" => Machine::Virt(Virt {
+                base,
+                gic_version: None,
+                ras: false,
+                highmem_mmio_size: None,
+            }),
+            "pseries" => Machine::Pseries(Pseries { base }),
+            "s390-ccw-virtio" => Machine::S390xCcwVirtio(S390xCcwVirtio { base }),
+            other => bail!("unknown machine type: {other}"),
+        };
+
+        Ok(Self {
+            machine,
+            pci: PciTopology { default_bus: None, roots: vec![] },
+            objects: Objects {
+                iommufd: None,
+                memory_backends: vec![MemoryBackend::Ram {
+                    id: PRIMARY_RAM_ID.to_owned(),
+                    size: memory_size,
+                }],
+                thread_contexts: vec![],
+                acpi_links: vec![],
+                rng: None,
+            },
+        })
     }
 
-    pub fn with_hugepages(self, _path: &str) -> Self {
-        todo!("Phase 3")
+    pub fn apply_host_defaults(&mut self, topo: &HostTopology) {
+        let has_gpus = topo.gpu_smmu_groups.iter().any(|g| !g.pci_bus_addrs.is_empty());
+        if has_gpus {
+            self.objects.iommufd = Some(IommufdBackend { id: "iommufd0".to_owned() });
+        }
+
+        for (idx, egm) in topo.egm_sockets.iter().enumerate() {
+            self.objects.memory_backends.push(MemoryBackend::File {
+                id: format!("egm{idx}"),
+                size: egm.total_size,
+                path: egm.path.clone(),
+                prealloc: false,
+                share: true,
+            });
+        }
+
+        let n_cpu_nodes = topo.sockets.len();
+        let mut gpu_idx = 0usize;
+
+        for (group_idx, group) in topo.gpu_smmu_groups.iter().enumerate() {
+            // 0x40 is the conventional start for pxb-pcie to avoid the primary bus range.
+            let bus_nr = 0x40u8.saturating_add((group_idx as u8).saturating_mul(0x20));
+            let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
+            let has_egm = topo.egm_sockets.iter().any(|e| e.socket == group.socket);
+
+            let mut root_ports = Vec::new();
+            for pci_addr in &group.pci_bus_addrs {
+                let dev_id = format!("gpu{gpu_idx}");
+                let port_id = format!("rp{gpu_idx}");
+
+                for i in 0..8u32 {
+                    let node = (n_cpu_nodes + gpu_idx * 8 + i as usize) as u32;
+                    self.objects.acpi_links.push(AcpiPciNodeLink::GenericInitiator {
+                        id: format!("{dev_id}_{i}"),
+                        pci_dev: dev_id.clone(),
+                        node,
+                    });
+                }
+
+                if has_egm {
+                    self.objects.acpi_links.push(AcpiPciNodeLink::EgmMemory {
+                        id: format!("egm_{dev_id}"),
+                        pci_dev: dev_id.clone(),
+                        node: cpu_mem_node,
+                    });
+                }
+
+                root_ports.push(PciRootPort {
+                    id: port_id,
+                    chassis: (gpu_idx + 1) as u8,
+                    device: Some(VfioDevice {
+                        id: dev_id,
+                        host: pci_addr.clone(),
+                        rombar: false,
+                        kind: VfioDeviceKind::Gpu,
+                    }),
+                });
+
+                gpu_idx += 1;
+            }
+
+            self.pci.roots.push(PciRootComplex {
+                id: format!("pxb{group_idx}"),
+                bus_nr,
+                numa_node: Some(cpu_mem_node),
+                iommu: if root_ports.is_empty() {
+                    None
+                } else {
+                    Some(BusIommu::SmmuV3(SmmuV3Config::default()))
+                },
+                root_ports,
+            });
+        }
     }
 
-    /// Emit the complete QEMU command-line argument list.
-    ///
-    /// Emission order:
-    ///   1. iommufd object
-    ///   2. remaining objects (memory backends, thread contexts, rng)
-    ///   3. -machine (picks up memory-backend=)
-    ///   4. CpuMem -numa node entries (cpus= + memdev=)
-    ///   5. GPU initiator -numa node entries (8 per GPU, no cpus/memdev)
-    ///   6. EGM / hotplug -numa node entries (memory-only)
-    ///   7. PciTopology (pxb-pcie, arm-smmuv3, root ports, vfio devices)
-    ///   8. acpi_links (acpi-generic-initiator x8 per GPU, acpi-egm-memory x1 per GPU)
+    pub fn with_hugepages(self, path: &str) -> Self {
+        let backends = self
+            .objects
+            .memory_backends
+            .into_iter()
+            .map(|b| match b {
+                MemoryBackend::Ram { id, size } => MemoryBackend::File {
+                    id,
+                    size,
+                    path: path.to_owned(),
+                    prealloc: true,
+                    share: false,
+                },
+                other => other,
+            })
+            .collect();
+
+        Platform {
+            objects: Objects { memory_backends: backends, ..self.objects },
+            ..self
+        }
+    }
+
     pub fn to_qemu_args(&self) -> Result<Vec<String>> {
         todo!("Phase 2+")
     }
+}
+
+// Socket IDs are not guaranteed contiguous; use position to get a dense NUMA node number.
+fn socket_numa_node(sockets: &[SocketInfo], socket_id: u32) -> u32 {
+    sockets
+        .iter()
+        .position(|s| s.id == socket_id)
+        .unwrap_or(socket_id as usize) as u32
 }
