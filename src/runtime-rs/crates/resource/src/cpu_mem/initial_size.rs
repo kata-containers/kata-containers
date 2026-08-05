@@ -8,8 +8,11 @@ use std::{collections::HashMap, convert::TryFrom};
 
 use anyhow::{ensure, Context, Result};
 use kata_types::{
-    annotations::Annotation, config::TomlConfig, container::ContainerType,
-    cpu::LinuxContainerCpuResources, k8s::container_type,
+    annotations::Annotation,
+    config::{hypervisor::HugePageType, TomlConfig},
+    container::ContainerType,
+    cpu::LinuxContainerCpuResources,
+    k8s::container_type,
 };
 use oci_spec::runtime as oci;
 
@@ -167,6 +170,17 @@ impl InitialSizeManager {
             return Ok(());
         }
 
+        // A guest that takes its memory from the hugetlb pool is not sized by
+        // the workload's memory limit: that limit is charged against ordinary
+        // memory, which such a guest never touches, while the memory it does
+        // run on is reserved by the pod as a hugepages-<size> resource.
+        // Sizing the VM from the limit would size it against the wrong
+        // resource, so keep the configured default_memory, which the pod
+        // reserves once. Transparent huge pages are ordinary memory and are
+        // sized as usual.
+        let hugetlb_backed = hv.memory_info.enable_hugepages
+            && matches!(hv.memory_info.hugepage_type, HugePageType::Hugetlbfs);
+
         if self.resource.vcpu > 0.0 || self.resource.mem_mb > 0 {
             if self.resource.vcpu > 0.0 {
                 info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
@@ -177,7 +191,19 @@ impl InitialSizeManager {
 
             hv.cpu_info.default_vcpus = (hv.cpu_info.overhead_vcpus + self.resource.vcpu).max(1.0);
 
-            hv.memory_info.default_memory = hv.memory_info.overhead_memory + self.resource.mem_mb;
+            if hugetlb_backed {
+                if self.resource.mem_mb > 0 {
+                    info!(
+                        sl!(),
+                        "sandbox is huge page backed: the workload memory limit does not size the VM, which stays at {} MiB",
+                        hv.memory_info.default_memory
+                    );
+                }
+            } else {
+                hv.memory_info.default_memory =
+                    hv.memory_info.overhead_memory + self.resource.mem_mb;
+            }
+
             hv.memory_info.default_maxmemory = hv
                 .memory_info
                 .default_maxmemory
@@ -523,6 +549,50 @@ mod tests {
         let hv = config.hypervisor.get("qemu").unwrap();
         assert_eq!(hv.memory_info.default_memory, 640);
         assert_eq!(hv.memory_info.default_maxmemory, 640);
+    }
+
+    fn set_hugepages(config: &mut TomlConfig, hugepage_type: HugePageType) {
+        config.hypervisor.entry("qemu".to_owned()).and_modify(|hv| {
+            hv.memory_info.enable_hugepages = true;
+            hv.memory_info.hugepage_type = hugepage_type;
+        });
+    }
+
+    #[test]
+    fn test_setup_config_static_keeps_default_memory_when_hugetlb_backed() {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+        set_hugepages(&mut config, HugePageType::Hugetlbfs);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 1.2,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        // The memory limit is charged against ordinary memory, which such a
+        // guest does not run on, so only the vCPU side follows the workload.
+        assert_eq!(hv.memory_info.default_memory, 256);
+        assert_eq!(hv.cpu_info.default_vcpus, 1.7);
+    }
+
+    #[test]
+    fn test_setup_config_static_sizes_memory_with_transparent_huge_pages() {
+        let mut config = make_config(1.0, 0.5, 4, 256, 128, 4096, true);
+        set_hugepages(&mut config, HugePageType::THP);
+        let mut mgr = InitialSizeManager {
+            resource: InitialSize {
+                vcpu: 0.0,
+                mem_mb: 512,
+                orig_toml_default_mem: 0,
+            },
+        };
+
+        mgr.setup_config(&mut config).unwrap();
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.memory_info.default_memory, 640);
     }
 
     #[test]
