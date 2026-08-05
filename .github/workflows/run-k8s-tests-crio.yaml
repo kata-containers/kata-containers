@@ -1,0 +1,128 @@
+# Run Kubernetes integration tests on free GitHub runners with CRI-O
+# as the container runtime and k0s as the Kubernetes distribution.
+name: CI | Run kubernetes tests (CRI-O)
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-crio
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  run-k8s-tests-crio:
+    name: run-k8s-tests-crio
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [
+          { vmm: qemu },
+          { vmm: qemu-runtime-rs }
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-crio-${{ toJSON(matrix) }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HOST_OS: ubuntu
+      KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
+      KUBERNETES: k0s
+      CONTAINER_RUNTIME: crio
+      KUBERNETES_EXTRA_PARAMS: '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"'
+      K8S_TEST_HOST_TYPE: baremetal-no-attestation
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
+
+      - name: Setup CRI-O
+        run: bash tests/integration/kubernetes/gha-run.sh setup-crio
+
+      - name: Deploy k8s (k0s)
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Deploy Kata
+        timeout-minutes: 20
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Run tests
+        timeout-minutes: 60
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Delete kata-deploy
+        if: always()
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
