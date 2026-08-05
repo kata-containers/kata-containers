@@ -3017,6 +3017,7 @@ dependencies = [
  "nix 0.31.3",
  "once_cell",
  "path-clean",
+ "pcilibs-rs",
  "persist",
  "protobuf",
  "protocols",
@@ -5287,8 +5288,7 @@ dependencies = [
 [[package]]
 name = "pcilibs-rs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a881b7e99a9f8a84ce775878838e5ad206e142d2213cc3868efea6bdac24590"
+source = "git+https://github.com/zvonkok/pcilibs-rs?rev=ce6486db#ce6486db79ade33028583a9e81245db5f4de2079"
 dependencies = [
  "nix 0.31.3",
  "pci-ids",
