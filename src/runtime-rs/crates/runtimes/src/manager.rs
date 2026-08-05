@@ -1,5 +1,6 @@
 // Copyright (c) 2019-2022 Alibaba Cloud
 // Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2026 NVIDIA Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -49,7 +50,7 @@ use std::{
     collections::HashMap,
     env,
     ops::Deref,
-    os::unix::fs::{chown, MetadataExt},
+    os::unix::fs::{chown, FileTypeExt, MetadataExt},
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -1054,18 +1055,77 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = build_path("/run/kata-containers/swap");
 
-    let kvm_path = PathBuf::from("/dev/kvm");
-    let metadata = std::fs::metadata(&kvm_path)?;
-    let kvm_gid = metadata.gid();
+    let mut groups = Vec::new();
+    add_rootless_device_group(&mut groups, Path::new("/dev/kvm"))?;
+
+    if config.security_info.confidential_guest && config.security_info.sev_snp_guest {
+        add_rootless_device_group(&mut groups, Path::new("/dev/sev"))?;
+    }
 
     config.security_info.rootless_user = Some(RootlessUser {
         uid,
         gid,
-        groups: vec![kvm_gid],
+        groups,
         user_name,
     });
 
     Ok(guard)
+}
+
+fn add_rootless_device_group(groups: &mut Vec<u32>, path: &Path) -> Result<()> {
+    let metadata = std::fs::metadata(path)
+        .with_context(|| format!("get metadata for rootless device {}", path.display()))?;
+    let group = rootless_device_group(
+        path,
+        metadata.file_type().is_char_device(),
+        metadata.mode(),
+        metadata.gid(),
+    )?;
+
+    if let Some(gid) = group {
+        if !groups.contains(&gid) {
+            groups.push(gid);
+        }
+    }
+
+    Ok(())
+}
+
+fn rootless_device_group(
+    path: &Path,
+    is_char_device: bool,
+    mode: u32,
+    gid: u32,
+) -> Result<Option<u32>> {
+    if !is_char_device {
+        return Err(anyhow!(
+            "rootless QEMU device {} is not a character device",
+            path.display()
+        ));
+    }
+
+    const OTHER_READ_WRITE: u32 = 0o006;
+    if mode & OTHER_READ_WRITE == OTHER_READ_WRITE {
+        return Ok(None);
+    }
+
+    const GROUP_READ_WRITE: u32 = 0o060;
+    if mode & GROUP_READ_WRITE != GROUP_READ_WRITE {
+        return Err(anyhow!(
+            "rootless QEMU requires group read/write access to {} (mode {:04o})",
+            path.display(),
+            mode & 0o7777,
+        ));
+    }
+
+    if gid == 0 {
+        return Err(anyhow!(
+            "rootless QEMU refuses group-root access to {}",
+            path.display()
+        ));
+    }
+
+    Ok(Some(gid))
 }
 
 #[cfg(test)]
@@ -1106,6 +1166,30 @@ mod tests {
         drop(guard);
 
         assert!(runtime_dir.exists());
+    }
+
+    #[rstest]
+    #[case::world_read_write(true, 0o666, 0, None, None)]
+    #[case::group_read_write(true, 0o660, 36, Some(36), None)]
+    #[case::group_is_dedicated(true, 0o660, 987, Some(987), None)]
+    #[case::not_a_character_device(false, 0o666, 36, None, Some("is not a character device"))]
+    #[case::group_read_only(true, 0o640, 36, None, Some("requires group read/write access"))]
+    #[case::group_write_only(true, 0o620, 36, None, Some("requires group read/write access"))]
+    #[case::group_root(true, 0o660, 0, None, Some("refuses group-root access"))]
+    fn test_rootless_device_group(
+        #[case] is_char_device: bool,
+        #[case] mode: u32,
+        #[case] gid: u32,
+        #[case] expected_group: Option<u32>,
+        #[case] expected_error: Option<&str>,
+    ) {
+        let result = rootless_device_group(Path::new("/dev/test"), is_char_device, mode, gid);
+
+        if let Some(expected_error) = expected_error {
+            assert!(result.unwrap_err().to_string().contains(expected_error));
+        } else {
+            assert_eq!(result.unwrap(), expected_group);
+        }
     }
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
