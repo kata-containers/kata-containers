@@ -15,6 +15,7 @@ use crate::{Hypervisor, MemoryConfig};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::config::hypervisor::RootlessUser;
 use persist::sandbox_persist::Persist;
 
 use anyhow::{Context, Result};
@@ -120,6 +121,14 @@ impl Hypervisor for Qemu {
     async fn update_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.update_device(device).await
+    }
+
+    async fn set_rootless_user(&self, user: RootlessUser) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        let mut config = inner.hypervisor_config();
+        config.security_info.rootless_user = Some(user);
+        inner.set_hypervisor_config(config);
+        Ok(())
     }
 
     async fn get_agent_socket(&self) -> Result<String> {
