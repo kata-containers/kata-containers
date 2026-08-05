@@ -60,12 +60,12 @@ fn smmu_groups(addrs: &[&[&str]], socket: u32) -> Vec<GpuSmmuGroup> {
 // ---- Grace Config 1: single GPU, 1 SMMU, 9 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_1_single_gpu() {
     check(
         HostTopology {
             sockets: single_socket(0..4),
             gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+            nic_smmu_groups: vec![],
             egm_sockets: vec![],
             numa_distances: vec![],
             pcie_root_port: 0,
@@ -78,7 +78,6 @@ fn grace_1_single_gpu() {
 // ---- Grace Config 2: 4 GPUs, 1 GPU per SMMU, 33 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_2_four_gpus_1_per_smmu() {
     check(
         HostTopology {
@@ -92,6 +91,7 @@ fn grace_2_four_gpus_1_per_smmu() {
                 ],
                 0,
             ),
+            nic_smmu_groups: vec![],
             egm_sockets: vec![],
             numa_distances: vec![],
             pcie_root_port: 0,
@@ -104,7 +104,6 @@ fn grace_2_four_gpus_1_per_smmu() {
 // ---- Grace Config 3: 4 GPUs, 2 GPUs per SMMU, 33 NUMA nodes ----
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_3_four_gpus_2_per_smmu() {
     check(
         HostTopology {
@@ -116,6 +115,7 @@ fn grace_3_four_gpus_2_per_smmu() {
                 ],
                 0,
             ),
+            nic_smmu_groups: vec![],
             egm_sockets: vec![],
             numa_distances: vec![],
             pcie_root_port: 0,
@@ -126,19 +126,19 @@ fn grace_3_four_gpus_2_per_smmu() {
 }
 
 // ---- Grace Config 4: GPU + NIC passthrough ----
+//
+// GPU on pcie.1, NIC on pcie.2.  NIC uses vfio-pci (not nohotplug) and emits
+// no acpi-generic-initiator links.  NUMA initiator nodes are GPU-only (9 total).
 
 #[test]
-#[ignore = "Phase 4"]
 fn grace_4_gpu_and_nic() {
-    // Placeholder until Phase 4: HostTopology cannot represent NIC passthrough
-    // yet, so this topology covers only the GPU half and the test stays
-    // ignored.  Phase 4 adds nic_smmu_groups and rewrites this body; the
-    // fixture already defines the full expected output (GPU on pcie.1, NIC on
-    // pcie.2 with no acpi-generic-initiator links).
     check(
         HostTopology {
             sockets: single_socket(0..4),
             gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+            nic_smmu_groups: vec![
+                GpuSmmuGroup { pci_bus_addrs: vec!["0008:00:00.0".into()], socket: 0 },
+            ],
             egm_sockets: vec![],
             numa_distances: vec![],
             pcie_root_port: 0,
@@ -159,6 +159,7 @@ fn grace_5_vcmdq() {
     let topo = HostTopology {
         sockets: single_socket(0..4),
         gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
         egm_sockets: vec![],
         numa_distances: vec![],
         pcie_root_port: 0,
@@ -191,6 +192,7 @@ fn grace_6_vegm_1_per_socket() {
                 GpuSmmuGroup { pci_bus_addrs: vec!["0010:06:00.0".into()], socket: 2 },
                 GpuSmmuGroup { pci_bus_addrs: vec!["0011:06:00.0".into()], socket: 3 },
             ],
+            nic_smmu_groups: vec![],
             egm_sockets: vec![
                 EgmSocketInfo { path: "/dev/egm4".into(), socket: 0, total_size: 56896 << 20 },
                 EgmSocketInfo { path: "/dev/egm5".into(), socket: 1, total_size: 56896 << 20 },
@@ -226,6 +228,7 @@ fn grace_7_vegm_2_per_socket() {
                     socket: 1,
                 },
             ],
+            nic_smmu_groups: vec![],
             egm_sockets: vec![
                 EgmSocketInfo { path: "/dev/egm4".into(), socket: 0, total_size: 56896 << 20 },
                 EgmSocketInfo { path: "/dev/egm5".into(), socket: 1, total_size: 56896 << 20 },
@@ -236,6 +239,37 @@ fn grace_7_vegm_2_per_socket() {
         },
         "grace_7_vegm_2_per_socket.args",
     );
+}
+
+// ---- GB300 NVL dry-run: Grace + 2 B200 GPUs, highmem-mmio-size=8T ----
+//
+// GB300 (Grace + Blackwell) requires highmem-mmio-size=8T because B200 BARs
+// exceed the 4T window used by GH200/GB200.  The topology is otherwise identical
+// to Config 3 (2 GPUs per SMMU on a single Grace socket).
+//
+// This fixture is a dry-run: real GB300 BDFs are used as placeholders.
+// `apply_host_defaults` with highmem override drives the GB300-specific machine line.
+
+#[test]
+fn gb300_nvl_2gpu() {
+    let topo = HostTopology {
+        sockets: single_socket(0..4),
+        gpu_smmu_groups: smmu_groups(&[&["0008:06:00.0", "0009:06:00.0"]], 0),
+        nic_smmu_groups: vec![],
+        egm_sockets: vec![],
+        numa_distances: vec![],
+        pcie_root_port: 0,
+        protection: None,
+    };
+    let mut platform = Platform::from_config_defaults("virt", 16 << 30).expect("build");
+    // B200 BARs require 8T highmem window; override the default 4T.
+    if let Machine::Virt(ref mut v) = platform.machine {
+        v.highmem_mmio_size = Some(8 << 40);
+    }
+    platform.apply_host_defaults(&topo);
+    let got = platform.to_qemu_args().expect("to_qemu_args");
+    let want = load_fixture("gb300_nvl_2gpu.args");
+    assert_eq!(want, got);
 }
 
 // ---- Q35 CoCo (SEV-SNP) + single GPU — AMD EPYC host, H100 80GB ----
@@ -608,6 +642,7 @@ fn q35_vanilla_kata_x86() {
             },
         ],
         gpu_smmu_groups: vec![],
+        nic_smmu_groups: vec![],
         egm_sockets: vec![],
         numa_distances: vec![(0, 1, 20), (1, 0, 20)],
         pcie_root_port: 8,
