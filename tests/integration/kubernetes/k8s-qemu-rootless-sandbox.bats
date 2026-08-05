@@ -12,6 +12,25 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
 
+# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
+# by default. Until then, explicitly request a GPU so this test exercises the
+# runtime-rs VFIO file-descriptor path.
+request_gpu_for_nvidia_gpu_runtime_rs() {
+	local available_gpus
+	local config="$1"
+
+	is_runtime_rs || return 0
+	is_nvidia_gpu_platform || return 0
+
+	available_gpus="$(kubectl get node "${node}" \
+		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
+	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
+		die "${node} has no allocatable nvidia.com/pgpu resource"
+
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
+		"${config}"
+}
+
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
 
@@ -59,6 +78,7 @@ setup() {
 		' "${pod_config}"
 	fi
 	set_container_command "${pod_config}" 0 sleep 30
+	request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
