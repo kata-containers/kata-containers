@@ -1,0 +1,112 @@
+name: Build & Publish Kata Shim Overlay (NVSwitch)
+
+on:
+  push:
+    branches:
+      - kubecon-staging
+    paths:
+      - 'src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs'
+      - '.github/workflows/build-shim-overlay.yaml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
+  SHIM_TAG: v4.0.0-nvswitch-fix3
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout kata-containers fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        run: |
+          rustup default 1.88.0
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq musl-tools clang llvm protobuf-compiler libseccomp-dev
+
+      - name: Verify NVSwitch patch is present
+        run: |
+          echo "=== Checking for 0x0680 exception in core.rs ==="
+          grep -n "0x0680" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          echo "=== Current commit ==="
+          git log --oneline -1
+
+      - name: Build containerd-shim-kata-v2
+        working-directory: src/runtime-rs
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl --bin containerd-shim-kata-v2
+          echo "=== Build complete ==="
+          ls -la target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
+          sha256sum target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
+
+      - name: Stage binary for Docker build
+        run: |
+          mkdir -p overlay-image
+          cp src/runtime-rs/target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2 overlay-image/
+
+      - name: Create overlay.sh
+        run: |
+          cat > overlay-image/overlay.sh << 'OVERLAY_EOF'
+          #!/bin/sh
+          set -eu
+          SRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2
+          DST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2
+          MARK=/host/opt/kata/runtime-rs/bin/.nvswitch-fix-applied
+          echo "[overlay] waiting for kata-deploy to install $DST ..."
+          while [ ! -f "$DST" ]; do sleep 5; done
+          echo "[overlay] $DST present"
+          apply() {
+            if cmp -s "$SRC" "$DST"; then
+              echo "[overlay] shim already patched (no-op)"
+            else
+              cp "$SRC" "$DST"
+              chmod 755 "$DST"
+              sha256sum "$SRC" | cut -d' ' -f1 > "$MARK"
+              echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"
+            fi
+          }
+          apply
+          echo "[overlay] entering watch loop (re-apply if kata-deploy re-installs)"
+          while true; do sleep 60; apply; done
+          OVERLAY_EOF
+          chmod 755 overlay-image/overlay.sh
+
+      - name: Create Dockerfile
+        run: |
+          cat > overlay-image/Dockerfile << 'DOCKERFILE_EOF'
+          FROM alpine:3.22
+          COPY containerd-shim-kata-v2 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2
+          COPY overlay.sh /overlay.sh
+          RUN chmod 755 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 /overlay.sh
+          CMD ["/bin/sh", "/overlay.sh"]
+          DOCKERFILE_EOF
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push overlay image
+        run: |
+          docker buildx build --platform linux/amd64 \
+            -f overlay-image/Dockerfile \
+            -t ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} \
+            --push \
+            overlay-image/
+          echo "=== Pushed ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} ==="
+
+      - name: Verify image
+        run: |
+          docker run --rm ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} sha256sum /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 || true
