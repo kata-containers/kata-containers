@@ -779,7 +779,7 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
                 format_memory(*size)
             )
         }
-        MemoryBackend::File { size, path, is_egm: false, host_nodes, policy, .. } => {
+        MemoryBackend::File { size, path, is_egm: false, prealloc, host_nodes, policy, .. } => {
             let mut s =
                 format!("memory-backend-file,id={id},size={},mem-path={path}", format_memory(*size));
             if let Some(hn) = host_nodes {
@@ -787,6 +787,9 @@ fn emit_backend(backend: &MemoryBackend, id: &str) -> String {
             }
             if let Some(pol) = policy {
                 s.push_str(&format!(",policy={pol}"));
+            }
+            if *prealloc {
+                s.push_str(",prealloc=on");
             }
             s.push_str(",share=on");
             s
