@@ -1,13 +1,13 @@
-name: Build & Publish Kata Shim Overlay (NVSwitch)
+name: Build and Publish Kata Shim Overlay NVSwitch
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - kubecon-staging
     paths:
       - 'src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs'
       - '.github/workflows/build-shim-overlay.yaml'
-  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -16,7 +16,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       contents: read
       packages: write
@@ -38,85 +38,34 @@ jobs:
 
       - name: Verify NVSwitch patch is present
         run: |
-          echo "=== Checking for 0x0680 exception in core.rs ==="
+          echo "Checking for 0x0680 exception in core.rs"
           grep -n "0x0680" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
-          echo "=== Current commit ==="
           git log --oneline -1
 
-      - name: Generate config.rs (auto-generated, gitignored)
+      - name: Generate config.rs
         working-directory: src/runtime-rs
         run: |
           COMMIT=$(git rev-parse --short HEAD)
-          cat > crates/shim/src/config.rs << CONFIG_EOF
-// Copyright (c) 2020 Intel Corporation
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-
-//
-// WARNING: This file is auto-generated - DO NOT EDIT!
-//
-
-pub const PROJECT_NAME: &str = "Kata Containers";
-pub const RUNTIME_VERSION: &str = "4.0.0";
-pub const RUNTIME_GIT_COMMIT: &str = "${COMMIT}";
-pub const RUNTIME_NAME: &str = "containerd-shim-kata-v2";
-pub const CONTAINERD_RUNTIME_NAME: &str = "io.containerd.kata.v2";
-pub const RUNTIME_DIR: &str = "/usr/local/bin";
-pub const RUNTIME_PATH: &str = "/usr/local/bin/containerd-shim-kata-v2";
-CONFIG_EOF
-          echo "=== Generated config.rs ==="
+          mkdir -p crates/shim/src
+          printf '// SPDX-License-Identifier: Apache-2.0\n// WARNING: auto-generated\n\npub const PROJECT_NAME: &str = "Kata Containers";\npub const RUNTIME_VERSION: &str = "4.0.0";\npub const RUNTIME_GIT_COMMIT: &str = "%s";\npub const RUNTIME_NAME: &str = "containerd-shim-kata-v2";\npub const CONTAINERD_RUNTIME_NAME: &str = "io.containerd.kata.v2";\npub const RUNTIME_DIR: &str = "/usr/local/bin";\npub const RUNTIME_PATH: &str = "/usr/local/bin/containerd-shim-kata-v2";\n' "$COMMIT" > crates/shim/src/config.rs
           cat crates/shim/src/config.rs
 
       - name: Build containerd-shim-kata-v2
         working-directory: src/runtime-rs
         run: |
           cargo build --release --target x86_64-unknown-linux-musl --bin containerd-shim-kata-v2
-          echo "=== Build complete ==="
           ls -la target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
           sha256sum target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
 
-      - name: Stage binary for Docker build
+      - name: Stage binary and create overlay image
         run: |
           mkdir -p overlay-image
           cp src/runtime-rs/target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2 overlay-image/
 
-      - name: Create overlay.sh
-        run: |
-          cat > overlay-image/overlay.sh << 'OVERLAY_EOF'
-          #!/bin/sh
-          set -eu
-          SRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2
-          DST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2
-          MARK=/host/opt/kata/runtime-rs/bin/.nvswitch-fix-applied
-          echo "[overlay] waiting for kata-deploy to install $DST ..."
-          while [ ! -f "$DST" ]; do sleep 5; done
-          echo "[overlay] $DST present"
-          apply() {
-            if cmp -s "$SRC" "$DST"; then
-              echo "[overlay] shim already patched (no-op)"
-            else
-              cp "$SRC" "$DST"
-              chmod 755 "$DST"
-              sha256sum "$SRC" | cut -d' ' -f1 > "$MARK"
-              echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"
-            fi
-          }
-          apply
-          echo "[overlay] entering watch loop (re-apply if kata-deploy re-installs)"
-          while true; do sleep 60; apply; done
-          OVERLAY_EOF
+          printf '#!/bin/sh\nset -eu\nSRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nDST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nMARK=/host/opt/kata/runtime-rs/bin/.nvswitch-fix-applied\necho "[overlay] waiting for kata-deploy to install $DST ..."\nwhile [ ! -f "$DST" ]; do sleep 5; done\necho "[overlay] $DST present"\napply() {\n  if cmp -s "$SRC" "$DST"; then\n    echo "[overlay] shim already patched (no-op)"\n  else\n    cp "$SRC" "$DST"\n    chmod 755 "$DST"\n    sha256sum "$SRC" | cut -d" " -f1 > "$MARK"\n    echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"\n  fi\n}\napply\necho "[overlay] entering watch loop"\nwhile true; do sleep 60; apply; done\n' > overlay-image/overlay.sh
           chmod 755 overlay-image/overlay.sh
 
-      - name: Create Dockerfile
-        run: |
-          cat > overlay-image/Dockerfile << 'DOCKERFILE_EOF'
-          FROM alpine:3.22
-          COPY containerd-shim-kata-v2 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2
-          COPY overlay.sh /overlay.sh
-          RUN chmod 755 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 /overlay.sh
-          CMD ["/bin/sh", "/overlay.sh"]
-          DOCKERFILE_EOF
+          printf 'FROM alpine:3.22\nCOPY containerd-shim-kata-v2 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nCOPY overlay.sh /overlay.sh\nRUN chmod 755 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 /overlay.sh\nCMD ["/bin/sh", "/overlay.sh"]\n' > overlay-image/Dockerfile
 
       - name: Log in to GHCR
         env:
@@ -130,7 +79,7 @@ CONFIG_EOF
             -t ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} \
             --push \
             overlay-image/
-          echo "=== Pushed ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} ==="
+          echo "Pushed ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG}"
 
       - name: Verify image
         run: |
