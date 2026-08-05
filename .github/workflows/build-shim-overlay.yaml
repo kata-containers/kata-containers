@@ -54,13 +54,16 @@ jobs:
         working-directory: src/runtime-rs
         run: |
           cargo build --release --target x86_64-unknown-linux-musl --bin containerd-shim-kata-v2
-          ls -la target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
-          sha256sum target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
+          BIN=$(find /home/aph5nt/actions-runner-kubetee/_work -name 'containerd-shim-kata-v2' -type f 2>/dev/null | head -1)
+          echo "Binary found at: $BIN"
+          cp "$BIN" ./containerd-shim-kata-v2
+          ls -la ./containerd-shim-kata-v2
+          sha256sum ./containerd-shim-kata-v2
 
       - name: Stage binary and create overlay image
         run: |
           mkdir -p overlay-image
-          cp src/runtime-rs/target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2 overlay-image/
+          cp src/runtime-rs/containerd-shim-kata-v2 overlay-image/
 
           printf '#!/bin/sh\nset -eu\nSRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nDST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nMARK=/host/opt/kata/runtime-rs/bin/.nvswitch-fix-applied\necho "[overlay] waiting for kata-deploy to install $DST ..."\nwhile [ ! -f "$DST" ]; do sleep 5; done\necho "[overlay] $DST present"\napply() {\n  if cmp -s "$SRC" "$DST"; then\n    echo "[overlay] shim already patched (no-op)"\n  else\n    cp "$SRC" "$DST"\n    chmod 755 "$DST"\n    sha256sum "$SRC" | cut -d" " -f1 > "$MARK"\n    echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"\n  fi\n}\napply\necho "[overlay] entering watch loop"\nwhile true; do sleep 60; apply; done\n' > overlay-image/overlay.sh
           chmod 755 overlay-image/overlay.sh
