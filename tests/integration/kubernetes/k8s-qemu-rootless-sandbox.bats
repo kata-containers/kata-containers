@@ -64,11 +64,11 @@ request_gpu_for_nvidia_gpu_runtime_rs() {
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
 
-	# CoCo-dev does not enable a TEE or require TEE device nodes. Keep
-	# actual confidential handlers excluded until rootless QEMU can access
-	# resources such as /dev/sev and /dev/tdx_guest.
+	# CoCo-dev does not enable a TEE and remains covered for both runtimes.
+	# Actual confidential handlers require runtime-rs rootless device access.
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
-		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
+		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]] &&
+		! is_runtime_rs; then
 		return 1
 	fi
 	# Runtime-go does not pass EROFS layers to rootless QEMU by file
@@ -92,10 +92,11 @@ setup() {
 	pod_name="test-e2e"
 	pod_config="$(new_pod_config \
 		"quay.io/prometheus/busybox:latest" \
-		"$(get_test_runtime_class)")"
+		"$(get_test_runtime_class)" \
+		"" "" "10")"
 	set_node "${pod_config}" "${node}"
-	# /dev/loop* remains covered by k8s-block-volume.bats. Init-data will be
-	# covered when confidential RuntimeClasses are enabled for this test.
+	# /dev/loop* remains covered by k8s-block-volume.bats. When policy
+	# generation is enabled, confidential runtime-rs handlers cover init-data.
 	# Do not request a disk-backed emptyDir from runtime-go with shared_fs=none;
 	# only runtime-rs implements the block-source file-descriptor path.
 	if is_runtime_rs || ! is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
