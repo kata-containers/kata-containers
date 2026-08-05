@@ -1,0 +1,175 @@
+// Copyright (c) NVIDIA Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Result;
+use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+
+use super::{
+    probe::HostTopology, pseries::Pseries, q35::Q35, s390x::S390xCcwVirtio, topology::PciTopology,
+    virt::Virt,
+};
+
+pub(crate) struct Platform {
+    pub machine: Machine,
+    pub pci: PciTopology,
+    pub objects: Objects,
+}
+
+pub(crate) enum Machine {
+    Q35(Q35),
+    Virt(Virt),
+    Pseries(Pseries),
+    S390xCcwVirtio(S390xCcwVirtio),
+}
+
+/// Fields common to all machine types.
+pub(crate) struct BaseMachine {
+    pub accel: String,
+    /// ID of the primary memory backend, written as `-machine memory-backend=<id>`.
+    /// `None` for topologies that supply memory per NUMA node via `-numa node,memdev=`
+    /// rather than a single machine-wide backend (e.g. multi-socket vEGM).
+    pub memory_backend: Option<String>,
+    pub cpu: CpuConfig,
+}
+
+/// CPU model selection and additive feature flags.
+///
+/// The model choice is an attestation identity for CoCo guests, not merely a
+/// performance knob.  See ARCHITECTURE.md §"CPU model and attestation identity"
+/// for the full rationale and the issues that drove this split (#12210, #12329,
+/// #12382).
+pub(crate) struct CpuConfig {
+    pub model: CpuModel,
+}
+
+pub(crate) enum CpuModel {
+    /// `-cpu host[,<extra_features>]`
+    ///
+    /// Exposes the full host CPU to the guest.  Correct for vanilla KVM and
+    /// TDX.  Not suitable for SNP: the guest CPUID family/model/stepping
+    /// changes per physical node, so attestation reference values differ
+    /// across a mixed Milan/Genoa/Turin fleet (#12329).
+    Host { extra_features: Vec<String> },
+
+    /// `-cpu EPYC-v4[,<extra_features>]`
+    ///
+    /// Pins the guest CPUID to a fixed AMD model, giving deterministic
+    /// attestation across all AMD nodes in the fleet regardless of actual
+    /// silicon generation.  `extra_features` re-enables the AVX-512 and
+    /// VAES extensions that EPYC-v4 strips by default, recovering ~2x
+    /// AES-GCM throughput without changing the attestation identity (#12382).
+    EpycV4 { extra_features: Vec<String> },
+}
+
+/// AVX-512 and vectorised-AES extensions stripped by EPYC-v4 that should be
+/// re-enabled for SNP guests to recover hardware crypto throughput.
+///
+/// Without these, AES-GCM throughput is ~4 GB/s; with them it returns to
+/// ~8 GB/s, which matters when an H100 GPU is the bottleneck (#12382).
+pub(crate) const SNP_CRYPTO_FEATURES: &[&str] = &[
+    "+vaes",
+    "+vpclmulqdq",
+    "+avx512f",
+    "+avx512dq",
+    "+avx512bw",
+    "+avx512vl",
+    "+avx512cd",
+    "+avx512ifma",
+    "+avx512vbmi",
+    "+avx512vbmi2",
+    "+avx512vnni",
+    "+avx512bitalg",
+    "+avx512-vpopcntdq",
+    "+avx512-bf16",
+];
+
+pub(crate) struct Objects {
+    pub iommufd: Option<IommufdBackend>,
+    pub memory_backends: Vec<MemoryBackend>,
+    pub thread_contexts: Vec<ThreadContext>,
+    pub acpi_links: Vec<AcpiPciNodeLink>,
+    pub rng: Option<ObjectRngRandom>,
+}
+
+pub(crate) struct IommufdBackend {
+    pub id: String,
+}
+
+pub(crate) enum MemoryBackend {
+    Ram {
+        id: String,
+        size: u64,
+    },
+    /// File-backed memory.
+    ///   path = "/dev/hugepages/" -- hugepages-backed guest RAM (vCMDQ)
+    ///   path = "/dev/egmN"      -- per-socket EGM region (vEGM)
+    File {
+        id: String,
+        size: u64,
+        path: String,
+        prealloc: bool,
+        share: bool,
+    },
+}
+
+pub(crate) enum AcpiPciNodeLink {
+    /// Emitted 8x per GPU; the GPU driver uses these to online GPU memory.
+    GenericInitiator {
+        id: String,
+        pci_dev: String,
+        node: u32,
+    },
+    /// Emitted 1x per GPU; links the GPU to the per-socket EGM backend.
+    /// `node` is the CpuMem NUMA node of the socket, not a GPU initiator node.
+    EgmMemory {
+        id: String,
+        pci_dev: String,
+        node: u32,
+    },
+}
+
+pub(crate) struct ThreadContext {
+    pub id: String,
+}
+
+pub(crate) struct ObjectRngRandom {
+    pub id: String,
+    pub filename: String,
+}
+
+impl Platform {
+    pub fn from_config(_config: &HypervisorConfig) -> Result<Self> {
+        todo!("Phase 1")
+    }
+
+    /// Test-only constructor; produces a minimal Virt platform with RAM-backed
+    /// memory. Replaced in Phase 1 by from_config once the builder exists.
+    #[cfg(test)]
+    pub(crate) fn from_config_defaults(_memory_size: u64) -> Result<Self> {
+        todo!("Phase 1")
+    }
+
+    pub fn apply_host_defaults(&mut self, _topo: &HostTopology) {
+        todo!("Phase 4")
+    }
+
+    pub fn with_hugepages(self, _path: &str) -> Self {
+        todo!("Phase 3")
+    }
+
+    /// Emit the complete QEMU command-line argument list.
+    ///
+    /// Emission order:
+    ///   1. iommufd object
+    ///   2. remaining objects (memory backends, thread contexts, rng)
+    ///   3. -machine (picks up memory-backend=)
+    ///   4. CpuMem -numa node entries (cpus= + memdev=)
+    ///   5. GPU initiator -numa node entries (8 per GPU, no cpus/memdev)
+    ///   6. EGM / hotplug -numa node entries (memory-only)
+    ///   7. PciTopology (pxb-pcie, arm-smmuv3, root ports, vfio devices)
+    ///   8. acpi_links (acpi-generic-initiator x8 per GPU, acpi-egm-memory x1 per GPU)
+    pub fn to_qemu_args(&self) -> Result<Vec<String>> {
+        todo!("Phase 2+")
+    }
+}
