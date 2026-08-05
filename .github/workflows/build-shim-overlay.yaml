@@ -43,6 +43,31 @@ jobs:
           echo "=== Current commit ==="
           git log --oneline -1
 
+      - name: Generate config.rs (auto-generated, gitignored)
+        working-directory: src/runtime-rs
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          cat > crates/shim/src/config.rs << CONFIG_EOF
+// Copyright (c) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+//
+// WARNING: This file is auto-generated - DO NOT EDIT!
+//
+
+pub const PROJECT_NAME: &str = "Kata Containers";
+pub const RUNTIME_VERSION: &str = "4.0.0";
+pub const RUNTIME_GIT_COMMIT: &str = "${COMMIT}";
+pub const RUNTIME_NAME: &str = "containerd-shim-kata-v2";
+pub const CONTAINERD_RUNTIME_NAME: &str = "io.containerd.kata.v2";
+pub const RUNTIME_DIR: &str = "/usr/local/bin";
+pub const RUNTIME_PATH: &str = "/usr/local/bin/containerd-shim-kata-v2";
+CONFIG_EOF
+          echo "=== Generated config.rs ==="
+          cat crates/shim/src/config.rs
+
       - name: Build containerd-shim-kata-v2
         working-directory: src/runtime-rs
         run: |
