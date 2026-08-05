@@ -43,6 +43,14 @@ jobs:
       KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        instance:
+          - "ubuntu-22.04"
+          - "ubuntu-24.04-arm"
+          - "ubuntu-24.04-s390x"
+          - "ppc64le"
     uses: ./.github/workflows/build-checks.yaml
     with:
-      instance: ubuntu-22.04
+      instance: ${{ matrix.instance }}

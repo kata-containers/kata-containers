@@ -38,6 +38,16 @@ if os.environ.get("GITHUB_TOKEN"):
     _GH_HEADERS["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
 _GH_API_URL = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}"
 _GH_RUNS_URL = f"{_GH_API_URL}/actions/runs"
+_GH_WEB_URL = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
+_CI_DEVEL_WORKFLOW_PATH = ".github/workflows/ci-devel.yaml"
+_CI_DEVEL_OVERLAPPING_WORKFLOWS = {
+    ".github/workflows/ci-on-push.yaml",
+    ".github/workflows/static-checks-self-hosted.yaml",
+}
+_CI_DEVEL_WORKFLOW_ALIASES = (
+    "Kata Containers CI",
+    "Static checks self-hosted",
+)
 _GH_SUMMARY_URL = (
     f"{os.environ.get('GITHUB_SERVER_URL')}/"
     f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
@@ -59,6 +69,7 @@ class Checker:
     def __init__(self):
         self.latest_commit_sha = os.getenv("COMMIT_HASH")
         self.pr_number = os.getenv("GH_PR_NUMBER")
+        self.ci_devel_run = None
         required_labels = os.getenv("REQUIRED_LABELS")
         if required_labels:
             self.required_labels = set(required_labels.split(";"))
@@ -183,6 +194,14 @@ class Checker:
         failing = []
         running = []
 
+        if self.ci_devel_run:
+            run_id = self.ci_devel_run["id"]
+            run_url = self.ci_devel_run.get(
+                "html_url", f"{_GH_WEB_URL}/actions/runs/{run_id}"
+            )
+            lines.append("## ci-devel run\n")
+            lines.append(f"[Scanned ci-devel run {run_id}]({run_url})\n")
+
         for name, job in self.results.items():
             status = self._job_status(job)
             url = job.get("html_url", "")
@@ -256,25 +275,47 @@ class Checker:
         return self.paginated_fetch(
             url, "jobs", f"get_jobs_for_workflow_run__{run_id}")
 
-    def check_workflow_runs_status(self, attempt):
+    def get_workflow_runs(self, attempt):
+        """Get workflow runs for the commit being checked"""
+        return self.paginated_fetch(
+            _GH_RUNS_URL, "workflow_runs",
+            f"check_workflow_runs_status_{attempt}",
+            {"head_sha": self.latest_commit_sha})
+
+    def should_ignore_workflow_run(self, run):
+        """Whether a regular run overlaps the selected ci-devel run"""
+        return (self.ci_devel_run is not None and
+                run.get("path") in _CI_DEVEL_OVERLAPPING_WORKFLOWS)
+
+    def workflow_names(self, run):
+        """Get workflow names used to match a run's jobs"""
+        if (self.ci_devel_run is not None and
+                run["id"] == self.ci_devel_run["id"]):
+            return _CI_DEVEL_WORKFLOW_ALIASES
+        return (run["name"],)
+
+    def check_workflow_runs_status(self, attempt, workflow_runs=None):
         """
         Checks if all required jobs passed
 
         :returns: 0 - all passing; 1 - any failure; 127 some jobs running
         """
-        workflow_runs = self.paginated_fetch(
-            _GH_RUNS_URL, "workflow_runs",
-            f"check_workflow_runs_status_{attempt}",
-            {"head_sha": self.latest_commit_sha})
+        if workflow_runs is None:
+            workflow_runs = self.get_workflow_runs(attempt)
         for run in workflow_runs:
+            if self.should_ignore_workflow_run(run):
+                print(f"Ignoring overlapping workflow run {run['html_url']}",
+                      file=sys.stderr)
+                continue
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
-                self.record(run["name"], job)
+                for workflow in self.workflow_names(run):
+                    self.record(workflow, job)
         print(self)
         self.write_step_summary()
         return self.status()
 
-    def wait_for_required_tests(self):
+    def wait_for_required_tests(self, workflow_runs=None):
         """
         Wait for all required tests to pass or failfast
 
@@ -283,7 +324,8 @@ class Checker:
         i = 0
         while True:
             i += 1
-            ret = self.check_workflow_runs_status(i)
+            ret = self.check_workflow_runs_status(i, workflow_runs)
+            workflow_runs = None
             if ret == RUNNING:
                 running_jobs = len([name
                                     for name, job in self.results.items()
@@ -293,7 +335,31 @@ class Checker:
                 continue
             return ret
 
-    def check_required_labels(self):
+    def get_pull_request(self):
+        """Get pull request metadata from its issue endpoint"""
+        return self.fetch_json_from_url(
+            f"{_GH_API_URL}/issues/{self.pr_number}",
+            f"get_pull_request__{self.pr_number}")
+
+    def find_ci_devel_run(self, workflow_runs):
+        """Find the latest ci-devel run for the commit being checked"""
+        run = max(
+            (run for run in workflow_runs
+             if run.get("path") == _CI_DEVEL_WORKFLOW_PATH and
+             run.get("event") == "workflow_dispatch" and
+             run.get("head_sha") == self.latest_commit_sha),
+            key=lambda run: run["id"],
+            default=None,
+        )
+        if run is None:
+            print(f"No ci-devel run found for {self.latest_commit_sha}; "
+                  "using regular workflow runs.", file=sys.stderr)
+            return None
+
+        print(f"Using latest ci-devel run {run['html_url']}", file=sys.stderr)
+        return run
+
+    def check_required_labels(self, pull_request=None):
         """
         Check if all expected labels are present
 
@@ -308,14 +374,10 @@ class Checker:
                   f"required-labels-check ({self.required_labels})")
             return True
 
-        response = requests.get(
-            f"{_GH_API_URL}/issues/{self.pr_number}",
-            headers=_GH_HEADERS,
-            timeout=60
-        )
-        response.raise_for_status()
-        labels = set(_["name"] for _ in response.json()["labels"])
-        if self.required_labels.issubset(labels):
+        if pull_request is None:
+            pull_request = self.get_pull_request()
+        labels = set(_["name"] for _ in pull_request["labels"])
+        if self.required_labels.issubset(labels) or self.ci_devel_run:
             return True
         print(f"To run all required tests the PR{self.pr_number} must have "
               f"{', '.join(self.required_labels.difference(labels))} labels "
@@ -330,9 +392,15 @@ class Checker:
         """
         print(f"Gatekeeper for project={os.environ['GITHUB_REPOSITORY']} and "
               f"SHA={self.latest_commit_sha} PR={self.pr_number}")
-        if not self.check_required_labels():
+        pull_request = None
+        workflow_runs = None
+        if self.pr_number:
+            pull_request = self.get_pull_request()
+            workflow_runs = self.get_workflow_runs(1)
+            self.ci_devel_run = self.find_ci_devel_run(workflow_runs)
+        if not self.check_required_labels(pull_request):
             sys.exit(2)
-        sys.exit(self.wait_for_required_tests())
+        sys.exit(self.wait_for_required_tests(workflow_runs))
 
 
 if __name__ == "__main__":
