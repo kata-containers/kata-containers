@@ -6,11 +6,11 @@
 
 use std::{
     collections::HashSet,
-    fs::{metadata, set_permissions, File, OpenOptions, Permissions},
+    fs::{metadata as fs_metadata, set_permissions, File, OpenOptions, Permissions},
     io,
     os::{
         fd::{BorrowedFd, RawFd},
-        unix::fs::{MetadataExt, PermissionsExt},
+        unix::fs::{FileTypeExt, MetadataExt, PermissionsExt},
     },
     path::{Path, PathBuf},
     process::Command,
@@ -153,6 +153,123 @@ where
     Ok(())
 }
 
+// Return the non-root owning group that grants `required_permissions`, or
+// None when the resource's other permissions already grant that access.
+pub fn select_rootless_access_group(
+    path: &Path,
+    mode: u32,
+    gid: u32,
+    required_permissions: u32,
+) -> Result<Option<u32>> {
+    if required_permissions == 0 || required_permissions & !0o7 != 0 {
+        return Err(anyhow!(
+            "invalid rootless VMM permissions {:o} for {}",
+            required_permissions,
+            path.display()
+        ));
+    }
+
+    if mode & required_permissions == required_permissions {
+        return Ok(None);
+    }
+
+    let group_permissions = required_permissions << 3;
+    if mode & group_permissions != group_permissions {
+        return Err(anyhow!(
+            "rootless VMM requires group permissions {:03o} on {} (mode {:04o})",
+            group_permissions,
+            path.display(),
+            mode & 0o7777,
+        ));
+    }
+
+    if gid == 0 {
+        return Err(anyhow!(
+            "rootless VMM refuses group-root access to {}",
+            path.display()
+        ));
+    }
+
+    Ok(Some(gid))
+}
+
+/// Authorize a rootless VMM to access a character device.
+///
+/// Verifies its Unix permissions and adds its non-root owning group to `user`
+/// when that group is required for access.
+pub fn authorize_rootless_device(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless device {}", path.display()))?;
+    if !metadata.file_type().is_char_device() {
+        return Err(anyhow!(
+            "rootless VMM device {} is not a character device",
+            path.display()
+        ));
+    }
+
+    authorize_rootless_resource_access(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        user,
+    )
+}
+
+fn authorize_rootless_resource_access(
+    path: &Path,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    required_permissions: u32,
+    user: &mut RootlessUser,
+) -> Result<()> {
+    if rootless_user_has_permission(user, uid, gid, mode, required_permissions) {
+        return Ok(());
+    }
+
+    if uid == user.uid || gid == user.gid || user.groups.contains(&gid) {
+        return Err(anyhow!(
+            "rootless VMM cannot access {} with required permissions {:o} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+            path.display(),
+            required_permissions,
+            mode & 0o7777,
+        ));
+    }
+
+    if let Some(gid) = select_rootless_access_group(path, mode, gid, required_permissions)? {
+        if !user.groups.contains(&gid) {
+            user.groups.push(gid);
+        }
+    }
+
+    Ok(())
+}
+
+// Evaluate `permission` using Unix owner, group, then other-mode semantics.
+fn rootless_user_has_permission(
+    user: &RootlessUser,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    permission: u32,
+) -> bool {
+    let permission = if uid == user.uid {
+        permission << 6
+    } else if gid == user.gid || user.groups.contains(&gid) {
+        permission << 3
+    } else {
+        permission
+    };
+
+    mode & permission == permission
+}
+
 pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
     let (multi_vq, vq_pairs) = if queues > 1 {
         (true, queues as usize)
@@ -269,7 +386,7 @@ pub fn chown_to_parent<P: AsRef<Path>>(path: P) -> io::Result<()> {
 
 fn first_valid_executable_path(paths: &[&str]) -> Result<String> {
     for p in paths {
-        if let Ok(m) = metadata(p) {
+        if let Ok(m) = fs_metadata(p) {
             if m.is_file() && m.mode() & 0o111 != 0 {
                 return Ok(p.to_string());
             }
@@ -550,7 +667,7 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use nix::unistd::chown;
     use nix::unistd::geteuid;
@@ -568,6 +685,55 @@ mod tests {
     use super::set_process_credentials_with;
     use super::vmm_user_runtime_dir;
     use super::SocketAddress;
+    use super::{authorize_rootless_resource_access, select_rootless_access_group};
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1000,
+            gid: 1000,
+            groups: Vec::new(),
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_select_rootless_access_group() {
+        let path = Path::new("/dev/test");
+
+        assert_eq!(
+            select_rootless_access_group(path, 0o666, 0, 0o6).unwrap(),
+            None
+        );
+        assert_eq!(
+            select_rootless_access_group(path, 0o660, 2000, 0o6).unwrap(),
+            Some(2000)
+        );
+
+        let error = select_rootless_access_group(path, 0o640, 2000, 0o6)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 060"));
+
+        let error = select_rootless_access_group(path, 0o660, 0, 0o6)
+            .expect_err("group root must be rejected");
+        assert!(error.to_string().contains("refuses group-root access"));
+    }
+
+    #[test]
+    fn test_authorize_rootless_resource_access() {
+        let path = Path::new("/run/test.sock");
+        let mut user = rootless_user();
+
+        authorize_rootless_resource_access(path, 0, 2000, 0o660, 0o2, &mut user).unwrap();
+        assert_eq!(user.groups, vec![2000]);
+
+        let error = authorize_rootless_resource_access(path, 0, 2001, 0o640, 0o2, &mut user)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 020"));
+
+        let mut user = rootless_user();
+        authorize_rootless_resource_access(path, 0, 2000, 0o666, 0o2, &mut user).unwrap();
+        assert!(user.groups.is_empty());
+    }
 
     // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
     // variants stand for, so keep it despite clippy::enum_variant_names.
@@ -587,7 +753,7 @@ mod tests {
         SetUid,
     }
 
-    fn rootless_user() -> RootlessUser {
+    fn credential_user() -> RootlessUser {
         RootlessUser {
             uid: 1001,
             gid: 1002,
@@ -601,7 +767,7 @@ mod tests {
     #[case::without_supplementary_groups(Vec::new())]
     fn test_set_process_credentials_order(#[case] groups: Vec<u32>) {
         let operations = RefCell::new(Vec::new());
-        let mut user = rootless_user();
+        let mut user = credential_user();
         user.groups = groups.clone();
 
         set_process_credentials_with(
@@ -650,7 +816,7 @@ mod tests {
     ) {
         let calls = Cell::new(0);
         let result = set_process_credentials_with(
-            &rootless_user(),
+            &credential_user(),
             |_| {
                 calls.set(calls.get() + 1);
                 if failed_step == CredentialStep::SetGroups {
