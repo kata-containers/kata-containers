@@ -250,6 +250,26 @@ EOF
 > pinning. The large `limits.cpu` value tells Kata to create a VM with
 > that many vCPUs distributed across NUMA nodes.
 
+!!! tip "Huge page backed guests"
+
+    Guaranteed QoS needs a `memory` limit, which is awkward on a host that
+    reserves most of its memory as huge pages: the limit is charged against
+    the ordinary memory left behind, so a value anywhere near the guest's
+    size is unschedulable. It does not have to be near it. When the guest
+    runs on huge pages (`enable_hugepages = true`), the memory limit does not
+    size the VM — `default_memory` does, and the pod reserves it as a
+    `hugepages-<size>` resource — so the limit only has to be large enough
+    for what the sandbox uses outside the guest:
+
+    ```yaml
+    resources:
+      requests: { cpu: "80", memory: 2Gi, hugepages-1Gi: 64Gi }
+      limits:   { cpu: "80", memory: 2Gi, hugepages-1Gi: 64Gi }
+    ```
+
+    That pod is Guaranteed, and its guest is the 64Gi of `default_memory`
+    that `hugepages-1Gi` covers.
+
 ### 4.2 GPU passthrough pod with NUMA
 
 For GPU workloads, use the NVIDIA GPU runtime class. NUMA is enabled by
