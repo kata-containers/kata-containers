@@ -72,8 +72,8 @@ jobs:
 
       - name: Log in to GHCR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GH_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u pamanseau --password-stdin
 
       - name: Build and push overlay image
         run: |
