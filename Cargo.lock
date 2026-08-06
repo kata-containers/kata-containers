@@ -1100,6 +1100,7 @@ dependencies = [
  "agent",
  "anyhow",
  "async-trait",
+ "cgroups-rs",
  "containerd-shim-protos",
  "kata-sys-util",
  "kata-types",
@@ -1110,6 +1111,7 @@ dependencies = [
  "resource",
  "runtime-spec",
  "strum 0.24.1",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
 ]
