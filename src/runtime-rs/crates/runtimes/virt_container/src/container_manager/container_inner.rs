@@ -33,6 +33,7 @@ pub struct ContainerInner {
     pub(crate) exec_processes: HashMap<String, Exec>,
     pub(crate) rootfs: Vec<Arc<dyn Rootfs>>,
     pub(crate) volumes: Vec<Arc<dyn Volume>>,
+    pub(crate) devices: Vec<String>, // device ids of devices hotplugged to the container
     pub(crate) linux_resources: Option<LinuxResources>,
 }
 
@@ -50,6 +51,7 @@ impl ContainerInner {
             exec_processes: HashMap::new(),
             rootfs: vec![],
             volumes: vec![],
+            devices: vec![],
             linux_resources,
         }
     }
@@ -212,6 +214,9 @@ impl ContainerInner {
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;
 
+        self.clean_devices(device_manager)
+        .await
+        .context("clean devices")?;
         self.clean_volumes(device_manager)
             .await
             .context("clean volumes")?;
@@ -340,10 +345,12 @@ impl ContainerInner {
                 );
             }
         }
-        if !unhandled.is_empty() {
-            self.volumes = unhandled;
+        self.volumes = unhandled;
+        if self.volumes.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("failed to clean {} volume(s)", self.volumes.len()))
         }
-        Ok(())
     }
 
     async fn clean_rootfs(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
@@ -359,9 +366,38 @@ impl ContainerInner {
                 );
             }
         }
-        if !unhandled.is_empty() {
-            self.rootfs = unhandled;
+        self.rootfs = unhandled;
+        if self.rootfs.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!("failed to clean {} rootfs(s)", self.rootfs.len()))
         }
-        Ok(())
+    }
+
+    async fn clean_devices(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
+        let mut unhandled = Vec::new();
+        for device_id in &self.devices {
+            if let Err(err) = device_manager
+                .write()
+                .await
+                .try_remove_device(device_id)
+                .await
+            {
+                unhandled.push(device_id.clone());
+                warn!(
+                    self.logger,
+                    "failed to hotunplug container device {}: {:?}", device_id, err
+                );
+            }
+        }
+        self.devices = unhandled;
+        if self.devices.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "failed to hotunplug {} container device(s)",
+                self.devices.len()
+            ))
+        }
     }
 }
