@@ -49,31 +49,79 @@ There are a few options for reference:
    3. The CSI plugin can also lookup pod `runtimeclass` during `NodePublish`. This approach can be found in the [ALIBABA CSI plugin](https://github.com/kubernetes-sigs/alibaba-cloud-csi-driver/blob/master/pkg/disk/nodeserver.go#L248).
 2. The CSI node driver delegates the direct assigned volume to the Kata Containers runtime. The CSI node driver APIs need to
    be modified to pass the volume mount information and collect volume information to/from the Kata Containers runtime by invoking `kata-runtime` command line commands.
-   * **`NodePublishVolume`** -- It invokes `kata-runtime direct-volume add --volume-path [volumePath] --mount-info [mountInfo]`
+   * **`NodePublishVolume`** -- It invokes `kata-ctl direct-volume add --volume-path [volumePath] --mount-info [mountInfo]`
    to propagate the volume mount information to the Kata Containers runtime for it to carry out the filesystem mount operation.
    The `volumePath` is the [target_path](https://github.com/container-storage-interface/spec/blob/master/csi.proto#L1364) in the CSI `NodePublishVolumeRequest`.
    The `mountInfo` is a serialized JSON string.
-   * **`NodeGetVolumeStats`** -- It invokes `kata-runtime direct-volume stats --volume-path [volumePath]` to retrieve the filesystem stats of direct-assigned volume.
-   * **`NodeExpandVolume`** -- It invokes `kata-runtime direct-volume resize --volume-path [volumePath] --size [size]` to send a resize request to the Kata Containers runtime to
+   * **`NodeGetVolumeStats`** -- It invokes `kata-ctl direct-volume stats --volume-path [volumePath]` to retrieve the filesystem stats of direct-assigned volume.
+   * **`NodeExpandVolume`** -- It invokes `kata-ctl direct-volume resize --volume-path [volumePath] --size [size]` to send a resize request to Kata Containers to
    resize the direct-assigned volume.
-   * **`NodeStageVolume/NodeUnStageVolume`** -- It invokes `kata-runtime direct-volume remove --volume-path [volumePath]` to remove the persisted metadata of a direct-assigned volume.
+   * **`NodeStageVolume/NodeUnStageVolume`** -- It invokes `kata-ctl direct-volume remove --volume-path [volumePath]` to remove the persisted metadata of a direct-assigned volume.
 
-The `mountInfo` object is defined as follows:
-```Golang
-type MountInfo struct {
-    // The type of the volume (ie. block)
-    VolumeType string `json:"volume-type"`
-    // The device backing the volume.
-    Device string `json:"device"`
-    // The filesystem type to be mounted on the volume.
-    FsType string `json:"fstype"`
-    // Additional metadata to pass to the agent regarding this volume.
-    Metadata map[string]string `json:"metadata,omitempty"`
-    // Additional mount options.
-    Options []string `json:"options,omitempty"`
+The `mountInfo` object consumed by runtime-rs is defined as follows:
+```Rust
+pub struct DirectVolumeMountInfo {
+    pub volume_type: String,
+    pub device: String,
+    pub fs_type: String,
+    pub metadata: HashMap<String, String>,
+    pub options: Vec<String>,
+    pub confidential_storage: Option<ConfidentialStorage>,
+}
+
+pub struct ConfidentialStorage {
+    pub profile: String,
+    pub volume_id: String,
+    pub key_uri: String,
 }
 ```
-Notes: given that the `mountInfo` is persisted to the disk by the Kata runtime, it shouldn't container any secrets (such as SMB mount password).
+Notes: given that the `mountInfo` is persisted to disk by the Kata runtime, it shouldn't contain any secrets (such as an SMB mount password).
+
+Confidential persistent storage uses the typed `confidential-storage` object,
+not driver options or vendor-specific metadata. Its initial fixed profile is:
+
+```json
+{
+  "volume-type": "directvol",
+  "device": "/dev/example",
+  "fstype": "confidential-storage",
+  "confidential-storage": {
+    "profile": "luks2-integrity-ext4",
+    "volume-id": "tenant/workload/volume",
+    "key-uri": "kbs:///tenant/storage/key"
+  }
+}
+```
+
+runtime-rs strictly parses and validates this complete object before attaching
+the device, then transports it to the guest as a dedicated Agent protocol
+message. The Agent authorizes it
+only when the exact profile, volume ID, and key URI tuple appears in the
+versioned `confidential_storage` registry in measured init-data. That registry
+is a JSON string under the init-data `data` table:
+
+```json
+{
+  "version": 1,
+  "volumes": [{
+    "profile": "luks2-integrity-ext4",
+    "volumeId": "tenant/workload/volume",
+    "keyUri": "kbs:///tenant/storage/key"
+  }]
+}
+```
+
+The outer `confidential-storage` fstype is a fail-closed discriminator, not the
+on-disk filesystem. An older runtime or Agent that does not understand the
+typed contract will fail instead of silently mounting a raw ext4 volume. The fixed
+profile asks CDH for persistent, journaled LUKS2 integrity and ext4 activation;
+it cannot be combined with filesystem-creation, ephemeral-encryption, sharing,
+or mount driver options. Its resize contract is deliberately unsupported and
+must fail without mutation until a separate profile defines safe growth.
+
+The KBS URI and stable volume ID are non-secret identifiers. Plaintext key
+material is released to CDH only inside the attested guest and is never included
+in `mountInfo`, Agent protocol fields, or driver options.
 
 ## Implementation Details
 

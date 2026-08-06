@@ -44,6 +44,23 @@ pub const KATA_VOLUME_OVERLAYFS_CREATE_DIR: &str =
 /// Key to request filesystem creation for a fresh block volume.
 pub const KATA_BLOCK_VOLUME_CREATE_FS: &str = "create_filesystem";
 
+/// The runtime-rs direct-volume type used for raw block devices.
+pub const KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE: &str = "directvol";
+
+/// Fail-closed filesystem discriminator for measured confidential storage.
+pub const KATA_CONFIDENTIAL_STORAGE_FS_TYPE: &str = "confidential-storage";
+
+/// Initial fixed measured confidential-storage activation profile.
+pub const KATA_CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4: &str = "luks2-integrity-ext4";
+
+const CONFIDENTIAL_STORAGE_VOLUME_ID_MAX_BYTES: usize = 256;
+const CONFIDENTIAL_STORAGE_KEY_URI_MAX_BYTES: usize = 2048;
+/// Direct-volume metadata key for the filesystem group ID.
+pub const DIRECT_VOLUME_METADATA_FS_GROUP: &str = "fsGroup";
+
+/// Direct-volume metadata key for the filesystem group change policy.
+pub const DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY: &str = "fsGroupChangePolicy";
+
 /// SANDBOX_BIND_MOUNTS_DIR is for sandbox bindmounts
 pub const SANDBOX_BIND_MOUNTS_DIR: &str = "sandbox-mounts";
 
@@ -142,6 +159,153 @@ pub struct DirectVolumeMountInfo {
     /// Additional mount options.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
+    /// Optional measured confidential-storage activation request.
+    #[serde(
+        rename = "confidential-storage",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub confidential_storage: Option<ConfidentialStorage>,
+}
+
+/// Non-secret identifiers for a fixed in-guest confidential-storage profile.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfidentialStorage {
+    /// Fixed activation profile interpreted by the guest agent and CDH.
+    pub profile: String,
+    /// Stable non-secret volume identity authorized by measured init-data.
+    #[serde(rename = "volume-id")]
+    pub volume_id: String,
+    /// Non-secret KBS resource URI resolved only inside the attested guest.
+    #[serde(rename = "key-uri")]
+    pub key_uri: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StrictDirectVolumeMountInfo {
+    #[serde(rename = "volume-type")]
+    volume_type: String,
+    device: String,
+    #[serde(rename = "fstype")]
+    fs_type: String,
+    #[serde(default)]
+    metadata: HashMap<String, String>,
+    #[serde(default)]
+    options: Vec<String>,
+    #[serde(rename = "confidential-storage")]
+    confidential_storage: Option<ConfidentialStorage>,
+}
+
+impl From<StrictDirectVolumeMountInfo> for DirectVolumeMountInfo {
+    fn from(value: StrictDirectVolumeMountInfo) -> Self {
+        Self {
+            volume_type: value.volume_type,
+            device: value.device,
+            fs_type: value.fs_type,
+            metadata: value.metadata,
+            options: value.options,
+            confidential_storage: value.confidential_storage,
+        }
+    }
+}
+
+fn canonical_confidential_volume_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= CONFIDENTIAL_STORAGE_VOLUME_ID_MAX_BYTES
+        && value
+            .split('/')
+            .all(|component| !component.is_empty() && component != "." && component != "..")
+        && value
+            .bytes()
+            .all(|character| character.is_ascii_alphanumeric() || b"-_.:/@".contains(&character))
+}
+
+fn canonical_confidential_key_uri(value: &str) -> bool {
+    value.len() > "kbs:///".len()
+        && value.len() <= CONFIDENTIAL_STORAGE_KEY_URI_MAX_BYTES
+        && value.starts_with("kbs:///")
+        && value.bytes().all(|character| character.is_ascii_graphic())
+}
+
+impl DirectVolumeMountInfo {
+    /// Validate the complete runtime-rs-to-agent confidential-storage request.
+    pub fn validated_confidential_storage(&self) -> Result<Option<&ConfidentialStorage>> {
+        let Some(request) = self.confidential_storage.as_ref() else {
+            return Ok(None);
+        };
+
+        if self.volume_type != KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: volume type must be directvol"
+            ));
+        }
+        if self.fs_type != KATA_CONFIDENTIAL_STORAGE_FS_TYPE {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: filesystem discriminator must be confidential-storage"
+            ));
+        }
+        if !self.options.is_empty() {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: mount options are not supported"
+            ));
+        }
+
+        for (key, value) in &self.metadata {
+            match key.as_str() {
+                DIRECT_VOLUME_METADATA_FS_GROUP => {
+                    let group_id = value.parse::<u32>().map_err(|_| {
+                        anyhow!("invalid confidential storage metadata: invalid fsGroup")
+                    })?;
+                    if group_id == 0 {
+                        return Err(anyhow!(
+                            "invalid confidential storage metadata: invalid fsGroup"
+                        ));
+                    }
+                }
+                DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY
+                    if value == "Always" || value == "OnRootMismatch" => {}
+                DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY => {
+                    return Err(anyhow!(
+                        "invalid confidential storage metadata: invalid fsGroup change policy"
+                    ));
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "invalid confidential storage metadata: unsupported metadata key {key:?}"
+                    ));
+                }
+            }
+        }
+
+        if self
+            .metadata
+            .contains_key(DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY)
+            && !self.metadata.contains_key(DIRECT_VOLUME_METADATA_FS_GROUP)
+        {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: fsGroup change policy requires fsGroup"
+            ));
+        }
+        if request.profile != KATA_CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4 {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: unsupported profile"
+            ));
+        }
+        if !canonical_confidential_volume_id(&request.volume_id) {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: invalid volume ID"
+            ));
+        }
+        if !canonical_confidential_key_uri(&request.key_uri) {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: invalid key URI"
+            ));
+        }
+
+        Ok(Some(request))
+    }
 }
 
 /// Nydus extra options
@@ -527,8 +691,35 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
     let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let mount_info_file = std::fs::read_to_string(mount_info_file_path)?;
-    let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
+    parse_direct_volume_mount_info(&mount_info_file)
+}
 
+/// Parse direct-volume metadata, applying strict validation when the measured
+/// confidential-storage extension is present.
+pub fn parse_direct_volume_mount_info(value: &str) -> Result<DirectVolumeMountInfo> {
+    let json: serde_json::Value = serde_json::from_str(value)?;
+    let has_confidential_storage = json
+        .as_object()
+        .is_some_and(|fields| fields.contains_key("confidential-storage"));
+
+    let mount_info = if has_confidential_storage {
+        if json
+            .get("confidential-storage")
+            .is_some_and(serde_json::Value::is_null)
+        {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: confidential-storage must be an object"
+            ));
+        }
+        let strict: StrictDirectVolumeMountInfo = serde_json::from_value(json).context(
+            "invalid confidential storage metadata: direct-volume object contains an unknown or malformed field",
+        )?;
+        DirectVolumeMountInfo::from(strict)
+    } else {
+        serde_json::from_value(json)?
+    };
+
+    mount_info.validated_confidential_storage()?;
     Ok(mount_info)
 }
 
@@ -536,6 +727,7 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
 /// for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountInfo) -> Result<()> {
+    mount_info.validated_confidential_storage()?;
     let root = kata_direct_volume_root_path();
     // safe_path::scoped_join requires the root to exist; ensure it does before
     // calling join_path (mirrors Go's os.MkdirAll behaviour in AddMountInfo).
@@ -549,6 +741,26 @@ pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountIn
         serde_json::to_string(mount_info).context("failed to serialize DirectVolumeMountInfo")?;
     std::fs::write(&file_path, data)
         .with_context(|| format!("failed to write mount info to {:?}", file_path))?;
+    Ok(())
+}
+
+/// Associate a direct volume with the sandbox that consumes it so `kata-ctl`
+/// can route stats and lifecycle requests to the correct runtime-rs shim.
+#[cfg(feature = "safe-path")]
+pub fn record_direct_volume_sandbox_id(volume_path: &str, sandbox_id: &str) -> Result<()> {
+    if sandbox_id.is_empty() || sandbox_id == "." || sandbox_id == ".." || sandbox_id.contains('/')
+    {
+        return Err(anyhow!("invalid direct-volume sandbox ID"));
+    }
+
+    let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
+    let marker = safe_path::scoped_join(&volume_path, sandbox_id)?;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&marker)
+        .with_context(|| format!("failed to record direct-volume sandbox ID at {marker:?}"))?;
     Ok(())
 }
 
@@ -751,6 +963,100 @@ mod tests {
         assert_eq!(volume.direct_volume, volume2.direct_volume);
     }
 
+    fn confidential_storage_mount_info() -> DirectVolumeMountInfo {
+        DirectVolumeMountInfo {
+            volume_type: KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE.to_string(),
+            device: "/dev/sda".to_string(),
+            fs_type: KATA_CONFIDENTIAL_STORAGE_FS_TYPE.to_string(),
+            metadata: HashMap::new(),
+            options: Vec::new(),
+            confidential_storage: Some(ConfidentialStorage {
+                profile: KATA_CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4.to_string(),
+                volume_id: "tenant/workload/volume".to_string(),
+                key_uri: "kbs:///tenant/storage/key".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn test_validate_confidential_storage() {
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.metadata.insert(
+            DIRECT_VOLUME_METADATA_FS_GROUP.to_string(),
+            "3000".to_string(),
+        );
+        mount_info.metadata.insert(
+            DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY.to_string(),
+            "OnRootMismatch".to_string(),
+        );
+
+        let request = mount_info
+            .validated_confidential_storage()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(request, mount_info.confidential_storage.as_ref().unwrap());
+    }
+
+    #[test]
+    fn test_validate_confidential_storage_rejects_downgrades() {
+        let mut invalid = Vec::new();
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.volume_type = "block".to_string();
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.fs_type = "ext4".to_string();
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.options.push("ro".to_string());
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info
+            .metadata
+            .insert("createFilesystem".to_string(), "true".to_string());
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.confidential_storage.as_mut().unwrap().profile = "unknown".to_string();
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.confidential_storage.as_mut().unwrap().volume_id = "tenant//volume".to_string();
+        invalid.push(mount_info);
+
+        let mut mount_info = confidential_storage_mount_info();
+        mount_info.confidential_storage.as_mut().unwrap().key_uri =
+            "https://example.invalid/key".to_string();
+        invalid.push(mount_info);
+
+        for mount_info in invalid {
+            assert!(mount_info.validated_confidential_storage().is_err());
+        }
+    }
+
+    #[test]
+    fn test_deserialize_confidential_storage_is_strict() {
+        let unknown = r#"{"volume-type":"directvol","device":"/dev/sda","fstype":"confidential-storage","confidential-storage":{"profile":"luks2-integrity-ext4","volume-id":"tenant/workload/volume","key-uri":"kbs:///tenant/storage/key","unexpected":true}}"#;
+        let null = r#"{"volume-type":"directvol","device":"/dev/sda","fstype":"confidential-storage","confidential-storage":null}"#;
+
+        assert!(parse_direct_volume_mount_info(unknown).is_err());
+        assert!(parse_direct_volume_mount_info(null).is_err());
+    }
+
+    #[test]
+    fn test_deserialize_ordinary_direct_volume_remains_extensible() {
+        let ordinary = r#"{"volume-type":"directvol","device":"/dev/sda","fstype":"ext4","future-field":true}"#;
+
+        let mount_info = parse_direct_volume_mount_info(ordinary).unwrap();
+
+        assert!(mount_info.confidential_storage.is_none());
+        assert_eq!(mount_info.fs_type, "ext4");
+    }
+
     #[test]
     fn test_try_from_direct_volume() {
         let mut metadata = HashMap::new();
@@ -761,6 +1067,7 @@ mod tests {
             fs_type: "ext4".to_string(),
             metadata,
             options: vec!["ro".to_string()],
+            confidential_storage: None,
         };
         KataVirtualVolume::try_from(&direct).unwrap_err();
 

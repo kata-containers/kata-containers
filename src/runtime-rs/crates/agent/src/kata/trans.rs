@@ -15,18 +15,18 @@ use crate::{
     types::{
         ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
         AgentDetails, BlkioStats, BlkioStatsEntry, CgroupStats, CheckRequest, CloseStdinRequest,
-        ContainerID, CopyFileRequest, CpuStats, CpuUsage, CreateContainerRequest,
-        CreateSandboxRequest, Device, Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy,
-        GetIPTablesRequest, GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse,
-        HugetlbStats, IPAddress, IPFamily, Interface, Interfaces, KernelModule,
-        MemHotplugByProbeRequest, MemoryData, MemoryStats, MetricsResponse, NetworkStats,
-        OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
-        RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
-        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SharedMount,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-        WriteStreamRequest,
+        ConfidentialStorage, ConfidentialStorageProfile, ContainerID, CopyFileRequest, CpuStats,
+        CpuUsage, CreateContainerRequest, CreateSandboxRequest, Device, Empty, ExecProcessRequest,
+        FSGroup, FSGroupChangePolicy, GetIPTablesRequest, GetIPTablesResponse,
+        GuestDetailsResponse, HealthCheckResponse, HugetlbStats, IPAddress, IPFamily, Interface,
+        Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData, MemoryStats,
+        MetricsResponse, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
+        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest,
+        Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse,
+        SharedMount, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
+        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     GetDiagnosticDataRequest, GetDiagnosticDataResponse, GetGuestDetailsRequest, OomEventResponse,
     SetPolicyRequest, WaitProcessResponse, WriteStreamResponse,
@@ -115,6 +115,24 @@ impl From<Storage> for agent::Storage {
             options: trans_vec(from.options),
             mount_point: from.mount_point,
             shared: from.shared,
+            confidential_storage: from_option(from.confidential_storage),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<ConfidentialStorage> for agent::ConfidentialStorage {
+    fn from(from: ConfidentialStorage) -> Self {
+        let profile = match from.profile {
+            ConfidentialStorageProfile::Luks2IntegrityExt4 => {
+                agent::ConfidentialStorageProfile::Luks2IntegrityExt4
+            }
+        };
+
+        Self {
+            profile: protobuf::EnumOrUnknown::new(profile),
+            volume_id: from.volume_id,
+            key_uri: from.key_uri,
             ..Default::default()
         }
     }

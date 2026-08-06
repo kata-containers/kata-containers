@@ -68,6 +68,7 @@ impl EphemeralVolume {
             options: dir_options,
             mount_point: source.clone(),
             shared: false,
+            confidential_storage: None,
         };
 
         let mut mount = oci::Mount::default();

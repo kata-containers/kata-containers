@@ -243,6 +243,7 @@ fn get_guest_empty_dir_mount_and_storage(
             },
             fs_group,
             shared: settings_empty_dir.shared,
+            confidential_storage: protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         });
     }
@@ -368,6 +369,7 @@ fn get_config_map_mount_and_storage(
             mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
             fs_group: protobuf::MessageField::none(),
             shared: false,
+            confidential_storage: protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         });
     }

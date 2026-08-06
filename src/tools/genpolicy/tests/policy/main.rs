@@ -192,6 +192,105 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_confidential_storage_policy_allowlist() {
+        let rules_path = path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rules.rego");
+        let mut rules = fs::read_to_string(rules_path).expect("rules.rego should open");
+        rules.push_str(
+            r#"
+policy_data := {}
+default ConfidentialStorageTest := false
+ConfidentialStorageTest := allow_storages([], [input], "", "")
+"#,
+        );
+
+        let valid = serde_json::json!({
+            "driver": "blk",
+            "driver_options": [],
+            "fs_group": null,
+            "fstype": "confidential-storage",
+            "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+            "options": [],
+            "source": "00/00",
+            "shared": false,
+            "confidential_storage": {
+                "profile": 1,
+                "volume_id": "tenant/workload/volume",
+                "key_uri": "kbs:///tenant/storage/key"
+            }
+        });
+
+        async fn allowed(rules: &str, storage: &serde_json::Value) -> bool {
+            let mut policy = AgentPolicy::new();
+            policy.set_policy(rules).await.unwrap();
+            policy
+                .allow_request("ConfidentialStorageTest", &storage.to_string())
+                .await
+                .unwrap()
+                .0
+        }
+
+        assert!(allowed(&rules, &valid).await);
+
+        let mut invalid_cases = Vec::new();
+
+        let mut legacy_option = valid.clone();
+        legacy_option["driver_options"] = serde_json::json!(["create_filesystem"]);
+        invalid_cases.push(legacy_option);
+
+        let mut wrong_uri = valid.clone();
+        wrong_uri["confidential_storage"]["key_uri"] =
+            serde_json::json!("https://example.invalid/key");
+        invalid_cases.push(wrong_uri);
+
+        let mut wrong_profile = valid.clone();
+        wrong_profile["confidential_storage"]["profile"] = serde_json::json!(0);
+        invalid_cases.push(wrong_profile);
+
+        let mut wrong_volume_id = valid.clone();
+        wrong_volume_id["confidential_storage"]["volume_id"] = serde_json::json!("tenant//volume");
+        invalid_cases.push(wrong_volume_id);
+
+        let mut absent_contract = valid.clone();
+        absent_contract["confidential_storage"] = serde_json::Value::Null;
+        invalid_cases.push(absent_contract);
+
+        let mut wrong_mount = valid.clone();
+        wrong_mount["mount_point"] = serde_json::json!("/workspace");
+        invalid_cases.push(wrong_mount);
+
+        let mut plain_ext4_downgrade = valid.clone();
+        plain_ext4_downgrade["fstype"] = serde_json::json!("ext4");
+        invalid_cases.push(plain_ext4_downgrade);
+
+        let mut wrong_driver = valid.clone();
+        wrong_driver["driver"] = serde_json::json!("local");
+        invalid_cases.push(wrong_driver);
+
+        let mut wrong_source = valid.clone();
+        wrong_source["source"] = serde_json::json!("/dev/vda");
+        invalid_cases.push(wrong_source);
+
+        let mut extra_mount_option = valid.clone();
+        extra_mount_option["options"] = serde_json::json!(["discard"]);
+        invalid_cases.push(extra_mount_option);
+
+        let mut shared = valid.clone();
+        shared["shared"] = serde_json::json!(true);
+        invalid_cases.push(shared);
+
+        let mut zero_fs_group = valid.clone();
+        zero_fs_group["fs_group"] = serde_json::json!({
+            "group_id": 0,
+            "group_change_policy": 0
+        });
+        invalid_cases.push(zero_fs_group);
+
+        for invalid in invalid_cases {
+            assert!(!allowed(&rules, &invalid).await);
+        }
+    }
+
     fn decode_policy(initdata_anno: &str) -> String {
         let initdata = kata_types::initdata::decode_initdata(initdata_anno)
             .expect("should decode initdata anno");

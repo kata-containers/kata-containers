@@ -35,6 +35,18 @@ pub struct FSGroup {
     pub group_change_policy: FSGroupChangePolicy,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum ConfidentialStorageProfile {
+    Luks2IntegrityExt4,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ConfidentialStorage {
+    pub profile: ConfidentialStorageProfile,
+    pub volume_id: String,
+    pub key_uri: String,
+}
+
 #[derive(PartialEq, Clone, Default)]
 pub struct StringUser {
     pub uid: String,
@@ -61,6 +73,7 @@ pub struct Storage {
     pub options: Vec<String>,
     pub mount_point: String,
     pub shared: bool,
+    pub confidential_storage: Option<ConfidentialStorage>,
 }
 
 #[derive(PartialEq, Clone, Default)]

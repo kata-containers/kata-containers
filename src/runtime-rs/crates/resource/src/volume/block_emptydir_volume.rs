@@ -96,6 +96,7 @@ impl BlockEmptyDirVolume {
                 fs_type: "ext4".to_string(),
                 metadata: block_emptydir_metadata(encrypted, dir_gid),
                 options: block_emptydir_mount_options(discard_unmap),
+                confidential_storage: None,
             };
 
             add_volume_mount_info(&source, &mount_info)
@@ -119,10 +120,16 @@ impl BlockEmptyDirVolume {
             .await
             .context("plug block emptyDir block device")?;
 
-        let (storage, mut mount, device_id) =
-            crate::volume::utils::handle_block_volume(device_info, m, false, sid, "ext4", Some(&[]))
-                .await
-                .context("handle block emptyDir block volume")?;
+        let (storage, mut mount, device_id) = crate::volume::utils::handle_block_volume(
+            device_info,
+            m,
+            false,
+            sid,
+            "ext4",
+            Some(&[]),
+        )
+        .await
+        .context("handle block emptyDir block volume")?;
 
         // genpolicy generates a "bind" type mount for emptyDir volumes; keep
         // the OCI mount type as "bind" so the agent policy allows the request.

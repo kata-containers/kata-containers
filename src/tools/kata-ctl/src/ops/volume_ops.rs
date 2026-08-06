@@ -9,7 +9,7 @@ use anyhow::{anyhow, Ok, Result};
 use futures::executor;
 use hyper::StatusCode;
 use kata_types::mount::{
-    get_volume_mount_info, join_path, kata_direct_volume_root_path, DirectVolumeMountInfo,
+    get_volume_mount_info, join_path, kata_direct_volume_root_path, parse_direct_volume_mount_info,
     KATA_MOUNT_INFO_FILE_NAME,
 };
 use nix;
@@ -109,7 +109,7 @@ pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
     // This behavior of deserializing and serializing comes from
     // https://github.com/kata-containers/kata-containers/blob/cd27ad144e1a111cb606015c5c9671431535e644/src/runtime/pkg/direct-volume/utils.go#L57-L79
     // Assuming that this is for the purpose of validating the json schema.
-    let unserialized_mount_info: DirectVolumeMountInfo = serde_json::from_str(mount_info)?;
+    let unserialized_mount_info = parse_direct_volume_mount_info(mount_info)?;
 
     let mount_info_file_path = mount_info_dir_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let serialized_mount_info = serde_json::to_string(&unserialized_mount_info)?;
@@ -251,6 +251,7 @@ mod tests {
             fs_type: String::from("ext4"),
             metadata: HashMap::new(),
             options: vec![String::from("journal_dev"), String::from("noload")],
+            confidential_storage: None,
         };
         // serialize volumemountinfo into json string
         let mount_info = serde_json::to_string(&actual).unwrap();
