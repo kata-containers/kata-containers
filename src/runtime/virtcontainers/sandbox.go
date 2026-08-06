@@ -3039,12 +3039,19 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 //     other vCPU of the sandbox uses. This requires the sandbox to own
 //     its CPUSet exclusively (Guaranteed pod under the kubelet static
 //     CPU manager policy), otherwise sandboxes would pin to each other's
-//     CPUs, and it requires that CPUSet to hold at least one CPU per
-//     vCPU.
+//     CPUs, and it requires a free CPU to be left in that CPUSet.
 //   - NUMA node affinity, each vCPU thread free to run on any host CPU
-//     of its guest node. This is the fallback whenever 1:1 pinning is
-//     not safe or not possible: the host scheduler balances the threads
-//     within the node instead of several of them time-sharing one CPU.
+//     of its guest node. This is what a vCPU gets when pinning is not
+//     safe (a shared CPUSet) or when the CPUSet has no CPU left for it:
+//     the host scheduler places the thread wherever there is slack
+//     within its node, rather than the runtime forcing it to time-share
+//     one CPU with a vCPU that owns it.
+//
+// The two mix: a CPUSet holding fewer CPUs than the sandbox has vCPUs
+// pins as many vCPU threads as it can and constrains the rest to their
+// node. That is the common shape under static sizing, where the guest
+// boots with default_vcpus on top of the pod's CPU limit while the
+// kubelet reserves only the limit.
 //
 // Both apply to multi-node sandboxes and to right-sized single-node
 // sandboxes alike: when buildNUMATopology()/maybeRightSizeAutoNUMA
@@ -3174,8 +3181,8 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 //
 // exclusiveCPUSet tells whether cpuSetSlice belongs to this sandbox alone.
 // Only then may a vCPU thread be given a host CPU of its own; otherwise,
-// and whenever the CPUs are too few to give each vCPU a distinct one, the
-// threads get their NUMA node's CPUs as an affinity mask instead.
+// and for the vCPUs left over once the CPUs run out, the threads get
+// their NUMA node's CPUs as an affinity mask instead.
 func (s *Sandbox) checkVCPUsPinningNUMA(ctx context.Context, vCPUThreadsMap VcpuThreadIDs, numaNodes []types.GuestNUMANode, cpuSetSlice []int, exclusiveCPUSet bool) error {
 	numVCPUs := uint32(len(vCPUThreadsMap.vcpus))
 	numNodes := uint32(len(numaNodes))
@@ -3216,13 +3223,14 @@ func (s *Sandbox) checkVCPUsPinningNUMA(ctx context.Context, vCPUThreadsMap Vcpu
 		}).Warn("NUMA node HostCPUs do not intersect sandbox CPUSet; its vCPUs lose host NUMA locality")
 	}
 
-	affinities, pinned := numaAffinityPlan(nodeCPUs, vcpusPerNode, cpuSetSlice, exclusiveCPUSet)
-	if !pinned {
+	affinities, dedicated := numaAffinityPlan(nodeCPUs, vcpusPerNode, cpuSetSlice, exclusiveCPUSet)
+	if dedicated < len(affinities) {
 		s.Logger().WithFields(logrus.Fields{
 			"vcpus":            numVCPUs,
+			"dedicated-cpus":   dedicated,
 			"sandbox-cpus":     cpuSetSlice,
 			"exclusive-cpuset": exclusiveCPUSet,
-		}).Info("cannot give every vCPU a host CPU of its own; constraining vCPU threads to their NUMA node instead")
+		}).Info("cannot give every vCPU a host CPU of its own; constraining the remaining vCPU threads to their NUMA node instead")
 	}
 
 	for vcpuIdx, allowedCPUs := range affinities {
@@ -3250,8 +3258,9 @@ func (s *Sandbox) checkVCPUsPinningNUMA(ctx context.Context, vCPUThreadsMap Vcpu
 
 // numaNodeCPUs returns, for each guest NUMA node, the host CPUs of that node
 // the sandbox is allowed to use, that is its HostCPUs intersected with
-// cpuSetSlice. A node whose host CPUs lie entirely outside cpuSetSlice gets
-// the whole cpuset — it has no locality left to preserve — and its index is
+// cpuSetSlice. A node whose host CPUs lie entirely outside cpuSetSlice gets no
+// CPUs at all: it has no locality left to preserve, and the CPUs it could take
+// are all local to some other node, which is to be served first. Its index is
 // returned alongside so the caller can log it.
 func numaNodeCPUs(numaNodes []types.GuestNUMANode, cpuSetSlice []int) ([][]int, []int, error) {
 	cpuSetAll := cpuset.NewCPUSet(cpuSetSlice...)
@@ -3265,7 +3274,6 @@ func numaNodeCPUs(numaNodes []types.GuestNUMANode, cpuSetSlice []int) ([][]int, 
 		}
 		nodeCPUs[i] = hostCPUs.Intersection(cpuSetAll).ToSlice()
 		if len(nodeCPUs[i]) == 0 {
-			nodeCPUs[i] = cpuSetSlice
 			detachedNodes = append(detachedNodes, i)
 		}
 	}
@@ -3278,42 +3286,33 @@ func numaNodeCPUs(numaNodes []types.GuestNUMANode, cpuSetSlice []int) ([][]int, 
 // order, vcpusPerNode[i] of them on node i, the same way the -numa cpus=
 // ranges are built for QEMU.
 //
-// The plan gives every vCPU a host CPU of its own, taken from its node and
-// falling back to the rest of the cpuset once the node runs out, and reports
-// true. When the sandbox does not own the cpuset, or when the cpuset holds
-// fewer usable CPUs than there are vCPUs, no such assignment is safe: every
-// vCPU then gets its node's CPUs as a mask and the plan reports false.
-func numaAffinityPlan(nodeCPUs [][]int, vcpusPerNode []uint32, cpuSetSlice []int, exclusiveCPUSet bool) ([][]int, bool) {
+// A vCPU gets a host CPU of its own for as long as the sandbox owns the cpuset
+// and a CPU is still free, its own node's first and another node's only once
+// every node has served its own vCPUs. The vCPUs left after that get their
+// node's CPUs as a mask: sharing chosen by the host scheduler, which can move
+// such a thread to whichever CPU of the node has slack, rather than the fixed
+// pairing that pinning two vCPUs to one CPU would impose. The plan reports how
+// many vCPUs did get a CPU of their own, zero when the cpuset is shared.
+//
+// A node with no CPUs of its own in the cpuset waits for both: it has nothing
+// to serve its vCPUs from, so they borrow with the rest and fall back to the
+// whole cpuset, the only affinity that means anything to them.
+func numaAffinityPlan(nodeCPUs [][]int, vcpusPerNode []uint32, cpuSetSlice []int, exclusiveCPUSet bool) ([][]int, int) {
 	var numVCPUs uint32
 	for _, n := range vcpusPerNode {
 		numVCPUs += n
 	}
 
-	if exclusiveCPUSet {
-		if pins, ok := assignDistinctCPUs(nodeCPUs, vcpusPerNode, cpuSetSlice); ok {
-			affinities := make([][]int, numVCPUs)
-			for vcpuIdx, cpu := range pins {
-				affinities[vcpuIdx] = []int{cpu}
+	if !exclusiveCPUSet {
+		affinities := make([][]int, 0, numVCPUs)
+		for i := range nodeCPUs {
+			for j := uint32(0); j < vcpusPerNode[i]; j++ {
+				affinities = append(affinities, nodeAffinityMask(nodeCPUs[i], cpuSetSlice))
 			}
-			return affinities, true
 		}
+		return affinities, 0
 	}
 
-	affinities := make([][]int, 0, numVCPUs)
-	for i := range nodeCPUs {
-		for j := uint32(0); j < vcpusPerNode[i]; j++ {
-			affinities = append(affinities, nodeCPUs[i])
-		}
-	}
-	return affinities, false
-}
-
-// assignDistinctCPUs hands each vCPU a host CPU no other vCPU of the sandbox
-// uses, preferring the CPUs of the vCPU's own NUMA node and borrowing from
-// the rest of the cpuset only once its node has none left. It reports false,
-// and no assignment, when the cpuset cannot back every vCPU with a CPU of
-// its own.
-func assignDistinctCPUs(nodeCPUs [][]int, vcpusPerNode []uint32, cpuSetSlice []int) ([]int, bool) {
 	used := make(map[int]bool, len(cpuSetSlice))
 	take := func(candidates []int) (int, bool) {
 		for _, cpu := range candidates {
@@ -3325,20 +3324,49 @@ func assignDistinctCPUs(nodeCPUs [][]int, vcpusPerNode []uint32, cpuSetSlice []i
 		return 0, false
 	}
 
-	var pins []int
+	// Serve every node from its own CPUs first. A node that ran out cannot
+	// be given a CPU of another node yet: that node may still need it for a
+	// vCPU of its own, and a remote pin is worse than a local one for both.
+	type pending struct{ vcpu, node int }
+	var deferred []pending
+	affinities := make([][]int, numVCPUs)
+	dedicated := 0
+	vcpuIdx := 0
 	for i := range nodeCPUs {
 		for j := uint32(0); j < vcpusPerNode[i]; j++ {
-			cpu, ok := take(nodeCPUs[i])
-			if !ok {
-				if cpu, ok = take(cpuSetSlice); !ok {
-					return nil, false
-				}
+			if cpu, ok := take(nodeCPUs[i]); ok {
+				affinities[vcpuIdx] = []int{cpu}
+				dedicated++
+			} else {
+				deferred = append(deferred, pending{vcpu: vcpuIdx, node: i})
 			}
-			pins = append(pins, cpu)
+			vcpuIdx++
 		}
 	}
 
-	return pins, true
+	// What no node claimed is genuine surplus, and a remote CPU of its own
+	// still beats sharing for a vCPU whose node is crowded. Whoever is left
+	// once that runs out keeps its node, where the scheduler can at least
+	// place it on the CPUs its memory is local to.
+	for _, p := range deferred {
+		if cpu, ok := take(cpuSetSlice); ok {
+			affinities[p.vcpu] = []int{cpu}
+			dedicated++
+			continue
+		}
+		affinities[p.vcpu] = nodeAffinityMask(nodeCPUs[p.node], cpuSetSlice)
+	}
+
+	return affinities, dedicated
+}
+
+// nodeAffinityMask returns the CPUs a vCPU thread that got no CPU of its own
+// may run on: its node's, or the whole cpuset when its node has none there.
+func nodeAffinityMask(nodeCPUs []int, cpuSetSlice []int) []int {
+	if len(nodeCPUs) == 0 {
+		return cpuSetSlice
+	}
+	return nodeCPUs
 }
 
 // resetVCPUsPinning cancels current pinning and restores default random vCPU threads scheduling
