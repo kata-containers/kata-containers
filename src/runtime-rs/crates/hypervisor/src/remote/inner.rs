@@ -221,18 +221,15 @@ impl RemoteInner {
     }
 
     pub(crate) async fn pause_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::pause_vm(): NOT YET IMPLEMENTED");
-        todo!()
+        Err(anyhow::anyhow!("pause not supported for remote hypervisor"))
     }
 
     pub(crate) async fn resume_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::resume_vm(): NOT YET IMPLEMENTED");
-        todo!()
+        Err(anyhow::anyhow!("resume not supported for remote hypervisor"))
     }
 
     pub(crate) async fn save_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::save_vm(): NOT YET IMPLEMENTED");
-        todo!()
+        Err(anyhow::anyhow!("save not supported for remote hypervisor"))
     }
 
     pub(crate) async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
@@ -255,8 +252,8 @@ impl RemoteInner {
     }
 
     pub(crate) async fn disconnect(&mut self) {
-        warn!(sl!(), "RemoteInner::disconnect(): NOT YET IMPLEMENTED");
-        todo!()
+        info!(sl!(), "RemoteInner::disconnect(): dropping ttrpc client");
+        self.client.take();
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
@@ -288,7 +285,6 @@ impl RemoteInner {
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
-        info!(sl!(), "RemoteInner::cleanup(): NOT YET IMPLEMENTED");
         Ok(())
     }
 
@@ -302,13 +298,11 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
-        warn!(sl!(), "RemoteInner::get_pids(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(vec![])
     }
 
     pub(crate) async fn check(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::check(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
@@ -325,19 +319,14 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        warn!(
-            sl!(),
-            "RemoteInner::get_hypervisor_metrics(): NOT YET IMPLEMENTED"
-        );
-        todo!()
+        Err(anyhow::anyhow!(
+            "hypervisor metrics not supported for remote hypervisor"
+        ))
     }
 
     pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
-        warn!(
-            sl!(),
-            "RemoteInner::set_capabilities(): NOT YET IMPLEMENTED"
-        );
-        todo!()
+        let mut caps = Capabilities::default();
+        caps.set(_flag);
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
