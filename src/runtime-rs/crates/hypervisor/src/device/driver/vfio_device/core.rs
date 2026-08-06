@@ -390,7 +390,7 @@ fn filter_bridge_device(bdf: &str, ignored: &[u16]) -> Option<u16> {
     // The sysfs `class` attribute is a hex string (e.g. "0x040300"), so it must
     // be parsed base-16. Parsing it as decimal always fails, which previously
     // caused every device to be treated as passthrough-capable.
-    let class_code = parse_class_code_u32(&device_class)? >> 8;
+    let class_code = parse_class_code_u32(&device_class)? >> 8; // drop prog-if byte; yields base+sub class
     let class_u16 = class_code as u16;
     if ignored.contains(&class_u16) {
         Some(class_u16)
@@ -561,26 +561,22 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
         vfio_cdev: cdev.clone(),
     };
 
-    let labels = build_group_labels(&[device_info.clone()]);
+    let labels = build_group_labels(std::slice::from_ref(&device_info));
     let primary = device_info.clone();
 
-    let iommufd_backend = {
-        let iommu_dev = PathBuf::from(DEV_IOMMU);
-        if is_char_dev(&iommu_dev) {
-            cdev.map(|c| VfioIommufdBackend {
-                iommufd_dev: iommu_dev,
-                cdevs: vec![c],
-            })
-        } else {
-            None
-        }
-    };
-
-    let health = if iommufd_backend.is_some() {
-        Health::Healthy
-    } else {
-        Health::Unhealthy
-    };
+    let iommu_dev = PathBuf::from(DEV_IOMMU);
+    if !is_char_dev(&iommu_dev) {
+        return Err(anyhow!(
+            "{} not available; IOMMUFD passthrough requires it",
+            DEV_IOMMU
+        ));
+    }
+    let iommufd_backend =
+        cdev.map(|c| VfioIommufdBackend {
+            iommufd_dev: iommu_dev,
+            cdevs: vec![c],
+        })
+        .ok_or_else(|| anyhow!("no VFIO cdev found for {} (vfio-dev sysfs missing?)", vfio_name))?;
 
     Ok(VfioDevice {
         id: format!("vfio-iommufd-{}", vfio_name),
@@ -588,11 +584,11 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
         bus_mode: VfioBusMode::Pci,
         iommu_group: None,
         iommu_group_id: None,
-        iommufd: iommufd_backend,
+        iommufd: Some(iommufd_backend),
         devices: vec![device_info],
         primary,
         labels,
-        health,
+        health: Health::Healthy,
         ap_devices: Vec::new(),
     })
 }
