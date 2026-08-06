@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::{
     annotations::{
-        cri_containerd::{SANDBOX_NAMESPACE_LABEL_KEY, SANDBOX_NAME_LABEL_KEY},
+        cri_containerd, crio,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
         KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA,
@@ -98,16 +98,18 @@ impl RemoteInner {
         let mut annotations: HashMap<String, String> = HashMap::new();
         let config = &self.config;
         annotations.insert(
-            SANDBOX_NAME_LABEL_KEY.to_string(),
+            cri_containerd::SANDBOX_NAME_LABEL_KEY.to_string(),
             oci_annotations
-                .get(SANDBOX_NAME_LABEL_KEY)
+                .get(cri_containerd::SANDBOX_NAME_LABEL_KEY)
+                .or_else(|| oci_annotations.get(crio::SANDBOX_NAME_LABEL_KEY))
                 .cloned()
                 .unwrap_or_default(),
         );
         annotations.insert(
-            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+            cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
             oci_annotations
-                .get(SANDBOX_NAMESPACE_LABEL_KEY)
+                .get(cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY)
+                .or_else(|| oci_annotations.get(crio::SANDBOX_NAMESPACE_LABEL_KEY))
                 .cloned()
                 .unwrap_or_default(),
         );

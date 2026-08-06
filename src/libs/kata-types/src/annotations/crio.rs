@@ -12,3 +12,5 @@ pub const SANDBOX: &str = "sandbox";
 pub const CONTAINER: &str = "container";
 
 pub const SANDBOX_ID_LABEL_KEY: &str = "io.kubernetes.cri-o.SandboxID";
+pub const SANDBOX_NAME_LABEL_KEY: &str = "io.kubernetes.cri-o.KubeName";
+pub const SANDBOX_NAMESPACE_LABEL_KEY: &str = "io.kubernetes.cri-o.Namespace";
