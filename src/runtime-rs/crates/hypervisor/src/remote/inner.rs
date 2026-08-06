@@ -25,7 +25,7 @@ use protocols::{
     remote_ttrpc_async::HypervisorClient,
 };
 use std::{collections::HashMap, time};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 use ttrpc::context::{self};
 use ttrpc::r#async::Client;
 
@@ -45,7 +45,6 @@ pub struct RemoteInner {
     pub(crate) client: Option<Client>,
 
     exit_notify: Option<mpsc::Sender<i32>>,
-    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl std::fmt::Debug for RemoteInner {
@@ -60,9 +59,7 @@ impl std::fmt::Debug for RemoteInner {
 }
 
 impl RemoteInner {
-    pub fn new() -> Self {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
+    pub fn new(exit_notify: mpsc::Sender<i32>) -> Self {
         Self {
             id: "".to_string(),
             config: HypervisorConfig::default(),
@@ -71,7 +68,6 @@ impl RemoteInner {
             client: None,
 
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -229,16 +225,6 @@ impl RemoteInner {
         todo!()
     }
 
-    pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        info!(sl!(), "Wait Remote VM");
-        let mut waiter = self.exit_waiter.lock().await;
-        if let Some(exitcode) = waiter.0.recv().await {
-            waiter.1 = exitcode;
-        }
-
-        Ok(waiter.1)
-    }
-
     pub(crate) async fn resume_vm(&self) -> Result<()> {
         warn!(sl!(), "RemoteInner::resume_vm(): NOT YET IMPLEMENTED");
         todo!()
@@ -382,7 +368,7 @@ impl RemoteInner {
 #[async_trait]
 impl Persist for RemoteInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     /// Save a state of hypervisor
     async fn save(&self) -> Result<Self::State> {
@@ -397,11 +383,9 @@ impl Persist for RemoteInner {
 
     /// Restore hypervisor
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        exit_notify: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
         Ok(RemoteInner {
             id: hypervisor_state.id,
             config: hypervisor_state.config,
@@ -409,7 +393,6 @@ impl Persist for RemoteInner {
             netns: hypervisor_state.netns,
             client: None,
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }
