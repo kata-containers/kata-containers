@@ -150,9 +150,16 @@ enable_tracing = false
 
 debug_console_enabled = false
 
-# Agent connection dialing timeout value in milliseconds
-# (default: 30000)
-dial_timeout_ms = 30000
+# Overall budget for establishing the agent connection, in milliseconds.
+# The runtime retries until this budget is exhausted.
+# (default: 3000, but 30s is appropriate for remote VMs)
+reconnect_timeout_ms = 30000
+
+# Sleep between individual agent connection retries, in milliseconds.
+# Note: unlike the Go runtime's dial_timeout (which is the overall budget),
+# this is just the inter-retry delay.
+# (default: 10)
+dial_timeout_ms = 100
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
