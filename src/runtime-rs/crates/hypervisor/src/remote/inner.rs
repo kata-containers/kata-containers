@@ -177,19 +177,23 @@ impl RemoteInner {
             .await
             .map_err(|e| anyhow::anyhow!("error creating VM: {e}"))?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
-        self.agent_socket_path = resp.agentSocketPath;
+        if resp.agentSocketPath.is_empty() {
+            return Err(anyhow::anyhow!("CAA did not return agent socket path"));
+        }
+        self.agent_socket_path = resp.agentSocketPath.clone();
         self.netns = netns;
         Ok(())
     }
 
-    pub(crate) async fn start_vm(&mut self, timeout: i32) -> Result<()> {
+    pub(crate) async fn start_vm(&mut self, mut timeout: i32) -> Result<()> {
         info!(sl!(), "Starting REMOTE VM");
 
-        let mut min_timeout = DEFAULT_MIN_TIMEOUT;
-        if self.config.remote_info.hypervisor_timeout > 0 {
-            min_timeout = self.config.remote_info.hypervisor_timeout.min(timeout);
-        }
-        let timeout = min_timeout;
+        let configured_timeout = if self.config.remote_info.hypervisor_timeout > 0 {
+            self.config.remote_info.hypervisor_timeout
+        } else {
+            DEFAULT_MIN_TIMEOUT
+        };
+        timeout = timeout.max(configured_timeout);
 
         let client = self.get_ttrpc_client().await?;
 
