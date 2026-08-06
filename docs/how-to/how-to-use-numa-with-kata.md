@@ -71,7 +71,7 @@ in turn decides how tightly Kata can place the sandbox's vCPU threads:
 | `cpuManagerPolicy` | Sandbox CPUSet | vCPU thread placement |
 |--------------------|----------------|-----------------------|
 | `none` (default) | none — the pod shares the node's CPUs | each vCPU thread is confined to the host CPUs of its guest NUMA node |
-| `static` (Guaranteed pods) | an exclusive set of host CPUs | each vCPU thread is pinned to a host CPU of its own within that set |
+| `static` (Guaranteed pods) | an exclusive set of host CPUs | each vCPU thread is pinned to a host CPU of its own within that set, and any vCPU beyond the set's size is confined to its node |
 
 Either way the guest's vCPUs and memory stay on the right host NUMA node,
 which is what NUMA support is about. What differs is the placement *within*
@@ -271,6 +271,17 @@ EOF
     for both CPU and memory — to be given host CPUs of its own and thus get
     one host CPU per vCPU thread. Under `cpuManagerPolicy: none` no pod gets
     an exclusive CPUSet, so every QoS class ends up with per-node affinity.
+
+!!! note "`default_vcpus` and the pod's CPU limit"
+
+    Static sizing boots the guest with `default_vcpus` *on top of* the pod's
+    `limits.cpu`, while the kubelet reserves only the limit, so the guest
+    always holds a few more vCPUs than the pod holds host CPUs. There is no
+    CPU left for those extra vCPU threads to own, so they are confined to
+    their NUMA node and share its CPUs with the pinned ones. With
+    `default_vcpus = 1`, the pod above runs an 81 vCPU guest on the 80 CPUs
+    it owns: 80 threads with a CPU each, one floating over its node. Raising
+    `limits.cpu` does not change that, as it raises the vCPU count with it.
 
 !!! tip "Huge page backed guests"
 
@@ -635,23 +646,31 @@ started with.
 **Symptom:** The shim logs show:
 
 ```
-cannot give every vCPU a host CPU of its own; constraining vCPU threads to their NUMA node instead
+cannot give every vCPU a host CPU of its own; constraining the remaining vCPU threads to their NUMA node instead
 ```
 
-and each vCPU thread's `Cpus_allowed_list` is a range rather than a single
-CPU.
+and some vCPU threads' `Cpus_allowed_list` is a range rather than a single
+CPU. The `dedicated-cpus` log field says how many threads did get a CPU of
+their own.
 
 **Cause:** Either the sandbox has no exclusive CPUSet (`exclusive-cpuset` is
 `false` in the log fields, meaning `cpuManagerPolicy` is not `static` or the
-pod is not Guaranteed), or its CPUSet holds fewer CPUs than the VM has vCPUs.
-Pinning several vCPU threads to one host CPU would make them time-share it,
-so the runtime keeps them on their node and lets the host scheduler spread
-them.
+pod is not Guaranteed), in which case `dedicated-cpus` is `0`, or its CPUSet
+holds fewer CPUs than the VM has vCPUs, in which case the vCPUs the CPUSet
+can back keep a CPU each and the rest are confined to their node. Pinning
+two vCPU threads to one host CPU would make them time-share it for good, so
+the surplus threads are left to the host scheduler, which can move them to
+whichever CPU of the node has slack.
 
-**Fix:** If you want one host CPU per vCPU, run the pod as Guaranteed QoS
-under `cpuManagerPolicy: static` (see
-[Step 2](#step-2-kubernetes-cpu-manager-policy)) and make sure its
-`limits.cpu` is at least the VM's vCPU count. Otherwise no action is needed —
+**Fix:** For most sandboxes there is nothing to fix. A Guaranteed pod under
+`cpuManagerPolicy: static` is normally short by exactly `default_vcpus`,
+which static sizing adds on top of `limits.cpu` while the kubelet reserves
+only the limit, so `default_vcpus` threads float and the rest are pinned.
+Lowering `default_vcpus` shrinks the overhang but cannot remove it, as `0`
+means one vCPU. If `dedicated-cpus` is far below the vCPU count instead, the
+CPUSet itself is small: check that the pod is Guaranteed with an integer
+`cpu` (see [Step 2](#step-2-kubernetes-cpu-manager-policy)) and that CPU
+manager reservations (`reservedSystemCPUs`) left enough CPUs in the pool.
 NUMA locality is preserved either way.
 
 ### NUMA node lost its host locality
@@ -708,12 +727,13 @@ EOF
   CPU/memory hotplug).
 - The VM needs at least as many vCPUs as NUMA nodes. If fewer vCPUs are
   available, multi-NUMA is silently skipped.
-- One host CPU per vCPU thread requires the pod to hold an exclusive CPUSet
-  with at least one CPU per vCPU, that is Guaranteed QoS under
-  `cpuManagerPolicy: static`. With any other combination the vCPU threads are
-  confined to their host NUMA node and share its CPUs. `static` in turn tends
-  to restrict the CPUSet to a single host NUMA node, so a multi-node guest
-  and per-vCPU pinning rarely come together.
+- One host CPU per vCPU thread requires the pod to hold an exclusive CPUSet,
+  that is Guaranteed QoS under `cpuManagerPolicy: static`. Without one, the
+  vCPU threads are confined to their host NUMA node and share its CPUs; with
+  one that holds fewer CPUs than the guest has vCPUs, the vCPUs it can back
+  get a CPU each and the rest are confined to their node. `static` in turn
+  tends to restrict the CPUSet to a single host NUMA node, so a multi-node
+  guest and per-vCPU pinning rarely come together.
 - Confidential guests (SEV-SNP, TDX) with NUMA require a QEMU patch
   ([accel/kvm: Fix kvm_convert_memory calls crossing memory regions](https://github.com/AMDESE/qemu/commit/6b0eaa20))
   to handle page conversions that span multiple NUMA memory backends.
