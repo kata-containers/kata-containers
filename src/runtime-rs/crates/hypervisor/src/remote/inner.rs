@@ -284,8 +284,11 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_ns_path(&self) -> Result<String> {
-        info!(sl!(), "RemoteInner::get_ns_path()");
-        Ok(self.netns.clone().unwrap_or_default())
+        // There is no local VMM process whose /proc/<pid>/ns we could
+        // point to.  Return the shim's own ns directory so that the
+        // caller's format!("{}/net", path) produces a valid path and
+        // NetnsGuard enters our own namespace (a no-op).
+        Ok(format!("/proc/{}/ns", nix::unistd::getpid()))
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
