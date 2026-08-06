@@ -21,7 +21,7 @@ use dbs_device::resources::DeviceResources;
 use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;
 #[cfg(target_arch = "x86_64")]
-use dbs_interrupt::UserspaceIoapicManager;
+use dbs_interrupt::SplitIrqManager;
 use dbs_interrupt::{InterruptManager, KvmIrqManager};
 use dbs_legacy_devices::ConsoleHandler;
 #[cfg(feature = "dbs-virtio-devices")]
@@ -210,9 +210,9 @@ pub enum DeviceMgrError {
     #[error("unsupported pci device type")]
     InvalidPciDeviceType,
     #[cfg(target_arch = "x86_64")]
-    /// Error from Userspace IOAPIC
-    #[error("Userspace IOAPIC error: {0}")]
-    UserspaceIoapicError(#[source] std::io::Error),
+    /// Error from spit IRQ manager
+    #[error("Split IRQ manager error: {0}")]
+    SplitIrqManagerError(#[source] std::io::Error),
 }
 
 /// Specialized version of `std::result::Result` for device manager operations.
@@ -690,8 +690,8 @@ impl DeviceManager {
         let irq_manager: Arc<Box<dyn InterruptManager>> =
             if shared_info.read().unwrap().split_irqchip() {
                 Arc::new(Box::new(
-                    UserspaceIoapicManager::create_default_ioapic_manager(vm_fd.clone())
-                        .map_err(DeviceMgrError::UserspaceIoapicError)?,
+                    SplitIrqManager::new(vm_fd.clone())
+                        .map_err(DeviceMgrError::SplitIrqManagerError)?,
                 ))
             } else {
                 Arc::new(Box::new(KvmIrqManager::new(vm_fd.clone())))
@@ -795,7 +795,7 @@ impl DeviceManager {
             {
                 legacy_manager = LegacyDeviceManager::create_manager(
                     &mut tx.io_manager,
-                    Some(self.vm_fd.clone()),
+                    self.irq_manager.clone(),
                 );
             }
 

@@ -18,6 +18,7 @@ dbs-interrupt = { workspace = true, features = [
     "kvm-legacy-irq",
     "kvm-msi-irq",
     "split-legacy-irq",
+    "split-msi-irq",
 ] }
 dbs-utils = { workspace = true }
 dbs-address-space = { workspace = true }
