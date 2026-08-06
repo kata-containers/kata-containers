@@ -61,12 +61,17 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 	}
 
 	timeStamp := time.Now()
+	var containerTeardownDone chan struct{}
 
 	if execID == "" {
 		s.mu.Lock()
 		c.status = task.Status_STOPPED
 		c.exit = uint32(ret)
 		c.exitTime = timeStamp
+		if !c.cType.IsSandbox() {
+			containerTeardownDone = make(chan struct{})
+			c.teardownDone = containerTeardownDone
+		}
 
 		// Cancel the sandbox watcher while holding s.mu so we do not race
 		// with watchSandbox()'s own (killed-VMM) teardown path.
@@ -120,6 +125,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 				}
 			})
 		} else {
+			defer close(containerTeardownDone)
 			if _, err = s.sandbox.StopContainer(ctx, c.id, true); err != nil {
 				shimLog.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
