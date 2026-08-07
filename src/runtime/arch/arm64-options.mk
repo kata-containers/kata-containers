@@ -11,6 +11,8 @@ MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
+# QEMU-emulated CCA simulation/testing binary (see configuration-qemu-cca-sim.toml.in)
+QEMUCCASIMCMD := qemu-system-aarch64-cca-experimental
 QEMUFW := AAVMF_CODE.fd
 QEMUFWVOL := AAVMF_VARS.fd
 
