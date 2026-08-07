@@ -47,7 +47,9 @@ use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
-    utils::{get_hvsock_path, uses_native_ccw_bus},
+    utils::{
+        get_hvsock_path, remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
+    },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
@@ -1325,6 +1327,14 @@ impl Sandbox for VirtSandbox {
             inner.cleaned = true;
         }
 
+        let rootless_uid = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .security_info
+            .rootless_user
+            .map(|user| user.uid);
+
         info!(sl!(), "delete hypervisor");
         self.hypervisor
             .cleanup()
@@ -1336,6 +1346,18 @@ impl Sandbox for VirtSandbox {
             .cleanup()
             .await
             .context("resource clean up")?;
+
+        if let Some(uid) = rootless_uid {
+            let path = vmm_user_runtime_dir(uid);
+            if let Err(err) = remove_vmm_user_runtime_dir(uid) {
+                warn!(
+                    sl!(),
+                    "failed to remove rootless runtime directory {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
 
         // TODO: cleanup other sandbox resource
         Ok(())
