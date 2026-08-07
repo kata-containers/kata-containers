@@ -88,10 +88,10 @@ build_and_install_gperf() {
 			gperf_tarball="${cached_tarball}"
 		else
 			echo "ORAS cache download failed, falling back to direct download"
-			curl -sLO "${gperf_tarball_url}"
+			curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 30 --max-time 300 -O "${gperf_tarball_url}"
 		fi
 	else
-		curl -sLO "${gperf_tarball_url}"
+		curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 30 --max-time 300 -O "${gperf_tarball_url}"
 	fi
 
 	tar -xf "${gperf_tarball}"
@@ -108,7 +108,7 @@ build_and_install_gperf() {
 build_and_install_libseccomp() {
 	echo "Build and install libseccomp version ${libseccomp_version}"
 	mkdir -p "${libseccomp_install_dir}"
-	curl -sLO "${libseccomp_tarball_url}"
+	curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 30 --max-time 300 -O "${libseccomp_tarball_url}"
 	tar -xf "${libseccomp_tarball}"
 	pushd "libseccomp-${libseccomp_version}"
 	./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static
