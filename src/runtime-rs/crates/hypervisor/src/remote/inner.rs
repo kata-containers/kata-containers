@@ -218,9 +218,13 @@ impl RemoteInner {
             id: self.id.clone(),
             ..Default::default()
         };
-        let _resp = client.stop_vm(ctx, &req).await?;
+        if let Err(e) = client.stop_vm(ctx, &req).await {
+            warn!(sl!(), "StopVM RPC failed (VM may already be gone): {}", e);
+        }
 
-        self.exit_notify.take().unwrap().send(1).await?;
+        if let Some(sender) = self.exit_notify.take() {
+            let _ = sender.send(1).await;
+        }
         Ok(())
     }
 
