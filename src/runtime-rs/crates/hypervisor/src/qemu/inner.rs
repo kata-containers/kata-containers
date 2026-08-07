@@ -35,6 +35,8 @@ use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -108,6 +110,12 @@ impl QemuInner {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
 
+        // Ensure the runtime directory exists before QMP binds its socket. In
+        // rootless mode, it is below the temporary VMM user's runtime directory.
+        let jailer_root = self.get_jailer_root().await?;
+
+        check_bpf_enabled(self.config.security_info.seccomp_sandbox.as_deref());
+
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
         // open until spawn() is called to launch qemu later in this function,
         // 'cmdline' has to live at least until spawn() is called
@@ -136,6 +144,8 @@ impl QemuInner {
                     let (
                         device_id,
                         path_on_host,
+                        format,
+                        vmdk,
                         is_direct,
                         is_readonly,
                         discard_unmap,
@@ -148,6 +158,8 @@ impl QemuInner {
                         (
                             device_id,
                             cfg.path_on_host.clone(),
+                            cfg.format.clone(),
+                            cfg.vmdk.clone(),
                             cfg.is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                             cfg.is_readonly,
@@ -163,10 +175,7 @@ impl QemuInner {
                         continue;
                     }
                     match driver_option.as_str() {
-                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
-                            &path_on_host,
-                            is_readonly,
-                        )?,
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(&path_on_host, is_readonly)?,
                         KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
                             let serial = if serial_override.is_empty() {
                                 None
@@ -176,7 +185,10 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
+                                &format,
+                                vmdk.as_ref(),
                                 is_direct,
+                                is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                                 discard_unmap,
                                 serial,
@@ -361,12 +373,16 @@ impl QemuInner {
         //cmdline.add_serial_console("/dev/pts/23");
 
         // Add a console to the devices of the cmdline
-        let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
+        let console_socket_path = Path::new(&jailer_root).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
-        info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
+        let qemu_args = cmdline.build().await?;
+        info!(sl!(), "qemu args: {}", qemu_args.join(" "));
         let mut command = Command::new(&self.config.path);
-        command.args(cmdline.build().await?);
+        command.args(qemu_args);
+        let ccw_subchannel = cmdline.take_ccw_subchannel();
+        let block_fdsets = cmdline.take_block_fdsets();
+        let has_memory_hotplug_region = cmdline.has_memory_hotplug_region();
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
@@ -402,13 +418,8 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
-                    let groups = user.groups.clone();
-                    let gid = Gid::from_raw(user.gid);
-                    let uid = Uid::from_raw(user.uid);
-
-                    let _ = set_groups(&groups);
-                    let _ = setgid(gid).context("setgid failed");
-                    let _ = setuid(uid).context("setuid failed");
+                    set_process_credentials(user)
+                        .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
 
                 Ok(())
@@ -416,6 +427,9 @@ impl QemuInner {
         }
 
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
+        // QEMU inherited its startup descriptors during spawn. Drop the
+        // privileged shim's copies immediately; QEMU owns the fdsets from here.
+        drop(cmdline);
         let stderr = qemu_process.stderr.take().unwrap();
         self.qemu_process = Mutex::new(Some(qemu_process));
 
@@ -432,9 +446,10 @@ impl QemuInner {
 
         match Qmp::new(&qmp_socket_path) {
             Ok(mut qmp) => {
-                if let Some(subchannel) = cmdline.take_ccw_subchannel() {
+                if let Some(subchannel) = ccw_subchannel {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                qmp.verify_block_fdsets(block_fdsets)?;
                 // Setup virtio-mem device if enabled.  It requires a memory
                 // hotplug region (maxmem) on the QEMU command line; that region
                 // is not reserved for every configuration (e.g. on s390x the
@@ -445,7 +460,7 @@ impl QemuInner {
                 // boot memory -- instead of failing VM start with
                 // "the configuration is not prepared for memory devices".
                 if self.config.memory_info.enable_virtio_mem {
-                    if cmdline.has_memory_hotplug_region() {
+                    if has_memory_hotplug_region {
                         qmp.setup_virtio_mem(
                             self.config.memory_info.default_memory,
                             self.config.memory_info.default_maxmemory,
@@ -946,6 +961,80 @@ impl QemuInner {
     }
 }
 
+const BPF_JIT_ENABLE_PATH: &str = "/proc/sys/net/core/bpf_jit_enable";
+
+fn check_bpf_enabled(seccomp_sandbox: Option<&str>) {
+    check_bpf_enabled_with(
+        seccomp_sandbox,
+        || fs::read_to_string(BPF_JIT_ENABLE_PATH),
+        |message| warn!(sl!(), "{}", message),
+    );
+}
+
+fn check_bpf_enabled_with<ReadStatus, LogWarning>(
+    seccomp_sandbox: Option<&str>,
+    read_status: ReadStatus,
+    mut log_warning: LogWarning,
+) where
+    ReadStatus: FnOnce() -> io::Result<String>,
+    LogWarning: FnMut(String),
+{
+    if seccomp_sandbox.unwrap_or_default().is_empty() {
+        return;
+    }
+
+    let status = match read_status() {
+        Ok(status) => status,
+        Err(err) => {
+            log_warning(format!("failed to get bpf_jit_enable status: {err}"));
+            return;
+        }
+    };
+
+    let enabled = match status.trim().parse::<i32>() {
+        Ok(enabled) => enabled,
+        Err(err) => {
+            log_warning(format!(
+                "failed to convert bpf_jit_enable status to integer: {err}"
+            ));
+            return;
+        }
+    };
+
+    if enabled == 0 {
+        log_warning(
+            "bpf_jit_enable is disabled. It's recommended to turn on bpf_jit_enable to reduce the performance impact of QEMU seccomp sandbox."
+                .to_string(),
+        );
+    }
+}
+
+fn set_process_credentials(user: &RootlessUser) -> Result<()> {
+    set_process_credentials_with(
+        user,
+        set_groups,
+        |gid| setgid(Gid::from_raw(gid)).map_err(anyhow::Error::from),
+        |uid| setuid(Uid::from_raw(uid)).map_err(anyhow::Error::from),
+    )
+}
+
+fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
+    user: &RootlessUser,
+    set_groups_fn: SetGroups,
+    set_gid_fn: SetGid,
+    set_uid_fn: SetUid,
+) -> Result<()>
+where
+    SetGroups: Fn(&[u32]) -> Result<()>,
+    SetGid: Fn(u32) -> Result<()>,
+    SetUid: Fn(u32) -> Result<()>,
+{
+    set_groups_fn(&user.groups).context("setgroups failed")?;
+    set_gid_fn(user.gid).context("setgid failed")?;
+    set_uid_fn(user.uid).context("setuid failed")?;
+    Ok(())
+}
+
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
     info!(sl!(), "starting reading qemu console");
 
@@ -1116,6 +1205,7 @@ impl QemuInner {
                     is_readonly,
                     no_drop,
                     block_format,
+                    vmdk,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1133,6 +1223,7 @@ impl QemuInner {
                         cfg.is_readonly,
                         cfg.no_drop,
                         cfg.format.clone(),
+                        cfg.vmdk.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
@@ -1170,6 +1261,7 @@ impl QemuInner {
                         logical_sector_size,
                         physical_sector_size,
                         &block_format,
+                        vmdk.as_ref(),
                         iothread,
                     )
                     .context("hotplug block device")?;
@@ -1332,5 +1424,219 @@ impl Persist for QemuInner {
 
             exit_notify: Some(exit_notify),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{Cell, RefCell};
+
+    use super::*;
+
+    #[test]
+    fn test_bpf_jit_check_warnings() {
+        struct TestCase {
+            name: &'static str,
+            seccomp_sandbox: Option<&'static str>,
+            read_result: Result<&'static str, io::ErrorKind>,
+            expect_read: bool,
+            expected_warning: Option<&'static str>,
+        }
+
+        let cases = [
+            TestCase {
+                name: "seccomp sandbox unset",
+                seccomp_sandbox: None,
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: false,
+                expected_warning: None,
+            },
+            TestCase {
+                name: "seccomp sandbox empty",
+                seccomp_sandbox: Some(""),
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: false,
+                expected_warning: None,
+            },
+            TestCase {
+                name: "read failure",
+                seccomp_sandbox: Some("on"),
+                read_result: Err(io::ErrorKind::NotFound),
+                expect_read: true,
+                expected_warning: Some("failed to get bpf_jit_enable status"),
+            },
+            TestCase {
+                name: "parse failure",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("invalid"),
+                expect_read: true,
+                expected_warning: Some("failed to convert bpf_jit_enable status to integer"),
+            },
+            TestCase {
+                name: "disabled",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("0\n"),
+                expect_read: true,
+                expected_warning: Some("bpf_jit_enable is disabled"),
+            },
+            TestCase {
+                name: "enabled",
+                seccomp_sandbox: Some("on"),
+                read_result: Ok("1\n"),
+                expect_read: true,
+                expected_warning: None,
+            },
+        ];
+
+        for case in cases {
+            let TestCase {
+                name,
+                seccomp_sandbox,
+                read_result,
+                expect_read,
+                expected_warning,
+            } = case;
+            let read_called = Cell::new(false);
+            let warnings = RefCell::new(Vec::new());
+            check_bpf_enabled_with(
+                seccomp_sandbox,
+                || {
+                    read_called.set(true);
+                    read_result
+                        .map(str::to_owned)
+                        .map_err(|kind| io::Error::new(kind, "injected"))
+                },
+                |warning| warnings.borrow_mut().push(warning),
+            );
+
+            assert_eq!(read_called.get(), expect_read, "{}", name);
+
+            let warnings = warnings.borrow();
+            match expected_warning {
+                Some(expected) => {
+                    assert_eq!(warnings.len(), 1, "{}", name);
+                    assert!(warnings[0].contains(expected), "{}", name);
+                }
+                None => assert!(warnings.is_empty(), "{}", name),
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum CredentialOperation {
+        SetGroups(Vec<u32>),
+        SetGid(u32),
+        SetUid(u32),
+    }
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1001,
+            gid: 1002,
+            groups: vec![1003, 1004],
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_set_process_credentials_order() {
+        let operations = RefCell::new(Vec::new());
+
+        set_process_credentials_with(
+            &rootless_user(),
+            |groups| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGroups(groups.to_vec()));
+                Ok(())
+            },
+            |gid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGid(gid));
+                Ok(())
+            },
+            |uid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetUid(uid));
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            *operations.borrow(),
+            vec![
+                CredentialOperation::SetGroups(vec![1003, 1004]),
+                CredentialOperation::SetGid(1002),
+                CredentialOperation::SetUid(1001),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_set_process_credentials_stops_on_error() {
+        for (failed_operation, expected_error) in [
+            (0, "setgroups failed"),
+            (1, "setgid failed"),
+            (2, "setuid failed"),
+        ] {
+            let calls = RefCell::new(0);
+            let result = set_process_credentials_with(
+                &rootless_user(),
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 0 {
+                        Err(anyhow!("injected setgroups failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 1 {
+                        Err(anyhow!("injected setgid failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                |_| {
+                    *calls.borrow_mut() += 1;
+                    if failed_operation == 2 {
+                        Err(anyhow!("injected setuid failure"))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+
+            let error = result.expect_err("credential failure must abort setup");
+            assert!(format!("{error:#}").contains(expected_error));
+            assert_eq!(*calls.borrow(), failed_operation + 1);
+        }
+    }
+
+    #[test]
+    fn test_set_process_credentials_replaces_empty_groups() {
+        let user = RootlessUser {
+            groups: Vec::new(),
+            ..rootless_user()
+        };
+        let setgroups_called = RefCell::new(false);
+
+        set_process_credentials_with(
+            &user,
+            |groups| {
+                *setgroups_called.borrow_mut() = true;
+                assert!(groups.is_empty());
+                Ok(())
+            },
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .unwrap();
+
+        assert!(*setgroups_called.borrow());
     }
 }

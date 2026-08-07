@@ -33,8 +33,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::kata_guest_share_dir;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig, DEFAULT_KATA_GUEST_SHARE_DIR};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
     mount,
@@ -334,8 +333,8 @@ impl VolumeManager {
         }
 
         // Create a new volume state
-        let guest_path =
-            generate_guest_path(container_id, mount_destination).context("generate path failed")?;
+        let guest_path = generate_copy_file_guest_path(container_id, mount_destination)
+            .context("generate path failed")?;
 
         let mut containers = HashSet::new();
         containers.insert(container_id.to_string());
@@ -459,7 +458,7 @@ impl ShareFsVolume {
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
                     // Generate guest path
-                    let guest_path = generate_guest_path(cid, m.destination())
+                    let guest_path = generate_copy_file_guest_path(cid, m.destination())
                         .context("generate path failed")?;
                     // Copy a single file
                     Self::copy_file_to_guest(&src, &guest_path, &agent)
@@ -966,8 +965,12 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
         || is_configmap(source_path)
 }
 
-/// Generates a guest path related to mount dest
-fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
+/// Generates a destination for an agent CopyFile request.
+///
+/// CopyFile writes into the guest filesystem and confines destinations to the
+/// fixed guest shared directory. Unlike filesystem-sharing paths, this guest
+/// path must not be adjusted when rootless mode is enabled.
+fn generate_copy_file_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
     let mut data = vec![0u8; 8];
     let mut rng = rng(); // Get a thread-local RNG
     rng.fill_bytes(&mut data);
@@ -980,10 +983,7 @@ fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
 
     Ok(format!(
         "{}{}-{}-{}",
-        kata_guest_share_dir(),
-        cid,
-        hex_str,
-        dest_base
+        DEFAULT_KATA_GUEST_SHARE_DIR, cid, hex_str, dest_base
     ))
 }
 
@@ -1034,5 +1034,14 @@ mod test {
         assert!(is_watchable_volume(&secret_path));
         assert!(is_watchable_volume(&projected_path));
         assert!(is_watchable_volume(&downward_api_path));
+    }
+
+    #[test]
+    fn test_generate_copy_file_guest_path() {
+        let path =
+            generate_copy_file_guest_path("sandbox-id", Path::new("/etc/resolv.conf")).unwrap();
+
+        assert!(path.starts_with(&format!("{DEFAULT_KATA_GUEST_SHARE_DIR}sandbox-id-")));
+        assert!(path.ends_with("-resolv.conf"));
     }
 }
