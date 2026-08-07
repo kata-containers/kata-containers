@@ -1,4 +1,4 @@
-name: Build and Publish Kata Shim Overlay NVSwitch
+name: Build and Publish Kata Shim Overlay
 
 on:
   workflow_dispatch:
@@ -15,10 +15,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
-  # fix6: replace local 0x0680 bitmask exception with upstream exact-class
-  # IOMMU filter + IOMMUFD single-device discover (410d12fe8 / 2c1c961bb,
-  # kata-containers#13430). Keeps fix5 QEMU reap (#13564).
-  SHIM_TAG: v4.0.0-nvswitch-fix6
 
 jobs:
   build-and-push:
@@ -26,11 +22,26 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # QEMU reap only (#13564 fix5). Tree after local 0x0680 revert, before
+          # upstream NVSwitch IOMMU cherry-picks. Deploy on Blackwell (gpu.family).
+          - shim_tag: v4.0.0-qemu-reap-fix5
+            checkout_ref: cf449bac1c719e3b22c745bc7e9e1299db114bac
+            variant: qemu-reap
+          # QEMU reap + upstream NVSwitch IOMMU (fix6). HEAD of kubecon-staging.
+          # Deploy on Hopper (gpu.family) only.
+          - shim_tag: v4.0.0-nvswitch-fix6
+            checkout_ref: ''
+            variant: nvswitch
     steps:
       - name: Checkout kata-containers fork
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ matrix.checkout_ref != '' && matrix.checkout_ref || github.sha }}
 
       - name: Install Rust toolchain
         run: |
@@ -44,17 +55,34 @@ jobs:
 
       - name: Verify patches are present
         run: |
-          echo "Checking for upstream IOMMU_IGNORE_CLASSES (exact match, NVSwitch absent)"
-          grep -n "IOMMU_IGNORE_CLASSES" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
-          grep -n "intentionally absent" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
-          # Must NOT still use the old bitmask exception path
+          set -eu
+          VARIANT="${{ matrix.variant }}"
+          echo "variant=$VARIANT commit=$(git rev-parse --short HEAD)"
+          git log --oneline -1
+
+          echo "Checking for zombie QEMU fix in inner.rs"
+          grep -n "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs | head -5
+          if ! grep -q "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs; then
+            echo "ERROR: fix5 stop_vm reap missing from inner.rs" >&2
+            exit 1
+          fi
+          # Must NOT still use the old bitmask exception path in either variant
           if grep -n 'if class_code == 0x0680' src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs; then
             echo "ERROR: old 0x0680 exception still present" >&2
             exit 1
           fi
-          echo "Checking for zombie QEMU fix in inner.rs"
-          grep -n "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs | head -5
-          git log --oneline -1
+
+          if [ "$VARIANT" = "nvswitch" ]; then
+            echo "Checking for upstream IOMMU_IGNORE_CLASSES (exact match, NVSwitch absent)"
+            grep -n "IOMMU_IGNORE_CLASSES" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+            grep -n "intentionally absent" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          else
+            echo "qemu-reap: upstream NVSwitch path must NOT be present"
+            if grep -n "IOMMU_IGNORE_CLASSES" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs; then
+              echo "ERROR: IOMMU_IGNORE_CLASSES present in qemu-reap tree" >&2
+              exit 1
+            fi
+          fi
 
       - name: Generate config.rs
         working-directory: src/runtime-rs
@@ -79,7 +107,8 @@ jobs:
           mkdir -p overlay-image
           cp src/runtime-rs/containerd-shim-kata-v2 overlay-image/
 
-          printf '#!/bin/sh\nset -eu\nSRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nDST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nMARK=/host/opt/kata/runtime-rs/bin/.nvswitch-fix-applied\necho "[overlay] waiting for kata-deploy to install $DST ..."\nwhile [ ! -f "$DST" ]; do sleep 5; done\necho "[overlay] $DST present"\napply() {\n  if cmp -s "$SRC" "$DST"; then\n    echo "[overlay] shim already patched (no-op)"\n  else\n    cp "$SRC" "$DST"\n    chmod 755 "$DST"\n    sha256sum "$SRC" | cut -d" " -f1 > "$MARK"\n    echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"\n  fi\n}\napply\necho "[overlay] entering watch loop"\nwhile true; do sleep 60; apply; done\n' > overlay-image/overlay.sh
+          MARK_NAME=".shim-overlay-${{ matrix.variant }}-applied"
+          printf '#!/bin/sh\nset -eu\nSRC=/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nDST=/host/opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nMARK=/host/opt/kata/runtime-rs/bin/%s\necho "[overlay] variant=%s waiting for kata-deploy to install $DST ..."\nwhile [ ! -f "$DST" ]; do sleep 5; done\necho "[overlay] $DST present"\napply() {\n  if cmp -s "$SRC" "$DST"; then\n    echo "[overlay] shim already patched (no-op)"\n  else\n    cp "$SRC" "$DST"\n    chmod 755 "$DST"\n    sha256sum "$SRC" | cut -d" " -f1 > "$MARK"\n    echo "[overlay] patched shim applied: $(cut -c1-16 < "$MARK")"\n  fi\n}\napply\necho "[overlay] entering watch loop"\nwhile true; do sleep 60; apply; done\n' "$MARK_NAME" "${{ matrix.variant }}" > overlay-image/overlay.sh
           chmod 755 overlay-image/overlay.sh
 
           printf 'FROM alpine:3.22\nCOPY containerd-shim-kata-v2 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2\nCOPY overlay.sh /overlay.sh\nRUN chmod 755 /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 /overlay.sh\nCMD ["/bin/sh", "/overlay.sh"]\n' > overlay-image/Dockerfile
@@ -93,11 +122,11 @@ jobs:
         run: |
           docker buildx build --platform linux/amd64 \
             -f overlay-image/Dockerfile \
-            -t ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} \
+            -t ${REGISTRY}/${IMAGE_NAME}:${{ matrix.shim_tag }} \
             --push \
             overlay-image/
-          echo "Pushed ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG}"
+          echo "Pushed ${REGISTRY}/${IMAGE_NAME}:${{ matrix.shim_tag }}"
 
       - name: Verify image
         run: |
-          docker run --rm ${REGISTRY}/${IMAGE_NAME}:${SHIM_TAG} sha256sum /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 || true
+          docker run --rm ${REGISTRY}/${IMAGE_NAME}:${{ matrix.shim_tag }} sha256sum /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 || true
