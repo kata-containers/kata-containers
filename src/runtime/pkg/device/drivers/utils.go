@@ -156,9 +156,22 @@ func GetAPVFIODevices(sysfsdev string) ([]string, error) {
 	return strings.Split(string(data[:len(data)-1]), "\n"), nil
 }
 
-// Ignore specific PCI devices, supply the pciClass and the bitmask to check
-// against the device class, deviceBDF for meaningfull info message
-func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (bool, error) {
+// pciClassesIgnoredForPassthrough lists the PCI class codes (base+subclass, i.e.
+// the sysfs `class` value with the trailing programming-interface byte removed)
+// that cannot be passed through when they merely share an IOMMU group with a
+// passthrough-capable device: 0x0600 Host Bridge and 0x0604 PCI-to-PCI Bridge.
+// Matched exactly rather than against the PCI base class 0x06 (Bridge) so
+// passthrough-capable bridges like NVSwitches (0x0680, "Bridge: Other") are not
+// filtered out.
+var pciClassesIgnoredForPassthrough = map[uint64]struct{}{
+	0x0600: {},
+	0x0604: {},
+}
+
+// checkIgnorePCIClass reports whether the device with the given sysfs pciClass
+// must be ignored (not passed through) because it is a Host or PCI-to-PCI bridge
+// sharing the IOMMU group. deviceBDF is only used for the info message.
+func checkIgnorePCIClass(pciClass string, deviceBDF string) (bool, error) {
 	if pciClass == "" {
 		return false, nil
 	}
@@ -168,8 +181,8 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 	}
 	// ClassID is 16 bits, remove the two trailing zeros
 	pciClassID = pciClassID >> 8
-	if pciClassID&bitmask == bitmask {
-		deviceLogger().Infof("Ignoring PCI (Host) Bridge deviceBDF %v Class %x", deviceBDF, pciClassID)
+	if _, ok := pciClassesIgnoredForPassthrough[pciClassID]; ok {
+		deviceLogger().Infof("Ignoring PCI Host/PCI Bridge deviceBDF %v Class %x", deviceBDF, pciClassID)
 		return true, nil
 	}
 	return false, nil
@@ -296,7 +309,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 			// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
 			// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
 			// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
-			ignorePCIDevice, err := checkIgnorePCIClass(pciClass, deviceBDF, 0x0600)
+			ignorePCIDevice, err := checkIgnorePCIClass(pciClass, deviceBDF)
 			if err != nil {
 				return nil, err
 			}
