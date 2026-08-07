@@ -72,7 +72,14 @@ impl Hypervisor for Qemu {
 
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.stop_vm().await
+        let kill_result = inner.stop_vm().await;
+        // Always attempt to reap after stop. Init-state / failed-start teardown
+        // previously called stop_vm() without wait_vm(), leaving QEMU as a
+        // zombie when the background exit waiter was absent or blocked on
+        // exit_notify (kata-containers#13564 fix5). Double-reap is harmless:
+        // wait_vm returns Err("already reaped") which we ignore.
+        let _ = inner.wait_vm().await;
+        kill_result
     }
 
     async fn wait_vm(&self) -> Result<i32> {

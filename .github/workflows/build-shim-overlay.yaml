@@ -8,12 +8,14 @@ on:
     paths:
       - 'src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs'
       - 'src/runtime-rs/crates/hypervisor/src/qemu/inner.rs'
+      - 'src/runtime-rs/crates/hypervisor/src/qemu/mod.rs'
+      - 'src/runtime-rs/crates/runtimes/virt_container/src/sandbox.rs'
       - '.github/workflows/build-shim-overlay.yaml'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
-  SHIM_TAG: v4.0.0-nvswitch-fix4
+  SHIM_TAG: v4.0.0-nvswitch-fix5
 
 jobs:
   build-and-push:

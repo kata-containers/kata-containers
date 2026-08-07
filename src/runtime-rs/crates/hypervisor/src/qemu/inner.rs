@@ -425,6 +425,35 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        // Any failure AFTER spawn must kill+reap the Child. The sandbox only
+        // starts its background wait_vm() waiter once start_vm() returns Ok, so
+        // an Err return without cleanup leaks QEMU as a zombie and wedges the
+        // shim in a Task/State timeout loop (kata-containers#13564). The Go
+        // runtime reaps unconditionally via LogAndWait; runtime-rs historically
+        // only cleaned up on the QMP-init / boot_from_template paths (fix4),
+        // missing virtio-mem setup, resume_vm, console connect, and any future
+        // `?` after spawn. fix5: one cleanup guard covers all of them.
+        let result = self
+            .start_vm_after_spawn(cmdline, console_socket_path)
+            .await;
+        if let Err(ref e) = result {
+            error!(
+                sl!(),
+                "start_vm failed after QEMU spawn: {:?}; killing and reaping child to prevent zombie",
+                e
+            );
+            let _ = self.stop_vm().await;
+            let _ = self.wait_vm().await;
+        }
+        result
+    }
+
+    /// QMP handshake + post-spawn bring-up. Caller must kill+reap on Err.
+    async fn start_vm_after_spawn(
+        &mut self,
+        mut cmdline: QemuCmdLine<'_>,
+        console_socket_path: std::path::PathBuf,
+    ) -> Result<()> {
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
@@ -465,25 +494,15 @@ impl QemuInner {
             }
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
-                // Kill and reap the spawned QEMU child to prevent a zombie process.
-                // Without this, the QEMU process is leaked when QMP init fails
-                // (e.g. the 50s QMP-connect deadline expires on slow CC/VFIO boots).
-                // The Go runtime reaps unconditionally via LogAndWait; the Rust
-                // runtime-rs had no equivalent on the failure path.
-                let _ = self.stop_vm().await;
-                let _ = self.wait_vm().await;
                 return Err(e);
             }
         }
 
         // Start the virtual machine by restoring it from a VM template if enabled.
         if self.config.vm_template.boot_from_template {
-            if let Err(e) = self.boot_from_template().await {
-                error!(sl!(), "boot from template failed: {:?}", e);
-                let _ = self.stop_vm().await;
-                let _ = self.wait_vm().await;
-                return Err(e).context("boot from template");
-            }
+            self.boot_from_template()
+                .await
+                .context("boot from template")?;
             self.resume_vm().context("resume vm")?;
         }
 
