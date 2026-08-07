@@ -376,7 +376,7 @@ impl PCIeTopology {
     pub fn insert_device(&mut self, ep: &mut PCIeEndpoint) -> Option<PciPath> {
         let to_pcipath = |v: u32| -> PciPath {
             PciPath {
-                slots: vec![PciSlot(v as u8)],
+                slots: vec![PciSlot::new(v as u8)],
             }
         };
 

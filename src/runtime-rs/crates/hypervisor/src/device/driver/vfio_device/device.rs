@@ -223,19 +223,26 @@ impl Device for VfioDeviceModernHandle {
             .with(|d| d.device.device_type == VfioDeviceType::MediatedAp)
             .await;
 
-        if is_ap {
-            // AP devices have no PCIe topology; call the hypervisor directly.
+        if is_ap || !h.requires_generic_vfio_topology() {
+            // AP devices have no PCIe topology. Some hypervisors, such as
+            // OpenVMM, construct and own their PCIe topology themselves.
             if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
-                error!(sl!(), "failed to attach vfio-ap device: {:?}", e);
+                error!(sl!(), "failed to attach vfio device: {:?}", e);
                 self.decrease_attach_count().await?;
                 return Err(e);
             }
         } else {
             // PCI devices must be registered in the topology first.
-            let topo = pcie_topo.as_deref_mut().ok_or_else(|| {
-                anyhow::anyhow!("VFIO device requires a PCIe topology but none was provided")
-            })?;
-            self.register(topo).await?;
+            let Some(topo) = pcie_topo.as_deref_mut() else {
+                self.decrease_attach_count().await?;
+                return Err(anyhow::anyhow!(
+                    "VFIO device requires a PCIe topology but none was provided"
+                ));
+            };
+            if let Err(e) = self.register(topo).await {
+                self.decrease_attach_count().await?;
+                return Err(e);
+            }
             if let Err(e) = h.add_device(DeviceType::VfioModern(self.arc())).await {
                 error!(sl!(), "failed to attach vfio device: {:?}", e);
                 self.decrease_attach_count().await?;
@@ -324,7 +331,6 @@ impl PCIeDevice for VfioDeviceModernHandle {
         {
             return Ok(());
         }
-
         let device_id = self.device_id().await;
         let port_type = self.with(|d| d.config.port).await;
 
@@ -352,6 +358,9 @@ impl PCIeDevice for VfioDeviceModernHandle {
         {
             return Ok(());
         }
+        if !self.with(|d| d.is_allocated).await {
+            return Ok(());
+        }
 
         let device_id = self.device_id().await;
         topo.release_bus_for_device(&device_id)?;
@@ -364,5 +373,68 @@ impl PCIeDevice for VfioDeviceModernHandle {
         .await;
 
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "openvmm"))]
+mod tests {
+    use super::*;
+    use crate::openvmm::OpenVmm;
+    use crate::qemu::Qemu;
+    use std::convert::TryFrom;
+
+    fn test_handle() -> VfioDeviceModernHandle {
+        VfioDeviceModernHandle {
+            inner: Arc::new(Mutex::new(VfioDeviceModern {
+                device_id: "vfio-test".to_string(),
+                ..Default::default()
+            })),
+        }
+    }
+
+    #[tokio::test]
+    async fn openvmm_attach_uses_hypervisor_owned_topology() {
+        let mut handle = test_handle();
+        let mut topology = None;
+
+        handle.attach(&mut topology, &OpenVmm::new()).await.unwrap();
+
+        assert_eq!(handle.attach_count().await, 1);
+        assert!(!handle.with(|device| device.is_allocated).await);
+    }
+
+    #[tokio::test]
+    async fn generic_attach_without_topology_rolls_back_reference() {
+        let mut handle = test_handle();
+        let mut topology = None;
+
+        let error = handle
+            .attach(&mut topology, &Qemu::new())
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("requires a PCIe topology"));
+        assert_eq!(handle.attach_count().await, 0);
+        assert!(!handle.with(|device| device.is_allocated).await);
+    }
+
+    #[tokio::test]
+    async fn unregister_without_generic_allocation_is_a_noop() {
+        let mut handle = test_handle();
+        handle
+            .with_mut(|device| {
+                device.config.guest_pci_path = PciPath::try_from("08.1/00").ok();
+            })
+            .await;
+        let mut topology = PCIeTopology::default();
+
+        handle.unregister(&mut topology).await.unwrap();
+
+        assert_eq!(
+            handle
+                .with(|device| device.config.guest_pci_path.clone())
+                .await,
+            PciPath::try_from("08.1/00").ok()
+        );
     }
 }
