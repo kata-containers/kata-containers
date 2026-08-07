@@ -240,12 +240,15 @@ impl QemuInner {
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
+                        // Legacy path: take devices from the IOMMU group.
+                        // IOMMUFD path: iommu_group is None; fall back to
+                        // VfioDevice::devices which holds the single cdev device.
                         let devices = vfio_device
                             .device
                             .iommu_group
                             .as_ref()
-                            .map(|g| g.clone().devices)
-                            .unwrap_or_default();
+                            .map(|g| g.devices.clone())
+                            .unwrap_or_else(|| vfio_device.device.devices.clone());
                         (
                             device_type,
                             ap_sysfs_path,
@@ -1203,13 +1206,15 @@ impl QemuInner {
                     let (address, driver_type, bus) = if device_type == VfioDeviceType::MediatedAp {
                         (String::new(), "vfio-ap".to_string(), String::new())
                     } else {
-                        // FIXME: The first device in the group might not be the actual device intended for passthrough.
-                        // Multi-function support is tracked via issue #11292.
+                        // Legacy path: primary comes from the IOMMU group.
+                        // IOMMUFD path: iommu_group is None; use VfioDevice::primary
+                        // which is the single device returned by discover_vfio_device.
+                        // FIXME: multi-function group support tracked in #11292.
                         let primary_device = device
-                            .clone()
                             .iommu_group
-                            .ok_or_else(|| anyhow!("IOMMU group missing for VFIO device"))?
-                            .primary;
+                            .as_ref()
+                            .map(|g| g.primary.clone())
+                            .unwrap_or_else(|| device.primary.clone());
 
                         info!(
                             sl!(),
