@@ -7,12 +7,13 @@ on:
       - kubecon-staging
     paths:
       - 'src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs'
+      - 'src/runtime-rs/crates/hypervisor/src/qemu/inner.rs'
       - '.github/workflows/build-shim-overlay.yaml'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
-  SHIM_TAG: v4.0.0-nvswitch-fix3
+  SHIM_TAG: v4.0.0-nvswitch-fix4
 
 jobs:
   build-and-push:
@@ -36,10 +37,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq musl-tools clang llvm protobuf-compiler libseccomp-dev
 
-      - name: Verify NVSwitch patch is present
+      - name: Verify patches are present
         run: |
           echo "Checking for 0x0680 exception in core.rs"
           grep -n "0x0680" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          echo "Checking for zombie QEMU fix in inner.rs"
+          grep -n "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs | head -5
           git log --oneline -1
 
       - name: Generate config.rs
