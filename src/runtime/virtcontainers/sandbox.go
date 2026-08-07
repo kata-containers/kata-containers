@@ -3062,9 +3062,9 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 // locality.
 //
 // In the non-NUMA path (GuestNUMANodes is empty, e.g. enable_numa=false),
-// it fetches the sandbox's number of vCPU threads and number of CPUs in
-// CPUSet. If the two are equal, each vCPU thread is pinned 1:1 to the
-// CPUs in CPUSet; otherwise pinning is skipped.
+// the CPUSet is all there is to place threads within: the vCPU threads it
+// can back are pinned 1:1 to its CPUs and any thread beyond that keeps the
+// CPUSet itself, which is the affinity it started with.
 func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	if s.config == nil {
 		return fmt.Errorf("no sandbox config found")
@@ -3152,24 +3152,58 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 		return s.checkVCPUsPinningNUMA(ctx, vCPUThreadsMap, numaNodes, cpuSetSlice, exclusiveCPUSet)
 	}
 
-	numVCPUs, numCPUs := len(vCPUThreadsMap.vcpus), len(cpuSetSlice)
-	if numVCPUs != numCPUs {
-		if s.isVCPUsPinningOn {
-			s.isVCPUsPinningOn = false
-			return s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice)
-		}
-		return nil
+	affinities, dedicated := cpuSetAffinityPlan(len(vCPUThreadsMap.vcpus), cpuSetSlice)
+	if dedicated < len(affinities) {
+		s.Logger().WithFields(logrus.Fields{
+			"vcpus":          len(affinities),
+			"dedicated-cpus": dedicated,
+			"sandbox-cpus":   cpuSetSlice,
+		}).Info("cannot give every vCPU a host CPU of its own; leaving the remaining vCPU threads on the sandbox CPUSet")
 	}
-	for i, tid := range vCPUThreadsMap.vcpus {
-		if err := resCtrl.SetThreadAffinity(tid, cpuSetSlice[i:i+1]); err != nil {
+
+	for vcpuIdx, allowedCPUs := range affinities {
+		tid, ok := vCPUThreadsMap.vcpus[vcpuIdx]
+		if !ok {
 			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
 				return err
 			}
-			return fmt.Errorf("failed to set vcpu thread %d affinity to cpu %d: %v", tid, cpuSetSlice[i], err)
+			return fmt.Errorf("missing vcpu thread id for vcpu index %d", vcpuIdx)
+		}
+		if err := resCtrl.SetThreadAffinity(tid, allowedCPUs); err != nil {
+			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
+				return err
+			}
+			return fmt.Errorf("failed to set vcpu thread %d affinity to cpus %v: %v", tid, allowedCPUs, err)
 		}
 	}
 	s.isVCPUsPinningOn = true
 	return nil
+}
+
+// cpuSetAffinityPlan returns the host CPUs each vCPU thread may run on when
+// the sandbox has no guest NUMA topology, indexed by vCPU number, and how
+// many vCPUs got a host CPU of their own.
+//
+// vCPUs take the CPUs of the CPUSet in order, one each, and the vCPUs left
+// once the CPUSet runs out keep the whole CPUSet: the affinity every thread
+// starts with, and the one the host scheduler can work with. Pinning those
+// threads too would mean handing them a CPU another vCPU already holds, which
+// pairs the two for good, and refusing to pin anything would take the CPUs
+// away from the vCPUs the CPUSet can back.
+func cpuSetAffinityPlan(numVCPUs int, cpuSetSlice []int) ([][]int, int) {
+	affinities := make([][]int, 0, numVCPUs)
+	dedicated := 0
+
+	for i := 0; i < numVCPUs; i++ {
+		if i < len(cpuSetSlice) {
+			affinities = append(affinities, cpuSetSlice[i:i+1])
+			dedicated++
+			continue
+		}
+		affinities = append(affinities, cpuSetSlice)
+	}
+
+	return affinities, dedicated
 }
 
 // checkVCPUsPinningNUMA binds vCPU threads to host CPUs that belong to the

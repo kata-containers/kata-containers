@@ -1890,6 +1890,51 @@ func TestNUMAAffinityPlanSkipsNodesWithoutVCPUs(t *testing.T) {
 	assert.Equal([][]int{{0}}, affinities)
 }
 
+// Without a guest NUMA topology the CPU set is the whole universe a thread can
+// be placed in, so the vCPUs it can back get a CPU each and the rest keep the
+// set they started with.  Asking for equality instead left a Guaranteed pod
+// with no pins at all, as its guest always holds default_vcpus more vCPUs than
+// the kubelet reserved CPUs.
+func TestCPUSetAffinityPlan(t *testing.T) {
+	assert := assert.New(t)
+
+	testCases := []struct {
+		description       string
+		numVCPUs          int
+		cpuSetSlice       []int
+		expected          [][]int
+		expectedDedicated int
+	}{
+		{
+			description:       "a CPU per vCPU",
+			numVCPUs:          4,
+			cpuSetSlice:       []int{0, 1, 2, 3},
+			expected:          [][]int{{0}, {1}, {2}, {3}},
+			expectedDedicated: 4,
+		},
+		{
+			description:       "more vCPUs than CPUs",
+			numVCPUs:          5,
+			cpuSetSlice:       []int{0, 1, 2, 3},
+			expected:          [][]int{{0}, {1}, {2}, {3}, {0, 1, 2, 3}},
+			expectedDedicated: 4,
+		},
+		{
+			description:       "more CPUs than vCPUs leaves the surplus unused",
+			numVCPUs:          2,
+			cpuSetSlice:       []int{0, 1, 2, 3},
+			expected:          [][]int{{0}, {1}},
+			expectedDedicated: 2,
+		},
+	}
+
+	for _, tt := range testCases {
+		affinities, dedicated := cpuSetAffinityPlan(tt.numVCPUs, tt.cpuSetSlice)
+		assert.Equal(tt.expected, affinities, tt.description)
+		assert.Equal(tt.expectedDedicated, dedicated, tt.description)
+	}
+}
+
 func TestNUMANodeCPUsDetachedNode(t *testing.T) {
 	assert := assert.New(t)
 
