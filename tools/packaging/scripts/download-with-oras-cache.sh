@@ -58,7 +58,7 @@ ensure_oras_installed() {
 
 	if [[ -f "${install_oras_script}" ]]; then
 		info "Installing ORAS using existing script"
-		if "${install_oras_script}"; then
+		if "${install_oras_script}" >&2; then
 			# Verify installation succeeded
 			if command -v oras &>/dev/null; then
 				info "ORAS installed successfully"
