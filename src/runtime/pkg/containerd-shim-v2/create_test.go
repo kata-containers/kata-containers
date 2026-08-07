@@ -24,8 +24,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
 )
 
@@ -127,6 +129,67 @@ func TestCreateSandboxFail(t *testing.T) {
 	_, err = s.Create(ctx, req)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
+}
+
+// TestCreateSandboxFailRollsBackRootlessSetup verifies that rootless resources
+// remain provisional until sandbox construction succeeds.
+func TestCreateSandboxFailRollsBackRootlessSetup(t *testing.T) {
+	assert := assert.New(t)
+	expectedErr := fmt.Errorf("sandbox construction failed")
+
+	// Use vcmock's existing injection point to fail after rootless setup and
+	// before a sandbox is returned.
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig, hookFunc func(context.Context) error) (vc.VCSandbox, error) {
+		return nil, expectedErr
+	}
+	defer func() {
+		testingImpl.CreateSandboxFunc = nil
+	}()
+
+	rolledBack := false
+	originalConfigureNonRootHypervisor := configureNonRootHypervisorFunc
+	// Replace privileged user and directory setup with a rollback marker. This
+	// tests create()'s ownership handoff without modifying users or /run/user.
+	configureNonRootHypervisorFunc = func(runtimeConfig *oci.RuntimeConfig, sandboxID string) (func(), error) {
+		return func() {
+			rolledBack = true
+		}, nil
+	}
+	defer func() {
+		configureNonRootHypervisorFunc = originalConfigureNonRootHypervisor
+		rootless.SetRootless(false)
+	}()
+
+	tmpdir, bundlePath, ociConfigFile := ktu.SetupOCIConfigFile(t)
+
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, true)
+	assert.NoError(err)
+	runtimeConfig.HypervisorConfig.Rootless = true
+	runtimeConfig.DisableNewNetNs = true
+
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
+	assert.NoError(err)
+
+	err = ktu.WriteOCIConfigFile(spec, ociConfigFile)
+	assert.NoError(err)
+
+	s := &service{
+		id:         testSandboxID,
+		containers: make(map[string]*container),
+		config:     &runtimeConfig,
+		ctx:        context.Background(),
+	}
+
+	req := &taskAPI.CreateTaskRequest{
+		ID:       testSandboxID,
+		Bundle:   bundlePath,
+		Terminal: true,
+	}
+
+	ctx := namespaces.WithNamespace(context.Background(), "UnitTest")
+	_, err = s.Create(ctx, req)
+	assert.ErrorIs(err, expectedErr)
+	assert.True(rolledBack)
 }
 
 func TestCreateSandboxConfigFail(t *testing.T) {
