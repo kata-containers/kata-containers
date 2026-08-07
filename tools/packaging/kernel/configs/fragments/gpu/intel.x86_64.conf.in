@@ -1,0 +1,7 @@
+# The following Xe kernel config options need to be enabled
+CONFIG_DRM=y
+CONFIG_X86_PLATFORM_DEVICES=y
+CONFIG_DRM_XE=y
+
+# Linux kernel version suffix
+CONFIG_LOCALVERSION="-intel-gpu"
