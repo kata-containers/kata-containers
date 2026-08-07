@@ -112,3 +112,27 @@ impl Volume for EphemeralVolume {
 pub(crate) fn is_ephemeral_volume(m: &oci::Mount) -> bool {
     get_mount_type(m).as_str() == KATA_EPHEMERAL_VOLUME_TYPE
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_types::mount::DEFAULT_KATA_GUEST_SANDBOX_DIR;
+
+    #[test]
+    fn test_ephemeral_volume_uses_guest_sandbox_path() {
+        let source = tempfile::tempdir().unwrap();
+        let mut mount = oci::Mount::default();
+        mount.set_source(Some(source.path().to_path_buf()));
+
+        let volume = EphemeralVolume::new(&mount).unwrap();
+        let expected = Path::new(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+            .join(KATA_EPHEMERAL_VOLUME_TYPE)
+            .join(source.path().file_name().unwrap());
+
+        let mounts = volume.get_volume_mount().unwrap();
+        assert_eq!(mounts[0].source(), &Some(expected.clone()));
+
+        let storages = volume.get_storage().unwrap();
+        assert_eq!(storages[0].mount_point, expected.to_string_lossy().into_owned());
+    }
+}

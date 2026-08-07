@@ -1,0 +1,20 @@
+[
+  {
+    "op": "replace",
+    "path": "/common/cpath",
+    "value": "(?:/run/user/[1-9][0-9]*)?/run/kata-containers/shared/containers(?:/passthrough)?"
+  },
+  {
+    "op": "add",
+    "path": "/sandbox/storages/-",
+    "value": {
+      "driver": "virtio-fs",
+      "driver_options": [],
+      "fs_group": null,
+      "fstype": "virtiofs",
+      "mount_point": "^$(cpath)/?$",
+      "options": [],
+      "source": "kataShared"
+    }
+  }
+]
