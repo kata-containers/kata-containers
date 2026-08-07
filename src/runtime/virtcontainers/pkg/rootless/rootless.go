@@ -22,11 +22,15 @@ package rootless
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/moby/sys/userns"
 	"github.com/sirupsen/logrus"
 )
+
+const vmmUserRuntimeBaseDir = "/run/user"
 
 var (
 	// isRootless states whether execution is rootless or not
@@ -90,4 +94,14 @@ func GetRootlessDir() string {
 		rootlessLog.WithField("rootlessDir", rootlessDir).Debug("initialized rootlessDir")
 	})
 	return rootlessDir
+}
+
+// VmmUserRuntimeDir returns the runtime directory for a temporary VMM user.
+func VmmUserRuntimeDir(uid uint32) string {
+	return filepath.Join(vmmUserRuntimeBaseDir, strconv.FormatUint(uint64(uid), 10))
+}
+
+// RemoveVmmUserRuntimeDir removes the runtime directory for a temporary VMM user.
+func RemoveVmmUserRuntimeDir(uid uint32) error {
+	return os.RemoveAll(VmmUserRuntimeDir(uid))
 }

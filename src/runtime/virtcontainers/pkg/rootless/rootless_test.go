@@ -7,6 +7,7 @@ package rootless
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/moby/sys/userns"
@@ -33,4 +34,8 @@ func TestIsRootless(t *testing.T) {
 	assert.False(isRootlessFunc())
 
 	isRootless = nil
+}
+
+func TestVmmUserRuntimeDir(t *testing.T) {
+	assert.Equal(t, filepath.Join(vmmUserRuntimeBaseDir, "1000"), VmmUserRuntimeDir(1000))
 }

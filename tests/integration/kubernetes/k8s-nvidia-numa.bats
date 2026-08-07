@@ -195,20 +195,6 @@ guest_per_node_values() {
 # Host-side pinning helpers
 # -----------------------------------------------------------------------------
 
-# get_qemu_pid_for_numa_pod resolves the running pod's sandbox via crictl
-# and returns the QEMU PID via pgrep.  Fails the test if either lookup
-# turns up empty.
-get_qemu_pid_for_numa_pod() {
-    local sandbox_id qemu_pid
-    sandbox_id=$(sudo crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
-        pods --name "${POD_NAME_NUMA}" -q | head -1)
-    [[ -n "${sandbox_id}" ]] || die "no sandbox id found for pod ${POD_NAME_NUMA}"
-
-    qemu_pid=$(sudo pgrep -f "qemu.*${sandbox_id}" | head -1)
-    [[ -n "${qemu_pid}" ]] || die "no QEMU PID found for sandbox ${sandbox_id}"
-    echo "${qemu_pid}"
-}
-
 # pinning_thread_total sums the per-bucket counts in numa-pinning-check.sh
 # output ("nodeN: <count>" lines) and echoes the total.
 pinning_thread_total() {
@@ -399,7 +385,7 @@ host_gpu_numa() {
 
     # --- Host-side vCPU pinning balance ---
     local qemu_pid host_output
-    qemu_pid=$(get_qemu_pid_for_numa_pod)
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
     echo "# QEMU PID: ${qemu_pid}"
     host_output=$(wait_for_host_pinning "${qemu_pid}" "${NUMA_TEST_VCPUS_LARGE}")
     echo "# Host pinning per NUMA node: ${host_output}"
@@ -455,7 +441,7 @@ host_gpu_numa() {
 
     # --- Host-side vCPU pinning collapsed to a single node ---
     local qemu_pid host_output
-    qemu_pid=$(get_qemu_pid_for_numa_pod)
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
     echo "# QEMU PID: ${qemu_pid}"
     host_output=$(wait_for_host_pinning "${qemu_pid}" "${NUMA_TEST_VCPUS_SMALL}")
     echo "# Host pinning per NUMA node: ${host_output}"
@@ -516,13 +502,8 @@ host_gpu_numa() {
     [[ ${#guest_mem[@]} -ge 2 ]] || die "expected >= 2 guest memory nodes"
 
     # --- Host-side QEMU lookup (needed for the GPU NUMA assertion) ---
-    local sandbox_id qemu_pid qemu_cmd host_bdf host_node
-    sandbox_id=$(sudo crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
-        pods --name "${POD_NAME_NUMA_GPU}" -q | head -1)
-    [[ -n "${sandbox_id}" ]] || die "no sandbox id found for GPU pod"
-
-    qemu_pid=$(sudo pgrep -f "qemu.*${sandbox_id}" | head -1)
-    [[ -n "${qemu_pid}" ]] || die "no QEMU PID found for GPU sandbox ${sandbox_id}"
+    local qemu_pid qemu_cmd host_bdf host_node
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA_GPU}")
     echo "# QEMU PID: ${qemu_pid}"
 
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
@@ -593,13 +574,8 @@ host_gpu_numa() {
     echo "# ${guest_logs}"
 
     # --- Host-side QEMU lookup ---
-    local sandbox_id qemu_pid qemu_cmd host_bdf host_node
-    sandbox_id=$(sudo crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
-        pods --name "${POD_NAME_NUMA_GPU}" -q | head -1)
-    [[ -n "${sandbox_id}" ]] || die "no sandbox id found for GPU pod"
-
-    qemu_pid=$(sudo pgrep -f "qemu.*${sandbox_id}" | head -1)
-    [[ -n "${qemu_pid}" ]] || die "no QEMU PID found for GPU sandbox ${sandbox_id}"
+    local qemu_pid qemu_cmd host_bdf host_node
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA_GPU}")
 
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
     host_bdf=$(extract_vfio_host_bdf "${qemu_cmd}")
@@ -694,7 +670,7 @@ host_gpu_numa() {
 
     # --- QEMU memory backend bound to host node 1 ---
     local qemu_pid qemu_cmd
-    qemu_pid=$(get_qemu_pid_for_numa_pod)
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
     echo "# Checking QEMU cmdline for memory binding on host node 1..."
     [[ "${qemu_cmd}" == *"host-nodes=1"* ]] \
