@@ -15,7 +15,10 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
-  SHIM_TAG: v4.0.0-nvswitch-fix5
+  # fix6: replace local 0x0680 bitmask exception with upstream exact-class
+  # IOMMU filter + IOMMUFD single-device discover (410d12fe8 / 2c1c961bb,
+  # kata-containers#13430). Keeps fix5 QEMU reap (#13564).
+  SHIM_TAG: v4.0.0-nvswitch-fix6
 
 jobs:
   build-and-push:
@@ -41,8 +44,14 @@ jobs:
 
       - name: Verify patches are present
         run: |
-          echo "Checking for 0x0680 exception in core.rs"
-          grep -n "0x0680" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          echo "Checking for upstream IOMMU_IGNORE_CLASSES (exact match, NVSwitch absent)"
+          grep -n "IOMMU_IGNORE_CLASSES" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          grep -n "intentionally absent" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
+          # Must NOT still use the old bitmask exception path
+          if grep -n 'if class_code == 0x0680' src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs; then
+            echo "ERROR: old 0x0680 exception still present" >&2
+            exit 1
+          fi
           echo "Checking for zombie QEMU fix in inner.rs"
           grep -n "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs | head -5
           git log --oneline -1
