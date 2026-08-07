@@ -468,15 +468,25 @@ impl QemuInner {
             }
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
+                // Kill and reap the spawned QEMU child to prevent a zombie process.
+                // Without this, the QEMU process is leaked when QMP init fails
+                // (e.g. the 50s QMP-connect deadline expires on slow CC/VFIO boots).
+                // The Go runtime reaps unconditionally via LogAndWait; the Rust
+                // runtime-rs had no equivalent on the failure path.
+                let _ = self.stop_vm().await;
+                let _ = self.wait_vm().await;
                 return Err(e);
             }
         }
 
         // Start the virtual machine by restoring it from a VM template if enabled.
         if self.config.vm_template.boot_from_template {
-            self.boot_from_template()
-                .await
-                .context("boot from template")?;
+            if let Err(e) = self.boot_from_template().await {
+                error!(sl!(), "boot from template failed: {:?}", e);
+                let _ = self.stop_vm().await;
+                let _ = self.wait_vm().await;
+                return Err(e).context("boot from template");
+            }
             self.resume_vm().context("resume vm")?;
         }
 
