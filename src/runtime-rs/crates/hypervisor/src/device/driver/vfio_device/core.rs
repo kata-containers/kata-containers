@@ -4,6 +4,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
+use pcilibs_rs::{IOMMUFD_SYSFS_CLASS, IOMMUFD_VFIO_DIR};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -12,13 +13,10 @@ use std::fs;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
-/// Path constants for VFIO and IOMMU sysfs/dev interfaces
-const DEV_VFIO: &str = "/dev/vfio";
 const SYS_IOMMU_GROUPS: &str = "/sys/kernel/iommu_groups";
 const SYS_PCI_DEVS: &str = "/sys/bus/pci/devices";
 const DEV_IOMMU: &str = "/dev/iommu";
 const DEV_VFIO_DEVICES: &str = "/dev/vfio/devices";
-const SYS_CLASS_VFIO_DEV: &str = "/sys/class/vfio-dev";
 const SYS_VFIO_AP: &str = "/sys/devices/vfio_ap";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -499,7 +497,7 @@ fn discover_vfio_cdev_by_name(
         } else {
             Some(minor)
         },
-        sysfs_path: Path::new(SYS_CLASS_VFIO_DEV).join(vfio_name),
+        sysfs_path: Path::new(IOMMUFD_SYSFS_CLASS).join(vfio_name),
         bdf,
         group_id: gid,
     })
@@ -523,7 +521,7 @@ pub fn discover_vfio_device(vfio_device: &Path) -> Result<VfioDevice> {
 
     // /sys/class/vfio-dev/<name>/device -> .../0000:01:00.0
     let dev_link = fs::read_link(
-        Path::new(SYS_CLASS_VFIO_DEV)
+        Path::new(IOMMUFD_SYSFS_CLASS)
             .join(&vfio_name)
             .join("device"),
     )
@@ -634,7 +632,7 @@ pub fn discover_vfio_group_device(host_path: PathBuf) -> Result<VfioDevice> {
 /// `group_devnode` is the char device used to represent the group for metadata/health:
 /// typically `/dev/vfio/<gid>` (legacy) or `/dev/vfio/devices/vfioX` when legacy nodes are absent.
 fn discover_vfio_device_for_iommu_group(gid: u32, group_devnode: PathBuf) -> Result<VfioDevice> {
-    let vfio_ctl = Path::new(DEV_VFIO).join("vfio");
+    let vfio_ctl = Path::new(IOMMUFD_VFIO_DIR).join("vfio");
     if !vfio_ctl.exists() {
         return Err(anyhow!("VFIO control node missing: {}", vfio_ctl.display()));
     }

@@ -40,6 +40,7 @@ hyper = { workspace = true }
 hyper-util = { workspace = true }
 regex = "1"
 once_cell = "1.21.3"
+pcilibs-rs = { workspace = true }
 # Local dependencies
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
