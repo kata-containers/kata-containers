@@ -213,20 +213,19 @@ function get_nodes_and_pods_info() {
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
+function setup_crio() {
+	local k0s_latest_url
+	k0s_latest_url=$(curl -sI -L -o /dev/null -w '%{url_effective}' https://github.com/k0sproject/k0s/releases/latest)
+	local k0s_version=${k0s_latest_url##*/}
+	local crio_version=${k0s_version%.*+*}
+	crio_version=${crio_version#v}
+
+	install_crio "${crio_version}"
+	overwrite_crio_config
+}
+
 function deploy_k0s() {
-	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
-		url=$(get_from_kata_deps ".externals.k0s.url")
-
-		k0s_version_param=""
-		version=$(get_from_kata_deps ".externals.k0s.version")
-		if [[ -n "${version}" ]]; then
-			k0s_version_param="K0S_VERSION=${version}"
-		fi
-
-		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
-	else
-		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
-	fi
+	curl -sSLf https://get.k0s.sh | sudo sh
 
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
@@ -1166,6 +1165,27 @@ VERIFICATION_POD_EOF
 		echo "::endgroup::"
 		echo "::group::kata-deploy logs (previous)"
 		kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
+		echo "::endgroup::"
+	fi
+
+	# k0s uses /var/lib/k0s/kubelet instead of the default /var/lib/kubelet.
+	# kata-deploy generates a 22-k0s-kubelet-root.toml drop-in for k0s's
+	# bundled containerd (install.rs:182), but when CRI-O replaces it the
+	# runtime is detected as "crio" and the drop-in is skipped.
+	if [[ "${KUBERNETES}" == "k0s" && "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		echo "::group::k0s kubelet_root_dir drop-in for CRI-O"
+		local kata_config_base="/opt/kata/share/defaults/kata-containers"
+		local dropin_content
+		read -r -d '' dropin_content <<-'TOML' || true
+		[runtime]
+		kubelet_root_dir = "/var/lib/k0s/kubelet"
+		TOML
+		for config_d in "${kata_config_base}"/runtimes/*/config.d \
+		                 "${kata_config_base}"/runtime-rs/runtimes/*/config.d; do
+			[[ -d "${config_d}" ]] || continue
+			echo "${dropin_content}" | sudo tee "${config_d}/22-k0s-kubelet-root.toml" > /dev/null
+			info "Wrote ${config_d}/22-k0s-kubelet-root.toml"
+		done
 		echo "::endgroup::"
 	fi
 

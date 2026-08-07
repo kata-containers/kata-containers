@@ -103,6 +103,9 @@ EOF
 }
 
 @test "Plain ephemeral data storage sizeLimit evicts pod" {
+	# CRI-O does not report stats for kata (VM-based) sandboxes,
+	# so kubelet cannot detect sizeLimit violations and never evicts the pod.
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "sizeLimit eviction not supported: CRI-O omits kata pods from stats"
 	run_emptydir_size_limit_eviction_test
 }
 
