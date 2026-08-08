@@ -16,6 +16,7 @@ mod debug_console;
 mod log_parser;
 mod monitor;
 mod ops;
+mod progress;
 mod types;
 mod utils;
 

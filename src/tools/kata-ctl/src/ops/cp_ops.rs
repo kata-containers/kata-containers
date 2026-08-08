@@ -22,6 +22,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
 use crate::args::CpArguments;
 use crate::debug_console::{self, shell_quote, Session, EOT};
+use crate::progress::{Meter, Progress};
 
 /// Where the devkit guest extension is mounted, and where the console shell can
 /// still see the guest's real root once devkit-init has chrooted it into the
@@ -47,6 +48,11 @@ const DIAGNOSTIC_BYTES: usize = 4 * 1024;
 /// Archive chunks in flight between the thread reading the console and the one
 /// extracting, so neither runs ahead of the other by more than a little.
 const PIPE_DEPTH: usize = 16;
+
+/// tar lays an entry out as a 512-byte header followed by its contents padded
+/// out to the next multiple of that, and closes the archive with two empty
+/// ones.
+const TAR_BLOCK: u64 = 512;
 
 // kata-ctl handle cp command starts here.
 pub fn handle_cp(cp_args: CpArguments) -> Result<()> {
@@ -184,9 +190,10 @@ fn copy_in(session: &mut Session, local: &Path, remote: &str) -> Result<()> {
     let feeder = {
         let src = local.to_path_buf();
         let entry = name.clone();
+        let progress = Progress::new(format!("sending {name}"), archive_size(local).ok());
 
         thread::spawn(move || {
-            let res = send_archive(&sink, &src, &entry);
+            let res = send_archive(&sink, &src, &entry, progress);
             if res.is_err() {
                 // Let the guest see the end of its input, so it stops waiting
                 // for an archive that is never going to arrive.
@@ -239,6 +246,8 @@ fn copy_out(session: &mut Session, remote: &str, local: &Path) -> Result<()> {
         bail!("{} is not a directory", root.display());
     }
 
+    let total = guest_archive_size(session, &dir, &name);
+
     // base64 is last in the pipeline, so without pipefail a tar that died would
     // still be reported as a clean exit.
     session.begin(&format!(
@@ -255,7 +264,8 @@ fn copy_out(session: &mut Session, remote: &str, local: &Path) -> Result<()> {
         thread::spawn(move || unpack(rx, root, dest))
     };
 
-    let mut decoder = Base64Decoder::new(tx);
+    let progress = Progress::new(format!("receiving {name}"), total);
+    let mut decoder = Base64Decoder::new(Meter::new(tx, progress));
     let status = session.finish(&mut decoder)?;
     // Dropping the decoder closes the pipe, which is what ends the extraction.
     decoder.finish()?;
@@ -280,11 +290,16 @@ fn copy_out(session: &mut Session, remote: &str, local: &Path) -> Result<()> {
 
 /// Tar `src` under the name `entry`, base64 it, and push it at the command
 /// waiting on the other end of `sink`, then close that command's stdin.
-fn send_archive(sink: &UnixStream, src: &Path, entry: &str) -> Result<()> {
+///
+/// `progress` is metered on the archive rather than on the base64 leaving the
+/// socket, so what it counts is the copy the caller asked for and not the
+/// third again that encoding it costs.
+fn send_archive(sink: &UnixStream, src: &Path, entry: &str, progress: Progress) -> Result<()> {
     let mut out = Base64Lines::new(BufWriter::new(sink));
 
     {
-        let mut archive = tar::Builder::new(&mut out);
+        let mut metered = Meter::new(&mut out, progress);
+        let mut archive = tar::Builder::new(&mut metered);
         let meta = fs::symlink_metadata(src).with_context(|| format!("stat {}", src.display()))?;
 
         if meta.is_dir() {
@@ -306,6 +321,55 @@ fn send_archive(sink: &UnixStream, src: &Path, entry: &str) -> Result<()> {
     sink.flush().context("flush to the guest")?;
 
     Ok(())
+}
+
+/// What the archive of `path` will come to once tar has laid it out, so the
+/// meter has something to count against. An estimate, in that a path too long
+/// to sit in a header costs an entry of its own that this does not add up, so
+/// the meter treats a total as a bound rather than a promise.
+fn archive_size(path: &Path) -> Result<u64> {
+    fn walk(path: &Path, total: &mut u64) -> Result<()> {
+        let meta =
+            fs::symlink_metadata(path).with_context(|| format!("stat {}", path.display()))?;
+
+        *total += TAR_BLOCK;
+
+        if meta.is_file() {
+            *total += meta.len().div_ceil(TAR_BLOCK) * TAR_BLOCK;
+        } else if meta.is_dir() {
+            for entry in fs::read_dir(path).with_context(|| format!("read {}", path.display()))? {
+                walk(&entry?.path(), total)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    let mut total = 2 * TAR_BLOCK;
+    walk(path, &mut total)?;
+
+    Ok(total)
+}
+
+/// The same for an archive only the guest can measure, by building it there
+/// and throwing it away. That reads the tree twice, but the second pass is
+/// over the guest's own disk and costs nothing beside the console the copy
+/// itself has to cross. Best effort: without a total the meter still counts
+/// bytes, it just cannot say out of how many.
+fn guest_archive_size(session: &mut Session, dir: &str, name: &str) -> Option<u64> {
+    let (status, out) = session
+        .capture(&format!(
+            "set -o pipefail 2>/dev/null; tar -C {} -cf - {} 2>/dev/null | wc -c",
+            shell_quote(dir),
+            shell_quote(name),
+        ))
+        .ok()?;
+
+    if status != 0 {
+        return None;
+    }
+
+    out.parse().ok()
 }
 
 /// Extract the archive `reader` carries into `root`. With `rename`, the
@@ -765,6 +829,66 @@ mod tests {
             "unhelpful error: {}",
             err
         );
+
+        session.close();
+        let _ = shell.kill();
+        let _ = shell.wait();
+    }
+
+    /// The meter counts the archive, so the total it counts against has to be
+    /// the archive too, not the bytes that went into it.
+    #[test]
+    fn test_archive_size_matches_the_archive() {
+        let dir = tempdir().unwrap();
+
+        let file = dir.path().join("one");
+        fs::write(&file, vec![b'x'; 1000]).unwrap();
+
+        let mut built = Vec::new();
+        let mut builder = tar::Builder::new(&mut built);
+        builder.append_path_with_name(&file, "one").unwrap();
+        builder.finish().unwrap();
+        drop(builder);
+
+        assert_eq!(archive_size(&file).unwrap(), built.len() as u64);
+
+        // A tree, where the headers of everything under it count too.
+        let tree = dir.path().join("tree");
+        fs::create_dir(&tree).unwrap();
+        fs::write(tree.join("a"), b"aaa").unwrap();
+        fs::create_dir(tree.join("sub")).unwrap();
+        fs::write(tree.join("sub/b"), vec![b'b'; 700]).unwrap();
+
+        let mut built = Vec::new();
+        let mut builder = tar::Builder::new(&mut built);
+        builder.append_dir_all("tree", &tree).unwrap();
+        builder.finish().unwrap();
+        drop(builder);
+
+        assert_eq!(archive_size(&tree).unwrap(), built.len() as u64);
+    }
+
+    /// Sizing runs in the guest, so it has to survive a guest that cannot do
+    /// it rather than hand the meter a total of nothing.
+    #[test]
+    fn test_guest_archive_size() {
+        let Some((sock, mut shell)) = console() else {
+            eprintln!("skipping: no pty-backed shell with tar and base64 here");
+            return;
+        };
+
+        let mut session = Session::new(sock);
+        let dir = tempdir().unwrap();
+        let tree = dir.path().join("tree");
+        fs::create_dir(&tree).unwrap();
+        fs::write(tree.join("one"), vec![b'x'; 5000]).unwrap();
+
+        let root = dir.path().to_str().unwrap();
+        let size = guest_archive_size(&mut session, root, "tree")
+            .expect("the guest could not size its own archive");
+
+        assert!(size >= 5000, "implausible archive size {}", size);
+        assert_eq!(guest_archive_size(&mut session, root, "missing"), None);
 
         session.close();
         let _ = shell.kill();
