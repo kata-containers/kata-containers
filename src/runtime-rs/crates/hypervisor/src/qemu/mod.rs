@@ -71,8 +71,16 @@ impl Hypervisor for Qemu {
     }
 
     async fn stop_vm(&self) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        let kill_result = inner.stop_vm().await;
+        // Signal QEMU under the write lock, then reap WITHOUT holding it.
+        // Holding inner.write() across wait_vm() blocked StateProcess and
+        // other RPCs for the entire (multi-minute) TDX teardown window;
+        // containerd then SIGKILL'd the shim and left a zombie QEMU
+        // (kata-containers#13564 fix8).
+        let kill_result = {
+            let mut inner = self.inner.write().await;
+            inner.stop_vm().await
+        };
+        let inner = self.inner.read().await;
         // Always attempt to reap after stop. Init-state / failed-start teardown
         // previously called stop_vm() without wait_vm(), leaving QEMU as a
         // zombie when the background exit waiter was absent or blocked on

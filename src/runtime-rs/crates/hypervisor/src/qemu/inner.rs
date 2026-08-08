@@ -58,6 +58,9 @@ pub struct QemuInner {
     id: String,
 
     qemu_process: Mutex<Option<Child>>,
+    /// Cached QEMU pid so stop_vm can signal even after wait_vm() has taken
+    /// the Child out of `qemu_process` (kata-containers#13564 fix8).
+    qemu_pid: Option<u32>,
     qmp: Option<Qmp>,
 
     config: HypervisorConfig,
@@ -72,6 +75,7 @@ impl QemuInner {
         QemuInner {
             id: "".to_string(),
             qemu_process: Mutex::new(None),
+            qemu_pid: None,
             qmp: None,
             config: Default::default(),
             devices: Vec::new(),
@@ -417,9 +421,14 @@ impl QemuInner {
 
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
         let stderr = qemu_process.stderr.take().unwrap();
+        self.qemu_pid = qemu_process.id();
         self.qemu_process = Mutex::new(Some(qemu_process));
 
-        info!(sl!(), "qemu process started");
+        info!(
+            sl!(),
+            "qemu process started (pid={:?})",
+            self.qemu_pid
+        );
 
         let exit_notify: mpsc::Sender<()> = self
             .exit_notify
@@ -626,29 +635,65 @@ impl QemuInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping QEMU VM");
 
-        let mut qemu_process = self.qemu_process.lock().await;
-        if let Some(qemu_process) = qemu_process.as_mut() {
-            let is_qemu_running = qemu_process.id().is_some();
-            if is_qemu_running {
-                info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
-                qemu_process.kill().await.map_err(anyhow::Error::from)
-            } else {
+        // CRITICAL (kata-containers#13564 fix8 / production B200+TDX):
+        // Do NOT use Child::kill().await while holding qemu_process — that
+        // waits for the process to exit under the mutex. On large confidential
+        // guests (e.g. 1.2 TiB TDX + 8×GPU) SIGKILL reclaim can take many
+        // minutes; containerd then SIGKILLs the shim mid-wait, the Child is
+        // never reaped, and QEMU becomes a zombie under init — leaving the
+        // Kubernetes pod stuck Terminating.
+        //
+        // Use start_kill() (signal only) and let wait_vm() reap outside the
+        // lock. If the Child was already taken by a concurrent wait_vm(),
+        // fall back to kill(2) on the cached pid.
+        {
+            let mut qemu_process = self.qemu_process.lock().await;
+            if let Some(child) = qemu_process.as_mut() {
+                if let Some(pid) = child.id() {
+                    self.qemu_pid = Some(pid);
+                    info!(
+                        sl!(),
+                        "QemuInner::stop_vm(): start_kill() qemu pid={}", pid
+                    );
+                    // Signal only — do not await exit here (see comment above).
+                    child.start_kill().map_err(anyhow::Error::from)?;
+                    return Ok(());
+                }
                 info!(
                     sl!(),
-                    "QemuInner::stop_vm(): qemu process isn't running (likely stopped already)"
+                    "QemuInner::stop_vm(): qemu Child present but not running \
+                     (already exited); wait_vm will reap"
                 );
-                Ok(())
+                return Ok(());
             }
-        } else {
-            Err(anyhow!("qemu process has not been started yet"))
         }
+
+        if let Some(pid) = self.qemu_pid {
+            info!(
+                sl!(),
+                "QemuInner::stop_vm(): Child already taken; kill(2) pid={}", pid
+            );
+            let _ = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid as i32),
+                nix::sys::signal::Signal::SIGKILL,
+            );
+            return Ok(());
+        }
+
+        Err(anyhow!("qemu process has not been started yet"))
     }
 
     pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        let mut qemu_process = self.qemu_process.lock().await;
+        // Take the Child under the lock, then wait OUTSIDE it so stop_vm()
+        // can always start_kill() (fix8). Holding the mutex across
+        // Child::wait() was the teardown deadlock that produced zombies.
+        let child = {
+            let mut qemu_process = self.qemu_process.lock().await;
+            qemu_process.take()
+        };
 
-        if let Some(mut qemu_process) = qemu_process.take() {
-            let status = qemu_process.wait().await?;
+        if let Some(mut child) = child {
+            let status = child.wait().await?;
             Ok(status.code().unwrap_or(0))
         } else {
             Err(anyhow!("the process has been reaped"))
@@ -720,13 +765,17 @@ impl QemuInner {
                     sl!(),
                     "QemuInner::get_vmm_master_tid(): returning {}", qemu_pid
                 );
-                Ok(qemu_pid)
-            } else {
-                Err(anyhow!("QemuInner::get_vmm_master_tid(): qemu process isn't running (likely stopped already)"))
+                return Ok(qemu_pid);
             }
-        } else {
-            Err(anyhow!("qemu process not running"))
         }
+        if let Some(qemu_pid) = self.qemu_pid {
+            info!(
+                sl!(),
+                "QemuInner::get_vmm_master_tid(): returning cached {}", qemu_pid
+            );
+            return Ok(qemu_pid);
+        }
+        Err(anyhow!("qemu process not running"))
     }
 
     pub(crate) async fn get_ns_path(&self) -> Result<String> {
@@ -1369,6 +1418,7 @@ impl Persist for QemuInner {
         Ok(QemuInner {
             id: hypervisor_state.id,
             qemu_process: Mutex::new(None),
+            qemu_pid: None,
             qmp: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
