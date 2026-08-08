@@ -22,7 +22,8 @@ strum_macros = "0.24.3"
 serde.workspace = true
 url.workspace = true
 futures.workspace = true
-base64 = "0.13.0"
+base64.workspace = true
+tar.workspace = true
 toml.workspace = true
 sys-info = "0.9.1"
 
