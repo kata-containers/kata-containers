@@ -22,7 +22,7 @@ if [[ "${ID:-}" != "ubuntu" ]]; then
 	exit 1
 fi
 
-# The repository NVIDIA publishes per distro tag (24.04 -> ubuntu2404) and per
+# The repository NVIDIA publishes per distro tag (26.04 -> ubuntu2604) and per
 # arch ('sbsa' for arm64) is pinned in versions.yaml under
 # externals.nvidia.cuda.repo, the same entry the GPU rootfs builds consume. The
 # devkit shell has no versions.yaml to read, so the build bakes it in here.

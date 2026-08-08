@@ -873,7 +873,7 @@ install_image_coco_extension() {
 install_image_devkit_extension() {
 	local component="rootfs-image-devkit-extension"
 
-	# Reuse the guest image's Ubuntu release (e.g. "noble") so the devkit matches
+	# Reuse the guest image's Ubuntu release (e.g. "resolute") so the devkit matches
 	# the base userspace ABI (glibc) the guest ships.
 	local os_name os_version
 	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"

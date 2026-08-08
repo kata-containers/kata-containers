@@ -69,12 +69,14 @@ install_userspace_components() {
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq libnvidia-compute nvidia-settings
 
-	# Needed for confidential-data-hub and NVAT runtime dependencies
-	eval "${APT_INSTALL}" cryptsetup-bin dmsetup         \
-		libargon2-1 e2fsprogs libxml2
+	# Needed for confidential-data-hub's secure_mount: cryptsetup to unlock
+	# encrypted storage and e2fsprogs to format it. cryptsetup-bin also carries
+	# veritysetup and pulls libdevmapper in via libcryptsetup12. NVAT's own
+	# dependencies (libxml2 among them) ship inside the coco-guest-components
+	# tarball, see chisseled_nvat().
+	eval "${APT_INSTALL}" cryptsetup-bin e2fsprogs
 
-	apt-mark hold cryptsetup-bin dmsetup libargon2-1     \
-		e2fsprogs libxml2
+	apt-mark hold cryptsetup-bin e2fsprogs
 
 	# NVRC loads the NVIDIA driver modules from the gpu extension's self-contained
 	# module tree via `modprobe --dirname <extension>`, a kmod feature the base
@@ -162,7 +164,10 @@ install_nvidia_dcgm() {
 
 	echo "chroot: Install NVIDIA DCGM"
 
-	eval "${APT_INSTALL}" datacenter-gpu-manager \
+	# -core carries nv-hostengine and libdcgm, which is all the chisel pulls; the
+	# CUDA flavour packages are multi-hundred-MB module blobs the guest never
+	# uses. The exporter provides the metrics endpoint the dcgm feature exposes.
+	eval "${APT_INSTALL}" datacenter-gpu-manager-4-core \
 		datacenter-gpu-manager-exporter
 }
 
