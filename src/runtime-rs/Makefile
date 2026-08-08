@@ -1188,6 +1188,10 @@ install-runtime: runtime
 install-configs: $(CONFIGS)
 	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
 	ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
+ifeq ($(ARCH),powerpc64le)
+	sed -i 's|^image = .*|initrd = "$(PREFIX)/share/kata-containers/kata-containers-initrd.img"|' \
+		$(DESTDIR)$(CONFIG_PATH_QEMU)
+endif
 
 .PHONY: \
 	help \
