@@ -71,22 +71,25 @@ impl Hypervisor for Qemu {
     }
 
     async fn stop_vm(&self) -> Result<()> {
-        // Signal QEMU under the write lock, then reap WITHOUT holding it.
-        // Holding inner.write() across wait_vm() blocked StateProcess and
-        // other RPCs for the entire (multi-minute) TDX teardown window;
-        // containerd then SIGKILL'd the shim and left a zombie QEMU
-        // (kata-containers#13564 fix8).
+        // fix8: signal under write lock only (start_kill), never hold locks
+        // across the multi-minute TDX reclaim wait.
+        // fix9: do NOT await wait_vm() here either — that still blocked the
+        // Shutdown RPC long enough for containerd to SIGKILL the shim, leaving
+        // a live orphan QEMU under init (production B200+TDX, ~1.2 TiB guest).
+        // Reap in a background task; the sandbox start_vm waiter may also reap
+        // (double-take → "already reaped" is fine). PR_SET_PDEATHSIG kills
+        // QEMU if the shim process exits/dies first.
         let kill_result = {
             let mut inner = self.inner.write().await;
             inner.stop_vm().await
         };
-        let inner = self.inner.read().await;
-        // Always attempt to reap after stop. Init-state / failed-start teardown
-        // previously called stop_vm() without wait_vm(), leaving QEMU as a
-        // zombie when the background exit waiter was absent or blocked on
-        // exit_notify (kata-containers#13564 fix5). Double-reap is harmless:
-        // wait_vm returns Err("already reaped") which we ignore.
-        let _ = inner.wait_vm().await;
+        let inner = self.inner.clone();
+        tokio::spawn(async move {
+            let inner = inner.read().await;
+            if let Err(e) = inner.wait_vm().await {
+                debug!(sl!(), "background wait_vm after stop_vm: {:?}", e);
+            }
+        });
         kill_result
     }
 

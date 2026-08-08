@@ -30,6 +30,8 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
 };
+use nix::sys::signal::Signal;
+use nix::sys::prctl::set_pdeathsig;
 use nix::unistd::{setgid, setuid, Gid, Uid};
 use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
@@ -392,6 +394,17 @@ impl QemuInner {
         unsafe {
             let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre_exec = command.pre_exec(move || {
+                // fix9 (kata-containers#13564): if the shim is SIGKILLed mid-
+                // teardown (or exits after Shutdown before QEMU finishes
+                // reclaiming a large TDX guest), the kernel must kill QEMU.
+                // Without this, QEMU is reparented to init as a live orphan and
+                // the Kubernetes pod stays Terminating. Set before exec; check
+                // getppid for the classic fork/PDEATHSIG race.
+                set_pdeathsig(Signal::SIGKILL).map_err(std::io::Error::from)?;
+                if nix::unistd::getppid().as_raw() == 1 {
+                    let _ = nix::sys::signal::raise(Signal::SIGKILL);
+                }
+
                 let _ = enter_netns(&netns);
                 if let Some(label) = selinux_label.as_ref() {
                     if let Err(e) = selinux::set_exec_label(label) {
@@ -635,17 +648,19 @@ impl QemuInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping QEMU VM");
 
-        // CRITICAL (kata-containers#13564 fix8 / production B200+TDX):
+        // CRITICAL (kata-containers#13564 fix8/fix9 / production B200+TDX):
         // Do NOT use Child::kill().await while holding qemu_process — that
         // waits for the process to exit under the mutex. On large confidential
         // guests (e.g. 1.2 TiB TDX + 8×GPU) SIGKILL reclaim can take many
         // minutes; containerd then SIGKILLs the shim mid-wait, the Child is
-        // never reaped, and QEMU becomes a zombie under init — leaving the
-        // Kubernetes pod stuck Terminating.
+        // never reaped, and QEMU becomes a zombie (or live orphan) under init
+        // — leaving the Kubernetes pod stuck Terminating.
         //
-        // Use start_kill() (signal only) and let wait_vm() reap outside the
-        // lock. If the Child was already taken by a concurrent wait_vm(),
-        // fall back to kill(2) on the cached pid.
+        // Use start_kill() (signal only). Reaping is done by the sandbox
+        // background wait_vm waiter / Qemu::stop_vm's background task — never
+        // block stop_vm on exit. If the Child was already taken by a concurrent
+        // wait_vm(), fall back to kill(2) on the cached pid. PR_SET_PDEATHSIG
+        // (fix9) covers the case where the shim dies before/during reclaim.
         {
             let mut qemu_process = self.qemu_process.lock().await;
             if let Some(child) = qemu_process.as_mut() {

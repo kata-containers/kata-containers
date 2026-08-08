@@ -1377,9 +1377,16 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
+        // fix9 (kata-containers#13564): stop_vm() only start_kill's QEMU and
+        // returns. Do NOT await wait() for the full reclaim of a large TDX/CC
+        // guest (can be many minutes) — that blocks Shutdown until containerd
+        // SIGKILLs the shim, orphaning a still-live QEMU under init. Mark
+        // Stopped now; the start_vm background wait_vm waiter reaps; QEMU's
+        // PR_SET_PDEATHSIG covers shim exit/death. Same pattern as the
+        // Init/Starting branch above.
         self.hypervisor.stop_vm().await.context("stop vm")?;
-        self.wait().await.context("wait for vm exit after stop")?;
-        info!(sl!(), "sandbox stopped");
+        self.record_stop(0, SystemTime::now()).await;
+        info!(sl!(), "sandbox stop signaled (not waiting for qemu exit)");
 
         Ok(())
     }
