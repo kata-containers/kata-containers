@@ -6,8 +6,6 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    fs::File,
-    io::Read,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -25,6 +23,8 @@ use nix::sys::stat::SFlag;
 use rand::rng;
 use rand::Rng;
 use tokio::{
+    fs::File,
+    io::AsyncReadExt,
     sync::{Mutex, RwLock},
     task::JoinHandle,
     time::Instant,
@@ -599,7 +599,9 @@ impl ShareFsVolume {
             .with_context(|| format!("Failed to read metadata from file: {src:?}"))?;
 
         // Open file
-        let mut file = File::open(src).with_context(|| format!("Failed to open file: {src:?}"))?;
+        let mut file = File::open(src)
+            .await
+            .with_context(|| format!("Failed to open file: {src:?}"))?;
 
         let mut remaining = file_metadata.len() as i64;
         let mut offset: i64 = 0;
@@ -608,6 +610,7 @@ impl ShareFsVolume {
             let chunk_size = std::cmp::min(remaining as usize, MAX_CHUNK_SIZE);
             let mut chunk = vec![0u8; chunk_size];
             file.read_exact(&mut chunk)
+                .await
                 .with_context(|| format!("Failed to read chunk from file: {src:?}"))?;
 
             let r = agent::CopyFileRequest {
