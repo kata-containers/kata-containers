@@ -71,13 +71,20 @@ jobs:
       - name: Build containerd-shim-kata-v2
         working-directory: src/runtime-rs
         run: |
+          set -eux
           cargo build --release --target x86_64-unknown-linux-musl --bin containerd-shim-kata-v2
-          BIN=target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
-          test -f "$BIN"
+          # Workspace cargo target-dir is the repo root (not src/runtime-rs/target).
+          BIN="../../target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2"
+          if [ ! -f "$BIN" ]; then
+            echo "ERROR: expected binary missing at $BIN; searching..."
+            find ../.. -name 'containerd-shim-kata-v2' -type f 2>/dev/null | head -10 || true
+            exit 1
+          fi
           echo "Binary found at: $BIN"
           cp "$BIN" ./containerd-shim-kata-v2
           ls -la ./containerd-shim-kata-v2
           sha256sum ./containerd-shim-kata-v2
+          file ./containerd-shim-kata-v2
 
       - name: Stage binary and create overlay image
         run: |
