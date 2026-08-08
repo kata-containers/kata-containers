@@ -55,7 +55,7 @@ pub enum Commands {
     /// Display settings
     Env(EnvArgument),
 
-    /// Enter into guest VM by debug console
+    /// Enter into guest VM by debug console, or run a single command there
     Exec(ExecArguments),
 
     /// Manage VM factory
@@ -213,6 +213,12 @@ pub struct ExecArguments {
     #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
     /// kata debug console vport same as configuration, default is 1026.
     pub vport: u32,
+    #[clap(last = true)]
+    /// Command to run in the guest, e.g. `kata-ctl exec <sandbox-id> -- ls -l /`.
+    /// Without one, a terminal is attached to the console shell instead. The
+    /// debug console carries a single stream, so the command's stderr arrives
+    /// interleaved on stdout; kata-ctl exits with the command's exit status.
+    pub command: Vec<String>,
 }
 
 #[derive(Args, Debug)]
