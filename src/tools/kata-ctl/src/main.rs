@@ -30,6 +30,7 @@ use std::process::exit;
 use ops::check_ops::{
     handle_check, handle_iptables, handle_metrics, handle_monitor, handle_version,
 };
+use ops::cp_ops::handle_cp;
 use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
 use ops::factory_ops::handle_factory;
@@ -68,6 +69,7 @@ fn real_main() -> Result<i32> {
     let res = if let Some(command) = args.command {
         match command {
             Commands::Check(args) => handle_check(args).map(|_| 0),
+            Commands::Cp(args) => handle_cp(args).map(|_| 0),
             Commands::DirectVolume(args) => handle_direct_volume(args).map(|_| 0),
             Commands::Exec(args) => handle_exec(args),
             Commands::Env(args) => handle_env(args).map(|_| 0),

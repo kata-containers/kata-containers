@@ -174,6 +174,35 @@ setup() {
 	assert_extension_dirs_in_path "${output}"
 }
 
+@test "kata-ctl cp moves a file in and out of the devkit guest" {
+	launch_pod "$(devkit_runtimeclass)"
+
+	local token="devkit-cp-${RANDOM}${RANDOM}"
+	local src="/tmp/kata-ctl-cp-src"
+	local dst="/tmp/kata-ctl-cp-dst"
+	local guest="/tmp/kata-ctl-cp-payload"
+
+	# All of this runs in PID 1's mount namespace: that is where the shim
+	# socket kata-ctl needs lives, and it also keeps the host paths below
+	# meaning the same thing to the shell that writes them and to kata-ctl.
+	# Nothing interpolated here carries a single quote, so the script survives
+	# being single-quoted for the remote shell.
+	local script="set -e"
+	script+="; printf %s ${token} > ${src}"
+	script+="; /opt/kata/bin/kata-ctl cp ${src} ${sandbox_id}:${guest}"
+	script+="; /opt/kata/bin/kata-ctl cp ${sandbox_id}:${guest} ${dst}"
+	script+="; cat ${dst}"
+	script+="; rm -f ${src} ${dst}"
+
+	local output
+	output="$(exec_host "${node}" "timeout 120 nsenter --mount=/proc/1/ns/mnt sh -c '${script}'")"
+	echo "kata-ctl cp output:"
+	echo "${output}"
+
+	echo "${output}" | grep -q "${token}" \
+		|| die "kata-ctl cp did not round-trip the payload through the guest"
+}
+
 teardown() {
 	check_and_skip
 

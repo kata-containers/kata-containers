@@ -234,6 +234,10 @@ pub fn connect(sandbox_id: &str, vport: u32) -> Result<UnixStream> {
     setup_client(server_url, vport)
 }
 
+/// End-of-transmission. The guest terminal stays in canonical mode, so this at
+/// the start of a line is what closes the stdin of a running command.
+pub const EOT: u8 = 0x04;
+
 /// Appended to the marker to frame the output of a command. Neither is ever
 /// spelled out in what we write to the shell - both are only ever produced by
 /// expanding the variable holding the marker - so a terminal that echoes our
@@ -309,6 +313,14 @@ impl Session {
         }
     }
 
+    /// A second handle on the connection, so a command's stdin can be fed
+    /// while its output is being read.
+    pub fn writer(&self) -> Result<UnixStream> {
+        self.stream
+            .try_clone()
+            .context("clone debug console socket")
+    }
+
     /// Run `cmd` to completion, relaying its output to `sink`, and report the
     /// exit status. The console is one stream, so this is stdout and stderr
     /// interleaved.
@@ -317,9 +329,22 @@ impl Session {
         self.finish(sink)
     }
 
+    /// Run `cmd` for its output, trimmed, as text.
+    pub fn capture(&mut self, cmd: &str) -> Result<(i32, String)> {
+        let mut out = Vec::new();
+        let status = self.run(cmd, &mut out)?;
+
+        Ok((status, String::from_utf8_lossy(&out).trim().to_string()))
+    }
+
+    /// Run `cmd` purely for its exit status, e.g. a `test` probe.
+    pub fn probe(&mut self, cmd: &str) -> Result<bool> {
+        Ok(self.run(cmd, &mut io::sink())? == 0)
+    }
+
     /// Send `cmd` and return once it is running, so the caller may then write
     /// to its stdin over the same connection.
-    fn begin(&mut self, cmd: &str) -> Result<()> {
+    pub fn begin(&mut self, cmd: &str) -> Result<()> {
         self.prepare()?;
 
         let marker = self.marker.clone();
@@ -341,7 +366,7 @@ impl Session {
 
     /// Relay the output of the command started by [`Session::begin`] to
     /// `sink`, and report its exit status.
-    fn finish(&mut self, sink: &mut dyn Write) -> Result<i32> {
+    pub fn finish(&mut self, sink: &mut dyn Write) -> Result<i32> {
         let end = format!("{}{END}", self.marker);
         self.scan(end.as_bytes(), sink)?;
 
