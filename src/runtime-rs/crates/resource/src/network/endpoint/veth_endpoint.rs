@@ -13,11 +13,25 @@ use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::device::driver::NetworkConfig;
 use hypervisor::device::DeviceType;
 use hypervisor::{Hypervisor, NetworkDevice};
+use scopeguard::defer;
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::{EndpointState, VethEndpointState};
 use super::{attach_network_device, Endpoint};
+use crate::network::utils::link;
 use crate::network::{utils, NetworkPair};
+
+async fn delete_tap_device(name: &str) -> Result<()> {
+    let (connection, handle, _) = rtnetlink::new_connection().context("new connection")?;
+    let thread_handler = tokio::spawn(connection);
+    defer!({
+        thread_handler.abort();
+    });
+    link::delete_link(&handle, name)
+        .await
+        .with_context(|| format!("delete tap {name}"))?;
+    Ok(())
+}
 
 #[derive(Debug)]
 pub struct VethEndpoint {
@@ -99,6 +113,18 @@ impl Endpoint for VethEndpoint {
         }))
         .await
         .context("remove Veth endpoint device by hypervisor failed.")?;
+
+        // create_link sets IFF_PERSIST, so the tap survives FD close / QEMU exit.
+        // Delete it explicitly so a retry of sandbox.start() can recreate it
+        // (otherwise TUNSETIFF returns EBUSY).
+        if let Err(err) = delete_tap_device(&self.net_pair.tap.tap_iface.name).await {
+            warn!(
+                sl!(),
+                "failed to delete tap {}: {:#}",
+                self.net_pair.tap.tap_iface.name,
+                err
+            );
+        }
 
         Ok(())
     }

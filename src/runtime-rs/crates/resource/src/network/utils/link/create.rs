@@ -16,6 +16,30 @@ use nix::ioctl_write_ptr;
 
 use super::macros::{get_name, set_name};
 
+/// True when TUNSETIFF failed because the named device already exists / is busy.
+/// Used to reuse a leftover `tapN_kata` after a failed sandbox start (IFF_PERSIST
+/// keeps the device alive after the creating FDs are dropped).
+pub fn is_busy_or_exist(err: &anyhow::Error) -> bool {
+    for cause in err.chain() {
+        if let Some(ioe) = cause.downcast_ref::<io::Error>() {
+            match ioe.raw_os_error() {
+                Some(libc::EBUSY) | Some(libc::EEXIST) => return true,
+                _ => {}
+            }
+        }
+        if let Some(ne) = cause.downcast_ref::<nix::Error>() {
+            if *ne == nix::Error::EBUSY || *ne == nix::Error::EEXIST {
+                return true;
+            }
+        }
+    }
+    let s = format!("{err:#}");
+    s.contains("EBUSY")
+        || s.contains("EEXIST")
+        || s.contains("Device or resource busy")
+        || s.contains("File exists")
+}
+
 type IfName = [u8; libc::IFNAMSIZ];
 
 #[derive(Copy, Clone, Debug)]
@@ -128,23 +152,26 @@ fn create_queue(name: &str, flags: libc::c_int) -> Result<(File, String)> {
     Ok((file, req.get_name()?))
 }
 
-#[cfg(test)]
-pub mod net_test_utils {
+/// Delete a link by name (e.g. leftover `tap0_kata` after a failed start).
+pub async fn delete_link(handle: &rtnetlink::Handle, name: &str) -> Result<()> {
     use crate::network::network_model::tc_filter_model::fetch_index;
 
-    // remove a link by its name
-    #[allow(dead_code)]
-    pub async fn delete_link(
-        handle: &rtnetlink::Handle,
-        name: &str,
-    ) -> Result<(), rtnetlink::Error> {
-        let link_index = fetch_index(handle, name)
-            .await
-            .expect("failed to fetch index");
-        // the ifindex of a link will not change during its lifetime, so the index
-        // remains the same between the query above and the deletion below
-        handle.link().del(link_index).execute().await
-    }
+    let link_index = fetch_index(handle, name)
+        .await
+        .with_context(|| format!("fetch index for {name}"))?;
+    handle
+        .link()
+        .del(link_index)
+        .execute()
+        .await
+        .with_context(|| format!("delete link {name}"))?;
+    Ok(())
+}
+
+#[cfg(test)]
+pub mod net_test_utils {
+    // Back-compat for tests that imported delete_link from this module.
+    pub use super::delete_link;
 }
 
 #[cfg(test)]
