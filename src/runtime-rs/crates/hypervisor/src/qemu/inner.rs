@@ -428,6 +428,14 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        // Any failure AFTER spawn must kill+reap the Child. The sandbox only
+        // starts its background wait_vm() waiter once start_vm() returns Ok, so
+        // an Err return without cleanup leaks QEMU as a zombie and wedges the
+        // shim in a Task/State timeout loop (kata-containers#13564). The Go
+        // runtime reaps unconditionally via LogAndWait; runtime-rs historically
+        // only cleaned up on the QMP-init / boot_from_template paths (fix4),
+        // missing virtio-mem setup, resume_vm, console connect, and any future
+        // `?` after spawn. fix5: cleanup on every failure path below.
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
@@ -446,13 +454,24 @@ impl QemuInner {
                 // "the configuration is not prepared for memory devices".
                 if self.config.memory_info.enable_virtio_mem {
                     if cmdline.has_memory_hotplug_region() {
-                        qmp.setup_virtio_mem(
-                            self.config.memory_info.default_memory,
-                            self.config.memory_info.default_maxmemory,
-                            &self.config.machine_info.machine_type,
-                            self.config.shared_fs.shared_fs.as_deref(),
-                        )
-                        .context("Failed to setup virtio-mem during VM initialization")?;
+                        if let Err(e) = qmp
+                            .setup_virtio_mem(
+                                self.config.memory_info.default_memory,
+                                self.config.memory_info.default_maxmemory,
+                                &self.config.machine_info.machine_type,
+                                self.config.shared_fs.shared_fs.as_deref(),
+                            )
+                            .context("Failed to setup virtio-mem during VM initialization")
+                        {
+                            error!(
+                                sl!(),
+                                "virtio-mem setup failed after QEMU spawn: {:?}; killing+reaping",
+                                e
+                            );
+                            let _ = self.stop_vm().await;
+                            let _ = self.wait_vm().await;
+                            return Err(e);
+                        }
                     } else {
                         info!(
                             sl!(),
@@ -468,22 +487,47 @@ impl QemuInner {
             }
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
+                let _ = self.stop_vm().await;
+                let _ = self.wait_vm().await;
                 return Err(e);
             }
         }
 
         // Start the virtual machine by restoring it from a VM template if enabled.
         if self.config.vm_template.boot_from_template {
-            self.boot_from_template()
-                .await
-                .context("boot from template")?;
-            self.resume_vm().context("resume vm")?;
+            if let Err(e) = self.boot_from_template().await {
+                error!(sl!(), "boot from template failed: {:?}", e);
+                let _ = self.stop_vm().await;
+                let _ = self.wait_vm().await;
+                return Err(e).context("boot from template");
+            }
+            if let Err(e) = self.resume_vm().context("resume vm") {
+                error!(
+                    sl!(),
+                    "resume_vm failed after QEMU spawn: {:?}; killing+reaping", e
+                );
+                let _ = self.stop_vm().await;
+                let _ = self.wait_vm().await;
+                return Err(e);
+            }
         }
 
         // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
-            let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
-            tokio::spawn(log_qemu_console(stream));
+            match UnixStream::connect(console_socket_path.as_os_str()).await {
+                Ok(stream) => {
+                    tokio::spawn(log_qemu_console(stream));
+                }
+                Err(e) => {
+                    error!(
+                        sl!(),
+                        "console connect failed after QEMU spawn: {:?}; killing+reaping", e
+                    );
+                    let _ = self.stop_vm().await;
+                    let _ = self.wait_vm().await;
+                    return Err(e.into());
+                }
+            }
         }
 
         Ok(())
