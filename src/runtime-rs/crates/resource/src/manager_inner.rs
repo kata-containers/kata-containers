@@ -951,6 +951,17 @@ impl ResourceManagerInner {
         }
     }
 
+    /// Detach endpoints and delete host-side taps, then clear `self.network` so a
+    /// subsequent `handle_network` can recreate them (sandbox.start retry path).
+    pub async fn release_network(&mut self) -> Result<()> {
+        if let Some(network) = self.network.take() {
+            if let Err(err) = network.remove(self.hypervisor.as_ref()).await {
+                warn!(sl!(), "failed to remove network: {}", err);
+            }
+        }
+        Ok(())
+    }
+
     pub async fn cleanup(&self) -> Result<()> {
         // detach network endpoints (rebinds VFs from vfio-pci back to host driver)
         if let Some(network) = &self.network {

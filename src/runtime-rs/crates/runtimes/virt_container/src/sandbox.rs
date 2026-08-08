@@ -95,6 +95,10 @@ pub struct SandboxRestoreArgs {
 #[derive(Clone, Copy, PartialEq, Debug, Display)]
 pub enum SandboxState {
     Init,
+    /// Bring-up in progress (network + QEMU + agent). Distinct from Init so
+    /// concurrent CreateContainer calls do not re-enter `start()` and hit
+    /// TUNSETIFF EBUSY on an already-created `tapN_kata`.
+    Starting,
     Running,
     Stopped,
 }
@@ -103,7 +107,9 @@ impl SandboxState {
     fn to_cri_state(self) -> &'static str {
         match self {
             SandboxState::Running => "SANDBOX_READY",
-            SandboxState::Init | SandboxState::Stopped => "SANDBOX_NOTREADY",
+            SandboxState::Init | SandboxState::Starting | SandboxState::Stopped => {
+                "SANDBOX_NOTREADY"
+            }
         }
     }
 }
@@ -135,6 +141,10 @@ pub struct VirtSandbox {
     sid: String,
     msg_sender: Arc<Mutex<Sender<Message>>>,
     inner: Arc<RwLock<SandboxInner>>,
+    /// Serializes `sandbox.start()` without holding `inner` write across the
+    /// long QEMU/agent bring-up (fix5). Concurrent CreateContainer retries wait
+    /// here instead of racing `prepare_before_start_vm` / tap creation.
+    start_mutex: Arc<Mutex<()>>,
     resource_manager: Arc<ResourceManager>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
@@ -181,6 +191,7 @@ impl VirtSandbox {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
             inner: Arc::new(RwLock::new(SandboxInner::new())),
+            start_mutex: Arc::new(Mutex::new(())),
             agent,
             hypervisor,
             resource_manager,
@@ -954,15 +965,48 @@ impl Sandbox for VirtSandbox {
         }
         let sandbox_config = self.sandbox_config.as_ref().unwrap();
 
-        // Only hold the sandbox lock for the Init check — NOT across start_vm /
-        // agent connect / device setup. Holding write across the whole bring-up
-        // blocked Task/State RPCs (StateProcess timed out) while QEMU was
-        // already dead, which is the wedge we hit on am-b200-38 (fix5).
+        // Fast path: already running — CreateContainer for the app container
+        // after the sandbox container brought the VM up.
         {
             let inner = self.inner.read().await;
-            if inner.state != SandboxState::Init {
-                warn!(sl!(), "sandbox is started");
-                return Ok(());
+            match inner.state {
+                SandboxState::Running => {
+                    warn!(sl!(), "sandbox is started");
+                    return Ok(());
+                }
+                SandboxState::Stopped => {
+                    return Err(anyhow!("sandbox already stopped"));
+                }
+                SandboxState::Init | SandboxState::Starting => {}
+            }
+        }
+
+        // Serialize bring-up. Do NOT hold `inner` write across QEMU/agent
+        // (fix5): that blocked Task/State RPCs. The start_mutex alone stops
+        // concurrent CreateContainer from racing tap creation (fix7 /
+        // kata-containers#13564 follow-up — TUNSETIFF EBUSY on tap0_kata).
+        let _start_guard = self.start_mutex.lock().await;
+
+        {
+            let mut inner = self.inner.write().await;
+            match inner.state {
+                SandboxState::Running => {
+                    warn!(sl!(), "sandbox is started");
+                    return Ok(());
+                }
+                SandboxState::Stopped => {
+                    return Err(anyhow!("sandbox already stopped"));
+                }
+                SandboxState::Starting => {
+                    // Should not happen under start_mutex; treat as in-progress
+                    // owner that somehow dropped the mutex — fail closed.
+                    return Err(anyhow!(
+                        "sandbox start already in progress (state=Starting)"
+                    ));
+                }
+                SandboxState::Init => {
+                    inner.state = SandboxState::Starting;
+                }
             }
         }
 
@@ -1110,19 +1154,36 @@ impl Sandbox for VirtSandbox {
         if let Err(ref e) = start_result {
             // CreateContainer returns Err without calling StopSandbox when start
             // fails — previously that left a running/zombie QEMU behind. stop_vm
-            // now also reaps (fix5).
+            // now also reaps (fix5). Also release host taps (IFF_PERSIST) so a
+            // retry does not hit TUNSETIFF EBUSY (fix7).
             error!(
                 sl!(),
-                "sandbox start failed: {:#}; stopping QEMU to prevent zombie", e
+                "sandbox start failed: {:#}; stopping QEMU and releasing network", e
             );
             let _ = self.hypervisor.stop_vm().await;
+            if let Err(net_err) = self.resource_manager.release_network().await {
+                warn!(
+                    sl!(),
+                    "failed to release network after start failure: {:#}", net_err
+                );
+            }
+            {
+                let mut inner = self.inner.write().await;
+                if inner.state == SandboxState::Starting {
+                    inner.state = SandboxState::Init;
+                }
+            }
             return start_result;
         }
 
         {
             let mut inner = self.inner.write().await;
-            if inner.state != SandboxState::Init {
-                warn!(sl!(), "sandbox left Init during start; skipping Running transition");
+            if inner.state != SandboxState::Starting {
+                warn!(
+                    sl!(),
+                    "sandbox left Starting during start (state={:?}); skipping Running transition",
+                    inner.state
+                );
                 return Ok(());
             }
             inner.state = SandboxState::Running;
@@ -1304,10 +1365,15 @@ impl Sandbox for VirtSandbox {
         self.cancel_token.cancel();
 
         info!(sl!(), "begin stop sandbox");
-        if state == SandboxState::Init {
+        if state == SandboxState::Init || state == SandboxState::Starting {
+            // Serialize with an in-flight start() so we don't race tap/QEMU teardown.
+            let _start_guard = self.start_mutex.lock().await;
             let _ = self.hypervisor.stop_vm().await;
+            if let Err(err) = self.resource_manager.release_network().await {
+                warn!(sl!(), "failed to release network during stop: {:#}", err);
+            }
             self.record_stop(0, SystemTime::now()).await;
-            info!(sl!(), "sandbox stopped during Init");
+            info!(sl!(), "sandbox stopped during {:?}", state);
             return Ok(());
         }
 
@@ -1600,6 +1666,7 @@ impl Persist for VirtSandbox {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(sandbox_args.sender)),
             inner: Arc::new(RwLock::new(SandboxInner::new())),
+            start_mutex: Arc::new(Mutex::new(())),
             agent,
             hypervisor,
             resource_manager,

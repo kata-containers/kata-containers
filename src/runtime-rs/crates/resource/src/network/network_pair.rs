@@ -156,7 +156,21 @@ pub async fn create_link(
     name: &str,
     queues: usize,
 ) -> Result<Box<dyn link::Link>> {
-    link::create_link(name, link::LinkType::Tap, queues)?;
+    match link::create_link(name, link::LinkType::Tap, queues) {
+        Ok(()) => {}
+        Err(e) if link::is_busy_or_exist(&e) => {
+            // IFF_PERSIST leaves tapN_kata in the netns after a failed
+            // sandbox.start(); concurrent CreateContainer retries then hit
+            // TUNSETIFF EBUSY. Reuse the existing device instead of failing.
+            warn!(
+                sl!(),
+                "tap {} already exists ({}), reusing",
+                name,
+                e
+            );
+        }
+        Err(e) => return Err(e).context("create tap device"),
+    }
 
     let link = get_link_by_name(handle, name)
         .await

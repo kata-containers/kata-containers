@@ -10,15 +10,20 @@ on:
       - 'src/runtime-rs/crates/hypervisor/src/qemu/inner.rs'
       - 'src/runtime-rs/crates/hypervisor/src/qemu/mod.rs'
       - 'src/runtime-rs/crates/runtimes/virt_container/src/sandbox.rs'
+      - 'src/runtime-rs/crates/resource/src/network/**'
+      - 'src/runtime-rs/crates/resource/src/manager.rs'
+      - 'src/runtime-rs/crates/resource/src/manager_inner.rs'
       - '.github/workflows/build-shim-overlay.yaml'
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: kubetee-ai/kata-deploy-shim-overlay
-  # fix6: replace local 0x0680 bitmask exception with upstream exact-class
-  # IOMMU filter + IOMMUFD single-device discover (410d12fe8 / 2c1c961bb,
-  # kata-containers#13430). Keeps fix5 QEMU reap (#13564).
-  SHIM_TAG: v4.0.0-nvswitch-fix6
+  # fix7: serialize sandbox.start() (start_mutex + Starting state) + reuse/delete
+  # IFF_PERSIST tapN_kata on failure — fixes TUNSETIFF EBUSY when CreateContainer
+  # retries while agent connect is still in progress (glm CC on B200, #13564 follow-up).
+  # Restores fix5 VFIO discover (0x0680 exception); fix6 IOMMUFD single-device path
+  # was rolled back (guest agent "bridge … no pci_bus" on 8×B200).
+  SHIM_TAG: v4.0.0-nvswitch-fix7
 
 jobs:
   build-and-push:
@@ -44,16 +49,15 @@ jobs:
 
       - name: Verify patches are present
         run: |
-          echo "Checking for upstream IOMMU_IGNORE_CLASSES (exact match, NVSwitch absent)"
-          grep -n "IOMMU_IGNORE_CLASSES" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
-          grep -n "intentionally absent" src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
-          # Must NOT still use the old bitmask exception path
-          if grep -n 'if class_code == 0x0680' src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs; then
-            echo "ERROR: old 0x0680 exception still present" >&2
-            exit 1
-          fi
+          echo "Checking for NVSwitch 0x0680 exception (fix5 path — NOT fix6 IOMMUFD-only)"
+          grep -n 'class_code == 0x0680' src/runtime-rs/crates/hypervisor/src/device/driver/vfio_device/core.rs
           echo "Checking for zombie QEMU fix in inner.rs"
           grep -n "stop_vm" src/runtime-rs/crates/hypervisor/src/qemu/inner.rs | head -5
+          echo "Checking for fix7 start_mutex / Starting state"
+          grep -n 'start_mutex' src/runtime-rs/crates/runtimes/virt_container/src/sandbox.rs | head -5
+          grep -n 'SandboxState::Starting' src/runtime-rs/crates/runtimes/virt_container/src/sandbox.rs | head -5
+          grep -n 'is_busy_or_exist' src/runtime-rs/crates/resource/src/network/utils/link/create.rs | head -3
+          grep -n 'release_network' src/runtime-rs/crates/resource/src/manager.rs | head -3
           git log --oneline -1
 
       - name: Generate config.rs
