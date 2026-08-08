@@ -98,11 +98,32 @@ handler: {{ $rcHandler }}
 {{- $shimOverheadEnabled = .overheadEnabled -}}
 {{- end -}}
 {{- end -}}
-{{- if $shimOverheadEnabled }}
+{{- /* TEE key accounting: with NFD advertising the node's SEV-SNP encrypted-state
+       IDs / TDX key slots as extended resources, each confidential sandbox has to
+       consume one, or the scheduler would place more of them on a node than it has
+       keys for. Requested through overhead.podFixed because the sandbox holds the
+       key for its whole life, not per container. Independent of overheadEnabled,
+       which is about memory/cpu sizing: dropping the key request would let the
+       scheduler oversubscribe the node's keys. */ -}}
+{{- $teeKeys := dict -}}
+{{- if eq (include "kata-deploy.nfdRulesActive" .root | trim) "true" -}}
+{{- if contains "snp" .shim -}}
+{{- $teeKeys = set $teeKeys "sev-snp.amd.com/esids" "1" -}}
+{{- end -}}
+{{- if contains "tdx" .shim -}}
+{{- $teeKeys = set $teeKeys "tdx.intel.com/keys" "1" -}}
+{{- end -}}
+{{- end -}}
+{{- if or $shimOverheadEnabled $teeKeys }}
 overhead:
   podFixed:
+{{- if $shimOverheadEnabled }}
     memory: {{ .config.memory | quote }}
     cpu: {{ .config.cpu | quote }}
+{{- end }}
+{{- range $key, $value := $teeKeys }}
+    {{ $key }}: {{ $value | quote }}
+{{- end }}
 {{- end }}
 scheduling:
   nodeSelector:

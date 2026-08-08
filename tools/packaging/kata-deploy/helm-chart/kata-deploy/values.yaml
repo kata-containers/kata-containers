@@ -812,6 +812,23 @@ env:
 node-feature-discovery:
   enabled: false
 
+# The NodeFeatureRule that makes node-feature-discovery advertise each node's TEE
+# key counts (AMD SEV-SNP encrypted-state IDs, Intel TDX key slots), together with
+# the matching `overhead.podFixed` request on Kata's confidential RuntimeClasses so
+# a sandbox consumes one key and the scheduler cannot oversubscribe them.
+#
+#   auto (default) - create them when NFD is around: installed by this release,
+#                    found already running, or its CRD registered in the cluster.
+#                    Since the last two need a live cluster, `helm template` alone
+#                    renders nothing under `auto`.
+#   true / false   - decide explicitly.
+#
+# The rule and the key requests are gated together on purpose: an extended-resource
+# request that nothing advertises makes every pod on that RuntimeClass unschedulable,
+# so the keys must never be requested without the rule that produces them.
+nodeFeatureRules:
+  create: auto
+
 # Verification
 # Post-install verification to validate Kata Containers is working correctly.
 # When a pod spec is provided, runs a verification pod after installation.

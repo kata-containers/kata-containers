@@ -101,7 +101,4 @@ COPY tools/packaging/kata-deploy/nydus-snapshotter ${DESTINATION}/nydus-snapshot
 COPY --from=artifact-stage /opt/prebuilt/opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
 COPY --from=artifact-stage /opt/prebuilt/opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 
-# Copy runtimeclasses and node-feature-rules
-COPY tools/packaging/kata-deploy/node-feature-rules ${DESTINATION}/node-feature-rules
-
 ENTRYPOINT ["/usr/bin/kata-deploy"]
