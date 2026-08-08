@@ -56,7 +56,45 @@ pub async fn wait_till_node_is_ready_timeout(
     }
 }
 
-pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
+/// Wait until the CRI runtime's systemd unit is active again, up to `timeout_secs`.
+///
+/// The host-local counterpart of `wait_till_node_is_ready_timeout`, for the staged
+/// (job-mode) pipeline: those containers hold no Kubernetes credentials, so they
+/// cannot ask the apiserver about the node. The unit being back is what this stage
+/// is actually responsible for; the dispatcher separately confirms the node
+/// reached Ready before it declares the node kata-capable.
+pub async fn wait_till_cri_unit_active(runtime: &str, timeout_secs: u64) -> Result<()> {
+    let unit = manager::cri_systemd_unit(runtime);
+    let start = std::time::Instant::now();
+    let mut attempt = 0;
+
+    loop {
+        attempt += 1;
+        if utils::host_systemctl(&["is-active", "--quiet", &unit])
+            .await
+            .is_ok()
+        {
+            info!("Unit {unit} is active again (attempt {attempt})");
+            return Ok(());
+        }
+
+        if start.elapsed().as_secs() >= timeout_secs {
+            return Err(anyhow::anyhow!(
+                "Timed out after {timeout_secs}s waiting for {unit} to become active again"
+            ));
+        }
+
+        info!("wait_till_cri_unit_active: {unit} not active yet, sleeping 2 seconds...");
+        sleep(Duration::from_secs(2)).await;
+    }
+}
+
+/// Restart the CRI runtime, then wait for it to come back.
+///
+/// `staged` selects how that wait is done: the DaemonSet survives the bounce and
+/// can wait for the node's Ready condition, while a staged per-node Job has no
+/// credentials and waits on the systemd unit instead.
+pub async fn restart_runtime(config: &Config, runtime: &str, staged: bool) -> Result<()> {
     info!("restart_runtime: Starting restart for runtime={}", runtime);
     match runtime {
         "k0s-worker" | "k0s-controller" => {
@@ -71,6 +109,15 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
             utils::host_systemctl(&["restart", &unit]).await?;
             info!("restart_runtime: Successfully restarted {}", unit);
         }
+    }
+
+    if staged {
+        // k0s never restarted anything above, so there is nothing to wait for.
+        if !matches!(runtime, "k0s-worker" | "k0s-controller") {
+            info!("restart_runtime: Waiting for the CRI runtime unit to come back");
+            wait_till_cri_unit_active(runtime, 300).await?;
+        }
+        return Ok(());
     }
 
     info!("restart_runtime: Waiting for node to become ready");
