@@ -4,6 +4,9 @@
 //
 
 use crate::device::topology::{TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
+use crate::qemu::block_source::{
+    block_fd_opaque, block_source_fd_count, prepare_block_source, MAX_QEMU_BLOCK_FDSETS,
+};
 use crate::qemu::qmp::get_qmp_socket_path;
 use crate::utils::{
     chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
@@ -21,10 +24,11 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 use std::fmt::{Display, Write};
-use std::fs::{read_to_string, File};
+use std::fs::{read_to_string, File, OpenOptions};
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
+use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
 use std::os::unix::net::UnixListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str;
 use tokio;
 
@@ -1020,6 +1024,28 @@ struct BlockBackend {
     discard_unmap: bool,
 }
 
+#[derive(Debug)]
+struct AddFd {
+    file: File,
+    fdset_id: i64,
+    opaque: String,
+}
+
+#[async_trait]
+impl ToQemuParams for AddFd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-add-fd".to_string(),
+            format!(
+                "fd={},set={},opaque={}",
+                self.file.as_raw_fd(),
+                self.fdset_id,
+                self.opaque
+            ),
+        ])
+    }
+}
+
 impl BlockBackend {
     fn new(id: &str, path: &str, cache_direct: bool) -> BlockBackend {
         BlockBackend {
@@ -1089,11 +1115,10 @@ impl ToQemuParams for BlockBackend {
         } else {
             params.push("cache.no-flush=off".to_owned());
         }
-        if self.read_only {
-            params.push("auto-read-only=on".to_owned());
-        } else {
-            params.push("auto-read-only=off".to_owned());
-        }
+        params.push(format!(
+            "read-only={}",
+            if self.read_only { "on" } else { "off" }
+        ));
         if self.discard_unmap {
             params.push("discard=unmap".to_owned());
         }
@@ -2204,25 +2229,60 @@ const DEFAULT_START_ADDR: &str = "0x5";
 //const DEFAULT_ADDR: &str = "0x0";
 
 /// Configuration for the IOMMUFD object backend.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ObjectIommufd {
     id: String,
+    fd: Option<File>,
 }
 
 impl ObjectIommufd {
     pub fn new(id: impl Into<String>) -> Self {
-        Self { id: id.into() }
+        Self {
+            id: id.into(),
+            fd: None,
+        }
+    }
+
+    pub fn with_fd(id: impl Into<String>, path: &Path) -> Result<Self> {
+        Ok(Self {
+            id: id.into(),
+            fd: Some(open_qemu_device_fd(path)?),
+        })
     }
 }
 
 #[async_trait]
 impl ToQemuParams for ObjectIommufd {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        Ok(vec![
-            "-object".to_string(),
-            format!("iommufd,id={}", self.id),
-        ])
+        let mut params = format!("iommufd,id={}", self.id);
+        if let Some(fd) = &self.fd {
+            write!(params, ",fd={}", fd.as_raw_fd()).unwrap();
+        }
+        Ok(vec!["-object".to_string(), params])
     }
+}
+
+fn open_qemu_device_fd(path: &Path) -> Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_CLOEXEC)
+        .open(path)
+        .with_context(|| format!("open QEMU host device {}", path.display()))?;
+    if !file
+        .metadata()
+        .with_context(|| format!("stat QEMU host device {}", path.display()))?
+        .file_type()
+        .is_char_device()
+    {
+        return Err(anyhow!(
+            "QEMU host device {} is not a character device",
+            path.display()
+        ));
+    }
+    clear_cloexec(file.as_raw_fd())
+        .with_context(|| format!("clear O_CLOEXEC on QEMU host device {}", path.display()))?;
+    Ok(file)
 }
 
 /// Representation of a PCIe Root Port device in QEMU.
@@ -2442,7 +2502,7 @@ impl ToQemuParams for PCIeSwitchDownstreamPortDevice {
 }
 
 /// VFIO PCI device
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PCIeVfioDevice {
     host_bdf: String,
     bus: String,
@@ -2452,6 +2512,7 @@ pub struct PCIeVfioDevice {
     /// via QMP (`qom-get`) or the runtime can match it to a guest PCI path.
     id: Option<String>,
     iommufd: Option<String>,
+    fd: Option<File>,
     x_pci_vendor_id: Option<String>,
     x_pci_device_id: Option<String>,
 }
@@ -2468,6 +2529,7 @@ impl PCIeVfioDevice {
             addr: "0x0".to_string(),
             id: None,
             iommufd: Some(iommufd.into()),
+            fd: None,
             x_pci_vendor_id: None,
             x_pci_device_id: None,
         }
@@ -2482,6 +2544,7 @@ impl PCIeVfioDevice {
             addr: "0x0".to_string(),
             id: None,
             iommufd: None,
+            fd: None,
             x_pci_vendor_id: None,
             x_pci_device_id: None,
         }
@@ -2490,6 +2553,11 @@ impl PCIeVfioDevice {
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
         self.id = Some(id.into());
         self
+    }
+
+    pub fn with_fd(mut self, path: &Path) -> Result<Self> {
+        self.fd = Some(open_qemu_device_fd(path)?);
+        Ok(self)
     }
 
     #[allow(dead_code)]
@@ -2529,7 +2597,10 @@ impl ToQemuParams for PCIeVfioDevice {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = String::with_capacity(256);
 
-        write!(params, "vfio-pci,host={}", self.host_bdf).unwrap();
+        write!(params, "vfio-pci").unwrap();
+        if self.fd.is_none() {
+            write!(params, ",host={}", self.host_bdf).unwrap();
+        }
         write!(params, ",bus={}", self.bus).unwrap();
         write!(params, ",addr={}", self.addr).unwrap();
 
@@ -2539,6 +2610,10 @@ impl ToQemuParams for PCIeVfioDevice {
 
         if let Some(iommufd) = &self.iommufd {
             write!(params, ",iommufd={}", iommufd).unwrap();
+        }
+
+        if let Some(fd) = &self.fd {
+            write!(params, ",fd={}", fd.as_raw_fd()).unwrap();
         }
 
         if let Some(vendor) = &self.x_pci_vendor_id {
@@ -2600,6 +2675,15 @@ pub struct VfioDeviceConfig {
 
     /// Optional PCI Device ID override.
     pub x_pci_device_id: Option<String>,
+
+    /// Host IOMMUFD device opened by the privileged shim for QEMU.
+    pub iommufd_dev: Option<PathBuf>,
+
+    /// Per-device VFIO cdev opened by the privileged shim for QEMU.
+    pub vfio_cdev: Option<PathBuf>,
+
+    /// Stable QEMU ID required when vfio-pci receives an external device fd.
+    pub qemu_device_id: Option<String>,
 }
 
 impl VfioDeviceConfig {
@@ -2618,6 +2702,9 @@ impl VfioDeviceConfig {
             vfio_addr: format!("0x{}", port),
             x_pci_vendor_id: None,
             x_pci_device_id: None,
+            iommufd_dev: None,
+            vfio_cdev: None,
+            qemu_device_id: None,
         }
     }
 
@@ -2673,6 +2760,18 @@ impl VfioDeviceConfig {
     #[allow(dead_code)]
     pub fn with_device_id(mut self, device_id: impl Into<String>) -> Self {
         self.x_pci_device_id = Some(device_id.into());
+        self
+    }
+
+    pub fn with_device_fds(
+        mut self,
+        iommufd_dev: impl Into<PathBuf>,
+        vfio_cdev: impl Into<PathBuf>,
+        qemu_device_id: impl Into<String>,
+    ) -> Self {
+        self.iommufd_dev = Some(iommufd_dev.into());
+        self.vfio_cdev = Some(vfio_cdev.into());
+        self.qemu_device_id = Some(qemu_device_id.into());
         self
     }
 }
@@ -2813,6 +2912,9 @@ pub struct QemuCmdLine<'a> {
 
     devices: Vec<Box<dyn ToQemuParams>>,
     ccw_subchannel: Option<CcwSubChannel>,
+    block_fdsets: HashMap<String, Vec<i64>>,
+    next_fdset_id: i64,
+    requires_memlock: bool,
 }
 
 impl<'a> QemuCmdLine<'a> {
@@ -2834,6 +2936,9 @@ impl<'a> QemuCmdLine<'a> {
             bios: None,
             devices: Vec::new(),
             ccw_subchannel,
+            block_fdsets: HashMap::new(),
+            next_fdset_id: 1,
+            requires_memlock: false,
         };
 
         // add_virtiofs_share() installs the file-backed memory backend when
@@ -2909,6 +3014,16 @@ impl<'a> QemuCmdLine<'a> {
     /// Used to transfer boot-time CCW state to Qmp for hotplug allocation.
     pub fn take_ccw_subchannel(&mut self) -> Option<CcwSubChannel> {
         self.ccw_subchannel.take()
+    }
+
+    /// Takes ownership of cold-plug block fdset bookkeeping so QMP can remove
+    /// the descriptors if one of those devices is subsequently unplugged.
+    pub fn take_block_fdsets(&mut self) -> HashMap<String, Vec<i64>> {
+        std::mem::take(&mut self.block_fdsets)
+    }
+
+    pub fn requires_memlock(&self) -> bool {
+        self.requires_memlock
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
@@ -3140,16 +3255,50 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_block_device(
         &mut self,
         device_id: &str,
         path: &str,
+        format: &crate::BlockDeviceFormat,
+        vmdk: Option<&crate::VmdkConfig>,
         is_direct: bool,
+        is_readonly: bool,
         is_scsi: bool,
         discard_unmap: bool,
         serial_override: Option<&str>,
     ) -> Result<()> {
-        let mut backend = BlockBackend::new(device_id, path, is_direct);
+        if self.block_fdsets.contains_key(device_id) {
+            return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
+        }
+        let fd_count = block_source_fd_count(format, vmdk)?;
+        let current_fd_count = self
+            .block_fdsets
+            .values()
+            .try_fold(0_usize, |total, ids| total.checked_add(ids.len()))
+            .ok_or_else(|| anyhow!("QEMU block fdset count overflow"))?;
+        if current_fd_count
+            .checked_add(fd_count)
+            .is_none_or(|count| count > MAX_QEMU_BLOCK_FDSETS)
+        {
+            return Err(anyhow!(
+                "QEMU block descriptors exceed the per-VM limit of {MAX_QEMU_BLOCK_FDSETS}"
+            ));
+        }
+
+        let mut fdset_ids = Vec::with_capacity(fd_count);
+        let path =
+            prepare_block_source(path, format, vmdk, is_readonly, is_direct, |file, label| {
+                let (path, fdset_id) =
+                    self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
+                fdset_ids.push(fdset_id);
+                Ok(path)
+            })?
+            .filename;
+        self.block_fdsets.insert(device_id.to_string(), fdset_ids);
+
+        let mut backend = BlockBackend::new(device_id, &path, is_direct);
+        backend.set_read_only(is_readonly);
         backend.set_discard_unmap(discard_unmap);
         self.devices.push(Box::new(backend));
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
@@ -3166,6 +3315,23 @@ impl<'a> QemuCmdLine<'a> {
         }
 
         Ok(())
+    }
+
+    fn add_block_source_fd(&mut self, file: File, label: &str) -> Result<(String, i64)> {
+        clear_cloexec(file.as_raw_fd()).context("clear O_CLOEXEC on QEMU block source")?;
+
+        let fdset_id = self.next_fdset_id;
+        self.next_fdset_id = self
+            .next_fdset_id
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("QEMU block fdset ID exhausted"))?;
+        self.devices.push(Box::new(AddFd {
+            file,
+            fdset_id,
+            opaque: label.to_string(),
+        }));
+
+        Ok((format!("/dev/fdset/{fdset_id}"), fdset_id))
     }
 
     #[allow(dead_code)]
@@ -3406,7 +3572,29 @@ impl<'a> QemuCmdLine<'a> {
         };
 
         let iommufd_name = format!("iommufd{}", config.bus);
-        self.add_iommufd(&iommufd_name)?;
+        let external_fds = match (
+            config.iommufd_dev.as_deref(),
+            config.vfio_cdev.as_deref(),
+            config.qemu_device_id.as_deref(),
+        ) {
+            (Some(iommufd_dev), Some(vfio_cdev), Some(qemu_device_id)) => {
+                Some((iommufd_dev, vfio_cdev, qemu_device_id))
+            }
+            (None, None, None) => None,
+            _ => {
+                return Err(anyhow!(
+                    "QEMU VFIO descriptor configuration must include IOMMUFD, cdev, and device ID"
+                ));
+            }
+        };
+        if let Some((iommufd_dev, _, _)) = external_fds {
+            self.devices.push(Box::new(ObjectIommufd::with_fd(
+                &iommufd_name,
+                iommufd_dev,
+            )?));
+        } else {
+            self.add_iommufd(&iommufd_name)?;
+        }
 
         let root_port_id = config.bus.clone();
         let root_port = PCIeRootPortDevice::new(&root_port_id, DEFAULT_PCIE_ROOT_BUS)
@@ -3417,6 +3605,10 @@ impl<'a> QemuCmdLine<'a> {
         info!(sl!(), "PCIe Root Port: {:?}", root_port.clone());
 
         let mut vfio_device = PCIeVfioDevice::new(&config.host_bdf, root_port_id, &iommufd_name);
+        if let Some((_, vfio_cdev, qemu_device_id)) = external_fds {
+            vfio_device = vfio_device.with_id(qemu_device_id).with_fd(vfio_cdev)?;
+            self.requires_memlock = true;
+        }
 
         if let Some(vendor_id) = &config.x_pci_vendor_id {
             vfio_device = vfio_device.with_vendor_id(vendor_id);
@@ -3779,7 +3971,9 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BlockDeviceFormat;
     use serial_test::serial;
+    use tempfile::tempdir;
 
     fn contains_param(params: &[String], expected: &str) -> bool {
         params
@@ -3868,5 +4062,219 @@ mod tests {
         let scsi_hd = DeviceScsiHd::new("blk0", "scsi0.0", None);
         let scsi_hd_params = scsi_hd.qemu_params().await.unwrap();
         assert!(!contains_param(&scsi_hd_params, "discard=on"));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_vfio_uses_inherited_device_fds() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("vfio-device-fds", &config).unwrap();
+        let vfio = VfioDeviceConfig::new("0000:21:00.0", 9, 10)
+            .with_vfio_bus("rp0")
+            .with_device_fds("/dev/null", "/dev/null", "vfio-test");
+
+        cmdline.add_pcie_vfio_device(vfio).unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        let iommufd = params
+            .windows(2)
+            .find(|args| args[0] == "-object" && args[1].starts_with("iommufd,"))
+            .expect("missing IOMMUFD object");
+        assert!(contains_param(&iommufd[1..2], "id=iommufdrp0"));
+        assert!(iommufd[1].split(',').any(|param| param.starts_with("fd=")));
+
+        let vfio = params
+            .windows(2)
+            .find(|args| args[0] == "-device" && args[1].starts_with("vfio-pci,"))
+            .expect("missing VFIO device");
+        assert!(contains_param(&vfio[1..2], "id=vfio-test"));
+        assert!(contains_param(&vfio[1..2], "iommufd=iommufdrp0"));
+        assert!(vfio[1].split(',').any(|param| param.starts_with("fd=")));
+        assert!(!vfio[1].split(',').any(|param| param.starts_with("host=")));
+        assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_multiple_vfio_devices_use_independent_fds() {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("multiple-vfio-device-fds", &config).unwrap();
+
+        let vfio0 = VfioDeviceConfig::new("0000:21:00.0", 9, 10)
+            .with_vfio_bus("rp0")
+            .with_device_fds("/dev/null", "/dev/null", "vfio-gpu-0");
+        let vfio1 = VfioDeviceConfig::new("0000:81:00.0", 10, 11)
+            .with_vfio_bus("rp1")
+            .with_device_fds("/dev/null", "/dev/null", "vfio-gpu-1");
+
+        cmdline.add_pcie_vfio_device(vfio0).unwrap();
+        cmdline.add_pcie_vfio_device(vfio1).unwrap();
+        let params = cmdline.build().await.unwrap();
+
+        let iommufds: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| {
+                (args[0] == "-object" && args[1].starts_with("iommufd,"))
+                    .then_some(args[1].as_str())
+            })
+            .collect();
+        assert_eq!(iommufds.len(), 2);
+        assert!(iommufds
+            .iter()
+            .any(|arg| arg.split(',').any(|param| param == "id=iommufdrp0")));
+        assert!(iommufds
+            .iter()
+            .any(|arg| arg.split(',').any(|param| param == "id=iommufdrp1")));
+
+        let vfio_devices: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| {
+                (args[0] == "-device" && args[1].starts_with("vfio-pci,"))
+                    .then_some(args[1].as_str())
+            })
+            .collect();
+        assert_eq!(vfio_devices.len(), 2);
+        assert!(vfio_devices.iter().any(|arg| {
+            arg.split(',').any(|param| param == "id=vfio-gpu-0")
+                && arg.split(',').any(|param| param == "iommufd=iommufdrp0")
+        }));
+        assert!(vfio_devices.iter().any(|arg| {
+            arg.split(',').any(|param| param == "id=vfio-gpu-1")
+                && arg.split(',').any(|param| param == "iommufd=iommufdrp1")
+        }));
+        assert!(vfio_devices
+            .iter()
+            .all(|arg| !arg.split(',').any(|param| param.starts_with("host="))));
+
+        let mut inherited_fds: Vec<&str> = iommufds
+            .iter()
+            .chain(vfio_devices.iter())
+            .map(|arg| {
+                arg.split(',')
+                    .find(|param| param.starts_with("fd="))
+                    .expect("missing inherited device fd")
+            })
+            .collect();
+        inherited_fds.sort_unstable();
+        inherited_fds.dedup();
+        assert_eq!(inherited_fds.len(), 4);
+        assert!(cmdline.requires_memlock());
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_block_source_uses_inherited_fdset() {
+        let dir = tempdir().unwrap();
+        let image = dir.path().join("image.raw");
+        std::fs::write(&image, vec![0u8; 4096]).unwrap();
+
+        let config = test_qemu_config(Some("none"), false);
+        let mut cmdline = QemuCmdLine::new("rootless-block-fd", &config).unwrap();
+        let result = cmdline.add_block_device(
+            "rootfs",
+            image.to_str().unwrap(),
+            &BlockDeviceFormat::Raw,
+            None,
+            false,
+            true,
+            false,
+            false,
+            None,
+        );
+        result.unwrap();
+
+        let params = cmdline.build().await.unwrap();
+        let add_fd = params
+            .windows(2)
+            .find(|args| args[0] == "-add-fd")
+            .expect("missing inherited block fd");
+        assert!(add_fd[1].contains("set=1"));
+        assert!(add_fd[1].contains("opaque=kata-block:rootfs:block-source"));
+
+        let blockdev = params
+            .windows(2)
+            .find(|args| args[0] == "-blockdev")
+            .expect("missing block backend");
+        assert!(blockdev[1].contains("filename=/dev/fdset/1"));
+        assert!(!blockdev[1].contains(image.to_str().unwrap()));
+
+        assert_eq!(
+            cmdline.take_block_fdsets(),
+            HashMap::from([("rootfs".to_string(), vec![1])])
+        );
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_block_backend_read_only_params() {
+        let dir = tempdir().unwrap();
+        let readonly = dir.path().join("readonly.img");
+        let writable = dir.path().join("writable.img");
+        std::fs::write(&readonly, vec![0_u8; 4096]).unwrap();
+        std::fs::write(&writable, vec![0_u8; 4096]).unwrap();
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("block-read-only", &config).unwrap();
+        cmdline
+            .add_block_device(
+                "readonly",
+                readonly.to_str().unwrap(),
+                &BlockDeviceFormat::Raw,
+                None,
+                true,
+                true,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
+        cmdline
+            .add_block_device(
+                "writable",
+                writable.to_str().unwrap(),
+                &BlockDeviceFormat::Raw,
+                None,
+                true,
+                false,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
+
+        let params = cmdline.build().await.unwrap();
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-blockdev"
+                && args[1].contains("node-name=image-readonly")
+                && contains_param(&args[1..2], "read-only=on")
+        }));
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-blockdev"
+                && args[1].contains("node-name=image-writable")
+                && contains_param(&args[1..2], "read-only=off")
+        }));
+        assert!(!params.iter().any(|arg| arg.contains("auto-read-only=")));
+
+        drop(cmdline);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_seccomp_sandbox_params() {
+        let mut config = test_qemu_config(None, false);
+        let params = build_test_cmdline("seccomp-disabled", &config).await;
+        assert!(!params.iter().any(|arg| arg == "-sandbox"));
+
+        let sandbox = "on";
+        config.security_info.seccomp_sandbox = Some(sandbox.to_owned());
+        let params = build_test_cmdline("seccomp-enabled", &config).await;
+
+        assert!(has_qemu_arg(&params, "-sandbox", sandbox));
+        assert_eq!(params.iter().filter(|arg| *arg == "-sandbox").count(), 1);
     }
 }

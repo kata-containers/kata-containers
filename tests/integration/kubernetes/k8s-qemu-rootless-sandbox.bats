@@ -12,22 +12,46 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
 
+# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
+# by default. Until then, explicitly request a GPU so this test exercises the
+# runtime-rs VFIO file-descriptor path.
+request_gpu_for_nvidia_gpu_runtime_rs() {
+	local available_gpus
+	local config="$1"
+
+	is_runtime_rs || return 0
+	is_nvidia_gpu_platform || return 0
+
+	available_gpus="$(kubectl get node "${node}" \
+		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
+	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
+		die "${node} has no allocatable nvidia.com/pgpu resource"
+
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
+		"${config}"
+}
+
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
 
-	# Additional QEMU configurations are tracked in:
-	# https://github.com/kata-containers/kata-containers/issues/13424
-	is_runtime_rs && return 1
-	is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" && return 1
-	# Rootless QEMU cannot access EROFS layers below root-owned
-	# snapshot directories.
-	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && return 1
-	is_confidential_runtime_class "${KATA_HYPERVISOR}" && return 1
+	# CoCo-dev does not enable a TEE and remains covered for both runtimes.
+	# Actual confidential handlers require runtime-rs rootless device access.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
+		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]] &&
+		! is_runtime_rs; then
+		return 1
+	fi
+	# Runtime-go does not pass EROFS layers to rootless QEMU by file
+	# descriptor and therefore cannot traverse their snapshot directories.
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]] && ! is_runtime_rs; then
+		return 1
+	fi
 	return 0
 }
 
 setup() {
 	local runtime_config_dropin_file
+	local seccomp_key
 
 	if ! qemu_rootless_sandbox_supported; then
 		skip "QEMU rootless and seccomp sandbox smoke testing does not cover ${KATA_HYPERVISOR}"
@@ -38,18 +62,39 @@ setup() {
 	pod_name="test-e2e"
 	pod_config="$(new_pod_config \
 		"quay.io/prometheus/busybox:latest" \
-		"$(get_test_runtime_class)")"
+		"$(get_test_runtime_class)" \
+		"" "" "10")"
 	set_node "${pod_config}" "${node}"
+	# /dev/loop* remains covered by k8s-block-volume.bats. When policy
+	# generation is enabled, confidential runtime-rs handlers cover init-data.
+	# Do not request a disk-backed emptyDir from runtime-go with shared_fs=none;
+	# only runtime-rs implements the block-source file-descriptor path.
+	if is_runtime_rs || ! is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
+		yq -i '
+			.spec.volumes += [{"name": "rootless-emptydir", "emptyDir": {}}] |
+			.spec.containers[0].volumeMounts += [{
+				"name": "rootless-emptydir",
+				"mountPath": "/mnt/rootless-emptydir"
+			}]
+		' "${pod_config}"
+	fi
 	set_container_command "${pod_config}" 0 sleep 30
+	request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
+
+	if is_runtime_rs; then
+		seccomp_key="seccomp_sandbox"
+	else
+		seccomp_key="seccompsandbox"
+	fi
 
 	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-qemu-sandbox.toml"
 	cat > "${runtime_config_dropin_file}" <<EOF
 [hypervisor.qemu]
 rootless = true
-seccompsandbox = "${QEMU_SANDBOX_PARAM}"
+${seccomp_key} = "${QEMU_SANDBOX_PARAM}"
 EOF
 
 	runtime_config_dropin="$(set_kata_runtime_config_dropin_file \
