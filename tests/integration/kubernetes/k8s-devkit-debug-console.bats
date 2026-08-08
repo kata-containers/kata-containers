@@ -70,8 +70,13 @@ launch_pod() {
 	kubectl create -f "${pod_config}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
 
-	sandbox_id="$(get_node_kata_sandbox_id "${node}")"
-	[[ -n "${sandbox_id}" ]] || die "Failed to resolve kata sandbox id on node ${node}"
+	# Ask the container runtime which sandbox belongs to this pod, rather than
+	# looking for a shim in the node's process list: the process list is read
+	# through the node debugger's chroot, where `ps -ef` intermittently dies
+	# on a "fatal library error, lookup self", and it cannot tell this pod's
+	# sandbox from any other one running on the node anyway.
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "Failed to resolve the sandbox id of pod ${pod_name}"
 	echo "sandbox id: ${sandbox_id}"
 }
 
