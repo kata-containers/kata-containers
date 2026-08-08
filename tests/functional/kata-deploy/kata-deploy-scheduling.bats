@@ -372,3 +372,48 @@ EOF
 	echo "${ds}" | grep -q "preferred-team"
 	echo "${ds}" | grep -q "feature.node.kubernetes.io/cpu-cpuid.VMX"
 }
+
+@test "Helm template (job mode): the dispatcher can be confined to trusted nodes" {
+	local args=(
+		--set 'job.dispatcherNodeSelector.node-role\.kubernetes\.io/control-plane='
+		--set 'job.dispatcherTolerations[0].key=node-role.kubernetes.io/control-plane'
+		--set 'job.dispatcherTolerations[0].operator=Exists'
+		--set 'job.dispatcherTolerations[0].effect=NoSchedule'
+	)
+
+	# The dispatcher is the part of job mode holding a token, so an operator must
+	# be able to keep it off the nodes Kata runs on: root on the node it lands on
+	# can read that token.
+	local stage rendered
+	for stage in install cleanup; do
+		rendered=$(helm template kata-deploy "${CHART_PATH}" \
+			--set deploymentMode=job \
+			"${args[@]}" \
+			--show-only "templates/kata-deploy-${stage}-job.yaml")
+		echo "${rendered}" | grep -q 'node-role.kubernetes.io/control-plane: ""'
+		echo "${rendered}" | grep -q 'key: node-role.kubernetes.io/control-plane'
+	done
+
+	# Where the dispatcher may run says nothing about where Kata is installed: the
+	# per-node Jobs must not inherit its placement, or pinning the dispatcher to
+	# the control plane would quietly stop installing on the workers.
+	local jobs
+	jobs=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		"${args[@]}" \
+		--show-only templates/kata-deploy-job-templates.yaml)
+	! echo "${jobs}" | grep -q 'node-role.kubernetes.io/control-plane'
+}
+
+@test "Helm template (job mode): dispatcher tolerations default to the top-level ones" {
+	local rendered
+	rendered=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set 'tolerations[0].operator=Exists' \
+		--show-only templates/kata-deploy-install-job.yaml)
+
+	# Without this fallback a cluster whose every node is tainted - a single-node
+	# cluster, say - would select nodes it has nowhere to dispatch from.
+	echo "${rendered}" | grep -q 'tolerations:'
+	echo "${rendered}" | grep -q 'operator: Exists'
+}
