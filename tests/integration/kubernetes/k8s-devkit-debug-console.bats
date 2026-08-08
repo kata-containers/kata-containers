@@ -28,11 +28,10 @@ devkit_runtimeclass() {
 }
 
 # A probe the *guest* shell must evaluate: $((6*7)) only becomes "SHELL_OK=42"
-# when a real shell runs it. The literal command text, even if echoed back by
-# the PTY, never contains the expanded value - so "SHELL_OK=42" in the output is
-# unambiguous proof that a debug console shell actually executed. The /real_root
-# symlink is created only by devkit-init when the overlay is set up, so it tells
-# the devkit chroot apart from the (also Ubuntu-based) NVIDIA base rootfs.
+# when a real shell runs it, so that string in the output is unambiguous proof
+# that a debug console shell actually executed. The /real_root symlink is
+# created only by devkit-init when the overlay is set up, so it tells the devkit
+# chroot apart from the (also Ubuntu-based) NVIDIA base rootfs.
 DEVKIT_PROBE='echo "SHELL_OK=$((6*7))"; . /etc/os-release 2>/dev/null; echo "GUEST_ID=${ID}"; test -L /real_root && echo "DEVKIT_OVERLAY=yes" || true'
 
 check_and_skip() {
@@ -80,22 +79,17 @@ launch_pod() {
 	echo "sandbox id: ${sandbox_id}"
 }
 
-# Drive the interactive agent debug console for sandbox_id with DEVKIT_PROBE and
-# echo the combined output.
+# Run DEVKIT_PROBE on the agent debug console for sandbox_id and echo what it
+# printed. `kata-ctl exec ... -- <cmd>` waits for the console shell to be ready
+# on its own, so no terminal has to be faked and no sleeps have to be guessed.
 #
-# The console is an interactive PTY, so a bare pipe races the guest login shell
-# startup and loses the input. Drive it with a real terminal via `script`
-# (util-linux), feeding commands through a FIFO whose writer stays open long
-# enough for the shell to be ready before input arrives and to flush output
-# before we send `exit`.
+# DEVKIT_PROBE carries no single quotes, so it survives being single-quoted here
+# for the remote shell.
 run_debug_console() {
 	local sandbox_id="$1"
-	local remote="
-fifo=\$(mktemp -u); mkfifo \"\${fifo}\"
-( sleep 2; printf '%s\\n' '${DEVKIT_PROBE}'; sleep 3; printf 'exit\\n'; sleep 1 ) > \"\${fifo}\" &
-timeout 120 script -qec \"nsenter --mount=/proc/1/ns/mnt /opt/kata/bin/kata-ctl exec ${sandbox_id}\" /dev/null < \"\${fifo}\" 2>&1
-rm -f \"\${fifo}\"
-"
+	local remote="timeout 120 nsenter --mount=/proc/1/ns/mnt \
+/opt/kata/bin/kata-ctl exec ${sandbox_id} -- sh -c '${DEVKIT_PROBE}' 2>&1"
+
 	exec_host "${node}" "${remote}" || true
 }
 

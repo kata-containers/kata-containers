@@ -12,6 +12,7 @@ extern crate slog;
 mod arch;
 mod args;
 mod check;
+mod debug_console;
 mod log_parser;
 mod monitor;
 mod ops;
@@ -41,7 +42,9 @@ macro_rules! sl {
     };
 }
 
-fn real_main() -> Result<()> {
+// Returns the exit status to leave with: zero for every command but `exec`,
+// which reports the status of what ran in the guest.
+fn real_main() -> Result<i32> {
     let args = KataCtlCli::parse();
 
     if args.show_default_config_paths {
@@ -49,7 +52,7 @@ fn real_main() -> Result<()> {
             .iter()
             .for_each(|p| println!("{}", p.display()));
 
-        return Ok(());
+        return Ok(0);
     }
 
     let log_level = args.log_level.unwrap_or(slog::Level::Info);
@@ -64,16 +67,16 @@ fn real_main() -> Result<()> {
 
     let res = if let Some(command) = args.command {
         match command {
-            Commands::Check(args) => handle_check(args),
-            Commands::DirectVolume(args) => handle_direct_volume(args),
+            Commands::Check(args) => handle_check(args).map(|_| 0),
+            Commands::DirectVolume(args) => handle_direct_volume(args).map(|_| 0),
             Commands::Exec(args) => handle_exec(args),
-            Commands::Env(args) => handle_env(args),
-            Commands::Factory(args) => handle_factory(args),
-            Commands::Iptables(args) => handle_iptables(args),
-            Commands::Metrics(args) => handle_metrics(args),
-            Commands::Monitor(args) => handle_monitor(args),
-            Commands::Version => handle_version(),
-            Commands::LogParser(args) => log_parser(args),
+            Commands::Env(args) => handle_env(args).map(|_| 0),
+            Commands::Factory(args) => handle_factory(args).map(|_| 0),
+            Commands::Iptables(args) => handle_iptables(args).map(|_| 0),
+            Commands::Metrics(args) => handle_metrics(args).map(|_| 0),
+            Commands::Monitor(args) => handle_monitor(args).map(|_| 0),
+            Commands::Version => handle_version().map(|_| 0),
+            Commands::LogParser(args) => log_parser(args).map(|_| 0),
         }
     } else {
         // The user specified an option, but not a subcommand. We've already
@@ -103,7 +106,8 @@ fn real_main() -> Result<()> {
 }
 
 fn main() {
-    if let Err(_e) = real_main() {
-        exit(1);
+    match real_main() {
+        Ok(status) => exit(status),
+        Err(_e) => exit(1),
     }
 }
