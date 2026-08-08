@@ -68,7 +68,8 @@ jobs:
         working-directory: src/runtime-rs
         run: |
           cargo build --release --target x86_64-unknown-linux-musl --bin containerd-shim-kata-v2
-          BIN=$(find /home/aph5nt/actions-runner-kubetee/_work -name 'containerd-shim-kata-v2' -type f 2>/dev/null | head -1)
+          BIN=target/x86_64-unknown-linux-musl/release/containerd-shim-kata-v2
+          test -f "$BIN"
           echo "Binary found at: $BIN"
           cp "$BIN" ./containerd-shim-kata-v2
           ls -la ./containerd-shim-kata-v2
