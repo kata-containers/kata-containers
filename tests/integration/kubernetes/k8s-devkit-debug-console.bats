@@ -88,8 +88,8 @@ launch_pod() {
 	kubectl create -f "${pod_config}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
 
-	sandbox_id="$(get_node_kata_sandbox_id "${node}")"
-	[[ -n "${sandbox_id}" ]] || die "Failed to resolve kata sandbox id on node ${node}"
+	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
+	[[ -n "${sandbox_id}" ]] || die "Failed to resolve the sandbox id of pod ${pod_name}"
 	echo "sandbox id: ${sandbox_id}"
 }
 
