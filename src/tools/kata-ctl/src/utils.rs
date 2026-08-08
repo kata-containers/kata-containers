@@ -159,14 +159,43 @@ pub fn supports_vsocks(vsock_path: &str) -> Result<bool> {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::env;
     use std::io::Write;
+    use std::process::Command;
     use tempfile::tempdir;
 
+    /// Set on the copy of the test binary that does the dropping, so it knows
+    /// to do it rather than start another one.
+    const DROP_PRIVS_CHILD: &str = "KATA_CTL_TEST_DROP_PRIVS_CHILD";
+
+    /// Dropping privileges cannot be undone and applies to the whole process,
+    /// and every test here runs in a thread of one. Dropping in place would
+    /// take root away from whatever else is running, which under `sudo make
+    /// test` leaves the longer tests unable to touch the files they created.
+    /// So run the real thing in a fresh copy of this binary and go by what it
+    /// exits with. A new process rather than a fork of this one: looking a
+    /// user up in the child of a process this threaded is a way to deadlock.
     #[test]
     #[serial]
     fn test_drop_privs() {
-        let res = drop_privs();
-        assert!(res.is_ok());
+        if env::var_os(DROP_PRIVS_CHILD).is_some() {
+            drop_privs().unwrap();
+            return;
+        }
+
+        let before = nix::unistd::Uid::effective();
+        let status = Command::new(env::current_exe().unwrap())
+            .args(["utils::tests::test_drop_privs", "--exact", "--nocapture"])
+            .env(DROP_PRIVS_CHILD, "1")
+            .status()
+            .unwrap();
+
+        assert!(status.success(), "dropping privileges failed: {}", status);
+        assert_eq!(
+            nix::unistd::Uid::effective(),
+            before,
+            "the suite dropped its own privileges"
+        );
     }
 
     #[test]
