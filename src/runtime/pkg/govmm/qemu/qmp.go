@@ -726,7 +726,7 @@ func QMPStartWithConn(ctx context.Context, conn net.Conn, cfg QMPConfig, disconn
 	case <-ctx.Done():
 		q.Shutdown()
 		<-disconnectedCh
-		return nil, nil, fmt.Errorf("canceled by caller")
+		return nil, nil, ctx.Err()
 	case <-disconnectedCh:
 		return nil, nil, fmt.Errorf("lost connection to VM")
 	case q.version = <-connectedCh:
