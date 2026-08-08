@@ -22,18 +22,20 @@ if [[ "${ID:-}" != "ubuntu" ]]; then
 	exit 1
 fi
 
-# NVIDIA publishes repos per distro tag (24.04 -> ubuntu2404) and per arch, with
-# 'sbsa' standing in for arm64.
-version_id="${VERSION_ID:-}"
-distro="ubuntu${version_id//./}"
-case "$(uname -m)" in
-	x86_64) repo_arch="x86_64" ;;
-	aarch64) repo_arch="sbsa" ;;
-	*) echo "add-nvidia-repos: unsupported arch $(uname -m)" >&2; exit 1 ;;
-esac
+# The repository NVIDIA publishes per distro tag (24.04 -> ubuntu2404) and per
+# arch ('sbsa' for arm64) is pinned in versions.yaml under
+# externals.nvidia.cuda.repo, the same entry the GPU rootfs builds consume. The
+# devkit shell has no versions.yaml to read, so the build bakes it in here.
+base_url="@CUDA_REPO_URL@"
+keyring_deb="@CUDA_REPO_PKG@"
 
-base_url="https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${repo_arch}"
-keyring_deb="cuda-keyring_1.1-1_all.deb"
+if [[ -z "${base_url}" ]] || [[ "${base_url}" == @* ]] || [[ -z "${keyring_deb}" ]]; then
+	echo "add-nvidia-repos: no CUDA repository was baked into this devkit (see externals.nvidia.cuda.repo in versions.yaml)" >&2
+	exit 1
+fi
+
+# versions.yaml stores the repository URL with a trailing slash.
+base_url="${base_url%/}"
 
 echo "add-nvidia-repos: adding ${base_url}"
 tmpdir="$(mktemp -d)"

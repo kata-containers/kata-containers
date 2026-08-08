@@ -864,12 +864,18 @@ install_image_devkit_extension() {
 	[[ "${os_name}" == "ubuntu" ]] || die "devkit extension expects an ubuntu base, got '${os_name}' for ${ARCH}"
 	[[ -n "${os_version}" ]] || die "assets.image.architecture.${ARCH}.version must be set in versions.yaml"
 
-	# Self-contained (Ubuntu release + guest scripts), so key the cache on the
-	# Ubuntu version and the devkit source directory.
+	# Self-contained (Ubuntu release + guest scripts + the CUDA repository baked
+	# into devkit-add-nvidia-repos), so key the cache on the Ubuntu version, the
+	# devkit source directory and that repository pin.
 	local devkit_last_commit
 	devkit_last_commit="$(git -C "${repo_root_dir}" log -1 --abbrev=9 --pretty=format:"%h" \
 		-- tools/osbuilder/rootfs-builder/devkit 2>/dev/null || echo "unknown")"
-	latest_artefact="$(get_kata_version)-devkit-extension-${os_version}-${devkit_last_commit}"
+	local cuda_repo_pin
+	cuda_repo_pin="$(printf '%s %s' \
+		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${ARCH}.url")" \
+		"$(get_from_kata_deps ".externals.nvidia.cuda.repo.${ARCH}.pkg")" \
+		| sha256sum | cut -c1-9)"
+	latest_artefact="$(get_kata_version)-devkit-extension-${os_version}-${devkit_last_commit}-${cuda_repo_pin}"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
