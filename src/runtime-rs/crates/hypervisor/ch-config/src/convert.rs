@@ -40,12 +40,12 @@ pub const DEFAULT_DISK_QUEUE_SIZE: u16 = 128;
 
 const MSHV_DEVICE_PATH: &str = "/dev/mshv";
 
-fn cpu_nested_config() -> Option<bool> {
+fn cpu_nested_config(disable_nested_virtualization: Option<bool>) -> Option<bool> {
     if Path::new(MSHV_DEVICE_PATH).exists() {
         // Nested vCPUs are not supported on MSHV yet.
         Some(false)
     } else {
-        None
+        disable_nested_virtualization.map(|value| !value)
     }
 }
 
@@ -418,7 +418,7 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
         let cfg = CpusConfig {
             boot_vcpus,
             max_vcpus,
-            nested: cpu_nested_config(),
+            nested: cpu_nested_config(cpu.disable_nested_virtualization),
             max_phys_bits,
             topology: Some(topology),
             features,
@@ -707,7 +707,7 @@ mod tests {
         let cpus_config = CpusConfig {
             boot_vcpus: cpu_default,
             max_vcpus,
-            nested: cpu_nested_config(),
+            nested: cpu_nested_config(cpu_info.disable_nested_virtualization),
             topology: Some(CpuTopology {
                 cores_per_die: u16::try_from(max_vcpus).unwrap(),
 
@@ -1280,7 +1280,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
-                    nested: cpu_nested_config(),
+                    nested: cpu_nested_config(None),
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 
@@ -1295,13 +1295,36 @@ mod tests {
                 cpu_info: CpuInfo {
                     default_vcpus: 1.0,
                     default_maxvcpus: 3,
+                    disable_nested_virtualization: Some(false),
                     ..Default::default()
                 },
                 guest_protection: GuestProtection::NoProtection,
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 3,
-                    nested: cpu_nested_config(),
+                    nested: cpu_nested_config(Some(false)),
+                    topology: Some(CpuTopology {
+                        cores_per_die: 3,
+
+                        ..topology
+                    }),
+                    max_phys_bits: DEFAULT_CH_MAX_PHYS_BITS,
+
+                    ..Default::default()
+                }),
+            },
+            TestData {
+                cpu_info: CpuInfo {
+                    default_vcpus: 1.0,
+                    default_maxvcpus: 3,
+                    disable_nested_virtualization: Some(true),
+                    ..Default::default()
+                },
+                guest_protection: GuestProtection::NoProtection,
+                result: Ok(CpusConfig {
+                    boot_vcpus: 1,
+                    max_vcpus: 3,
+                    nested: Some(false),
                     topology: Some(CpuTopology {
                         cores_per_die: 3,
 
@@ -1322,7 +1345,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 256,
-                    nested: cpu_nested_config(),
+                    nested: cpu_nested_config(None),
                     topology: Some(CpuTopology {
                         cores_per_die: 256,
 
@@ -1343,7 +1366,7 @@ mod tests {
                 result: Ok(CpusConfig {
                     boot_vcpus: 1,
                     max_vcpus: 1,
-                    nested: cpu_nested_config(),
+                    nested: cpu_nested_config(None),
                     topology: Some(CpuTopology {
                         cores_per_die: 1,
 

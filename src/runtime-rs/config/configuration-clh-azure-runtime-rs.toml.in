@@ -90,6 +90,9 @@ overhead_vcpus = @DEFOVERHEADVCPUS_CLH@
 # unless you know what are you doing.
 default_maxvcpus = @DEFMAXVCPUS@
 
+# Disable nested virtualization in the guest.
+disable_nested_virtualization = @DEFDISABLENESTEDVIRTUALIZATION_CLH_AZURE@
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
