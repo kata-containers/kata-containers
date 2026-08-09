@@ -1381,9 +1381,10 @@ impl Sandbox for VirtSandbox {
         // returns. Do NOT await wait() for the full reclaim of a large TDX/CC
         // guest (can be many minutes) — that blocks Shutdown until containerd
         // SIGKILLs the shim, orphaning a still-live QEMU under init. Mark
-        // Stopped now; the start_vm background wait_vm waiter reaps; QEMU's
-        // PR_SET_PDEATHSIG covers shim exit/death. Same pattern as the
-        // Init/Starting branch above.
+        // Stopped now; QEMU's PR_SET_PDEATHSIG covers shim exit/death.
+        // fix10: stop_vm takes the Child and reaps on an OS thread (try_wait),
+        // so a cancelled tokio wait_vm cannot leave a zombie under an orphaned
+        // shim. Same non-blocking pattern as the Init/Starting branch above.
         self.hypervisor.stop_vm().await.context("stop vm")?;
         self.record_stop(0, SystemTime::now()).await;
         info!(sl!(), "sandbox stop signaled (not waiting for qemu exit)");

@@ -656,10 +656,10 @@ impl QemuInner {
         // never reaped, and QEMU becomes a zombie (or live orphan) under init
         // — leaving the Kubernetes pod stuck Terminating.
         //
-        // Use start_kill() (signal only). Reaping is done by the sandbox
-        // background wait_vm waiter / Qemu::stop_vm's background task — never
-        // block stop_vm on exit. If the Child was already taken by a concurrent
-        // wait_vm(), fall back to kill(2) on the cached pid. PR_SET_PDEATHSIG
+        // Use start_kill() (signal only). Reaping is done by Qemu::stop_vm /
+        // wait_vm via an OS-thread try_wait reaper (fix10) — never block
+        // stop_vm on exit. If the Child was already taken by a concurrent
+        // waiter, fall back to kill(2) on the cached pid. PR_SET_PDEATHSIG
         // (fix9) covers the case where the shim dies before/during reclaim.
         {
             let mut qemu_process = self.qemu_process.lock().await;
@@ -698,14 +698,19 @@ impl QemuInner {
         Err(anyhow!("qemu process has not been started yet"))
     }
 
+    /// Take ownership of the QEMU Child for reaping. Used by fix10 so stop_vm
+    /// (or wait_vm) can move the Child onto an OS thread that survives tokio
+    /// task cancellation.
+    pub(crate) async fn take_qemu_child(&self) -> Option<Child> {
+        let mut qemu_process = self.qemu_process.lock().await;
+        qemu_process.take()
+    }
+
     pub(crate) async fn wait_vm(&self) -> Result<i32> {
         // Take the Child under the lock, then wait OUTSIDE it so stop_vm()
         // can always start_kill() (fix8). Holding the mutex across
         // Child::wait() was the teardown deadlock that produced zombies.
-        let child = {
-            let mut qemu_process = self.qemu_process.lock().await;
-            qemu_process.take()
-        };
+        let child = self.take_qemu_child().await;
 
         if let Some(mut child) = child {
             let status = child.wait().await?;
