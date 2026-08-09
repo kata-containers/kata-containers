@@ -2911,6 +2911,23 @@ impl<'a> QemuCmdLine<'a> {
         self.ccw_subchannel.take()
     }
 
+    /// Drop the parent's copy of the QMP listen FD after QEMU has inherited it
+    /// via `unix:fd=` (CLOEXEC cleared before spawn).
+    ///
+    /// fix11 (kata-containers#13564): while the parent also held the listen FD,
+    /// a dead/wedged QEMU left a listener that never `accept()`s —
+    /// `UnixStream::connect` to the path could block forever and QMP bring-up
+    /// never reached its deadline (glm-0 B200).
+    pub fn drop_qmp_listen_fd(&mut self) {
+        if let QmpSockType::Fd(file) =
+            std::mem::replace(&mut self.qmp_socket.address, QmpSockType::Path(PathBuf::new()))
+        {
+            let fd = file.as_raw_fd();
+            drop(file);
+            info!(sl!(), "fix11: dropped parent QMP listen fd={}", fd);
+        }
+    }
+
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
         let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto))?;
         self.devices.push(Box::new(monitor));

@@ -24,22 +24,82 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::str::FromStr;
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use qapi_spec::Dictionary;
-use std::thread;
-use std::time::Instant;
+use tokio::process::Child;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
+
+use nix::errno::Errno;
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::sys::socket::sockopt::SocketError;
+use nix::sys::socket::{
+    connect, getsockopt, socket, AddressFamily, SockFlag, SockType, UnixAddr,
+};
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
 const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
-const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
+/// Overall QMP bring-up ceiling (historical). Per-attempt connect is bounded
+/// separately by DEFAULT_QMP_CONNECT_ATTEMPT_MS (fix11).
+pub const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
+/// fix11: never block forever in connect(2). Parent holding the QMP listen FD
+/// after a dead QEMU made unbounded UnixStream::connect hang (glm-0 B200).
+const DEFAULT_QMP_CONNECT_ATTEMPT_MS: u64 = 1000;
 
 const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Non-blocking AF_UNIX connect with a hard timeout (fix11).
+fn connect_unix_timeout(path: &str, timeout: Duration) -> std::io::Result<UnixStream> {
+    let addr = UnixAddr::new(path).map_err(std::io::Error::from)?;
+    let sock: OwnedFd = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::SOCK_CLOEXEC | SockFlag::SOCK_NONBLOCK,
+        None,
+    )
+    .map_err(std::io::Error::from)?;
+
+    match connect(sock.as_raw_fd(), &addr) {
+        Ok(()) => {}
+        Err(Errno::EINPROGRESS) => {
+            let mut pfd = libc::pollfd {
+                fd: sock.as_raw_fd(),
+                events: libc::POLLOUT,
+                revents: 0,
+            };
+            let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+            let n = unsafe { libc::poll(&mut pfd, 1, ms) };
+            if n == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "qmp unix connect timed out",
+                ));
+            }
+            if n < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let err = getsockopt(&sock, SocketError).map_err(std::io::Error::from)?;
+            if err != 0 {
+                return Err(std::io::Error::from_raw_os_error(err));
+            }
+        }
+        Err(e) => return Err(std::io::Error::from(e)),
+    }
+
+    // qapi expects a blocking stream for handshake / execute.
+    let flags = fcntl(&sock, FcntlArg::F_GETFL).map_err(std::io::Error::from)?;
+    let flags = OFlag::from_bits_truncate(flags) & !OFlag::O_NONBLOCK;
+    fcntl(&sock, FcntlArg::F_SETFL(flags)).map_err(std::io::Error::from)?;
+
+    Ok(unsafe { UnixStream::from_raw_fd(sock.into_raw_fd()) })
+}
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -76,9 +136,24 @@ impl Debug for Qmp {
 }
 
 impl Qmp {
-    pub fn new(qmp_sock_path: &str) -> Result<Self> {
+    /// Connect to QEMU's QMP socket with bounded connect(2) and Child liveness
+    /// checks (fix11 / kata-containers#13564).
+    ///
+    /// Previously this used unbounded `UnixStream::connect` on a path whose
+    /// listen FD was still held by the parent after spawn. When QEMU died
+    /// before speaking QMP, connect could block forever — the 50s deadline
+    /// never fired, Err-path cleanup never ran, and QEMU stayed Z under the
+    /// shim (glm-0 on B200).
+    pub async fn connect(
+        qmp_sock_path: &str,
+        qemu_process: &Mutex<Option<Child>>,
+        overall_timeout: Duration,
+    ) -> Result<Self> {
         let try_new_once_fn = || -> Result<Qmp> {
-            let stream = UnixStream::connect(qmp_sock_path)?;
+            let stream = connect_unix_timeout(
+                qmp_sock_path,
+                Duration::from_millis(DEFAULT_QMP_CONNECT_ATTEMPT_MS),
+            )?;
 
             stream
                 .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_INIT_READ_TIMEOUT)))
@@ -100,16 +175,38 @@ impl Qmp {
             Ok(qmp)
         };
 
-        let deadline = Instant::now() + Duration::from_millis(DEFAULT_QMP_CONNECT_DEADLINE_MS);
+        let deadline = Instant::now() + overall_timeout;
         let mut last_err: Option<anyhow::Error> = None;
 
         while Instant::now() < deadline {
+            // Fail fast if QEMU already exited (try_wait reaps a zombie Child).
+            {
+                let mut guard = qemu_process.lock().await;
+                match guard.as_mut() {
+                    Some(child) => match child.try_wait() {
+                        Ok(Some(status)) => {
+                            return Err(anyhow!(
+                                "QEMU exited before QMP ready (status={:?})",
+                                status
+                            ));
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            return Err(anyhow!("QEMU try_wait during QMP connect: {}", e));
+                        }
+                    },
+                    None => {
+                        return Err(anyhow!("QEMU Child missing before QMP ready"));
+                    }
+                }
+            }
+
             match try_new_once_fn() {
                 Ok(qmp) => return Ok(qmp),
                 Err(e) => {
                     debug!(sl!(), "QMP not ready yet: {}", e);
                     last_err = Some(e);
-                    thread::sleep(Duration::from_millis(DEFAULT_QMP_RETRY_SLEEP_MS));
+                    sleep(Duration::from_millis(DEFAULT_QMP_RETRY_SLEEP_MS)).await;
                 }
             }
         }

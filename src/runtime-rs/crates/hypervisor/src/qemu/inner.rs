@@ -4,7 +4,8 @@
 //
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine};
-use super::qmp::Qmp;
+use super::qmp::{Qmp, DEFAULT_QMP_CONNECT_DEADLINE_MS};
+use super::spawn_os_reaper;
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIePort;
 use crate::qemu::cmdline_generator::VfioDeviceConfig;
@@ -110,7 +111,7 @@ impl QemuInner {
         Ok(())
     }
 
-    pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
+    pub(crate) async fn start_vm(&mut self, timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
 
@@ -458,9 +459,19 @@ impl QemuInner {
         // only cleaned up on the QMP-init / boot_from_template paths (fix4),
         // missing virtio-mem setup, resume_vm, console connect, and any future
         // `?` after spawn. fix5: cleanup on every failure path below.
-        let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+        // fix11: drop parent's QMP listen FD so a dead QEMU cannot leave a
+        // non-accepting listener that wedges unbounded connect(2).
+        cmdline.drop_qmp_listen_fd();
 
-        match Qmp::new(&qmp_socket_path) {
+        let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+        // sandbox passes 10_000 (ms). Keep at least the historical 50s QMP
+        // ceiling so slow CC bring-up is not regressed; each connect attempt
+        // is separately bounded (see Qmp::connect).
+        let qmp_timeout = Duration::from_millis(
+            DEFAULT_QMP_CONNECT_DEADLINE_MS.max(timeout.max(0) as u64),
+        );
+
+        match Qmp::connect(&qmp_socket_path, &self.qemu_process, qmp_timeout).await {
             Ok(mut qmp) => {
                 if let Some(subchannel) = cmdline.take_ccw_subchannel() {
                     qmp.set_ccw_subchannel(subchannel);
@@ -490,8 +501,7 @@ impl QemuInner {
                                 "virtio-mem setup failed after QEMU spawn: {:?}; killing+reaping",
                                 e
                             );
-                            let _ = self.stop_vm().await;
-                            let _ = self.wait_vm().await;
+                            self.kill_and_os_reap_qemu().await;
                             return Err(e);
                         }
                     } else {
@@ -509,8 +519,7 @@ impl QemuInner {
             }
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
-                let _ = self.stop_vm().await;
-                let _ = self.wait_vm().await;
+                self.kill_and_os_reap_qemu().await;
                 return Err(e);
             }
         }
@@ -519,8 +528,7 @@ impl QemuInner {
         if self.config.vm_template.boot_from_template {
             if let Err(e) = self.boot_from_template().await {
                 error!(sl!(), "boot from template failed: {:?}", e);
-                let _ = self.stop_vm().await;
-                let _ = self.wait_vm().await;
+                self.kill_and_os_reap_qemu().await;
                 return Err(e).context("boot from template");
             }
             if let Err(e) = self.resume_vm().context("resume vm") {
@@ -528,8 +536,7 @@ impl QemuInner {
                     sl!(),
                     "resume_vm failed after QEMU spawn: {:?}; killing+reaping", e
                 );
-                let _ = self.stop_vm().await;
-                let _ = self.wait_vm().await;
+                self.kill_and_os_reap_qemu().await;
                 return Err(e);
             }
         }
@@ -545,8 +552,7 @@ impl QemuInner {
                         sl!(),
                         "console connect failed after QEMU spawn: {:?}; killing+reaping", e
                     );
-                    let _ = self.stop_vm().await;
-                    let _ = self.wait_vm().await;
+                    self.kill_and_os_reap_qemu().await;
                     return Err(e.into());
                 }
             }
@@ -696,6 +702,22 @@ impl QemuInner {
         }
 
         Err(anyhow!("qemu process has not been started yet"))
+    }
+
+
+    /// Kill QEMU and reap via the fix10 OS-thread path (fix11).
+    /// Do not use `wait_vm()` here — that awaits Child on a cancellable tokio
+    /// task and historically left zombies when start failed mid-QMP.
+    async fn kill_and_os_reap_qemu(&mut self) {
+        let _ = self.stop_vm().await;
+        if let Some(child) = self.take_qemu_child().await {
+            info!(
+                sl!(),
+                "fix11: start-fail OS reaper for qemu pid={:?}",
+                child.id()
+            );
+            spawn_os_reaper(child, None);
+        }
     }
 
     /// Take ownership of the QEMU Child for reaping. Used by fix10 so stop_vm

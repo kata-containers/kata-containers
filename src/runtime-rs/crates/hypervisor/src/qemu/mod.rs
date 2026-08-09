@@ -59,45 +59,6 @@ impl Qemu {
         inner.set_hypervisor_config(config)
     }
 
-    /// Reap QEMU on a dedicated OS thread using sync `try_wait()`.
-    ///
-    /// fix10 (kata-containers#13564): a tokio task awaiting `Child::wait()` can
-    /// be cancelled when containerd SIGKILLs / abandons the shim after a
-    /// non-blocking Shutdown — Dropping the Child without a successful wait
-    /// leaves QEMU as a zombie under the (still-alive) orphaned shim. An OS
-    /// thread is not cancelled with the tokio task; `try_wait` reaps on Unix.
-    fn spawn_os_reaper(child: Child, reaped_exit: watch::Sender<Option<i32>>) {
-        let pid = child.id();
-        let _ = thread::Builder::new()
-            .name("qemu-reap".into())
-            .spawn(move || {
-                let mut child = child;
-                loop {
-                    match child.try_wait() {
-                        Ok(Some(status)) => {
-                            let code = status.code().unwrap_or(0);
-                            info!(
-                                sl!(),
-                                "fix10 OS reaper: qemu pid={:?} exited code={}", pid, code
-                            );
-                            let _ = reaped_exit.send(Some(code));
-                            return;
-                        }
-                        Ok(None) => thread::sleep(Duration::from_millis(200)),
-                        Err(e) => {
-                            // ECHILD if a racing reaper already collected the status.
-                            warn!(
-                                sl!(),
-                                "fix10 OS reaper: try_wait pid={:?} err={:?}", pid, e
-                            );
-                            let _ = reaped_exit.send(Some(0));
-                            return;
-                        }
-                    }
-                }
-            });
-    }
-
     async fn wait_for_reaped_exit(&self) -> i32 {
         let mut rx = self.reaped_exit.subscribe();
         loop {
@@ -109,6 +70,51 @@ impl Qemu {
             }
         }
     }
+}
+
+/// Reap QEMU on a dedicated OS thread using sync `try_wait()`.
+///
+/// fix10 (kata-containers#13564): a tokio task awaiting `Child::wait()` can
+/// be cancelled when containerd SIGKILLs / abandons the shim after a
+/// non-blocking Shutdown — Dropping the Child without a successful wait
+/// leaves QEMU as a zombie under the (still-alive) orphaned shim. An OS
+/// thread is not cancelled with the tokio task; `try_wait` reaps on Unix.
+///
+/// fix11: also used on start_vm failure paths (`reaped_exit = None`).
+pub(crate) fn spawn_os_reaper(child: Child, reaped_exit: Option<watch::Sender<Option<i32>>>) {
+    let pid = child.id();
+    let _ = thread::Builder::new()
+        .name("qemu-reap".into())
+        .spawn(move || {
+            let mut child = child;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        let code = status.code().unwrap_or(0);
+                        info!(
+                            sl!(),
+                            "fix10 OS reaper: qemu pid={:?} exited code={}", pid, code
+                        );
+                        if let Some(tx) = reaped_exit {
+                            let _ = tx.send(Some(code));
+                        }
+                        return;
+                    }
+                    Ok(None) => thread::sleep(Duration::from_millis(200)),
+                    Err(e) => {
+                        // ECHILD if a racing reaper already collected the status.
+                        warn!(
+                            sl!(),
+                            "fix10 OS reaper: try_wait pid={:?} err={:?}", pid, e
+                        );
+                        if let Some(tx) = reaped_exit {
+                            let _ = tx.send(Some(0));
+                        }
+                        return;
+                    }
+                }
+            }
+        });
 }
 
 #[async_trait]
@@ -158,7 +164,7 @@ impl Hypervisor for Qemu {
                 "fix10: stop_vm took qemu Child pid={:?}; spawning OS reaper",
                 child.id()
             );
-            Self::spawn_os_reaper(child, self.reaped_exit.clone());
+            spawn_os_reaper(child, Some(self.reaped_exit.clone()));
         } else if kill_result.is_ok() {
             info!(
                 sl!(),
@@ -194,7 +200,7 @@ impl Hypervisor for Qemu {
                 "fix10: wait_vm took qemu Child pid={:?}; spawning OS reaper",
                 child.id()
             );
-            Self::spawn_os_reaper(child, self.reaped_exit.clone());
+            spawn_os_reaper(child, Some(self.reaped_exit.clone()));
         }
 
         let code = self.wait_for_reaped_exit().await;
