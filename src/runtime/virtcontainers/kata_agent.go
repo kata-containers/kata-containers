@@ -1052,7 +1052,126 @@ func translateHostMemsToGuest(hostMems string, numaNodes []types.GuestNUMANode) 
 	return cpuset.NewCPUSet(guestNodes...).String()
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode) error {
+// translateHostMemoryLimitToGuest adds a container's huge page reservation to
+// the memory limits the agent applies inside the guest, where the reserved
+// pages are ordinary RAM charged to the container's cgroup. Swap follows the
+// limit (it carries memory plus swap), keeping any room it had above the limit.
+// For a guest of fixed size (guestMemMB > 0) the result is held to what the
+// guest can hold; 0 means the guest grows on demand and the sum stands.
+func translateHostMemoryLimitToGuest(logger *logrus.Entry, memory *grpc.LinuxMemory, hugePages uint64, guestMemMB uint32) {
+	if memory == nil || hugePages == 0 {
+		return
+	}
+
+	logger.WithFields(logrus.Fields{
+		"host-limit": memory.Limit,
+		"huge-pages": hugePages,
+	}).Debug("adding the container's huge page reservation to the memory limit applied inside the guest")
+
+	// Memory plus swap minus memory is the swap alone, and it survives both
+	// the addition and the holding below.
+	swapRoom := int64(0)
+	if memory.Swap > 0 && memory.Limit > 0 && memory.Swap > memory.Limit {
+		swapRoom = memory.Swap - memory.Limit
+	}
+
+	memory.Limit = addSaturating(memory.Limit, hugePages)
+	memory.Reservation = addSaturating(memory.Reservation, hugePages)
+	memory.Swap = addSaturating(memory.Swap, hugePages)
+
+	holdable := holdableGuestMemoryBytes(guestMemMB)
+	if holdable == 0 {
+		return
+	}
+
+	if memory.Limit > holdable {
+		logger.WithFields(logrus.Fields{
+			"guest-limit":  memory.Limit,
+			"vm-memory-mb": guestMemMB,
+			"held-to":      holdable,
+		}).Info("the container's huge page reservation reaches past the guest: holding its memory limit to what the guest can hold")
+
+		memory.Limit = holdable
+		if memory.Swap > 0 {
+			memory.Swap = addSaturating(holdable, uint64(swapRoom))
+		}
+	}
+	if memory.Reservation > holdable {
+		memory.Reservation = holdable
+	}
+}
+
+// hugePagesTotal adds up the huge pages a container reserved, of whatever page
+// sizes, saturating rather than wrapping on a spec that asks for more than
+// there could ever be.
+func hugePagesTotal(limits []*grpc.LinuxHugepageLimit) uint64 {
+	var total uint64
+	for _, l := range limits {
+		if l.Limit > math.MaxUint64-total {
+			return math.MaxUint64
+		}
+		total += l.Limit
+	}
+	return total
+}
+
+// hugePagesTotalOCI is hugePagesTotal for the reservations a container was
+// created with, which an update need not repeat.
+func hugePagesTotalOCI(limits []specs.LinuxHugepageLimit) uint64 {
+	var total uint64
+	for _, l := range limits {
+		if l.Limit > math.MaxUint64-total {
+			return math.MaxUint64
+		}
+		total += l.Limit
+	}
+	return total
+}
+
+// staticGuestMemoryMB returns the size of a sandbox that has all the memory it
+// will ever have, and zero for one that grows on demand, whose memory is
+// hotplugged after a container asks for it.
+func staticGuestMemoryMB(sandbox *Sandbox) uint32 {
+	if !sandbox.config.StaticResourceMgmt {
+		return 0
+	}
+	return sandbox.config.HypervisorConfig.MemorySize
+}
+
+// holdableGuestMemoryBytes is the most a container in a guest of guestMemMB can
+// be held to. A thirty-second of the VM, at least 128 MiB, is left for the
+// kernel's page metadata (about a sixty-fourth of RAM), the kernel and the
+// agent. Zero for a guest whose size is not known upfront.
+func holdableGuestMemoryBytes(guestMemMB uint32) int64 {
+	if guestMemMB == 0 {
+		return 0
+	}
+
+	const minReserveMB = 128
+	reserveMB := uint32(guestMemMB / 32)
+	if reserveMB < minReserveMB {
+		reserveMB = minReserveMB
+	}
+	if reserveMB >= guestMemMB {
+		return 0
+	}
+
+	return int64(guestMemMB-reserveMB) << utils.MibToBytesShift
+}
+
+// addSaturating grows a memory limit, leaving an unset (zero or negative, that
+// is unlimited) limit alone and saturating rather than wrapping.
+func addSaturating(limit int64, delta uint64) int64 {
+	if limit <= 0 {
+		return limit
+	}
+	if delta > uint64(math.MaxInt64-limit) {
+		return math.MaxInt64
+	}
+	return limit + int64(delta)
+}
+
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool, numaNodes []types.GuestNUMANode, hugePages bool, guestMemMB uint32) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1108,6 +1227,11 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		} else {
 			grpcSpec.Linux.Resources.CPU.Mems = ""
 		}
+	}
+
+	if hugePages && grpcSpec.Linux.Resources != nil {
+		hugePagesBytes := hugePagesTotal(grpcSpec.Linux.Resources.HugepageLimits)
+		translateHostMemoryLimitToGuest(k.Logger(), grpcSpec.Linux.Resources.Memory, hugePagesBytes, guestMemMB)
 	}
 
 	// Disable network and time namespaces since they are handled on the host
@@ -1697,9 +1821,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
 	}
 
+	// A static guest has all its memory at boot, so its size caps the limits
+	// below; a guest that grows on demand hotplugs what a limit asks for later.
+	guestMemMB := staticGuestMemoryMB(sandbox)
+
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel, sandbox.config.HypervisorConfig.GuestNUMANodes, sandbox.config.HypervisorConfig.HugePages, guestMemMB)
 	if err != nil {
 		return nil, err
 	}
@@ -2255,6 +2383,16 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 	grpcResources, err := grpc.ResourcesOCItoGRPC(&resources)
 	if err != nil {
 		return err
+	}
+
+	// An update repeats the memory limit but not the huge page reservation the
+	// container was created with; fold it in again or the ceiling is lost.
+	if sandbox.config.HypervisorConfig.HugePages && grpcResources != nil {
+		hugePages := hugePagesTotal(grpcResources.HugepageLimits)
+		if hugePages == 0 {
+			hugePages = hugePagesTotalOCI(c.config.Resources.HugepageLimits)
+		}
+		translateHostMemoryLimitToGuest(k.Logger(), grpcResources.Memory, hugePages, staticGuestMemoryMB(sandbox))
 	}
 
 	req := &grpc.UpdateContainerRequest{
