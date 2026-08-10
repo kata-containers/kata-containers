@@ -51,8 +51,8 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
     utils::{
-        authorize_rootless_device, get_hvsock_path, remove_vmm_user_runtime_dir,
-        uses_native_ccw_bus, vmm_user_runtime_dir,
+        authorize_rootless_device, authorize_rootless_socket, get_hvsock_path,
+        remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
     },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
@@ -857,6 +857,13 @@ impl VirtSandbox {
             }
             ProtectionDeviceConfig::Se => {
                 authorize_rootless_device(Path::new("/dev/uv"), &mut user, 0o6)?;
+            }
+            ProtectionDeviceConfig::Tdx(config) => {
+                if let Some(path) = self.hypervisor.tdx_quote_socket_path(config).await? {
+                    authorize_rootless_socket(&path, &mut user, 0o2)?;
+                } else {
+                    return Ok(());
+                }
             }
             _ => return Ok(()),
         }
