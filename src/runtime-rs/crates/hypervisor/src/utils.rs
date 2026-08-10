@@ -155,7 +155,7 @@ where
 
 // Return the non-root owning group that grants `required_permissions`, or
 // None when the resource's other permissions already grant that access.
-pub fn select_rootless_access_group(
+fn select_rootless_access_group(
     path: &Path,
     mode: u32,
     gid: u32,
@@ -219,6 +219,68 @@ pub fn authorize_rootless_device(
         required_permissions,
         user,
     )
+}
+
+/// Authorize a rootless VMM to access a Unix domain socket.
+///
+/// Validates socket access and traversal of every parent directory, updating
+/// `user` only after all checks succeed.
+pub fn authorize_rootless_socket(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless socket {}", path.display()))?;
+    if !metadata.file_type().is_socket() {
+        return Err(anyhow!(
+            "rootless VMM endpoint {} is not a Unix socket",
+            path.display()
+        ));
+    }
+
+    let mut candidate = user.clone();
+    authorize_rootless_resource_access(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        &mut candidate,
+    )?;
+
+    let mut parent = path.parent();
+    while let Some(directory) = parent {
+        let metadata = fs_metadata(directory).with_context(|| {
+            format!(
+                "get metadata for rootless socket parent {}",
+                directory.display()
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(anyhow!(
+                "rootless VMM socket parent {} is not a directory",
+                directory.display()
+            ));
+        }
+        if !rootless_user_has_permission(
+            &candidate,
+            metadata.uid(),
+            metadata.gid(),
+            metadata.mode(),
+            0o1,
+        ) {
+            return Err(anyhow!(
+                "rootless VMM cannot traverse socket parent {} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+                directory.display(),
+                metadata.mode() & 0o7777,
+            ));
+        }
+        parent = directory.parent();
+    }
+
+    user.groups = candidate.groups;
+    Ok(())
 }
 
 fn authorize_rootless_resource_access(
@@ -667,6 +729,7 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::net::UnixListener;
     use std::path::{Path, PathBuf};
 
     use nix::unistd::chown;
@@ -685,7 +748,9 @@ mod tests {
     use super::set_process_credentials_with;
     use super::vmm_user_runtime_dir;
     use super::SocketAddress;
-    use super::{authorize_rootless_resource_access, select_rootless_access_group};
+    use super::{
+        authorize_rootless_resource_access, authorize_rootless_socket, select_rootless_access_group,
+    };
 
     fn rootless_user() -> RootlessUser {
         RootlessUser {
@@ -694,6 +759,38 @@ mod tests {
             groups: Vec::new(),
             user_name: "kata-test".to_string(),
         }
+    }
+
+    // Model a user unrelated to the socket owner and group, with one existing
+    // supplementary group, so authorization must append the socket group.
+    fn socket_test_user(socket_path: &Path) -> RootlessUser {
+        let metadata = fs::metadata(socket_path).expect("stat socket");
+
+        RootlessUser {
+            uid: metadata.uid().wrapping_add(1),
+            gid: metadata.gid().wrapping_add(1),
+            groups: vec![metadata.gid().wrapping_add(2)],
+            user_name: "kata-socket-test".to_string(),
+        }
+    }
+
+    fn set_socket_group_access(socket_path: &Path) -> u32 {
+        fs::set_permissions(socket_path, fs::Permissions::from_mode(0o660))
+            .expect("set socket permissions");
+
+        let gid = fs::metadata(socket_path).expect("stat socket").gid();
+        if gid != 0 {
+            return gid;
+        }
+
+        assert_eq!(
+            geteuid().as_raw(),
+            0,
+            "changing a root-owned socket requires root"
+        );
+        let gid = 2000;
+        chown(socket_path, None, Some(Gid::from_raw(gid))).expect("set non-root socket group");
+        gid
     }
 
     #[test]
@@ -733,6 +830,55 @@ mod tests {
         let mut user = rootless_user();
         authorize_rootless_resource_access(path, 0, 2000, 0o666, 0o2, &mut user).unwrap();
         assert!(user.groups.is_empty());
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket() {
+        let dir = TempDir::new().expect("create socket directory");
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755))
+            .expect("make socket directory traversable");
+        let socket_path = dir.path().join("qgs.socket");
+        let _listener = UnixListener::bind(&socket_path).expect("bind Unix socket");
+        let socket_gid = set_socket_group_access(&socket_path);
+        let mut user = socket_test_user(&socket_path);
+        let original_groups = user.groups.clone();
+
+        authorize_rootless_socket(&socket_path, &mut user, 0o2).expect("authorize rootless socket");
+
+        assert_eq!(user.groups, [original_groups, vec![socket_gid]].concat());
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket_rejects_non_socket() {
+        let dir = TempDir::new().expect("create socket directory");
+        let socket_path = dir.path().join("qgs.socket");
+        fs::write(&socket_path, []).expect("create regular file");
+        let mut user = rootless_user();
+        let original_groups = user.groups.clone();
+
+        let error = authorize_rootless_socket(&socket_path, &mut user, 0o2)
+            .expect_err("regular file must be rejected");
+
+        assert!(error.to_string().contains("is not a Unix socket"));
+        assert_eq!(user.groups, original_groups);
+    }
+
+    #[test]
+    fn test_authorize_rootless_socket_rejects_untraversable_parent() {
+        let dir = TempDir::new().expect("create socket directory");
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700))
+            .expect("make socket directory private");
+        let socket_path = dir.path().join("qgs.socket");
+        let _listener = UnixListener::bind(&socket_path).expect("bind Unix socket");
+        set_socket_group_access(&socket_path);
+        let mut user = socket_test_user(&socket_path);
+        let original_groups = user.groups.clone();
+
+        let error = authorize_rootless_socket(&socket_path, &mut user, 0o2)
+            .expect_err("untraversable parent must be rejected");
+
+        assert!(error.to_string().contains("cannot traverse socket parent"));
+        assert_eq!(user.groups, original_groups);
     }
 
     // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
