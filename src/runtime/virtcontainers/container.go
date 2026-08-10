@@ -1850,6 +1850,13 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		c.config.Resources.Memory.Limit = mem.Limit
 	}
 
+	// Follow the huge pages the container holds as well, so that a later
+	// update carrying none of them is still told the reservation this one
+	// asked for rather than the one the container was created with.
+	if len(resources.HugepageLimits) != 0 {
+		c.config.Resources.HugepageLimits = resources.HugepageLimits
+	}
+
 	if err := c.sandbox.updateResources(ctx); err != nil {
 		return err
 	}

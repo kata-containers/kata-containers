@@ -304,7 +304,20 @@ EOF
     ```
 
     That pod is Guaranteed, and its guest is the 64Gi of `default_memory`
-    that `hugepages-1Gi` covers.
+    that `hugepages-1Gi` covers. Inside the guest that 64Gi is ordinary RAM,
+    so the container is bounded by its `memory` limit *plus* the huge pages it
+    reserved, and not by the 2Gi alone — and never by more than the guest can
+    hold. A 64Gi guest reports about 63Gi of it, the rest being the page
+    metadata its kernel needs to describe that memory, so the ceiling lands at
+    62Gi. A
+    ceiling above that could not stop the container: the guest's own OOM killer
+    would, and it picks among all of the guest's processes, so it may kill the
+    guest's init before the workload that filled the memory, leaving the pod
+    with no OOM and no restart to report.
+
+    A sidecar that reserves no huge pages keeps its own limit as its ceiling,
+    far below the guest's size, so the containers of a pod still bound each
+    other.
 
 ### 4.2 GPU passthrough pod with NUMA
 
