@@ -177,6 +177,43 @@ membership is resolved at run time, and the dispatcher itself paces the rollout
 per node**. Per-node Jobs are garbage-collected via an `ownerReference` to the
 dispatcher and `job.ttlSecondsAfterFinished`.
 
+### Where the dispatcher runs
+
+The dispatcher holds the one token in `job` mode that can enumerate every node
+in the cluster and create the privileged per-node Jobs, and root on whatever
+node it lands on can read it. Confine it to nodes you trust — typically the
+control plane — with `job.dispatcherNodeSelector` and
+`job.dispatcherTolerations`:
+
+```yaml title="values.yaml"
+job:
+  dispatcherNodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  dispatcherTolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+```
+
+The toleration is needed because control-plane nodes are normally tainted. These
+settings say nothing about where Kata is installed — that remains the top-level
+`nodeSelector` / `affinity` / `tolerations`, and the per-node Jobs do not inherit
+the dispatcher's placement. When `job.dispatcherTolerations` is empty it falls
+back to the top-level `tolerations`, so the dispatcher stays schedulable on a
+cluster whose every node is tainted.
+
+!!! warning "What this does, and what it leaves alone"
+
+    Pinning moves one credential, not all of them. The per-node Jobs still run
+    under the `kata-deploy` ServiceAccount on every node Kata is installed on,
+    so a worker still hosts a token that can patch nodes and RuntimeClasses.
+    What it takes off those workers is the credential that reaches the *whole*
+    cluster: node enumeration, and the ability to create privileged Jobs
+    anywhere.
+
+    That much is a boundary `daemonset` mode cannot draw at all, since the pod
+    holding its token has to run on every node by definition.
+
 ### Adding nodes in `job` mode
 
 The dispatcher only runs on `helm install` / `helm upgrade` / `helm uninstall`.
