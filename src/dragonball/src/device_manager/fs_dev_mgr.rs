@@ -11,6 +11,8 @@ use serde_derive::{Deserialize, Serialize};
 use slog::{error, info};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{
     ConfigItem, DeviceConfigInfo, DeviceConfigInfos, RateLimiterConfigInfo,
 };
@@ -405,6 +407,11 @@ impl FsDeviceMgr {
             address_space,
         };
 
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         let device = Box::new(
             virtio::fs::VirtioFs::new(
                 &config.tag,
@@ -422,6 +429,7 @@ impl FsDeviceMgr {
                 Box::new(handler),
                 epoll_mgr,
                 limiter,
+                f_access_platform,
             )
             .map_err(FsDeviceError::CreateFsDevice)?,
         );
