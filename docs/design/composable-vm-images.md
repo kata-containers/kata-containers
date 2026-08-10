@@ -591,7 +591,7 @@ The `kata-containers-coco-extension.img` is built and published by
 (`tools/coco-extension/`) as a multi-arch OCI index at
 `ghcr.io/confidential-containers/guest-components/coco-extension-disk`. Kata pins
 the guest-components revision in `versions.yaml` under
-`.externals.coco-guest-components` (`version`, `container_image`, and
+`.externals.coco-guest-components` (`version`, `variant`, `container_image`, and
 `extension_image` must stay in sync) and, at build time, `install_image_coco_extension`:
 
 1. Resolves the per-architecture manifest digest from the index

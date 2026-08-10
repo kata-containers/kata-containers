@@ -279,7 +279,11 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "d4dce5ce62294cfa741225f7e5b4527ea276f326"
+    version: "304c21f29e26dbbb968783e41109f3b6d630e872"
+    # Guest Ubuntu release qualifier published by coco-extension-image.yml
+    # (tags are "<version>-<variant>", e.g. "<sha>-ubuntu26.04"). The
+    # extension ships no libc, so this must match the guest rootfs ABI.
+    variant: "ubuntu26.04"
     # Scratch OCI container image (guest-components "Publish OCI container
     # image" step). Consumed by monolithic confidential rootfs builds.
     # yamllint disable-line rule:line-length

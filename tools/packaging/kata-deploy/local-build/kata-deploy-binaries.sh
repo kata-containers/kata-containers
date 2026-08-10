@@ -363,8 +363,15 @@ get_coco_guest_components_tarball_checksum() {
 	sha256sum "${tarball}" | cut -d' ' -f1
 }
 
+get_coco_extension_variant() {
+	local variant
+	variant="$(get_from_kata_deps ".externals.coco-guest-components.variant")"
+	[[ -n "${variant}" ]] || die "Failed to get coco-guest-components variant from versions.yaml"
+	echo "${variant}"
+}
+
 get_latest_coco_guest_components_artefact_and_builder_image_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)-$(get_coco_guest_components_container_image_digest)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)-$(get_coco_extension_oci_arch)-$(get_coco_guest_components_container_image_digest)"
 }
 
 get_coco_extension_oci_arch() {
@@ -374,14 +381,16 @@ get_coco_extension_oci_arch() {
 # Multi-arch scratch OCI container image from guest-components' "Publish OCI
 # container image" step (coco-extension-image.yml). This is the assembled guest
 # components rootfs as a container, not the EROFS disk image (extension_image).
+# Tags are ABI-qualified as "<version>-<variant>" (e.g. "<sha>-ubuntu26.04").
 get_coco_guest_components_container_image_ref() {
-	local version image
+	local version image variant
 	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	image="$(get_from_kata_deps ".externals.coco-guest-components.container_image")"
+	variant="$(get_coco_extension_variant)"
 	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
 	[[ -n "${image}" ]] || die "Failed to get coco-guest-components container_image from versions.yaml"
 
-	echo "${image}:${version}"
+	echo "${image}:${version}-${variant}"
 }
 
 get_coco_guest_components_container_image_digest() {
@@ -396,15 +405,17 @@ get_coco_guest_components_container_image_digest() {
 }
 
 # The extension disk image is published as a multi-arch OCI index tagged with the
-# guest-components commit; the per-arch selection happens at pull time.
+# guest-components commit and Ubuntu variant; the per-arch selection happens at
+# pull time.
 get_coco_extension_disk_image_ref() {
-	local version image
+	local version image variant
 	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	image="$(get_from_kata_deps ".externals.coco-guest-components.extension_image")"
+	variant="$(get_coco_extension_variant)"
 	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
 	[[ -n "${image}" ]] || die "Failed to get coco-guest-components extension_image from versions.yaml"
 
-	echo "${image}:${version}"
+	echo "${image}:${version}-${variant}"
 }
 
 # GitHub "owner/repo" that owns the provenance attestation, derived from the
@@ -417,7 +428,7 @@ get_coco_extension_provenance_repo() {
 }
 
 get_latest_coco_extension_artefact_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)-$(get_coco_extension_oci_arch)"
 }
 
 ensure_oras_installed() {
@@ -1714,7 +1725,7 @@ install_agent() {
 
 install_coco_guest_components() {
 	latest_artefact="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")"
+	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
