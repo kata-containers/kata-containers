@@ -2651,9 +2651,10 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
     if let Some(envs) = process.env_mut().as_mut() {
         for env in envs.iter_mut() {
             match confidential_data_hub::unseal_env(env).await {
-                Ok(unsealed_env) => *env = unsealed_env.to_string(),
+                Ok(unsealed_env) => *env = unsealed_env,
                 Err(e) => {
-                    warn!(sl(), "Failed to unseal secret: {}", e)
+                    error!(sl(), "Failed to unseal sealed environment variable: {}", e);
+                    return Err(e).context("failed to process a sealed environment variable");
                 }
             }
         }

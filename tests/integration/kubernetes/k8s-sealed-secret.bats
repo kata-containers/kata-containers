@@ -64,14 +64,10 @@ setup() {
 	fi
 }
 
-@test "Cannot Unseal Env Secrets with CDH without key" {
-	k8s_create_pod "${K8S_TEST_ENV_YAML}"
-
-	logs=$(kubectl logs secret-test-pod-cc)
-	echo "$logs"
-	grep -q "UNPROTECTED_SECRET = not_sealed_secret" <<< "$logs"
-	run grep -q "PROTECTED_SECRET = unsealed_secret" <<< "$logs"
-	[ "$status" -eq 1 ]
+@test "Reject Env Secrets with CDH without key" {
+	assert_pod_fail "${K8S_TEST_ENV_YAML}"
+	assert_logs_contain "${node}" kata "${node_start_time}" \
+		"Failed to unseal sealed environment variable"
 }
 
 
