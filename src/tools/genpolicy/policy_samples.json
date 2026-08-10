@@ -1,0 +1,83 @@
+{
+        "default": [
+                "configmap/pod-cm1.yaml",
+                "configmap/pod-cm2.yaml",
+                "configmap/pod-cm3.yaml",
+                "cron-job/test-cron-job.yaml",
+                "deployment/deployment-back.yaml",
+                "deployment/deployment-front.yaml",
+                "deployment/deployment-busybox.yaml",
+                "job/test-job.yaml",
+                "job/test-job2.yaml",
+                "kubernetes/conformance/conformance-e2e.yaml",
+                "kubernetes/conformance/csi-hostpath-plugin.yaml",
+                "kubernetes/conformance/csi-hostpath-testing.yaml",
+                "kubernetes/conformance/etcd-statefulset.yaml",
+                "kubernetes/conformance/hello-populator-deploy.yaml",
+                "kubernetes/conformance/netexecrc.yaml",
+                "kubernetes/conformance2/ingress-http-rc.yaml",
+                "kubernetes/conformance2/ingress-http2-rc.yaml",
+                "kubernetes/conformance2/ingress-multiple-certs-rc.yaml",
+                "kubernetes/conformance2/ingress-nginx-rc.yaml",
+                "kubernetes/conformance2/ingress-static-ip-rc.yaml",
+                "kubernetes/fixtures/appsv1deployment.yaml",
+                "kubernetes/fixtures/daemon.yaml",
+                "kubernetes/fixtures/deploy-clientside.yaml",
+                "kubernetes/fixtures/job.yaml",
+                "kubernetes/fixtures/multi-resource-yaml.yaml",
+                "kubernetes/fixtures/rc-lastapplied.yaml",
+                "kubernetes/fixtures/rc-noexist.yaml",
+                "kubernetes/fixtures/replication.yaml",
+                "kubernetes/fixtures2/rc-service.yaml",
+                "kubernetes/fixtures2/valid-pod.yaml",
+                "pod/pod-exec.yaml",
+                "pod/pod-init-apt.yaml",
+                "pod/pod-lifecycle.yaml",
+                "pod/pod-one-container.yaml",
+                "pod/pod-persistent-volumes.yaml",
+                "pod/pod-same-containers.yaml",
+                "pod/pod-spark.yaml",
+                "pod/pod-three-containers.yaml",
+                "pod/pod-ubuntu.yaml",
+                "replica-set/replica-busy.yaml",
+                "replica-set/replica2.yaml",
+                "secrets/azure-file-secrets.yaml",
+                "stateful-set/web.yaml",
+                "stateful-set/web2.yaml"
+        ],
+        "incomplete_init": [
+                "kubernetes/incomplete-init/cassandra-statefulset.yaml",
+                "kubernetes/incomplete-init/controller.yaml"
+        ],
+        "silently_ignored": [
+                "webhook/webhook-pod1.yaml",
+                "webhook/webhook-pod2.yaml",
+                "webhook/webhook-pod3.yaml",
+                "webhook/webhook-pod4.yaml",
+                "webhook/webhook-pod5.yaml",
+                "webhook/webhook-pod6.yaml",
+                "webhook/webhook-pod7.yaml",
+                "webhook2/webhook-pod8.yaml",
+                "webhook2/webhook-pod9.yaml",
+                "webhook2/webhook-pod10.yaml",
+                "webhook2/webhook-pod11.yaml",
+                "webhook2/webhook-pod12.yaml",
+                "webhook2/webhook-pod13.yaml",
+                "webhook3/dns-test.yaml",
+                "webhook3/many-layers.yaml"
+        ],
+        "no_policy": [
+                "kubernetes/fixtures/limits.yaml",
+                "kubernetes/fixtures/namespace.yaml",
+                "kubernetes/fixtures/quota.yaml"
+        ],
+        "needs_containerd_pull": [
+                "pod/pod-many-layers.yaml"
+        ],
+        "common_images": [
+                "mcr.microsoft.com/azurelinux/busybox:1.36",
+                "mcr.microsoft.com/azurelinux/base/nginx:1.25",
+                "mcr.microsoft.com/mirror/docker/library/ubuntu:noble",
+                "mcr.microsoft.com/mirror/docker/library/debian:bookworm-slim"
+        ]
+}
