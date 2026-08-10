@@ -48,7 +48,6 @@ jobs:
           - fake-boot-image-se
           - fake-boot-image-se-runtime-rs
           - kernel
-          - pause-image
           - qemu
           - virtiofsd
     concurrency:
@@ -262,7 +261,6 @@ jobs:
         asset:
           - agent
           - coco-guest-components
-          - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-s390x-${{ toJSON(matrix) }}
       cancel-in-progress: true

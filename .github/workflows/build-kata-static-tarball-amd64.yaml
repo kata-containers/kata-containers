@@ -58,7 +58,6 @@ jobs:
           - ovmf
           - ovmf-sev
           - ovmf-tdx
-          - pause-image
           - qemu
           - qemu-no-shared-fs
           - qemu-snp-experimental
@@ -294,7 +293,6 @@ jobs:
           - busybox
           - coco-guest-components
           - kernel-nvidia-gpu-modules
-          - pause-image
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
