@@ -482,3 +482,53 @@ EOF
 	! echo "${install}" | grep -q "affinity:"
 	! echo "${install}" | grep -q "node.cloud/reserved"
 }
+
+@test "Helm template (job mode): the dispatcher can be confined to trusted nodes" {
+	local args=(
+		--set 'job.dispatcherNodeSelector.node-role\.kubernetes\.io/control-plane='
+		--set 'job.dispatcherTolerations[0].key=node-role.kubernetes.io/control-plane'
+		--set 'job.dispatcherTolerations[0].operator=Exists'
+		--set 'job.dispatcherTolerations[0].effect=NoSchedule'
+	)
+
+	# The dispatcher's token is the one that reaches every node in the cluster, so
+	# an operator must be able to keep it off the nodes Kata runs on: root on the
+	# node it lands on can read that token.
+	local stage rendered
+	for stage in install cleanup; do
+		rendered=$(helm template kata-deploy "${CHART_PATH}" \
+			--set deploymentMode=job \
+			"${args[@]}" \
+			--show-only "templates/kata-deploy-${stage}-job.yaml")
+		echo "${rendered}" | grep -q 'node-role.kubernetes.io/control-plane: ""'
+		echo "${rendered}" | grep -q 'key: node-role.kubernetes.io/control-plane'
+	done
+
+	# Where the dispatcher may run says nothing about where Kata is installed: the
+	# per-node Jobs must not inherit its placement, or pinning the dispatcher to
+	# the control plane would quietly stop installing on the workers.
+	local jobs
+	jobs=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		"${args[@]}" \
+		--show-only templates/kata-deploy-job-templates.yaml)
+	# Spelled out rather than `! ... grep`, whose return value bash leaves out of
+	# set -e: as anything but the last line of a test, it cannot fail it.
+	if echo "${jobs}" | grep -q 'node-role.kubernetes.io/control-plane'; then
+		echo "per-node Jobs inherited the dispatcher's placement" >&2
+		return 1
+	fi
+}
+
+@test "Helm template (job mode): dispatcher tolerations default to the top-level ones" {
+	local rendered
+	rendered=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set 'tolerations[0].operator=Exists' \
+		--show-only templates/kata-deploy-install-job.yaml)
+
+	# Without this fallback a cluster whose every node is tainted - a single-node
+	# cluster, say - would select nodes it has nowhere to dispatch from.
+	echo "${rendered}" | grep -q 'tolerations:'
+	echo "${rendered}" | grep -q 'operator: Exists'
+}

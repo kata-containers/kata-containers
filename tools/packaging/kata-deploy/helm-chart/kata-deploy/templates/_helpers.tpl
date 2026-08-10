@@ -789,6 +789,34 @@ true
 {{- end -}}
 
 {{/*
+Where a dispatcher pod may run: `nodeSelector` and `tolerations` blocks for the
+install and cleanup dispatchers.
+
+This is about the dispatcher pod, not about which nodes get Kata. The dispatcher
+holds the one token that reaches the whole cluster - it enumerates every node and
+creates the privileged per-node Jobs - and root on the node it lands on can read
+it; confining it to trusted nodes is a hardening step a DaemonSet cannot offer,
+having to run everywhere by definition.
+
+Tolerations fall back to the top-level `tolerations` so the dispatcher stays
+schedulable wherever the per-node Jobs are allowed to run - without that, a
+cluster whose every node is tainted could select nodes it cannot dispatch from.
+
+Emitted at column 0; embed with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.dispatcherPlacement" -}}
+{{- $job := .Values.job | default dict -}}
+{{- with $job.dispatcherNodeSelector }}
+nodeSelector:
+{{ toYaml . | indent 2 }}
+{{- end }}
+{{- with ($job.dispatcherTolerations | default .Values.tolerations) }}
+tolerations:
+{{ toYaml . | indent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Per-node staged Job manifest (deploymentMode: job), embedded verbatim into the
 job-templates ConfigMap. The dispatcher (kata-deploy-job-dispatcher) clones this once per
 target node, injecting metadata.name + spec.template.spec.nodeName, so the

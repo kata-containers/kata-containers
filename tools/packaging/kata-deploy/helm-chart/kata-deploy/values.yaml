@@ -33,6 +33,30 @@ job:
   dispatcherImage:
     reference: quay.io/kata-containers/kata-deploy-job-dispatcher
     tag: ""
+  # Where the dispatcher pods themselves may run (install and uninstall). Nothing
+  # to do with which nodes get Kata - that is the top-level `nodeSelector` /
+  # `affinity` / `tolerations`.
+  #
+  # Worth setting: the dispatcher is the component that holds Kubernetes
+  # credentials, and root on whatever node it lands on can read them.
+  # Confining it to nodes you trust - typically the control plane - means a
+  # compromised worker cannot reach them, something a DaemonSet can never offer
+  # because it must run everywhere.
+  #
+  # Example (control plane only; the toleration is required because those nodes are
+  # normally tainted):
+  #   job:
+  #     dispatcherNodeSelector:
+  #       node-role.kubernetes.io/control-plane: ""
+  #     dispatcherTolerations:
+  #       - key: node-role.kubernetes.io/control-plane
+  #         operator: Exists
+  #         effect: NoSchedule
+  dispatcherNodeSelector: {}
+  # Defaults to the top-level `tolerations` when empty, so the dispatcher stays
+  # schedulable on clusters whose every node is tainted (a single-node cluster, for
+  # instance). Set it to override that.
+  dispatcherTolerations: []
   # Maximum number of nodes processed concurrently (the dispatcher keeps at most
   # this many per-node Jobs in flight, refilling as they finish). Lower it to
   # pace the rollout (e.g. limit how many CRI runtimes restart at once on a big
