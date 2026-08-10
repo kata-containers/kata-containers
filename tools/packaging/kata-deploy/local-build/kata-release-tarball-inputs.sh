@@ -57,15 +57,20 @@ EOF
 		arm64)
 			cat <<'EOF'
 kata-static-cloud-hypervisor.tar.zst
+kata-static-kernel-cca-confidential.tar.zst
 kata-static-kernel-debug.tar.zst
 kata-static-kernel-dragonball-experimental.tar.zst
 kata-static-kernel-nvidia-gpu.tar.zst
 kata-static-kernel.tar.zst
 kata-static-nydus.tar.zst
 kata-static-openvmm.tar.zst
+kata-static-ovmf-cca.tar.zst
 kata-static-ovmf.tar.zst
+kata-static-qemu-cca-experimental.tar.zst
 kata-static-qemu-no-shared-fs.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-cca-confidential-image.tar.zst
+kata-static-rootfs-cca-confidential-initrd.tar.zst
 kata-static-rootfs-image-coco-extension.tar.zst
 kata-static-rootfs-image-devkit-extension.tar.zst
 kata-static-rootfs-image-nvidia-gpu-extension.tar.zst
@@ -136,12 +141,17 @@ EOF
 			cat <<'EOF'
 kata-static-cloud-hypervisor.tar.zst
 kata-static-firecracker.tar.zst
+kata-static-kernel-cca-confidential.tar.zst
 kata-static-kernel-debug.tar.zst
 kata-static-kernel-nvidia-gpu.tar.zst
 kata-static-kernel.tar.zst
 kata-static-nydus.tar.zst
+kata-static-ovmf-cca.tar.zst
 kata-static-ovmf.tar.zst
+kata-static-qemu-cca-experimental.tar.zst
 kata-static-qemu.tar.zst
+kata-static-rootfs-cca-confidential-image.tar.zst
+kata-static-rootfs-cca-confidential-initrd.tar.zst
 kata-static-rootfs-image-confidential.tar.zst
 kata-static-rootfs-image-nvidia-gpu.tar.zst
 kata-static-rootfs-image-nvidia.tar.zst
