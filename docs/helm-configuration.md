@@ -273,7 +273,15 @@ Because the cleanup dispatcher resolves nodes **live when it runs** at
 node set is *not* frozen into the stored release. This means the **default
 cleanup selector can simply be "nodes carrying the
 `katacontainers.io/kata-runtime` label"** — i.e. exactly the nodes the install
-actually labeled, regardless of how the install selector has drifted since.
+touched, regardless of how the install selector has drifted since.
+
+The selector matches the label's *key*, not the value `"true"`, and that is
+deliberate. An install claims its node with `katacontainers.io/kata-runtime=false`
+before it writes anything to it, and only promotes it to `"true"` once the node
+is kata-capable. Uninstall therefore also reaches nodes where the install failed
+part way through — the ones most likely to have artifacts or CRI configuration
+left on them. Nothing schedules onto a claimed node in the meantime, since the
+RuntimeClasses select the exact value `"true"`.
 
 Override it under `job.cleanup`, with the same precedence/semantics as install
 (`cleanup.nodes`, then `cleanup.nodeSelector` ANDed with

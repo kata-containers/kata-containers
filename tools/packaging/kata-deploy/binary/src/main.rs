@@ -99,6 +99,9 @@ enum Action {
 /// Node label applied to mark a node as kata-capable. Shared across the
 /// install/cleanup label stages so the key stays consistent.
 const KATA_RUNTIME_LABEL: &str = "katacontainers.io/kata-runtime";
+/// The value [`KATA_RUNTIME_LABEL`] carries while an install is under way: this
+/// node has to be cleaned up, but cannot run kata workloads yet.
+const KATA_RUNTIME_PENDING: &str = "false";
 const SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS: u64 = 10 * 60;
 const MKFS_EROFS: &str = "mkfs.erofs";
 const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
@@ -756,10 +759,42 @@ fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
     })
 }
 
+/// Mark the node as one kata-deploy has started installing on, before anything
+/// is written to it.
+///
+/// `helm uninstall` cleans the nodes carrying the kata-runtime label, whatever
+/// its value, so a node labelled only once the install *finishes* is out of
+/// uninstall's reach for the whole time it is half-installed. Not `true`,
+/// because RuntimeClasses select that exact value; an existing label is left
+/// alone, so reinstalling over a working node cannot withdraw it from
+/// scheduling.
+///
+/// Best-effort: this guards a failure that may never happen, and refusing to
+/// install over one failed label write would trade a rare orphan for a common
+/// outage.
+async fn claim_node(config: &config::Config) {
+    if let Err(e) = k8s::label_node(
+        config,
+        KATA_RUNTIME_LABEL,
+        Some(KATA_RUNTIME_PENDING),
+        false,
+    )
+    .await
+    {
+        log::warn!(
+            "install: could not mark node {} as being installed on ({e}). Should this install \
+             fail before it labels the node, `helm uninstall` will not clean this node up.",
+            config.node_name
+        );
+    }
+}
+
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
 /// up any configured snapshotters. This does not touch CRI configuration.
 async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (artifacts): installing kata artifacts on host");
+
+    claim_node(config).await;
 
     artifacts::install_artifacts(config, runtime).await?;
 
