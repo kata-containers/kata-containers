@@ -129,7 +129,7 @@ pub fn set_groups(groups: &[u32]) -> Result<()> {
     Ok(())
 }
 
-pub fn rootless_resource_group(
+fn rootless_resource_group(
     path: &Path,
     mode: u32,
     gid: u32,
@@ -189,6 +189,64 @@ pub fn authorize_rootless_device(
         required_permissions,
         user,
     )
+}
+
+pub fn authorize_rootless_socket(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless socket {}", path.display()))?;
+    if !metadata.file_type().is_socket() {
+        return Err(anyhow!(
+            "rootless VMM endpoint {} is not a Unix socket",
+            path.display()
+        ));
+    }
+
+    let mut candidate = user.clone();
+    authorize_rootless_resource_group(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        &mut candidate,
+    )?;
+
+    let mut parent = path.parent();
+    while let Some(directory) = parent {
+        let metadata = fs_metadata(directory).with_context(|| {
+            format!(
+                "get metadata for rootless socket parent {}",
+                directory.display()
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(anyhow!(
+                "rootless VMM socket parent {} is not a directory",
+                directory.display()
+            ));
+        }
+        if !rootless_user_has_permission(
+            &candidate,
+            metadata.uid(),
+            metadata.gid(),
+            metadata.mode(),
+            0o1,
+        ) {
+            return Err(anyhow!(
+                "rootless VMM cannot traverse socket parent {} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+                directory.display(),
+                metadata.mode() & 0o7777,
+            ));
+        }
+        parent = directory.parent();
+    }
+
+    user.groups = candidate.groups;
+    Ok(())
 }
 
 fn authorize_rootless_resource_group(
