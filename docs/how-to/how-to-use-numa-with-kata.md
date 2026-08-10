@@ -319,6 +319,25 @@ EOF
     far below the guest's size, so the containers of a pod still bound each
     other.
 
+!!! warning "`hugepages-<size>` has to cover `default_memory`"
+
+    The two numbers are yours to keep in step: nothing in the pod spec or in
+    the runtime ties the reservation to the size of the guest it has to back.
+    Reserve less than `default_memory` and the guest's memory cannot be
+    faulted in from the pod's huge page allowance, so the sandbox fails to
+    start — with an error about mapping guest memory that names neither
+    number. The runtime logs both before starting the VM:
+
+    ```
+    guest memory comes from huge pages: the sandbox's cgroup has to allow at
+    least the VM's size  pod-resource=hugepages-1Gi vm-memory-mb=65536
+    ```
+
+    Raising `default_memory` — or setting it per pod through the
+    `io.katacontainers.config.hypervisor.default_memory` annotation — means
+    raising `hugepages-<size>` with it. The reservation is per pod, so with
+    several containers in one pod it is their sum that has to cover the guest.
+
 ### 4.2 GPU passthrough pod with NUMA
 
 For GPU workloads, use the NVIDIA GPU runtime class. NUMA is enabled by

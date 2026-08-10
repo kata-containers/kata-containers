@@ -1379,6 +1379,19 @@ func TestBuildNUMATopologyHugePages(t *testing.T) {
 	assert.Equal(fmt.Sprintf("%dM", perNodeMiB), nodes[0].MemSize)
 }
 
+func TestHugePageResourceName(t *testing.T) {
+	assert := assert.New(t)
+
+	const kib = uint64(1) << 10
+
+	assert.Equal("hugepages-64Ki", hugePageResourceName(64*kib))
+	assert.Equal("hugepages-2Mi", hugePageResourceName(2*kib*kib))
+	assert.Equal("hugepages-32Mi", hugePageResourceName(32*kib*kib))
+	assert.Equal("hugepages-1Gi", hugePageResourceName(kib*kib*kib))
+	assert.Equal("hugepages-16Gi", hugePageResourceName(16*kib*kib*kib))
+	assert.Equal("hugepages-3", hugePageResourceName(3))
+}
+
 func TestBuildNUMATopologyVirtioFS(t *testing.T) {
 	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
 		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)

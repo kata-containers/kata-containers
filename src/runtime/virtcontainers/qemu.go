@@ -1697,6 +1697,44 @@ func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
 	}
 }
 
+// hugePageResourceName renders a huge page size as the resource name a pod
+// reserves those pages with, e.g. "hugepages-1Gi" for 1 GiB pages.
+func hugePageResourceName(sizeBytes uint64) string {
+	const kib = uint64(1) << 10
+	for _, unit := range []struct {
+		suffix string
+		size   uint64
+	}{
+		{"Gi", kib * kib * kib},
+		{"Mi", kib * kib},
+		{"Ki", kib},
+	} {
+		if sizeBytes >= unit.size && sizeBytes%unit.size == 0 {
+			return fmt.Sprintf("hugepages-%d%s", sizeBytes/unit.size, unit.suffix)
+		}
+	}
+	return fmt.Sprintf("hugepages-%d", sizeBytes)
+}
+
+// logHugePageReservation names the huge page reservation the guest's memory is
+// faulted in from, together with the size it has to cover. Nothing ties the
+// reservation to the VM's size, and a sandbox whose cgroup is short of it stops
+// with an error about mapping guest memory that names neither number, so leave
+// both in the log the operator reaches for.
+func (q *qemu) logHugePageReservation() {
+	hpSize, err := hugepageSizeBytes(defaultHugepagesMountpoint)
+	if err != nil {
+		q.Logger().WithError(err).Warn("cannot determine the huge page size backing guest memory")
+		return
+	}
+
+	q.Logger().WithFields(logrus.Fields{
+		"vm-memory-mb":    q.config.MemorySize,
+		"huge-page-mount": defaultHugepagesMountpoint,
+		"pod-resource":    hugePageResourceName(hpSize),
+	}).Info("guest memory comes from huge pages: the sandbox's cgroup has to allow at least the VM's size")
+}
+
 // StartVM will start the Sandbox's VM.
 func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "StartVM", qemuTracingTags, map[string]string{"sandbox_id": q.id})
@@ -1767,6 +1805,10 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 			}
 		}()
 
+	}
+
+	if q.config.HugePages {
+		q.logHugePageReservation()
 	}
 
 	qemuCmd, reader, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
