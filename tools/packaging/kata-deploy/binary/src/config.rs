@@ -460,6 +460,17 @@ impl Config {
         Ok(config)
     }
 
+    /// The CRI runtime handlers this install writes for its shims.
+    ///
+    /// Custom runtimes and variants are left out: they are configured
+    /// conditionally, so their absence from a runtime would say nothing.
+    pub fn shim_handlers(&self) -> Vec<String> {
+        self.shims_for_arch
+            .iter()
+            .map(|shim| shim_handler(shim, self.multi_install_suffix.as_deref()))
+            .collect()
+    }
+
     /// Validate configuration parameters
     ///
     /// All validations are performed on the `_for_arch` values, which are the final
@@ -972,6 +983,19 @@ impl Variant {
             Self::Debug => "debug",
             Self::Devkit => "devkit",
         }
+    }
+}
+
+/// The handler name, and hence the RuntimeClass name, of a shim.
+///
+/// In one place because it is both written into the CRI configuration and read
+/// back out of a running CRI to confirm that configuration was loaded.
+pub fn shim_handler(shim: &str, multi_install_suffix: Option<&str>) -> String {
+    match multi_install_suffix {
+        Some(install_suffix) if !install_suffix.is_empty() => {
+            format!("kata-{shim}-{install_suffix}")
+        }
+        _ => format!("kata-{shim}"),
     }
 }
 
@@ -1959,6 +1983,13 @@ mod tests {
         assert!(debug_variants[0].crio_pull_type.is_none());
 
         cleanup_env_vars();
+    }
+
+    #[test]
+    fn shim_handlers_name_what_the_cri_config_declares() {
+        assert_eq!(shim_handler("qemu", None), "kata-qemu");
+        assert_eq!(shim_handler("qemu", Some("")), "kata-qemu");
+        assert_eq!(shim_handler("qemu", Some("dev")), "kata-qemu-dev");
     }
 
     #[serial]

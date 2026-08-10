@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config;
 use crate::config::{Config, ContainerdPaths, CustomRuntime, NYDUS_FOR_KATA_TEE};
 use crate::k8s;
 use crate::utils;
@@ -136,6 +137,30 @@ fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
     } else {
         Path::new(&paths.config_file).to_path_buf()
     }
+}
+
+/// Every containerd configuration file [`configure_containerd`] can write, the
+/// effective kata output file first.
+///
+/// All of them, because an unchanged kata drop-in says nothing about the user
+/// drop-in next to it, or about the `imports` entry in the main config that
+/// makes containerd read either of them in the first place.
+pub(crate) async fn kata_cri_config_files(config: &Config, runtime: &str) -> Option<Vec<PathBuf>> {
+    let paths = config.get_containerd_paths(runtime).await.ok()?;
+
+    let mut files = vec![get_containerd_output_path(&paths)];
+    if let Ok((user_drop_in, _)) = get_user_containerd_drop_in_output_path(&paths) {
+        files.push(user_drop_in);
+    }
+    if let Some(imports_file) = &paths.imports_file {
+        files.push(PathBuf::from(imports_file));
+    }
+
+    // Without drop-in support the output file is the main config, which is also
+    // where imports would go.
+    files.dedup();
+
+    Some(files)
 }
 
 fn get_user_containerd_drop_in_output_path(paths: &ContainerdPaths) -> Result<(PathBuf, String)> {
@@ -286,11 +311,7 @@ pub async fn configure_containerd_runtime(
 ) -> Result<()> {
     log::info!("configure_containerd_runtime: Starting for shim={}", shim);
 
-    let adjusted_shim = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{shim}-{suffix}"),
-        _ => shim.to_string(),
-    };
-    let runtime_name = format!("kata-{adjusted_shim}");
+    let runtime_name = config::shim_handler(shim, config.multi_install_suffix.as_deref());
     let configuration = format!("configuration-{shim}");
 
     let paths = config.get_containerd_paths(runtime).await?;

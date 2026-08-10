@@ -99,6 +99,9 @@ enum Action {
 /// Node label applied to mark a node as kata-capable. Shared across the
 /// install/cleanup label stages so the key stays consistent.
 const KATA_RUNTIME_LABEL: &str = "katacontainers.io/kata-runtime";
+/// The value [`KATA_RUNTIME_LABEL`] carries while an install is under way: this
+/// node has to be cleaned up, but cannot run kata workloads yet.
+const KATA_RUNTIME_PENDING: &str = "false";
 const SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS: u64 = 10 * 60;
 const MKFS_EROFS: &str = "mkfs.erofs";
 const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
@@ -310,7 +313,7 @@ async fn main() -> Result<()> {
             info!("Install artifacts stage completed, exiting");
         }
         Action::InstallStageCri => {
-            install_stage_cri(&config, &runtime).await?;
+            install_stage_cri(&config, &runtime, true).await?;
             info!("Install CRI stage completed, exiting");
         }
         Action::InstallStageLabel => {
@@ -369,7 +372,7 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
     install_stage_host_check(config, runtime).await?;
     install_stage_artifacts(config, runtime).await?;
-    install_stage_cri(config, runtime).await?;
+    install_stage_cri(config, runtime, false).await?;
     install_stage_label(config).await?;
 
     info!("Kata Containers installation completed successfully");
@@ -756,10 +759,42 @@ fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
     })
 }
 
+/// Mark the node as one kata-deploy has started installing on, before anything
+/// is written to it.
+///
+/// `helm uninstall` cleans the nodes carrying the kata-runtime label, whatever
+/// its value, so a node labelled only once the install *finishes* is out of
+/// uninstall's reach for the whole time it is half-installed. Not `true`,
+/// because RuntimeClasses select that exact value; an existing label is left
+/// alone, so reinstalling over a working node cannot withdraw it from
+/// scheduling.
+///
+/// Best-effort: this guards a failure that may never happen, and refusing to
+/// install over one failed label write would trade a rare orphan for a common
+/// outage.
+async fn claim_node(config: &config::Config) {
+    if let Err(e) = k8s::label_node(
+        config,
+        KATA_RUNTIME_LABEL,
+        Some(KATA_RUNTIME_PENDING),
+        false,
+    )
+    .await
+    {
+        log::warn!(
+            "install: could not mark node {} as being installed on ({e}). Should this install \
+             fail before it labels the node, `helm uninstall` will not clean this node up.",
+            config.node_name
+        );
+    }
+}
+
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
 /// up any configured snapshotters. This does not touch CRI configuration.
 async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
     info!("install (artifacts): installing kata artifacts on host");
+
+    claim_node(config).await;
 
     artifacts::install_artifacts(config, runtime).await?;
 
@@ -778,8 +813,42 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
 /// Install stage 2 (cri): write CRI drop-ins, configure snapshotters, restart
 /// the runtime, and wait for the node to become ready. This node-disrupting
 /// stage is kept short-lived.
-async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()> {
+///
+/// `staged` distinguishes the two deployment models, because they survive the
+/// runtime restart very differently:
+///
+///   - DaemonSet (`staged == false`): this runs inside a long-lived, regular
+///     container. When containerd is restarted the kubelet re-attaches to the
+///     still-running container, so the process survives the bounce, reaches the
+///     readiness wait, and goes on to label the node in a single shot. It
+///     therefore always restarts.
+///
+///   - Job (`staged == true`): this runs as a short-lived *init* container in a
+///     `restartPolicy: Never` per-node Job. On some platforms (notably AKS)
+///     restarting the very containerd that manages this pod tears the init
+///     container down (exit 255, no logs) before it can finish - so the Job
+///     retries with a fresh pod. To let the retry converge we skip the restart
+///     once three things hold: the config we just (idempotently) re-applied is
+///     byte-for-byte what was already on disk, systemd says the runtime has been
+///     up since it was written, and the node reports the runtime serving the
+///     handlers that config defines. No one of them is enough: an unchanged
+///     config also describes an attempt that died before restarting anything, a
+///     recent restart says nothing about an upgrade that changes the config, and
+///     a node that cannot report handlers cannot rule either way. A genuine
+///     change still restarts; if that restart kills the init container again,
+///     the next retry finds all three satisfied and takes the skip path.
+///
+/// Either way the stage ends by confirming the runtime is serving kata handlers,
+/// so a runtime that ignored what we wrote fails here rather than at the first
+/// kata pod scheduled onto the node.
+async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
+
+    let config_before = if staged {
+        runtime::cri_config_snapshot(config, runtime).await
+    } else {
+        None
+    };
 
     runtime::containerd::setup_containerd_config_files(runtime, config).await?;
 
@@ -794,11 +863,91 @@ async fn install_stage_cri(config: &config::Config, runtime: &str) -> Result<()>
         }
     }
 
+    let handlers = config.shim_handlers();
+
+    if staged {
+        if let Some(before) = config_before {
+            let unchanged =
+                runtime::cri_config_snapshot(config, runtime).await.as_ref() == Some(&before);
+            if unchanged
+                && runtime::lifecycle::cri_serving_config_from(runtime, before.written_at()).await
+            {
+                // Everything up to here is inference about a pod no longer around
+                // to ask. The node seeing our handlers is the one direct answer.
+                let report =
+                    runtime::lifecycle::kata_handlers_loaded(config, &handlers, HANDLER_WAIT_SECS)
+                        .await;
+
+                if let runtime::lifecycle::HandlerReport::Missing(missing) = report {
+                    info!(
+                        "install (cri): {runtime} has been up since this config was written, but \
+                         node {} still does not report {missing:?}, so it is not serving it after \
+                         all. Restarting.",
+                        config.node_name
+                    );
+                } else {
+                    info!(
+                        "install (cri): CRI config for {runtime} is unchanged from a previous \
+                         attempt, and {runtime} is already serving it. Skipping the \
+                         (self-terminating) restart and checking the runtime is up instead."
+                    );
+                    runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                    info!("install (cri): runtime is up; CRI stage complete without restart");
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     info!("About to restart runtime: {}", runtime);
-    runtime::lifecycle::restart_runtime(config, runtime).await?;
+    runtime::lifecycle::restart_runtime(config, runtime, staged).await?;
     info!("Runtime restart completed successfully");
 
-    Ok(())
+    confirm_handlers_are_served(config, runtime, &handlers).await
+}
+
+/// Generous: the kubelet republishes this on every node status sync.
+const HANDLER_WAIT_SECS: u64 = 120;
+
+/// Fail the cri stage if the runtime came back without a single kata handler.
+///
+/// Restarting a unit says the unit restarted, not that it liked what we wrote.
+/// A runtime that ignored our drop-in would otherwise reach the label stage and
+/// leave a node advertised as kata-capable that cannot run a single kata pod.
+///
+/// A partial list is only reported: a node serving some of our handlers is
+/// running a CRI that read our configuration, which is what this stage is
+/// answerable for.
+async fn confirm_handlers_are_served(
+    config: &config::Config,
+    runtime: &str,
+    handlers: &[String],
+) -> Result<()> {
+    use runtime::lifecycle::HandlerReport;
+
+    match runtime::lifecycle::kata_handlers_loaded(config, handlers, HANDLER_WAIT_SECS).await {
+        HandlerReport::AllLoaded => {
+            info!("install (cri): {runtime} is serving {handlers:?}");
+            Ok(())
+        }
+        HandlerReport::Missing(missing) if missing.len() == handlers.len() => {
+            anyhow::bail!(
+                "{runtime} restarted but node {} reports none of {handlers:?} among its runtime \
+                 handlers, so it is not serving the kata configuration this stage wrote. Check \
+                 {runtime}'s logs for a rejected or unread configuration file.",
+                config.node_name
+            )
+        }
+        HandlerReport::Missing(missing) => {
+            log::warn!(
+                "install (cri): {runtime} is serving kata handlers, but not {missing:?}. The \
+                 RuntimeClasses naming them will not be usable on node {}.",
+                config.node_name
+            );
+            Ok(())
+        }
+        HandlerReport::Unknown => Ok(()),
+    }
 }
 
 /// Install stage 3 (label): apply the kata-runtime node label. Unprivileged,

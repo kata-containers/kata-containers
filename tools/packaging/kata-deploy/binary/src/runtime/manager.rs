@@ -8,6 +8,9 @@ use crate::k8s;
 use crate::utils;
 use anyhow::{Context, Result};
 use regex::Regex;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use super::containerd;
 use super::crio;
@@ -206,6 +209,73 @@ pub async fn configure_cri_runtime(config: &Config, runtime: &str) -> Result<()>
     Ok(())
 }
 
+/// What the kata CRI configuration for a runtime looked like at a point in time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CriConfigSnapshot {
+    fingerprint: String,
+    written_at: Option<SystemTime>,
+}
+
+impl CriConfigSnapshot {
+    pub fn written_at(&self) -> Option<SystemTime> {
+        self.written_at
+    }
+}
+
+/// Snapshot the current on-disk kata CRI configuration for `runtime`.
+///
+/// The config writes are idempotent, so comparing a snapshot from before a
+/// re-apply with one from after says whether the runtime has to be restarted to
+/// pick anything up.
+pub async fn cri_config_snapshot(config: &Config, runtime: &str) -> Option<CriConfigSnapshot> {
+    let files = if runtime == "crio" {
+        crio::kata_cri_config_files(config)
+    } else if is_containerd_based(runtime) {
+        containerd::kata_cri_config_files(config, runtime).await?
+    } else {
+        return None;
+    };
+
+    snapshot_files(&files)
+}
+
+/// Fold `files` into a single snapshot, in order.
+///
+/// A missing first entry means kata was never configured here. The rest count
+/// as empty when absent, so a user drop-in appearing still reads as a change.
+fn snapshot_files(files: &[PathBuf]) -> Option<CriConfigSnapshot> {
+    let (primary, rest) = files.split_first()?;
+
+    let mut fingerprint = read_for_fingerprint(primary)?;
+    let mut written_at = mtime(primary);
+
+    for file in rest {
+        fingerprint.push_str(&read_for_fingerprint(file).unwrap_or_default());
+        written_at = written_at.max(mtime(file));
+    }
+
+    Some(CriConfigSnapshot {
+        fingerprint,
+        written_at,
+    })
+}
+
+/// Path and content, framed so that content moving between files still reads as
+/// a change.
+fn read_for_fingerprint(file: &Path) -> Option<String> {
+    let content = fs::read_to_string(file).ok()?;
+
+    Some(format!(
+        "{}\n{}\n{content}\n",
+        file.display(),
+        content.len()
+    ))
+}
+
+fn mtime(file: &Path) -> Option<SystemTime> {
+    fs::metadata(file).ok()?.modified().ok()
+}
+
 /// Remove CRI runtime configuration (containerd/crio config files) without restarting.
 pub async fn cleanup_cri_runtime_config(config: &Config, runtime: &str) -> Result<()> {
     log::info!(
@@ -246,6 +316,86 @@ pub async fn restart_and_wait_for_ready(config: &Config, runtime: &str) -> Resul
 mod tests {
     use super::*;
     use rstest::rstest;
+    use tempfile::tempdir;
+
+    // --- snapshot_files ---
+    //
+    // What install_stage_cri decides on: equal fingerprints across per-node Job
+    // retries mean this config is already on disk, so the retry can converge
+    // instead of restarting the runtime (and getting killed) again.
+
+    #[test]
+    fn absent_primary_file_is_none() {
+        let dir = tempdir().unwrap();
+
+        assert_eq!(
+            snapshot_files(&[dir.path().join("kata-deploy.toml")]),
+            None,
+            "no config on disk yet must read as None (fresh install -> restart)"
+        );
+    }
+
+    #[test]
+    fn a_secondary_file_appearing_is_a_change() {
+        let dir = tempdir().unwrap();
+        let drop_in = dir.path().join("kata-deploy.toml");
+        let user_drop_in = dir.path().join("zz-kata-deploy-user.toml");
+        fs::write(&drop_in, "kata").unwrap();
+
+        let files = [drop_in, user_drop_in.clone()];
+        let before = snapshot_files(&files).unwrap();
+
+        // A user drop-in added by an upgrade leaves the kata drop-in untouched,
+        // so this is exactly the change a single-file snapshot used to miss.
+        fs::write(&user_drop_in, "user").unwrap();
+        assert_ne!(
+            before.fingerprint,
+            snapshot_files(&files).unwrap().fingerprint
+        );
+    }
+
+    #[test]
+    fn identical_content_fingerprints_the_same() {
+        let dir = tempdir().unwrap();
+        let drop_in = dir.path().join("kata-deploy.toml");
+        let main_config = dir.path().join("config.toml");
+        fs::write(&drop_in, "kata").unwrap();
+        fs::write(&main_config, "imports = [\"kata-deploy.toml\"]").unwrap();
+
+        let files = [drop_in, main_config.clone()];
+        let before = snapshot_files(&files).unwrap();
+
+        assert_eq!(
+            before.fingerprint,
+            snapshot_files(&files).unwrap().fingerprint
+        );
+
+        // Losing the import means containerd no longer reads the drop-in, even
+        // though the drop-in itself is byte-for-byte what we want.
+        fs::write(&main_config, "imports = []").unwrap();
+        assert_ne!(
+            before.fingerprint,
+            snapshot_files(&files).unwrap().fingerprint
+        );
+    }
+
+    #[test]
+    fn written_at_is_the_newest_file() {
+        let dir = tempdir().unwrap();
+        let drop_in = dir.path().join("kata-deploy.toml");
+        let user_drop_in = dir.path().join("zz-kata-deploy-user.toml");
+        fs::write(&drop_in, "kata").unwrap();
+        fs::write(&user_drop_in, "user").unwrap();
+
+        let newest = mtime(&drop_in).max(mtime(&user_drop_in));
+        assert_eq!(
+            snapshot_files(&[drop_in, user_drop_in])
+                .unwrap()
+                .written_at(),
+            newest,
+            "the restart has to be newer than the last write, whichever file it landed in"
+        );
+    }
 
     // --- containerd_version_is_2_or_newer ---
 

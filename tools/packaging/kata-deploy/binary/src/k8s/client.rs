@@ -307,6 +307,30 @@ pub async fn get_node_ready_status(config: &Config) -> Result<String> {
     Ok("Unknown".to_string())
 }
 
+/// The CRI runtime handlers the kubelet reports this node's runtime as serving.
+///
+/// `None` means the node does not report them at all - the kubelet only fills
+/// this in with RecursiveReadOnlyMounts or UserNamespacesSupport enabled, and an
+/// older runtime returns none - which is not the same as kata being missing.
+pub async fn get_node_runtime_handlers(config: &Config) -> Result<Option<Vec<String>>> {
+    let client = K8sClient::new(&config.node_name).await?;
+    let node = client.get_node().await?;
+
+    let handlers: Vec<String> = node
+        .status
+        .and_then(|status| status.runtime_handlers)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|handler| handler.name)
+        .collect();
+
+    if handlers.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(handlers))
+}
+
 pub async fn label_node(
     config: &Config,
     label_key: &str,

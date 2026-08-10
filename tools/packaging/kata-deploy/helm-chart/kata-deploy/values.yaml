@@ -82,9 +82,14 @@ job:
   #
   # The cleanup dispatcher resolves nodes LIVE when it runs at `helm uninstall`
   # (the dispatcher does the lookup), so - unlike a frozen Helm-rendered hook -
-  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime",
-  # i.e. exactly the nodes install actually labeled. Override to clean a
-  # different set, e.g.:
+  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime".
+  #
+  # Note the selector matches the KEY, not the value "true": install claims a
+  # node with katacontainers.io/kata-runtime=false before it writes anything to
+  # it, and only sets "true" once the node is kata-capable. Uninstall therefore
+  # also reaches nodes where the install failed half way, which are precisely
+  # the nodes with something left on them. Override to clean a different set,
+  # e.g.:
   #   job:
   #     cleanup:
   #       nodes: ["worker-1"]

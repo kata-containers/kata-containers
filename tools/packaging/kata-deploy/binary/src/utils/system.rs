@@ -54,6 +54,10 @@ pub async fn host_systemctl(args: &[&str]) -> Result<()> {
     super::systemd::systemctl(args).await
 }
 
+pub async fn host_unit_active_since(unit: &str) -> Result<Option<std::time::SystemTime>> {
+    super::systemd::unit_active_since(unit).await
+}
+
 /// Get kata containers config path based on shim type.
 /// This returns the path where the shim's configuration will be read from.
 /// For standard runtimes using drop-in configuration, this is the per-shim directory.
