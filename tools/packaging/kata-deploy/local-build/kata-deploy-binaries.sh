@@ -355,8 +355,16 @@ get_coco_guest_components_tarball_path() {
 	echo "${coco_guest_components_local_build_dir}/${coco_guest_components_tarball_name}"
 }
 
+get_coco_guest_components_tarball_checksum() {
+	local tarball
+	tarball="$(get_coco_guest_components_tarball_path)"
+	[[ -f "${tarball}" ]] || die "CoCo guest components tarball not found: ${tarball}"
+
+	sha256sum "${tarball}" | cut -d' ' -f1
+}
+
 get_latest_coco_guest_components_artefact_and_builder_image_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)-$(get_coco_guest_components_container_image_digest)"
 }
 
 get_coco_extension_oci_arch() {
@@ -374,6 +382,17 @@ get_coco_guest_components_container_image_ref() {
 	[[ -n "${image}" ]] || die "Failed to get coco-guest-components container_image from versions.yaml"
 
 	echo "${image}:${version}"
+}
+
+get_coco_guest_components_container_image_digest() {
+	ensure_oras_installed >&2
+
+	local image_ref go_arch
+	image_ref="$(get_coco_guest_components_container_image_ref)"
+	go_arch="$(get_coco_extension_oci_arch)"
+
+	oras resolve --platform "linux/${go_arch}" "${image_ref}" \
+		|| die "Failed to resolve ${image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
 }
 
 # The extension disk image is published as a multi-arch OCI index tagged with the
@@ -474,15 +493,12 @@ verify_guest_components_oci_provenance() {
 # Pull the published scratch OCI container image (coco-extension), verify its
 # provenance, and export the rootfs into destdir for monolithic confidential images.
 install_coco_guest_components_from_oci() {
-	ensure_oras_installed
-
 	local image_ref image go_arch digest cid
 	image_ref="$(get_coco_guest_components_container_image_ref)"
 	image="${image_ref%%:*}"
 	go_arch="$(get_coco_extension_oci_arch)"
 
-	digest="$(oras resolve --platform "linux/${go_arch}" "${image_ref}")" \
-		|| die "Failed to resolve ${image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
+	digest="$(get_coco_guest_components_container_image_digest)"
 
 	verify_guest_components_oci_provenance "${image}" "${digest}"
 
@@ -656,6 +672,7 @@ install_image() {
 		# Both the standard and NVIDIA confidential images bake the CoCo
 		# guest components (including the pause bundle) into the rootfs.
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_coco_guest_components_tarball_checksum)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -996,6 +1013,7 @@ install_initrd() {
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_coco_guest_components_tarball_checksum)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
