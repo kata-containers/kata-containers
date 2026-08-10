@@ -36,7 +36,7 @@ pub mod remote;
 pub mod selinux;
 pub use kernel_param::Param;
 pub mod utils;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 #[cfg(all(
     feature = "cloud-hypervisor",
@@ -178,6 +178,13 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
         Err(anyhow::anyhow!(
             "updating the rootless user is not supported for this hypervisor"
         ))
+    }
+
+    /// Return the host Unix socket used by this VMM for TDX quote generation.
+    /// A VMM that uses another transport, or does not support guest quote
+    /// generation, returns `None`.
+    async fn tdx_quote_socket_path(&self, _config: &TdxConfig) -> Result<Option<PathBuf>> {
+        Ok(None)
     }
 
     /// Resolve the in-guest PCIe path for a cold-plugged physical-endpoint VF
