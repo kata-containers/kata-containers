@@ -33,7 +33,25 @@ devkit_runtimeclass() {
 # unambiguous proof that a debug console shell actually executed. The /real_root
 # symlink is created only by devkit-init when the overlay is set up, so it tells
 # the devkit chroot apart from the (also Ubuntu-based) NVIDIA base rootfs.
-DEVKIT_PROBE='echo "SHELL_OK=$((6*7))"; . /etc/os-release 2>/dev/null; echo "GUEST_ID=${ID}"; test -L /real_root && echo "DEVKIT_OVERLAY=yes" || true'
+#
+# It also reports the PATH the shell runs with, plus one EXT_BIN line per tool
+# directory the mounted extensions ship, which assert_extension_dirs_in_path()
+# then cross-checks on this side.
+#
+# One complete command per element, joined by newlines below: the guest reads
+# these from a PTY, so nothing is spread over continuation lines. Single quotes
+# cannot appear either - run_debug_console() feeds the result through a
+# single-quoted printf on the node.
+DEVKIT_PROBE_COMMANDS=(
+	'echo "SHELL_OK=$((6*7))"'
+	'. /etc/os-release 2>/dev/null; echo "GUEST_ID=${ID}"'
+	'test -L /real_root && echo "DEVKIT_OVERLAY=yes" || true'
+	'echo "DEVKIT_PATH=${PATH}"'
+	# Symlinked directories are skipped for the same reason devkit-init does
+	# not list them (the GPU extension's usr/bin -> ../bin).
+	'for d in /real_root/run/kata-extensions/*/bin; do test -d "${d}" && ! test -L "${d}" && echo "EXT_BIN=${d#/real_root}"; done'
+)
+DEVKIT_PROBE="$(printf '%s\n' "${DEVKIT_PROBE_COMMANDS[@]}")"
 
 check_and_skip() {
 	if ! devkit_supported; then
@@ -94,6 +112,41 @@ rm -f \"\${fifo}\"
 	exec_host "${node}" "${remote}" || true
 }
 
+# Every tool directory the probe found under /run/kata-extensions must be in the
+# PATH the devkit shell runs with, under the name the *guest* root uses: that is
+# what `chroot /real_root <tool>` resolves against, so without it an extension's
+# tools (e.g. the GPU extension's nvidia-smi) are only reachable by full path.
+#
+# A reported value is told apart from the probe text the PTY echoes back by
+# where it sits and what it holds: at the start of a line, with a path for a
+# value, while the echo carries `${PATH}` and `${d#/real_root}` unexpanded and
+# behind a shell prompt.
+#
+# Passes vacuously where the devkit is the only extension cold-plugged, which is
+# the case on the CPU-only class this test runs on today.
+assert_extension_dirs_in_path() {
+	local output="$1"
+	local clean guest_path ext_dir missing=""
+
+	# Readline brackets every line it accepts in paste-mode escapes, and the
+	# closing one is written just before the command's output: on a PTY the
+	# values only begin a line once the control sequences are dropped.
+	clean="$(printf '%s\n' "${output}" | tr -d '\r' | sed $'s/\033\\[[0-9;?]*[A-Za-z]//g')"
+
+	guest_path="$(printf '%s\n' "${clean}" | sed -n 's|^DEVKIT_PATH=\(/.*\)$|\1|p' | head -1)"
+	[[ -n "${guest_path}" ]] || die "devkit debug console did not report its PATH"
+
+	# The devkit's own bin/ is the chroot's root, not something PATH should
+	# point at: its dynamic binaries cannot run on the guest base anyway.
+	for ext_dir in $(printf '%s\n' "${clean}" | sed -n 's|^EXT_BIN=\(/.*\)$|\1|p'); do
+		[[ "${ext_dir}" == */devkit/bin ]] && continue
+		[[ ":${guest_path}:" == *":${ext_dir}:"* ]] && continue
+		missing+=" ${ext_dir}"
+	done
+
+	[[ -z "${missing}" ]] || die "devkit shell PATH lacks extension tools at:${missing} (PATH=${guest_path})"
+}
+
 setup() {
 	check_and_skip
 
@@ -121,6 +174,8 @@ setup() {
 		|| die "devkit debug console did not report an Ubuntu guest"
 	echo "${output}" | grep -q 'DEVKIT_OVERLAY=yes' \
 		|| die "devkit debug console shell lacks /real_root; not the devkit overlay"
+
+	assert_extension_dirs_in_path "${output}"
 }
 
 teardown() {
