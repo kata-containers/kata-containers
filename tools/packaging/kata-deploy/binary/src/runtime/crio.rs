@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::config;
 use crate::config::{Config, CustomRuntime};
 use crate::utils;
 use anyhow::Result;
@@ -45,11 +46,7 @@ fn write_crio_runtime_config(file: &mut fs::File, params: &CrioRuntimeParams) ->
 }
 
 pub async fn configure_crio_runtime(config: &Config, shim: &str) -> Result<()> {
-    let adjusted_shim = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{shim}-{suffix}"),
-        _ => shim.to_string(),
-    };
-    let runtime_name = format!("kata-{adjusted_shim}");
+    let runtime_name = config::shim_handler(shim, config.multi_install_suffix.as_deref());
     let configuration = format!("configuration-{shim}");
 
     // Determine if guest-pull is configured for this shim

@@ -793,13 +793,19 @@ async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Resu
 ///     restarting the very containerd that manages this pod tears the init
 ///     container down (exit 255, no logs) before it can finish - so the Job
 ///     retries with a fresh pod. To let the retry converge we skip the restart
-///     once the config we just (idempotently) re-applied is byte-for-byte what
-///     was already on disk *and* systemd says the runtime has been up since it
-///     was written. Neither half is enough alone: an unchanged config also
-///     describes an attempt that died before restarting anything, and a recent
-///     restart says nothing about an upgrade that changes the config. A genuine
+///     once three things hold: the config we just (idempotently) re-applied is
+///     byte-for-byte what was already on disk, systemd says the runtime has been
+///     up since it was written, and the node reports the runtime serving the
+///     handlers that config defines. No one of them is enough: an unchanged
+///     config also describes an attempt that died before restarting anything, a
+///     recent restart says nothing about an upgrade that changes the config, and
+///     a node that cannot report handlers cannot rule either way. A genuine
 ///     change still restarts; if that restart kills the init container again,
-///     the next retry finds both satisfied and takes the skip path.
+///     the next retry finds all three satisfied and takes the skip path.
+///
+/// Either way the stage ends by confirming the runtime is serving kata handlers,
+/// so a runtime that ignored what we wrote fails here rather than at the first
+/// kata pod scheduled onto the node.
 async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
 
@@ -822,6 +828,8 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
         }
     }
 
+    let handlers = config.shim_handlers();
+
     if staged {
         if let Some(before) = config_before {
             let unchanged =
@@ -829,15 +837,29 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
             if unchanged
                 && runtime::lifecycle::cri_serving_config_from(runtime, before.written_at()).await
             {
-                info!(
-                    "install (cri): CRI config for {runtime} is unchanged from a previous \
-                     attempt, and {runtime} has been running since it was written, so it is \
-                     already serving it. Skipping the (self-terminating) restart and \
-                     checking the runtime is up instead."
-                );
-                runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
-                info!("install (cri): runtime is up; CRI stage complete without restart");
-                return Ok(());
+                // Everything up to here is inference about a pod no longer around
+                // to ask. The node seeing our handlers is the one direct answer.
+                let report =
+                    runtime::lifecycle::kata_handlers_loaded(config, &handlers, HANDLER_WAIT_SECS)
+                        .await;
+
+                if let runtime::lifecycle::HandlerReport::Missing(missing) = report {
+                    info!(
+                        "install (cri): {runtime} has been up since this config was written, but \
+                         node {} still does not report {missing:?}, so it is not serving it after \
+                         all. Restarting.",
+                        config.node_name
+                    );
+                } else {
+                    info!(
+                        "install (cri): CRI config for {runtime} is unchanged from a previous \
+                         attempt, and {runtime} is already serving it. Skipping the \
+                         (self-terminating) restart and checking the runtime is up instead."
+                    );
+                    runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                    info!("install (cri): runtime is up; CRI stage complete without restart");
+                    return Ok(());
+                }
             }
         }
     }
@@ -846,7 +868,51 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
     runtime::lifecycle::restart_runtime(config, runtime, staged).await?;
     info!("Runtime restart completed successfully");
 
-    Ok(())
+    confirm_handlers_are_served(config, runtime, &handlers).await
+}
+
+/// Generous: the kubelet republishes this on every node status sync.
+const HANDLER_WAIT_SECS: u64 = 120;
+
+/// Fail the cri stage if the runtime came back without a single kata handler.
+///
+/// Restarting a unit says the unit restarted, not that it liked what we wrote.
+/// A runtime that ignored our drop-in would otherwise reach the label stage and
+/// leave a node advertised as kata-capable that cannot run a single kata pod.
+///
+/// A partial list is only reported: a node serving some of our handlers is
+/// running a CRI that read our configuration, which is what this stage is
+/// answerable for.
+async fn confirm_handlers_are_served(
+    config: &config::Config,
+    runtime: &str,
+    handlers: &[String],
+) -> Result<()> {
+    use runtime::lifecycle::HandlerReport;
+
+    match runtime::lifecycle::kata_handlers_loaded(config, handlers, HANDLER_WAIT_SECS).await {
+        HandlerReport::AllLoaded => {
+            info!("install (cri): {runtime} is serving {handlers:?}");
+            Ok(())
+        }
+        HandlerReport::Missing(missing) if missing.len() == handlers.len() => {
+            anyhow::bail!(
+                "{runtime} restarted but node {} reports none of {handlers:?} among its runtime \
+                 handlers, so it is not serving the kata configuration this stage wrote. Check \
+                 {runtime}'s logs for a rejected or unread configuration file.",
+                config.node_name
+            )
+        }
+        HandlerReport::Missing(missing) => {
+            log::warn!(
+                "install (cri): {runtime} is serving kata handlers, but not {missing:?}. The \
+                 RuntimeClasses naming them will not be usable on node {}.",
+                config.node_name
+            );
+            Ok(())
+        }
+        HandlerReport::Unknown => Ok(()),
+    }
 }
 
 /// Install stage 3 (label): apply the kata-runtime node label. Unprivileged,

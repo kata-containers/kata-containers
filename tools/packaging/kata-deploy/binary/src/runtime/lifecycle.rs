@@ -87,6 +87,96 @@ pub async fn wait_till_cri_unit_active(runtime: &str, timeout_secs: u64) -> Resu
     }
 }
 
+/// What the node says about the kata handlers the CRI runtime is serving.
+#[derive(Debug, PartialEq, Eq)]
+pub enum HandlerReport {
+    AllLoaded,
+    Missing(Vec<String>),
+    /// The node does not report handlers, or could not be read. Never a
+    /// failure: this check exists to catch a runtime that ignored our
+    /// configuration, not to make installs depend on being able to ask.
+    Unknown,
+}
+
+/// Ask the node which kata handlers its CRI runtime is serving, waiting up to
+/// `timeout_secs` for `expected` to show up.
+///
+/// The only view we have of what the runtime actually *loaded*, as opposed to
+/// what we wrote and hoped it would read. It trails the runtime by a node status
+/// sync or two, hence the wait - but a cluster that cannot answer at all says so
+/// immediately, rather than spending the timeout on it.
+pub async fn kata_handlers_loaded(
+    config: &Config,
+    expected: &[String],
+    timeout_secs: u64,
+) -> HandlerReport {
+    if expected.is_empty() {
+        return HandlerReport::Unknown;
+    }
+
+    // A best-effort check is not worth the full timeout to give up on.
+    const READ_FAILURES_BEFORE_GIVING_UP: u32 = 3;
+
+    let start = std::time::Instant::now();
+    let mut last_missing: Option<Vec<String>> = None;
+    let mut failures = 0;
+
+    loop {
+        match k8s::get_node_runtime_handlers(config).await {
+            Ok(Some(loaded)) => {
+                let missing = missing_handlers(expected, &loaded);
+
+                if missing.is_empty() {
+                    return HandlerReport::AllLoaded;
+                }
+
+                info!(
+                    "kata_handlers_loaded: node {} reports {loaded:?}; still waiting for {missing:?}",
+                    config.node_name
+                );
+                failures = 0;
+                last_missing = Some(missing);
+            }
+            Ok(None) => {
+                info!(
+                    "kata_handlers_loaded: node {} reports no runtime handlers, so what the \
+                     runtime loaded cannot be checked here",
+                    config.node_name
+                );
+                return HandlerReport::Unknown;
+            }
+            Err(e) => {
+                info!("kata_handlers_loaded: could not read the node's handlers: {e}");
+                failures += 1;
+                if failures >= READ_FAILURES_BEFORE_GIVING_UP {
+                    return HandlerReport::Unknown;
+                }
+            }
+        }
+
+        if start.elapsed().as_secs() >= timeout_secs {
+            return match last_missing {
+                Some(missing) => HandlerReport::Missing(missing),
+                None => HandlerReport::Unknown,
+            };
+        }
+
+        sleep(Duration::from_secs(2)).await;
+    }
+}
+
+/// Which of `expected` the runtime is not serving.
+///
+/// Only ever looks for ours: a runtime is free to serve handlers we know
+/// nothing about.
+fn missing_handlers(expected: &[String], loaded: &[String]) -> Vec<String> {
+    expected
+        .iter()
+        .filter(|handler| !loaded.contains(handler))
+        .cloned()
+        .collect()
+}
+
 /// Whether the CRI runtime has been running continuously since `written_at`, and
 /// is therefore serving the configuration that was on disk at that moment.
 ///
@@ -174,4 +264,42 @@ pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handlers(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| name.to_string()).collect()
+    }
+
+    #[test]
+    fn a_runtime_serving_everything_we_wrote_is_missing_nothing() {
+        assert!(missing_handlers(
+            &handlers(&["kata-qemu", "kata-clh"]),
+            &handlers(&["runc", "kata-qemu", "kata-clh"]),
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn a_runtime_that_never_read_our_config_is_missing_all_of_them() {
+        assert_eq!(
+            missing_handlers(&handlers(&["kata-qemu", "kata-clh"]), &handlers(&["runc"])),
+            handlers(&["kata-qemu", "kata-clh"]),
+        );
+    }
+
+    #[test]
+    fn another_installs_handlers_do_not_count_as_ours() {
+        // A multi-install alongside us serves kata handlers under its own suffix.
+        assert_eq!(
+            missing_handlers(
+                &handlers(&["kata-qemu"]),
+                &handlers(&["kata-qemu-tee", "kata-qemu-debug"]),
+            ),
+            handlers(&["kata-qemu"]),
+        );
+    }
 }
