@@ -23,6 +23,7 @@ else
 		"kata-deploy-custom-runtimes.bats" \
 		"kata-deploy-lifecycle.bats" \
 		"kata-deploy-scheduling.bats" \
+		"kata-deploy-tee-keys.bats" \
 	)
 fi
 

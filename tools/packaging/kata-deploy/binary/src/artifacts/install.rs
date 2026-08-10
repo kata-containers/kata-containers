@@ -4,8 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{variant_handler, Config, Variant, DEFAULT_KATA_INSTALL_DIR};
-use crate::k8s::nfd;
-use crate::k8s::runtimeclasses;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
@@ -134,12 +132,6 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
     // handler dirs (e.g. devkit toggled off, or a shim removed).
     reconcile_devkit_artifacts(config)?;
 
-    let expand_runtime_classes_for_nfd = nfd::setup_nfd_rules(config).await?;
-
-    if expand_runtime_classes_for_nfd {
-        runtimeclasses::update_existing_runtimeclasses_for_nfd(config).await?;
-    }
-
     Ok(())
 }
 
@@ -162,8 +154,6 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
     if install_dir.exists() {
         remove_tree_keeping_mount_points(install_dir)?;
     }
-
-    nfd::remove_nfd_rules(config).await?;
 
     Ok(())
 }
