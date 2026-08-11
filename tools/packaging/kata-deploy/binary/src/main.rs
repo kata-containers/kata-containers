@@ -72,13 +72,18 @@ enum Action {
     /// runtime, and wait for node readiness.
     #[clap(name = "install-stage-cri")]
     InstallStageCri,
-    /// Stage 3 of a staged (JobSet) install: apply the kata-runtime node label.
-    /// Unprivileged, Kubernetes API only.
+    /// Apply the kata-runtime node label. Unprivileged, Kubernetes API only.
+    ///
+    /// No longer part of the staged pipeline: the dispatcher labels the node
+    /// itself, once the node's Job as a whole succeeded, which is what lets those
+    /// Jobs run with no ServiceAccount token. Kept because a chart from before
+    /// that change still invokes it.
     #[clap(name = "install-stage-label")]
     InstallStageLabel,
-    /// Cleanup stage 1 of a staged (JobSet) uninstall: remove the kata-runtime
-    /// node label first so the scheduler stops placing kata workloads here.
-    /// Unprivileged, Kubernetes API only.
+    /// Remove the kata-runtime node label. Unprivileged, Kubernetes API only.
+    ///
+    /// As with install-stage-label, the dispatcher does this now; kept for older
+    /// charts.
     #[clap(name = "cleanup-stage-unlabel")]
     CleanupStageUnlabel,
     /// Cleanup stage 2 of a staged (JobSet) uninstall: remove CRI drop-ins,

@@ -37,11 +37,11 @@ job:
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
   #
-  # Worth setting: the dispatcher is the component that holds Kubernetes
-  # credentials, and root on whatever node it lands on can read them.
-  # Confining it to nodes you trust - typically the control plane - means a
-  # compromised worker cannot reach them, something a DaemonSet can never offer
-  # because it must run everywhere.
+  # Worth setting: the dispatcher is the one component that holds credentials, and
+  # root on whatever node it lands on can read them. Confining it to nodes you
+  # trust - typically the control plane - means a compromised worker cannot reach
+  # them, something a DaemonSet can never offer because it must run everywhere.
+  # The per-node Jobs need no such care: they carry no ServiceAccount token at all.
   #
   # Example (control plane only; the toleration is required because those nodes are
   # normally tainted):
@@ -98,6 +98,17 @@ job:
   # this alone just trades a dispatcher error that names the selectors it tried
   # for Helm's opaque "timed out waiting for the condition".
   waitForNodesSeconds: 120
+  # How long to wait for a node to report Ready again after its install Job
+  # finished, before advertising it as Kata-capable.
+  #
+  # The last thing that install does is restart the node's CRI runtime, which
+  # takes the node NotReady for a moment. Labeling it (and lifting its
+  # startupTaints) only once it is Ready again is what keeps the scheduler from
+  # sending the first Kata workload to a node whose runtime is still coming back.
+  #
+  # A node that never recovers fails its own install and nothing else: it stays
+  # unlabeled, so no workload is sent there, and a later run retries it.
+  waitNodeReadySeconds: 300
   # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
   #
   # Deliberately independent of the install selection: uninstall has to reach

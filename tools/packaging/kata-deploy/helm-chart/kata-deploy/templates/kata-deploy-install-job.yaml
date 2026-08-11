@@ -110,6 +110,7 @@ job.nodes list, which names nodes outright and needs no discovery.
 */}}
             - "--wait-for-nodes-secs={{ $root.Values.job.waitForNodesSeconds | default 0 }}"
 {{- end }}
+{{- include "kata-deploy.dispatcherNodeWorkFlags" (dict "root" $root "stage" "install") | nindent 12 }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
