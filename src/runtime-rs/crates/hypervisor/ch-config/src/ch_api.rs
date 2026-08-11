@@ -83,6 +83,40 @@ pub async fn cloud_hypervisor_vm_start(api_socket: &ApiSocket) -> Result<Option<
     api_command(api_socket, "PUT", "vm.boot", None, None).await
 }
 
+pub async fn cloud_hypervisor_vm_pause(api_socket: &ApiSocket) -> Result<Option<String>> {
+    api_command(api_socket, "PUT", "vm.pause", None, None).await
+}
+
+pub async fn cloud_hypervisor_vm_resume(api_socket: &ApiSocket) -> Result<Option<String>> {
+    api_command(api_socket, "PUT", "vm.resume", None, None).await
+}
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct VmSnapshotConfig {
+    pub destination_url: String,
+}
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct RestoreConfig {
+    pub source_url: String,
+}
+
+pub async fn cloud_hypervisor_vm_snapshot(
+    api_socket: &ApiSocket,
+    cfg: VmSnapshotConfig,
+) -> Result<Option<String>> {
+    let body = serde_json::to_string(&cfg)?;
+    api_command(api_socket, "PUT", "vm.snapshot", Some(body), None).await
+}
+
+pub async fn cloud_hypervisor_vm_restore(
+    api_socket: &ApiSocket,
+    cfg: RestoreConfig,
+) -> Result<Option<String>> {
+    let body = serde_json::to_string(&cfg)?;
+    api_command(api_socket, "PUT", "vm.restore", Some(body), None).await
+}
+
 #[allow(dead_code)]
 pub async fn cloud_hypervisor_vm_stop(api_socket: &ApiSocket) -> Result<Option<String>> {
     api_command(api_socket, "PUT", "vm.shutdown", None, None).await

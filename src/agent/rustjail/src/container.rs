@@ -653,6 +653,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if !oci_process.cwd().as_os_str().is_empty() {
         unistd::chdir(oci_process.cwd().display().to_string().as_str())?;
     }
+    // Create new session for init/exec process rather than inheriting parent's session
+    // This ensures the init/exec process owns independent session ID, which aligns with runc behavior.
+    unistd::setsid().context("create a new session")?;
 
     let guser = &oci_process.user();
 
@@ -783,7 +786,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let _ = unistd::close(cwfd);
 
     if oci_process.terminal().unwrap_or_default() {
-        unistd::setsid().context("create a new session")?;
         unsafe { libc::ioctl(0, libc::TIOCSCTTY) };
     }
 
