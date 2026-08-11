@@ -1312,6 +1312,8 @@ host. Emitted at column 0; indent with `nindent` at the call site.
 - name: host-machine-id
   mountPath: /host-machine-id
   readOnly: true
+- name: host-run-lock
+  mountPath: /host-run-lock
 - name: host-usr-bin
   mountPath: /host-usr/bin
   readOnly: true
@@ -1373,6 +1375,12 @@ indent with `nindent` at the call site.
   hostPath:
     path: /etc/machine-id
     type: File
+{{- /* Writable, unlike the other host mounts: this is where the lock the
+       installs on this node take against each other is created. */}}
+- name: host-run-lock
+  hostPath:
+    path: /run/lock
+    type: DirectoryOrCreate
 - name: host-usr-bin
   hostPath:
     path: /usr/bin

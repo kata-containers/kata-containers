@@ -7,7 +7,7 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use k8s_openapi::api::core::v1::Node;
 use kube::{
-    api::{Api, GetParams, Patch, PatchParams},
+    api::{Api, GetParams, ListParams, Patch, PatchParams},
     core::Request,
     Client,
 };
@@ -314,45 +314,131 @@ impl K8sClient {
         )
     }
 
-    /// Returns whether a non-terminating DaemonSet with this exact name
-    /// exists in the current namespace. Used to decide whether this pod is
-    /// being restarted (true) or uninstalled (false).
-    pub async fn own_daemonset_exists(&self, daemonset_name: &str) -> Result<bool> {
+    /// Whether this DaemonSet still wants a pod on the bound node.
+    ///
+    /// Existence alone cannot distinguish a rolling restart from selector
+    /// shrinkage: in both cases the old pod terminates while the DaemonSet
+    /// remains. Cleanup is skipped only in the first case.
+    pub async fn own_daemonset_selects_node(&self, daemonset_name: &str) -> Result<bool> {
         use k8s_openapi::api::apps::v1::DaemonSet;
         use kube::api::Api;
 
         let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
         match ds_api.get_opt(daemonset_name).await? {
-            Some(ds) => Ok(ds.metadata.deletion_timestamp.is_none()),
-            None => Ok(false),
+            Some(ds) if ds.metadata.deletion_timestamp.is_none() => {
+                let node = self.get_node().await?;
+                Ok(daemonset_selects_node(&ds, &node))
+            }
+            _ => Ok(false),
         }
     }
 
-    /// Returns how many non-terminating DaemonSets across all namespaces
-    /// have a name containing "kata-deploy". Used to decide whether shared
-    /// node-level resources (node label, CRI restart) should be cleaned up:
-    /// they are only safe to remove when no kata-deploy instance remains
-    /// on the cluster.
-    pub async fn count_any_kata_deploy_daemonsets(&self) -> Result<usize> {
+    /// Whether another kata-deploy DaemonSet actually selects this node.
+    ///
+    /// A cluster-wide DaemonSet count is not ownership: a release selecting a
+    /// different pool must not preserve this node's label. Legacy releases have
+    /// no per-install marker, so their live pod is the node-local evidence.
+    pub async fn other_kata_deploy_daemonset_selects_node(&self, ours: &str) -> Result<bool> {
         use k8s_openapi::api::apps::v1::DaemonSet;
-        use kube::api::{Api, ListParams};
 
-        let ds_api: Api<DaemonSet> = Api::all(self.client.clone());
-        let daemonsets = ds_api.list(&ListParams::default()).await?;
-
-        let count = daemonsets
-            .iter()
-            .filter(|ds| {
-                ds.metadata.deletion_timestamp.is_none()
-                    && ds
+        let node = self.get_node().await?;
+        let own_uid = Api::<DaemonSet>::default_namespaced(self.client.clone())
+            .get_opt(ours)
+            .await?
+            .and_then(|daemonset| daemonset.metadata.uid);
+        let daemonsets: Api<DaemonSet> = Api::all(self.client.clone());
+        Ok(daemonsets
+            .list(&ListParams::default())
+            .await?
+            .items
+            .into_iter()
+            .any(|daemonset| {
+                daemonset.metadata.deletion_timestamp.is_none()
+                    && daemonset.metadata.uid != own_uid
+                    && daemonset
                         .metadata
                         .name
-                        .as_ref()
-                        .is_some_and(|n| n.contains("kata-deploy"))
-            })
-            .count();
+                        .as_deref()
+                        .is_some_and(|name| name.contains("kata-deploy"))
+                    && daemonset_selects_node(&daemonset, &node)
+            }))
+    }
+}
 
-        Ok(count)
+fn daemonset_selects_node(daemonset: &k8s_openapi::api::apps::v1::DaemonSet, node: &Node) -> bool {
+    let Some(pod_spec) = daemonset
+        .spec
+        .as_ref()
+        .and_then(|spec| spec.template.spec.as_ref())
+    else {
+        return false;
+    };
+    let labels = node.metadata.labels.as_ref().cloned().unwrap_or_default();
+    if pod_spec.node_selector.as_ref().is_some_and(|selector| {
+        selector
+            .iter()
+            .any(|(key, value)| labels.get(key) != Some(value))
+    }) {
+        return false;
+    }
+
+    let required = pod_spec
+        .affinity
+        .as_ref()
+        .and_then(|affinity| affinity.node_affinity.as_ref())
+        .and_then(|affinity| {
+            affinity
+                .required_during_scheduling_ignored_during_execution
+                .as_ref()
+        });
+    let Some(required) = required else {
+        return true;
+    };
+
+    required.node_selector_terms.iter().any(|term| {
+        // Kubernetes reads a term with no requirement in it as matching no nodes,
+        // while `all` over nothing is true. Left alone, an empty term would hand
+        // the whole cluster to a DaemonSet that asked for none of it.
+        if term.match_expressions.iter().flatten().next().is_none()
+            && term.match_fields.iter().flatten().next().is_none()
+        {
+            return false;
+        }
+        term.match_expressions.iter().flatten().all(|requirement| {
+            selector_requirement_matches(
+                labels.get(&requirement.key).map(String::as_str),
+                &requirement.operator,
+                requirement.values.as_deref().unwrap_or_default(),
+            )
+        }) && term.match_fields.iter().flatten().all(|requirement| {
+            let value = match requirement.key.as_str() {
+                "metadata.name" => node.metadata.name.as_deref(),
+                _ => None,
+            };
+            selector_requirement_matches(
+                value,
+                &requirement.operator,
+                requirement.values.as_deref().unwrap_or_default(),
+            )
+        })
+    })
+}
+
+fn selector_requirement_matches(value: Option<&str>, operator: &str, values: &[String]) -> bool {
+    match operator {
+        "In" => value.is_some_and(|value| values.iter().any(|candidate| candidate == value)),
+        "NotIn" => value.is_none_or(|value| values.iter().all(|candidate| candidate != value)),
+        "Exists" => value.is_some(),
+        "DoesNotExist" => value.is_none(),
+        "Gt" => value
+            .and_then(|value| value.parse::<i64>().ok())
+            .zip(values.first().and_then(|value| value.parse::<i64>().ok()))
+            .is_some_and(|(actual, threshold)| actual > threshold),
+        "Lt" => value
+            .and_then(|value| value.parse::<i64>().ok())
+            .zip(values.first().and_then(|value| value.parse::<i64>().ok()))
+            .is_some_and(|(actual, threshold)| actual < threshold),
+        _ => false,
     }
 }
 
@@ -474,20 +560,25 @@ pub async fn remove_node_taints(config: &Config, matchers: &[String]) -> Result<
     client.remove_node_taints(matchers).await
 }
 
-pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
+pub async fn own_daemonset_selects_node(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.own_daemonset_exists(&config.daemonset_name).await
+    client
+        .own_daemonset_selects_node(&config.daemonset_name)
+        .await
 }
 
-pub async fn count_any_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+pub async fn other_kata_deploy_daemonset_selects_node(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.count_any_kata_deploy_daemonsets().await
+    client
+        .other_kata_deploy_daemonset_selects_node(&config.daemonset_name)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::partition_taints;
-    use k8s_openapi::api::core::v1::Taint;
+    use super::{daemonset_selects_node, partition_taints};
+    use k8s_openapi::api::apps::v1::DaemonSet;
+    use k8s_openapi::api::core::v1::{Node, Taint};
     use rstest::rstest;
 
     fn taint(key: &str, effect: &str) -> Taint {
@@ -508,6 +599,108 @@ mod tests {
             .iter()
             .map(|t| (t.key.clone(), t.effect.clone()))
             .collect()
+    }
+
+    #[test]
+    fn daemonset_ownership_follows_node_selector_and_required_affinity() {
+        let daemonset: DaemonSet = serde_yaml::from_str(
+            r#"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      nodeSelector:
+        pool: kata
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: [amd64]
+      containers:
+        - name: kata-deploy
+          image: example.invalid/kata-deploy
+"#,
+        )
+        .unwrap();
+        let mut node: Node = serde_yaml::from_str(
+            r#"
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    pool: kata
+    kubernetes.io/arch: amd64
+"#,
+        )
+        .unwrap();
+
+        assert!(daemonset_selects_node(&daemonset, &node));
+        node.metadata
+            .labels
+            .as_mut()
+            .unwrap()
+            .insert("pool".to_string(), "other".to_string());
+        assert!(!daemonset_selects_node(&daemonset, &node));
+    }
+
+    /// An empty required term, or an empty list of them, selects no nodes in
+    /// Kubernetes. Reading either as "every node" would let a DaemonSet that wants
+    /// nothing keep this node's label or block its cleanup.
+    #[rstest]
+    #[case::empty_term("\n              - {}")]
+    #[case::no_terms(" []")]
+    fn a_required_affinity_that_matches_nothing_selects_no_node(#[case] terms: &str) {
+        let daemonset: DaemonSet = serde_yaml::from_str(&format!(
+            r#"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:{terms}
+      containers:
+        - name: kata-deploy
+          image: example.invalid/kata-deploy
+"#
+        ))
+        .unwrap();
+        let node: Node = serde_yaml::from_str(
+            r#"
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    pool: kata
+"#,
+        )
+        .unwrap();
+
+        assert!(!daemonset_selects_node(&daemonset, &node));
     }
 
     /// `partition_taints` keeps every taint except those matched by a matcher.

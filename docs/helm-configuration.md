@@ -946,7 +946,9 @@ only ever had `cicd` on it loses the label and stops being a Kata node. Cleanup
 still restarts the shared CRI runtime after removing this installation's
 configuration: otherwise the live runtime could keep advertising a handler whose
 binary has just been deleted. The other installation's configuration remains and
-is reloaded by that restart.
+is reloaded by that restart. Host-mutating stages from different releases take
+the same node-local lock, so concurrent installs or uninstalls cannot race their
+configuration edits and restarts.
 
 A mark reading `false` does not count as another installation serving Kata: if the
 last `true` mark goes and only a half-finished installation is left, the shared

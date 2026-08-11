@@ -362,6 +362,30 @@ fn verify_node_machine_id() -> Result<()> {
     Ok(())
 }
 
+/// Serialize host mutation across every kata-deploy running on this node.
+///
+/// Two releases working on the same node at once would interleave their
+/// configuration edits and restarts, leaving the runtime reading configuration that
+/// is only half written. The lock lives on the host because that is all two
+/// releases share, and is held until the returned file is dropped.
+fn acquire_node_mutation_lock() -> Result<std::fs::File> {
+    use std::os::fd::AsRawFd;
+
+    const LOCK_PATH: &str = "/host-run-lock/kata-deploy.lock";
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(LOCK_PATH)
+        .with_context(|| format!("failed to open the node mutation lock {LOCK_PATH}"))?;
+    let result = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("failed to acquire the node mutation lock {LOCK_PATH}"));
+    }
+    Ok(lock)
+}
+
 /// Re-exec the current binary into the hidden `internal-post-install-wait`
 /// action. Propagates the detected runtime (so we don't have to re-query the
 /// apiserver) and the health-listener FD (so kubelet probes don't see a gap
@@ -844,13 +868,17 @@ fn shared_label_after(labels: &BTreeMap<String, String>, ours: &str) -> SharedLa
 async fn release_node(config: &config::Config) -> Result<bool> {
     let ours = instance_label(config.multi_install_suffix.as_deref());
 
-    // A node nothing has marked was installed on by a version that did not mark it,
-    // so ask the question that version asked: is any other kata-deploy left in the
-    // cluster at all?
+    // A legacy install leaves no marker behind, so when no other marker is left,
+    // ask whether another kata-deploy still wants a pod here: otherwise this
+    // uninstall takes the shared label out from under that install.
+    //
+    // Answered here rather than inside the rewrite below, and so a snapshot: a
+    // DaemonSet lives outside this node, and nothing can make reading it atomic
+    // with a write guarded by this node's resourceVersion. Should that DaemonSet
+    // go in between, the shared label is left for the next uninstall to take.
     let labels = k8s::get_node_labels(config).await?;
-    let unmarked =
-        !labels.contains_key(&ours) && shared_label_after(&labels, &ours) == SharedLabel::Remove;
-    let legacy_others = unmarked && k8s::count_any_kata_deploy_daemonsets(config).await? > 0;
+    let legacy_others = shared_label_after(&labels, &ours) == SharedLabel::Remove
+        && k8s::other_kata_deploy_daemonset_selects_node(config).await?;
 
     let others = k8s::rewrite_node_labels(config, |labels| {
         let mut updates: Vec<(String, Option<String>)> = Vec::new();
@@ -940,9 +968,12 @@ async fn install_stage_artifacts(
         claim_node(config).await;
     }
 
+    let _node_lock = acquire_node_mutation_lock()?;
+
     // Refuse before touching the host: whole-file containerd configuration keeps a
     // single backup, which the first uninstall would restore over every other
-    // installation's handlers.
+    // installation's handlers. Read under the lock, or another release's edit could
+    // be half-written while this one decides.
     if runtime != "crio"
         && config
             .multi_install_suffix
@@ -1004,6 +1035,21 @@ async fn install_stage_artifacts(
 /// kata pod scheduled onto the node.
 async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool) -> Result<()> {
     info!("install (cri): configuring CRI runtime");
+    let _node_lock = acquire_node_mutation_lock()?;
+
+    if runtime != "crio"
+        && config
+            .multi_install_suffix
+            .as_deref()
+            .is_some_and(|suffix| !suffix.is_empty())
+    {
+        let paths = config.get_containerd_paths(runtime).await?;
+        anyhow::ensure!(
+            paths.use_drop_in,
+            "multi-install requires containerd drop-in support: whole-file configuration and its \
+             single backup cannot preserve another installation during uninstall"
+        );
+    }
 
     let config_before = if staged {
         runtime::cri_config_snapshot(config, runtime).await
@@ -1301,26 +1347,21 @@ async fn label_node_with_retry(config: &config::Config, labels: &[(&str, &str)])
 async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Cleaning up Kata Containers");
 
-    // Step 1: Check if THIS pod's owning DaemonSet still exists.
-    // If it does, this is a pod restart (rolling update, label change, etc.),
-    // not an uninstall — skip everything so running kata pods are not disrupted.
     info!(
-        "Checking if DaemonSet '{}' still exists",
+        "Checking whether DaemonSet '{}' still wants a pod on this node",
         config.daemonset_name
     );
-    if k8s::own_daemonset_exists(config).await? {
+    if k8s::own_daemonset_selects_node(config).await? {
         info!(
-            "DaemonSet '{}' still exists, \
-             skipping all cleanup to avoid disrupting running kata pods",
+            "DaemonSet '{}' still selects this node, skipping all cleanup to avoid disrupting a \
+             rolling restart",
             config.daemonset_name
         );
         return Ok(());
     }
 
-    // Step 2: Our DaemonSet is gone (uninstall). Perform instance-specific
-    // cleanup: snapshotters, CRI config, and artifacts for this instance.
     info!(
-        "DaemonSet '{}' not found, proceeding with instance cleanup",
+        "DaemonSet '{}' is gone or no longer selects this node, proceeding with instance cleanup",
         config.daemonset_name
     );
 
@@ -1329,6 +1370,7 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     // not - this install's configuration is leaving the disk the runtime reads.
     info!("Removing this install's node labels");
     release_node(config).await?;
+    let _node_lock = acquire_node_mutation_lock()?;
 
     if runtime != "crio" {
         match config.experimental_setup_snapshotter.as_ref() {
@@ -1366,22 +1408,18 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     Ok(())
 }
 
-/// Cleanup stage 2 (revert-cri): remove CRI drop-ins (and any snapshotter
+/// Cleanup stage 2 (revert-cri): remove CRI configuration (and any snapshotter
 /// config), then restart the runtime and wait for readiness. This is the
-/// privileged, node-disrupting cleanup stage and is kept short-lived. Skips
-/// entirely when the CRI drop-ins are already absent, avoiding an unnecessary
-/// runtime restart.
+/// privileged, node-disrupting cleanup stage and is kept short-lived. Snapshotter
+/// cleanup is independent because a partial install may fail before writing CRI
+/// configuration; only the restart is skipped when configuration is absent.
 async fn cleanup_stage_revert_cri(
     config: &config::Config,
     runtime: &str,
     staged: bool,
 ) -> Result<()> {
     info!("cleanup (revert-cri): reverting CRI configuration");
-
-    if !cri_drop_in_present(config, runtime).await {
-        info!("cleanup (revert-cri): CRI drop-ins already absent, skipping");
-        return Ok(());
-    }
+    let _node_lock = acquire_node_mutation_lock()?;
 
     if runtime != "crio" {
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
@@ -1390,6 +1428,11 @@ async fn cleanup_stage_revert_cri(
                 artifacts::snapshotters::uninstall_snapshotter(snapshotter, config).await?;
             }
         }
+    }
+
+    if !cri_configuration_present(config, runtime).await {
+        info!("cleanup (revert-cri): CRI configuration already absent, skipping restart");
+        return Ok(());
     }
 
     runtime::cleanup_cri_runtime_config(config, runtime).await?;
@@ -1405,6 +1448,7 @@ async fn cleanup_stage_revert_cri(
 /// from the host. Skips when the install directory is already gone or empty.
 async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
     info!("cleanup (remove-artifacts): removing kata artifacts from host");
+    let _node_lock = acquire_node_mutation_lock()?;
 
     // The install dir is bind mounted into this pod, so it always exists and
     // outlives the artifacts it holds: an empty one means there is nothing
@@ -1431,18 +1475,22 @@ async fn cleanup_stage_remove_artifacts(config: &config::Config) -> Result<()> {
     Ok(())
 }
 
-/// Best-effort check for whether kata's CRI drop-in configuration is present on
+/// Best-effort check for whether kata's CRI configuration is present on
 /// the host for this runtime. Used by the staged cleanup to skip a disruptive
 /// runtime restart when there is nothing to revert. On any uncertainty (e.g.
 /// the containerd paths cannot be resolved) this returns `true` so the caller
 /// errs on the side of running the revert rather than incorrectly skipping it.
-async fn cri_drop_in_present(config: &config::Config, runtime: &str) -> bool {
+async fn cri_configuration_present(config: &config::Config, runtime: &str) -> bool {
     if runtime == "crio" {
         return std::path::Path::new(&config.crio_drop_in_conf_file).exists();
     }
 
     match config.get_containerd_paths(runtime).await {
-        Ok(paths) => std::path::Path::new(&paths.drop_in_file).exists(),
+        Ok(paths) if paths.use_drop_in => std::path::Path::new(&paths.drop_in_file).exists(),
+        // Whole-file mode leaves no drop-in to look for. The backup is what it does
+        // leave behind, and it is evidence of this install's own edit rather than of
+        // a configuration that merely mentions the same paths.
+        Ok(paths) => std::path::Path::new(&paths.backup_file).exists(),
         Err(e) => {
             log::warn!(
                 "cleanup (revert-cri): could not resolve containerd paths to check drop-in \
@@ -1464,6 +1512,7 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
         return Ok(());
     }
 
+    let _node_lock = acquire_node_mutation_lock()?;
     runtime::lifecycle::restart_cri_runtime(config, runtime).await?;
     if matches!(runtime, "crio" | "containerd") {
         utils::host_systemctl(&["restart", "kubelet"]).await?;
