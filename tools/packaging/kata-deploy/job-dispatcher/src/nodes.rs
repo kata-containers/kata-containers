@@ -18,6 +18,7 @@ use kube::api::{Api, GetParams, Patch, PatchParams, Request};
 use kube::Client;
 use log::{info, warn};
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 /// The RuntimeClasses select on this label, so it is the switch that admits Kata
@@ -44,6 +45,63 @@ const TAINT_PATCH_ATTEMPTS: u32 = 3;
 
 /// Same for a node that gained the label while it was being claimed.
 const CLAIM_PATCH_ATTEMPTS: u32 = 3;
+
+/// Same for a node whose labels another install rewrote mid-decision.
+const LABEL_PATCH_ATTEMPTS: u32 = 5;
+
+/// Every install marks its own nodes with a label named after its
+/// multiInstallSuffix. Without it, an uninstall removing the shared
+/// [`KATA_RUNTIME_LABEL`] could not tell whether it leaves another install's
+/// workloads with nowhere to run.
+const INSTANCE_LABEL_PREFIX: &str = "kata-deploy.katacontainers.io/";
+
+/// The instance name of an install that set no multiInstallSuffix.
+const DEFAULT_INSTANCE: &str = "default";
+
+/// The marker label of one install.
+pub fn instance_label(suffix: Option<&str>) -> String {
+    format!(
+        "{INSTANCE_LABEL_PREFIX}{}",
+        suffix.unwrap_or(DEFAULT_INSTANCE)
+    )
+}
+
+/// What the marks of the other installs on a node say about the label they share.
+#[derive(Debug, PartialEq, Eq)]
+enum SharedLabel {
+    /// At least one other install is serving Kata here: the shared label stays `true`.
+    Keep,
+    /// The other installs here are all mid-flight or failed. Nothing may be scheduled
+    /// on the strength of it, but the key has to stay so those installs' own uninstalls
+    /// can still find the node.
+    Demote,
+    /// Ours was the last mark: the key goes.
+    Remove,
+}
+
+/// Read the marks other installs left on a node.
+///
+/// The value matters, not just the key: a `false` mark is a claim on a node whose
+/// install has not finished, and reading it as "Kata is served here" would leave the
+/// node advertised with nothing behind it.
+fn shared_label_after(labels: &BTreeMap<String, String>, ours: &str) -> SharedLabel {
+    let mut any = false;
+    for (key, value) in labels {
+        if key == ours || !key.starts_with(INSTANCE_LABEL_PREFIX) {
+            continue;
+        }
+        any = true;
+        if value != KATA_RUNTIME_PENDING {
+            return SharedLabel::Keep;
+        }
+    }
+
+    if any {
+        SharedLabel::Demote
+    } else {
+        SharedLabel::Remove
+    }
+}
 
 /// The kubelet may be unreachable through the apiserver proxy, and this check is
 /// only advisory: it must not hold up the node it is about, let alone the queue
@@ -92,6 +150,8 @@ pub struct NodeOps {
     /// labelled. Empty skips the check.
     pub require_handlers: Vec<String>,
     pub kubelet_timeout_warn: Option<Duration>,
+    /// This install's own marker label; see [`INSTANCE_LABEL_PREFIX`].
+    pub instance_label: String,
 }
 
 impl NodeOps {
@@ -106,6 +166,7 @@ impl NodeOps {
             wait_ready: None,
             require_handlers: Vec::new(),
             kubelet_timeout_warn: None,
+            instance_label: instance_label(None),
         }
     }
 
@@ -148,7 +209,7 @@ impl NodeOps {
         // spent now, and leaving the key behind would have a later uninstall clean
         // a node that has nothing left on it.
         if self.remove_label {
-            return self.set_label(node, None).await;
+            return self.release(node).await;
         }
 
         let Some(value) = self.label_value.clone() else {
@@ -171,10 +232,162 @@ impl NodeOps {
     /// was never installed on, and adding a key here would only invite the next
     /// uninstall to come back for it.
     async fn demote(&self, node: &str) -> Result<()> {
-        match self.read_label(node).await? {
-            Some(value) if value == KATA_RUNTIME_PENDING => Ok(()),
-            Some(_) => self.set_label(node, Some(KATA_RUNTIME_PENDING)).await,
-            None => Ok(()),
+        self.rewrite_labels(node, |labels, ours| {
+            let mut updates: Vec<(String, Option<String>)> = Vec::new();
+
+            if labels.contains_key(ours) {
+                updates.push((ours.to_string(), Some(KATA_RUNTIME_PENDING.to_string())));
+            }
+
+            // Our RuntimeClasses select our own mark, so demoting that is what keeps
+            // this install's workloads off the node. The shared label is another
+            // question: an install still serving Kata here needs it.
+            let shared = labels.get(KATA_RUNTIME_LABEL).map(String::as_str);
+            match (shared, shared_label_after(labels, ours)) {
+                (None, _) | (Some(KATA_RUNTIME_PENDING), _) => (),
+                (Some(_), SharedLabel::Keep) => info!(
+                    "node {node}: leaving {KATA_RUNTIME_LABEL} in place, another kata-deploy \
+                     install is still serving Kata from this node"
+                ),
+                (Some(_), _) => updates.push((
+                    KATA_RUNTIME_LABEL.to_string(),
+                    Some(KATA_RUNTIME_PENDING.to_string()),
+                )),
+            }
+
+            updates
+        })
+        .await
+    }
+
+    /// Give the node back: this install's marker goes, and the label it shares with
+    /// every other install goes with it only if no other install is left holding
+    /// this node.
+    async fn release(&self, node: &str) -> Result<()> {
+        self.rewrite_labels(node, |labels, ours| {
+            let mut updates: Vec<(String, Option<String>)> = Vec::new();
+            if labels.contains_key(ours) {
+                updates.push((ours.to_string(), None));
+            }
+
+            match shared_label_after(labels, ours) {
+                SharedLabel::Keep => info!(
+                    "node {node}: keeping {KATA_RUNTIME_LABEL}, another kata-deploy install is \
+                     still serving Kata from this node"
+                ),
+                // Unfinished installs elsewhere: they need the key to find this node
+                // again, but nothing may be scheduled here meanwhile.
+                SharedLabel::Demote => {
+                    if labels.get(KATA_RUNTIME_LABEL).map(String::as_str)
+                        != Some(KATA_RUNTIME_PENDING)
+                    {
+                        info!(
+                            "node {node}: leaving {KATA_RUNTIME_LABEL}={KATA_RUNTIME_PENDING}, \
+                             one or more kata-deploy installs have claimed this node but none \
+                             has finished installing on it"
+                        );
+                        updates.push((
+                            KATA_RUNTIME_LABEL.to_string(),
+                            Some(KATA_RUNTIME_PENDING.to_string()),
+                        ));
+                    }
+                }
+                SharedLabel::Remove => {
+                    if labels.contains_key(KATA_RUNTIME_LABEL) {
+                        updates.push((KATA_RUNTIME_LABEL.to_string(), None));
+                    }
+                }
+            }
+
+            updates
+        })
+        .await
+    }
+
+    /// Read a node's labels, decide what to write from them, and write it only if
+    /// nothing else changed the node in between.
+    ///
+    /// The decision is read from labels other installs write at the same time, so an
+    /// unconditional write could act on a node that has already moved on: two
+    /// uninstalls each seeing the other's mark, each removing their own, leaving a
+    /// node advertising Kata with nothing installed.
+    async fn rewrite_labels<F>(&self, node: &str, decide: F) -> Result<()>
+    where
+        F: Fn(&BTreeMap<String, String>, &str) -> Vec<(String, Option<String>)>,
+    {
+        for attempt in 1..=LABEL_PATCH_ATTEMPTS {
+            let fetched = self.get(node).await?;
+            let version = fetched
+                .metadata
+                .resource_version
+                .clone()
+                .unwrap_or_default();
+            let labels = fetched.metadata.labels.unwrap_or_default();
+
+            let updates = decide(&labels, &self.instance_label);
+            if updates.is_empty() {
+                return Ok(());
+            }
+
+            match self.patch_labels_guarded(node, &version, &updates).await {
+                Ok(()) => return Ok(()),
+                Err(err) if err.is_conflict => {
+                    info!(
+                        "node {node}: its labels changed while they were being rewritten \
+                         (attempt {attempt}/{LABEL_PATCH_ATTEMPTS}); reading them again"
+                    );
+                }
+                Err(err) => return Err(err.error),
+            }
+        }
+
+        anyhow::bail!(
+            "gave up rewriting the labels on node {node} after {LABEL_PATCH_ATTEMPTS} attempts: \
+             something keeps changing them concurrently"
+        )
+    }
+
+    /// One label write, rejected if the node changed since `version` was read.
+    async fn patch_labels_guarded(
+        &self,
+        node: &str,
+        version: &str,
+        updates: &[(String, Option<String>)],
+    ) -> std::result::Result<(), GuardedPatchError> {
+        let mut ops =
+            vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+        for (key, value) in updates {
+            let path = format!("/metadata/labels/{}", escape_pointer(key));
+            match value {
+                Some(value) => ops.push(json!({"op": "add", "path": path, "value": value})),
+                // `remove` is what makes this rejectable: it fails when the key is
+                // already gone, which is another way of saying we read a stale node.
+                None => ops.push(json!({"op": "remove", "path": path})),
+            }
+        }
+
+        let patch: json_patch::Patch =
+            serde_json::from_value(json!(ops)).map_err(|err| GuardedPatchError {
+                is_conflict: false,
+                error: anyhow::Error::new(err).context("failed to build the label patch"),
+            })?;
+
+        match self
+            .api
+            .patch(node, &PatchParams::default(), &Patch::Json::<Node>(patch))
+            .await
+        {
+            Ok(_) => {
+                info!("node {node}: labels {}", describe_updates(updates));
+                Ok(())
+            }
+            Err(err) => Err(GuardedPatchError {
+                is_conflict: is_precondition_failure(&err),
+                error: anyhow::Error::new(err).context(format!(
+                    "failed to write labels {} on node {node}",
+                    describe_updates(updates)
+                )),
+            }),
         }
     }
 
@@ -199,7 +412,11 @@ impl NodeOps {
             let labels = fetched.metadata.labels.unwrap_or_default();
             // Any value means someone has been here: a `true` must not be
             // downgraded mid-upgrade, and a `false` is already the claim.
-            if labels.contains_key(KATA_RUNTIME_LABEL) {
+            let missing: Vec<&str> = [KATA_RUNTIME_LABEL, self.instance_label.as_str()]
+                .into_iter()
+                .filter(|key| !labels.contains_key(*key))
+                .collect();
+            if missing.is_empty() {
                 return;
             }
 
@@ -210,18 +427,23 @@ impl NodeOps {
                 .unwrap_or_default();
             // `add` needs its parent to exist; a Node without labels is only ever
             // seen in tests, but the patch has to be valid for it too.
-            let add = if labels.is_empty() {
-                json!({"op": "add", "path": "/metadata/labels",
-                       "value": {KATA_RUNTIME_LABEL: KATA_RUNTIME_PENDING}})
+            let mut ops =
+                vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+            if labels.is_empty() {
+                let claimed: BTreeMap<&str, &str> = missing
+                    .iter()
+                    .map(|key| (*key, KATA_RUNTIME_PENDING))
+                    .collect();
+                ops.push(json!({"op": "add", "path": "/metadata/labels", "value": claimed}));
             } else {
-                json!({"op": "add", "path": format!("/metadata/labels/{}", escape_pointer(KATA_RUNTIME_LABEL)),
-                       "value": KATA_RUNTIME_PENDING})
-            };
+                for key in &missing {
+                    ops.push(json!({"op": "add",
+                                    "path": format!("/metadata/labels/{}", escape_pointer(key)),
+                                    "value": KATA_RUNTIME_PENDING}));
+                }
+            }
 
-            let patch: json_patch::Patch = match serde_json::from_value(json!([
-                {"op": "test", "path": "/metadata/resourceVersion", "value": version},
-                add,
-            ])) {
+            let patch: json_patch::Patch = match serde_json::from_value(json!(ops)) {
                 Ok(patch) => patch,
                 Err(err) => {
                     warn!("node {node}: could not build the claim patch ({err})");
@@ -352,27 +574,46 @@ impl NodeOps {
     /// the kubelet's own restart. So the label has to be seen to hold, and be
     /// re-applied when it drifts.
     async fn label_until_stable(&self, node: &str, value: &str) -> Result<()> {
+        // Both labels, because the RuntimeClasses select both: a marker the kubelet
+        // clobbered leaves the node advertised but unusable by this install.
+        let wanted = [KATA_RUNTIME_LABEL, self.instance_label.as_str()];
+        let updates: Vec<(String, Option<String>)> = wanted
+            .iter()
+            .map(|key| (key.to_string(), Some(value.to_string())))
+            .collect();
+
         for attempt in 1..=LABEL_APPLY_ATTEMPTS {
-            self.set_label(node, Some(value)).await?;
+            self.patch_labels(node, &updates).await?;
 
             let mut stable = 0;
             while stable < LABEL_STABILITY_CHECKS {
                 tokio::time::sleep(LABEL_CHECK_INTERVAL).await;
 
-                match self.read_label(node).await {
-                    Ok(Some(observed)) if observed == value => stable += 1,
-                    Ok(observed) => {
+                match self.read_labels(node).await {
+                    Ok(labels) => {
+                        let drifted: Vec<String> = wanted
+                            .iter()
+                            .filter(|key| labels.get(**key).map(String::as_str) != Some(value))
+                            .map(|key| format!("{key}={:?}", labels.get(*key).map(String::as_str)))
+                            .collect();
+
+                        if drifted.is_empty() {
+                            stable += 1;
+                            continue;
+                        }
+
                         warn!(
-                            "node {node}: {KATA_RUNTIME_LABEL} drifted to {observed:?} after \
-                             {stable}/{LABEL_STABILITY_CHECKS} stable observation(s); re-applying \
-                             (attempt {attempt}/{LABEL_APPLY_ATTEMPTS})"
+                            "node {node}: {} after {stable}/{LABEL_STABILITY_CHECKS} stable \
+                             observation(s); re-applying (attempt \
+                             {attempt}/{LABEL_APPLY_ATTEMPTS})",
+                            drifted.join(", ")
                         );
                         break;
                     }
                     Err(err) => {
                         warn!(
-                            "node {node}: could not confirm {KATA_RUNTIME_LABEL} ({err:#}); \
-                             re-applying (attempt {attempt}/{LABEL_APPLY_ATTEMPTS})"
+                            "node {node}: could not confirm its labels ({err:#}); re-applying \
+                             (attempt {attempt}/{LABEL_APPLY_ATTEMPTS})"
                         );
                         break;
                     }
@@ -380,51 +621,53 @@ impl NodeOps {
             }
 
             if stable >= LABEL_STABILITY_CHECKS {
-                info!("node {node}: {KATA_RUNTIME_LABEL}={value} is holding");
+                info!("node {node}: {} are holding", describe_updates(&updates));
                 return Ok(());
             }
         }
 
         anyhow::bail!(
-            "node {node} did not hold {KATA_RUNTIME_LABEL}={value} for \
-             {LABEL_STABILITY_CHECKS} consecutive checks over {LABEL_APPLY_ATTEMPTS} attempts; \
-             something on the node keeps removing it, and workloads would not be scheduled there"
+            "node {node} did not hold {} for {LABEL_STABILITY_CHECKS} consecutive checks over \
+             {LABEL_APPLY_ATTEMPTS} attempts; something on the node keeps removing them, and \
+             workloads would not be scheduled there",
+            describe_updates(&updates)
         )
     }
 
     /// Set (or, with `None`, remove) the Kata runtime label on `node`.
-    async fn set_label(&self, node: &str, value: Option<&str>) -> Result<()> {
+    /// Apply label writes in one request, `None` removing a label.
+    async fn patch_labels(&self, node: &str, updates: &[(String, Option<String>)]) -> Result<()> {
+        if updates.is_empty() {
+            return Ok(());
+        }
+
         // A JSON merge patch removes a key by setting it to null; omitting it
         // would leave it untouched.
-        let patch = match value {
-            Some(value) => json!({"metadata": {"labels": {KATA_RUNTIME_LABEL: value}}}),
-            None => json!({"metadata": {"labels": {KATA_RUNTIME_LABEL: serde_json::Value::Null}}}),
-        };
+        let labels: serde_json::Map<String, serde_json::Value> = updates
+            .iter()
+            .map(|(key, value)| {
+                let value = match value {
+                    Some(value) => serde_json::Value::String(value.clone()),
+                    None => serde_json::Value::Null,
+                };
+                (key.clone(), value)
+            })
+            .collect();
+        let patch = json!({"metadata": {"labels": labels}});
+
+        let described = describe_updates(updates);
 
         self.api
             .patch(node, &PatchParams::default(), &Patch::Merge(&patch))
             .await
-            .with_context(|| match value {
-                Some(value) => format!("failed to label node {node} {KATA_RUNTIME_LABEL}={value}"),
-                None => format!("failed to remove label {KATA_RUNTIME_LABEL} from node {node}"),
-            })?;
+            .with_context(|| format!("failed to write labels {described} on node {node}"))?;
 
-        match value {
-            Some(value) => info!("node {node}: labelled {KATA_RUNTIME_LABEL}={value}"),
-            None => info!("node {node}: removed label {KATA_RUNTIME_LABEL}"),
-        }
+        info!("node {node}: labels {described}");
         Ok(())
     }
 
-    async fn read_label(&self, node: &str) -> Result<Option<String>> {
-        Ok(self
-            .get(node)
-            .await?
-            .metadata
-            .labels
-            .as_ref()
-            .and_then(|labels| labels.get(KATA_RUNTIME_LABEL))
-            .cloned())
+    async fn read_labels(&self, node: &str) -> Result<BTreeMap<String, String>> {
+        Ok(self.get(node).await?.metadata.labels.unwrap_or_default())
     }
 
     /// Best-effort on purpose: the runtime is installed and the node is labelled
@@ -629,6 +872,24 @@ impl NodeOps {
     }
 }
 
+/// A label write that was rejected, and whether re-reading the node could make it
+/// succeed.
+struct GuardedPatchError {
+    is_conflict: bool,
+    error: anyhow::Error,
+}
+
+fn describe_updates(updates: &[(String, Option<String>)]) -> String {
+    updates
+        .iter()
+        .map(|(key, value)| match value {
+            Some(value) => format!("{key}={value}"),
+            None => format!("{key} (removed)"),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// A label key as a JSON Pointer token: `~` and `/` are the two characters with a
 /// meaning of their own there (RFC 6901).
 fn escape_pointer(token: &str) -> String {
@@ -817,6 +1078,88 @@ mod tests {
             ),
             HandlerVerdict::NotServing
         );
+    }
+
+    #[test]
+    fn an_install_is_named_after_its_suffix() {
+        assert_eq!(
+            instance_label(None),
+            "kata-deploy.katacontainers.io/default"
+        );
+        assert_eq!(
+            instance_label(Some("dev")),
+            "kata-deploy.katacontainers.io/dev"
+        );
+    }
+
+    /// The shared label may only be taken away when it is nobody else's.
+    #[test]
+    fn only_another_installs_mark_counts() {
+        let ours = instance_label(Some("dev"));
+        let mark = |keys: &[&str]| -> BTreeMap<String, String> {
+            keys.iter()
+                .map(|key| (key.to_string(), "true".to_string()))
+                .collect()
+        };
+
+        assert_eq!(
+            shared_label_after(&mark(&[&ours]), &ours),
+            SharedLabel::Remove
+        );
+        assert_eq!(
+            shared_label_after(
+                &mark(&[&ours, KATA_RUNTIME_LABEL, "kubernetes.io/hostname"]),
+                &ours
+            ),
+            SharedLabel::Remove,
+            "neither the shared label nor an unrelated one is another install's mark"
+        );
+        assert_eq!(
+            shared_label_after(&mark(&[&ours, &instance_label(None)]), &ours),
+            SharedLabel::Keep
+        );
+        assert_eq!(
+            shared_label_after(&mark(&[&instance_label(Some("prod"))]), &ours),
+            SharedLabel::Keep
+        );
+    }
+
+    /// Installs that have claimed the node but not finished on it must not keep it
+    /// advertised as able to run Kata - and must still be able to find it.
+    #[test]
+    fn unfinished_installs_hold_the_key_without_the_promise() {
+        let ours = instance_label(Some("dev"));
+        let labels = BTreeMap::from([
+            (ours.clone(), "true".to_string()),
+            (instance_label(None), KATA_RUNTIME_PENDING.to_string()),
+        ]);
+
+        assert_eq!(shared_label_after(&labels, &ours), SharedLabel::Demote);
+
+        // However many of them there are.
+        let labels = BTreeMap::from([
+            (instance_label(None), KATA_RUNTIME_PENDING.to_string()),
+            (
+                instance_label(Some("prod")),
+                KATA_RUNTIME_PENDING.to_string(),
+            ),
+        ]);
+
+        assert_eq!(shared_label_after(&labels, &ours), SharedLabel::Demote);
+    }
+
+    /// One install serving Kata is enough to keep the shared label, however many
+    /// unfinished ones are read before it - and labels are read in key order, so
+    /// "default" here is read before "prod".
+    #[test]
+    fn a_serving_install_outweighs_unfinished_ones() {
+        let ours = instance_label(Some("dev"));
+        let labels = BTreeMap::from([
+            (instance_label(None), KATA_RUNTIME_PENDING.to_string()),
+            (instance_label(Some("prod")), "true".to_string()),
+        ]);
+
+        assert_eq!(shared_label_after(&labels, &ours), SharedLabel::Keep);
     }
 
     /// The label key has a `/` in it, which is a path separator inside a JSON

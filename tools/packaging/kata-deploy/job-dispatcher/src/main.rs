@@ -33,7 +33,7 @@ use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::Client;
 use log::{error, info};
 use node_filter::{describe_taint, partition_by_tolerations, suggested_toleration, SkippedNode};
-use nodes::{NodeFacts, NodeOps};
+use nodes::{instance_label, NodeFacts, NodeOps};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -161,6 +161,15 @@ struct Args {
     #[arg(long)]
     require_node_handlers: Option<String>,
 
+    /// This release's `env.multiInstallSuffix`, if it set one.
+    ///
+    /// Installs share katacontainers.io/kata-runtime - every install's
+    /// RuntimeClasses select it - so each one also marks the nodes it holds with a
+    /// label named after its suffix. An uninstall takes the shared label away only
+    /// once no other install's mark is left on the node.
+    #[arg(long)]
+    multi_install_suffix: Option<String>,
+
     /// Comma-separated taints to lift after labelling a node, as `key` (any
     /// effect) or `key:effect`. These are the start-up taints that keep workloads
     /// off a node until Kata is actually installed on it.
@@ -274,6 +283,7 @@ fn node_ops_from_args(client: &Client, args: &Args) -> Result<NodeOps> {
     ops.claim_pending = args.claim_node_pending;
     ops.remove_taints = comma_separated(args.remove_node_taints.as_deref());
     ops.require_handlers = comma_separated(args.require_node_handlers.as_deref());
+    ops.instance_label = instance_label(args.multi_install_suffix.as_deref());
     if args.wait_node_ready_secs > 0 {
         ops.wait_ready = Some(Duration::from_secs(args.wait_node_ready_secs));
     }
