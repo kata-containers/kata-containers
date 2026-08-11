@@ -67,11 +67,39 @@ message DirectBoot {
 }
 
 message UEFI {
+    // Variables used to initialize an empty UEFI variable store. These are
+    // ignored when the store already contains any variables.
+    message InitialVariables {
+        // A predefined set of Secure Boot-related variables. Selecting a
+        // template initializes keys and signature databases but does not
+        // enable Secure Boot enforcement.
+        enum SecureBootTemplate {
+            // Do not initialize Secure Boot-related variables from a template.
+            NONE = 0;
+            // Initialize variables with the Microsoft Windows certificate set.
+            MICROSOFT_WINDOWS = 1;
+            // Initialize variables with the Microsoft UEFI CA certificate set.
+            MICROSOFT_UEFI_CERTIFICATE_AUTHORITY = 2;
+        }
+
+        // The predefined Secure Boot variable set to use for initialization.
+        SecureBootTemplate secure_boot_template = 1;
+    }
+
+    // Path to the UEFI firmware image on the host.
     string firmware_path = 1;
-    string device_path = 2;
-    // Optional data to include for uefi boot. For Linux this could be used as the kernel
-    // commandline.
-    string optional_data = 3;
+
+    // Fields 2 and 3 were previously `device_path` and `optional_data`. They
+    // had no OpenVMM equivalent and were never honored.
+    reserved 2, 3;
+    reserved "device_path", "optional_data";
+
+    // Variables to inject when initializing an empty UEFI variable store.
+    InitialVariables initial_variables = 4;
+
+    // Whether the firmware enforces Secure Boot policy. This is independent
+    // of whether initial Secure Boot variables are supplied above.
+    bool secure_boot_enabled = 5;
 }
 
 message MemoryConfig {
@@ -294,6 +322,21 @@ message NvmeNamespace {
 message VfioDevice {
     // Host PCI address (BDF), e.g. "0000:01:00.0".
     string host_pci_address = 1;
+    // BARs whose initial addresses are pinned. Omitted BARs are assigned by
+    // the guest normally.
+    repeated VfioBarAddress bar_addresses = 2;
+}
+
+// Initial address configuration for one VFIO device BAR.
+message VfioBarAddress {
+    // BAR index, from 0 through 5.
+    uint32 bar_index = 1;
+    oneof source {
+        // Use the physical BAR address reported by the host.
+        google.protobuf.Empty host = 2;
+        // Use an explicit host physical address.
+        uint64 fixed = 3;
+    }
 }
 
 //
@@ -338,8 +381,9 @@ message NodeMemoryConfig {
     bool prefetch              = 3;
     // Use private anonymous memory instead of shared file-backed memory.
     bool private_memory        = 4;
-    // Mark the memory transparent-hugepage eligible (requires private_memory).
-    bool transparent_hugepages = 5;
+    // Mark this node's RAM as transparent-hugepage eligible. Unset => enabled
+    // by default. Set to false to opt out.
+    optional bool transparent_hugepages = 5;
     // Allocate from explicit hugetlb pages.
     bool hugepages             = 6;
     // Hugetlb page size in bytes (requires hugepages). Absent => default.
@@ -369,6 +413,16 @@ message NumaDistance {
 message PcieTopologyConfig {
     // The PCIe root complexes in the VM.
     repeated PcieRootComplex root_complexes = 1;
+    // Devices that act as initiators for device-only NUMA nodes.
+    repeated PcieGenericInitiator generic_initiators = 2;
+}
+
+// Associates the device behind a PCIe port with a NUMA proximity domain.
+message PcieGenericInitiator {
+    // Port directly upstream of the initiator device.
+    string port_name = 1;
+    // NUMA node for which the device is an initiator.
+    uint32 node = 2;
 }
 
 // A PCIe root complex.
@@ -410,6 +464,8 @@ message PciePort {
     // Device/function (`device << 3 | function`) to place this port at on its
     // bus. Absent => lowest available devfn.
     optional uint32 devfn = 4;
+    // ACS capability bits exposed by this port. Absent => default capabilities.
+    optional uint32 acs_capabilities_supported = 5;
 }
 
 // A PCIe switch: a set of downstream ports, each of which may have its own
@@ -432,6 +488,28 @@ message PcieAttachment {
 }
 
 message VMConfig {
+    // Action for the VMM to take when the guest triggers a power event.
+    enum GuestPowerAction {
+        // Use the default for this event.
+        DEFAULT = 0;
+        // Restart the guest.
+        RESTART = 1;
+        // Leave the virtual machine halted.
+        HALT = 2;
+    }
+
+    // Actions for the VMM to take on guest power events.
+    message GuestPowerActions {
+        // The guest powered off or hibernated. Defaults to HALT.
+        GuestPowerAction shutdown = 1;
+        // The guest requested a reset. Defaults to RESTART.
+        GuestPowerAction reset = 2;
+        // The guest triple faulted. Defaults to HALT.
+        GuestPowerAction crash = 3;
+        // The guest's watchdog timer expired. Defaults to RESTART.
+        GuestPowerAction watchdog = 4;
+    }
+
     MemoryConfig memory_config = 1;
     ProcessorConfig processor_config = 2;
     DevicesConfig devices_config = 3;
@@ -451,6 +529,9 @@ message VMConfig {
     NumaConfig numa_config = 10;
     // PCIe root complexes / ports / switches.
     PcieTopologyConfig pcie = 11;
+    // Actions to take on guest power events. Each unset action uses its
+    // default.
+    GuestPowerActions guest_power_actions = 12;
 }
 
 // WindowsOptions contains virtual machine configurations that are only present on a Windows host.
@@ -501,9 +582,19 @@ message PropertiesVMRequest {
     repeated PropertiesType types = 1;
 }
 
+enum VmState {
+    Uninitialized = 0;
+    Paused = 1;
+    Running = 2;
+    Halted = 3;
+}
+
 message PropertiesVMResponse {
     MemoryStats memory_stats = 1;
     ProcessorStats processor_stats = 2;
+    VmState state = 3;
+    // Set when state is Halted.
+    optional string halt_reason = 4;
 }
 
 message CapabilitiesVMResponse {
@@ -581,7 +672,13 @@ message DioBackend {
 }
 
 message TapBackend {
-    string name = 1;
+    oneof source {
+        // Open /dev/net/tun by this device name (existing behavior).
+        string name = 1;
+        // Use the file descriptor registered under this name via the
+        // fd-passing protocol (see fd_passing.md).
+        string fd_name = 2;
+    }
 }
 
 enum IpProtocol {

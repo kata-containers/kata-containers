@@ -161,7 +161,7 @@ fn net_device_kind(mac_address: String, tap_name: String) -> vmservice::PcieDevi
     virtio_pcie_device(vmservice::virtio_device::Kind::Net(vmservice::VirtioNet {
         backend: MessageField::some(vmservice::NicBackend {
             kind: Some(vmservice::nic_backend::Kind::Tap(vmservice::TapBackend {
-                name: tap_name,
+                source: Some(vmservice::tap_backend::Source::Name(tap_name)),
                 ..Default::default()
             })),
             ..Default::default()

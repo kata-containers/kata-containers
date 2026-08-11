@@ -57,6 +57,9 @@ const (
 	// DragonballHypervisor is the Dragonball hypervisor.
 	DragonballHypervisor HypervisorType = "dragonball"
 
+	// OpenvmmHypervisor is the OpenVMM hypervisor driven by runtime-rs.
+	OpenvmmHypervisor HypervisorType = "openvmm"
+
 	// VirtFrameworkHypervisor is the Darwin Virtualization.framework hypervisor
 	VirtframeworkHypervisor HypervisorType = "virtframework"
 
@@ -389,6 +392,9 @@ func (hType *HypervisorType) Set(value string) error {
 	case "dragonball":
 		*hType = DragonballHypervisor
 		return nil
+	case "openvmm":
+		*hType = OpenvmmHypervisor
+		return nil
 	case "virtframework":
 		*hType = VirtframeworkHypervisor
 		return nil
@@ -414,6 +420,8 @@ func (hType *HypervisorType) String() string {
 		return string(ClhHypervisor)
 	case StratovirtHypervisor:
 		return string(StratovirtHypervisor)
+	case OpenvmmHypervisor:
+		return string(OpenvmmHypervisor)
 	case RemoteHypervisor:
 		return string(RemoteHypervisor)
 	case MockHypervisor:
