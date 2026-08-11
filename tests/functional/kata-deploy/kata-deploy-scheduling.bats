@@ -628,10 +628,30 @@ EOF
 
 	# Load-bearing: the dispatcher decides which tainted nodes are eligible by
 	# reading the tolerations out of this very template, so dropping them here
-	# would silently skip every tainted node.
-	echo "${install}" | grep -q "key: node-role.kubernetes.io/control-plane"
-	echo "${install}" | grep -q "operator: Exists"
-	echo "${cleanup}" | grep -q "key: node-role.kubernetes.io/control-plane"
+	# would silently skip every tainted node. Asserted as whole entries, since a
+	# key on one line says nothing about the operator on another.
+	echo "${install}" | tolerations_of |
+		grep "key: node-role.kubernetes.io/control-plane" | grep -q "operator: Exists"
+
+	# Cleanup tolerates everything instead: a taint added after the install must
+	# not leave a node with Kata on it that no uninstall can reach. A key or an
+	# effect on that entry would narrow it back down.
+	[[ "$(echo "${cleanup}" | tolerations_of)" == "operator: Exists" ]]
+}
+
+@test "Helm template (job mode): install Jobs tolerate what a DaemonSet pod tolerates" {
+	# The DaemonSet controller adds these to its own pods, and job mode installs on
+	# the same nodes. not-ready matters most: the install restarts the CRI runtime,
+	# which takes the node NotReady long enough for the taint manager to evict a pod
+	# that does not tolerate it.
+	render_job_templates
+
+	local install taint
+	install=$(extract_pernode_job install)
+
+	for taint in not-ready unreachable disk-pressure memory-pressure pid-pressure unschedulable; do
+		echo "${install}" | grep -q "key: node.kubernetes.io/${taint}"
+	done
 }
 
 @test "Helm template (job mode): uninstall targets labeled nodes and ignores taints" {

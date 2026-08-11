@@ -1115,9 +1115,39 @@ spec:
              pods need no API access: the dispatcher does all of it. */}}
       automountServiceAccountToken: false
       restartPolicy: Never
-{{- with $root.Values.tolerations }}
+{{- if eq $stage "cleanup" }}
+      {{- /* nodeName gets the pod past the scheduler, but not past the taint
+             manager, which evicts even a bound pod. A node tainted after the
+             install would keep its Kata configuration for good. */}}
       tolerations:
+        - operator: Exists
+{{- else }}
+      {{- /* The DaemonSet controller adds these to its own pods, and job mode
+             installs on the same nodes. not-ready matters most: this Job
+             restarts the CRI runtime, which takes the node NotReady long enough
+             for the taint manager to evict it mid-install. */}}
+      tolerations:
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/memory-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/pid-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+          effect: NoSchedule
+{{- with $root.Values.tolerations }}
 {{- toYaml . | nindent 8 }}
+{{- end }}
 {{- end }}
 {{- with $root.Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
