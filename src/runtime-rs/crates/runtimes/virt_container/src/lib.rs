@@ -66,7 +66,7 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 ))]
 use kata_types::config::OpenVmmConfig;
 
-use crate::factory::{template_device_state_path, vm::VmConfig};
+use crate::factory::{check_template_vm_config, template_device_state_path};
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
@@ -144,9 +144,16 @@ impl RuntimeHandler for VirtContainer {
         init_size_manager: InitialSizeManager,
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
-        let factory = config.get_factory();
+        let mut factory = config.get_factory();
+        if factory.enable_template {
+            if let Err(e) = check_template_vm_config(&config) {
+                info!(sl!(), "cannot use VM template, booting normally: {:#}", e);
+                factory.enable_template = false;
+            }
+        }
+
         let (hypervisor, agent) = if factory.enable_template {
-            build_vm_from_template()
+            build_vm_from_template(&config)
                 .await
                 .context("build vm from template")?
         } else {
@@ -199,9 +206,10 @@ impl RuntimeHandler for VirtContainer {
     }
 }
 
-async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
-    let (mut toml_config, _) =
-        TomlConfig::load_from_default().context("failed to load toml config")?;
+async fn build_vm_from_template(
+    config: &TomlConfig,
+) -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
+    let mut toml_config = config.clone();
     let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
     if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
         h.vm_template.boot_to_be_template = false;
@@ -211,7 +219,6 @@ async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>
         h.vm_template.device_state_path = template_device_state_path(&hypervisor_name, path)
             .to_string_lossy()
             .to_string();
-        let _ = VmConfig::validate_hypervisor_config(h);
     } else {
         return Err(anyhow!("hypervisor '{}' not found", hypervisor_name));
     }

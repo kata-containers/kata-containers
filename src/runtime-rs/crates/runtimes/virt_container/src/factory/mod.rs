@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -10,6 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use hypervisor::HYPERVISOR_NAME_CH;
 use kata_sys_util::mount::umount_all;
 use kata_types::config::TomlConfig;
+use resource::cpu_mem::initial_size::InitialSizeManager;
 use serde::{Deserialize, Serialize};
 use slog::{error, info, warn};
 
@@ -53,9 +55,31 @@ impl FactoryConfig {
     }
 }
 
-/// Load and validate factory configuration
-fn load_and_validate_factory_config() -> Result<(TomlConfig, FactoryConfig)> {
-    let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
+/// Returns an error if a sandbox VM with `config` cannot be restored from the template.
+pub(crate) fn check_template_vm_config(config: &TomlConfig) -> Result<()> {
+    let template_path = PathBuf::from(config.get_factory().template_path);
+    let template_config = Template::load_vm_config(&template_path)?;
+
+    if template_config != vm_config_value(&VmConfig::new(config))? {
+        return Err(anyhow!("sandbox VM config does not match the template"));
+    }
+
+    Ok(())
+}
+
+/// The config used to match templates, ignoring the template paths and flags.
+pub(crate) fn vm_config_value(config: &VmConfig) -> Result<serde_json::Value> {
+    let mut config = config.clone();
+    config.hypervisor_config.vm_template = Default::default();
+
+    Ok(serde_json::to_value(config)?)
+}
+
+fn validate_factory_config(mut toml_config: TomlConfig) -> Result<(TomlConfig, FactoryConfig)> {
+    // Give the template the CPU and memory of a sandbox without resource limits.
+    InitialSizeManager::new_from(&HashMap::new())?
+        .setup_config(&mut toml_config)
+        .context("setup template vm size")?;
 
     let factory_config = FactoryConfig::new(&toml_config);
 
@@ -66,8 +90,8 @@ fn load_and_validate_factory_config() -> Result<(TomlConfig, FactoryConfig)> {
     Ok((toml_config, factory_config))
 }
 
-pub async fn init_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn init_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     new_factory(&mut factory_config, toml_config, false)
         .await
@@ -78,8 +102,8 @@ pub async fn init_factory_command() -> Result<()> {
     Ok(())
 }
 
-pub async fn destroy_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn destroy_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     new_factory(&mut factory_config, toml_config, true)
         .await
@@ -91,8 +115,8 @@ pub async fn destroy_factory_command() -> Result<()> {
     Ok(())
 }
 
-pub async fn status_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn status_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     if new_factory(&mut factory_config, toml_config, true)
         .await
@@ -114,9 +138,6 @@ pub async fn new_factory(
     if !config.template {
         anyhow::bail!("template must be enabled");
     } else {
-        VmConfig::validate_hypervisor_config(&mut config.vm_config.hypervisor_config)
-            .context("validate hypervisor config")?;
-
         let path: PathBuf = config.template_path.clone().into();
         if fetch_only {
             Template::fetch(config.vm_config.clone(), path).context("fetch VM template")?;
@@ -161,4 +182,61 @@ pub fn close_factory(config: &mut FactoryConfig) -> Result<()> {
         .with_context(|| format!("failed to remove {}", state_path.display()))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::RuntimeHandler;
+    use kata_types::annotations::cri_containerd::SANDBOX_MEM_KEY;
+
+    fn qemu_static_config(template_path: &Path) -> TomlConfig {
+        crate::VirtContainer::init().unwrap();
+        TomlConfig::load(&format!(
+            r#"
+[hypervisor.qemu]
+path = "/bin/echo"
+kernel = "/bin/echo"
+image = "/bin/echo"
+firmware = ""
+
+[hypervisor.qemu.factory]
+enable_template = true
+template_path = "{}"
+
+[runtime]
+hypervisor_name = "qemu"
+static_sandbox_resource_mgmt = true
+"#,
+            template_path.display()
+        ))
+        .unwrap()
+    }
+
+    fn sandbox_config(config: &TomlConfig, annotations: HashMap<String, String>) -> TomlConfig {
+        let mut config = config.clone();
+        InitialSizeManager::new_from(&annotations)
+            .unwrap()
+            .setup_config(&mut config)
+            .unwrap();
+        config
+    }
+
+    #[test]
+    fn template_is_used_only_when_its_saved_vm_config_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = qemu_static_config(dir.path());
+        let (_, factory_config) = validate_factory_config(config.clone()).unwrap();
+        let unlimited = sandbox_config(&config, HashMap::new());
+        assert!(check_template_vm_config(&unlimited).is_err());
+
+        Template::new(factory_config.vm_config, dir.path().to_path_buf())
+            .save_vm_config()
+            .unwrap();
+        assert!(check_template_vm_config(&unlimited).is_ok());
+
+        let limits = HashMap::from([(SANDBOX_MEM_KEY.to_string(), (512u64 << 20).to_string())]);
+        let limited = sandbox_config(&config, limits);
+        assert!(check_template_vm_config(&limited).is_err());
+    }
 }

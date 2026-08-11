@@ -5,7 +5,7 @@
 
 use std::fmt::Debug;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -18,6 +18,7 @@ use slog::warn;
 use crate::factory::{
     template_device_state_path,
     vm::{TemplateVm, VmConfig},
+    vm_config_value,
 };
 
 /// Maximum time to wait for the Kata Agent to become ready when initializing a template VM.
@@ -26,6 +27,9 @@ const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 /// Preallocated size (in MB) for saving the device state snapshot of the template VM.
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8;
 const MIB: u64 = 1024 * 1024;
+
+/// Cloud Hypervisor already writes its own `config.json` here.
+const TEMPLATE_VM_CONFIG_FILE: &str = "vm_config.json";
 
 #[derive(Debug)]
 pub struct Template {
@@ -74,8 +78,27 @@ impl Template {
         t.save_to_template(toml_config)
             .await
             .context("create template files")?;
+        t.save_vm_config().context("save template vm config")?;
 
         Ok(Box::new(t))
+    }
+
+    /// Read as JSON: parsing it into `VmConfig` would change `create_container_timeout`.
+    pub(crate) fn load_vm_config(template_path: &Path) -> Result<serde_json::Value> {
+        let path = template_path.join(TEMPLATE_VM_CONFIG_FILE);
+        let content =
+            std::fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
+
+        serde_json::from_slice(&content)
+            .with_context(|| format!("failed to parse {}", path.display()))
+    }
+
+    pub(crate) fn save_vm_config(&self) -> Result<()> {
+        let path = self.state_path.join(TEMPLATE_VM_CONFIG_FILE);
+        let content = serde_json::to_vec(&vm_config_value(&self.config)?)?;
+
+        std::fs::write(&path, content)
+            .with_context(|| format!("failed to write {}", path.display()))
     }
 
     pub fn template_vm_exists(&self) -> bool {
