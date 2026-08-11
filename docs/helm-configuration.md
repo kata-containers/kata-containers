@@ -220,10 +220,10 @@ Three things need the Kubernetes API, so none of them happen inside a per-node J
   *before* that node's Job starts taking the node apart — and the label itself goes
   only once that Job has succeeded.
 
-    The claim is best-effort by design: a node that cannot be claimed is still
-    worth installing on, so a failure there is logged and the install proceeds.
-    Uninstall then relies on what the node does carry — see
-    [Choosing which nodes are cleaned up on uninstall](#choosing-which-nodes-are-cleaned-up-on-uninstall).
+    In `job` mode the claim is mandatory: the dispatcher refuses to start a
+    host-mutating Job unless both labels were written atomically. Otherwise a
+    half-failed install could modify a host that the default uninstall selector
+    cannot discover. In `daemonset` mode the claim stays best-effort.
 
     The handler check has one limit worth knowing: `.status.runtimeHandlers` is
     populated by kubelet from Kubernetes 1.30 on. A node that does not report the
@@ -416,6 +416,11 @@ An empty `nodeSelector` therefore does **not** mean "every node": step 2 still
 applies, and that is what keeps Kata off control-plane nodes by default without
 any label filtering.
 
+On upgrade, `job` mode also compares that desired set with the nodes carrying
+this installation's marker. Nodes in `owned - desired` run the cleanup pipeline
+before the desired nodes are installed, so narrowing or changing a selector does
+not leave the old nodes labelled and configured forever.
+
 ```yaml title="values.yaml"
 # Install on nodes carrying a specific label:
 nodeSelector:
@@ -478,15 +483,16 @@ is permanent — nothing installs the node later — so a silent success would l
 the fleet without Kata and nothing to point at.
 
 Finding one eligible node is not the end of the wait either. Eligibility arrives
-per node, so the dispatcher keeps looking until a whole pass adds nothing new
-(or the wait expires) — otherwise it would install on whichever node was labelled
-first and quietly leave the rest of the fleet out. This costs one extra poll on a
-cluster where every node is eligible from the start.
+per node, so the dispatcher waits until the set stays unchanged for
+`job.nodeSettleSeconds` (default `15`) or the overall wait expires. A single
+unchanged poll is not enough: the next node may be labelled a second later.
 
 ```yaml title="values.yaml"
 job:
   # Give a slow-labelling cluster longer (see the timeout warning below)...
   waitForNodesSeconds: 300
+  # Require a 30-second quiet period after the last newly eligible node.
+  nodeSettleSeconds: 30
   # ...or resolve once and treat "no eligible node" as a no-op, the way a
   # DaemonSet with no matching node quietly installs nothing.
   # waitForNodesSeconds: 0
@@ -591,13 +597,9 @@ find. Where several installations share a node, neither the demotion nor the rem
 happens while another one is still holding it — see
 [How installations keep out of each other's way on a node](#how-installations-keep-out-of-each-others-way-on-a-node).
 
-!!! warning "Claiming is best-effort, so this is not a guarantee"
-
-    A node whose claim could not be written (a rejected patch, an API server that
-    was unreachable at that moment) carries no label, and the default selector
-    cannot see it. If an install failed and you are unsure whether every node was
-    reached, name the nodes explicitly under `job.cleanup.nodes`, or widen the
-    selector to the nodes the install targeted.
+In `job` mode claiming is a precondition for dispatch: if the labels cannot be
+written, that node fails before any host mutation begins. This keeps the default
+cleanup selector complete even when the API server rejects or times out a patch.
 
 Cleanup pods also tolerate **every** taint, unlike the install's, which carry the
 `tolerations` you configured. Where an install may run is your decision; where an
@@ -956,8 +958,8 @@ label its own uninstall can find.
 
     Nodes installed by a version that did not write marks carry none, and an
     uninstall cannot attribute such a node to one release. Run `helm upgrade` on
-    every installation before uninstalling one of them, so each release has first
-    marked the nodes it owns.
+    every installation without changing its node selection before uninstalling or
+    narrowing one of them, so each release has first marked the nodes it owns.
 
 `env.multiInstallSuffix` is immutable for the life of a Helm release. The chart
 stores the first value under a suffix-independent ConfigMap name and rejects an

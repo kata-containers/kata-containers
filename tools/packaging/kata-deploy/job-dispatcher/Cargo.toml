@@ -34,6 +34,7 @@ kube = { version = "2.0", default-features = false, features = [
 ] }
 log.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 serde_yaml = "0.9"
 tokio = { workspace = true, features = [
     "rt-multi-thread",

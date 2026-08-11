@@ -1001,13 +1001,20 @@ the install does not tolerate, mirroring what the scheduler does for a DaemonSet
 {{- $eq := .Values.nodeSelector | default dict -}}
 {{- $terms := list -}}
 {{- $nodeAffinity := (.Values.affinity | default dict).nodeAffinity | default dict -}}
+{{- $hasRequired := hasKey $nodeAffinity "requiredDuringSchedulingIgnoredDuringExecution" -}}
 {{- with $nodeAffinity -}}
 {{- $required := .requiredDuringSchedulingIgnoredDuringExecution | default dict -}}
 {{- $terms = $required.nodeSelectorTerms | default list -}}
 {{- end -}}
+{{- if and $hasRequired (not $terms) -}}
+{{- fail "affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms must not be empty with deploymentMode: job. Kubernetes defines an empty required term list as matching no nodes; remove requiredDuringSchedulingIgnoredDuringExecution to select every otherwise eligible node." -}}
+{{- end -}}
 {{- range $term := $terms -}}
 {{- if $term.matchFields -}}
 {{- fail "affinity.nodeAffinity: matchFields cannot be used with deploymentMode: job. Node selection is a label-selector LIST against the Kubernetes API server, which cannot match on fields. To target nodes by name, use job.nodes instead." -}}
+{{- end -}}
+{{- if not ($term.matchExpressions | default list) -}}
+{{- fail "affinity.nodeAffinity: an empty nodeSelectorTerm matches no nodes in Kubernetes and cannot be represented as an API label selector in job mode. Remove the empty term or add a matchExpressions requirement." -}}
 {{- end -}}
 {{- end -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
@@ -1151,6 +1158,12 @@ spec:
              restarts the CRI runtime, which takes the node NotReady long enough
              for the taint manager to evict it mid-install. */}}
       tolerations:
+{{- if $root.Values.job.nodes }}
+        {{- /* Explicit names are a deliberate admission override. nodeName gets
+               past the scheduler, but an untolerated NoExecute taint can still
+               evict the bound pod before it finishes. */}}
+        - operator: Exists
+{{- else }}
         - key: node.kubernetes.io/not-ready
           operator: Exists
           effect: NoExecute
@@ -1169,6 +1182,7 @@ spec:
         - key: node.kubernetes.io/unschedulable
           operator: Exists
           effect: NoSchedule
+{{- end }}
 {{- with $root.Values.tolerations }}
 {{- toYaml . | nindent 8 }}
 {{- end }}
@@ -1295,6 +1309,9 @@ host. Emitted at column 0; indent with `nindent` at the call site.
 - name: boot
   mountPath: /boot
   readOnly: true
+- name: host-machine-id
+  mountPath: /host-machine-id
+  readOnly: true
 - name: host-usr-bin
   mountPath: /host-usr/bin
   readOnly: true
@@ -1352,6 +1369,10 @@ indent with `nindent` at the call site.
 - name: boot
   hostPath:
     path: /boot
+- name: host-machine-id
+  hostPath:
+    path: /etc/machine-id
+    type: File
 - name: host-usr-bin
   hostPath:
     path: /usr/bin

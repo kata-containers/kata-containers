@@ -34,7 +34,7 @@ use kube::Client;
 use log::{error, info};
 use node_filter::{describe_taint, partition_by_tolerations, suggested_toleration, SkippedNode};
 use nodes::{instance_label, NodeFacts, NodeOps};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
@@ -45,8 +45,9 @@ use tokio::task::JoinSet;
 /// rejecting it - would otherwise be polled forever, and the run would end only
 /// when something killed the dispatcher, with no result reported for any node.
 const JOB_READ_ERROR_BUDGET: Duration = Duration::from_secs(300);
+const JOB_GET_TIMEOUT: Duration = Duration::from_secs(15);
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
@@ -57,6 +58,11 @@ struct Args {
     /// The dispatcher clones it per node and sets metadata.name + nodeName.
     #[arg(long)]
     job_template: String,
+
+    /// Cleanup Job template used on upgrade for nodes this installation owns but
+    /// which no longer match the desired node selection.
+    #[arg(long)]
+    cleanup_job_template: Option<String>,
 
     /// Prefix for generated per-node Job names. Also recorded as the
     /// "kata-deploy-job-dispatcher/owner" label so the dispatcher tracks only its own Jobs.
@@ -117,6 +123,14 @@ struct Args {
     /// silent no-op that would leave every node uninstalled.
     #[arg(long, default_value_t = 0)]
     wait_for_nodes_secs: u64,
+
+    /// Seconds the eligible-node set must remain unchanged before it is accepted.
+    ///
+    /// Labels arrive node by node. Treating one unchanged poll as convergence can
+    /// miss a node labelled immediately after that poll even when most of
+    /// --wait-for-nodes-secs remains.
+    #[arg(long, default_value_t = 15)]
+    node_settle_secs: u64,
 
     /// Optional owner Job name (in the dispatcher's namespace). When set, every
     /// per-node Job gets an ownerReference to it so they are garbage-collected
@@ -202,6 +216,12 @@ struct Args {
     /// Page size used when listing nodes (server-side pagination).
     #[arg(long, default_value_t = 500)]
     node_page_size: u32,
+
+    /// Not a flag: set on the copy of these arguments that cleans nodes this
+    /// install owns but no longer selects, where a node back in the selection is
+    /// one to leave alone rather than one to act on.
+    #[arg(skip)]
+    removed_node_cleanup: bool,
 }
 
 // The dispatcher is overwhelmingly I/O-bound (apiserver round-trips); two worker
@@ -230,13 +250,18 @@ async fn main() -> Result<()> {
 
     let node_ops = Arc::new(node_ops_from_args(&client, &args)?);
 
-    let nodes = resolve_nodes(&client, &args, &template_tolerations(&template)).await?;
-    if nodes.is_empty() {
-        info!("no target nodes matched the selection; nothing to do");
-        return Ok(());
-    }
-
-    let facts = collect_node_facts(&node_ops, &nodes).await;
+    let mut nodes = resolve_nodes(&client, &args, &template_tolerations(&template)).await?;
+    // The matched set, not the admitted one: this decides which nodes the release
+    // still owns, and a taint only says a pod cannot run there right now. Reading
+    // an untolerated taint as "no longer mine" would uninstall from every node
+    // somebody cordoned between two upgrades.
+    let desired_nodes = if args.nodes.is_some() {
+        nodes.clone()
+    } else {
+        let api: Api<Node> = Api::all(client.clone());
+        let (matched, _, _) = select_nodes(&api, &args, &template_tolerations(&template)).await?;
+        matched
+    };
 
     let owner = match args.owner_job_name.as_deref() {
         Some(name) => Some(owner_ref_for_job(&client, &namespace, name).await?),
@@ -244,6 +269,57 @@ async fn main() -> Result<()> {
     };
 
     let jobs: Api<Job> = Api::namespaced(client.clone(), &namespace);
+
+    if let Some(cleanup_path) = args.cleanup_job_template.as_deref() {
+        let cleanup_raw = std::fs::read_to_string(cleanup_path)
+            .with_context(|| format!("failed to read cleanup job template {cleanup_path}"))?;
+        let cleanup_template: Job = serde_yaml::from_str(&cleanup_raw)
+            .with_context(|| format!("failed to parse cleanup job template {cleanup_path}"))?;
+        let removed =
+            nodes_owned_but_not_desired(&client, &node_ops.instance_label, &desired_nodes).await?;
+        if !removed.is_empty() {
+            info!(
+                "{} node(s) no longer match this installation's selection; cleaning them before \
+                 installing the desired set",
+                removed.len()
+            );
+            let mut cleanup_args = args.clone();
+            cleanup_args.name_prefix = format!("{}-removed", args.name_prefix);
+            cleanup_args.cleanup_job_template = None;
+            cleanup_args.removed_node_cleanup = true;
+            let mut cleanup_ops = (*node_ops).clone();
+            cleanup_ops.label_value = None;
+            cleanup_ops.remove_label = true;
+            cleanup_ops.claim_pending = false;
+            cleanup_ops.remove_taints.clear();
+            cleanup_ops.wait_ready = None;
+            cleanup_ops.require_handlers.clear();
+            cleanup_ops.kubelet_timeout_warn = None;
+            run_fanout(
+                &jobs,
+                &cleanup_template,
+                &removed,
+                &cleanup_args,
+                &namespace,
+                cleanup_args.parallelism.clamp(1, removed.len()),
+                owner.as_ref(),
+                Arc::new(cleanup_ops),
+                &client,
+            )
+            .await
+            .context("failed to clean nodes removed from the desired selection")?;
+
+            // Cleanup may take long enough for a removed node to re-enter the
+            // selection. It was left untouched by the guarded cleanup path, so
+            // include it in this upgrade's install pass.
+            nodes = resolve_nodes(&client, &args, &template_tolerations(&template)).await?;
+        }
+    }
+
+    if nodes.is_empty() {
+        info!("no target nodes matched the selection; nothing to install");
+        return Ok(());
+    }
 
     let parallelism = args.parallelism.clamp(1, nodes.len());
     info!(
@@ -261,7 +337,7 @@ async fn main() -> Result<()> {
         parallelism,
         owner.as_ref(),
         node_ops.clone(),
-        &facts,
+        &client,
     )
     .await
 }
@@ -300,54 +376,6 @@ fn node_ops_from_args(client: &Client, args: &Args) -> Result<NodeOps> {
     }
 
     Ok(ops)
-}
-
-/// Nodes resolved from a selector were already listed in full, so their facts are
-/// free; explicitly named nodes (`--nodes`) are fetched here.
-///
-/// A node missing from the result is not dispatched to. The per-node Jobs detect
-/// their CRI runtime from this version string and hold no credentials to look it
-/// up themselves, so dispatching one anyway would start a privileged pod that is
-/// certain to fail on the first thing it does.
-async fn collect_node_facts(ops: &NodeOps, nodes: &[Node]) -> HashMap<String, NodeFacts> {
-    let mut facts = HashMap::new();
-
-    for node in nodes {
-        let Some(name) = node.metadata.name.clone() else {
-            continue;
-        };
-        // A node the selector produced carries its full object; a named one is a
-        // stub holding just the name.
-        let known = node.status.is_some() || node.metadata.labels.is_some();
-        if known {
-            record_facts(&mut facts, NodeFacts::from_node(node));
-            continue;
-        }
-
-        match ops.get(&name).await {
-            Ok(fetched) => {
-                record_facts(&mut facts, NodeFacts::from_node(&fetched));
-            }
-            Err(err) => {
-                error!("node {name}: could not read its runtime details ({err:#})");
-            }
-        }
-    }
-
-    facts
-}
-
-fn record_facts(facts: &mut HashMap<String, NodeFacts>, node_facts: NodeFacts) {
-    if node_facts.container_runtime_version.is_none() {
-        error!(
-            "node {}: reports no containerRuntimeVersion, so the per-node Job would have no way \
-             to tell which CRI runtime to configure",
-            node_facts.name
-        );
-        return;
-    }
-
-    facts.insert(node_facts.name.clone(), node_facts);
 }
 
 /// Resolve the namespace to create Jobs in: explicit flag, then $POD_NAMESPACE,
@@ -419,9 +447,16 @@ async fn resolve_nodes(
             .collect();
         names.sort();
         names.dedup();
-        // Named nodes are taken at face value - naming a node is unambiguous - so
-        // these are stubs; whatever else is needed about them is fetched later.
-        return Ok(names.into_iter().map(node_stub).collect());
+        let api: Api<Node> = Api::all(client.clone());
+        let mut nodes = Vec::with_capacity(names.len());
+        for name in names {
+            nodes.push(
+                api.get(&name)
+                    .await
+                    .with_context(|| format!("failed to resolve explicitly named node {name}"))?,
+            );
+        }
+        return Ok(nodes);
     }
 
     let api: Api<Node> = Api::all(client.clone());
@@ -429,6 +464,7 @@ async fn resolve_nodes(
     let deadline = Instant::now() + Duration::from_secs(args.wait_for_nodes_secs);
     let mut announced_wait = false;
     let mut previous: Option<Vec<String>> = None;
+    let mut stable_since: Option<Instant> = None;
 
     let report_skipped = |skipped: &[SkippedNode]| {
         for node in skipped {
@@ -442,7 +478,7 @@ async fn resolve_nodes(
     };
 
     loop {
-        let (admitted, skipped) = select_nodes(&api, args, tolerations).await?;
+        let (_, admitted, skipped) = select_nodes(&api, args, tolerations).await?;
         let expired = Instant::now() >= deadline;
 
         if !admitted.is_empty() {
@@ -451,26 +487,42 @@ async fn resolve_nodes(
                 .filter_map(|node| node.metadata.name.clone())
                 .collect();
             names.sort();
+            let changed = previous.as_deref() != Some(names.as_slice());
+            if changed {
+                previous = Some(names.clone());
+                stable_since = Some(Instant::now());
+            }
+            let settled = args.wait_for_nodes_secs == 0
+                || stable_since.is_some_and(|since| {
+                    since.elapsed() >= Duration::from_secs(args.node_settle_secs)
+                });
 
             // The set the first pass sees is not the set to install on: the labels
             // a selector matches are written per node by an add-on that is itself
             // still starting, so returning on the first match would install on
             // whichever node won that race and silently leave the rest out. Wait
             // until a whole pass adds nothing.
-            if expired || previous.as_deref() == Some(names.as_slice()) {
+            if expired || settled {
                 report_skipped(&skipped);
                 return Ok(admitted);
             }
 
-            info!(
-                "{} node(s) eligible so far ({}); re-checking once more in case others are still \
-                 becoming eligible",
-                names.len(),
-                names.join(", ")
-            );
-            previous = Some(names);
+            if changed {
+                info!(
+                    "{} node(s) eligible so far ({}); waiting for the set to remain unchanged for \
+                     {}s",
+                    names.len(),
+                    names.join(", "),
+                    args.node_settle_secs
+                );
+            }
             tokio::time::sleep(poll).await;
             continue;
+        }
+
+        if previous.as_deref() != Some(&[]) {
+            previous = Some(Vec::new());
+            stable_since = Some(Instant::now());
         }
 
         if expired {
@@ -499,18 +551,51 @@ async fn select_nodes(
     api: &Api<Node>,
     args: &Args,
     tolerations: &[Toleration],
-) -> Result<(Vec<Node>, Vec<SkippedNode>)> {
+) -> Result<(Vec<Node>, Vec<Node>, Vec<SkippedNode>)> {
     let mut matched: Vec<Node> = Vec::new();
     for selector in selector_passes(&args.node_selector) {
         matched.extend(list_nodes(api, args, selector).await?);
     }
 
     if args.ignore_node_taints {
-        return Ok((dedup_by_name(matched, None), Vec::new()));
+        let matched = dedup_by_name(matched, None);
+        return Ok((matched.clone(), matched, Vec::new()));
     }
 
     let (admitted, skipped) = partition_by_tolerations(&matched, tolerations);
-    Ok((dedup_by_name(matched, Some(&admitted)), skipped))
+    Ok((
+        dedup_by_name(matched.clone(), None),
+        dedup_by_name(matched, Some(&admitted)),
+        skipped,
+    ))
+}
+
+async fn nodes_owned_but_not_desired(
+    client: &Client,
+    instance_label: &str,
+    desired: &[Node],
+) -> Result<Vec<Node>> {
+    let desired: HashSet<&str> = desired
+        .iter()
+        .filter_map(|node| node.metadata.name.as_deref())
+        .collect();
+    let owned = Api::<Node>::all(client.clone())
+        .list(&ListParams::default().labels(instance_label))
+        .await
+        .with_context(|| {
+            format!("failed to list nodes carrying this install's marker {instance_label}")
+        })?;
+
+    Ok(owned
+        .items
+        .into_iter()
+        .filter(|node| {
+            node.metadata
+                .name
+                .as_deref()
+                .is_some_and(|name| !desired.contains(name))
+        })
+        .collect())
 }
 
 /// Collapse the per-selector duplicates a union produces, keeping the objects
@@ -538,18 +623,6 @@ fn dedup_by_name(nodes: Vec<Node>, keep: Option<&[String]>) -> Vec<Node> {
 
     unique.sort_by(|a, b| a.metadata.name.cmp(&b.metadata.name));
     unique
-}
-
-/// A Node carrying nothing but its name, for nodes named explicitly rather than
-/// selected (and therefore never listed).
-fn node_stub(name: String) -> Node {
-    Node {
-        metadata: kube::core::ObjectMeta {
-            name: Some(name),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
 }
 
 /// Decide what "nothing is eligible" means once we have stopped looking.
@@ -603,6 +676,42 @@ fn describe_selectors(selectors: &[String]) -> String {
         .map(|s| format!("[{s}]"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+async fn node_still_selected(client: &Client, args: &Args, node: &str) -> Result<bool> {
+    if let Some(nodes) = args.nodes.as_deref() {
+        return Ok(nodes
+            .split(',')
+            .map(str::trim)
+            .any(|candidate| candidate == node));
+    }
+
+    let api = Api::<Node>::all(client.clone());
+    let node_field = format!("metadata.name={node}");
+    let field_selector = match args.node_field_selector.as_deref() {
+        Some(existing) if !existing.is_empty() => format!("{existing},{node_field}"),
+        _ => node_field,
+    };
+    for selector in selector_passes(&args.node_selector) {
+        // No selector means every node, which is an absent labelSelector rather
+        // than an empty one: what an empty string means is up to the apiserver.
+        let params = ListParams {
+            limit: Some(1),
+            label_selector: selector.map(str::to_string),
+            field_selector: Some(field_selector.clone()),
+            ..Default::default()
+        };
+        if !api
+            .list(&params)
+            .await
+            .with_context(|| format!("failed to revalidate node selection for {node}"))?
+            .items
+            .is_empty()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// One paginated LIST of nodes matching `label_selector` (ANDed with the global
@@ -681,13 +790,9 @@ async fn run_fanout(
     parallelism: usize,
     owner: Option<&OwnerReference>,
     node_ops: Arc<NodeOps>,
-    facts: &HashMap<String, NodeFacts>,
+    client: &Client,
 ) -> Result<()> {
-    let names: Vec<String> = nodes
-        .iter()
-        .filter_map(|node| node.metadata.name.clone())
-        .collect();
-    let mut queue: VecDeque<&String> = names.iter().collect();
+    let mut queue: VecDeque<Node> = nodes.iter().cloned().collect();
     // job name -> node name
     let mut in_flight: HashMap<String, String> = HashMap::new();
     let mut succeeded = 0usize;
@@ -699,6 +804,7 @@ async fn run_fanout(
     // prefix; sanitize it once so it is a valid label value / DNS-1123 prefix
     // regardless of what the caller passed (e.g. a Helm release suffix).
     let owner_value = sanitize_label_value(&args.name_prefix);
+    clear_stale_jobs(jobs, &owner_value, owner).await?;
 
     // A node's post-success work (readiness, handlers, label, taints) can take
     // minutes, so it runs off to the side. It holds a slot until it finishes -
@@ -711,29 +817,113 @@ async fn run_fanout(
 
     loop {
         while in_flight.len() + post_work.len() < parallelism {
-            let Some(node) = queue.pop_front() else {
+            let Some(expected_node) = queue.pop_front() else {
                 break;
             };
+            let Some(node) = expected_node.metadata.name.as_deref() else {
+                error!("selected a Node object without metadata.name; refusing to dispatch it");
+                continue;
+            };
 
-            // A failure here fails the node rather than proceeding: for cleanup
-            // that would mean dismantling Kata on a node still advertising it.
-            if let Err(err) = node_ops.before_dispatch(node).await {
-                error!("node {node}: {err:#}");
-                failed.push(node.clone());
+            let fresh = match node_ops.get(node).await {
+                Ok(fresh) => fresh,
+                Err(err) => {
+                    error!(
+                        "node {node}: could not re-read it immediately before dispatch ({err:#})"
+                    );
+                    failed.push(node.to_string());
+                    continue;
+                }
+            };
+            let Some(expected_uid) = expected_node.metadata.uid.as_deref() else {
+                error!("node {node}: selected Node has no UID; refusing to dispatch");
+                failed.push(node.to_string());
+                continue;
+            };
+            if fresh.metadata.uid.as_deref() != Some(expected_uid) {
+                error!(
+                    "node {node}: the selected Node UID was {expected_uid}, but the object now \
+                     has UID {:?}; refusing to mutate a replacement node under stale identity",
+                    fresh.metadata.uid
+                );
+                failed.push(node.to_string());
+                continue;
+            }
+            let still_selected = node_still_selected(client, args, node).await?;
+            if args.removed_node_cleanup && still_selected {
+                info!(
+                    "node {node}: re-entered the desired selection before removed-node cleanup; \
+                     leaving it installed"
+                );
+                succeeded += 1;
+                continue;
+            }
+            if !args.removed_node_cleanup && !still_selected {
+                // Left as it is rather than uninstalled here: a selection that
+                // changed under a running rollout is not an instruction to
+                // dismantle a node. The next run starts by cleaning the nodes it
+                // owns but no longer wants, and picks this one up if it is still
+                // out.
+                error!(
+                    "node {node}: no longer matches the node selection immediately before \
+                     dispatch; refusing to mutate stale selection, leaving the node as it is"
+                );
+                failed.push(node.to_string());
+                continue;
+            }
+            // Whoever passed --ignore-node-taints asked for every node in the
+            // selection to be acted on whatever it is tainted with, so this
+            // check would go back on that promise.
+            if !args.ignore_node_taints {
+                let (admitted, skipped) = partition_by_tolerations(
+                    std::slice::from_ref(&fresh),
+                    &template_tolerations(template),
+                );
+                if admitted.is_empty() {
+                    error!(
+                        "node {node}: acquired untolerated taint {} before dispatch; refusing to \
+                         start a Job that the taint manager would evict",
+                        skipped
+                            .first()
+                            .map(|item| describe_taint(&item.taint))
+                            .unwrap_or_else(|| "<unknown>".to_string())
+                    );
+                    failed.push(node.to_string());
+                    continue;
+                }
+            }
+
+            let node_facts = NodeFacts::from_node(&fresh);
+            if node_facts.container_runtime_version.is_none() {
+                error!(
+                    "node {node}: reports no containerRuntimeVersion immediately before dispatch, \
+                     so the per-node Job cannot know which CRI runtime to configure"
+                );
+                failed.push(node.to_string());
+                continue;
+            }
+            if node_facts.machine_id.is_none() {
+                error!(
+                    "node {node}: reports no machineID immediately before dispatch, so a \
+                     token-free privileged Job cannot defend against Node name reuse"
+                );
+                failed.push(node.to_string());
                 continue;
             }
 
-            let Some(node_facts) = facts.get(node.as_str()) else {
-                error!(
-                    "node {node}: not dispatching a Job to it, since its runtime details could \
-                     not be established (reported above)"
-                );
-                failed.push(node.clone());
-                continue;
-            };
+            // A failure here fails the node rather than proceeding: for cleanup
+            // that would mean dismantling Kata on a node still advertising it.
+            match node_ops.before_dispatch(node, expected_uid).await {
+                Ok(()) => {}
+                Err(err) => {
+                    error!("node {node}: {err:#}");
+                    failed.push(node.to_string());
+                    continue;
+                }
+            }
 
             let name = job_name(&owner_value, node);
-            let node_job = build_node_job(template, &name, node, &owner_value, owner, node_facts);
+            let node_job = build_node_job(template, &name, node, &owner_value, owner, &node_facts);
             match jobs.create(&post, &node_job).await {
                 Ok(_) => info!("created job {name} (node {node})"),
                 // A Job with this name already exists. Job names are derived from
@@ -750,18 +940,18 @@ async fn run_fanout(
                         }
                         Err(err) => {
                             error!("node {node}: {err:#}");
-                            failed.push(node.clone());
+                            failed.push(node.to_string());
                             continue;
                         }
                     }
                 }
                 Err(e) => {
                     error!("failed to create job {name} (node {node}): {e}");
-                    failed.push(node.clone());
+                    failed.push(node.to_string());
                     continue;
                 }
             }
-            in_flight.insert(name, node.clone());
+            in_flight.insert(name, node.to_string());
         }
 
         if in_flight.is_empty() && post_work.is_empty() {
@@ -779,55 +969,100 @@ async fn run_fanout(
 
         tokio::time::sleep(poll).await;
 
-        // Poll each in-flight Job via GET so we only need the `get` verb on
-        // batch/jobs (not `list`), matching the least-privilege Role.
+        // Concurrently, so one slow apiserver request cannot hold every other node
+        // behind it. Each read has a short timeout of its own, and the budget below
+        // tolerates transient failures without letting one unreadable Job keep the
+        // rollout alive forever.
         let mut finished: Vec<String> = Vec::new();
+        let mut reads = JoinSet::new();
         for (name, node) in &in_flight {
-            let j = match jobs.get(name).await {
-                Ok(j) => j,
+            unreadable.entry(name.clone()).or_insert_with(Instant::now);
+            let api = jobs.clone();
+            let name = name.clone();
+            let node = node.clone();
+            reads.spawn(async move {
+                let result = tokio::time::timeout(JOB_GET_TIMEOUT, api.get(&name)).await;
+                (name, node, result)
+            });
+        }
+
+        while let Some(joined) = reads.join_next().await {
+            let (name, node, result) =
+                joined.context("a Job status polling task terminated unexpectedly")?;
+            let j = match result {
+                Ok(Ok(j)) => j,
                 // Deleted under us - garbage collection catching up with a
                 // previous dispatcher, or someone clearing Jobs by hand. Waiting
                 // for a Job that no longer exists never ends, so the node fails
                 // and a later run retries it.
-                Err(kube::Error::Api(e)) if e.code == 404 => {
+                Ok(Err(kube::Error::Api(e))) if e.code == 404 => {
                     error!(
                         "node {node}: job {name} no longer exists, so its result cannot be \
                          established; treating the node as failed"
                     );
-                    failed.push(node.clone());
-                    finished.push(name.clone());
+                    failed.push(node);
+                    finished.push(name);
                     continue;
                 }
-                Err(e) => {
-                    let since = *unreadable.entry(name.clone()).or_insert_with(Instant::now);
+                Ok(Err(e)) => {
+                    let since = unreadable[&name];
                     if since.elapsed() >= JOB_READ_ERROR_BUDGET {
                         error!(
                             "node {node}: job {name} has been unreadable for {}s ({e}), so its \
                              result cannot be established; treating the node as failed",
                             since.elapsed().as_secs()
                         );
-                        failed.push(node.clone());
-                        finished.push(name.clone());
+                        failed.push(node);
+                        finished.push(name);
                     } else {
                         error!("failed to get job {name} (node {node}): {e}");
                     }
                     continue;
                 }
+                Err(_) => {
+                    let since = unreadable[&name];
+                    if since.elapsed() >= JOB_READ_ERROR_BUDGET {
+                        error!(
+                            "node {node}: job {name} has been unreadable for {}s because its GET \
+                             requests keep timing out after {}s; treating the node as failed",
+                            since.elapsed().as_secs(),
+                            JOB_GET_TIMEOUT.as_secs()
+                        );
+                        failed.push(node);
+                        finished.push(name);
+                    } else {
+                        error!(
+                            "timed out after {}s getting job {name} (node {node})",
+                            JOB_GET_TIMEOUT.as_secs()
+                        );
+                    }
+                    continue;
+                }
             };
-            unreadable.remove(name);
+            unreadable.remove(&name);
             match interpret_status(&j) {
                 JobOutcome::Succeeded => {
                     finished.push(name.clone());
                     info!("node {node}: job {name} succeeded");
+                    let Some(expected_uid) = nodes
+                        .iter()
+                        .find(|candidate| candidate.metadata.name.as_deref() == Some(node.as_str()))
+                        .and_then(|candidate| candidate.metadata.uid.clone())
+                    else {
+                        error!("node {node}: selected Node UID disappeared from dispatcher state");
+                        failed.push(node);
+                        continue;
+                    };
                     let ops = node_ops.clone();
                     let target = node.clone();
-                    let handle = post_work.spawn(async move { ops.after_success(&target).await });
-                    post_nodes.insert(handle.id(), node.clone());
+                    let handle = post_work
+                        .spawn(async move { ops.after_success(&target, &expected_uid).await });
+                    post_nodes.insert(handle.id(), node);
                 }
                 JobOutcome::Failed => {
-                    failed.push(node.clone());
-                    finished.push(name.clone());
                     error!("node {node}: job {name} failed");
+                    failed.push(node);
+                    finished.push(name);
                 }
                 JobOutcome::Running => {}
             }
@@ -866,6 +1101,116 @@ async fn run_fanout(
 
     info!("all {succeeded} node(s) completed successfully");
     Ok(())
+}
+
+async fn clear_stale_jobs(
+    jobs: &Api<Job>,
+    owner_value: &str,
+    owner: Option<&OwnerReference>,
+) -> Result<()> {
+    let Some(owner) = owner else {
+        return Ok(());
+    };
+    let selector = format!("{OWNER_LABEL}={owner_value}");
+    let stale = stale_job_names(jobs, &selector, owner_value, owner).await?;
+
+    let mut pending: VecDeque<String> = stale.into();
+    let mut deletes = JoinSet::new();
+    const DELETE_CONCURRENCY: usize = 16;
+    while !pending.is_empty() || !deletes.is_empty() {
+        while deletes.len() < DELETE_CONCURRENCY {
+            let Some(name) = pending.pop_front() else {
+                break;
+            };
+            info!("deleting stale per-node job {name} before opening rollout slots");
+            let jobs = jobs.clone();
+            deletes.spawn(async move {
+                match jobs.delete(&name, &DeleteParams::foreground()).await {
+                    Ok(_) => Ok(()),
+                    Err(kube::Error::Api(status)) if status.code == 404 => Ok(()),
+                    Err(err) => Err(err)
+                        .with_context(|| format!("failed to delete stale per-node job {name}")),
+                }
+            });
+        }
+        if let Some(result) = deletes.join_next().await {
+            result.context("stale Job deletion task failed")??;
+        }
+    }
+
+    for _ in 0..REPLACE_ATTEMPTS {
+        let remaining = stale_job_exists(jobs, &selector, owner_value, owner).await?;
+        if !remaining {
+            return Ok(());
+        }
+        tokio::time::sleep(REPLACE_INTERVAL).await;
+    }
+
+    bail!(
+        "stale per-node Jobs were still terminating after {}s; refusing to start more privileged \
+         Jobs beyond the configured parallelism",
+        (REPLACE_ATTEMPTS as u64) * REPLACE_INTERVAL.as_secs()
+    )
+}
+
+async fn stale_job_names(
+    jobs: &Api<Job>,
+    selector: &str,
+    owner_value: &str,
+    owner: &OwnerReference,
+) -> Result<Vec<String>> {
+    let mut token: Option<String> = None;
+    let mut names = Vec::new();
+    loop {
+        let mut params = ListParams::default().labels(selector).limit(500);
+        if let Some(value) = token.as_deref() {
+            params = params.continue_token(value);
+        }
+        let page = jobs
+            .list(&params)
+            .await
+            .with_context(|| format!("failed to list per-node Jobs owned by {owner_value}"))?;
+        names.extend(
+            page.items
+                .into_iter()
+                .filter(|job| job_disposition(job, owner_value, Some(owner)) == Disposition::Stale)
+                .filter_map(|job| job.metadata.name),
+        );
+        token = page.metadata.continue_;
+        if token.as_deref().is_none_or(str::is_empty) {
+            return Ok(names);
+        }
+    }
+}
+
+async fn stale_job_exists(
+    jobs: &Api<Job>,
+    selector: &str,
+    owner_value: &str,
+    owner: &OwnerReference,
+) -> Result<bool> {
+    let mut token: Option<String> = None;
+    loop {
+        let mut params = ListParams::default().labels(selector).limit(500);
+        if let Some(value) = token.as_deref() {
+            params = params.continue_token(value);
+        }
+        let page = jobs
+            .list(&params)
+            .await
+            .with_context(|| format!("failed to wait for stale Jobs owned by {owner_value}"))?;
+        if page
+            .items
+            .iter()
+            .any(|job| job_disposition(job, owner_value, Some(owner)) == Disposition::Stale)
+        {
+            return Ok(true);
+        }
+        token = page.metadata.continue_;
+        if token.as_deref().is_none_or(str::is_empty) {
+            return Ok(false);
+        }
+    }
 }
 
 enum Adoption {

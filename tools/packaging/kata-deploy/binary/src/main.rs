@@ -150,6 +150,16 @@ async fn main() -> Result<()> {
     }
 
     let config = config::Config::from_env()?;
+    if matches!(
+        args.action,
+        Action::InstallStageHostCheck
+            | Action::InstallStageArtifacts
+            | Action::InstallStageCri
+            | Action::CleanupStageRevertCri
+            | Action::CleanupStageRemoveArtifacts
+    ) {
+        verify_node_machine_id()?;
+    }
     let action_str = match args.action {
         Action::Install => "install",
         Action::Cleanup => "cleanup",
@@ -325,6 +335,30 @@ async fn main() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Confirm this pod is on the node the dispatcher meant.
+///
+/// A Job is bound to a node by name, and a name can outlive the machine that
+/// carried it, so refuse to mutate a host whose machine ID is not the one the
+/// dispatcher passed down. An older chart passes none, and then there is nothing to
+/// compare against.
+fn verify_node_machine_id() -> Result<()> {
+    const EXPECTED_ENV: &str = "KATA_DEPLOY_NODE_MACHINE_ID";
+    const HOST_MACHINE_ID: &str = "/host-machine-id";
+
+    let Ok(expected) = std::env::var(EXPECTED_ENV) else {
+        return Ok(());
+    };
+    let actual = std::fs::read_to_string(HOST_MACHINE_ID)
+        .with_context(|| format!("failed to read the host identity from {HOST_MACHINE_ID}"))?;
+    anyhow::ensure!(
+        actual.trim() == expected.trim(),
+        "target node identity changed before host mutation: expected machine ID {}, found {}",
+        expected.trim(),
+        actual.trim()
+    );
     Ok(())
 }
 

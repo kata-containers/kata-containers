@@ -69,7 +69,8 @@ job:
   #
   # The only job-mode-specific override is an explicit list of node names, which
   # takes precedence over the selection above and is used verbatim (including
-  # tainted nodes, since naming a node is unambiguous):
+  # tainted nodes, since naming a node is unambiguous). Those install Jobs receive
+  # a catch-all toleration so a NoExecute taint cannot evict a directly bound pod:
   #   job:
   #     nodes: ["worker-1", "worker-2"]
   nodes: []
@@ -96,6 +97,14 @@ job:
   # this alone just trades a dispatcher error that names the selectors it tried
   # for Helm's opaque "timed out waiting for the condition".
   waitForNodesSeconds: 120
+  # How long the eligible-node set must remain unchanged before dispatch starts
+  # (seconds). Labels commonly arrive one node at a time; this quiet period keeps
+  # the first labelled node from making the dispatcher miss the rest.
+  nodeSettleSeconds: 15
+  # On upgrade, nodes carrying this installation's marker but no longer matching
+  # the selection run the cleanup pipeline before the desired nodes are installed.
+  # This makes selector changes converge in both directions instead of leaving
+  # removed nodes permanently configured and advertised.
   # How long to wait for a node to report Ready again after its install Job
   # finished, before advertising it as Kata-capable.
   #

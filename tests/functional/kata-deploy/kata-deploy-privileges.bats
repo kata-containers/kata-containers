@@ -129,6 +129,18 @@ rbac_doc() {
 	echo "${jobs}" | grep -q 'cleanup-stage-remove-artifacts'
 }
 
+@test "Helm template (job mode): a per-node Job can tell which host it woke up on" {
+	local stage pod_spec
+	for stage in install cleanup; do
+		pod_spec=$(per_node_pod_spec "${stage}")
+		# A Job is bound to a node by name, and a name can outlive the machine that
+		# answered to it. Without the host's own identity to compare against, the
+		# machine ID the dispatcher passes down would be unverifiable.
+		echo "${pod_spec}" | grep -q 'path: /etc/machine-id'
+		echo "${pod_spec}" | grep -q 'mountPath: /host-machine-id'
+	done
+}
+
 @test "Helm template (job mode): the privileged ServiceAccount is not created at all" {
 	local rbac
 	rbac=$(render_job_mode kata-rbac.yaml)
@@ -238,8 +250,9 @@ EOF
 	echo "${noderole}" | grep -q 'resources: \["nodes"\]'
 	echo "${noderole}" | grep -q 'verbs: \["list", "get", "patch"\]'
 
-	# Nothing beyond nodes and their kubelet proxy, and no verb that could delete
-	# or create one.
+	# Job mode never reasons about DaemonSets: all releases in one cluster use the
+	# same deployment mode.
+	refute_match "${noderole}" 'daemonsets'
 	refute_match "${noderole}" 'pods'
 	refute_match "${noderole}" '"delete"'
 	refute_match "${noderole}" '"create"'
@@ -251,7 +264,7 @@ EOF
 	role=$(rbac_doc "${rbac}" 'kata-deploy-dispatcher-role')
 	[[ -n "${role}" ]]
 	echo "${role}" | grep -q 'resources: \["jobs"\]'
-	echo "${role}" | grep -q 'verbs: \["create", "get", "delete"\]'
+	echo "${role}" | grep -q 'verbs: \["create", "get", "list", "delete"\]'
 	echo "${role}" | grep -q '^kind: Role$'
 }
 
