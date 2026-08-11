@@ -587,7 +587,9 @@ schedules onto a claimed node in the meantime, since the RuntimeClasses select t
 exact value `"true"`. For the same reason an uninstall demotes the label to
 `"false"` rather than removing it, and removes it only once that node's cleanup Job
 has succeeded: a cleanup that fails is still a node the next `helm uninstall` can
-find.
+find. Where several installations share a node, neither the demotion nor the removal
+happens while another one is still holding it — see
+[How installations keep out of each other's way on a node](#how-installations-keep-out-of-each-others-way-on-a-node).
 
 !!! warning "Claiming is best-effort, so this is not a guarantee"
 
@@ -908,6 +910,77 @@ kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
+
+#### How installations keep out of each other's way on a node
+
+One thing is deliberately *not* suffixed: the node label
+`katacontainers.io/kata-runtime`, which every installation's RuntimeClasses select.
+It says "this node can run Kata", not "this installation is here", so it cannot be
+used to work out whether removing it is safe.
+
+Each installation therefore also marks the nodes it holds with a label of its own,
+named after its suffix — `kata-deploy.katacontainers.io/cicd` for the example above,
+and `kata-deploy.katacontainers.io/default` for an installation that sets no suffix.
+The value follows the shared label's: `false` while the installation is being put in
+place, `true` once the node can run its workloads.
+
+```sh
+$ kubectl get node worker-1 -o jsonpath='{.metadata.labels}' | tr ',' '\n' | grep kata
+"katacontainers.io/kata-runtime":"true"
+"kata-deploy.katacontainers.io/default":"true"
+"kata-deploy.katacontainers.io/cicd":"true"
+```
+
+With a suffix set, an installation's RuntimeClasses select **both** labels — the
+shared one and its own mark. That is what makes the mark do something for
+scheduling: removing `kata-deploy-cicd` from a node stops `kata-qemu-cicd` pods
+being sent there immediately, even though the shared label stays behind for the
+other installation. An installation with no suffix selects the shared label alone,
+since there is nobody else to be outvoted by.
+
+An uninstall removes its own mark from every node it reaches, and the shared label
+only from the nodes where no other mark is left. So uninstalling `kata-deploy-cicd`
+above leaves `worker-1` running Kata for the other installation, while a node that
+only ever had `cicd` on it loses the label and stops being a Kata node. The same
+rule decides whether the CRI runtime is restarted, since that restart is shared too.
+
+A mark reading `false` does not count as another installation serving Kata: if the
+last `true` mark goes and only a half-finished installation is left, the shared
+label is set back to `false` rather than removed. Nothing is scheduled on the
+strength of it, and the installation that is still working on the node keeps a
+label its own uninstall can find.
+
+!!! warning "Upgrade every installation before uninstalling any"
+
+    Nodes installed by a version that did not write marks carry none, and an
+    uninstall reading a node with no marks at all falls back to asking whether any
+    kata-deploy is left in the cluster. Run `helm upgrade` on every installation
+    before uninstalling one of them, so each has marked its own nodes.
+
+In `job` mode this means an uninstall may visit a node that only ever belonged to
+another installation — the default cleanup selection is the shared label, which is
+by definition not yours alone — and find nothing of its own to remove. That is
+deliberately the safe direction: it reaches every node it might have touched. If you
+would rather it visited only its own nodes, select on its mark:
+
+```yaml title="values.yaml"
+job:
+  cleanup:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kata-deploy.katacontainers.io/cicd
+                operator: Exists
+```
+
+!!! note "Both deployment modes keep the same books"
+
+    The marks are the same labels in either mode — written by the dispatcher in
+    `job` mode and by the pod on the node in `daemonset` mode — so an uninstall in
+    one mode does see an installation running in the other. Mixing modes across
+    installations is not a combination we test, though: give every installation the
+    same `deploymentMode`.
 
 ## RuntimeClass Node Selectors for TEE Shims
 

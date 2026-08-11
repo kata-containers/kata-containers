@@ -26,6 +26,7 @@ else
 		"kata-deploy-tee-keys.bats" \
 		"kata-deploy-distribution.bats" \
 		"kata-deploy-privileges.bats" \
+		"kata-deploy-multi-install.bats" \
 	)
 fi
 
