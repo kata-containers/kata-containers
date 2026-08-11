@@ -162,27 +162,69 @@ top-level `deploymentMode` value:
   pipeline as ordered `initContainers` and then exits:
 
   ```
-  host-check -> artifacts -> cri   (initContainers)  ->  label (main)
+  host-check -> artifacts   (initContainers)  ->  cri (main)
   ```
 
   On `helm uninstall`, a `pre-delete` dispatcher fans out per-node Jobs that run
-  the pipeline in reverse (`unlabel -> revert-cri -> remove-artifacts`). Unlike
+  the pipeline in reverse (`revert-cri -> remove-artifacts`). Unlike
   the DaemonSet, **nothing keeps running on the node after installation
   completes**, and the dispatcher itself only ever talks to the API server — it
   never touches the host (so it ships as a separate, minimal image,
   `job.dispatcherImage`).
 
-  The privilege split is explicit: the dispatcher pod runs **fully unprivileged**
-  (`runAsNonRoot`, all capabilities dropped, no privilege escalation, read-only
-  root filesystem, `RuntimeDefault` seccomp) under a **dedicated minimal
-  ServiceAccount** whose only rights are `nodes: list` (cluster-scoped) and
-  managing Jobs in the release namespace. All privileged, host-mutating work
-  stays in the per-node Jobs, which continue to use the `kata-deploy`
-  ServiceAccount.
+  The privilege split is explicit, and it is what `job` mode buys you over the
+  DaemonSet: **the privileged pods hold no API credentials at all**. Everything
+  that needs the API server is done by the dispatcher, which runs **fully
+  unprivileged** (`runAsNonRoot`, all capabilities dropped, no privilege
+  escalation, read-only root filesystem, `RuntimeDefault` seccomp), never touches
+  the host, and can be confined to nodes you trust.
 
 ```yaml title="values.yaml"
 deploymentMode: job
 ```
+
+#### Where the credentials live
+
+Only **one** identity exists in `job` mode, and it is not the one that runs on
+your nodes. This matters because root on a node can read the ServiceAccount token
+of any pod running there — so the per-node Jobs are rendered with
+`automountServiceAccountToken: false` and no ServiceAccount of their own.
+
+| | runs where | privileged on the host | API rights |
+|---|---|---|---|
+| dispatcher (install, uninstall) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured |
+| per-node Jobs | every node Kata is installed on | yes | **none — no token is mounted** |
+
+Getting there moved three things out of the per-node Jobs:
+
+- **Labelling the node and lifting its taints.** The dispatcher applies
+  `katacontainers.io/kata-runtime` once a node's Job has succeeded *and* the node
+  reports `Ready` again (`job.waitNodeReadySeconds`), then lifts the configured
+  `startupTaints`. This is also a stronger guarantee than before: the label can no
+  longer appear on a node whose install pipeline failed halfway, and it is removed
+  *before* an uninstall Job starts taking the node apart.
+- **The one node fact the install cannot work out locally** — the node's container
+  runtime version — is read by the dispatcher off the `Node` objects it already
+  listed, and passed down as an environment variable. Everything else it needs
+  about the node, the Kubernetes flavour included, it establishes by asking the
+  host.
+- **The cluster-scoped objects**: the `RuntimeClass`es and the `NodeFeatureRule`
+  advertising TEE key counts are rendered by the chart (see
+  [TEE key advertisement](#tee-key-advertisement)) rather than applied at run time
+  from a root-on-the-host container. `helm uninstall` removes them for free.
+
+!!! note "How this compares to `daemonset` mode"
+
+    Installing Kata means writing to the host and restarting the CRI runtime, so
+    something privileged has to run on each node in either mode. Two things differ.
+    The DaemonSet pod carries the `kata-deploy` ServiceAccount, which can patch any
+    node in the cluster and read any node's kubelet configuration, and it stays on
+    the node — token and all — for the life of the release. A per-node Job carries
+    no token and exits when it is done.
+
+    So in `job` mode a compromised worker node yields no cluster credentials, and
+    the one component that does hold them can be kept on the control plane. In
+    `daemonset` mode that token is, by construction, on every node Kata runs on.
 
 #### Why a dispatcher instead of Helm-rendered per-node Jobs
 
@@ -226,17 +268,15 @@ the dispatcher's placement. When `job.dispatcherTolerations` is empty it falls
 back to the top-level `tolerations`, so the dispatcher stays schedulable on a
 cluster whose every node is tainted.
 
-!!! warning "What this does, and what it leaves alone"
+!!! tip "Pinning covers every credential in the release"
 
-    Pinning moves one credential, not all of them. The per-node Jobs still run
-    under the `kata-deploy` ServiceAccount on every node Kata is installed on,
-    so a worker still hosts a token that can patch nodes and RuntimeClasses.
-    What it takes off those workers is the credential that reaches the *whole*
-    cluster: node enumeration, and the ability to create privileged Jobs
-    anywhere.
+    The dispatcher holds the only token `job` mode has, so keeping it off your
+    workers leaves no Kubernetes credential on them at all — the privileged
+    per-node Jobs mount none (see
+    [Where the credentials live](#where-the-credentials-live)).
 
-    That much is a boundary `daemonset` mode cannot draw at all, since the pod
-    holding its token has to run on every node by definition.
+    That is a boundary `daemonset` mode cannot draw, since the pod holding its
+    token has to run on every node by definition.
 
 ### Adding nodes in `job` mode
 
@@ -783,3 +823,38 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 **Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
+
+## TEE key advertisement
+
+A confidential VM consumes a *hardware key slot* — an encrypted-state ID on AMD
+SEV-SNP, a key ID on Intel TDX — and a node has a small, fixed number of them. The chart models that
+as an extended resource so the scheduler stops placing confidential pods on a node
+whose slots are all taken, instead of letting the VM fail to start:
+
+- a `NodeFeatureRule` tells node-feature-discovery to advertise the per-node counts
+  as `sev-snp.amd.com/esids` and `tdx.intel.com/keys`
+- the matching `RuntimeClass`es request one of them in `overhead.podFixed`, so every
+  pod that uses the class consumes a slot
+
+Both halves are one switch, because requesting a resource nothing advertises would
+leave confidential pods `Pending` forever:
+
+```yaml title="values.yaml"
+nodeFeatureRules:
+  create: auto   # auto | true | false
+```
+
+`auto` renders them when NFD is in the picture: installed by this chart
+(`node-feature-discovery.enabled=true`), already present in the cluster, or its CRD
+is registered. `true` and `false` decide outright — `false` is the escape hatch for
+a cluster that manages the rule itself.
+
+!!! note "This used to be the install binary's job"
+    The rule and the `RuntimeClass` patching were applied at run time by the
+    privileged pod on each node, which meant granting cluster-wide write access to
+    `nodefeaturerules` and `runtimeclasses` to a container running as root on the
+    host — once per node, for a pair of cluster-scoped objects. Rendering them in
+    the chart drops that grant, does it once per release, and removes them on
+    `helm uninstall`. The rule is named `kata-tee-keys` (suffixed with
+    `env.multiInstallSuffix` when set); a rule left behind by an older release is
+    called `amd64-tee-keys` and can be deleted once every release has been upgraded.
