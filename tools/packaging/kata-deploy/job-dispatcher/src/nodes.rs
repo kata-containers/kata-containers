@@ -737,3 +737,233 @@ fn partition_taints(taints: Vec<Taint>, matchers: &[String]) -> (Vec<Taint>, Vec
     (retained, removed)
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k8s_openapi::api::core::v1::{
+        NodeCondition, NodeRuntimeHandler, NodeStatus, NodeSystemInfo,
+    };
+
+    fn node_serving(handlers: &[&str]) -> Node {
+        Node {
+            status: Some(NodeStatus {
+                runtime_handlers: Some(
+                    handlers
+                        .iter()
+                        .map(|name| NodeRuntimeHandler {
+                            name: Some(name.to_string()),
+                            features: None,
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn expected(handlers: &[&str]) -> Vec<String> {
+        handlers.iter().map(|h| h.to_string()).collect()
+    }
+
+    /// The chart names every handler the release could install, but a node only
+    /// serves those built for its own architecture, so one is enough.
+    #[test]
+    fn one_expected_handler_is_enough() {
+        let node = node_serving(&["runc", "kata-qemu"]);
+        assert_eq!(
+            handler_verdict(
+                &expected(&["kata-qemu", "kata-qemu-snp"]),
+                served_handlers(&node).as_deref()
+            ),
+            HandlerVerdict::Serving {
+                serving: vec!["kata-qemu".to_string()],
+                missing: vec!["kata-qemu-snp".to_string()],
+            }
+        );
+    }
+
+    /// A runtime serving nothing of ours never read what the install wrote.
+    #[test]
+    fn no_expected_handler_is_a_runtime_that_ignored_us() {
+        let node = node_serving(&["runc"]);
+        assert_eq!(
+            handler_verdict(&expected(&["kata-qemu"]), served_handlers(&node).as_deref()),
+            HandlerVerdict::NotServing
+        );
+    }
+
+    /// A node that reports no handlers at all (an older kubelet, a CRI that does
+    /// not report them) cannot answer, which must never fail an install.
+    #[test]
+    fn a_node_that_cannot_answer_never_fails_an_install() {
+        assert_eq!(served_handlers(&Node::default()), None);
+        assert_eq!(
+            handler_verdict(&expected(&["kata-qemu"]), None),
+            HandlerVerdict::Unanswerable
+        );
+    }
+
+    /// An empty list is an answer, and the answer is "nothing of ours". Reading it
+    /// as "cannot be asked" would label a node whose runtime read no Kata
+    /// configuration at all.
+    #[test]
+    fn an_empty_list_is_an_answer() {
+        assert_eq!(served_handlers(&node_serving(&[])), Some(Vec::new()));
+        assert_eq!(
+            handler_verdict(
+                &expected(&["kata-qemu"]),
+                served_handlers(&node_serving(&[])).as_deref()
+            ),
+            HandlerVerdict::NotServing
+        );
+    }
+
+    /// The label key has a `/` in it, which is a path separator inside a JSON
+    /// Pointer: unescaped, the claim would patch a key called "kata-runtime"
+    /// nested under one called "katacontainers.io".
+    #[test]
+    fn a_label_key_is_escaped_for_a_json_pointer() {
+        assert_eq!(
+            escape_pointer(KATA_RUNTIME_LABEL),
+            "katacontainers.io~1kata-runtime"
+        );
+        assert_eq!(escape_pointer("a~b/c"), "a~0b~1c");
+    }
+
+    #[test]
+    fn only_conflicts_are_retried() {
+        let status = |code: u16| {
+            kube::Error::Api(kube::error::ErrorResponse {
+                status: String::new(),
+                message: String::new(),
+                reason: String::new(),
+                code,
+            })
+        };
+
+        assert!(is_precondition_failure(&status(409)));
+        assert!(is_precondition_failure(&status(422)));
+        assert!(!is_precondition_failure(&status(403)));
+        assert!(!is_precondition_failure(&status(404)));
+    }
+    fn taint(key: &str, effect: &str) -> Taint {
+        Taint {
+            key: key.to_string(),
+            effect: effect.to_string(),
+            value: None,
+            time_added: None,
+        }
+    }
+
+    fn keys(taints: &[Taint]) -> Vec<(String, String)> {
+        taints
+            .iter()
+            .map(|t| (t.key.clone(), t.effect.clone()))
+            .collect()
+    }
+
+    /// A bare key removes the taint whatever its effect; `key:effect` is exact.
+    #[test]
+    fn taint_matchers_respect_the_effect() {
+        let taints = vec![
+            taint("kata/startup", "NoSchedule"),
+            taint("kata/startup", "NoExecute"),
+            taint("other", "NoSchedule"),
+        ];
+
+        let (retained, removed) = partition_taints(taints.clone(), &["kata/startup".to_string()]);
+        assert_eq!(keys(&retained), vec![("other".into(), "NoSchedule".into())]);
+        assert_eq!(removed.len(), 2);
+
+        let (retained, removed) = partition_taints(taints, &["kata/startup:NoExecute".to_string()]);
+        assert_eq!(removed, vec!["kata/startup:NoExecute".to_string()]);
+        assert_eq!(keys(&retained).len(), 2);
+    }
+
+    /// A matcher that matches nothing leaves the taints alone and reports nothing
+    /// removed, so a re-run is a no-op rather than a failure.
+    #[test]
+    fn unmatched_matchers_change_nothing() {
+        let taints = vec![taint("other", "NoSchedule")];
+        let (retained, removed) = partition_taints(taints, &["kata/startup".to_string()]);
+        assert_eq!(keys(&retained), vec![("other".into(), "NoSchedule".into())]);
+        assert!(removed.is_empty());
+    }
+
+    /// The facts handed to a per-node Job come straight off the Node object the
+    /// dispatcher already listed, so no extra API call is needed to collect them.
+    #[test]
+    fn facts_are_read_off_the_node() {
+        let node = Node {
+            metadata: kube::core::ObjectMeta {
+                name: Some("node-1".to_string()),
+                ..Default::default()
+            },
+            status: Some(NodeStatus {
+                node_info: Some(NodeSystemInfo {
+                    container_runtime_version: "containerd://2.1.5".to_string(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let facts = NodeFacts::from_node(&node);
+        assert_eq!(facts.name, "node-1");
+        assert_eq!(
+            facts.container_runtime_version.as_deref(),
+            Some("containerd://2.1.5")
+        );
+    }
+
+    /// A node with no runtime version reported yields no override, so the install
+    /// falls back to looking it up rather than acting on an empty string.
+    #[test]
+    fn missing_facts_are_absent_not_empty() {
+        let node = Node {
+            metadata: kube::core::ObjectMeta {
+                name: Some("node-2".to_string()),
+                ..Default::default()
+            },
+            status: Some(NodeStatus {
+                node_info: Some(NodeSystemInfo {
+                    container_runtime_version: String::new(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let facts = NodeFacts::from_node(&node);
+        assert!(facts.container_runtime_version.is_none());
+    }
+
+    /// Readiness is read from the Ready condition, not from the first condition.
+    #[test]
+    fn ready_condition_is_picked_by_type() {
+        let node = Node {
+            status: Some(NodeStatus {
+                conditions: Some(vec![
+                    NodeCondition {
+                        type_: "MemoryPressure".to_string(),
+                        status: "False".to_string(),
+                        ..Default::default()
+                    },
+                    NodeCondition {
+                        type_: "Ready".to_string(),
+                        status: "True".to_string(),
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert_eq!(node_ready_condition(&node).as_deref(), Some("True"));
+        assert_eq!(node_ready_condition(&Node::default()), None);
+    }
+}
