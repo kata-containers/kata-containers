@@ -5,6 +5,9 @@ authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -13,6 +16,8 @@ async-trait = { workspace = true }
 containerd-shim-protos = { workspace = true, features = ["sandbox"] }
 nix = { workspace = true }
 protobuf = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "process", "fs"] }
@@ -20,6 +25,7 @@ oci-spec = { workspace = true }
 
 # Local dependencies
 agent = { workspace = true }
+hypervisor = { workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 runtime-spec = { workspace = true }

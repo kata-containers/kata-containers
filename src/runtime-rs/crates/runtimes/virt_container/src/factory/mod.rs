@@ -53,10 +53,7 @@ impl FactoryConfig {
     }
 }
 
-/// Load and validate factory configuration
-fn load_and_validate_factory_config() -> Result<(TomlConfig, FactoryConfig)> {
-    let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
-
+fn validate_factory_config(toml_config: TomlConfig) -> Result<(TomlConfig, FactoryConfig)> {
     let factory_config = FactoryConfig::new(&toml_config);
 
     if !factory_config.template {
@@ -66,8 +63,8 @@ fn load_and_validate_factory_config() -> Result<(TomlConfig, FactoryConfig)> {
     Ok((toml_config, factory_config))
 }
 
-pub async fn init_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn init_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     new_factory(&mut factory_config, toml_config, false)
         .await
@@ -78,8 +75,8 @@ pub async fn init_factory_command() -> Result<()> {
     Ok(())
 }
 
-pub async fn destroy_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn destroy_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     new_factory(&mut factory_config, toml_config, true)
         .await
@@ -91,8 +88,8 @@ pub async fn destroy_factory_command() -> Result<()> {
     Ok(())
 }
 
-pub async fn status_factory_command() -> Result<()> {
-    let (toml_config, mut factory_config) = load_and_validate_factory_config()?;
+pub async fn status_factory_command(toml_config: TomlConfig) -> Result<()> {
+    let (toml_config, mut factory_config) = validate_factory_config(toml_config)?;
 
     if new_factory(&mut factory_config, toml_config, true)
         .await
@@ -114,9 +111,6 @@ pub async fn new_factory(
     if !config.template {
         anyhow::bail!("template must be enabled");
     } else {
-        VmConfig::validate_hypervisor_config(&mut config.vm_config.hypervisor_config)
-            .context("validate hypervisor config")?;
-
         let path: PathBuf = config.template_path.clone().into();
         if fetch_only {
             Template::fetch(config.vm_config.clone(), path).context("fetch VM template")?;
@@ -161,4 +155,73 @@ pub fn close_factory(config: &mut FactoryConfig) -> Result<()> {
         .with_context(|| format!("failed to remove {}", state_path.display()))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_types::config::Hypervisor;
+
+    #[cfg(all(
+        feature = "cloud-hypervisor",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    #[test]
+    fn factory_uses_adjusted_clh_bridge_count() {
+        crate::register_hypervisor_config_plugins();
+        let toml_config = TomlConfig::load(
+            r#"
+[hypervisor.clh]
+path = "/bin/echo"
+ctlpath = "/bin/echo"
+kernel = "/bin/echo"
+image = "/bin/echo"
+firmware = ""
+default_bridges = 0
+
+[hypervisor.clh.factory]
+enable_template = true
+template_path = "/tmp/canonical-template"
+
+[runtime]
+hypervisor_name = "clh"
+"#,
+        )
+        .unwrap();
+
+        let (_, factory_config) = validate_factory_config(toml_config).unwrap();
+
+        assert_eq!(
+            factory_config
+                .vm_config
+                .hypervisor_config
+                .device_info
+                .default_bridges,
+            kata_types::config::default::DEFAULT_CH_PCI_BRIDGES
+        );
+    }
+
+    #[test]
+    fn factory_config_does_not_apply_qemu_defaults_to_dragonball() {
+        let mut toml_config = TomlConfig::default();
+        toml_config.runtime.hypervisor_name = "dragonball".to_string();
+
+        let mut hypervisor = Hypervisor::default();
+        hypervisor.factory.enable_template = true;
+        hypervisor.device_info.default_bridges = 0;
+        toml_config
+            .hypervisor
+            .insert("dragonball".to_string(), hypervisor);
+
+        let (_, factory_config) = validate_factory_config(toml_config).unwrap();
+
+        assert_eq!(
+            factory_config
+                .vm_config
+                .hypervisor_config
+                .device_info
+                .default_bridges,
+            0
+        );
+    }
 }

@@ -8,7 +8,7 @@
 use super::*;
 use slog::Level;
 /// Vendor customization runtime configuration.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct RuntimeVendor {
     /// Log level
     #[serde(default)]

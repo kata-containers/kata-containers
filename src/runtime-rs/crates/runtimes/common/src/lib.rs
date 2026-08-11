@@ -6,6 +6,7 @@
 
 mod container_manager;
 pub use container_manager::ContainerManager;
+pub mod config;
 pub mod error;
 pub mod message;
 mod runtime_handler;

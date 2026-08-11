@@ -30,6 +30,7 @@ shim-interface.workspace = true
 kata-types.workspace = true
 kata-sys-util.workspace = true
 agent.workspace = true
+common.workspace = true
 virt_container.workspace = true
 serial_test.workspace = true
 vmm-sys-util.workspace = true

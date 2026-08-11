@@ -28,7 +28,7 @@ pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 
 /// Kata runtime configuration information.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
     /// Runtime name: Plan to support virt-container, linux-container, wasm-container
     #[serde(default)]
@@ -323,7 +323,7 @@ mod vendor {
     use super::*;
 
     /// Vendor customization runtime configuration.
-    #[derive(Debug, Default, Deserialize, Serialize)]
+    #[derive(Clone, Debug, Default, Deserialize, Serialize)]
     pub struct RuntimeVendor {}
 
     impl ConfigOps for RuntimeVendor {}
