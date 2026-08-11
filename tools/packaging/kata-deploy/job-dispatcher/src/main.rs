@@ -18,6 +18,7 @@
 
 mod job;
 mod node_filter;
+mod nodes;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -30,8 +31,9 @@ use k8s_openapi::api::core::v1::{Node, Toleration};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
 use kube::api::{Api, ListParams, PostParams};
 use kube::Client;
-use log::{error, info};
+use log::{error, info, warn};
 use node_filter::{describe_taint, partition_by_tolerations, suggested_toleration, SkippedNode};
+use nodes::{NodeFacts, NodeOps};
 use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
@@ -113,6 +115,48 @@ struct Args {
     #[arg(long)]
     owner_job_name: Option<String>,
 
+    /// Label a node `katacontainers.io/kata-runtime=<value>` once its Job
+    /// succeeded, then lift any --remove-node-taints.
+    ///
+    /// The label is what admits Kata workloads to a node, and setting it from
+    /// here rather than from a final stage inside the per-node Job is what allows
+    /// those Jobs to carry no credentials at all. It also tightens the contract:
+    /// the label goes on only after the Job as a whole succeeded AND the node
+    /// reported Ready again, never from inside a pipeline that might still fail.
+    #[arg(long)]
+    node_label: Option<String>,
+
+    /// Remove `katacontainers.io/kata-runtime` from a node before creating its
+    /// Job, so the scheduler stops sending Kata workloads there before anything on
+    /// the node is taken apart. For cleanup runs.
+    #[arg(long, default_value_t = false)]
+    remove_node_label: bool,
+
+    /// Comma-separated taints to lift after labelling a node, as `key` (any
+    /// effect) or `key:effect`. These are the start-up taints that keep workloads
+    /// off a node until Kata is actually installed on it.
+    #[arg(long)]
+    remove_node_taints: Option<String>,
+
+    /// Seconds to wait for a node to report Ready after its install Job finished,
+    /// before labelling it. 0 disables the wait.
+    ///
+    /// The install restarts the node's CRI runtime, and the Job can only report on
+    /// the runtime's own unit; waiting for the kubelet to report Ready here is
+    /// what keeps a node from being advertised as Kata-capable while it is still
+    /// coming back.
+    #[arg(long, default_value_t = 0)]
+    wait_node_ready_secs: u64,
+
+    /// Warn when a node's kubelet `runtimeRequestTimeout` is below this many
+    /// seconds. 0 disables the check.
+    ///
+    /// Advisory: a timeout well below the time a large image needs can abort
+    /// CreateContainer mid-pull, which is why the chart only asks for this when
+    /// guest pull or image conversion is configured.
+    #[arg(long, default_value_t = 0)]
+    kubelet_timeout_warn_secs: u64,
+
     /// Seconds between status polls.
     #[arg(long, default_value_t = 5)]
     poll_interval_secs: u64,
@@ -146,11 +190,15 @@ async fn main() -> Result<()> {
     let template: Job = serde_yaml::from_str(&template_raw)
         .with_context(|| format!("failed to parse job template {}", args.job_template))?;
 
+    let node_ops = node_ops_from_args(&client, &args)?;
+
     let nodes = resolve_nodes(&client, &args, &template_tolerations(&template)).await?;
     if nodes.is_empty() {
         info!("no target nodes matched the selection; nothing to do");
         return Ok(());
     }
+
+    let facts = collect_node_facts(&node_ops, &nodes).await;
 
     let owner = match args.owner_job_name.as_deref() {
         Some(name) => Some(owner_ref_for_job(&client, &namespace, name).await?),
@@ -174,8 +222,77 @@ async fn main() -> Result<()> {
         &namespace,
         parallelism,
         owner.as_ref(),
+        &node_ops,
+        &facts,
     )
     .await
+}
+
+fn node_ops_from_args(client: &Client, args: &Args) -> Result<NodeOps> {
+    let mut ops = NodeOps::new(client);
+
+    ops.label_value = args.node_label.clone();
+    ops.remove_label = args.remove_node_label;
+    ops.remove_taints = args
+        .remove_node_taints
+        .as_deref()
+        .unwrap_or_default()
+        .split(',')
+        .map(|taint| taint.trim().to_string())
+        .filter(|taint| !taint.is_empty())
+        .collect();
+    if args.wait_node_ready_secs > 0 {
+        ops.wait_ready = Some(Duration::from_secs(args.wait_node_ready_secs));
+    }
+    if args.kubelet_timeout_warn_secs > 0 {
+        ops.kubelet_timeout_warn = Some(Duration::from_secs(args.kubelet_timeout_warn_secs));
+    }
+
+    if !ops.remove_taints.is_empty() && ops.label_value.is_none() {
+        bail!(
+            "--remove-node-taints needs --node-label: a start-up taint may only be lifted once \
+             the node is labelled Kata-capable, otherwise workloads reach it before the label \
+             that is supposed to gate them"
+        );
+    }
+
+    Ok(ops)
+}
+
+/// Nodes resolved from a selector were already listed in full, so their facts are
+/// free; explicitly named nodes (`--nodes`) are fetched here. A node whose facts
+/// cannot be read is not fatal: the Job falls back to looking them up, which is
+/// what it does under the DaemonSet anyway.
+async fn collect_node_facts(ops: &NodeOps, nodes: &[Node]) -> HashMap<String, NodeFacts> {
+    let mut facts = HashMap::new();
+
+    for node in nodes {
+        let Some(name) = node.metadata.name.clone() else {
+            continue;
+        };
+        // A node the selector produced carries its full object; a named one is a
+        // stub holding just the name.
+        let known = node.status.is_some() || node.metadata.labels.is_some();
+        if known {
+            facts.insert(name.clone(), NodeFacts::from_node(node));
+            continue;
+        }
+
+        match ops.get(&name).await {
+            Ok(fetched) => {
+                facts.insert(name.clone(), NodeFacts::from_node(&fetched));
+            }
+            Err(err) => {
+                warn!(
+                    "could not read node {name} to pass its runtime details to the per-node Job \
+                     ({err:#}); the Job will look them up itself"
+                );
+                facts.insert(name.clone(), NodeFacts::name_only(&name));
+            }
+        }
+    }
+
+    facts
 }
 
 /// Resolve the namespace to create Jobs in: explicit flag, then $POD_NAMESPACE,
@@ -238,7 +355,7 @@ async fn resolve_nodes(
     client: &Client,
     args: &Args,
     tolerations: &[Toleration],
-) -> Result<Vec<String>> {
+) -> Result<Vec<Node>> {
     if let Some(list) = args.nodes.as_deref() {
         let mut names: Vec<String> = list
             .split(',')
@@ -247,7 +364,9 @@ async fn resolve_nodes(
             .collect();
         names.sort();
         names.dedup();
-        return Ok(names);
+        // Named nodes are taken at face value - naming a node is unambiguous - so
+        // these are stubs; whatever else is needed about them is fetched later.
+        return Ok(names.into_iter().map(node_stub).collect());
     }
 
     let api: Api<Node> = Api::all(client.clone());
@@ -294,23 +413,57 @@ async fn select_nodes(
     api: &Api<Node>,
     args: &Args,
     tolerations: &[Toleration],
-) -> Result<(Vec<String>, Vec<SkippedNode>)> {
+) -> Result<(Vec<Node>, Vec<SkippedNode>)> {
     let mut matched: Vec<Node> = Vec::new();
     for selector in selector_passes(&args.node_selector) {
         matched.extend(list_nodes(api, args, selector).await?);
     }
 
     if args.ignore_node_taints {
-        let mut names: Vec<String> = matched
-            .iter()
-            .filter_map(|node| node.metadata.name.clone())
-            .collect();
-        names.sort();
-        names.dedup();
-        return Ok((names, Vec::new()));
+        return Ok((dedup_by_name(matched, None), Vec::new()));
     }
 
-    Ok(partition_by_tolerations(&matched, tolerations))
+    let (admitted, skipped) = partition_by_tolerations(&matched, tolerations);
+    Ok((dedup_by_name(matched, Some(&admitted)), skipped))
+}
+
+/// Collapse the per-selector duplicates a union produces, keeping the objects
+/// themselves so the facts they carry can be handed to the per-node Jobs. With
+/// `keep`, only those nodes survive.
+fn dedup_by_name(nodes: Vec<Node>, keep: Option<&[String]>) -> Vec<Node> {
+    let mut seen: Vec<String> = Vec::new();
+    let mut unique: Vec<Node> = Vec::new();
+
+    for node in nodes {
+        let Some(name) = node.metadata.name.clone() else {
+            continue;
+        };
+        if let Some(keep) = keep {
+            if !keep.contains(&name) {
+                continue;
+            }
+        }
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.push(name);
+        unique.push(node);
+    }
+
+    unique.sort_by(|a, b| a.metadata.name.cmp(&b.metadata.name));
+    unique
+}
+
+/// A Node carrying nothing but its name, for nodes named explicitly rather than
+/// selected (and therefore never listed).
+fn node_stub(name: String) -> Node {
+    Node {
+        metadata: kube::core::ObjectMeta {
+            name: Some(name),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 /// Decide what "nothing is eligible" means once we have stopped looking.
@@ -320,7 +473,7 @@ async fn select_nodes(
 /// Nothing matched at all is only a no-op when the caller never asked us to
 /// wait: having waited means nodes were expected, and exiting 0 there would
 /// leave the whole fleet uninstalled with nothing to show for it.
-fn no_eligible_nodes(args: &Args, skipped: &[SkippedNode]) -> Result<Vec<String>> {
+fn no_eligible_nodes(args: &Args, skipped: &[SkippedNode]) -> Result<Vec<Node>> {
     let waited = if args.wait_for_nodes_secs > 0 {
         format!(" after waiting {}s", args.wait_for_nodes_secs)
     } else {
@@ -426,16 +579,28 @@ async fn owner_ref_for_job(client: &Client, namespace: &str, name: &str) -> Resu
 
 /// Create and watch per-node Jobs, keeping at most `parallelism` in flight.
 /// Returns an error listing the nodes whose Jobs failed, if any.
+///
+/// `node_ops` brackets each node's Job with the node-level API work the Job
+/// itself is deliberately not credentialed to do: unlabelling before a cleanup
+/// Job, and - once a Job has actually succeeded - waiting for the node to report
+/// Ready, labelling it Kata-capable and lifting its start-up taints.
+#[allow(clippy::too_many_arguments)]
 async fn run_fanout(
     jobs: &Api<Job>,
     template: &Job,
-    nodes: &[String],
+    nodes: &[Node],
     args: &Args,
     namespace: &str,
     parallelism: usize,
     owner: Option<&OwnerReference>,
+    node_ops: &NodeOps,
+    facts: &HashMap<String, NodeFacts>,
 ) -> Result<()> {
-    let mut queue: VecDeque<&String> = nodes.iter().collect();
+    let names: Vec<String> = nodes
+        .iter()
+        .filter_map(|node| node.metadata.name.clone())
+        .collect();
+    let mut queue: VecDeque<&String> = names.iter().collect();
     // job name -> node name
     let mut in_flight: HashMap<String, String> = HashMap::new();
     let mut succeeded = 0usize;
@@ -454,8 +619,21 @@ async fn run_fanout(
             let Some(node) = queue.pop_front() else {
                 break;
             };
+
+            // A failure here fails the node rather than proceeding: for cleanup
+            // that would mean dismantling Kata on a node still advertising it.
+            if let Err(err) = node_ops.before_dispatch(node).await {
+                error!("node {node}: {err:#}");
+                failed.push(node.clone());
+                continue;
+            }
+
             let name = job_name(&owner_value, node);
-            let node_job = build_node_job(template, &name, node, &owner_value, owner);
+            let node_facts = facts
+                .get(node)
+                .cloned()
+                .unwrap_or_else(|| NodeFacts::name_only(node));
+            let node_job = build_node_job(template, &name, node, &owner_value, owner, &node_facts);
             match jobs.create(&post, &node_job).await {
                 Ok(_) => info!("created job {name} (node {node})"),
                 // A Job with this name already exists (e.g. left over from a
@@ -510,9 +688,18 @@ async fn run_fanout(
             };
             match interpret_status(&j) {
                 JobOutcome::Succeeded => {
-                    succeeded += 1;
                     finished.push(name.clone());
                     info!("node {node}: job {name} succeeded");
+                    // The install is only complete once the node is labelled, so a
+                    // node that cannot be labelled counts as failed even though
+                    // its Job passed - a later run comes back to it.
+                    match node_ops.after_success(node).await {
+                        Ok(()) => succeeded += 1,
+                        Err(err) => {
+                            error!("node {node}: install finished but {err:#}");
+                            failed.push(node.clone());
+                        }
+                    }
                 }
                 JobOutcome::Failed => {
                     failed.push(node.clone());

@@ -3759,10 +3759,12 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger 0.10.2",
+ "humantime",
  "k8s-openapi",
  "kube",
  "log",
  "rstest",
+ "serde_json",
  "serde_yaml 0.9.34+deprecated",
  "tokio",
 ]
