@@ -35,6 +35,9 @@ containerd_fragment_backup="/tmp/50-nydus.toml.bak"
 # test image for container
 IMAGE="${IMAGE:-ghcr.io/dragonflyoss/image-service/alpine:nydus-latest}"
 
+# How long to wait for the nydus processes to be gone after being killed
+KILL_TIMEOUT_SECS=10
+
 if [[ "${KATA_HYPERVISOR}" != "qemu" ]] && [[ "${KATA_HYPERVISOR}" != "clh" ]] && \
    [[ "${KATA_HYPERVISOR}" != "dragonball" ]] && [[ "${KATA_HYPERVISOR}" != "qemu-runtime-rs" ]] && \
    [[ "${KATA_HYPERVISOR}" != "clh-runtime-rs" ]]; then
@@ -228,8 +231,10 @@ function teardown() {
 			echo "Killing ${bin} processes"
 			# shellcheck disable=SC2086
 			sudo -E kill -9 ${pid} || true
-			if [[ -n "$(pidof "${bin}")" ]]; then
-				echo "${bin} is still running (${pid}) but it should not"
+			# kill(2) only queues the signal, so the processes can still be
+			# listed for a while after it returns.
+			if ! waitForProcess "${KILL_TIMEOUT_SECS}" 1 "[[ -z \"\$(pidof ${bin} || true)\" ]]"; then
+				echo "${bin} is still running ($(pidof "${bin}" || true)) but it should not"
 				rc=1
 			fi
 		fi
