@@ -27,7 +27,7 @@ pick up newly added ones).
 {{- $sa := include "kata-deploy.dispatcherServiceAccountName" . }}
 {{- $dispatcherName := printf "%s-install-dispatcher" $base | trunc 63 | trimSuffix "-" }}
 {{- $nodes := .Values.job.nodes | default list }}
-{{- $selector := include "kata-deploy.nodeLabelSelector" (dict "eq" (.Values.job.nodeSelector | default dict) "exprs" (.Values.job.nodeSelectorExpressions | default list)) }}
+{{- $selectors := include "kata-deploy.installNodeSelectors" . | splitList "\n" | compact }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -97,8 +97,18 @@ spec:
             - "--parallelism={{ $root.Values.job.parallelism }}"
 {{- if $nodes }}
             - "--nodes={{ join "," $nodes }}"
-{{- else if $selector }}
+{{- else }}
+{{- /* One flag per nodeSelectorTerm; the dispatcher unions the matches (OR). */}}
+{{- range $selector := $selectors }}
             - "--node-selector={{ $selector }}"
+{{- end }}
+{{- /*
+Node eligibility is a moving target at install time (NFD is still labelling,
+new nodes are still settling), so let the dispatcher re-resolve instead of
+acting on the first snapshot it happens to see. Not passed with an explicit
+job.nodes list, which names nodes outright and needs no discovery.
+*/}}
+            - "--wait-for-nodes-secs={{ $root.Values.job.waitForNodesSeconds | default 0 }}"
 {{- end }}
           env:
             - name: POD_NAMESPACE
