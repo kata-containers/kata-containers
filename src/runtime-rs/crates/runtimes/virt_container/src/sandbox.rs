@@ -1156,11 +1156,20 @@ impl Sandbox for VirtSandbox {
             // fails — previously that left a running/zombie QEMU behind. stop_vm
             // now also reaps (fix5). Also release host taps (IFF_PERSIST) so a
             // retry does not hit TUNSETIFF EBUSY (fix7).
+            //
+            // fix12: use stop_vm_for_start_fail (bounded join) — non-blocking
+            // stop_vm (fix9, correct for Shutdown) races CreateContainer retries
+            // while QEMU still holds tap FDs → TUNSETIFF EBUSY.
             error!(
                 sl!(),
                 "sandbox start failed: {:#}; stopping QEMU and releasing network", e
             );
-            let _ = self.hypervisor.stop_vm().await;
+            const START_FAIL_REAP_TIMEOUT: std::time::Duration =
+                std::time::Duration::from_secs(60);
+            let _ = self
+                .hypervisor
+                .stop_vm_for_start_fail(START_FAIL_REAP_TIMEOUT)
+                .await;
             if let Err(net_err) = self.resource_manager.release_network().await {
                 warn!(
                     sl!(),

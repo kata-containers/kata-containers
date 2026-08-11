@@ -70,6 +70,67 @@ impl Qemu {
             }
         }
     }
+
+    /// Signal QEMU and spawn the OS reaper. When `wait` is true, join the
+    /// reaper for up to `timeout` (fix12 start-fail path).
+    async fn stop_vm_signal_and_reap(&self, wait: bool, timeout: Duration) -> Result<()> {
+        let (kill_result, child) = {
+            let mut inner = self.inner.write().await;
+            let kill_result = inner.stop_vm().await;
+            let child = if kill_result.is_ok() {
+                inner.take_qemu_child().await
+            } else {
+                None
+            };
+            (kill_result, child)
+        };
+        if let Some(child) = child {
+            info!(
+                sl!(),
+                "fix10: stop_vm took qemu Child pid={:?}; spawning OS reaper",
+                child.id()
+            );
+            spawn_os_reaper(child, Some(self.reaped_exit.clone()));
+        } else if kill_result.is_ok() {
+            info!(
+                sl!(),
+                "fix10: stop_vm Child already taken; start_vm waiter / prior reaper owns wait"
+            );
+        }
+
+        if wait && kill_result.is_ok() {
+            // Already reaped?
+            if self.reaped_exit.borrow().is_some() {
+                return kill_result;
+            }
+            let mut rx = self.reaped_exit.subscribe();
+            match tokio::time::timeout(timeout, async {
+                loop {
+                    if rx.borrow_and_update().is_some() {
+                        return;
+                    }
+                    if rx.changed().await.is_err() {
+                        return;
+                    }
+                }
+            })
+            .await
+            {
+                Ok(()) => {
+                    info!(sl!(), "fix12: QEMU reaped within start-fail timeout");
+                }
+                Err(_) => {
+                    warn!(
+                        sl!(),
+                        "fix12: QEMU still alive after {:?}; proceeding to release_network \
+                         (tap may still be busy if FDs held)",
+                        timeout
+                    );
+                }
+            }
+        }
+        kill_result
+    }
 }
 
 /// Reap QEMU on a dedicated OS thread using sync `try_wait()`.
@@ -131,6 +192,9 @@ impl Hypervisor for Qemu {
     }
 
     async fn start_vm(&self, timeout: i32) -> Result<()> {
+        // Reset prior exit code so fix12 start-fail wait does not observe a
+        // stale reaped_exit from an earlier attempt in this shim process.
+        let _ = self.reaped_exit.send(None);
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
     }
@@ -148,30 +212,21 @@ impl Hypervisor for Qemu {
         // Child ownership; the loser logged "the process has been reaped" and
         // the winner's Child::wait() was abandoned when the shim task was
         // cancelled → zombie QEMU under an orphaned live shim (glm B200).
-        let (kill_result, child) = {
-            let mut inner = self.inner.write().await;
-            let kill_result = inner.stop_vm().await;
-            let child = if kill_result.is_ok() {
-                inner.take_qemu_child().await
-            } else {
-                None
-            };
-            (kill_result, child)
-        };
-        if let Some(child) = child {
-            info!(
-                sl!(),
-                "fix10: stop_vm took qemu Child pid={:?}; spawning OS reaper",
-                child.id()
-            );
-            spawn_os_reaper(child, Some(self.reaped_exit.clone()));
-        } else if kill_result.is_ok() {
-            info!(
-                sl!(),
-                "fix10: stop_vm Child already taken; start_vm waiter / prior reaper owns wait"
-            );
-        }
-        kill_result
+        self.stop_vm_signal_and_reap(/* wait */ false, Duration::from_secs(0))
+            .await
+    }
+
+    async fn stop_vm_for_start_fail(&self, timeout: Duration) -> Result<()> {
+        // fix12: on sandbox.start() failure, CreateContainer retries immediately.
+        // Non-blocking stop leaves QEMU holding tap FDs → TUNSETIFF EBUSY.
+        // Bound the wait so we release taps before release_network(); do not
+        // use this for Shutdown (1.2 TiB TDX reclaim).
+        info!(
+            sl!(),
+            "fix12: stop_vm_for_start_fail waiting up to {:?} for QEMU reap",
+            timeout
+        );
+        self.stop_vm_signal_and_reap(/* wait */ true, timeout).await
     }
 
     async fn wait_vm(&self) -> Result<i32> {

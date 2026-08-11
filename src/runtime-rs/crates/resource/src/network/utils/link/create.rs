@@ -19,6 +19,9 @@ use super::macros::{get_name, set_name};
 /// True when TUNSETIFF failed because the named device already exists / is busy.
 /// Used to reuse a leftover `tapN_kata` after a failed sandbox start (IFF_PERSIST
 /// keeps the device alive after the creating FDs are dropped).
+///
+/// fix12: match every error-shape we have seen on musl/glibc (io::Error,
+/// nix::Error / Errno, and Display text) so reuse cannot miss EBUSY.
 pub fn is_busy_or_exist(err: &anyhow::Error) -> bool {
     for cause in err.chain() {
         if let Some(ioe) = cause.downcast_ref::<io::Error>() {
@@ -26,9 +29,20 @@ pub fn is_busy_or_exist(err: &anyhow::Error) -> bool {
                 Some(libc::EBUSY) | Some(libc::EEXIST) => return true,
                 _ => {}
             }
+            if ioe.kind() == io::ErrorKind::AlreadyExists
+                || ioe.kind() == io::ErrorKind::ResourceBusy
+            {
+                return true;
+            }
         }
         if let Some(ne) = cause.downcast_ref::<nix::Error>() {
             if *ne == nix::Error::EBUSY || *ne == nix::Error::EEXIST {
+                return true;
+            }
+        }
+        // nix >= 0.27 often surfaces Errno directly in the chain.
+        if let Some(errno) = cause.downcast_ref::<nix::errno::Errno>() {
+            if *errno == nix::errno::Errno::EBUSY || *errno == nix::errno::Errno::EEXIST {
                 return true;
             }
         }
@@ -38,6 +52,7 @@ pub fn is_busy_or_exist(err: &anyhow::Error) -> bool {
         || s.contains("EEXIST")
         || s.contains("Device or resource busy")
         || s.contains("File exists")
+        || s.contains("Resource busy")
 }
 
 type IfName = [u8; libc::IFNAMSIZ];
@@ -176,6 +191,7 @@ pub mod net_test_utils {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
     use scopeguard::defer;
     use test_utils::skip_if_not_root;
 
@@ -184,6 +200,27 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn test_is_busy_or_exist_shapes() {
+        let io_busy = anyhow!(io::Error::from_raw_os_error(libc::EBUSY)).context("tun set iff");
+        assert!(is_busy_or_exist(&io_busy));
+
+        let io_exist = anyhow!(io::Error::from_raw_os_error(libc::EEXIST)).context("tun set iff");
+        assert!(is_busy_or_exist(&io_exist));
+
+        let nix_busy = anyhow!(nix::Error::EBUSY).context("tun set iff");
+        assert!(is_busy_or_exist(&nix_busy));
+
+        let errno_busy = anyhow!(nix::errno::Errno::EBUSY).context("tun set iff");
+        assert!(is_busy_or_exist(&errno_busy));
+
+        let text = anyhow!("EBUSY: Device or resource busy");
+        assert!(is_busy_or_exist(&text));
+
+        let other = anyhow!(io::Error::from_raw_os_error(libc::EINVAL)).context("tun set iff");
+        assert!(!is_busy_or_exist(&other));
+    }
 
     #[actix_rt::test]
     async fn test_create_link() {

@@ -156,12 +156,15 @@ pub async fn create_link(
     name: &str,
     queues: usize,
 ) -> Result<Box<dyn link::Link>> {
+    let mut reused = false;
     match link::create_link(name, link::LinkType::Tap, queues) {
         Ok(()) => {}
         Err(e) if link::is_busy_or_exist(&e) => {
             // IFF_PERSIST leaves tapN_kata in the netns after a failed
             // sandbox.start(); concurrent CreateContainer retries then hit
             // TUNSETIFF EBUSY. Reuse the existing device instead of failing.
+            // fix12: distinguish "netdev visible, reuse" vs "FDs held / orphan".
+            reused = true;
             warn!(
                 sl!(),
                 "tap {} already exists ({}), reusing",
@@ -172,9 +175,22 @@ pub async fn create_link(
         Err(e) => return Err(e).context("create tap device"),
     }
 
-    let link = get_link_by_name(handle, name)
-        .await
-        .context("get link by name")?;
+    let link = match get_link_by_name(handle, name).await {
+        Ok(l) => l,
+        Err(lookup_err) if reused => {
+            // Device name is busy to TUNSETIFF but netlink cannot see it —
+            // typically another live process (orphan QEMU) holds the FDs.
+            return Err(anyhow!(
+                "tap {} held by live process (TUNSETIFF EBUSY, netlink miss: {:#}); \
+                 kill orphan shim/QEMU or wait for start-fail reap (fix12)",
+                name,
+                lookup_err
+            ));
+        }
+        Err(lookup_err) => {
+            return Err(lookup_err).context("get link by name");
+        }
+    };
 
     let base = link.attrs();
     if base.master_index != 0 {

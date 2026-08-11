@@ -137,6 +137,17 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
+    /// Stop QEMU and wait up to `timeout` for the process to be reaped.
+    ///
+    /// Used on `sandbox.start()` failure so tap FDs are released before
+    /// `release_network()` and a CreateContainer retry (fix12 / #13574).
+    /// Default: same as `stop_vm` (non-blocking) for non-QEMU hypervisors.
+    /// QEMU overrides this with a bounded join on the OS-thread reaper.
+    /// Do NOT use this for Shutdown — large TDX reclaim can exceed any
+    /// reasonable RPC budget (fix9).
+    async fn stop_vm_for_start_fail(&self, _timeout: std::time::Duration) -> Result<()> {
+        self.stop_vm().await
+    }
     async fn wait_vm(&self) -> Result<i32>;
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
