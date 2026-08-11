@@ -14,6 +14,16 @@ use kube::{
 use log::info;
 use serde_json::json;
 
+/// A concurrent taint update is a lost race, not a broken node.
+const TAINT_PATCH_ATTEMPTS: u32 = 3;
+
+/// A rejected precondition, as opposed to a request that failed on its merits.
+/// The apiserver answers a failing JSON Patch `test` with 422, and a genuine write
+/// conflict with 409.
+fn is_precondition_failure(err: &kube::Error) -> bool {
+    matches!(err, kube::Error::Api(status) if status.code == 409 || status.code == 422)
+}
+
 pub struct K8sClient {
     client: Client,
     node_api: Api<Node>,
@@ -144,49 +154,77 @@ impl K8sClient {
     /// Returns the matcher labels that matched and were removed. A matcher that
     /// matches nothing is not an error: the node simply had no such taint, which
     /// is the expected steady state on re-runs and pod restarts.
+    ///
+    /// `.spec.taints` is an atomic list server-side, so removing one means writing
+    /// the whole list back - which would silently drop a taint some controller
+    /// added in the meantime, in the direction that admits workloads. Testing the
+    /// resourceVersion that was read makes that a rejected write instead, and a
+    /// rejection just means reading again.
     pub async fn remove_node_taints(&self, matchers: &[String]) -> Result<Vec<String>> {
         if matchers.is_empty() {
             return Ok(Vec::new());
         }
 
-        let node = self.get_node().await?;
-        let current = node
-            .spec
-            .as_ref()
-            .and_then(|s| s.taints.clone())
-            .unwrap_or_default();
+        for attempt in 1..=TAINT_PATCH_ATTEMPTS {
+            let node = self.get_node().await?;
+            let version = node.metadata.resource_version.clone().unwrap_or_default();
+            let current = node
+                .spec
+                .as_ref()
+                .and_then(|s| s.taints.clone())
+                .unwrap_or_default();
 
-        if current.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let (retained, removed) = partition_taints(current, matchers);
-
-        if removed.is_empty() {
-            return Ok(removed);
-        }
-
-        for label in &removed {
-            info!("Removing taint {} from node {}", label, self.node_name);
-        }
-
-        // `.spec.taints` is an atomic list server-side, so we replace it wholesale
-        // with the retained set. A JSON-merge patch on the whole array is
-        // equivalent here; we use a merge patch for consistency with label_node
-        // and to avoid resourceVersion juggling.
-        let patch = Patch::Merge(json!({
-            "spec": {
-                "taints": retained,
+            if current.is_empty() {
+                return Ok(Vec::new());
             }
-        }));
 
-        let pp = PatchParams::default();
-        self.node_api
-            .patch(&self.node_name, &pp, &patch)
-            .await
-            .with_context(|| format!("Failed to patch node {} to remove taints", self.node_name))?;
+            let (retained, removed) = partition_taints(current, matchers);
 
-        Ok(removed)
+            if removed.is_empty() {
+                return Ok(removed);
+            }
+
+            for label in &removed {
+                info!("Removing taint {} from node {}", label, self.node_name);
+            }
+
+            let patch: json_patch::Patch = serde_json::from_value(json!([
+                {"op": "test", "path": "/metadata/resourceVersion", "value": version},
+                {"op": "replace", "path": "/spec/taints", "value": retained},
+            ]))
+            .context("Failed to build the taint patch")?;
+
+            match self
+                .node_api
+                .patch(
+                    &self.node_name,
+                    &PatchParams::default(),
+                    &Patch::Json::<Node>(patch),
+                )
+                .await
+            {
+                Ok(_) => return Ok(removed),
+                Err(e) if is_precondition_failure(&e) => {
+                    info!(
+                        "Taints on node {} changed while they were being removed (attempt {}/{}); \
+                         reading them again",
+                        self.node_name, attempt, TAINT_PATCH_ATTEMPTS
+                    );
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to patch node {} to remove taints", self.node_name)
+                    })
+                }
+            }
+        }
+
+        anyhow::bail!(
+            "Gave up removing taints from node {} after {} attempts: something keeps changing \
+             them concurrently",
+            self.node_name,
+            TAINT_PATCH_ATTEMPTS
+        )
     }
 
     /// Returns whether a non-terminating DaemonSet with this exact name
@@ -311,24 +349,17 @@ pub async fn get_node_ready_status(config: &Config) -> Result<String> {
 ///
 /// `None` means the node does not report them at all - the kubelet only fills
 /// this in with RecursiveReadOnlyMounts or UserNamespacesSupport enabled, and an
-/// older runtime returns none - which is not the same as kata being missing.
+/// older runtime returns none - which is not the same as kata being missing. An
+/// empty list, on the other hand, is an answer: a runtime serving no handler at
+/// all.
 pub async fn get_node_runtime_handlers(config: &Config) -> Result<Option<Vec<String>>> {
     let client = K8sClient::new(&config.node_name).await?;
     let node = client.get_node().await?;
 
-    let handlers: Vec<String> = node
+    Ok(node
         .status
         .and_then(|status| status.runtime_handlers)
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|handler| handler.name)
-        .collect();
-
-    if handlers.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(handlers))
+        .map(|handlers| handlers.into_iter().filter_map(|h| h.name).collect()))
 }
 
 pub async fn label_node(
