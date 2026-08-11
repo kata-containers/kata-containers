@@ -72,15 +72,6 @@ enum Action {
     /// runtime, and wait for node readiness.
     #[clap(name = "install-stage-cri")]
     InstallStageCri,
-    /// Stage 3 of a staged (JobSet) install: apply the kata-runtime node label.
-    /// Unprivileged, Kubernetes API only.
-    #[clap(name = "install-stage-label")]
-    InstallStageLabel,
-    /// Cleanup stage 1 of a staged (JobSet) uninstall: remove the kata-runtime
-    /// node label first so the scheduler stops placing kata workloads here.
-    /// Unprivileged, Kubernetes API only.
-    #[clap(name = "cleanup-stage-unlabel")]
-    CleanupStageUnlabel,
     /// Cleanup stage 2 of a staged (JobSet) uninstall: remove CRI drop-ins,
     /// restart the runtime, and wait for readiness.
     #[clap(name = "cleanup-stage-revert-cri")]
@@ -158,8 +149,6 @@ async fn main() -> Result<()> {
         Action::InstallStageHostCheck => "install-stage-host-check",
         Action::InstallStageArtifacts => "install-stage-artifacts",
         Action::InstallStageCri => "install-stage-cri",
-        Action::InstallStageLabel => "install-stage-label",
-        Action::CleanupStageUnlabel => "cleanup-stage-unlabel",
         Action::CleanupStageRevertCri => "cleanup-stage-revert-cri",
         Action::CleanupStageRemoveArtifacts => "cleanup-stage-remove-artifacts",
         Action::InternalPostInstallWait => "internal-post-install-wait",
@@ -309,25 +298,15 @@ async fn main() -> Result<()> {
             info!("Install host-check stage completed, exiting");
         }
         Action::InstallStageArtifacts => {
-            install_stage_artifacts(&config, &runtime).await?;
+            install_stage_artifacts(&config, &runtime, true).await?;
             info!("Install artifacts stage completed, exiting");
         }
         Action::InstallStageCri => {
             install_stage_cri(&config, &runtime, true).await?;
             info!("Install CRI stage completed, exiting");
         }
-        Action::InstallStageLabel => {
-            install_stage_label(&config).await?;
-            info!("Install label stage completed, exiting");
-        }
-        // Staged (JobSet) cleanup actions. These run in reverse order
-        // (unlabel -> revert-cri -> remove-artifacts) and, unlike the DaemonSet
-        // `cleanup` above, do not perform DaemonSet-presence gating: the JobSet
-        // workflow only schedules these when an uninstall is actually intended.
-        Action::CleanupStageUnlabel => {
-            cleanup_stage_unlabel(&config).await?;
-            info!("Cleanup unlabel stage completed, exiting");
-        }
+        // No DaemonSet check here, unlike `cleanup` above: these stages only run
+        // when an uninstall is what the dispatcher was asked for.
         Action::CleanupStageRevertCri => {
             cleanup_stage_revert_cri(&config, &runtime, true).await?;
             info!("Cleanup revert-cri stage completed, exiting");
@@ -371,7 +350,7 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Installing Kata Containers");
 
     install_stage_host_check(config, runtime, false).await?;
-    install_stage_artifacts(config, runtime).await?;
+    install_stage_artifacts(config, runtime, false).await?;
     install_stage_cri(config, runtime, false).await?;
     install_stage_label(config).await?;
 
@@ -772,19 +751,14 @@ fn mapping_contains_value(mapping: Option<&str>, expected_value: &str) -> bool {
     })
 }
 
-/// Mark the node as one kata-deploy has started installing on, before anything
-/// is written to it.
+/// Mark the node before anything is written to it, so `helm uninstall` can find a
+/// node whose install died half-way: it cleans every node that carries the
+/// kata-runtime label, whatever the value. The value is not `true`, because
+/// RuntimeClasses select that exact value.
 ///
-/// `helm uninstall` cleans the nodes carrying the kata-runtime label, whatever
-/// its value, so a node labelled only once the install *finishes* is out of
-/// uninstall's reach for the whole time it is half-installed. Not `true`,
-/// because RuntimeClasses select that exact value; an existing label is left
-/// alone, so reinstalling over a working node cannot withdraw it from
-/// scheduling.
-///
-/// Best-effort: this guards a failure that may never happen, and refusing to
-/// install over one failed label write would trade a rare orphan for a common
-/// outage.
+/// Best-effort: failing an install over one label write would trade a rare orphan
+/// for a common outage. Staged runs skip this, because their dispatcher marks the
+/// node before creating the Job.
 async fn claim_node(config: &config::Config) {
     if let Err(e) = k8s::label_node(
         config,
@@ -804,10 +778,16 @@ async fn claim_node(config: &config::Config) {
 
 /// Install stage 1 (artifacts): place kata artifacts/config on the host and set
 /// up any configured snapshotters. This does not touch CRI configuration.
-async fn install_stage_artifacts(config: &config::Config, runtime: &str) -> Result<()> {
+async fn install_stage_artifacts(
+    config: &config::Config,
+    runtime: &str,
+    staged: bool,
+) -> Result<()> {
     info!("install (artifacts): installing kata artifacts on host");
 
-    claim_node(config).await;
+    if !staged {
+        claim_node(config).await;
+    }
 
     artifacts::install_artifacts(config, runtime).await?;
 
@@ -885,29 +865,14 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
             if unchanged
                 && runtime::lifecycle::cri_serving_config_from(runtime, before.written_at()).await
             {
-                // Everything up to here is inference about a pod no longer around
-                // to ask. The node seeing our handlers is the one direct answer.
-                let report =
-                    runtime::lifecycle::kata_handlers_loaded(config, &handlers, HANDLER_WAIT_SECS)
-                        .await;
-
-                if let runtime::lifecycle::HandlerReport::Missing(missing) = report {
-                    info!(
-                        "install (cri): {runtime} has been up since this config was written, but \
-                         node {} still does not report {missing:?}, so it is not serving it after \
-                         all. Restarting.",
-                        config.node_name
-                    );
-                } else {
-                    info!(
-                        "install (cri): CRI config for {runtime} is unchanged from a previous \
-                         attempt, and {runtime} is already serving it. Skipping the \
-                         (self-terminating) restart and checking the runtime is up instead."
-                    );
-                    runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
-                    info!("install (cri): runtime is up; CRI stage complete without restart");
-                    return Ok(());
-                }
+                info!(
+                    "install (cri): CRI config for {runtime} is unchanged from a previous \
+                     attempt, and {runtime} has been up since it was written. Skipping the \
+                     (self-terminating) restart and checking the runtime is up instead."
+                );
+                runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                info!("install (cri): runtime is up; CRI stage complete without restart");
+                return Ok(());
             }
         }
     }
@@ -915,6 +880,18 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
     info!("About to restart runtime: {}", runtime);
     runtime::lifecycle::restart_runtime(config, runtime, staged).await?;
     info!("Runtime restart completed successfully");
+
+    if staged {
+        // Only the node can say whether the runtime is serving what was written,
+        // and asking needs the apiserver. The dispatcher asks before it labels.
+        if !handlers.is_empty() {
+            info!(
+                "install (cri): leaving the check that {runtime} is serving {handlers:?} to the \
+                 dispatcher, which can ask the node"
+            );
+        }
+        return Ok(());
+    }
 
     confirm_handlers_are_served(config, runtime, &handlers).await
 }
@@ -963,15 +940,14 @@ async fn confirm_handlers_are_served(
     }
 }
 
-/// Install stage 3 (label): apply the kata-runtime node label. Unprivileged,
-/// Kubernetes API only. Skips re-applying when the label is already correct.
+/// The last step of the DaemonSet install. Job mode has no such stage: there the
+/// dispatcher labels the node, which is what lets the per-node Jobs run without a
+/// token.
 ///
-/// As the very last action, once the label is confirmed present, remove any
-/// configured startup taints (`STARTUP_TAINTS`). This is what makes the
-/// scheduling handshake safe: a node can be provisioned with a startup taint
-/// that keeps kata workloads off it until the runtime exists, and that taint is
-/// only lifted here, strictly after artifacts are installed, the CRI runtime is
-/// configured and restarted, and the node is labeled kata-capable.
+/// Startup taints are lifted here and nowhere else. A node can be provisioned with
+/// one to keep Kata workloads away until the runtime exists, so it may only be
+/// lifted after the artifacts are installed, the runtime is configured and
+/// restarted, and the node is labelled.
 async fn install_stage_label(config: &config::Config) -> Result<()> {
     info!("install (label): applying node label");
 
@@ -1219,28 +1195,6 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     Ok(())
 }
 
-/// Cleanup stage 1 (unlabel): remove the kata-runtime node label first so the
-/// scheduler stops placing kata workloads on this node before any host
-/// mutation. Unprivileged, Kubernetes API only. Skips when already absent.
-async fn cleanup_stage_unlabel(config: &config::Config) -> Result<()> {
-    info!("cleanup (unlabel): removing node label");
-
-    // If the label is already absent, there is nothing to do. Any other state
-    // (present, or unknown due to a transient read error) falls through to the
-    // removal below.
-    if let Ok(None) = k8s::get_node_label(config, KATA_RUNTIME_LABEL).await {
-        info!(
-            "cleanup (unlabel): label {} already absent, skipping",
-            KATA_RUNTIME_LABEL
-        );
-        return Ok(());
-    }
-
-    k8s::label_node(config, KATA_RUNTIME_LABEL, None, false).await?;
-    info!("cleanup (unlabel): label removed");
-    Ok(())
-}
-
 /// Cleanup stage 2 (revert-cri): remove CRI drop-ins (and any snapshotter
 /// config), then restart the runtime and wait for readiness. This is the
 /// privileged, node-disrupting cleanup stage and is kept short-lived. Skips
@@ -1362,8 +1316,6 @@ mod tests {
     #[case("install-stage-host-check", Action::InstallStageHostCheck)]
     #[case("install-stage-artifacts", Action::InstallStageArtifacts)]
     #[case("install-stage-cri", Action::InstallStageCri)]
-    #[case("install-stage-label", Action::InstallStageLabel)]
-    #[case("cleanup-stage-unlabel", Action::CleanupStageUnlabel)]
     #[case("cleanup-stage-revert-cri", Action::CleanupStageRevertCri)]
     #[case("cleanup-stage-remove-artifacts", Action::CleanupStageRemoveArtifacts)]
     #[case("internal-post-install-wait", Action::InternalPostInstallWait)]
@@ -1377,11 +1329,13 @@ mod tests {
         );
     }
 
-    /// Unknown actions must be rejected rather than silently accepted.
     #[rstest]
     #[case("install-stage")]
     #[case("cleanup-stage")]
     #[case("install-stage-foo")]
+    // These two were real actions once, so an older chart can still ask for them.
+    #[case("install-stage-label")]
+    #[case("cleanup-stage-unlabel")]
     #[case("bogus")]
     fn test_unknown_action_is_rejected(#[case] arg: &str) {
         assert!(
@@ -1428,8 +1382,6 @@ mod tests {
     #[case(Action::InstallStageHostCheck)]
     #[case(Action::InstallStageArtifacts)]
     #[case(Action::InstallStageCri)]
-    #[case(Action::InstallStageLabel)]
-    #[case(Action::CleanupStageUnlabel)]
     #[case(Action::CleanupStageRevertCri)]
     #[case(Action::CleanupStageRemoveArtifacts)]
     fn test_staged_actions_are_visible(#[case] action: Action) {

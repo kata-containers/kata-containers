@@ -92,6 +92,7 @@ spec:
             - "--name-prefix={{ $base }}-cleanup"
             - "--owner-job-name={{ $dispatcherName }}"
             - "--parallelism={{ $root.Values.job.parallelism }}"
+{{- include "kata-deploy.dispatcherNodeWorkFlags" (dict "root" $root "stage" "cleanup") | nindent 12 }}
 {{- if $cNodes }}
             - "--nodes={{ join "," $cNodes }}"
 {{- else }}

@@ -60,11 +60,7 @@ spec:
       imagePullSecrets:
 {{- toYaml . | nindent 6 }}
 {{- end }}
-{{- if .Values.env.multiInstallSuffix }}
-      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
-{{- else }}
-      serviceAccountName: {{ .Chart.Name }}-sa
-{{- end }}
+      serviceAccountName: {{ include "kata-deploy.serviceAccountName" . }}
 {{- with .Values.nodeSelector }}
       nodeSelector:
 {{- toYaml . | nindent 8 }}

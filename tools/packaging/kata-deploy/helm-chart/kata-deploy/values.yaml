@@ -37,11 +37,9 @@ job:
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
   #
-  # Worth setting: the dispatcher is the component that holds Kubernetes
-  # credentials, and root on whatever node it lands on can read them.
-  # Confining it to nodes you trust - typically the control plane - means a
-  # compromised worker cannot reach them, something a DaemonSet can never offer
-  # because it must run everywhere.
+  # Worth setting: the dispatcher is the only component that holds credentials,
+  # and root on the node it runs on can read them. The per-node Jobs hold no
+  # token, so they do not need this.
   #
   # Example (control plane only; the toleration is required because those nodes are
   # normally tainted):
@@ -98,6 +96,13 @@ job:
   # this alone just trades a dispatcher error that names the selectors it tried
   # for Helm's opaque "timed out waiting for the condition".
   waitForNodesSeconds: 120
+  # How long to wait for a node to report Ready again after its install Job
+  # finished, before advertising it as Kata-capable.
+  #
+  # Install ends by restarting the node's CRI runtime, which makes the node
+  # NotReady for a moment. Waiting keeps the first Kata workload away until the
+  # runtime is back. A node that never becomes Ready stays unlabeled.
+  waitNodeReadySeconds: 300
   # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
   #
   # Deliberately independent of the install selection: uninstall has to reach
@@ -131,7 +136,17 @@ job:
                 operator: Exists
   # How long finished per-node Jobs are retained before automatic garbage
   # collection (seconds). Applies to both install and cleanup per-node Jobs.
+  #
+  # The dispatcher polls each Job for its result. A Job deleted before the next
+  # poll leaves its node with no result, and that counts as a failed install.
+  # Values below 60 are refused.
   ttlSecondsAfterFinished: 600
+  # How long a single node's Job may run before Kubernetes fails it (seconds).
+  #
+  # The dispatcher waits for every node it dispatched to, so this limits how long
+  # one stuck node can hold up the whole rollout. The default is generous: a slow
+  # node pulling a large image is normal, an hour of it is not.
+  activeDeadlineSeconds: 3600
   # Per-node retry budget: retries for a single node's Job before it is marked
   # failed. One node failing never aborts the others.
   backoffLimit: 3

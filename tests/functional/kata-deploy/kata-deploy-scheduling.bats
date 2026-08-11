@@ -830,3 +830,23 @@ EOF
 	echo "${rendered}" | grep -q 'tolerations:'
 	echo "${rendered}" | grep -q 'operator: Exists'
 }
+
+@test "Helm template (job mode): a per-node Job cannot run forever" {
+	# The dispatcher waits for every node it dispatched to, so one host wedged on a
+	# restart that never returns would hold up the whole rollout.
+	render_job_templates
+
+	local install
+	install=$(extract_pernode_job install)
+	echo "${install}" | grep -q "activeDeadlineSeconds: 3600"
+}
+
+@test "Helm template (job mode): a Job TTL the dispatcher could not observe is refused" {
+	# A Job deleted before the next poll leaves its node with no result, and that
+	# counts as a failure: an install that worked, reported as broken.
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set job.ttlSecondsAfterFinished=30
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q "too short for the dispatcher to observe"
+}
