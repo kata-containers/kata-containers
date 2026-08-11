@@ -7,9 +7,8 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use k8s_openapi::api::core::v1::Node;
 use kube::{
-    api::{Api, DeleteParams, DynamicObject, GetParams, Patch, PatchParams},
+    api::{Api, GetParams, Patch, PatchParams},
     core::Request,
-    discovery::ApiResource,
     Client,
 };
 use log::info;
@@ -230,352 +229,6 @@ impl K8sClient {
 
         Ok(count)
     }
-
-    pub async fn crd_exists(&self, crd_name: &str) -> Result<bool> {
-        use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-        use kube::api::{Api, ListParams};
-
-        let crd_api: Api<CustomResourceDefinition> = Api::all(self.client.clone());
-        // Use field selector to filter server-side for exact name match
-        let lp = ListParams::default().fields(&format!("metadata.name={crd_name}"));
-        let crds = crd_api.list(&lp).await?;
-
-        // If any CRDs are returned, the CRD exists
-        Ok(!crds.items.is_empty())
-    }
-
-    pub async fn apply_yaml(&self, yaml_content: &str) -> Result<()> {
-        use kube::api::{Api, PostParams};
-        use serde_yaml;
-
-        // Parse YAML to determine resource type
-        let value: serde_yaml::Value = serde_yaml::from_str(yaml_content)?;
-        let kind = value
-            .get("kind")
-            .and_then(|k| k.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing 'kind' in YAML"))?;
-
-        match kind {
-            "RuntimeClass" => {
-                use k8s_openapi::api::node::v1::RuntimeClass;
-                let runtimeclass: RuntimeClass = serde_yaml::from_str(yaml_content)?;
-                let api: Api<RuntimeClass> = Api::all(self.client.clone());
-                let pp = PostParams::default();
-                api.create(&pp, &runtimeclass).await?;
-            }
-            "NodeFeatureRule" => {
-                // NodeFeatureRule is a CRD, handle via dynamic API
-                self.apply_dynamic_resource(yaml_content).await?;
-            }
-            _ => {
-                return Err(anyhow::anyhow!("Unsupported resource kind: {kind}"));
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn delete_yaml(&self, yaml_content: &str, ignore_not_found: bool) -> Result<()> {
-        use serde_yaml;
-
-        let value: serde_yaml::Value = serde_yaml::from_str(yaml_content)?;
-        let kind = value
-            .get("kind")
-            .and_then(|k| k.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing 'kind' in YAML"))?;
-
-        let name = value
-            .get("metadata")
-            .and_then(|m| m.get("name"))
-            .and_then(|n| n.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing 'metadata.name' in YAML"))?;
-
-        // Extract expected instance label for ownership verification
-        let expected_instance = value
-            .get("metadata")
-            .and_then(|m| m.get("labels"))
-            .and_then(|l| l.get("kata-deploy/instance"))
-            .and_then(|i| i.as_str());
-
-        // If the YAML doesn't have our instance label, skip ownership verification
-        // This handles old resources created before labeling was implemented
-        let expected_instance = match expected_instance {
-            Some(instance) => instance,
-            None => {
-                log::warn!(
-                    "YAML for {} '{}' missing kata-deploy/instance label - skipping deletion for safety",
-                    kind,
-                    name
-                );
-                return Ok(());
-            }
-        };
-
-        match kind {
-            "RuntimeClass" => {
-                use k8s_openapi::api::node::v1::RuntimeClass;
-                let api: Api<RuntimeClass> = Api::all(self.client.clone());
-
-                // Fetch the existing resource to verify ownership
-                match api.get(name).await {
-                    Ok(existing) => {
-                        // Check if the instance label matches
-                        let current_instance = existing
-                            .metadata
-                            .labels
-                            .as_ref()
-                            .and_then(|labels| labels.get("kata-deploy/instance"))
-                            .map(|s| s.as_str());
-
-                        match current_instance {
-                            Some(instance) if instance == expected_instance => {
-                                // We own this resource, safe to delete
-                                info!("Deleting RuntimeClass '{}' (instance: {})", name, instance);
-                                let dp = DeleteParams::default();
-                                api.delete(name, &dp).await?;
-                            }
-                            Some(instance) => {
-                                // Resource exists but owned by different instance
-                                log::warn!(
-                                    "Skipping deletion of RuntimeClass '{}' - owned by instance '{}', not '{}'",
-                                    name,
-                                    instance,
-                                    expected_instance
-                                );
-                            }
-                            None => {
-                                // Resource exists but has no instance label
-                                log::warn!(
-                                    "Skipping deletion of RuntimeClass '{}' - missing kata-deploy/instance label",
-                                    name
-                                );
-                            }
-                        }
-                    }
-                    Err(kube::Error::Api(e)) if e.code == 404 => {
-                        // Resource doesn't exist
-                        if ignore_not_found {
-                            log::debug!("RuntimeClass '{}' not found (already deleted)", name);
-                        } else {
-                            return Err(anyhow::anyhow!("RuntimeClass '{}' not found", name));
-                        }
-                    }
-                    Err(e) => return Err(e.into()),
-                }
-            }
-            "NodeFeatureRule" => {
-                self.delete_dynamic_resource(yaml_content, ignore_not_found)
-                    .await?;
-            }
-            _ => {
-                return Err(anyhow::anyhow!("Unsupported resource kind: {kind}"));
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn apply_dynamic_resource(&self, yaml_content: &str) -> Result<()> {
-        // Parse the YAML into a DynamicObject
-        let obj: DynamicObject = serde_yaml::from_str(yaml_content)
-            .context("Failed to parse YAML for dynamic resource")?;
-
-        // NodeFeatureRule is in the nfd.k8s-sigs.io API group
-        // We know the CRD exists because we checked before calling this function
-        let api_resource = ApiResource {
-            group: "nfd.k8s-sigs.io".to_string(),
-            version: "v1alpha1".to_string(),
-            api_version: "nfd.k8s-sigs.io/v1alpha1".to_string(),
-            kind: "NodeFeatureRule".to_string(),
-            plural: "nodefeaturerules".to_string(),
-        };
-
-        // NodeFeatureRule is cluster-scoped (no namespace)
-        let api: Api<DynamicObject> = Api::all_with(self.client.clone(), &api_resource);
-
-        // Extract the resource name from the object
-        let name = obj
-            .metadata
-            .name
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Resource missing name"))?;
-
-        // Apply the resource (server-side apply)
-        let pp = PatchParams::apply("kata-deploy");
-        api.patch(name, &pp, &Patch::Apply(&obj)).await?;
-
-        Ok(())
-    }
-
-    async fn delete_dynamic_resource(
-        &self,
-        yaml_content: &str,
-        ignore_not_found: bool,
-    ) -> Result<()> {
-        // Parse the YAML to extract the resource name and expected instance label
-        let obj: DynamicObject = serde_yaml::from_str(yaml_content)
-            .context("Failed to parse YAML for dynamic resource")?;
-
-        // NodeFeatureRule is in the nfd.k8s-sigs.io API group
-        // We know the CRD exists because we checked before calling this function
-        let api_resource = ApiResource {
-            group: "nfd.k8s-sigs.io".to_string(),
-            version: "v1alpha1".to_string(),
-            api_version: "nfd.k8s-sigs.io/v1alpha1".to_string(),
-            kind: "NodeFeatureRule".to_string(),
-            plural: "nodefeaturerules".to_string(),
-        };
-
-        // NodeFeatureRule is cluster-scoped (no namespace)
-        let api: Api<DynamicObject> = Api::all_with(self.client.clone(), &api_resource);
-
-        // Extract the resource name from the object
-        let name = obj
-            .metadata
-            .name
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Resource missing name"))?;
-
-        // Extract the expected instance label from the YAML
-        let expected_instance = obj
-            .metadata
-            .labels
-            .as_ref()
-            .and_then(|labels| labels.get("kata-deploy/instance"))
-            .map(|s| s.as_str());
-
-        // If the YAML doesn't have our instance label, skip ownership verification
-        // This handles old resources created before labeling was implemented
-        let expected_instance = match expected_instance {
-            Some(instance) => instance,
-            None => {
-                log::warn!(
-                    "YAML for {} '{}' missing kata-deploy/instance label - skipping deletion for safety",
-                    api_resource.kind,
-                    name
-                );
-                return Ok(());
-            }
-        };
-
-        // Fetch the existing resource to verify ownership
-        match api.get(name).await {
-            Ok(existing) => {
-                // Check if the instance label matches
-                let current_instance = existing
-                    .metadata
-                    .labels
-                    .as_ref()
-                    .and_then(|labels| labels.get("kata-deploy/instance"))
-                    .map(|s| s.as_str());
-
-                match current_instance {
-                    Some(instance) if instance == expected_instance => {
-                        // We own this resource, safe to delete
-                        info!(
-                            "Deleting {} '{}' (instance: {})",
-                            api_resource.kind, name, instance
-                        );
-                        let dp = DeleteParams::default();
-                        api.delete(name, &dp).await?;
-                        Ok(())
-                    }
-                    Some(instance) => {
-                        // Resource exists but owned by different instance
-                        log::warn!(
-                            "Skipping deletion of {} '{}' - owned by instance '{}', not '{}'",
-                            api_resource.kind,
-                            name,
-                            instance,
-                            expected_instance
-                        );
-                        Ok(())
-                    }
-                    None => {
-                        // Resource exists but has no instance label
-                        log::warn!(
-                            "Skipping deletion of {} '{}' - missing kata-deploy/instance label",
-                            api_resource.kind,
-                            name
-                        );
-                        Ok(())
-                    }
-                }
-            }
-            Err(kube::Error::Api(e)) if e.code == 404 => {
-                // Resource doesn't exist
-                if ignore_not_found {
-                    log::debug!(
-                        "{} '{}' not found (already deleted)",
-                        api_resource.kind,
-                        name
-                    );
-                    Ok(())
-                } else {
-                    Err(anyhow::anyhow!(
-                        "{} '{}' not found",
-                        api_resource.kind,
-                        name
-                    ))
-                }
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Get all RuntimeClasses from Kubernetes
-    pub async fn list_runtimeclasses(
-        &self,
-    ) -> Result<Vec<k8s_openapi::api::node::v1::RuntimeClass>> {
-        use k8s_openapi::api::node::v1::RuntimeClass;
-        use kube::api::{Api, ListParams};
-
-        let api: Api<RuntimeClass> = Api::all(self.client.clone());
-        let lp = ListParams::default();
-        let runtimeclasses = api.list(&lp).await?;
-
-        Ok(runtimeclasses.iter().cloned().collect())
-    }
-
-    /// Get a specific RuntimeClass by name
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub async fn get_runtimeclass(
-        &self,
-        name: &str,
-    ) -> Result<Option<k8s_openapi::api::node::v1::RuntimeClass>> {
-        use k8s_openapi::api::node::v1::RuntimeClass;
-        use kube::api::Api;
-
-        let api: Api<RuntimeClass> = Api::all(self.client.clone());
-        match api.get(name).await {
-            Ok(rc) => Ok(Some(rc)),
-            Err(kube::Error::Api(e)) if e.code == 404 => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Update a RuntimeClass
-    pub async fn update_runtimeclass(
-        &self,
-        runtimeclass: &k8s_openapi::api::node::v1::RuntimeClass,
-    ) -> Result<()> {
-        use k8s_openapi::api::node::v1::RuntimeClass;
-        use kube::api::{Api, Patch, PatchParams};
-
-        let api: Api<RuntimeClass> = Api::all(self.client.clone());
-        let name = runtimeclass
-            .metadata
-            .name
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("RuntimeClass missing name"))?;
-
-        let patch = Patch::Merge(runtimeclass);
-        let pp = PatchParams::default();
-        api.patch(name, &pp, &patch).await?;
-
-        Ok(())
-    }
 }
 
 /// Split `taints` into (retained, removed-labels) according to `matchers`.
@@ -654,6 +307,30 @@ pub async fn get_node_ready_status(config: &Config) -> Result<String> {
     Ok("Unknown".to_string())
 }
 
+/// The CRI runtime handlers the kubelet reports this node's runtime as serving.
+///
+/// `None` means the node does not report them at all - the kubelet only fills
+/// this in with RecursiveReadOnlyMounts or UserNamespacesSupport enabled, and an
+/// older runtime returns none - which is not the same as kata being missing.
+pub async fn get_node_runtime_handlers(config: &Config) -> Result<Option<Vec<String>>> {
+    let client = K8sClient::new(&config.node_name).await?;
+    let node = client.get_node().await?;
+
+    let handlers: Vec<String> = node
+        .status
+        .and_then(|status| status.runtime_handlers)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|handler| handler.name)
+        .collect();
+
+    if handlers.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(handlers))
+}
+
 pub async fn label_node(
     config: &Config,
     label_key: &str,
@@ -677,40 +354,6 @@ pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
 pub async fn count_any_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
     let client = K8sClient::new(&config.node_name).await?;
     client.count_any_kata_deploy_daemonsets().await
-}
-
-pub async fn crd_exists(config: &Config, crd_name: &str) -> Result<bool> {
-    let client = K8sClient::new(&config.node_name).await?;
-    client.crd_exists(crd_name).await
-}
-
-pub async fn apply_yaml(config: &Config, yaml_content: &str) -> Result<()> {
-    let client = K8sClient::new(&config.node_name).await?;
-    client.apply_yaml(yaml_content).await
-}
-
-pub async fn delete_yaml(
-    config: &Config,
-    yaml_content: &str,
-    ignore_not_found: bool,
-) -> Result<()> {
-    let client = K8sClient::new(&config.node_name).await?;
-    client.delete_yaml(yaml_content, ignore_not_found).await
-}
-
-pub async fn list_runtimeclasses(
-    config: &Config,
-) -> Result<Vec<k8s_openapi::api::node::v1::RuntimeClass>> {
-    let client = K8sClient::new(&config.node_name).await?;
-    client.list_runtimeclasses().await
-}
-
-pub async fn update_runtimeclass(
-    config: &Config,
-    runtimeclass: &k8s_openapi::api::node::v1::RuntimeClass,
-) -> Result<()> {
-    let client = K8sClient::new(&config.node_name).await?;
-    client.update_runtimeclass(runtimeclass).await
 }
 
 #[cfg(test)]

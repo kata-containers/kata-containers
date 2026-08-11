@@ -49,6 +49,22 @@ build_rootfs() {
 	done
 	ln -sf devkit-enter "${rootfs_dir}/usr/bin/devkit-sh"
 
+	# devkit-add-nvidia-repos runs inside the guest, where versions.yaml is not
+	# available, so resolve the pinned CUDA repository here and bake it in. Arches
+	# with no entry get the placeholders substituted away, which makes the helper
+	# refuse to run rather than reach for an unpinned URL.
+	local cuda_repo_url cuda_repo_pkg
+	# ARCH is exported by rootfs.sh.
+	# shellcheck disable=SC2154
+	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${ARCH}.url")
+	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${ARCH}.pkg")
+	[[ -n "${cuda_repo_url}" ]] \
+		|| info "no externals.nvidia.cuda.repo entry for ${ARCH}: devkit-add-nvidia-repos will be inert"
+	sed -i \
+		-e "s|@CUDA_REPO_URL@|${cuda_repo_url}|g" \
+		-e "s|@CUDA_REPO_PKG@|${cuda_repo_pkg}|g" \
+		"${rootfs_dir}/usr/bin/devkit-add-nvidia-repos"
+
 	# apt in the debug overlay runs as root: this is a single-user chroot and the
 	# _apt sandbox user cannot create its temp files (apt-key config, partials) on
 	# the tmpfs overlay, which otherwise breaks `apt-get update`. Keep /tmp sticky

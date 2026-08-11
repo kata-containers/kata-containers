@@ -134,7 +134,7 @@ jobs:
         if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 
       - name: Install `kbs-client`
-        timeout-minutes: 20
+        timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
         if: ${{ startsWith(matrix.vmm, 'qemu-coco-dev') }}
 

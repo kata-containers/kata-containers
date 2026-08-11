@@ -45,7 +45,11 @@
   nameOverride (optional; if set, use as metadata.name for default RC),
   variant (optional; e.g. "debug" -> name/handler kata-<shim>-debug, or
   "devkit" -> kata-<shim>-devkit),
-  useShimNodeSelectors.
+  useShimNodeSelectors, nfdRulesActive.
+
+  nfdRulesActive is passed in rather than resolved here: answering it involves
+  listing every DaemonSet and Deployment in the cluster, and this template is
+  rendered once per shim, per variant.
 
   Name/handler precedence: variant > multiInstallSuffix > nameOverride > default.
   A variant RuntimeClass mirrors the handler kata-deploy registers for the same
@@ -98,11 +102,32 @@ handler: {{ $rcHandler }}
 {{- $shimOverheadEnabled = .overheadEnabled -}}
 {{- end -}}
 {{- end -}}
-{{- if $shimOverheadEnabled }}
+{{- /* TEE key accounting: with NFD advertising the node's SEV-SNP encrypted-state
+       IDs / TDX key slots as extended resources, each confidential sandbox has to
+       consume one, or the scheduler would place more of them on a node than it has
+       keys for. Requested through overhead.podFixed because the sandbox holds the
+       key for its whole life, not per container. Independent of overheadEnabled,
+       which is about memory/cpu sizing: dropping the key request would let the
+       scheduler oversubscribe the node's keys. */ -}}
+{{- $teeKeys := dict -}}
+{{- if .nfdRulesActive -}}
+{{- if contains "snp" .shim -}}
+{{- $teeKeys = set $teeKeys "sev-snp.amd.com/esids" "1" -}}
+{{- end -}}
+{{- if contains "tdx" .shim -}}
+{{- $teeKeys = set $teeKeys "tdx.intel.com/keys" "1" -}}
+{{- end -}}
+{{- end -}}
+{{- if or $shimOverheadEnabled $teeKeys }}
 overhead:
   podFixed:
+{{- if $shimOverheadEnabled }}
     memory: {{ .config.memory | quote }}
     cpu: {{ .config.cpu | quote }}
+{{- end }}
+{{- range $key, $value := $teeKeys }}
+    {{ $key }}: {{ $value | quote }}
+{{- end }}
 {{- end }}
 scheduling:
   nodeSelector:
@@ -136,6 +161,7 @@ scheduling:
 {{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false }}
 {{- $externalNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
 {{- $useShimNodeSelectors := or $nfdEnabled (ne $externalNFDNamespace "") -}}
+{{- $nfdRulesActive := eq (include "kata-deploy.nfdRulesActive" . | trim) "true" -}}
 
 {{- $disableAll := .Values.shims.disableAll | default false -}}
 {{- $enabledShims := list -}}
@@ -168,9 +194,9 @@ scheduling:
 {{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
 {{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
 {{- end }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "variant" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "variant" "" "useShimNodeSelectors" $useShimNodeSelectors "nfdRulesActive" $nfdRulesActive) }}
 {{- if and $createDefaultRC (not $multiInstallSuffix) (eq $shim $defaultShim) }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" $defaultRCName "variant" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" $defaultRCName "variant" "" "useShimNodeSelectors" $useShimNodeSelectors "nfdRulesActive" $nfdRulesActive) }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -189,7 +215,7 @@ scheduling:
 {{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
 {{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
 {{- end }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "variant" "debug" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "variant" "debug" "useShimNodeSelectors" $useShimNodeSelectors "nfdRulesActive" $nfdRulesActive) }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -207,7 +233,7 @@ scheduling:
 {{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
 {{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
 {{- end }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "variant" "devkit" "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "variant" "devkit" "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors "nfdRulesActive" $nfdRulesActive) }}
 {{- end }}
 {{- end }}
 {{- end }}

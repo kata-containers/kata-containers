@@ -8,11 +8,13 @@ FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 
 # mmdebstrap builds the devkit rootfs; the extension ships no agent, so none of
 # the language toolchains the guest rootfs builder carries are needed here.
+# curl only bootstraps yq, which the build needs to read versions.yaml.
 # hadolint ignore=DL3009
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
     ca-certificates \
+    curl \
     file \
     mmdebstrap \
     zstd && \

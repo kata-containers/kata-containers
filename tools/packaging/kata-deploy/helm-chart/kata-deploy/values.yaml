@@ -33,6 +33,30 @@ job:
   dispatcherImage:
     reference: quay.io/kata-containers/kata-deploy-job-dispatcher
     tag: ""
+  # Where the dispatcher pods themselves may run (install and uninstall). Nothing
+  # to do with which nodes get Kata - that is the top-level `nodeSelector` /
+  # `affinity` / `tolerations`.
+  #
+  # Worth setting: the dispatcher is the component that holds Kubernetes
+  # credentials, and root on whatever node it lands on can read them.
+  # Confining it to nodes you trust - typically the control plane - means a
+  # compromised worker cannot reach them, something a DaemonSet can never offer
+  # because it must run everywhere.
+  #
+  # Example (control plane only; the toleration is required because those nodes are
+  # normally tainted):
+  #   job:
+  #     dispatcherNodeSelector:
+  #       node-role.kubernetes.io/control-plane: ""
+  #     dispatcherTolerations:
+  #       - key: node-role.kubernetes.io/control-plane
+  #         operator: Exists
+  #         effect: NoSchedule
+  dispatcherNodeSelector: {}
+  # Defaults to the top-level `tolerations` when empty, so the dispatcher stays
+  # schedulable on clusters whose every node is tainted (a single-node cluster, for
+  # instance). Set it to override that.
+  dispatcherTolerations: []
   # Maximum number of nodes processed concurrently (the dispatcher keeps at most
   # this many per-node Jobs in flight, refilling as they finish). Lower it to
   # pace the rollout (e.g. limit how many CRI runtimes restart at once on a big
@@ -82,9 +106,14 @@ job:
   #
   # The cleanup dispatcher resolves nodes LIVE when it runs at `helm uninstall`
   # (the dispatcher does the lookup), so - unlike a frozen Helm-rendered hook -
-  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime",
-  # i.e. exactly the nodes install actually labeled. Override to clean a
-  # different set, e.g.:
+  # the DEFAULT below can safely be "nodes carrying katacontainers.io/kata-runtime".
+  #
+  # Note the selector matches the KEY, not the value "true": install claims a
+  # node with katacontainers.io/kata-runtime=false before it writes anything to
+  # it, and only sets "true" once the node is kata-capable. Uninstall therefore
+  # also reaches nodes where the install failed half way, which are precisely
+  # the nodes with something left on them. Override to clean a different set,
+  # e.g.:
   #   job:
   #     cleanup:
   #       nodes: ["worker-1"]
@@ -811,6 +840,23 @@ env:
 #            deployment, use nodeSelector manually.
 node-feature-discovery:
   enabled: false
+
+# The NodeFeatureRule that makes node-feature-discovery advertise each node's TEE
+# key counts (AMD SEV-SNP encrypted-state IDs, Intel TDX key slots), together with
+# the matching `overhead.podFixed` request on Kata's confidential RuntimeClasses so
+# a sandbox consumes one key and the scheduler cannot oversubscribe them.
+#
+#   auto (default) - create them when NFD is around: installed by this release,
+#                    found already running, or its CRD registered in the cluster.
+#                    Since the last two need a live cluster, `helm template` alone
+#                    renders nothing under `auto`.
+#   true / false   - decide explicitly.
+#
+# The rule and the key requests are gated together on purpose: an extended-resource
+# request that nothing advertises makes every pod on that RuntimeClass unschedulable,
+# so the keys must never be requested without the rule that produces them.
+nodeFeatureRules:
+  create: auto
 
 # Verification
 # Post-install verification to validate Kata Containers is working correctly.

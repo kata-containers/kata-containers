@@ -748,6 +748,75 @@ Returns the comma-joined selector string (possibly empty, meaning "all nodes").
 {{- end -}}
 
 {{/*
+Whether to render the NFD-derived resources: the `NodeFeatureRule` that advertises
+TEE key counts, and the matching `overhead.podFixed` entries that make Kata's
+confidential RuntimeClasses consume one of those keys per pod.
+
+Returns "true" or the empty string.
+
+`nodeFeatureRules.create: auto` (the default) mirrors what the kata-deploy binary
+used to check at run time - is NFD actually around? - from three angles: this
+release installs it, an existing installation was found, or the CRD is registered
+in the cluster (which also covers an NFD deployed under names the lookup does not
+recognise). The CRD check only sees a live cluster, so `helm template` renders
+nothing under `auto`; pass `--set nodeFeatureRules.create=true` to inspect it.
+
+Both resources hang off one signal on purpose: an extended-resource request that
+nothing advertises makes every pod on that RuntimeClass unschedulable, so the
+keys must never be requested without the rule that produces them.
+*/}}
+{{- define "kata-deploy.nfdRulesActive" -}}
+{{- $nfr := .Values.nodeFeatureRules | default dict -}}
+{{- /* Read through hasKey rather than `default`, which counts a boolean false
+       as empty and would turn `create: false` back into `auto`. */ -}}
+{{- $create := "auto" -}}
+{{- if and (hasKey $nfr "create") (not (kindIs "invalid" $nfr.create)) -}}
+{{- $create = toString $nfr.create -}}
+{{- end -}}
+{{- if eq $create "true" -}}
+true
+{{- else if eq $create "false" -}}
+{{- else if ne $create "auto" -}}
+{{- fail (printf "nodeFeatureRules.create must be one of auto, true, false (got %q)" $create) -}}
+{{- else -}}
+{{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false -}}
+{{- $existingNFD := ne (include "kata-deploy.detectExistingNFD" . | trim) "" -}}
+{{- $crdPresent := .Capabilities.APIVersions.Has "nfd.k8s-sigs.io/v1alpha1" -}}
+{{- if or $nfdEnabled $existingNFD $crdPresent -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Where a dispatcher pod may run: `nodeSelector` and `tolerations` blocks for the
+install and cleanup dispatchers.
+
+This is about the dispatcher pod, not about which nodes get Kata. The dispatcher
+holds the one token that reaches the whole cluster - it enumerates every node and
+creates the privileged per-node Jobs - and root on the node it lands on can read
+it; confining it to trusted nodes is a hardening step a DaemonSet cannot offer,
+having to run everywhere by definition.
+
+Tolerations fall back to the top-level `tolerations` so the dispatcher stays
+schedulable wherever the per-node Jobs are allowed to run - without that, a
+cluster whose every node is tainted could select nodes it cannot dispatch from.
+
+Emitted at column 0; embed with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.dispatcherPlacement" -}}
+{{- $job := .Values.job | default dict -}}
+{{- with $job.dispatcherNodeSelector }}
+nodeSelector:
+{{ toYaml . | indent 2 }}
+{{- end }}
+{{- with ($job.dispatcherTolerations | default .Values.tolerations) }}
+tolerations:
+{{ toYaml . | indent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Per-node staged Job manifest (deploymentMode: job), embedded verbatim into the
 job-templates ConfigMap. The dispatcher (kata-deploy-job-dispatcher) clones this once per
 target node, injecting metadata.name + spec.template.spec.nodeName, so the
@@ -779,6 +848,9 @@ spec:
   template:
     metadata:
       labels:
+{{- with $root.Values.podLabels }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
         app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
         app.kubernetes.io/instance: {{ $root.Release.Name }}
         kata-deploy/stage: {{ $stage }}

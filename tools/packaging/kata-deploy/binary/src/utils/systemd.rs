@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Context, Result};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zvariant::{OwnedObjectPath, OwnedValue};
 
 use super::dbus::{Connection, Method};
@@ -36,6 +36,24 @@ pub async fn systemctl(args: &[&str]) -> Result<()> {
     tokio::task::spawn_blocking(move || run(&args))
         .await
         .context("The systemd worker thread panicked")?
+}
+
+/// When systemd last saw `unit` enter the active state, or `None` if it never
+/// did in this boot.
+///
+/// Readable by a process other than the one that asked for the restart, which
+/// is the point: a container torn down mid-restart leaves no record of its own.
+pub async fn unit_active_since(unit: &str) -> Result<Option<SystemTime>> {
+    let unit = unit.to_owned();
+
+    tokio::task::spawn_blocking(move || {
+        let mut connection = Connection::connect(SYSTEMD_SOCKET, IO_TIMEOUT)
+            .context("Failed to connect to the host systemd private socket")?;
+
+        active_enter_timestamp(&mut connection, &service_name(&unit))
+    })
+    .await
+    .context("The systemd worker thread panicked")?
 }
 
 fn manager(member: &str) -> Method<'_> {
@@ -182,7 +200,7 @@ fn wait_for_job(connection: &mut Connection, job: &OwnedObjectPath, unit: &str) 
     }
 }
 
-fn active_state(connection: &mut Connection, unit: &str) -> Result<String> {
+fn unit_property(connection: &mut Connection, unit: &str, name: &str) -> Result<OwnedValue> {
     let reply = connection
         .call(&manager("GetUnit"), &(unit,))
         .with_context(|| format!("Failed to find systemd unit {unit}"))?;
@@ -197,15 +215,33 @@ fn active_state(connection: &mut Connection, unit: &str) -> Result<String> {
         member: "Get",
     };
     let reply = connection
-        .call(&property, &(UNIT_INTERFACE, "ActiveState"))
-        .with_context(|| format!("Failed to get systemd unit {unit} state"))?;
+        .call(&property, &(UNIT_INTERFACE, name))
+        .with_context(|| format!("Failed to get {name} of systemd unit {unit}"))?;
 
-    let state: OwnedValue = reply
+    reply
         .body()
-        .with_context(|| format!("Failed to read the state of systemd unit {unit}"))?;
+        .with_context(|| format!("Failed to read {name} of systemd unit {unit}"))
+}
+
+fn active_state(connection: &mut Connection, unit: &str) -> Result<String> {
+    let state = unit_property(connection, unit, "ActiveState")?;
 
     String::try_from(state)
         .with_context(|| format!("Systemd reported a non-string state for unit {unit}"))
+}
+
+fn active_enter_timestamp(connection: &mut Connection, unit: &str) -> Result<Option<SystemTime>> {
+    let timestamp = unit_property(connection, unit, "ActiveEnterTimestamp")?;
+
+    // Microseconds on the same clock as a file's mtime; zero for a unit that
+    // has never been active.
+    let micros = u64::try_from(timestamp)
+        .with_context(|| format!("Systemd reported a non-numeric timestamp for unit {unit}"))?;
+    if micros == 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(UNIX_EPOCH + Duration::from_micros(micros)))
 }
 
 #[cfg(test)]

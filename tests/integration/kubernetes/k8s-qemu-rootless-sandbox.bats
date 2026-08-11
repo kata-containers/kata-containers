@@ -11,6 +11,36 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
+readonly QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS="${QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS:-30}"
+
+get_rootless_host_resources() {
+	local query="{ getent passwd | "
+	query+="awk -F: '\$1 ~ /^kata-[0-9]+$/ "
+	query+="&& \$5 ~ /Kata Containers temporary hypervisor user/ "
+	query+="{ print \"user:\" \$1 \":\" \$3 }'; "
+	query+="find /run/user -mindepth 1 -maxdepth 1 -type d "
+	query+="-printf 'dir:%f\\n' 2>/dev/null; } | sort"
+
+	exec_host "${node}" "${query}"
+}
+
+wait_for_rootless_host_resources() {
+	local actual_resources
+	local attempt
+	local expected_resources="$1"
+
+	for ((attempt = 0; attempt < QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS; attempt++)); do
+		actual_resources="$(get_rootless_host_resources)"
+		[[ "${actual_resources}" == "${expected_resources}" ]] && return 0
+		sleep 1
+	done
+
+	echo "Rootless host resources before the sandbox:"
+	echo "${expected_resources}"
+	echo "Rootless host resources after sandbox teardown:"
+	echo "${actual_resources}"
+	return 1
+}
 
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
@@ -60,10 +90,12 @@ EOF
 
 @test "QEMU runs rootless with its seccomp sandbox enabled" {
 	local cmdline
+	local host_resources
 	local qemu_pid
 	local qemu_status
 	local qemu_gid
 	local qemu_uid
+	host_resources="$(get_rootless_host_resources)"
 
 	retry_kubectl_apply "${pod_config}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
@@ -83,6 +115,9 @@ EOF
 
 	cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${qemu_pid}/cmdline")"
 	[[ " ${cmdline} " == *" -sandbox ${QEMU_SANDBOX_PARAM} "* ]]
+
+	kubectl delete -f "${pod_config}" --ignore-not-found=true
+	wait_for_rootless_host_resources "${host_resources}"
 }
 
 teardown() {

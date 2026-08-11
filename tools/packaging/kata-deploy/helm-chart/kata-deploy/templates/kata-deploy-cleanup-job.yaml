@@ -12,8 +12,10 @@ pipeline in reverse and exits:
 Unlike the old per-node hook model, node selection here is resolved LIVE when the
 hook runs at `helm uninstall` (the dispatcher does the lookup), not frozen at
 install/upgrade time. That is why the default cleanup selector can be
-"nodes carrying the katacontainers.io/kata-runtime label" (i.e. exactly the
-nodes install actually labeled) - see values.yaml job.cleanup.
+"nodes carrying the katacontainers.io/kata-runtime label", whatever its value:
+install claims a node with =false before writing to it and promotes it to =true
+once it is kata-capable, so this covers half-installed nodes too - see
+values.yaml job.cleanup.
 
 This runs while the release's kept ServiceAccount/RBAC and the job-templates
 ConfigMap still exist; they are torn down only after pre-delete hooks complete.
@@ -67,9 +69,8 @@ spec:
         runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-{{- with $root.Values.tolerations }}
-      tolerations:
-{{- toYaml . | nindent 8 }}
+{{- with include "kata-deploy.dispatcherPlacement" $root | trim }}
+{{- . | nindent 6 }}
 {{- end }}
 {{- with $root.Values.priorityClassName }}
       priorityClassName: {{ . | quote }}

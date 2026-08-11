@@ -8,6 +8,8 @@ use virtio::balloon::{Balloon, BalloonConfig};
 use virtio::Error as VirtioError;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::DbsMmioV2Device;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
@@ -165,6 +167,11 @@ impl BalloonDeviceMgr {
                 return Ok(());
             }
 
+            #[cfg(not(target_arch = "x86_64"))]
+            let f_access_platform = false;
+            #[cfg(target_arch = "x86_64")]
+            let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
             info!(ctx.logger(), "hotplug balloon device: {}", balloon_cfg.balloon_id; "subsystem" => "balloon_dev_mgr");
             let device = Box::new(
                 virtio::balloon::Balloon::new(
@@ -173,6 +180,7 @@ impl BalloonDeviceMgr {
                         f_deflate_on_oom: balloon_cfg.f_deflate_on_oom,
                         f_reporting: balloon_cfg.f_reporting,
                     },
+                    f_access_platform,
                 )
                 .map_err(BalloonDeviceError::CreateBalloonDevice)?,
             );
@@ -218,12 +226,18 @@ impl BalloonDeviceMgr {
         for info in self.info_list.iter_mut() {
             info!(ctx.logger(), "attach balloon device: {}", info.config.balloon_id; "subsystem" => "balloon_dev_mgr");
 
+            #[cfg(not(target_arch = "x86_64"))]
+            let f_access_platform = false;
+            #[cfg(target_arch = "x86_64")]
+            let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
             let device = Balloon::new(
                 epoll_mgr.clone(),
                 BalloonConfig {
                     f_deflate_on_oom: info.config.f_deflate_on_oom,
                     f_reporting: info.config.f_reporting,
                 },
+                f_access_platform,
             )
             .map_err(BalloonDeviceError::CreateBalloonDevice)?;
             METRICS
