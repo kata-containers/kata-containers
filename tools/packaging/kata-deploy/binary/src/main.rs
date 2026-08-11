@@ -305,7 +305,7 @@ async fn main() -> Result<()> {
         // path does not use these directly; it goes through `install` above,
         // which composes the same stage functions.
         Action::InstallStageHostCheck => {
-            install_stage_host_check(&config, &runtime).await?;
+            install_stage_host_check(&config, &runtime, true).await?;
             info!("Install host-check stage completed, exiting");
         }
         Action::InstallStageArtifacts => {
@@ -329,7 +329,7 @@ async fn main() -> Result<()> {
             info!("Cleanup unlabel stage completed, exiting");
         }
         Action::CleanupStageRevertCri => {
-            cleanup_stage_revert_cri(&config, &runtime).await?;
+            cleanup_stage_revert_cri(&config, &runtime, true).await?;
             info!("Cleanup revert-cri stage completed, exiting");
         }
         Action::CleanupStageRemoveArtifacts => {
@@ -370,7 +370,7 @@ fn reexec_into_post_install_wait(
 async fn install(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Installing Kata Containers");
 
-    install_stage_host_check(config, runtime).await?;
+    install_stage_host_check(config, runtime, false).await?;
     install_stage_artifacts(config, runtime).await?;
     install_stage_cri(config, runtime, false).await?;
     install_stage_label(config).await?;
@@ -395,7 +395,16 @@ const SUPPORTED_RUNTIMES: &[&str] = &[
 /// installation before any host mutation happens. This is read-only and safe
 /// to run repeatedly; it fails fast with actionable diagnostics so a staged
 /// JobSet can abort the per-node pipeline before the privileged stages run.
-async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Result<()> {
+///
+/// `staged` marks the job-mode pipeline, whose containers hold no Kubernetes
+/// credentials: the one check that needs the apiserver (reading the kubelet's
+/// `runtimeRequestTimeout` out of `/configz`, which is advisory) is left to the
+/// dispatcher, which runs it per node before dispatching.
+async fn install_stage_host_check(
+    config: &config::Config,
+    runtime: &str,
+    staged: bool,
+) -> Result<()> {
     info!("install (host-check): validating node prerequisites for runtime {runtime}");
 
     if !SUPPORTED_RUNTIMES.contains(&runtime) {
@@ -440,7 +449,7 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
                 for s in &non_empty_snapshotters {
                     match s.as_str() {
                         "erofs" => {
-                            validate_erofs_prerequisites(config).await?;
+                            validate_erofs_prerequisites(config, staged).await?;
                         }
                         "nydus" => {}
                         _ => {
@@ -454,7 +463,7 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
         }
     }
 
-    if config_uses_guest_pull(config) {
+    if config_uses_guest_pull(config) && !staged {
         validate_kubelet_runtime_request_timeout(config, "guest pull").await?;
     }
 
@@ -462,7 +471,7 @@ async fn install_stage_host_check(config: &config::Config, runtime: &str) -> Res
     Ok(())
 }
 
-async fn validate_erofs_prerequisites(config: &config::Config) -> Result<()> {
+async fn validate_erofs_prerequisites(config: &config::Config, staged: bool) -> Result<()> {
     info!("Validating EROFS snapshotter prerequisites");
 
     runtime::containerd::containerd_erofs_snapshotter_version_check(config).await?;
@@ -494,7 +503,9 @@ async fn validate_erofs_prerequisites(config: &config::Config) -> Result<()> {
     // the backing filesystem's fs-verity feature. Keep this check warning-only.
     warn_if_erofs_fsverity_may_be_unavailable();
 
-    validate_kubelet_runtime_request_timeout(config, "EROFS layer conversion").await?;
+    if !staged {
+        validate_kubelet_runtime_request_timeout(config, "EROFS layer conversion").await?;
+    }
 
     Ok(())
 }
@@ -1199,7 +1210,7 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     // server process, which kills this (terminating) pod. By doing it after
     // all other cleanup, we ensure config and artifacts are already gone.
     info!("Restarting CRI runtime");
-    runtime::restart_and_wait_for_ready(config, runtime).await?;
+    runtime::restart_and_wait_for_ready(config, runtime, false).await?;
     info!("CRI runtime restarted successfully");
 
     info!("Kata Containers cleanup completed successfully");
@@ -1233,7 +1244,11 @@ async fn cleanup_stage_unlabel(config: &config::Config) -> Result<()> {
 /// privileged, node-disrupting cleanup stage and is kept short-lived. Skips
 /// entirely when the CRI drop-ins are already absent, avoiding an unnecessary
 /// runtime restart.
-async fn cleanup_stage_revert_cri(config: &config::Config, runtime: &str) -> Result<()> {
+async fn cleanup_stage_revert_cri(
+    config: &config::Config,
+    runtime: &str,
+    staged: bool,
+) -> Result<()> {
     info!("cleanup (revert-cri): reverting CRI configuration");
 
     if !cri_drop_in_present(config, runtime).await {
@@ -1253,7 +1268,7 @@ async fn cleanup_stage_revert_cri(config: &config::Config, runtime: &str) -> Res
     runtime::cleanup_cri_runtime_config(config, runtime).await?;
 
     info!("cleanup (revert-cri): restarting runtime");
-    runtime::restart_and_wait_for_ready(config, runtime).await?;
+    runtime::restart_and_wait_for_ready(config, runtime, staged).await?;
     info!("cleanup (revert-cri): runtime restarted");
 
     Ok(())
