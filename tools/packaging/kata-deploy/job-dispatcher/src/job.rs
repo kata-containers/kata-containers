@@ -2,11 +2,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::nodes::NodeFacts;
 use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::core::v1::{EnvVar, PodSpec};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
+
+/// Carries `.status.nodeInfo.containerRuntimeVersion` into the per-node Job, so it
+/// need not read the Node object to detect the runtime.
+pub const CONTAINER_RUNTIME_VERSION_ENV: &str = "CONTAINER_RUNTIME_VERSION";
 
 /// Label applied to every per-node Job, set to the dispatcher's name prefix.
 /// Used as a server-side selector so the dispatcher only ever sees the Jobs it
@@ -111,6 +117,8 @@ pub fn job_owned_by(job: &Job, owner_value: &str) -> bool {
 ///   - set a unique `metadata.name`,
 ///   - pin the pod to `node` via `spec.template.spec.nodeName`,
 ///   - add owner/node tracking labels (+ a full-name annotation),
+///   - pass down the node facts in `facts`, so the containers do not have to read
+///     them from the apiserver themselves,
 ///   - optionally attach an `ownerReference` for garbage collection.
 ///
 /// `owner_value` is the dispatcher's name prefix, recorded in [`OWNER_LABEL`] so
@@ -121,6 +129,7 @@ pub fn build_node_job(
     node: &str,
     owner_value: &str,
     owner: Option<&OwnerReference>,
+    facts: &NodeFacts,
 ) -> Job {
     let mut job = template.clone();
 
@@ -151,7 +160,45 @@ pub fn build_node_job(
     let pod_spec = spec.template.spec.get_or_insert_with(Default::default);
     pod_spec.node_name = Some(node.to_string());
 
+    inject_node_facts(pod_spec, facts);
+
     job
+}
+
+/// Each stage container runs the same binary and resolves the node's CRI runtime
+/// on its own, which normally means reading the Node object. Handing the one
+/// cluster-sourced fact down here is what lets the per-node Jobs run without a
+/// ServiceAccount token: the dispatcher already holds the Node objects it
+/// selected, so this costs nothing.
+///
+/// Set on every container rather than just the first: the stages are independent
+/// processes, any of them may need the runtime, and an existing value is left
+/// alone so an explicit override in the chart still wins.
+fn inject_node_facts(pod_spec: &mut PodSpec, facts: &NodeFacts) {
+    let Some(version) = facts.container_runtime_version.as_deref() else {
+        return;
+    };
+
+    let containers = pod_spec
+        .init_containers
+        .iter_mut()
+        .flatten()
+        .chain(pod_spec.containers.iter_mut());
+
+    for container in containers {
+        let env = container.env.get_or_insert_with(Vec::new);
+        if env
+            .iter()
+            .any(|var| var.name == CONTAINER_RUNTIME_VERSION_ENV)
+        {
+            continue;
+        }
+        env.push(EnvVar {
+            name: CONTAINER_RUNTIME_VERSION_ENV.to_string(),
+            value: Some(version.to_string()),
+            value_from: None,
+        });
+    }
 }
 
 /// Interpret a Job's `.status` into a coarse outcome. Prefers the explicit
@@ -287,12 +334,18 @@ spec:
             block_owner_deletion: Some(false),
         };
 
+        let facts = NodeFacts {
+            name: "node1".to_string(),
+            container_runtime_version: Some("containerd://2.1.5".to_string()),
+        };
+
         let job = build_node_job(
             &template,
             "kata-deploy-install-node1",
             "node1",
             "kata-deploy-install",
             Some(&owner),
+            &facts,
         );
 
         assert_eq!(
@@ -313,6 +366,101 @@ spec:
         assert_eq!(job.metadata.owner_references.unwrap().len(), 1);
         let pod_spec = job.spec.unwrap().template.spec.unwrap();
         assert_eq!(pod_spec.node_name.as_deref(), Some("node1"));
+
+        // The fact has to reach the containers, or they would try to read it from
+        // the apiserver with a token they no longer have.
+        let env = pod_spec.containers[0].env.as_ref().unwrap();
+        assert_eq!(
+            env.iter()
+                .find(|var| var.name == CONTAINER_RUNTIME_VERSION_ENV)
+                .and_then(|var| var.value.clone())
+                .as_deref(),
+            Some("containerd://2.1.5")
+        );
+    }
+
+    /// Nothing is injected for a node whose facts are unknown, so the install
+    /// falls back to looking them up rather than seeing an empty value.
+    #[test]
+    fn unknown_facts_inject_nothing() {
+        let template: Job = serde_yaml::from_str(
+            r#"apiVersion: batch/v1
+kind: Job
+metadata:
+  name: t
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: i
+          image: busybox
+      containers:
+        - name: c
+          image: busybox
+"#,
+        )
+        .unwrap();
+
+        let job = build_node_job(
+            &template,
+            "j",
+            "node1",
+            "owner",
+            None,
+            &NodeFacts {
+                name: "node1".to_string(),
+                container_runtime_version: None,
+            },
+        );
+
+        let pod_spec = job.spec.unwrap().template.spec.unwrap();
+        assert!(pod_spec.containers[0].env.is_none());
+        assert!(pod_spec.init_containers.unwrap()[0].env.is_none());
+    }
+
+    /// Init containers run the same stages, so they need the fact too.
+    #[test]
+    fn facts_reach_init_containers() {
+        let template: Job = serde_yaml::from_str(
+            r#"apiVersion: batch/v1
+kind: Job
+metadata:
+  name: t
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: host-check
+          image: busybox
+      containers:
+        - name: cri
+          image: busybox
+"#,
+        )
+        .unwrap();
+
+        let facts = NodeFacts {
+            name: "node1".to_string(),
+            container_runtime_version: Some("cri-o://1.31.0".to_string()),
+        };
+        let job = build_node_job(&template, "j", "node1", "owner", None, &facts);
+        let pod_spec = job.spec.unwrap().template.spec.unwrap();
+
+        for env in [
+            pod_spec.init_containers.as_ref().unwrap()[0].env.as_ref(),
+            pod_spec.containers[0].env.as_ref(),
+        ] {
+            let env = env.unwrap();
+            assert_eq!(
+                env.iter()
+                    .find(|var| var.name == CONTAINER_RUNTIME_VERSION_ENV)
+                    .and_then(|var| var.value.clone())
+                    .as_deref(),
+                Some("cri-o://1.31.0")
+            );
+        }
     }
 
     fn job_with_status(status_yaml: &str) -> Job {
