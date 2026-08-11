@@ -53,6 +53,41 @@ refute_match() {
 	done
 }
 
+@test "Helm template: the suffix is persisted under a stable release name" {
+	# Every host path, handler, and marker derives from the suffix. Keeping the
+	# record under a name that does not derive from it lets a live upgrade reject
+	# an in-place suffix change instead of orphaning the old installation.
+	local rendered
+	rendered=$(helm template my-release "${CHART_PATH}" \
+		--set env.multiInstallSuffix=dev \
+		--show-only templates/kata-deploy-state.yaml)
+
+	echo "${rendered}" | grep -q 'name: my-release-kata-deploy-state'
+	echo "${rendered}" | grep -q 'multiInstallSuffix: "dev"'
+	echo "${rendered}" | grep -q 'deploymentMode: "daemonset"'
+}
+
+@test "Helm template: an unverifiable pre-state upgrade is refused" {
+	# A suffix change makes every old mode-specific resource disappear under the
+	# newly derived name. Proceeding would create a second installation and forget
+	# the first, so the safe answer is to require the previous identity to be
+	# restored or seeded.
+	run helm template my-release "${CHART_PATH}" \
+		--is-upgrade \
+		--set env.multiInstallSuffix=dev \
+		--show-only templates/kata-deploy-state.yaml
+
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q 'cannot verify the previous kata-deploy identity'
+}
+
+@test "Helm template: deployment mode is validated before state is persisted" {
+	run helm template my-release "${CHART_PATH}" --set deploymentMode=bogus
+
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q 'deploymentMode must be one of daemonset or job'
+}
+
 @test "Helm template: the node label the RuntimeClasses select is never suffixed" {
 	# Which is why the per-install mark exists: this label cannot tell two
 	# installations apart, so removing it cannot be decided from it.
@@ -101,16 +136,17 @@ refute_match() {
 	echo "${qemu}" | grep -q 'disktype: "ssd"'
 }
 
-@test "Helm template: a single install's RuntimeClasses select the shared label only" {
-	# With one install there is nothing to disambiguate, and requiring a mark would
-	# strand its workloads until an upgrade had marked every node.
+@test "Helm template: the default install's RuntimeClasses select its mark too" {
+	# "Default" is one installation like any other. Without its mark in the selector,
+	# removing it while another release holds the shared label would keep default
+	# workloads landing on a node whose default runtime is going away.
 	local rendered
 	rendered=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
 		--show-only templates/runtimeclasses.yaml)
 
 	echo "${rendered}" | grep -q 'katacontainers.io/kata-runtime: "true"'
-	refute_match "${rendered}" 'kata-deploy.katacontainers.io/'
+	echo "${rendered}" | grep -q 'kata-deploy.katacontainers.io/default: "true"'
 }
 
 @test "Helm template: custom RuntimeClasses are gated on the mark too" {
@@ -128,9 +164,11 @@ handler: mine
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
+    kata-deploy.katacontainers.io/dev: "false"
 ' \
 		--show-only templates/custom-runtimes.yaml)
 
 	echo "${rendered}" | grep -q 'kata-deploy.katacontainers.io/dev: "true"'
+	refute_match "${rendered}" 'kata-deploy.katacontainers.io/dev: "false"'
 	echo "${rendered}" | grep -q 'katacontainers.io/kata-runtime: "true"'
 }

@@ -931,18 +931,20 @@ $ kubectl get node worker-1 -o jsonpath='{.metadata.labels}' | tr ',' '\n' | gre
 "kata-deploy.katacontainers.io/cicd":"true"
 ```
 
-With a suffix set, an installation's RuntimeClasses select **both** labels — the
-shared one and its own mark. That is what makes the mark do something for
-scheduling: removing `kata-deploy-cicd` from a node stops `kata-qemu-cicd` pods
-being sent there immediately, even though the shared label stays behind for the
-other installation. An installation with no suffix selects the shared label alone,
-since there is nobody else to be outvoted by.
+Every installation's RuntimeClasses select **both** labels — the shared one and
+its own mark, including `kata-deploy.katacontainers.io/default` when no suffix was
+set. The default installation can still share a node with a suffixed release, so
+it needs the same gate. Removing one mark stops that installation's workloads
+being sent there immediately, even when the shared label stays for another one.
 
 An uninstall removes its own mark from every node it reaches, and the shared label
 only from the nodes where no other mark is left. So uninstalling `kata-deploy-cicd`
 above leaves `worker-1` running Kata for the other installation, while a node that
-only ever had `cicd` on it loses the label and stops being a Kata node. The same
-rule decides whether the CRI runtime is restarted, since that restart is shared too.
+only ever had `cicd` on it loses the label and stops being a Kata node. Cleanup
+still restarts the shared CRI runtime after removing this installation's
+configuration: otherwise the live runtime could keep advertising a handler whose
+binary has just been deleted. The other installation's configuration remains and
+is reloaded by that restart.
 
 A mark reading `false` does not count as another installation serving Kata: if the
 last `true` mark goes and only a half-finished installation is left, the shared
@@ -953,9 +955,33 @@ label its own uninstall can find.
 !!! warning "Upgrade every installation before uninstalling any"
 
     Nodes installed by a version that did not write marks carry none, and an
-    uninstall reading a node with no marks at all falls back to asking whether any
-    kata-deploy is left in the cluster. Run `helm upgrade` on every installation
-    before uninstalling one of them, so each has marked its own nodes.
+    uninstall cannot attribute such a node to one release. Run `helm upgrade` on
+    every installation before uninstalling one of them, so each release has first
+    marked the nodes it owns.
+
+`env.multiInstallSuffix` is immutable for the life of a Helm release. The chart
+stores the first value under a suffix-independent ConfigMap name and rejects an
+upgrade that changes it: the install directory, handlers, resource names, and
+node marker all derive from the suffix, so changing it in place would create a
+second installation while forgetting how to remove the first.
+
+For containerd, a suffixed installation also requires drop-in configuration
+support. Older whole-file configuration has one shared backup; uninstalling one
+release would restore a file that predates every release and erase the surviving
+handlers. Installation therefore fails before modifying CRI configuration when
+that unsafe combination is detected.
+
+On the first upgrade from a chart version that predates that state ConfigMap, the
+chart verifies the previous identity from the existing mode-specific resource
+whose name derives from the suffix. If it cannot find one, the upgrade stops and
+the error names the ConfigMap data that can be seeded explicitly; guessing would
+be the unsafe choice.
+
+The same state makes `deploymentMode` immutable and rejects values other than
+`daemonset` and `job`. An in-place mode switch can strand nodes owned by the old
+controller, and recording a new mode before its hook succeeds can also make a
+rollback reject the previous mode. Uninstall the existing mode cleanly before
+installing the other one.
 
 In `job` mode this means an uninstall may visit a node that only ever belonged to
 another installation — the default cleanup selection is the shared label, which is

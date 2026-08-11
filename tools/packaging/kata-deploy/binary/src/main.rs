@@ -906,6 +906,23 @@ async fn install_stage_artifacts(
         claim_node(config).await;
     }
 
+    // Refuse before touching the host: whole-file containerd configuration keeps a
+    // single backup, which the first uninstall would restore over every other
+    // installation's handlers.
+    if runtime != "crio"
+        && config
+            .multi_install_suffix
+            .as_deref()
+            .is_some_and(|suffix| !suffix.is_empty())
+    {
+        let paths = config.get_containerd_paths(runtime).await?;
+        anyhow::ensure!(
+            paths.use_drop_in,
+            "multi-install requires containerd drop-in support: whole-file configuration and its \
+             single backup cannot preserve another installation during uninstall"
+        );
+    }
+
     artifacts::install_artifacts(config, runtime).await?;
 
     if runtime != "crio" {

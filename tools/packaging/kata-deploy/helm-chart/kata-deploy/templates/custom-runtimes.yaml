@@ -25,7 +25,8 @@
        strength of a label another install holds. */}}
 {{- with include "kata-deploy.instanceMarkerLabel" $ }}
 {{- $scheduling := dig "scheduling" (dict) $runtimeClassObj }}
-{{- $selector := merge (dig "nodeSelector" (dict) $scheduling) (dict . "true") }}
+{{- $selector := dig "nodeSelector" (dict) $scheduling }}
+{{- $_ := set $selector . "true" }}
 {{- $_ := set $runtimeClassObj "scheduling" (merge (dict "nodeSelector" $selector) $scheduling) }}
 {{- end }}
 {{ toYaml $runtimeClassObj }}

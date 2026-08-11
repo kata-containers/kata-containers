@@ -779,6 +779,8 @@ installs keep theirs.
 {{- define "kata-deploy.instanceMarkerLabel" -}}
 {{- if .Values.env.multiInstallSuffix -}}
 kata-deploy.katacontainers.io/{{ .Values.env.multiInstallSuffix }}
+{{- else -}}
+kata-deploy.katacontainers.io/default
 {{- end -}}
 {{- end -}}
 
