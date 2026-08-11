@@ -184,10 +184,16 @@ setup() {
 	# Remove escape backslashes for quotes from output for dm-mod.create parameters
 	append="${append//\\\"/\"}"
 
+	vcpu_family=$(cpuid -1 | grep -oP -- '\(family synth\).*\(\K[^)]+' | head -n 1)
+	vcpu_model=$(cpuid -1 | grep -oP -- '\(model synth\).*\(\K[^)]+' | head -n 1)
+	vcpu_stepping=$(cpuid -1 | grep -oP -- 'stepping id.*\(\K[^)]+' | head -n 1)
+
 	measure_args=(
 		--mode=snp
 		--vcpus="${vcpu_count}"
-		--vcpu-type=EPYC-v4
+		--vcpu-family="${vcpu_family}"
+		--vcpu-model="${vcpu_model}"
+		--vcpu-stepping="${vcpu_stepping}"
 		--output-format=hex
 		--ovmf="${firmware_path}"
 		--kernel="${kernel_path}"
