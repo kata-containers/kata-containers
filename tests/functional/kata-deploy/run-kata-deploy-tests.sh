@@ -25,6 +25,7 @@ else
 		"kata-deploy-scheduling.bats" \
 		"kata-deploy-tee-keys.bats" \
 		"kata-deploy-privileges.bats" \
+		"kata-deploy-distribution.bats" \
 	)
 fi
 

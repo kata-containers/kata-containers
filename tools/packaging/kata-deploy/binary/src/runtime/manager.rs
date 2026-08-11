@@ -94,6 +94,76 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     Ok(runtime)
 }
 
+/// Distributions keeping containerd's configuration somewhere of their own, and
+/// the runtimes each can turn out to be. More than one apiece because a single
+/// Helm value covers a whole cluster while the runtime differs per node role.
+const DISTRIBUTION_RUNTIMES: &[(&str, &[&str])] = &[
+    ("k3s", &["k3s", "k3s-agent"]),
+    ("rke2", &["rke2-server", "rke2-agent"]),
+    ("k0s", &["k0s-controller", "k0s-worker"]),
+    ("microk8s", &["microk8s"]),
+];
+
+/// Runtimes reading their configuration from the default location.
+const VANILLA_RUNTIMES: &[&str] = &["containerd", "crio"];
+
+/// Unrecognised values answer with the vanilla runtimes rather than with nothing,
+/// because that is what the chart does with them: `containerdConfPath` falls
+/// through to /etc/containerd for everything it does not know, so "kubeadm" and
+/// "vanilla" describe the same mount as "k8s" and can be checked just as well.
+fn runtimes_for_distribution(distribution: &str) -> &'static [&'static str] {
+    DISTRIBUTION_RUNTIMES
+        .iter()
+        .find(|(name, _)| *name == distribution)
+        .map(|(_, runtimes)| *runtimes)
+        .unwrap_or(VANILLA_RUNTIMES)
+}
+
+/// The `k8sDistribution` a node running `runtime` should have been declared as,
+/// or `None` when any of the values meaning "vanilla" would have done.
+fn distribution_for_runtime(runtime: &str) -> Option<&'static str> {
+    DISTRIBUTION_RUNTIMES
+        .iter()
+        .find(|(_, runtimes)| runtimes.contains(&runtime))
+        .map(|(name, _)| *name)
+}
+
+/// Refuse to continue when the Kubernetes flavour the chart was configured for is
+/// not the one this node turns out to run.
+///
+/// Neither value corrects the other: the declared one chose which host directory
+/// is mounted at /etc/containerd, while the detected runtime chooses the file
+/// written inside that mount. Disagreeing writes a valid configuration into a
+/// directory this node's CRI runtime never reads, and the install can then go on
+/// to restart the runtime and advertise the node as Kata-capable regardless.
+pub fn validate_declared_distribution(config: &Config, runtime: &str) -> Result<()> {
+    check_declared_distribution(config.k8s_distribution.as_deref(), runtime)
+}
+
+fn check_declared_distribution(declared: Option<&str>, runtime: &str) -> Result<()> {
+    let Some(declared) = declared else {
+        return Ok(());
+    };
+
+    if runtimes_for_distribution(declared).contains(&runtime) {
+        return Ok(());
+    }
+
+    let advice = match distribution_for_runtime(runtime) {
+        Some(distribution) => format!("set k8sDistribution to {distribution:?}"),
+        // Nothing to name: this runtime keeps its configuration where the chart
+        // already mounts by default, so the declared value is the odd one out.
+        None => "set k8sDistribution to \"k8s\"".to_string(),
+    };
+
+    anyhow::bail!(
+        "this node runs {runtime}, but the chart was configured for k8sDistribution \
+         {declared:?}, so the directory mounted at /etc/containerd is not the one \
+         {runtime} reads its configuration from. Kata would be configured where nothing \
+         looks for it: {advice}, or override containerd.configDir directly."
+    )
+}
+
 /// Returns the systemd unit that runs the node's CRI runtime.
 ///
 /// For most runtimes the detected runtime name doubles as the unit name, but k3s,
@@ -459,6 +529,51 @@ mod tests {
     #[case::unknown_runtime_falls_back_to_its_own_name("something-else", "something-else.service")]
     fn test_cri_systemd_unit(#[case] runtime: &str, #[case] expected: &str) {
         assert_eq!(cri_systemd_unit(runtime), expected, "runtime: {}", runtime);
+    }
+
+    // --- check_declared_distribution ---
+
+    /// Every runtime a flavour can present as is accepted, since one Helm value
+    /// covers a whole cluster while the runtime differs per node role: declaring
+    /// k3s and finding an agent is right, finding cri-o is not.
+    #[rstest]
+    #[case::vanilla_containerd(Some("k8s"), "containerd", true)]
+    #[case::crio_is_also_vanilla_k8s(Some("k8s"), "crio", true)]
+    #[case::k3s_server(Some("k3s"), "k3s", true)]
+    #[case::k3s_agent(Some("k3s"), "k3s-agent", true)]
+    #[case::rke2_agent(Some("rke2"), "rke2-agent", true)]
+    #[case::k0s_worker(Some("k0s"), "k0s-worker", true)]
+    #[case::microk8s(Some("microk8s"), "microk8s", true)]
+    #[case::k3s_node_left_at_the_default(Some("k8s"), "k3s", false)]
+    #[case::k8s_node_declared_as_k3s(Some("k3s"), "containerd", false)]
+    #[case::k3s_and_rke2_are_not_interchangeable(Some("k3s"), "rke2-agent", false)]
+    // The chart mounts /etc/containerd for any value it does not recognise, so
+    // these mean the same as "k8s" and are held to the same answer.
+    #[case::kubeadm_is_vanilla(Some("kubeadm"), "containerd", true)]
+    #[case::vanilla_on_a_k3s_node(Some("vanilla"), "k3s", false)]
+    // Not started by the chart, so there is nothing to check against.
+    #[case::unset(None, "k3s", true)]
+    fn test_check_declared_distribution(
+        #[case] declared: Option<&str>,
+        #[case] runtime: &str,
+        #[case] accepted: bool,
+    ) {
+        assert_eq!(
+            check_declared_distribution(declared, runtime).is_ok(),
+            accepted,
+            "declared: {declared:?}, runtime: {runtime}"
+        );
+    }
+
+    /// The error has to say which value to change, since the two names differ
+    /// (`k0s-worker` is not a k8sDistribution) and only one of them is a knob.
+    #[test]
+    fn a_mismatch_names_the_value_to_set() {
+        let err = check_declared_distribution(Some("k8s"), "k0s-worker")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("k0s-worker"), "{err}");
+        assert!(err.contains(r#"set k8sDistribution to "k0s""#), "{err}");
     }
 
     // --- is_containerd_capable_of_drop_in (pure version) ---

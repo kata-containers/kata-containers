@@ -236,6 +236,12 @@ pub struct Config {
     /// of the install, and the less they can reach the better. Absent (the
     /// DaemonSet), the value is read from the Node.
     pub container_runtime_version: Option<String>,
+    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`),
+    /// which is what chose the host directory mounted at /etc/containerd.
+    ///
+    /// Absent when the operator pinned that directory themselves, or when this
+    /// process was not started by the chart.
+    pub k8s_distribution: Option<String>,
 }
 
 impl Config {
@@ -436,6 +442,11 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
 
+        let k8s_distribution = env::var("K8S_DISTRIBUTION")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -469,6 +480,7 @@ impl Config {
             erofs_dmverity,
             startup_taints,
             container_runtime_version,
+            k8s_distribution,
         };
 
         // Validate the configuration

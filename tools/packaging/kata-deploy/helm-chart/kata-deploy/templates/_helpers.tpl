@@ -684,6 +684,14 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CONTAINERD_CONFIG_FILE_NAME
   value: {{ .Values.containerd.configFileName | trim | quote }}
 {{- end }}
+{{- if not (.Values.containerd.configDir | trim) }}
+{{- /* This value picks the host directory mounted at /etc/containerd, while the
+       install detects the runtime itself and picks the file written within it, so
+       the install needs it to refuse a directory its runtime does not read.
+       Omitted when configDir overrides the derivation being checked. */}}
+- name: K8S_DISTRIBUTION
+  value: {{ .Values.k8sDistribution | quote }}
+{{- end }}
 {{- if .Values.containerd.userDropIn | trim }}
 - name: CONTAINERD_USER_DROP_IN_SOURCE_FILE
   value: "/custom-containerd-config/containerd-user-dropin.toml"
