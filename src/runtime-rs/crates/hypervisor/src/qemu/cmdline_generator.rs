@@ -10,7 +10,7 @@ use crate::utils::{
     SocketAddress,
 };
 
-use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
+use crate::{kernel_param::KernelParams, Address, HypervisorConfig, DEV_HUGEPAGES};
 use std::borrow::Cow;
 
 use anyhow::{anyhow, Context, Result};
@@ -2836,9 +2836,27 @@ impl<'a> QemuCmdLine<'a> {
             ccw_subchannel,
         };
 
-        // add_virtiofs_share() installs the file-backed memory backend when
-        // filesystem sharing is enabled.
-        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+        // With huge pages the whole of the guest RAM comes out of the hugetlbfs
+        // pool, so that backend replaces both the plain RAM one and the
+        // /dev/shm one that add_virtiofs_share() would otherwise install.  This
+        // is the order getMemArgs() uses in the Go runtime
+        // (src/runtime/virtcontainers/qemu.go).
+        let shared_fs_enabled =
+            !matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none"));
+        if config.memory_info.enable_hugepages {
+            // The Go runtime also pre-allocates when huge pages are combined
+            // with filesystem sharing, so a pool that cannot satisfy the
+            // reservation fails the boot instead of the first guest fault.
+            qemu_cmd_line.add_file_memory_backend(
+                "entire-guest-memory",
+                DEV_HUGEPAGES,
+                true,
+                false,
+                config.memory_info.enable_mem_prealloc || shared_fs_enabled,
+            );
+        } else if !shared_fs_enabled {
+            // add_virtiofs_share() installs the file-backed memory backend when
+            // filesystem sharing is enabled.
             qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
         }
 
@@ -3074,13 +3092,18 @@ impl<'a> QemuCmdLine<'a> {
 
         // don't put the /dev/shm memory backend file into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
-        self.add_file_memory_backend(
-            "entire-guest-memory-share",
-            "/dev/shm",
-            true,
-            false,
-            self.config.memory_info.enable_mem_prealloc,
-        );
+        //
+        // Huge pages are shared as well, and QemuCmdLine::new() has already
+        // installed that backend, so there is nothing left to do here.
+        if !self.config.memory_info.enable_hugepages {
+            self.add_file_memory_backend(
+                "entire-guest-memory-share",
+                "/dev/shm",
+                true,
+                false,
+                self.config.memory_info.enable_mem_prealloc,
+            );
+        }
     }
 
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
@@ -3851,6 +3874,49 @@ mod tests {
             args[0] == "-machine"
                 && contains_param(&args[1..2], "memory-backend=entire-guest-memory")
         }));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_hugepages_backend_without_shared_fs() {
+        let mut config = test_qemu_config(Some("none"), false);
+        config.memory_info.enable_hugepages = true;
+        let params = build_test_cmdline("hugepages-no-shared-fs", &config).await;
+
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-file,id=entire-guest-memory,mem-path=/dev/hugepages,size=2G,share=on,prealloc=off,readonly=off"
+        ));
+        assert!(!params.iter().any(|arg| arg.contains("memory-backend-ram")));
+
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-machine"
+                && contains_param(&args[1..2], "memory-backend=entire-guest-memory")
+        }));
+    }
+
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_hugepages_take_precedence_over_virtiofs_shm() {
+        let mut config = test_qemu_config(Some("virtio-fs"), false);
+        config.memory_info.enable_hugepages = true;
+
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("hugepages-virtiofs", &config).unwrap();
+        cmdline.add_virtiofs_share("/run/virtiofsd.sock", "kataShared", 1024);
+        let params = cmdline.build().await.unwrap();
+        drop(cmdline);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+
+        // Sharing the guest memory over virtio-fs still has to come from the
+        // huge page pool, and it is pre-allocated, as in the Go runtime.
+        assert!(has_qemu_arg(
+            &params,
+            "-object",
+            "memory-backend-file,id=entire-guest-memory,mem-path=/dev/hugepages,size=2G,share=on,prealloc=on,readonly=off"
+        ));
+        assert!(!params.iter().any(|arg| arg.contains("mem-path=/dev/shm")));
     }
 
     #[actix_rt::test]
