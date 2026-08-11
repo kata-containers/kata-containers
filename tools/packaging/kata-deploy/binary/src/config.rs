@@ -227,6 +227,15 @@ pub struct Config {
     /// removes the taint as its final install step, closing the window in which a
     /// pod could land on a not-yet-ready node.
     pub startup_taints: Vec<String>,
+    /// This node's `status.nodeInfo.containerRuntimeVersion`, supplied by
+    /// whoever launched this process (`CONTAINER_RUNTIME_VERSION`).
+    ///
+    /// The job-mode dispatcher already holds every Node object it selected, so it
+    /// passes this down to the per-node Job. That is what lets those Jobs run
+    /// without a ServiceAccount token: they are the privileged, host-mutating part
+    /// of the install, and the less they can reach the better. Absent (the
+    /// DaemonSet), the value is read from the Node.
+    pub container_runtime_version: Option<String>,
 }
 
 impl Config {
@@ -420,6 +429,13 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
 
+        // Empty is treated as absent, so a template that renders the env var
+        // unconditionally still means "look it up".
+        let container_runtime_version = env::var("CONTAINER_RUNTIME_VERSION")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -452,6 +468,7 @@ impl Config {
             erofs_snapshotter_mode,
             erofs_dmverity,
             startup_taints,
+            container_runtime_version,
         };
 
         // Validate the configuration
@@ -724,6 +741,22 @@ impl Config {
         log::debug!("Resolved kata-deploy configuration:\n{:#?}", self);
     }
 
+    /// This node's container runtime version, e.g. `containerd://2.1.5-k3s1`.
+    ///
+    /// Every caller goes through here so there is a single place where the value
+    /// can come from the environment (job mode, where the dispatcher passes it in
+    /// and the pod holds no credentials) instead of from the Node object.
+    pub async fn resolve_container_runtime_version(&self) -> Result<String> {
+        match self.container_runtime_version.as_deref() {
+            Some(version) => Ok(version.to_string()),
+            None => k8s::get_container_runtime_version(self).await.context(
+                "could not read this node's container runtime version from the apiserver. In job \
+                 mode the dispatcher passes it in CONTAINER_RUNTIME_VERSION precisely because \
+                 these pods hold no credentials, so reaching this means it did not",
+            ),
+        }
+    }
+
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
@@ -733,7 +766,7 @@ impl Config {
         let container_runtime_version = if matches!(runtime, "k0s-worker" | "k0s-controller") {
             None
         } else {
-            Some(k8s::get_container_runtime_version(self).await?)
+            Some(self.resolve_container_runtime_version().await?)
         };
         let use_drop_in = manager::is_containerd_capable_of_drop_in(
             runtime,
