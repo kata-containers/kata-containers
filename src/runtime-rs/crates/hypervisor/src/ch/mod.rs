@@ -93,12 +93,12 @@ impl Hypervisor for CloudHypervisor {
 
     async fn pause_vm(&self) -> Result<()> {
         let inner = self.inner.write().await;
-        inner.pause_vm()
+        inner.pause_vm().await
     }
 
     async fn resume_vm(&self) -> Result<()> {
         let inner = self.inner.write().await;
-        inner.resume_vm()
+        inner.resume_vm().await
     }
 
     async fn save_vm(&self) -> Result<()> {
