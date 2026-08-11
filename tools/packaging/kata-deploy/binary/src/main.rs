@@ -413,6 +413,8 @@ async fn install_stage_host_check(
         ));
     }
 
+    runtime::validate_declared_distribution(config, runtime)?;
+
     if runtime != "crio" {
         runtime::containerd::containerd_snapshotter_version_check(config).await?;
         runtime::containerd::snapshotter_handler_mapping_validation_check(config)?;
