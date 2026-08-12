@@ -204,7 +204,9 @@ enable_debug = false
 #     proxies. Supports a single network interface per network namespace.
 #     Experimental feature, IPv4 only.
 #
-# Note: The remote hypervisor, uses it's own network, so "none" is required
+# Note: The remote hypervisor uses CAA for networking via a VXLAN tunnel —
+# the runtime must not set up its own network devices. "none" is required;
+# adjust_config() enforces this.
 internetworking_model = "none"
 
 name = "virt_container"
@@ -240,7 +242,8 @@ jaeger_password = ""
 # `disable_new_netns` only works with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
-# Note: The remote hypervisor has a different networking model, which requires true
+# Note: Must be false for the remote hypervisor — CAA needs the netns path
+# for VXLAN tunnel setup. adjust_config() enforces this.
 disable_new_netns = false
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
