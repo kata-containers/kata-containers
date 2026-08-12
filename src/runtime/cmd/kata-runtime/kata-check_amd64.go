@@ -86,6 +86,8 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 			fallthrough
 		case vc.DragonballHypervisor:
 			fallthrough
+		case vc.OpenvmmHypervisor:
+			fallthrough
 		case vc.QemuHypervisor:
 			archRequiredCPUFlags = map[string]string{
 				cpuFlagVMX:    "Virtualization support",
@@ -197,6 +199,8 @@ func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 	case vc.ClhHypervisor:
 		fallthrough
 	case vc.StratovirtHypervisor:
+		fallthrough
+	case vc.OpenvmmHypervisor:
 		fallthrough
 	case vc.FirecrackerHypervisor:
 		return kvmIsUsable()

@@ -148,17 +148,24 @@ impl TryFrom<u32> for PciSlot {
 // its PciPath.slots will contains only one PciSlot.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PciPath {
+    /// Root bus for a non-default PCI root complex.
+    pub root_bus: Option<u8>,
+
     // list of PCI slots
     pub slots: Vec<PciSlot>,
 }
 
 impl PciPath {
     pub fn new(slots: Vec<PciSlot>) -> Option<PciPath> {
+        Self::new_with_root_bus(None, slots)
+    }
+
+    pub fn new_with_root_bus(root_bus: Option<u8>, slots: Vec<PciSlot>) -> Option<PciPath> {
         if slots.is_empty() {
             return None;
         }
 
-        Some(PciPath { slots })
+        Some(PciPath { root_bus, slots })
     }
 
     // device_slot to get the slot of the device on its PCI bridge
@@ -174,15 +181,16 @@ impl PciPath {
 
 impl std::fmt::Display for PciPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.slots
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()
-                .join("/")
-        )
+        let slots = self
+            .slots
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>()
+            .join("/");
+        match self.root_bus {
+            Some(root_bus) => write!(f, "{root_bus:02x}/{slots}"),
+            None => write!(f, "{slots}"),
+        }
     }
 }
 
@@ -192,6 +200,7 @@ impl TryFrom<u32> for PciPath {
 
     fn try_from(slot: u32) -> Result<PciPath> {
         Ok(PciPath {
+            root_bus: None,
             slots: vec![PciSlot::try_from(slot).context("pci slot convert failed.")?],
         })
     }
@@ -206,8 +215,19 @@ impl TryFrom<&str> for PciPath {
             return Err(anyhow!("path given is empty."));
         }
 
+        let mut slots = path.split('/').collect::<Vec<_>>();
+        let root_bus = if slots.len() >= 3 {
+            let candidate = u8::from_str_radix(slots[0], 16)
+                .with_context(|| format!("invalid PCI root bus in path {path:?}"))?;
+            (candidate > MAX_PCI_SLOTS as u8).then(|| {
+                slots.remove(0);
+                candidate
+            })
+        } else {
+            None
+        };
+
         let mut pci_slots: Vec<PciSlot> = Vec::new();
-        let slots: Vec<&str> = path.split('/').collect();
         for slot in slots {
             match PciSlot::try_from(slot) {
                 Ok(s) => pci_slots.push(s),
@@ -215,7 +235,10 @@ impl TryFrom<&str> for PciPath {
             }
         }
 
-        Ok(PciPath { slots: pci_slots })
+        Ok(PciPath {
+            root_bus,
+            slots: pci_slots,
+        })
     }
 }
 
@@ -258,8 +281,15 @@ mod tests {
 
         let legacy_path = PciPath::try_from("01/0a/05").unwrap();
         assert_eq!(legacy_path.to_string(), "01/0a/05");
+        assert_eq!(legacy_path.root_bus, None);
         assert_eq!(legacy_path.slots[0].device(), 1);
         assert_eq!(legacy_path.slots[1].device(), 10);
         assert_eq!(legacy_path.slots[2].device(), 5);
+
+        let rooted_path = PciPath::try_from("80/00/00").unwrap();
+        assert_eq!(rooted_path.to_string(), "80/00/00");
+        assert_eq!(rooted_path.root_bus, Some(0x80));
+        assert_eq!(rooted_path.get_root_slot().unwrap().device(), 0);
+        assert_eq!(rooted_path.get_device_slot().unwrap().device(), 0);
     }
 }

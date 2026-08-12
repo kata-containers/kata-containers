@@ -38,6 +38,9 @@ func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 		return &stratovirt{}, nil
 	case DragonballHypervisor:
 		return &mockHypervisor{}, nil
+	case OpenvmmHypervisor:
+		// OpenVMM VM lifecycle is owned by the runtime-rs shim.
+		return &mockHypervisor{}, nil
 	case RemoteHypervisor:
 		return &remoteHypervisor{}, nil
 	case MockHypervisor:

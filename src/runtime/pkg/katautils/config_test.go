@@ -1854,6 +1854,7 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 	var entries = []tableTypeEntry{
 		{clhHypervisorTableType, true},
 		{dragonballHypervisorTableType, true},
+		{openvmmHypervisorTableType, true},
 		{firecrackerHypervisorTableType, true},
 		{qemuHypervisorTableType, true},
 		{"foo", false},

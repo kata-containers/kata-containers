@@ -53,6 +53,7 @@ const (
 	dragonballHypervisorTableType  = "dragonball"
 	stratovirtHypervisorTableType  = "stratovirt"
 	remoteHypervisorTableType      = "remote"
+	openvmmHypervisorTableType     = "openvmm"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -1339,6 +1340,55 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+// newOpenvmmHypervisorConfig parses an [hypervisor.openvmm] section for
+// diagnostic commands. The Go runtime does not launch OpenVMM; runtime-rs owns
+// the standalone process and its state.
+func newOpenvmmHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	hypervisor, err := h.path()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	return vc.HypervisorConfig{
+		HypervisorPath:     hypervisor,
+		HypervisorPathList: h.HypervisorPathList,
+		KernelPath:         kernel,
+		InitrdPath:         initrd,
+		ImagePath:          image,
+		RootfsType:         rootfsType,
+		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(h.kernelParams())),
+		KernelVerityParams: h.kernelVerityParams(),
+		NumVCPUsF:          h.defaultVCPUs(),
+		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
+		MemorySize:         h.defaultMemSz(),
+		MemSlots:           h.defaultMemSlots(),
+		EntropySource:      h.GetEntropySource(),
+		ColdPlugVFIO:       h.coldPlugVFIO(),
+		HotPlugVFIO:        h.hotPlugVFIO(),
+		Debug:              h.Debug,
+	}, nil
+}
+
 func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	hypervisor, err := h.path()
 	if err != nil {
@@ -1503,6 +1553,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case clhHypervisorTableType:
 			config.HypervisorType = vc.ClhHypervisor
 			hConfig, err = newClhHypervisorConfig(hypervisor)
+		case openvmmHypervisorTableType:
+			config.HypervisorType = vc.OpenvmmHypervisor
+			hConfig, err = newOpenvmmHypervisorConfig(hypervisor)
 		case dragonballHypervisorTableType:
 			config.HypervisorType = vc.DragonballHypervisor
 			hConfig, err = newDragonballHypervisorConfig(hypervisor)
