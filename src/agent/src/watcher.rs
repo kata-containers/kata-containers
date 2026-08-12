@@ -7,11 +7,11 @@
 
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use async_recursion::async_recursion;
 use nix::mount::{umount, MsFlags};
 use nix::unistd::{Gid, Uid};
@@ -34,12 +34,15 @@ const MAX_SIZE_PER_WATCHABLE_MOUNT: u64 = 1024 * 1024;
 /// How often to check for modified files.
 const WATCH_INTERVAL_SECS: u64 = 2;
 
-/// Destination path for tmpfs, which used by the golang runtime
-const WATCH_MOUNT_POINT_PATH: &str = "/run/kata-containers/shared/containers/watchable/";
+/// Watchable tmpfs path used by the golang runtime.
+const WATCH_MOUNT_POINT_PATH: &str = "/run/kata-containers/shared/containers/watchable";
 
-/// Destination path for tmpfs for runtime-rs passthrough file sharing
+/// Watchable tmpfs path used by runtime-rs passthrough file sharing.
 const WATCH_MOUNT_POINT_PATH_PASSTHROUGH: &str =
-    "/run/kata-containers/shared/containers/passthrough/watchable/";
+    "/run/kata-containers/shared/containers/passthrough/watchable";
+
+/// Base directory used for rootless runtime paths.
+const ROOTLESS_RUNTIME_DIR: &str = "/run/user";
 
 /// Represents a single watched storage entry which may have multiple files to watch.
 #[derive(Default, Debug, Clone)]
@@ -434,6 +437,7 @@ pub struct BindWatcher {
     /// Container ID -> Vec of watched entries
     sandbox_storages: Arc<Mutex<HashMap<String, SandboxStorages>>>,
     watch_thread: Option<task::JoinHandle<()>>,
+    watchable_mount_path: Option<PathBuf>,
 }
 
 impl Drop for BindWatcher {
@@ -453,9 +457,15 @@ impl BindWatcher {
         mounts: impl IntoIterator<Item = protos::Storage>,
         logger: &Logger,
     ) -> Result<()> {
+        let mounts: Vec<protos::Storage> = mounts.into_iter().collect();
+        let watchable_mount_path = Self::watchable_mount_path(&mounts)?;
+
         if self.watch_thread.is_none() {
             // Virtio-fs shared path is RO by default, so we back the target-mounts by tmpfs.
-            self.mount(logger).await.context("mount watch directory")?;
+            self.mount(&watchable_mount_path, logger)
+                .await
+                .context("mount watch directory")?;
+            self.watchable_mount_path = Some(watchable_mount_path);
 
             // Spawn background thread to monitor changes
             self.watch_thread = Some(Self::spawn_watcher(
@@ -463,6 +473,11 @@ impl BindWatcher {
                 Arc::clone(&self.sandbox_storages),
                 WATCH_INTERVAL_SECS,
             ));
+        } else {
+            ensure!(
+                self.watchable_mount_path.as_ref() == Some(&watchable_mount_path),
+                "watchable mounts must use the same tmpfs root"
+            );
         }
 
         self.sandbox_storages
@@ -475,6 +490,73 @@ impl BindWatcher {
             .with_context(|| "Failed to add container")?;
 
         Ok(())
+    }
+
+    fn watchable_mount_path(mounts: &[protos::Storage]) -> Result<PathBuf> {
+        ensure!(!mounts.is_empty(), "watchable storage list is empty");
+
+        let mut watchable_mount_path = None;
+        for storage in mounts {
+            let target = Path::new(&storage.mount_point);
+            ensure!(
+                target.is_absolute()
+                    && target.components().all(|component| matches!(
+                        component,
+                        Component::RootDir | Component::Normal(_)
+                    )),
+                "invalid watchable mount point {}",
+                target.display()
+            );
+
+            let path = target
+                .parent()
+                .context("watchable mount point has no parent")?;
+            ensure!(
+                Self::valid_watchable_mount_path(path),
+                "invalid watchable tmpfs root {}",
+                path.display()
+            );
+
+            if let Some(existing) = &watchable_mount_path {
+                ensure!(
+                    existing == path,
+                    "watchable mounts must use the same tmpfs root"
+                );
+            } else {
+                watchable_mount_path = Some(path.to_path_buf());
+            }
+        }
+
+        watchable_mount_path.context("watchable storage list is empty")
+    }
+
+    fn valid_watchable_mount_path(path: &Path) -> bool {
+        if path == Path::new(WATCH_MOUNT_POINT_PATH)
+            || path == Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH)
+        {
+            return true;
+        }
+
+        let Ok(rootless_path) = path.strip_prefix(ROOTLESS_RUNTIME_DIR) else {
+            return false;
+        };
+        let mut components = rootless_path.components();
+        let Some(Component::Normal(uid)) = components.next() else {
+            return false;
+        };
+        let Some(uid) = uid.to_str() else {
+            return false;
+        };
+        let Ok(uid_value) = uid.parse::<u32>() else {
+            return false;
+        };
+        if uid_value == 0 || uid_value.to_string() != uid {
+            return false;
+        }
+
+        let shared_path = components.as_path();
+        shared_path == Path::new(WATCH_MOUNT_POINT_PATH.trim_start_matches('/'))
+            || shared_path == Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH.trim_start_matches('/'))
     }
 
     pub async fn remove_container(&self, id: &str) {
@@ -503,23 +585,19 @@ impl BindWatcher {
         })
     }
 
-    async fn mount(&self, logger: &Logger) -> Result<()> {
-        // the watchable directory is created on the host side.
-        // here we can only check if it exist.
-        // first we will check the default WATCH_MOUNT_POINT_PATH,
-        // and then check WATCH_MOUNT_POINT_PATH_PASSTHROUGH
-        // in turn which are introduced by runtime-rs file sharing.
-        let watchable_dir = if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
-            WATCH_MOUNT_POINT_PATH
-        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
-            WATCH_MOUNT_POINT_PATH_PASSTHROUGH
-        } else {
-            return Err(anyhow!("watchable mount source not found"));
-        };
+    async fn mount(&self, watchable_dir: &Path, logger: &Logger) -> Result<()> {
+        // The runtime creates the watchable directory in the shared
+        // filesystem and supplies a target below it. The directory may be
+        // prefixed with the rootless runtime path.
+        ensure!(
+            watchable_dir.is_dir(),
+            "watchable mount source {} not found",
+            watchable_dir.display()
+        );
 
         baremount(
             Path::new("tmpfs"),
-            Path::new(watchable_dir),
+            watchable_dir,
             "tmpfs",
             MsFlags::empty(),
             "",
@@ -536,11 +614,8 @@ impl BindWatcher {
             handle.abort();
         }
 
-        // try umount watchable mount path in turn
-        if Path::new(WATCH_MOUNT_POINT_PATH).is_dir() {
-            let _ = umount(WATCH_MOUNT_POINT_PATH);
-        } else if Path::new(WATCH_MOUNT_POINT_PATH_PASSTHROUGH).is_dir() {
-            let _ = umount(WATCH_MOUNT_POINT_PATH_PASSTHROUGH);
+        if let Some(watchable_mount_path) = self.watchable_mount_path.take() {
+            let _ = umount(&watchable_mount_path);
         }
     }
 }
@@ -550,10 +625,33 @@ mod tests {
     use super::*;
     use crate::mount::is_mounted;
     use nix::unistd::{Gid, Uid};
+    use rstest::rstest;
     use scopeguard::defer;
     use std::fs;
     use std::thread;
     use test_utils::skip_if_not_root;
+
+    fn test_watchable_mount_path(rootless_uid: Option<u32>, passthrough: bool) -> PathBuf {
+        let path = if passthrough {
+            WATCH_MOUNT_POINT_PATH_PASSTHROUGH
+        } else {
+            WATCH_MOUNT_POINT_PATH
+        };
+
+        match rootless_uid {
+            Some(uid) => Path::new(ROOTLESS_RUNTIME_DIR)
+                .join(uid.to_string())
+                .join(path.trim_start_matches('/')),
+            None => PathBuf::from(path),
+        }
+    }
+
+    fn test_watchable_storage(mount_point: &Path) -> protos::Storage {
+        protos::Storage {
+            mount_point: mount_point.display().to_string(),
+            ..Default::default()
+        }
+    }
 
     async fn create_test_storage(dir: &Path, id: &str) -> Result<(protos::Storage, PathBuf)> {
         let src_path = dir.join(format!("src{id}"));
@@ -1289,6 +1387,57 @@ mod tests {
 
     use serial_test::serial;
 
+    #[rstest]
+    #[case::runtime_go(None, false)]
+    #[case::runtime_rs_passthrough(None, true)]
+    #[case::rootless_runtime_go(Some(1002), false)]
+    #[case::rootless_runtime_rs_passthrough(Some(1002), true)]
+    fn derive_watchable_mount_path(#[case] rootless_uid: Option<u32>, #[case] passthrough: bool) {
+        let watchable_dir = test_watchable_mount_path(rootless_uid, passthrough);
+        let target = watchable_dir.join("config");
+        let mounts = [test_watchable_storage(&target)];
+
+        assert_eq!(
+            BindWatcher::watchable_mount_path(&mounts).unwrap(),
+            watchable_dir
+        );
+    }
+
+    #[rstest]
+    #[case::relative("relative/watchable/config")]
+    #[case::parent_component("/run/kata-containers/shared/containers/watchable/../config")]
+    #[case::unrecognized_root("/tmp/watchable/config")]
+    #[case::embedded_shared_path("/tmp/run/kata-containers/shared/containers/watchable/config")]
+    #[case::non_numeric_uid(
+        "/run/user/not-a-uid/run/kata-containers/shared/containers/watchable/config"
+    )]
+    #[case::root_uid("/run/user/0/run/kata-containers/shared/containers/watchable/config")]
+    #[case::non_canonical_uid(
+        "/run/user/01002/run/kata-containers/shared/containers/watchable/config"
+    )]
+    #[case::uid_overflow(
+        "/run/user/4294967296/run/kata-containers/shared/containers/watchable/config"
+    )]
+    #[case::unexpected_rootless_suffix(
+        "/run/user/1002/tmp/run/kata-containers/shared/containers/watchable/config"
+    )]
+    fn reject_invalid_watchable_mount_paths(#[case] mount_point: &str) {
+        let mounts = [test_watchable_storage(Path::new(mount_point))];
+        assert!(BindWatcher::watchable_mount_path(&mounts).is_err());
+    }
+
+    #[test]
+    fn reject_different_watchable_mount_roots() {
+        let first = test_watchable_mount_path(Some(1002), false).join("config");
+        let second = test_watchable_mount_path(Some(1002), true).join("secret");
+        let mounts = [
+            test_watchable_storage(&first),
+            test_watchable_storage(&second),
+        ];
+
+        assert!(BindWatcher::watchable_mount_path(&mounts).is_err());
+    }
+
     #[tokio::test]
     #[serial]
     #[cfg(not(any(target_arch = "aarch64", target_arch = "s390x")))]
@@ -1297,19 +1446,22 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut watcher = BindWatcher::default();
+        let dir = tempfile::tempdir().unwrap();
 
-        for mount_point in [WATCH_MOUNT_POINT_PATH, WATCH_MOUNT_POINT_PATH_PASSTHROUGH] {
-            fs::create_dir_all(mount_point).unwrap();
-            // ensure the watchable directory is deleted.
-            defer!(fs::remove_dir_all(mount_point).unwrap());
+        for passthrough in [false, true] {
+            let watchable_path = test_watchable_mount_path(None, passthrough);
+            let mount_point = dir.path().join(watchable_path.strip_prefix("/").unwrap());
+            fs::create_dir_all(&mount_point).unwrap();
+            let mount_point_string = mount_point.display().to_string();
 
-            watcher.mount(&logger).await.unwrap();
-            assert!(is_mounted(mount_point).unwrap());
+            watcher.mount(&mount_point, &logger).await.unwrap();
+            watcher.watchable_mount_path = Some(mount_point);
+            assert!(is_mounted(&mount_point_string).unwrap());
 
             thread::sleep(Duration::from_millis(20));
 
             watcher.cleanup();
-            assert!(!is_mounted(mount_point).unwrap());
+            assert!(!is_mounted(&mount_point_string).unwrap());
         }
     }
 
@@ -1318,18 +1470,18 @@ mod tests {
     async fn spawn_thread() {
         skip_if_not_root!();
 
-        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
-        // ensure the watchable directory is deleted.
-        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
-
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();
 
-        let dest_dir = tempfile::tempdir().unwrap();
+        let rootless_dir = Path::new(ROOTLESS_RUNTIME_DIR).join(std::process::id().to_string());
+        defer!(fs::remove_dir_all(&rootless_dir).unwrap());
+        let watchable_dir = test_watchable_mount_path(Some(std::process::id()), false);
+        fs::create_dir_all(&watchable_dir).unwrap();
+        let dest_dir = watchable_dir.join("dest");
 
         let storage = protos::Storage {
             source: source_dir.path().display().to_string(),
-            mount_point: dest_dir.path().display().to_string(),
+            mount_point: dest_dir.display().to_string(),
             ..Default::default()
         };
 
@@ -1343,7 +1495,7 @@ mod tests {
 
         thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
 
-        let out = fs::read_to_string(dest_dir.path().join("1.txt")).unwrap();
+        let out = fs::read_to_string(dest_dir.join("1.txt")).unwrap();
         assert_eq!(out, "one");
     }
 
@@ -1352,18 +1504,18 @@ mod tests {
     async fn verify_container_cleanup_watching() {
         skip_if_not_root!();
 
-        fs::create_dir_all(WATCH_MOUNT_POINT_PATH).unwrap();
-        // ensure the watchable directory is deleted.
-        defer!(fs::remove_dir_all(WATCH_MOUNT_POINT_PATH).unwrap());
-
         let source_dir = tempfile::tempdir().unwrap();
         fs::write(source_dir.path().join("1.txt"), "one").unwrap();
 
-        let dest_dir = tempfile::tempdir().unwrap();
+        let rootless_dir = Path::new(ROOTLESS_RUNTIME_DIR).join(std::process::id().to_string());
+        defer!(fs::remove_dir_all(&rootless_dir).unwrap());
+        let watchable_dir = test_watchable_mount_path(Some(std::process::id()), false);
+        fs::create_dir_all(&watchable_dir).unwrap();
+        let dest_dir = watchable_dir.join("dest");
 
         let storage = protos::Storage {
             source: source_dir.path().display().to_string(),
-            mount_point: dest_dir.path().display().to_string(),
+            mount_point: dest_dir.display().to_string(),
             ..Default::default()
         };
 
@@ -1377,14 +1529,14 @@ mod tests {
 
         thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
 
-        let out = fs::read_to_string(dest_dir.path().join("1.txt")).unwrap();
-        assert!(dest_dir.path().exists());
+        let out = fs::read_to_string(dest_dir.join("1.txt")).unwrap();
+        assert!(dest_dir.exists());
         assert_eq!(out, "one");
 
         watcher.remove_container("test").await;
 
         thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
-        assert!(!dest_dir.path().exists());
+        assert!(!dest_dir.exists());
 
         for i in 1..21 {
             fs::write(source_dir.path().join(format!("{i}.txt")), "fluff").unwrap();
@@ -1393,7 +1545,7 @@ mod tests {
         // verify non-watched storage is cleaned up correctly
         let storage1 = protos::Storage {
             source: source_dir.path().display().to_string(),
-            mount_point: dest_dir.path().display().to_string(),
+            mount_point: dest_dir.display().to_string(),
             ..Default::default()
         };
 
@@ -1404,14 +1556,14 @@ mod tests {
 
         thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
 
-        assert!(dest_dir.path().exists());
-        assert!(is_mounted(dest_dir.path().to_str().unwrap()).unwrap());
+        assert!(dest_dir.exists());
+        assert!(is_mounted(dest_dir.to_str().unwrap()).unwrap());
 
         watcher.remove_container("test").await;
 
         thread::sleep(Duration::from_secs(WATCH_INTERVAL_SECS));
 
-        assert!(!dest_dir.path().exists());
-        assert!(!is_mounted(dest_dir.path().to_str().unwrap()).unwrap());
+        assert!(!dest_dir.exists());
+        assert!(!is_mounted(dest_dir.to_str().unwrap()).unwrap());
     }
 }
