@@ -137,7 +137,7 @@ Any other value means the default location, `/etc/containerd/` — so `kubeadm` 
 `vanilla` are as good as `k8s`. Set `containerd.configDir` instead if your
 containerd matches none of the presets.
 
-!!! warning "A wrong value fails the install rather than misconfiguring the node"
+!!! warning "A wrong value stops the install before changing the node"
 
     Which *file* to write is worked out on the node itself, from the CRI runtime
     actually running there — so declaring `k8s` on a `k3s` cluster used to produce a
