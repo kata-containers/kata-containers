@@ -1,7 +1,5 @@
 #!/usr/bin/env bats
 #
-# Copyright (c) 2022 Ant Group
-#
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -28,9 +26,11 @@ setup() {
 	# Create test yaml
 	test_yaml="${pod_config_dir}/test-pod-large-file-volume.yaml"
 
-	sed -e "s|HOST_FILE|$tmp_file|" ${pod_config_dir}/pod-file-volume.yaml > "${test_yaml}"
-	sed -i "s|MOUNT_PATH|$mount_path|" "${test_yaml}"
-	sed -i "s|NODE|$node|" "${test_yaml}"
+    sed \
+		-e "s|HOST_FILE|$tmp_file|" \
+		-e "s|MOUNT_PATH|$mount_path|" \
+		-e "s|NODE|$node|" \
+		"${pod_config_dir}/pod-large-file-volume.yaml" > "${test_yaml}"
 
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
