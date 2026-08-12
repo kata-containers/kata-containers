@@ -23,7 +23,8 @@
 
 DEVKIT_INIT_VERSION=1
 
-DEVKIT="${DEVKIT:-/run/kata-extensions/devkit}"
+EXTENSIONS_ROOT="${EXTENSIONS_ROOT:-/run/kata-extensions}"
+DEVKIT="${DEVKIT:-${EXTENSIONS_ROOT}/devkit}"
 WRITABLE="${WRITABLE:-/run/kata-devkit-writable}"
 BB="${BB:-${DEVKIT}/bin/busybox.static}"
 
@@ -31,8 +32,64 @@ UPPER="${WRITABLE}/upper"
 WORK="${WRITABLE}/work"
 MERGED="${WRITABLE}/merged"
 
+# The agent execs the debug console shell with the environment PID 1 happens to
+# have, which on a minimal guest may carry no PATH at all, so the chroot starts
+# from an explicit one rather than whatever the shell falls back to.
+DEVKIT_BASE_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Tool directories an extension may ship, relative to its mount root. The GPU
+# extension keeps its binaries in bin/sbin, the CoCo one under usr/local; list
+# both layouts so no extension needs to know about this file.
+DEVKIT_EXTENSION_BIN_DIRS="bin sbin usr/bin usr/sbin usr/local/bin usr/local/sbin"
+
 devkit_is_mounted() {
 	"${BB}" grep -q "[[:space:]]${1}[[:space:]]" /proc/mounts 2>/dev/null
+}
+
+# Colon-separated tool directories of the extensions mounted in this sandbox,
+# named as the *guest* root sees them (/run/kata-extensions/<name>/...).
+#
+# Those are the paths that matter for the common debug move of reaching into the
+# guest from the devkit shell: `chroot /real_root <tool>` resolves <tool> with
+# execvp() *after* switching root, i.e. against the guest's filesystem, using the
+# PATH it inherits from us. Without these entries an extension's tools are only
+# reachable by full path ("chroot: failed to run command 'nvidia-smi'").
+#
+# The devkit extension itself is skipped: it is already the chroot's own root,
+# and its dynamically linked binaries cannot run on the shell-less guest base.
+devkit_extension_path() {
+	local path="" ext sub dir
+	for ext in "${EXTENSIONS_ROOT}"/*; do
+		"${BB}" test -d "${ext}" || continue
+		"${BB}" test "${ext}" = "${DEVKIT}" && continue
+
+		# An extension name is a mount point the runtime created from the
+		# hypervisor config, but PATH has no quoting: anything that could
+		# split an entry has no business in it.
+		case "${ext##*/}" in
+			*[!A-Za-z0-9._-]*) continue ;;
+		esac
+
+		for sub in ${DEVKIT_EXTENSION_BIN_DIRS}; do
+			dir="${ext}/${sub}"
+			"${BB}" test -d "${dir}" || continue
+			# A symlinked directory (the GPU extension's usr/bin ->
+			# ../bin) is just a second name for one already listed.
+			"${BB}" test -L "${dir}" && continue
+			path="${path:+${path}:}${dir}"
+		done
+	done
+	"${BB}" echo "${path}"
+}
+
+# Seed the PATH the chroot (and anything it execs, including `chroot /real_root`)
+# runs with. Ubuntu's /etc/profile only sources /etc/profile.d, it does not reset
+# PATH, so a login shell keeps what we export here.
+devkit_export_path() {
+	local extension_path
+	extension_path="$(devkit_extension_path)"
+	PATH="${DEVKIT_BASE_PATH}${extension_path:+:${extension_path}}"
+	export PATH
 }
 
 # Mount an exec-enabled tmpfs at ${WRITABLE}: /run is typically noexec, so the
@@ -101,13 +158,16 @@ devkit_link_real_root() {
 	"${BB}" ln -s /proc/1/root "${MERGED}/real_root" 2>/dev/null || true
 }
 
-# Idempotent: safe to call from every devkit-* invocation.
+# Idempotent: safe to call from every devkit-* invocation. Also exports the PATH
+# the caller then hands to the chroot, so mounting an extension is all it takes
+# for its tools to be reachable by name.
 devkit_setup_chroot() {
 	devkit_mount_writable || return 1
 	devkit_mount_root || return 1
 	devkit_bind_mounts || return 1
 	devkit_seed_resolv_conf
 	devkit_link_real_root
+	devkit_export_path
 	"${BB}" echo "${DEVKIT_INIT_VERSION}" > "${WRITABLE}/.initialized" 2>/dev/null || true
 	return 0
 }
