@@ -117,6 +117,7 @@ else
 		"k8s-vm-templating.bats" \
 		"k8s-nginx-connectivity.bats" \
 		"k8s-l3forwarding-connectivity.bats" \
+		"k8s-large-file-volume.bats" \
 	)
 
 	K8S_TEST_NORMAL_HOST_UNION=( \
