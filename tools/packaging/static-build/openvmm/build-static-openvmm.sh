@@ -10,8 +10,8 @@ set -o pipefail
 
 ARCH=${ARCH:-$(uname -m)}
 
-# Kata's OpenVMM integration is currently supported only on x86_64.
-[[ "${ARCH}" != "x86_64" ]] && exit
+# Kata's OpenVMM integration is supported on aarch64 and x86_64.
+[[ "${ARCH}" != "aarch64" ]] && [[ "${ARCH}" != "x86_64" ]] && exit
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
