@@ -43,17 +43,21 @@ spec:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 150
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 45
+      failureThreshold: 54
     env:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
             name: ngc-api-key-instruct
             key: api-key
+      - name: NIM_JSONL_LOGGING
+        value: "1"
+      - name: NIM_LOG_LEVEL
+        value: "INFO"
     # GPU resource limit (for NVIDIA GPU)
     resources:
       limits:

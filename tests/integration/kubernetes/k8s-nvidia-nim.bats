@@ -23,6 +23,8 @@ export TEE
 
 POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 POD_NAME_INSTRUCT="nvidia-nim-llama-3-1-8b-instruct"
+# Instruct/embedqa startupProbe windows (initialDelaySeconds +
+# periodSeconds * failureThreshold) are aligned to these ready waits.
 POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=500s
 POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=600s
 if [[ "${TEE}" = "true" ]]; then
