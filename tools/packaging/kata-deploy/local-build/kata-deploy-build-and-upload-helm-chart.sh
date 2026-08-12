@@ -50,6 +50,6 @@ if [[ -n "${CHART_VALUES_OVERLAY:-}" ]]; then
 	yq eval-all -i 'select(fileIndex == 0) * select(fileIndex == 1)' \
 		"${tmp}/kata-deploy/values.yaml" "${overlay}"
 fi
-helm dependencies update "${tmp}/kata-deploy"
+# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 helm package "${tmp}/kata-deploy" -d "${tmp}"
 helm push "${tmp}/kata-deploy-${CHART_VERSION}.tgz" "oci://${CHART_REGISTRY}"

@@ -23,8 +23,12 @@ version: "4.0.0"
 # It is recommended to use it with quotes.
 appVersion: "4.0.0"
 
+# node-feature-discovery is vendored as charts/node-feature-discovery-0.19.0.tgz
+# (upstream chart v0.19.0) so packaging and CI do not need to fetch the remote
+# Helm repo. Do not run `helm dependency update/build` against this chart — the
+# remote archive name breaks Helm 4 resolution; the local tarball is enough.
 dependencies:
   - name: node-feature-discovery
-    version: "~0.19.0"
+    version: "0.19.0"
     repository: https://kubernetes-sigs.github.io/node-feature-discovery/charts
     condition: node-feature-discovery.enabled

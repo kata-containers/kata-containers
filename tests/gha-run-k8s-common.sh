@@ -634,10 +634,7 @@ function helm_helper() {
 	ensure_yq
 	ensure_helm
 
-	# Update dependencies before configuring values
-	pushd "${helm_chart_dir}"
-	helm dependencies update
-	popd
+	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Create temporary values file for customization
 	# Start with values.yaml which has all shims enabled by default
