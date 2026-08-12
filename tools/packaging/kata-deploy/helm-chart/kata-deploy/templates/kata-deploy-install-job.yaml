@@ -110,6 +110,9 @@ job.nodes list, which names nodes outright and needs no discovery.
 */}}
             - "--wait-for-nodes-secs={{ $root.Values.job.waitForNodesSeconds | default 0 }}"
 {{- end }}
+{{- with include "kata-deploy.kubeletTimeoutWarnSecs" $root | trim }}
+            - "--kubelet-timeout-warn-secs={{ . }}"
+{{- end }}
           env:
             - name: POD_NAMESPACE
               valueFrom:
