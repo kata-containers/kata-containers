@@ -2,7 +2,7 @@
 
 ## Overview
 `kata-monitor` is a daemon able to collect and expose metrics related to all the Kata Containers workloads running on the same host.
-Once started, it detects all the running Kata Containers runtimes (`containerd-shim-kata-v2`) in the system and exposes few http endpoints to allow the retrieval of the available data.
+Once started, it detects Kata sandboxes from both the Go runtime (`/run/vc/sbs`) and runtime-rs (`/run/kata`) and exposes a few HTTP endpoints to retrieve the available data.
 The main endpoint is the `/metrics` one which aggregates metrics from all the kata workloads.
 Available metrics include:
   * Kata runtime metrics

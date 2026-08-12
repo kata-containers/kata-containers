@@ -65,7 +65,12 @@ Only one `kata-monitor` process runs in each node.
 
 `kata-monitor` uses a different communication channel than the one used by the container engine (`containerd`/`CRI-O`) to communicate with the Kata shim. The Kata shim exposes a dedicated socket address reserved to `kata-monitor`.
 
-The shim's metrics socket file is created under the virtcontainers sandboxes directory, i.e. `vc/sbs/${PODID}/shim-monitor.sock`.
+The shim's metrics socket file is created under the sandboxes directory for the active runtime:
+
+- Go runtime: `/run/vc/sbs/${PODID}/shim-monitor.sock`
+- runtime-rs: `/run/kata/${PODID}/shim-monitor.sock`
+
+`kata-monitor` watches **both** paths so it can collect metrics from either runtime (or both on the same node) without a runtime-type selection flag.
 
 > **Note**: If there is no Prometheus server configured, i.e., there are no scrape operations, `kata-monitor` will not collect any metrics.
 

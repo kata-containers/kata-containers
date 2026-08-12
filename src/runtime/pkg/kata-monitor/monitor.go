@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,40 @@ func removeFromSandboxList(sandboxList []string, sandboxToRemove string) []strin
 	return sandboxList
 }
 
+// syncSandboxFSPath registers a watch on path (if not already watched) and
+// returns sandbox IDs found during the initial directory sync.
+func (km *KataMonitor) syncSandboxFSPath(watcher *fsnotify.Watcher, path string, watched map[string]struct{}) ([]string, error) {
+	if _, ok := watched[path]; ok {
+		return nil, nil
+	}
+
+	if err := watcher.Add(path); err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		_ = watcher.Remove(path)
+		return nil, err
+	}
+
+	watched[path] = struct{}{}
+	monitorLog.Debugf("started fs monitoring @%s", path)
+
+	var sandboxes []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		id := entry.Name()
+		if km.sandboxCache.putIfNotExists(id, sandboxCRIMetadata{}) {
+			sandboxes = append(sandboxes, id)
+		}
+	}
+	monitorLog.WithField("path", path).WithField("sandboxes", sandboxes).Debug("initial sync of sandbox directory completed")
+	return sandboxes, nil
+}
+
 // startPodCacheUpdater will boot a thread to manage sandbox cache
 func (km *KataMonitor) startPodCacheUpdater() {
 	sbsWatcher, err := fsnotify.NewWatcher()
@@ -86,54 +121,54 @@ func (km *KataMonitor) startPodCacheUpdater() {
 		os.Exit(1)
 	}
 	defer sbsWatcher.Close()
-	for {
-		err = sbsWatcher.Add(getSandboxFS())
-		if err != nil {
-			// if there are no kata pods (yet), the kata /run/vc directory may not be there: retry later
-			monitorLog.WithError(err).Warnf("cannot monitor %s, retry in %d sec.", getSandboxFS(), fsMonitorRetryDelaySeconds)
-			time.Sleep(fsMonitorRetryDelaySeconds * time.Second)
-			continue
+
+	sandboxFSPaths := getSandboxFSPaths()
+	watchedPaths := make(map[string]struct{}, len(sandboxFSPaths))
+	sandboxList := []string{}
+
+	tryWatchAll := func() {
+		for _, path := range sandboxFSPaths {
+			added, syncErr := km.syncSandboxFSPath(sbsWatcher, path, watchedPaths)
+			if syncErr != nil {
+				// Path may not exist yet when no sandboxes of that runtime are present.
+				monitorLog.WithError(syncErr).Warnf("cannot monitor %s, retry in %d sec.", path, fsMonitorRetryDelaySeconds)
+				continue
+			}
+			sandboxList = append(sandboxList, added...)
 		}
-		monitorLog.Debugf("started fs monitoring @%s", getSandboxFS())
-		break
-	}
-	// Initial sync with the kata sandboxes already running
-	sbsFile, err := os.Open(getSandboxFS())
-	if err != nil {
-		monitorLog.WithError(err).Fatal("cannot open sandboxes fs")
-		os.Exit(1)
-	}
-	sandboxList, err := sbsFile.Readdirnames(0)
-	if err != nil {
-		monitorLog.WithError(err).Fatal("cannot read sandboxes fs")
-		os.Exit(1)
-	}
-	for _, sandbox := range sandboxList {
-		km.sandboxCache.putIfNotExists(sandbox, sandboxCRIMetadata{})
 	}
 
-	monitorLog.Debug("initial sync of sbs directory completed")
-	monitorLog.Tracef("pod list from sbs: %v", sandboxList)
+	tryWatchAll()
+	if len(watchedPaths) == 0 {
+		monitorLog.Warnf("no sandbox storage paths available yet; will retry every %d sec.", fsMonitorRetryDelaySeconds)
+	}
 
 	// We try to get CRI (kubernetes) metadata from the container manager for each new kata sandbox we detect.
 	// It may take a while for data to be available, so we always wait podCacheRefreshDelaySeconds before checking.
 	cacheUpdateTimer := time.NewTimer(podCacheRefreshDelaySeconds * time.Second)
 	cacheUpdateTimerIsSet := true
+	watchRetryTicker := time.NewTicker(fsMonitorRetryDelaySeconds * time.Second)
+	defer watchRetryTicker.Stop()
+
 	for {
 		select {
 		case event, ok := <-sbsWatcher.Events:
 			if !ok {
-				monitorLog.WithError(err).Fatal("cannot watch sandboxes fs")
+				monitorLog.Fatal("cannot watch sandboxes fs")
 				os.Exit(1)
 			}
 			monitorLog.WithField("event", event).Debug("got sandbox event")
-			switch event.Op {
-			case fsnotify.Create:
-				splitPath := strings.Split(event.Name, string(os.PathSeparator))
-				id := splitPath[len(splitPath)-1]
+			switch {
+			case event.Op&fsnotify.Create == fsnotify.Create:
+				id := filepath.Base(event.Name)
+				info, statErr := os.Stat(event.Name)
+				if statErr != nil || !info.IsDir() {
+					continue
+				}
 				if !km.sandboxCache.putIfNotExists(id, sandboxCRIMetadata{}) {
 					monitorLog.WithField("pod", id).Warn(
 						"CREATE event but pod already present in the sandbox cache")
+					continue
 				}
 				sandboxList = append(sandboxList, id)
 				monitorLog.WithField("pod", id).Info("sandbox cache: added pod")
@@ -144,15 +179,26 @@ func (km *KataMonitor) startPodCacheUpdater() {
 						"cache update timer fires in %d secs", podCacheRefreshDelaySeconds)
 				}
 
-			case fsnotify.Remove:
-				splitPath := strings.Split(event.Name, string(os.PathSeparator))
-				id := splitPath[len(splitPath)-1]
+			case event.Op&fsnotify.Remove == fsnotify.Remove:
+				// A watched root may disappear (e.g. last sandbox cleaned up the tree).
+				// Drop it from watchedPaths so the retry ticker can re-attach later.
+				if _, ok := watchedPaths[event.Name]; ok {
+					delete(watchedPaths, event.Name)
+					monitorLog.WithField("path", event.Name).Warn("sandbox storage path removed; will retry watch")
+					continue
+				}
+				id := filepath.Base(event.Name)
 				if !km.sandboxCache.deleteIfExists(id) {
 					monitorLog.WithField("pod", id).Warn(
 						"REMOVE event but pod was missing from the sandbox cache")
 				}
 				sandboxList = removeFromSandboxList(sandboxList, id)
 				monitorLog.WithField("pod", id).Info("sandbox cache: removed pod")
+			}
+
+		case <-watchRetryTicker.C:
+			if len(watchedPaths) < len(sandboxFSPaths) {
+				tryWatchAll()
 			}
 
 		case <-cacheUpdateTimer.C:
