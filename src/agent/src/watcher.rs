@@ -88,6 +88,21 @@ impl Drop for Storage {
     }
 }
 
+// Preserve the source's uid and gid on the destination without following
+// symlinks: during atomic Secret/ConfigMap updates a freshly mirrored
+// ..data symlink may briefly dangle, and a following chown(2) would fail
+// with ENOENT (see #13622).
+fn preserve_ownership(metadata: &std::fs::Metadata, path: &Path) -> Result<()> {
+    nix::unistd::fchownat(
+        nix::fcntl::AT_FDCWD,
+        path,
+        Some(Uid::from_raw(metadata.uid())),
+        Some(Gid::from_raw(metadata.gid())),
+        nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW,
+    )
+    .with_context(|| format!("Unable to set ownership for {}", path.display()))
+}
+
 async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
     let metadata = fs::symlink_metadata(&from).await?;
     if metadata.file_type().is_symlink() {
@@ -101,11 +116,7 @@ async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
         fs::copy(&from, &to).await?;
     }
     // preserve the source uid and gid to the destination.
-    nix::unistd::chown(
-        to.as_ref(),
-        Some(Uid::from_raw(metadata.uid())),
-        Some(Gid::from_raw(metadata.gid())),
-    )?;
+    preserve_ownership(&metadata, to.as_ref())?;
 
     Ok(())
 }
@@ -139,12 +150,7 @@ impl Storage {
                     format!("Unable to set permissions for {}", dest_file_path.display())
                 })?;
             // preserve the source directory uid and gid to the destination.
-            nix::unistd::chown(
-                &dest_file_path,
-                Some(Uid::from_raw(metadata.uid())),
-                Some(Gid::from_raw(metadata.gid())),
-            )
-            .with_context(|| format!("Unable to set ownership for {}", dest_file_path.display()))?;
+            preserve_ownership(&metadata, &dest_file_path)?;
 
             return Ok(());
         }
@@ -1065,11 +1071,21 @@ mod tests {
         assert_eq!(fs::metadata(&dst_file).unwrap().gid(), gid.as_raw());
 
         // verify copy of a symlink
+        let link_uid = Uid::from_raw(11);
+        let link_gid = Gid::from_raw(201);
         let src_symlink_file = source_dir.path().join("symlink_file.txt");
         let dst_symlink_file = dest_dir.path().join("symlink_file.txt");
         tokio::fs::symlink(&src_file, &src_symlink_file)
             .await
             .unwrap();
+        nix::unistd::fchownat(
+            nix::fcntl::AT_FDCWD,
+            &src_symlink_file,
+            Some(link_uid),
+            Some(link_gid),
+            nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW,
+        )
+        .unwrap();
         copy(&src_symlink_file, &dst_symlink_file).await.unwrap();
         // verify destination:
         assert!(fs::symlink_metadata(&dst_symlink_file)
@@ -1078,8 +1094,32 @@ mod tests {
             .is_symlink());
         assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
         assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo");
-        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
-        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
+        // the copied symlink itself carries the source symlink's ownership...
+        assert_eq!(
+            fs::symlink_metadata(&dst_symlink_file).unwrap().uid(),
+            link_uid.as_raw()
+        );
+        assert_eq!(
+            fs::symlink_metadata(&dst_symlink_file).unwrap().gid(),
+            link_gid.as_raw()
+        );
+        // ...and the file it points to retains its own ownership.
+        assert_eq!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
+        assert_eq!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
+
+        // verify copy of a dangling symlink: during atomic Secret/ConfigMap
+        // updates the ..data symlink can be mirrored before the timestamped
+        // directory it points to exists, and copy() must still succeed.
+        let src_dangling = source_dir.path().join("..data");
+        let dst_dangling = dest_dir.path().join("..data");
+        tokio::fs::symlink(source_dir.path().join("..2026_08_13_new"), &src_dangling)
+            .await
+            .unwrap();
+        copy(&src_dangling, &dst_dangling).await.unwrap();
+        assert!(fs::symlink_metadata(&dst_dangling)
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[tokio::test]
