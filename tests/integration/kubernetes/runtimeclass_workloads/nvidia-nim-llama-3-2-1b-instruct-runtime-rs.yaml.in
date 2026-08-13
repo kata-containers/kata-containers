@@ -10,13 +10,19 @@ metadata:
   labels:
     app: ${POD_NAME_INSTRUCT}
 spec:
+  # block-plain emptyDir volumes are formatted and mounted in the guest.
+  # Set fsGroup so the agent makes the cache writable by the NIM user.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   restartPolicy: Never
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    image: nvcr.io/nim/meta/llama-3.2-1b-instruct:1.12.0
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
@@ -47,7 +53,7 @@ spec:
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 54
+      failureThreshold: 90
     env:
       - name: NGC_API_KEY
         valueFrom:
@@ -63,19 +69,15 @@ spec:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "40Gi"
-    # Mount the local .cache directory into the container
+        memory: "48Gi"
     volumeMounts:
       - name: nim-cache
         mountPath: /opt/nim/.cache
 
-  # Host path volume for the local .cache directory.
-  # Adjust 'path' to match your $LOCAL_NIM_CACHE location.
   volumes:
   - name: nim-cache
-    hostPath:
-      path: "${LOCAL_NIM_CACHE}"
-      type: DirectoryOrCreate
+    emptyDir:
+      sizeLimit: 64Gi
 ---
 apiVersion: v1
 kind: Secret

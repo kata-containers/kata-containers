@@ -90,8 +90,8 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 	local pods=(
 		"aa-test-cc"
 		"nvidia-cuda-vectoradd"
-		"nvidia-nim-llama-3-1-8b-instruct"
-		"nvidia-nim-llama-3-1-8b-instruct-tee"
+		"nvidia-nim-llama-3-2-1b-instruct"
+		"nvidia-nim-llama-3-2-1b-instruct-tee"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
 		"numa-topology-test"
