@@ -2836,28 +2836,23 @@ impl<'a> QemuCmdLine<'a> {
             ccw_subchannel,
         };
 
-        // With huge pages the whole of the guest RAM comes out of the hugetlbfs
-        // pool, so that backend replaces both the plain RAM one and the
-        // /dev/shm one that add_virtiofs_share() would otherwise install.  This
-        // is the order getMemArgs() uses in the Go runtime
-        // (src/runtime/virtcontainers/qemu.go).
-        let shared_fs_enabled =
-            !matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none"));
-        if config.memory_info.enable_hugepages {
-            // The Go runtime also pre-allocates when huge pages are combined
-            // with filesystem sharing, so a pool that cannot satisfy the
-            // reservation fails the boot instead of the first guest fault.
-            qemu_cmd_line.add_file_memory_backend(
-                "entire-guest-memory",
-                DEV_HUGEPAGES,
-                true,
-                false,
-                config.memory_info.enable_mem_prealloc || shared_fs_enabled,
-            );
-        } else if !shared_fs_enabled {
-            // add_virtiofs_share() installs the file-backed memory backend when
-            // filesystem sharing is enabled.
-            qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
+        // add_virtiofs_share() installs the memory backend when filesystem
+        // sharing is enabled.
+        if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
+            if config.memory_info.enable_hugepages {
+                // The whole of the guest RAM comes out of the hugetlbfs pool,
+                // as getMemArgs() does it in the Go runtime
+                // (src/runtime/virtcontainers/qemu.go).
+                qemu_cmd_line.add_file_memory_backend(
+                    "entire-guest-memory",
+                    DEV_HUGEPAGES,
+                    true,
+                    false,
+                    config.memory_info.enable_mem_prealloc,
+                );
+            } else {
+                qemu_cmd_line.add_ram_memory_backend(config.memory_info.enable_mem_prealloc);
+            }
         }
 
         if config.device_info.enable_iommu {
@@ -3090,12 +3085,16 @@ impl<'a> QemuCmdLine<'a> {
         }
         self.devices.push(Box::new(virtiofs_device));
 
-        // don't put the /dev/shm memory backend file into the anonymous container,
+        // don't put the memory backend file into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
-        //
-        // Huge pages are shared as well, and QemuCmdLine::new() has already
-        // installed that backend, so there is nothing left to do here.
-        if !self.config.memory_info.enable_hugepages {
+        if self.config.memory_info.enable_hugepages {
+            // Huge pages are shared too, so they replace the /dev/shm backend
+            // rather than adding to it.  The Go runtime pre-allocates when the
+            // two are combined (qemu.go sets Knobs.MemPrealloc), so a pool that
+            // cannot satisfy the reservation fails the boot instead of the
+            // first guest fault.
+            self.add_file_memory_backend("entire-guest-memory", DEV_HUGEPAGES, true, false, true);
+        } else {
             self.add_file_memory_backend(
                 "entire-guest-memory-share",
                 "/dev/shm",
