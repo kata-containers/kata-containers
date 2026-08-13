@@ -77,6 +77,8 @@ shims:
       - amd64
       - arm64
     allowedHypervisorAnnotations: []
+    hypervisor:
+      rootless: true
     containerd:
       snapshotter: "erofs"
 
