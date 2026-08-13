@@ -2840,9 +2840,11 @@ impl<'a> QemuCmdLine<'a> {
         // sharing is enabled.
         if matches!(config.shared_fs.shared_fs.as_deref(), None | Some("none")) {
             if config.memory_info.enable_hugepages {
-                // The whole of the guest RAM comes out of the hugetlbfs pool,
-                // as getMemArgs() does it in the Go runtime
-                // (src/runtime/virtcontainers/qemu.go).
+                // Binding the whole of the guest RAM to the hugetlbfs mount is
+                // what takes it from the huge page pool.  qemu then refuses to
+                // start when the pool is not mounted or cannot cover the
+                // sandbox, instead of the guest silently running on ordinary
+                // pages.
                 qemu_cmd_line.add_file_memory_backend(
                     "entire-guest-memory",
                     DEV_HUGEPAGES,
@@ -3089,10 +3091,9 @@ impl<'a> QemuCmdLine<'a> {
         // there has to be at most one of those so keep it by name in Memory instead
         if self.config.memory_info.enable_hugepages {
             // Huge pages are shared too, so they replace the /dev/shm backend
-            // rather than adding to it.  The Go runtime pre-allocates when the
-            // two are combined (qemu.go sets Knobs.MemPrealloc), so a pool that
-            // cannot satisfy the reservation fails the boot instead of the
-            // first guest fault.
+            // rather than adding to it.  Pre-allocating makes a pool too small
+            // for the sandbox fail the boot, rather than surfacing as a fault
+            // at an arbitrary point once the guest is running.
             self.add_file_memory_backend("entire-guest-memory", DEV_HUGEPAGES, true, false, true);
         } else {
             self.add_file_memory_backend(
@@ -3909,7 +3910,7 @@ mod tests {
         let _ = std::fs::remove_file(QMP_SOCKET_FILE);
 
         // Sharing the guest memory over virtio-fs still has to come from the
-        // huge page pool, and it is pre-allocated, as in the Go runtime.
+        // huge page pool, and it is pre-allocated.
         assert!(has_qemu_arg(
             &params,
             "-object",
