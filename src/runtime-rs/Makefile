@@ -94,7 +94,7 @@ else
         Specify "USE_BUILTIN_DB=true" to force enable.)
 endif
 
-ARCH_SUPPORT_OPENVMM := x86_64
+ARCH_SUPPORT_OPENVMM := x86_64 aarch64
 ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_OPENVMM)),)
     USE_OPENVMM := true
 else

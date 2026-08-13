@@ -71,7 +71,8 @@ BASE_TARBALLS = serial-targets \
 	shim-v2-go-tarball \
 	shim-v2-rust-tarball \
 	virtiofsd-tarball
-BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+BASE_SERIAL_TARBALLS = openvmm-tarball \
+	rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-image-devkit-extension-tarball \
