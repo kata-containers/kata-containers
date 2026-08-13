@@ -7,6 +7,7 @@ package utils
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path"
@@ -879,4 +880,35 @@ func TestFilterNUMANodesByCPUSet(t *testing.T) {
 	filtered = FilterNUMANodesByCPUSet(singleNode, sandboxCPUs)
 	assert.Len(filtered, 1)
 	assert.Equal("0", filtered[0].HostNodes)
+}
+
+func TestTmpfsMaxInodes(t *testing.T) {
+	tcs := []struct {
+		name     string
+		size     uint32
+		expected uint64
+	}{
+		{
+			name:     "empty",
+			size:     0,
+			expected: 0,
+		},
+		{
+			name:     "1 MB",
+			size:     1,
+			expected: 128,
+		},
+		{
+			name:     "uint32 overflow",
+			size:     math.MaxInt32,
+			expected: 274877906816,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := TmpfsMaxInodes(tc.size)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
 }

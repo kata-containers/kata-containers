@@ -42,6 +42,9 @@ const DefaultRateLimiterRefillTimeMilliSecs = 1000
 // MibToBytesShift the number to shift needed to convert MiB to Bytes
 const MibToBytesShift = 20
 
+// MibToKibShift the number to shift needed to convert MiB to KiB
+const MibtoKibShift = 10
+
 // MaxSocketPathLen is the effective maximum Unix domain socket length.
 //
 // See unix(7).
@@ -842,4 +845,14 @@ func DistributeVCPUsProportionally(numaNodes []types.GuestNUMANode, totalVCPUs u
 	}
 
 	return vcpusPerNode, nil
+}
+
+// TmpfsMaxInodes computes the max number of inodes
+// for a tmpfs mount as defined by the default calculation of nr_inodes at:
+// https://docs.kernel.org/filesystems/tmpfs.html
+//
+// Assumes 4K pages.
+func TmpfsMaxInodes(sizeMiB uint32) uint64 {
+	// There's 256 4k pages in 1MiB, which translates to 128 inodes.
+	return uint64(sizeMiB) * 128
 }

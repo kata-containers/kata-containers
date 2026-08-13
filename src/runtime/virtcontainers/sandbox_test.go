@@ -229,11 +229,12 @@ func TestPrepareEphemeralMounts(t *testing.T) {
 		assert.Equal(t, s.Source, "tmpfs")
 		assert.Equal(t, s.Fstype, "tmpfs")
 		assert.Equal(t, s.MountPoint, filepath.Join(ephemeralPath(), "tmp"))
-		assert.Equal(t, len(s.Options), 2) // remount, size=1024M
+		assert.Equal(t, len(s.Options), 3) // remount, size=1024M, nr_inodes=131072
 
 		validSet := map[string]struct{}{
-			"remount":    {},
-			"size=1024M": {},
+			"remount":          {},
+			"size=1024M":       {},
+			"nr_inodes=131072": {},
 		}
 		for _, opt := range s.Options {
 			if _, ok := validSet[opt]; !ok {
