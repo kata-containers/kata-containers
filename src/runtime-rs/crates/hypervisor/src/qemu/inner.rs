@@ -35,6 +35,8 @@ use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::{TryFrom, TryInto};
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -108,6 +110,8 @@ impl QemuInner {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
 
+        check_bpf_enabled(self.config.security_info.seccomp_sandbox.as_deref());
+
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
         // open until spawn() is called to launch qemu later in this function,
         // 'cmdline' has to live at least until spawn() is called
@@ -177,6 +181,7 @@ impl QemuInner {
                                 device_id.as_str(),
                                 &path_on_host,
                                 is_direct,
+                                is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                                 discard_unmap,
                                 serial,
@@ -402,13 +407,8 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
-                    let groups = user.groups.clone();
-                    let gid = Gid::from_raw(user.gid);
-                    let uid = Uid::from_raw(user.uid);
-
-                    let _ = set_groups(&groups);
-                    let _ = setgid(gid).context("setgid failed");
-                    let _ = setuid(uid).context("setuid failed");
+                    set_process_credentials(user)
+                        .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
 
                 Ok(())
@@ -948,6 +948,80 @@ impl QemuInner {
     }
 }
 
+const BPF_JIT_ENABLE_PATH: &str = "/proc/sys/net/core/bpf_jit_enable";
+
+fn check_bpf_enabled(seccomp_sandbox: Option<&str>) {
+    check_bpf_enabled_with(
+        seccomp_sandbox,
+        || fs::read_to_string(BPF_JIT_ENABLE_PATH),
+        |message| warn!(sl!(), "{}", message),
+    );
+}
+
+fn check_bpf_enabled_with<ReadStatus, LogWarning>(
+    seccomp_sandbox: Option<&str>,
+    read_status: ReadStatus,
+    mut log_warning: LogWarning,
+) where
+    ReadStatus: FnOnce() -> io::Result<String>,
+    LogWarning: FnMut(String),
+{
+    if seccomp_sandbox.unwrap_or_default().is_empty() {
+        return;
+    }
+
+    let status = match read_status() {
+        Ok(status) => status,
+        Err(err) => {
+            log_warning(format!("failed to get bpf_jit_enable status: {err}"));
+            return;
+        }
+    };
+
+    let enabled = match status.trim().parse::<i32>() {
+        Ok(enabled) => enabled,
+        Err(err) => {
+            log_warning(format!(
+                "failed to convert bpf_jit_enable status to integer: {err}"
+            ));
+            return;
+        }
+    };
+
+    if enabled == 0 {
+        log_warning(
+            "bpf_jit_enable is disabled. It's recommended to turn on bpf_jit_enable to reduce the performance impact of QEMU seccomp sandbox."
+                .to_string(),
+        );
+    }
+}
+
+fn set_process_credentials(user: &RootlessUser) -> Result<()> {
+    set_process_credentials_with(
+        user,
+        set_groups,
+        |gid| setgid(Gid::from_raw(gid)).map_err(anyhow::Error::from),
+        |uid| setuid(Uid::from_raw(uid)).map_err(anyhow::Error::from),
+    )
+}
+
+fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
+    user: &RootlessUser,
+    set_groups_fn: SetGroups,
+    set_gid_fn: SetGid,
+    set_uid_fn: SetUid,
+) -> Result<()>
+where
+    SetGroups: Fn(&[u32]) -> Result<()>,
+    SetGid: Fn(u32) -> Result<()>,
+    SetUid: Fn(u32) -> Result<()>,
+{
+    set_groups_fn(&user.groups).context("setgroups failed")?;
+    set_gid_fn(user.gid).context("setgid failed")?;
+    set_uid_fn(user.uid).context("setuid failed")?;
+    Ok(())
+}
+
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
     info!(sl!(), "starting reading qemu console");
 
@@ -1307,23 +1381,6 @@ impl QemuInner {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_network_device_hotplug_capability() {
-        let (exit_notify, _exit_waiter) = mpsc::channel(1);
-        let qemu = QemuInner::new(exit_notify);
-
-        assert!(qemu
-            .capabilities()
-            .await
-            .unwrap()
-            .is_network_device_hotplug_supported());
-    }
-}
-
 #[async_trait]
 impl Persist for QemuInner {
     type State = HypervisorState;
@@ -1351,5 +1408,187 @@ impl Persist for QemuInner {
 
             exit_notify: Some(exit_notify),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{Cell, RefCell};
+
+    use super::*;
+    use rstest::rstest;
+
+    #[tokio::test]
+    async fn test_network_device_hotplug_capability() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let qemu = QemuInner::new(exit_notify);
+
+        assert!(qemu
+            .capabilities()
+            .await
+            .unwrap()
+            .is_network_device_hotplug_supported());
+    }
+
+    #[rstest]
+    #[case::seccomp_sandbox_unset(None, Err(io::ErrorKind::NotFound), false, None)]
+    #[case::seccomp_sandbox_empty(Some(""), Err(io::ErrorKind::NotFound), false, None)]
+    #[case::read_failure(
+        Some("on"),
+        Err(io::ErrorKind::NotFound),
+        true,
+        Some("failed to get bpf_jit_enable status")
+    )]
+    #[case::parse_failure(
+        Some("on"),
+        Ok("invalid"),
+        true,
+        Some("failed to convert bpf_jit_enable status to integer")
+    )]
+    #[case::disabled(
+        Some("on"),
+        Ok("0\n"),
+        true,
+        Some("bpf_jit_enable is disabled")
+    )]
+    #[case::enabled(Some("on"), Ok("1\n"), true, None)]
+    fn test_bpf_jit_check_warnings(
+        #[case] seccomp_sandbox: Option<&str>,
+        #[case] read_result: Result<&str, io::ErrorKind>,
+        #[case] expect_read: bool,
+        #[case] expected_warning: Option<&str>,
+    ) {
+        let read_called = Cell::new(false);
+        let warnings = RefCell::new(Vec::new());
+        check_bpf_enabled_with(
+            seccomp_sandbox,
+            || {
+                read_called.set(true);
+                read_result
+                    .map(str::to_owned)
+                    .map_err(|kind| io::Error::new(kind, "injected"))
+            },
+            |warning| warnings.borrow_mut().push(warning),
+        );
+
+        assert_eq!(read_called.get(), expect_read);
+
+        let warnings = warnings.borrow();
+        match expected_warning {
+            Some(expected) => {
+                assert_eq!(warnings.len(), 1);
+                assert!(warnings[0].contains(expected));
+            }
+            None => assert!(warnings.is_empty()),
+        }
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum CredentialOperation {
+        SetGroups(Vec<u32>),
+        SetGid(u32),
+        SetUid(u32),
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum CredentialStep {
+        SetGroups,
+        SetGid,
+        SetUid,
+    }
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1001,
+            gid: 1002,
+            groups: vec![1003, 1004],
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    #[rstest]
+    #[case::with_supplementary_groups(vec![1003, 1004])]
+    #[case::without_supplementary_groups(Vec::new())]
+    fn test_set_process_credentials_order(#[case] groups: Vec<u32>) {
+        let operations = RefCell::new(Vec::new());
+        let mut user = rootless_user();
+        user.groups = groups.clone();
+
+        set_process_credentials_with(
+            &user,
+            |groups| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGroups(groups.to_vec()));
+                Ok(())
+            },
+            |gid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetGid(gid));
+                Ok(())
+            },
+            |uid| {
+                operations
+                    .borrow_mut()
+                    .push(CredentialOperation::SetUid(uid));
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            *operations.borrow(),
+            vec![
+                // Calling setgroups with an empty list clears any inherited
+                // supplementary groups and must not be skipped.
+                CredentialOperation::SetGroups(groups),
+                CredentialOperation::SetGid(1002),
+                CredentialOperation::SetUid(1001),
+            ]
+        );
+    }
+
+    #[rstest]
+    #[case::setgroups(CredentialStep::SetGroups, "setgroups failed", 1)]
+    #[case::setgid(CredentialStep::SetGid, "setgid failed", 2)]
+    #[case::setuid(CredentialStep::SetUid, "setuid failed", 3)]
+    fn test_set_process_credentials_stops_on_error(
+        #[case] failed_step: CredentialStep,
+        #[case] expected_error: &str,
+        #[case] expected_calls: usize,
+    ) {
+        let calls = Cell::new(0);
+        let result = set_process_credentials_with(
+            &rootless_user(),
+            |_| {
+                calls.set(calls.get() + 1);
+                if failed_step == CredentialStep::SetGroups {
+                    Err(anyhow!("injected setgroups failure"))
+                } else {
+                    Ok(())
+                }
+            },
+            |_| {
+                calls.set(calls.get() + 1);
+                if failed_step == CredentialStep::SetGid {
+                    Err(anyhow!("injected setgid failure"))
+                } else {
+                    Ok(())
+                }
+            },
+            |_| {
+                calls.set(calls.get() + 1);
+                if failed_step == CredentialStep::SetUid {
+                    Err(anyhow!("injected setuid failure"))
+                } else {
+                    Ok(())
+                }
+            },
+        );
+
+        let error = result.expect_err("credential failure must abort setup");
+        assert!(format!("{error:#}").contains(expected_error));
+        assert_eq!(calls.get(), expected_calls);
     }
 }

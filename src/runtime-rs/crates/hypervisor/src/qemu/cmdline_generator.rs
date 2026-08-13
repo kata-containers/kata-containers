@@ -1089,11 +1089,10 @@ impl ToQemuParams for BlockBackend {
         } else {
             params.push("cache.no-flush=off".to_owned());
         }
-        if self.read_only {
-            params.push("auto-read-only=on".to_owned());
-        } else {
-            params.push("auto-read-only=off".to_owned());
-        }
+        params.push(format!(
+            "read-only={}",
+            if self.read_only { "on" } else { "off" }
+        ));
         if self.discard_unmap {
             params.push("discard=unmap".to_owned());
         }
@@ -3140,16 +3139,19 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_block_device(
         &mut self,
         device_id: &str,
         path: &str,
         is_direct: bool,
+        is_readonly: bool,
         is_scsi: bool,
         discard_unmap: bool,
         serial_override: Option<&str>,
     ) -> Result<()> {
         let mut backend = BlockBackend::new(device_id, path, is_direct);
+        backend.set_read_only(is_readonly);
         backend.set_discard_unmap(discard_unmap);
         self.devices.push(Box::new(backend));
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
@@ -3779,6 +3781,7 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use serial_test::serial;
 
     fn contains_param(params: &[String], expected: &str) -> bool {
@@ -3868,5 +3871,62 @@ mod tests {
         let scsi_hd = DeviceScsiHd::new("blk0", "scsi0.0", None);
         let scsi_hd_params = scsi_hd.qemu_params().await.unwrap();
         assert!(!contains_param(&scsi_hd_params, "discard=on"));
+    }
+
+    #[rstest]
+    #[case::read_only(true, "read-only=on")]
+    #[case::writable(false, "read-only=off")]
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_block_backend_read_only_params(
+        #[case] is_readonly: bool,
+        #[case] expected_param: &str,
+    ) {
+        let config = test_qemu_config(Some("none"), false);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+        let mut cmdline = QemuCmdLine::new("block-read-only", &config).unwrap();
+        cmdline
+            .add_block_device(
+                "blk0",
+                "/tmp/disk.img",
+                true,
+                is_readonly,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
+
+        let params = cmdline.build().await.unwrap();
+        assert!(params.windows(2).any(|args| {
+            args[0] == "-blockdev"
+                && args[1].contains("node-name=image-blk0")
+                && contains_param(&args[1..2], expected_param)
+        }));
+        assert!(!params.iter().any(|arg| arg.contains("auto-read-only=")));
+
+        drop(cmdline);
+        let _ = std::fs::remove_file(QMP_SOCKET_FILE);
+    }
+
+    #[rstest]
+    #[case::sandbox_unset(None, vec![])]
+    #[case::sandbox_enabled(Some("on"), vec!["on"])]
+    #[actix_rt::test]
+    #[serial]
+    async fn test_qemu_seccomp_sandbox_params(
+        #[case] seccomp_sandbox: Option<&str>,
+        #[case] expected_values: Vec<&str>,
+    ) {
+        let mut config = test_qemu_config(None, false);
+        config.security_info.seccomp_sandbox = seccomp_sandbox.map(str::to_owned);
+        let params = build_test_cmdline("seccomp-sandbox", &config).await;
+
+        let values: Vec<&str> = params
+            .windows(2)
+            .filter_map(|args| (args[0] == "-sandbox").then_some(args[1].as_str()))
+            .collect();
+
+        assert_eq!(values, expected_values);
     }
 }
