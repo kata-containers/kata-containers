@@ -46,9 +46,9 @@ qemu_rootless_skip_reason() {
 	fi
 
 	# Inclusions:
-	# - the NVIDIA GPU TEE (SNP, TDX) runtime-rs handlers: for NVIDIA's TEE
-	# CI machine path, we will make use of kata-deploy to configure for rootless
-	# execution. For the time being, The SNP machine was configured by hand.
+	# - the NVIDIA TEE runtime-rs handlers provisioned for rootless mode via
+	# kata-deploy (a future TDX machine still requires QGS provisioning via an
+	# external TDX chart).
 	# - the IBM Secure Execution for Linux (SEL) runtime-rs handler
 	# (qemu-se-runtime-rs): kata-deploy provisions /dev/uv for the rootless
 	# VMM user when rootless is configured.
@@ -192,24 +192,14 @@ setup() {
 			}]
 		' "${pod_config}"
 	fi
-	# The kill test must find the shim alive whenever it gets to the
-	# SIGKILL, not just in the first half minute of the pod's life, and
-	# the command has to be set before the policy is generated from it.
+	# Keep the pod running until the test deletes it; set the command before
+	# generating the policy.
 	set_container_command "${pod_config}" 0 sleep infinity
-	# Drop this request once the NVIDIA GPU runtime-rs configurations enable
-	# rootless by default. Until then, ask for a GPU explicitly so this test
-	# exercises the runtime-rs VFIO file-descriptor path.
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
-	fi
 
 	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
 	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
 	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
 	set_node "${watchable_pod_config}" "${node}"
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
-	fi
 
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"
