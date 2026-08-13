@@ -40,28 +40,6 @@ wait_for_rootless_host_resources() {
 	return 1
 }
 
-# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
-# by default. Until then, explicitly request a GPU so this test exercises the
-# runtime-rs VFIO file-descriptor path.
-nvidia_gpu_request_supported() {
-	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
-	is_runtime_rs || return 1
-	is_nvidia_gpu_platform || return 1
-}
-
-request_gpu_for_nvidia_gpu_runtime_rs() {
-	local available_gpus
-	local config="$1"
-
-	available_gpus="$(kubectl get node "${node}" \
-		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
-	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
-		die "${node} has no allocatable nvidia.com/pgpu resource"
-
-	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
-		"${config}"
-}
-
 # Print why the current runtime cannot run this rootless VMM smoke test. A
 # non-zero return means the runtime is supported.
 rootless_vmm_skip_reason() {
@@ -98,11 +76,11 @@ qemu_rootless_skip_reason() {
 		fi
 	fi
 
-	# The NVIDIA GPU TEE (SNP, TDX) handlers are not excluded. For NVIDIA's
-	# SNP CI machine path, we make use of kata-deploy to configure /dev/sev,
-	# while the NVIDIA GPU TDX path was tested by hand due to the absence of
-	# a CI machine.
-	# The non-TEE qemu-coco-dev handlers are not excluded as these do not need
+	# The NVIDIA GPU TEE (SNP, TDX) handlers are enabled. The SNP runner uses
+	# the kata-deploy rootless profile, which grants scoped access to /dev/sev.
+	# For the NVIDIA TDX path, no CI runner exists yet, but will be configured
+	# accordingly for access to the QGS socket.
+	# The non-TEE qemu-coco-dev handlers are enabled as these do not need
 	# device/socket access provisioning. This leaves us with the following
 	# exclusions:
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
@@ -243,17 +221,11 @@ setup() {
 		' "${pod_config}"
 	fi
 	set_container_command "${pod_config}" 0 sleep 30
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
-	fi
 
 	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
 	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
 	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
 	set_node "${watchable_pod_config}" "${node}"
-	if nvidia_gpu_request_supported; then
-		request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
-	fi
 
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"
