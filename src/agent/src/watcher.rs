@@ -97,15 +97,25 @@ async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
             fs::remove_file(&to).await?;
         }
         fs::symlink(fs::read_link(&from).await?, &to).await?;
+        // preserve the source uid and gid to the destination.
+        // For symlinks, use fchownat with AT_SYMLINK_NOFOLLOW to avoid
+        // following a dangling symlink to a target that hasn't been copied yet.
+        nix::unistd::fchownat(
+            None,
+            to.as_ref(),
+            Some(Uid::from_raw(metadata.uid())),
+            Some(Gid::from_raw(metadata.gid())),
+            nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW,
+        )?;
     } else {
         fs::copy(&from, &to).await?;
+        // preserve the source uid and gid to the destination.
+        nix::unistd::chown(
+            to.as_ref(),
+            Some(Uid::from_raw(metadata.uid())),
+            Some(Gid::from_raw(metadata.gid())),
+        )?;
     }
-    // preserve the source uid and gid to the destination.
-    nix::unistd::chown(
-        to.as_ref(),
-        Some(Uid::from_raw(metadata.uid())),
-        Some(Gid::from_raw(metadata.gid())),
-    )?;
 
     Ok(())
 }
