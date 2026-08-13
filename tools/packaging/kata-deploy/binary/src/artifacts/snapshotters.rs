@@ -391,9 +391,12 @@ pub async fn uninstall_nydus_snapshotter(config: &Config) -> Result<()> {
         _ => NYDUS_FOR_KATA_TEE.to_string(),
     };
 
-    utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")]).await?;
-
-    fs::remove_file(format!("/etc/systemd/system/{nydus_snapshotter}.service")).ok();
+    let service = format!("/etc/systemd/system/{nydus_snapshotter}.service");
+    if Path::new(&service).exists() {
+        utils::host_systemctl(&["disable", "--now", &format!("{nydus_snapshotter}.service")])
+            .await?;
+        fs::remove_file(service).ok();
+    }
     fs::remove_dir_all(format!("{}/{NYDUS_FOR_KATA_TEE}", config.host_install_dir)).ok();
 
     // The nydus data directory (/var/lib/nydus-for-kata-tee) is intentionally preserved.
