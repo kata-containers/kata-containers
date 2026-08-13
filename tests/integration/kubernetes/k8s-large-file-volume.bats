@@ -6,11 +6,14 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	if ! is_shared_fs_none_runtime_class; then
+		skip "Test requires a shared_fs=none runtime class"
+	fi
+
 	setup_common || die "setup_common failed"
 	pod_name="test-large-file-volume"
 	container_name="busybox-large-file-volume-container"
@@ -57,8 +60,9 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	if ! is_shared_fs_none_runtime_class; then
+		return
+	fi
 
 	kubectl describe pod "$pod_name"
 

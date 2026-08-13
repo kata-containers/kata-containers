@@ -8,8 +8,6 @@ kind: Pod
 metadata:
   name: test-large-file-volume
 spec:
-  annotations:
-    io.katacontainers.config.hypervisor.default_memory: 5120
   runtimeClassName: kata
   securityContext:
     supplementalGroups: [10]
@@ -24,10 +22,10 @@ spec:
   - name: busybox-large-file-volume-container
     image: quay.io/prometheus/busybox:latest
     resources:
-    requests:
-      memory: 3Gi
-    limits:
-      memory: 3Gi
+      requests:
+        memory: 12Gi
+      limits:
+        memory: 12Gi
     volumeMounts:
     - name: shared-file
       mountPath: MOUNT_PATH
