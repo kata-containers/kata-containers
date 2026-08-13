@@ -653,6 +653,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if !oci_process.cwd().as_os_str().is_empty() {
         unistd::chdir(oci_process.cwd().display().to_string().as_str())?;
     }
+    verify_cwd()?;
     // Create new session for init/exec process rather than inheriting parent's session
     // This ensures the init/exec process owns independent session ID, which aligns with runc behavior.
     unistd::setsid().context("create a new session")?;
@@ -831,6 +832,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     }
 
     do_exec(&args);
+}
+
+// Verify that chdir did not follow a procfs magic link outside the container
+// mount namespace. libc reports ENOENT when cwd is unreachable from root.
+fn verify_cwd() -> Result<()> {
+    match unistd::getcwd() {
+        Err(Errno::ENOENT) => Err(anyhow!(
+            "current working directory is outside the container mount namespace root"
+        )),
+        Err(e) => Err(anyhow!("failed to verify current working directory: {e}")),
+        Ok(_) => Ok(()),
+    }
 }
 
 // set_stdio_permissions fixes the permissions of PID 1's STDIO

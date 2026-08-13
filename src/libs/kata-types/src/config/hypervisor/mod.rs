@@ -684,6 +684,12 @@ pub struct CpuInfo {
     /// - On ARM with GICv2, max is 8
     #[serde(default)]
     pub default_maxvcpus: u32,
+
+    /// Disables nested virtualization in the guest for Cloud Hypervisor.
+    ///
+    /// If unspecified, the option is omitted from the Cloud Hypervisor configuration.
+    #[serde(default)]
+    pub disable_nested_virtualization: Option<bool>,
 }
 
 impl CpuInfo {
@@ -2045,12 +2051,14 @@ mod tests {
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
+                    disable_nested_virtualization: None,
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
+                    disable_nested_virtualization: None,
                 },
             },
             TestData {
@@ -2060,12 +2068,14 @@ mod tests {
                     default_vcpus: 9999999.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
+                    disable_nested_virtualization: None,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: node_cpus,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
+                    disable_nested_virtualization: None,
                 },
             },
             TestData {
@@ -2075,12 +2085,14 @@ mod tests {
                     default_vcpus: -1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
+                    disable_nested_virtualization: None,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
                     default_vcpus: 1.0,
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
+                    disable_nested_virtualization: None,
                 },
             },
             TestData {
@@ -2090,12 +2102,14 @@ mod tests {
                     default_vcpus: 0.0,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
+                    disable_nested_virtualization: None,
                 },
                 output: CpuInfo {
                     cpu_features: "x,y".to_string(),
                     default_vcpus,
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
+                    disable_nested_virtualization: None,
                 },
             },
         ];
