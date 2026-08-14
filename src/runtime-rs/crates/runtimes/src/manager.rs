@@ -26,7 +26,10 @@ use hypervisor::{
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation,
-    config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
+    config::{
+        default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig,
+        KATA_PATH,
+    },
     mount::SHM_DEVICE,
     prefix_with_rootless_dir,
     rootless::{is_rootless, rootless_dir, set_rootless},
@@ -1024,6 +1027,11 @@ impl Drop for RootlessSetupGuard {
     }
 }
 
+fn prepare_rootless_runtime_root(path: &Path) -> Result<()> {
+    create_dir_all_with_inherit_owner(path, 0o750)
+        .with_context(|| format!("create rootless runtime root {}", path.display()))
+}
+
 fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetupGuard> {
     let user_name = create_vmm_user().context("failed to create vmm user")?;
     let mut guard = RootlessSetupGuard::new(user_name.clone());
@@ -1051,6 +1059,9 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
 
     env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
 
+    let runtime_root = PathBuf::from(prefix_with_rootless_dir(KATA_PATH));
+    prepare_rootless_runtime_root(&runtime_root)?;
+
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
 
@@ -1074,6 +1085,23 @@ mod tests {
     use common::types::ShutdownRequest;
     use rstest::rstest;
     use tokio::sync::mpsc::channel;
+
+    #[test]
+    fn test_prepare_rootless_runtime_root() {
+        let parent = tempfile::tempdir().unwrap();
+        let runtime_root = parent.path().join("run").join("kata");
+
+        prepare_rootless_runtime_root(&runtime_root).unwrap();
+        prepare_rootless_runtime_root(&runtime_root).unwrap();
+
+        let parent_metadata = std::fs::metadata(parent.path()).unwrap();
+        for path in [parent.path().join("run"), runtime_root] {
+            let metadata = std::fs::metadata(path).unwrap();
+            assert!(metadata.is_dir());
+            assert_eq!(metadata.uid(), parent_metadata.uid());
+            assert_eq!(metadata.gid(), parent_metadata.gid());
+        }
+    }
 
     #[rstest]
     #[case::armed_guard_removes_runtime_dir(false, false)]
