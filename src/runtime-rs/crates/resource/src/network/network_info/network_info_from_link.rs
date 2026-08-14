@@ -192,7 +192,9 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
         match nla {
             RouteAttribute::Destination(d) => {
                 let dest = parse_route_addr(d)?;
-                route.dest = dest.to_string();
+                let dest_prefix_len = route_msg.header.destination_prefix_length;
+
+                route.dest = format!("{}/{}", dest, dest_prefix_len);
             }
             RouteAttribute::Gateway(g) => {
                 let dest = parse_route_addr(g)?;
@@ -289,4 +291,22 @@ fn parse_route_addr(ra: &RouteAddress) -> Result<IpAddr> {
     };
 
     Ok(ipaddr)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_route_preserves_destination_prefix_length() {
+        let route_msg = RouteMessageBuilder::<Ipv4Addr>::new()
+            .destination_prefix(Ipv4Addr::new(10, 244, 0, 0), 16)
+            .build();
+
+        let route = generate_route("eth0", &route_msg)
+            .expect("route should be valid")
+            .expect("route should not be filtered");
+
+        assert_eq!(route.dest, "10.244.0.0/16");
+    }
 }
