@@ -68,9 +68,26 @@ async fn create_grpc_channel(socket_path: &str) -> Result<Channel> {
     Ok(channel)
 }
 
-/// Collect the CDI device names in a container's DynamicResources (KEP-3695):
-/// DRA allocations are reported only there, never in the device-plugin
-/// `devices` field.
+/// Collect the CDI device names in a container's DynamicResources (KEP-3695).
+///
+/// A PodResources response carries device data in two places that never
+/// shadow each other, which is why each source gets its own collector:
+///
+/// ```text
+/// containers:
+/// - name: workload
+///   devices:                              # device-plugin allocations
+///   - resource_name: "nvidia.com/pgpu"
+///     device_ids: ["GPU-8c25ea9f"]
+///   dynamic_resources:                    # DRA allocations (read here)
+///   - claim_resources:
+///     - cdi_devices:
+///       - name: "gpu.example.com/gpu=gpu0"
+/// ```
+///
+/// DRA allocations appear only under `dynamic_resources`; the legacy
+/// `devices` field is read by `select_cold_plug_devices` when
+/// "device-plugin" is a trusted source.
 fn collect_pod_resource_cdi_devices(container: &ContainerResources) -> Vec<String> {
     let mut devices = Vec::new();
     for dr in &container.dynamic_resources {
@@ -191,6 +208,15 @@ fn select_cold_plug_devices(
     Ok(dedup_strings(&devices))
 }
 
+/// Resolve the pod's cold-plug CDI device list from kubelet's PodResources
+/// API, trusting only the sources named in `sources`.
+///
+/// "device-plugin" and "dra" may be listed together: an operator can serve
+/// different device classes through each API on the same node, and a node
+/// migrating between the two runs both for a while. The sets have to stay
+/// disjoint, because kubelet counts a device advertised via both APIs twice
+/// at scheduling; a same-device collision is rejected by the overlap check
+/// instead of being plugged twice.
 pub async fn get_pod_cdi_devices(
     socket: &str,
     annotations: &HashMap<String, String>,
