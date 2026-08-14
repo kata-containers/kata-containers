@@ -16,7 +16,7 @@ spec:
     runAsUser: 1000
     runAsGroup: 1000
     fsGroup: 1000
-  restartPolicy: Never
+  restartPolicy: OnFailure
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct

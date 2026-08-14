@@ -10,7 +10,7 @@ metadata:
   labels:
     app: ${POD_NAME_INSTRUCT}
 spec:
-  restartPolicy: Never
+  restartPolicy: OnFailure
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct

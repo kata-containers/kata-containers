@@ -23,7 +23,7 @@ spec:
     runAsGroup: 1000
     fsGroup: 1000
     supplementalGroups: [4, 20, 24, 25, 27, 29, 30, 44, 46]
-  restartPolicy: Never
+  restartPolicy: OnFailure
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
