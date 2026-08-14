@@ -93,3 +93,211 @@ fn cgroup_exists(path: &str) -> bool {
 pub(crate) fn normalize_cgroup_path(path: &str) -> &str {
     path.trim().trim_matches('/')
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_cgroup_from_cgroup_file() {
+        let test_cases = vec![
+            (
+                "0::/system.slice/cri-containerd-abc.scope/init.scope\n",
+                "system.slice/cri-containerd-abc.scope",
+                Some("system.slice/cri-containerd-abc.scope/init.scope"),
+            ),
+            (
+                "0::/system.slice/cri-containerd-abc.scope/init.scope\n",
+                "/system.slice/cri-containerd-abc.scope",
+                Some("system.slice/cri-containerd-abc.scope/init.scope"),
+            ),
+            (
+                "0::/\n",
+                "system.slice/cri-containerd-abc.scope",
+                Some("system.slice/cri-containerd-abc.scope"),
+            ),
+            (
+                "0::/kubepods/besteffort/podx/ctry/init\n",
+                "/kubepods/besteffort/podx/ctry",
+                Some("kubepods/besteffort/podx/ctry/init"),
+            ),
+            (
+                "0::/system.slice/foo.scope\n",
+                "system.slice/foo.scope",
+                Some("system.slice/foo.scope"),
+            ),
+            (
+                "0::/system.slice/foo.scope/\n",
+                "system.slice/foo.scope",
+                Some("system.slice/foo.scope"),
+            ),
+            (
+                "0::/a/b.slice/init.scope/payload.service\n",
+                "/a/b.slice",
+                Some("a/b.slice/init.scope/payload.service"),
+            ),
+            (
+                "12:memory:/\n11:cpu,cpuacct:/\n",
+                "system.slice/foo.scope",
+                None,
+            ),
+            ("", "system.slice/foo.scope", None),
+            (
+                "12:memory:/\n0::/a/b/init.scope\n",
+                "/a/b",
+                Some("a/b/init.scope"),
+            ),
+        ];
+
+        for (contents, container_cgroup, expected) in test_cases {
+            assert_eq!(
+                cgroup_from_cgroup_file(contents, normalize_cgroup_path(container_cgroup))
+                    .as_deref(),
+                expected,
+                "contents={:?} container={}",
+                contents,
+                container_cgroup
+            );
+        }
+    }
+
+    #[test]
+    fn test_live_cgroup_v2_init_scope_lookup() {
+        use std::process::{Command, Stdio};
+
+        skip_if_not_root!();
+        if !cgroups::hierarchies::is_cgroup2_unified_mode() {
+            println!("INFO: skipping live cgroup test; not cgroup v2");
+            return;
+        }
+
+        let root = cgroups::hierarchies::auto().root();
+        let name = format!(
+            "kata-nest-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+        let parent = root.join(&name);
+        if let Err(err) = fs::create_dir(&parent) {
+            println!(
+                "INFO: skipping live cgroup test; cannot create {:?}: {}",
+                parent, err
+            );
+            return;
+        }
+
+        let init_scope = parent.join("init.scope");
+        fs::create_dir(&init_scope).unwrap();
+
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let child_pid = child.id() as i32;
+
+        defer!({
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_dir(&init_scope);
+            let _ = fs::remove_dir(&parent);
+        });
+
+        fs::write(init_scope.join("cgroup.procs"), child_pid.to_string()).unwrap();
+
+        let looked_up = exec_cgroup(i32::MAX, child_pid, &name);
+        assert_eq!(looked_up, format!("{name}/init.scope"));
+
+        if fs::write(parent.join("cgroup.subtree_control"), "+pids").is_ok() {
+            let mut extra = Command::new("sleep")
+                .arg("5")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            let extra_pid = extra.id() as i32;
+            let err = fs::write(parent.join("cgroup.procs"), extra_pid.to_string()).unwrap_err();
+            assert_eq!(err.raw_os_error(), Some(libc::EBUSY));
+            fs::write(init_scope.join("cgroup.procs"), extra_pid.to_string()).unwrap();
+            extra.kill().ok();
+            let _ = extra.wait();
+        }
+    }
+
+    #[test]
+    fn test_live_cgroup_v2_init_moved_outside() {
+        use std::process::{Command, Stdio};
+
+        skip_if_not_root!();
+        if !cgroups::hierarchies::is_cgroup2_unified_mode() {
+            println!("INFO: skipping live cgroup test; not cgroup v2");
+            return;
+        }
+
+        let root = cgroups::hierarchies::auto().root();
+        let stamp = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+        let container = root.join(format!("kata-nest-test-{stamp}"));
+        let outside = root.join(format!("kata-nest-out-{stamp}"));
+        if let Err(err) = fs::create_dir(&container) {
+            println!(
+                "INFO: skipping live cgroup test; cannot create {:?}: {}",
+                container, err
+            );
+            return;
+        }
+        if let Err(err) = fs::create_dir(&outside) {
+            let _ = fs::remove_dir(&container);
+            println!(
+                "INFO: skipping live cgroup test; cannot create {:?}: {}",
+                outside, err
+            );
+            return;
+        }
+
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let child_pid = child.id() as i32;
+
+        defer!({
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = fs::remove_dir(&outside);
+            let _ = fs::remove_dir(&container);
+        });
+
+        if let Err(err) = fs::write(outside.join("cgroup.procs"), child_pid.to_string()) {
+            println!(
+                "INFO: skipping live cgroup test; cannot move pid into {:?}: {}",
+                outside, err
+            );
+            return;
+        }
+
+        let looked_up = exec_cgroup(
+            i32::MAX,
+            child_pid,
+            container.file_name().unwrap().to_str().unwrap(),
+        );
+        assert_eq!(looked_up, outside.file_name().unwrap().to_str().unwrap());
+    }
+}
