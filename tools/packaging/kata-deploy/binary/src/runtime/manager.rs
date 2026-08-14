@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::Config;
-use crate::k8s;
 use crate::utils;
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -45,15 +44,16 @@ async fn is_unit_active(unit: &str) -> bool {
 }
 
 pub async fn get_container_runtime(config: &Config) -> Result<String> {
-    let runtime_version = k8s::get_container_runtime_version(config)
+    let runtime_version = config
+        .resolve_container_runtime_version()
         .await
         .context("Failed to get container runtime version")?;
 
-    let microk8s = k8s::get_node_label(config, "microk8s.io/cluster")
-        .await
-        .ok()
-        .flatten();
-    if microk8s.as_deref() == Some("true") {
+    // Asked of the host rather than of the `microk8s.io/cluster` node label, so
+    // that a pod holding no Kubernetes credentials can still tell: microk8s runs
+    // containerd as a snap daemon, and the version string kubelet reports says
+    // only "containerd".
+    if is_unit_active(&cri_systemd_unit("microk8s")).await {
         return Ok("microk8s".to_string());
     }
 
@@ -188,7 +188,7 @@ pub async fn is_containerd_capable_of_using_drop_in_files(
     let runtime_version = if runtime == "k0s-worker" || runtime == "k0s-controller" {
         None
     } else {
-        Some(k8s::get_container_runtime_version(config).await?)
+        Some(config.resolve_container_runtime_version().await?)
     };
 
     Ok(is_containerd_capable_of_drop_in(
@@ -299,11 +299,28 @@ pub async fn cleanup_cri_runtime_config(config: &Config, runtime: &str) -> Resul
     Ok(())
 }
 
-/// Restart the CRI runtime and wait for the node to become ready.
-pub async fn restart_and_wait_for_ready(config: &Config, runtime: &str) -> Result<()> {
+/// Restart the CRI runtime and wait for it to come back.
+///
+/// `staged` picks the wait: a staged per-node Job has no Kubernetes credentials
+/// and waits on the systemd unit, the DaemonSet waits for the node to go Ready.
+pub async fn restart_and_wait_for_ready(
+    config: &Config,
+    runtime: &str,
+    staged: bool,
+) -> Result<()> {
     log::info!("restart_and_wait_for_ready: Restarting runtime");
     lifecycle::restart_cri_runtime(config, runtime).await?;
     log::info!("restart_and_wait_for_ready: Successfully restarted runtime");
+
+    if staged {
+        if !matches!(runtime, "k0s-worker" | "k0s-controller") {
+            log::info!(
+                "restart_and_wait_for_ready: Waiting for the CRI runtime unit (timeout: 300s)"
+            );
+            lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+        }
+        return Ok(());
+    }
 
     log::info!("restart_and_wait_for_ready: Waiting for node to become ready (timeout: 300s)");
     lifecycle::wait_till_node_is_ready_timeout(config, Some(300)).await?;

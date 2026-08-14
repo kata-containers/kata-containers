@@ -789,6 +789,34 @@ true
 {{- end -}}
 
 {{/*
+Only guest pull and EROFS conversion can make CreateContainer exceed kubelet's
+default two-minute runtime timeout. The dispatcher owns this API check once the
+staged per-node process takes its runtime facts from the environment.
+*/}}
+{{- define "kata-deploy.kubeletTimeoutWarnSecs" -}}
+{{- $needed := false -}}
+{{- range $arch := list "amd64" "arm64" "s390x" "ppc64le" -}}
+{{- if include "kata-deploy.getForceGuestPullForArch" (dict "root" $ "arch" $arch) | trim -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- if contains "guest-pull" (include "kata-deploy.getPullTypeMappingForArch" (dict "root" $ "arch" $arch) | trim) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- end -}}
+{{- if contains "erofs" (include "kata-deploy.getSnapshotterSetup" . | trim) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- if .Values.customRuntimes.enabled -}}
+{{- range $runtime := (.Values.customRuntimes.runtimes | default list) -}}
+{{- if contains "guest-pull" (dig "crio" "pullType" "" $runtime | toString) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $needed -}}600{{- end -}}
+{{- end -}}
+
+{{/*
 Where a dispatcher pod may run: `nodeSelector` and `tolerations` blocks for the
 install and cleanup dispatchers.
 

@@ -80,10 +80,13 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ .Chart.Name }}-dispatcher-noderole{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
 rules:
-# Enumerating nodes is inherently cluster-scoped.
+# Enumerating nodes is inherently cluster-scoped. `get` re-reads one node (its
+# readiness, and the label back after patching it); `patch` sets the
+# katacontainers.io/kata-runtime label and lifts start-up taints, which is the
+# work the per-node Jobs used to do with a token of their own.
 - apiGroups: [""]
   resources: ["nodes"]
-  verbs: ["list"]
+  verbs: ["list", "get", "patch"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
