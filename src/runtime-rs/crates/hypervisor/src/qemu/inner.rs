@@ -428,9 +428,17 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
-        let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+        // Drop the parent's QMP listen FD so a dead QEMU cannot leave a
+        // non-accepting listener that wedges unbounded connect(2).
+        cmdline.drop_qmp_listen_fd();
 
-        match Qmp::new(&qmp_socket_path) {
+        let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+        let qmp_result = {
+            let mut qemu_guard = self.qemu_process.lock().await;
+            Qmp::new(&qmp_socket_path, qemu_guard.as_mut())
+        };
+
+        match qmp_result {
             Ok(mut qmp) => {
                 if let Some(subchannel) = cmdline.take_ccw_subchannel() {
                     qmp.set_ccw_subchannel(subchannel);
