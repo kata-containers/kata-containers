@@ -27,6 +27,12 @@ pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 /// EmptyDir mode: plug a block device to be mounted directly in the guest.
 pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 
+/// Device source token for the legacy device-plugin API (container.Devices).
+pub const POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN: &str = "device-plugin";
+
+/// Device source token for Dynamic Resource Allocation (KEP-3695).
+pub const POD_RESOURCE_DEVICE_SOURCE_DRA: &str = "dra";
+
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Runtime {
@@ -236,12 +242,6 @@ pub struct Runtime {
 fn default_passfd_listener_port() -> u32 {
     default::DEFAULT_PASSFD_LISTENER_PORT
 }
-
-/// Device source token for the legacy device-plugin API (container.Devices).
-pub const POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN: &str = "device-plugin";
-
-/// Device source token for Dynamic Resource Allocation (KEP-3695).
-pub const POD_RESOURCE_DEVICE_SOURCE_DRA: &str = "dra";
 
 fn default_pod_resource_device_sources() -> Vec<String> {
     vec![POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()]
