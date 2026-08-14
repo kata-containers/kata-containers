@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 // default xdg runtime directory just in case XDG_RUNTIME_DIR is not set
@@ -42,6 +43,9 @@ func RootlessInit() (persistapi.PersistDriver, error) {
 	}
 
 	fsDriver.storageRootPath = filepath.Join(rootlessDir, fsDriver.storageRootPath)
+	if err := utils.MkdirAllWithInheritedOwner(fsDriver.storageRootPath, dirMode); err != nil {
+		return nil, fmt.Errorf("failed to prepare rootless FS storage path %s: %w", fsDriver.storageRootPath, err)
+	}
 	fsDriver.driverName = "rootlessfs"
 
 	return &RootlessFS{fsDriver}, nil
