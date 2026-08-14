@@ -782,3 +782,39 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 **Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
+
+## TEE key advertisement
+
+A confidential VM consumes a *hardware key slot* — an encrypted-state ID on AMD
+SEV-SNP, a key ID on Intel TDX — and a node has a small, fixed number of them. The chart models that
+as an extended resource so the scheduler stops placing confidential pods on a node
+whose slots are all taken, instead of letting the VM fail to start:
+
+- a `NodeFeatureRule` tells node-feature-discovery to advertise the per-node counts
+  as `sev-snp.amd.com/esids` and `tdx.intel.com/keys`
+- the matching `RuntimeClass`es request one of them in `overhead.podFixed`, so every
+  pod that uses the class consumes a slot
+
+Both halves are one switch, because requesting a resource nothing advertises would
+leave confidential pods `Pending` forever:
+
+```yaml title="values.yaml"
+nodeFeatureRules:
+  create: auto   # auto | true | false
+```
+
+`auto` renders them when NFD is in the picture: installed by this chart
+(`node-feature-discovery.enabled=true`), already present in the cluster, or its CRD
+is registered. `true` and `false` decide outright.
+
+`false` turns off **both** halves: no rule, and no confidential `RuntimeClass` asks
+for a TEE key. It is the escape hatch for a cluster that wants no part of this — not
+the way to keep the requests while managing the rule elsewhere. If you create an
+equivalent rule yourself, leave this at `auto` (or set it to `true`) so the requests
+are still rendered, and delete the chart's rule if it duplicates yours.
+
+!!! note "Naming, and a rule you may have to delete by hand"
+    The chart's rule is named `kata-tee-keys`, suffixed with
+    `env.multiInstallSuffix` when that is set. A rule called `amd64-tee-keys`
+    belongs to a release that has not been upgraded yet, and can be deleted once
+    every release has been.
