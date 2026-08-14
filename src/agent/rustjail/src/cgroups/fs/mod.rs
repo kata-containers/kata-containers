@@ -1196,6 +1196,18 @@ impl Manager {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn load_for_test(cpath: &str) -> Self {
+        Self {
+            paths: HashMap::new(),
+            mounts: HashMap::new(),
+            cpath: cpath.to_string(),
+            cgroup: load_cgroup(cgroups::hierarchies::auto(), cpath),
+            pod_cgroup: None,
+            devcg_allowed_all: false,
+        }
+    }
+
     fn get_paths_and_mounts(
         cpath: &str,
     ) -> Result<(HashMap<String, String>, HashMap<String, String>)> {
