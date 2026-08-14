@@ -19,6 +19,7 @@ use cgroups::{
     DeviceResource, HugePageResource, MaxValue, NetworkPriority,
 };
 
+use crate::cgroups::nested::exec_cgroup;
 use crate::cgroups::{rule_for_all_devices, Manager as CgroupManager};
 use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
@@ -44,8 +45,6 @@ use std::sync::{Arc, RwLock};
 use super::DevicesCgroupInfo;
 
 const GUEST_CPUS_PATH: &str = "/sys/devices/system/cpu/online";
-const ROOT_SUBCGROUP: &str = "/";
-const INIT_SUBCGROUP: &str = "/init/";
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -85,18 +84,12 @@ macro_rules! set_resource {
 }
 
 impl CgroupManager for Manager {
-    fn apply(&self, pid: pid_t) -> Result<()> {
-        let cgroup_pid = CgroupPid::from(pid as u64);
-        if cgroup_has_init_subcgroup(&self.cpath) {
-            let cpath = self.cgroup_path_with_subcgroup(INIT_SUBCGROUP);
-            load_cgroup(cgroups::hierarchies::auto(), &cpath)
-                .add_task_by_tgid(cgroup_pid)
-                .with_context(|| format!("add task {} to cgroup {}", pid, cpath))?;
-        } else {
-            self.cgroup
-                .add_task_by_tgid(cgroup_pid)
-                .with_context(|| format!("add task {} to cgroup {}", pid, self.cpath))?;
-        }
+    fn apply(&self, pid: pid_t, init_pid: pid_t) -> Result<()> {
+        let path = exec_cgroup(pid, init_pid, &self.cpath);
+        let cgroup = load_cgroup(cgroups::hierarchies::auto(), &path);
+        cgroup
+            .add_task_by_tgid(CgroupPid::from(pid as u64))
+            .context(format!("add task {} to cgroup {}", pid, cgroup.path()))?;
         Ok(())
     }
 
@@ -1024,15 +1017,9 @@ pub fn get_paths() -> Result<HashMap<String, String>> {
     Ok(m)
 }
 
+#[cfg(test)]
 fn cgroup_path_under_root(root: impl AsRef<Path>, cpath: &str) -> PathBuf {
     root.as_ref().join(cpath.trim_start_matches('/'))
-}
-
-fn cgroup_has_init_subcgroup(cpath: &str) -> bool {
-    cgroups::hierarchies::is_cgroup2_unified_mode()
-        && cgroup_path_under_root(cgroups::hierarchies::auto().root(), cpath)
-            .join("init")
-            .exists()
 }
 
 pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, String>> {
@@ -1071,7 +1058,7 @@ fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Result<Cgroup> {
 }
 
 #[inline]
-fn load_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
+pub(crate) fn load_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
     let valid_path = path.trim_start_matches('/').to_string();
     cgroups::Cgroup::load(h, valid_path.as_str())
 }
@@ -1189,27 +1176,6 @@ impl Manager {
             cgroup: cg,
             devcg_allowed_all: false,
         })
-    }
-
-    pub fn subcgroup(&self) -> &str {
-        // Check if we're running with cgroup v2 delegation by verifying:
-        // 1. We're using cgroups v2 (which restricts direct process control)
-        // 2. An "init" subdirectory exists for delegated process attachment
-        //    (for example, Docker-in-Docker or systemd in a container)
-        if cgroup_has_init_subcgroup(&self.cpath) {
-            INIT_SUBCGROUP
-        } else {
-            ROOT_SUBCGROUP
-        }
-    }
-
-    fn cgroup_path_with_subcgroup(&self, subcgroup: &str) -> String {
-        let subcgroup = subcgroup.trim_matches('/');
-        if subcgroup.is_empty() {
-            self.cpath.clone()
-        } else {
-            Path::new(&self.cpath).join(subcgroup).display().to_string()
-        }
     }
 
     fn get_paths_and_mounts(
@@ -1428,7 +1394,7 @@ mod tests {
     use oci_spec::runtime as oci;
     use test_utils::skip_if_not_root;
 
-    use super::{cgroup_path_under_root, default_allowed_devices, load_cgroup};
+    use super::{cgroup_path_under_root, default_allowed_devices};
     use crate::cgroups::fs::{
         line_to_vec, lines_to_map, Manager, DEFAULT_ALLOWED_DEVICES, WILDCARD,
     };
@@ -1443,27 +1409,6 @@ mod tests {
                 "/docker.slice/docker-containers.slice/container"
             ),
             PathBuf::from("/sys/fs/cgroup/docker.slice/docker-containers.slice/container")
-        );
-    }
-
-    #[test]
-    fn test_cgroup_path_with_subcgroup_preserves_absolute_cpath() {
-        let manager = Manager {
-            paths: HashMap::new(),
-            mounts: HashMap::new(),
-            cpath: "/docker.slice/docker-containers.slice/container".to_string(),
-            cgroup: load_cgroup(cgroups::hierarchies::auto(), "/"),
-            pod_cgroup: None,
-            devcg_allowed_all: false,
-        };
-
-        assert_eq!(
-            manager.cgroup_path_with_subcgroup("/init/"),
-            "/docker.slice/docker-containers.slice/container/init"
-        );
-        assert_eq!(
-            manager.cgroup_path_with_subcgroup("/"),
-            "/docker.slice/docker-containers.slice/container"
         );
     }
 
