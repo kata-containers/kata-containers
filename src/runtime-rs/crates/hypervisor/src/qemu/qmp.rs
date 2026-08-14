@@ -36,6 +36,10 @@ use std::time::Instant;
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
 const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
+/// blockdev-add of a multi-layer EROFS VMDK can exceed 250ms. SO_RCVTIMEO then
+/// returns EAGAIN (WouldBlock) after QEMU has already created the node, and the
+/// CreateContainer retry hits "Duplicate nodes drive-N" (kata#11649).
+const DEFAULT_QMP_HOTPLUG_READ_TIMEOUT: u64 = 60_000;
 const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
@@ -1008,8 +1012,102 @@ impl Qmp {
         Err(anyhow!("no target device found"))
     }
 
+    fn set_qmp_read_timeout(&mut self, timeout: Duration) {
+        if let Err(e) = self
+            .qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(timeout))
+        {
+            warn!(
+                sl!(),
+                "Failed to set QMP read timeout {:?}: {:?}", timeout, e
+            );
+        }
+    }
+
+    fn block_node_exists(&mut self, node_name: &str) -> bool {
+        match self
+            .qmp
+            .execute(&qapi_qmp::query_named_block_nodes { flat: Some(true) })
+        {
+            Ok(nodes) => nodes
+                .iter()
+                .any(|d| d.node_name.as_deref() == Some(node_name)),
+            Err(e) => {
+                warn!(
+                    sl!(),
+                    "query_named_block_nodes failed while checking {}: {:?}", node_name, e
+                );
+                false
+            }
+        }
+    }
+
+    fn existing_block_hotplug(
+        &mut self,
+        block_driver: &str,
+        index: u64,
+    ) -> Result<Option<(Option<PciPath>, Option<String>)>> {
+        let node_name = block_node_name(index);
+        let node_exists = self.block_node_exists(&node_name);
+        let device_exists = self.get_device_by_qdev_id(&node_name).is_ok();
+
+        if node_exists && device_exists {
+            info!(
+                sl!(),
+                "hotplug_block_device(): {} already attached, treating as success", node_name
+            );
+            return Ok(Some(self.block_hotplug_result(
+                block_driver,
+                index,
+                &node_name,
+            )?));
+        }
+
+        if node_exists && !device_exists {
+            warn!(
+                sl!(),
+                "hotplug_block_device(): orphaned backend {}, deleting before retry", node_name
+            );
+            if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_del {
+                node_name: node_name.clone(),
+            }) {
+                warn!(
+                    sl!(),
+                    "hotplug_block_device(): blockdev_del of orphan {} failed: {:?}", node_name, e
+                );
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn block_hotplug_result(
+        &mut self,
+        block_driver: &str,
+        index: u64,
+        node_name: &str,
+    ) -> Result<(Option<PciPath>, Option<String>)> {
+        if block_driver == VIRTIO_SCSI {
+            let index_u16 = u16::try_from(index)?;
+            let scsi_id = (index_u16 >> 8) as u8;
+            let lun = (index_u16 & 0xFF) as u8;
+            Ok((None, Some(format!("{scsi_id}:{lun}"))))
+        } else if block_driver == VIRTIO_BLK_CCW {
+            Ok((None, Some(node_name.to_string())))
+        } else {
+            let pci_path = self
+                .get_device_by_qdev_id(node_name)
+                .context("get device by qdev_id failed")?;
+            Ok((Some(pci_path), None))
+        }
+    }
+
     /// Execute device_add for a block device. On failure, automatically
     /// rolls back the blockdev node added earlier to avoid orphaned resources.
+    /// Timeout / Duplicate must not roll back — QEMU may already own the node
+    /// (kata#11649).
     fn device_add_with_rollback(
         &mut self,
         node_name: &str,
@@ -1023,12 +1121,37 @@ impl Qmp {
             driver: driver.to_owned(),
             arguments,
         }) {
-            if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_del {
+            let msg = format!("{e:?}");
+            if qmp_err_is_duplicate(&msg) {
+                info!(
+                    sl!(),
+                    "device_add_with_rollback(): {} already present, treating as success",
+                    node_name
+                );
+                return Ok(());
+            }
+            if qmp_err_is_timeout(&msg) && self.get_device_by_qdev_id(node_name).is_ok() {
+                warn!(
+                    sl!(),
+                    "device_add_with_rollback(): {} timed out but frontend exists", node_name
+                );
+                return Ok(());
+            }
+            if qmp_err_is_timeout(&msg) {
+                warn!(
+                    sl!(),
+                    "device_add_with_rollback(): {} timed out; leaving backend", node_name
+                );
+                return Err(anyhow!("device_add {:?}", e));
+            }
+            if let Err(del_err) = self.qmp.execute(&qapi_qmp::blockdev_del {
                 node_name: node_name.to_owned(),
             }) {
                 warn!(
                     sl!(),
-                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}", node_name, e
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
+                    node_name,
+                    del_err
                 );
             }
             return Err(anyhow!("device_add {:?}", e));
@@ -1073,17 +1196,9 @@ impl Qmp {
             thread::sleep(POLL_INTERVAL.min(deadline - now));
         };
 
-        // Reset the default read timeout for subsequent QMP operations.
-        // Failure here is non-fatal — a stale timeout only affects the next
-        // QMP read, not the already-completed device removal.
-        if let Err(e) = self
-            .qmp
-            .inner_mut()
-            .get_mut_write()
-            .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
-        {
-            warn!(sl!(), "Failed to reset read timeout: {:?}", e);
-        }
+        // Keep the hotplug-sized timeout. Resetting to 250ms made the next
+        // container's EROFS blockdev-add fail WouldBlock (kata#11649).
+        self.set_qmp_read_timeout(Duration::from_millis(DEFAULT_QMP_HOTPLUG_READ_TIMEOUT));
 
         result
     }
@@ -1144,6 +1259,10 @@ impl Qmp {
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
+        self.set_qmp_read_timeout(Duration::from_millis(DEFAULT_QMP_HOTPLUG_READ_TIMEOUT));
+        if let Some(existing) = self.existing_block_hotplug(block_driver, index)? {
+            return Ok(existing);
+        }
         let discard_option = || discard_unmap.then_some(BlockdevDiscardOptions::unmap);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
@@ -1236,10 +1355,22 @@ impl Qmp {
             }
         };
 
-        self.qmp
-            .execute(&qapi_qmp::blockdev_add(blockdev_options))
-            .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
-            .map(|_| ())?;
+        if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_add(blockdev_options)) {
+            let msg = format!("{e:?}");
+            if qmp_err_is_duplicate(&msg) {
+                warn!(
+                    sl!(),
+                    "hotplug_block_device(): {} already present, continuing", node_name
+                );
+            } else if qmp_err_is_timeout(&msg) && self.block_node_exists(&node_name) {
+                warn!(
+                    sl!(),
+                    "hotplug_block_device(): {} timed out but node exists, continuing", node_name
+                );
+            } else {
+                return Err(anyhow!("blockdev-add backend {:?}", e));
+            }
+        }
 
         // block device
         // `device_add`
@@ -1689,4 +1820,41 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
 /// Generate a blockdev node name based on the given index.
 fn block_node_name(index: u64) -> String {
     format!("drive-{index}")
+}
+
+fn qmp_err_is_duplicate(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("duplicate nodes") || m.contains("is in use")
+}
+
+fn qmp_err_is_timeout(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("wouldblock")
+        || m.contains("timed out")
+        || m.contains("timeout")
+        || m.contains("resource temporarily unavailable")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{qmp_err_is_duplicate, qmp_err_is_timeout};
+
+    #[test]
+    fn duplicate_matches_qemu_qapi() {
+        assert!(qmp_err_is_duplicate(
+            r#"Qapi(Error { class: GenericError, desc: "Duplicate nodes with node-name='drive-5'", id: None })"#
+        ));
+        assert!(qmp_err_is_duplicate(
+            r#"Qapi(Error { class: GenericError, desc: "Node drive-5 is in use", id: None })"#
+        ));
+        assert!(!qmp_err_is_duplicate("blockdev-add backend other"));
+    }
+
+    #[test]
+    fn timeout_matches_so_rcvtimeo_wouldblock() {
+        assert!(qmp_err_is_timeout(
+            r#"Io(Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" })"#
+        ));
+        assert!(!qmp_err_is_timeout("GenericError"));
+    }
 }
