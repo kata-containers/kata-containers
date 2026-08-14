@@ -121,7 +121,9 @@ job:
   # the nodes with something left on them.
   #
   # Precedence: cleanup.nodes, else cleanup.nodeSelector (equality) ANDed with
-  # cleanup.nodeAffinity, else all nodes. Override to clean a different set, e.g.:
+  # cleanup.nodeAffinity - which is what the default below expresses. Setting all
+  # three to empty is what means "every node". Override to clean a different set,
+  # e.g.:
   #   job:
   #     cleanup:
   #       nodes: ["worker-1"]
