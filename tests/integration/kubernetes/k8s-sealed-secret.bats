@@ -66,8 +66,8 @@ setup() {
 
 @test "Reject Env Secrets with CDH without key" {
 	assert_pod_fail "${K8S_TEST_ENV_YAML}"
-	assert_logs_contain "${node}" kata "${node_start_time}" \
-		"Failed to unseal sealed environment variable"
+	kubectl describe pod/secret-test-pod-cc | \
+		grep -F "failed to handle sealed secrets: failed to process a sealed environment variable"
 }
 
 
