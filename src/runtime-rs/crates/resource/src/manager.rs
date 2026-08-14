@@ -84,6 +84,13 @@ impl ResourceManager {
         inner.handle_network(network_config).await
     }
 
+    /// Detach endpoints and clear the cached network so a retry of
+    /// `sandbox.start()` can recreate them.
+    pub async fn release_network(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.release_network().await
+    }
+
     #[instrument]
     pub async fn setup_after_start_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
