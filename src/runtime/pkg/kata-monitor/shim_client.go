@@ -34,8 +34,16 @@ func getSandboxIDFromReq(r *http.Request) (string, error) {
 	return "", fmt.Errorf("sandbox not found in %+v", r.URL.Query())
 }
 
-func getSandboxFS() string {
-	return shim.GetSandboxesStoragePath()
+// getSandboxFSPaths returns all sandbox storage paths that kata-monitor must
+// watch.
+//
+// The Go runtime stores sandboxes under /run/vc/sbs; runtime-rs under
+// /run/kata.
+func getSandboxFSPaths() []string {
+	return []string{
+		shim.GetSandboxesStoragePath(),
+		shim.GetSandboxesStoragePathRust(),
+	}
 }
 
 func getFilterFamilyFromReq(r *http.Request) ([]string, error) {
