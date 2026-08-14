@@ -123,6 +123,30 @@ found [here](runtime-configuration.md#drop-in-files).
 You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
 chart to achieve the same results.
 
+### k8sDistribution
+
+Different Kubernetes distributions keep containerd's configuration in different
+places, so the chart needs to be told which one this cluster is. The value picks the
+host directory that gets mounted into the install:
+
+```yaml title="values.yaml"
+k8sDistribution: k8s   # k8s | k3s | rke2 | k0s | microk8s
+```
+
+Any other value means the default location, `/etc/containerd/` — so `kubeadm` and
+`vanilla` are as good as `k8s`. Set `containerd.configDir` instead if your
+containerd matches none of the presets.
+
+!!! warning "A wrong value stops the install before changing the node"
+
+    Which *file* to write is worked out on the node itself, from the CRI runtime
+    actually running there — so declaring `k8s` on a `k3s` cluster used to produce a
+    perfectly good `k3s` configuration inside a directory `k3s` does not read, with
+    nothing to show for it afterwards but a node that never runs a Kata workload.
+    The install now compares the two and stops before writing anything, naming the
+    value to set. An explicit `containerd.configDir` overrides the derivation this
+    check is about, so it does not apply in that case.
+
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the

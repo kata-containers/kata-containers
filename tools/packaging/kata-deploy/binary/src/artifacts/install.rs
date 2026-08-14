@@ -2471,6 +2471,7 @@ mod tests {
             erofs_dmverity: false,
             startup_taints: vec![],
             container_runtime_version: None,
+            k8s_distribution: None,
         };
 
         let without_debug = generate_kernel_params_drop_in(&config, "qemu", false).unwrap();
