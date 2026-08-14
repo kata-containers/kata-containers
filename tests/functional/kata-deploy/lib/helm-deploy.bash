@@ -86,12 +86,7 @@ deploy_kata() {
 	# Generate base values
 	generate_base_values "${values_yaml}"
 
-	# Add required helm repos for dependencies
-	helm repo add node-feature-discovery https://kubernetes-sigs.github.io/node-feature-discovery/charts 2>/dev/null || true
-	helm repo update
-
-	# Build helm dependencies
-	helm dependency build "${chart_path}"
+	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Build helm command
 	local helm_cmd=(
