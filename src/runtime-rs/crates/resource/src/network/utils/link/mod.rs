@@ -5,7 +5,7 @@
 //
 
 mod create;
-pub use create::{create_link, LinkType};
+pub use create::{create_link, delete_link, is_busy_or_exist, LinkType};
 mod driver_info;
 pub use driver_info::get_driver_info;
 mod macros;
