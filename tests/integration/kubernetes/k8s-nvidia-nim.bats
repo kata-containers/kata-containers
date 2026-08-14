@@ -22,7 +22,9 @@ fi
 export TEE
 
 POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
-POD_NAME_INSTRUCT="nvidia-nim-llama-3-1-8b-instruct"
+POD_NAME_INSTRUCT="nvidia-nim-llama-3-2-1b-instruct"
+# Instruct/embedqa startupProbe windows (initialDelaySeconds +
+# periodSeconds * failureThreshold) are aligned to these ready waits.
 POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=500s
 POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=600s
 if [[ "${TEE}" = "true" ]]; then
@@ -299,7 +301,6 @@ teardown() {
     [[ -n "${MODEL_NAME}" ]]
 
     QUESTION="What is the capital of France?"
-    ANSWER="The capital of France is Paris."
 
     # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >"${HOME}"/.cicd/venv/langchain_nim.py
@@ -314,10 +315,10 @@ EOF
     run python3 "${HOME}"/.cicd/venv/langchain_nim.py
 
     [[ "${status}" -eq 0 ]]
-    [[ "${output}" = "${ANSWER}" ]]
+    [[ "${output}" == *"Paris"* ]]
 
     echo "# QUESTION: ${QUESTION}" >&3
-    echo "# ANSWER: ${ANSWER}" >&3
+    echo "# ANSWER: ${output}" >&3
 }
 
 @test "Kata Documentation RAG" {

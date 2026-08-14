@@ -10,13 +10,13 @@ metadata:
   labels:
     app: ${POD_NAME_INSTRUCT}
 spec:
-  restartPolicy: Never
+  restartPolicy: OnFailure
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    image: nvcr.io/nim/meta/llama-3.2-1b-instruct:1.12.0
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
@@ -43,17 +43,21 @@ spec:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 150
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 45
+      failureThreshold: 54
     env:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
             name: ngc-api-key-instruct
             key: api-key
+      - name: NIM_JSONL_LOGGING
+        value: "1"
+      - name: NIM_LOG_LEVEL
+        value: "INFO"
     # GPU resource limit (for NVIDIA GPU)
     resources:
       limits:
