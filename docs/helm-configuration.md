@@ -138,13 +138,13 @@ containerd matches none of the presets.
 
 !!! warning "A wrong value stops the install before changing the node"
 
-    Which *file* to write is worked out on the node itself, from the CRI runtime
-    actually running there — so declaring `k8s` on a `k3s` cluster used to produce a
-    perfectly good `k3s` configuration inside a directory `k3s` does not read, with
-    nothing to show for it afterwards but a node that never runs a Kata workload.
-    The install now compares the two and stops before writing anything, naming the
-    value to set. An explicit `containerd.configDir` overrides the derivation this
-    check is about, so it does not apply in that case.
+    This value picks the *directory*, while which *file* to write is worked out on
+    the node itself, from the CRI runtime actually running there. Declaring `k8s` on
+    a `k3s` cluster therefore describes a perfectly good `k3s` configuration inside a
+    directory `k3s` does not read — a node that never runs a Kata workload, with
+    nothing to show for it. The install compares the two and stops before writing
+    anything, naming the value to set. An explicit `containerd.configDir` overrides
+    the derivation this check is about, so it does not apply in that case.
 
 ## Deployment Modes (DaemonSet vs Job)
 
