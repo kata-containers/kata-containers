@@ -100,10 +100,48 @@ impl MonitorConfig {
     }
 }
 
+/// Close an inotify fd on a dedicated OS thread.
+///
+/// `Inotify::drop` calls `close(2)`, which runs `inotify_release` →
+/// `fsnotify_wait_marks_destroyed` → `flush_delayed_work`. When the
+/// watched path is a kubelet ConfigMap / projected / secret volume being
+/// unmounted during pod teardown, that flush can block uninterruptibly
+/// (D-state). Doing it on a tokio worker wedges the whole runtime-rs
+/// executor: Shutdown never reaches `stop_vm`, QEMU keeps VFIO devices,
+/// and the pod stays Terminating until `runtime-request-timeout`.
+///
+/// Spawn-and-forget: a hung `close(2)` may leak one OS thread, but must
+/// not pin the async runtime. Same pattern as OS-thread QEMU reap.
+///
+/// Fixes #13641
+struct InotifyCloseOnThread(Option<Inotify>);
+
+impl InotifyCloseOnThread {
+    fn new(ino: Inotify) -> Self {
+        Self(Some(ino))
+    }
+
+    fn get_mut(&mut self) -> Option<&mut Inotify> {
+        self.0.as_mut()
+    }
+}
+
+impl Drop for InotifyCloseOnThread {
+    fn drop(&mut self) {
+        if let Some(ino) = self.0.take() {
+            let _ = std::thread::Builder::new()
+                .name("kata-inotify-close".into())
+                .spawn(move || {
+                    drop(ino);
+                });
+        }
+    }
+}
+
 #[derive(Clone)]
 struct FsWatcher {
     config: MonitorConfig,
-    inotify: Arc<Mutex<Inotify>>,
+    inotify: Arc<Mutex<InotifyCloseOnThread>>,
     watch_dirs: Arc<Mutex<HashSet<PathBuf>>>,
     pending_events: Arc<Mutex<HashSet<PathBuf>>>,
     need_sync: Arc<Mutex<bool>>,
@@ -115,7 +153,7 @@ impl FsWatcher {
         let mon_cfg = MonitorConfig::new(source_path);
         let mut watcher = Self {
             config: mon_cfg,
-            inotify: Arc::new(Mutex::new(inotify)),
+            inotify: Arc::new(Mutex::new(InotifyCloseOnThread::new(inotify))),
             pending_events: Arc::new(Mutex::new(HashSet::new())),
             watch_dirs: Arc::new(Mutex::new(HashSet::new())),
             need_sync: Arc::new(Mutex::new(false)),
@@ -147,11 +185,9 @@ impl FsWatcher {
             if entry.file_type().is_dir() {
                 let path = entry.path();
                 if watched_dirs.insert(path.to_path_buf()) {
-                    self.inotify
-                        .lock()
-                        .await
-                        .watches()
-                        .add(path, config.watch_events)?; // we don't use WatchMask::ALL_EVENTS
+                    let mut guard = self.inotify.lock().await;
+                    let ino = guard.get_mut().ok_or_else(|| anyhow!("inotify closed"))?;
+                    ino.watches().add(path, config.watch_events)?; // we don't use WatchMask::ALL_EVENTS
                 }
             }
         }
@@ -195,7 +231,14 @@ impl FsWatcher {
 
             loop {
                 // use cloned inotify instance
-                match inotify.lock().await.read_events(&mut buffer) {
+                let events = {
+                    let mut guard = inotify.lock().await;
+                    let Some(ino) = guard.get_mut() else {
+                        break;
+                    };
+                    ino.read_events(&mut buffer)
+                };
+                match events {
                     Ok(events) => {
                         for event in events {
                             if !event.mask.intersects(
@@ -390,7 +433,9 @@ impl VolumeManager {
             state.ref_count = state.ref_count.saturating_sub(1);
 
             if state.ref_count == 0 {
-                // Abort the monitor task
+                // Abort the monitor task. The task's InotifyCloseOnThread
+                // then closes the fd on an OS thread so a hung
+                // fsnotify_wait_marks_destroyed cannot wedge tokio.
                 if let Some(handle) = &state.monitor_task {
                     handle.abort();
                 }
@@ -1043,5 +1088,17 @@ mod test {
 
         assert!(path.starts_with(&format!("{DEFAULT_KATA_GUEST_SHARE_DIR}sandbox-id-")));
         assert!(path.ends_with("-resolv.conf"));
+    }
+
+    #[test]
+    fn test_inotify_close_on_thread_drop_returns() {
+        let ino = Inotify::init().expect("inotify init");
+        let handle = InotifyCloseOnThread::new(ino);
+        let start = std::time::Instant::now();
+        drop(handle);
+        assert!(
+            start.elapsed() < Duration::from_millis(200),
+            "InotifyCloseOnThread::drop must not wait for close(2)"
+        );
     }
 }
