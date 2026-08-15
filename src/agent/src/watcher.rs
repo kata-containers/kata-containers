@@ -101,10 +101,12 @@ async fn copy(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
         fs::copy(&from, &to).await?;
     }
     // preserve the source uid and gid to the destination.
-    nix::unistd::chown(
+    nix::unistd::fchownat(
+        nix::fcntl::AT_FDCWD,
         to.as_ref(),
         Some(Uid::from_raw(metadata.uid())),
         Some(Gid::from_raw(metadata.gid())),
+        nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW,
     )?;
 
     Ok(())
@@ -1078,8 +1080,49 @@ mod tests {
             .is_symlink());
         assert_eq!(fs::read_link(&dst_symlink_file).unwrap(), src_file);
         assert_eq!(fs::read_to_string(&dst_symlink_file).unwrap(), "foo");
-        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
-        assert_ne!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
+        assert_eq!(fs::metadata(&dst_symlink_file).unwrap().uid(), uid.as_raw());
+        assert_eq!(fs::metadata(&dst_symlink_file).unwrap().gid(), gid.as_raw());
+    }
+
+    #[tokio::test]
+    async fn test_copy_with_dangling_symlink() {
+        skip_if_not_root!();
+
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+        let uid = Uid::from_raw(10);
+        let gid = Gid::from_raw(200);
+
+        let link_target = Path::new("file.txt");
+        let src_target = source_dir.path().join(link_target);
+        let dst_target = dest_dir.path().join(link_target);
+        let src_symlink = source_dir.path().join("symlink_file.txt");
+        let dst_symlink = dest_dir.path().join("symlink_file.txt");
+
+        fs::write(&src_target, "foo").unwrap();
+        nix::unistd::chown(&src_target, Some(uid), Some(gid)).unwrap();
+        tokio::fs::symlink(link_target, &src_symlink).await.unwrap();
+
+        copy(&src_symlink, &dst_symlink).await.unwrap();
+
+        assert!(fs::symlink_metadata(&dst_symlink)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read_link(&dst_symlink).unwrap(), link_target);
+
+        // dst_symlink is dargling
+        assert_eq!(
+            fs::metadata(&dst_symlink).unwrap_err().kind(),
+            std::io::ErrorKind::NotFound
+        );
+
+        copy(&src_target, &dst_target).await.unwrap();
+
+        assert_eq!(fs::read_to_string(&dst_symlink).unwrap(), "foo");
+        let metadata = fs::metadata(&dst_symlink).unwrap();
+        assert_eq!(metadata.uid(), uid.as_raw());
+        assert_eq!(metadata.gid(), gid.as_raw());
     }
 
     #[tokio::test]
