@@ -8,12 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 use agent::{kata::KataAgent, Agent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv};
-use hypervisor::device::driver::{VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_PCI};
 use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
-use kata_types::config::{
-    default, Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig,
-};
-use kata_types::machine_type::MACHINE_TYPE_S390X_TYPE;
+use kata_types::config::{Agent as AgentConfig, Hypervisor as HypervisorConfig, TomlConfig};
 use resource::{cpu_mem::initial_size::InitialSizeManager, ResourceManager};
 use runtime_spec;
 use serde::{Deserialize, Serialize};
@@ -86,84 +82,6 @@ impl VmConfig {
             hypervisor_config,
             agent_config,
         }
-    }
-
-    /// Validates boot configuration based on security mode
-    fn validate_boot_configuration(conf: &HypervisorConfig) -> Result<()> {
-        let is_secure_execution = conf.security_info.confidential_guest
-            && conf.machine_info.machine_type == MACHINE_TYPE_S390X_TYPE;
-
-        let has_image = !conf.boot_info.image.is_empty();
-        let has_initrd = !conf.boot_info.initrd.is_empty();
-
-        // Secure execution mode does not allow image or initrd
-        if is_secure_execution {
-            if has_image || has_initrd {
-                return Err(anyhow!(
-                    "secure execution mode does not allow image or initrd"
-                ));
-            }
-            return Ok(());
-        }
-
-        // Standard mode: must have exactly one of image or initrd
-        if !has_image && !has_initrd {
-            return Err(anyhow!("missing image and initrd path"));
-        }
-
-        if has_image && has_initrd {
-            return Err(anyhow!("image and initrd path cannot both be set"));
-        }
-
-        Ok(())
-    }
-
-    pub fn validate_hypervisor_config(conf: &mut HypervisorConfig) -> Result<()> {
-        // remote hypervisor_socket
-        if !conf.remote_info.hypervisor_socket.is_empty() {
-            return Ok(());
-        }
-
-        // kernel_path
-        if conf.boot_info.kernel.is_empty() {
-            return Err(anyhow!("missing kernel path"));
-        }
-
-        // Validate boot configuration based on security mode
-        Self::validate_boot_configuration(conf)?;
-
-        // vcpus
-        if conf.cpu_info.default_vcpus == 0.0 {
-            conf.cpu_info.default_vcpus = default::DEFAULT_GUEST_VCPUS as f32;
-        }
-
-        // memory_size
-        if conf.memory_info.default_memory == 0 {
-            conf.memory_info.default_memory = default::DEFAULT_QEMU_MEMORY_SIZE_MB;
-        }
-
-        // default_bridges
-        if conf.device_info.default_bridges == 0 {
-            conf.device_info.default_bridges = default::DEFAULT_QEMU_PCI_BRIDGES;
-        }
-
-        // block_device_driver
-        if conf.blockdev_info.block_device_driver.is_empty() {
-            conf.blockdev_info.block_device_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
-        } else if conf.blockdev_info.block_device_driver == VIRTIO_BLOCK_PCI
-            && conf.machine_info.machine_type == MACHINE_TYPE_S390X_TYPE
-        {
-            conf.blockdev_info.block_device_driver = VIRTIO_BLOCK_CCW.to_string();
-        }
-
-        // default_maxvcpus
-        if conf.cpu_info.default_maxvcpus == 0
-            || conf.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
-        {
-            conf.cpu_info.default_maxvcpus = default::MAX_QEMU_VCPUS;
-        }
-
-        Ok(())
     }
 }
 
