@@ -46,11 +46,13 @@ func TestIOStream(t *testing.T) {
 	_, err = stdin.Write(buffer)
 	assert.NotNil(t, err, "stdin write closed should fail")
 
+	// The process outlives its stdin, so its output must still be
+	// readable once stdin has been closed.
 	_, err = stdout.Read(buffer)
-	assert.NotNil(t, err, "stdout read closed should fail")
+	assert.Nil(t, err, "stdout read after stdin close failed: %s", err)
 
 	_, err = stderr.Read(buffer)
-	assert.NotNil(t, err, "stderr read closed should fail")
+	assert.Nil(t, err, "stderr read after stdin close failed: %s", err)
 
 	err = stdin.Close()
 	assert.NotNil(t, err, "stdin close closed should fail")
