@@ -541,6 +541,10 @@ snapshotter:
 #       runtimeClass:
 #         nodeSelector:              # extra node selectors added to the RuntimeClass
 #           example.io/feature: "true"
+#         tolerations:               # extra tolerations appended to runtimeClasses.tolerations
+#           - key: katacontainers.io/dedicated
+#             operator: Exists
+#             effect: NoSchedule
 #         overheadEnabled: true      # enable/disable overhead in RuntimeClass (default: inherits from runtimeClasses.overheadEnabled)
 #         overhead:                  # override pod overhead (falls back to built-in defaults)
 #           memory: "160Mi"
@@ -902,6 +906,12 @@ runtimeClasses:
   # Set to false to disable overhead for all shims globally.
   # Individual shims can override this via shims.<name>.runtimeClass.overheadEnabled
   overheadEnabled: true
+  # Tolerations applied to the scheduling section of every generated RuntimeClass.
+  # Useful when Kata-capable nodes are tainted (e.g., reserved for confidential workloads),
+  # so pods using these RuntimeClasses can be scheduled onto those nodes.
+  # Per-shim tolerations declared under shims.<name>.runtimeClass.tolerations are appended
+  # to this list for that shim's RuntimeClass.
+  tolerations: []
 
 env:
   installationPrefix: ""
