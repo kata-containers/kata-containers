@@ -274,11 +274,11 @@ enable_tracing = false
 
 debug_console_enabled = false
 
-# Agent dial timeout in millisecond.
+# Sleep between agent connection retries, in milliseconds.
 # (default: 10)
 dial_timeout_ms = 1000
 
-# Agent reconnect timeout in millisecond.
+# Overall time budget for establishing the agent connection, in milliseconds.
 # Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
 # If you find pod cannot connect to the agent when starting, please
 # consider increasing this value to increase the retry times.
