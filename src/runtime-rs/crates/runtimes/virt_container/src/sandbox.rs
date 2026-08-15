@@ -1405,7 +1405,18 @@ impl Sandbox for VirtSandbox {
 
         info!(sl!(), "begin stop sandbox");
         if state == SandboxState::Init || state == SandboxState::Starting {
-            let _start_guard = self.start_mutex.lock().await;
+            // Do not await start_mutex: start() holds it across start_vm +
+            // agent connect. If QEMU dies during bring-up, start() can wait
+            // until kubelet runtime-request-timeout (2h). Awaiting the same
+            // mutex here made Shutdown wait that long too (glm-0, 2026-08-13).
+            // try_lock: if start() holds it, still signal QEMU and proceed.
+            let _start_guard = self.start_mutex.try_lock();
+            if _start_guard.is_err() {
+                warn!(
+                    sl!(),
+                    "sandbox.stop: start in progress; signaling QEMU without waiting on start_mutex"
+                );
+            }
             if let Err(e) = self.hypervisor.stop_vm().await {
                 warn!(sl!(), "stop during {:?}: stop_vm: {:#}", state, e);
             }
