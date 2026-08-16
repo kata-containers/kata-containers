@@ -6,10 +6,15 @@
 // Resolve the cgroup v2 leaf used to retry attaching an exec process.
 // After systemd (init.scope) or DinD (init) nest PID 1, the container
 // cgroup is an inner node and cgroup.procs writes to it fail with EBUSY.
+//
+// The same nesting has to be accounted for when a container goes away: the
+// leaves it created are not visible in the container cgroup and nothing else
+// removes them.
 
 use crate::cgroups_rs as cgroups;
 use libc::pid_t;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "cgroups"))
@@ -46,6 +51,82 @@ fn cgroup_from_cgroup_file(pid: pid_t) -> Option<String> {
     contents
         .lines()
         .find_map(|line| line.strip_prefix("0::").map(String::from))
+}
+
+// Processes of a container, including the ones it moved into nested cgroups.
+// Reading the container cgroup alone misses them, so a container that nests
+// PID 1 would keep processes running after being signalled or destroyed.
+pub fn subtree_pids(cpath: &str) -> Vec<pid_t> {
+    if !cgroups::hierarchies::is_cgroup2_unified_mode() {
+        return Vec::new();
+    }
+
+    let cgroup = unified_path(cpath);
+    let mut pids = procs(&cgroup);
+    for nested in nested_cgroups(&cgroup) {
+        pids.extend(procs(&nested));
+    }
+    pids
+}
+
+// Remove the cgroups a container nested below its own. They outlive the
+// container and keep the container cgroup itself from being removed.
+pub fn remove_nested_cgroups(cpath: &str) {
+    if !cgroups::hierarchies::is_cgroup2_unified_mode() {
+        return;
+    }
+
+    for nested in nested_cgroups(&unified_path(cpath)) {
+        if let Err(err) = fs::remove_dir(&nested) {
+            warn!(sl(), "remove nested cgroup {}: {}", nested.display(), err);
+        }
+    }
+}
+
+// Absolute path of a hierarchy-relative cgroup in the unified hierarchy.
+fn unified_path(cpath: &str) -> PathBuf {
+    cgroups::hierarchies::auto()
+        .root()
+        .join(normalize_cgroup_path(cpath))
+}
+
+// Cgroups below `cgroup`, deepest first so that they can be removed in order.
+fn nested_cgroups(cgroup: &Path) -> Vec<PathBuf> {
+    let entries = match fs::read_dir(cgroup) {
+        Ok(entries) => entries,
+        Err(err) => {
+            debug!(sl(), "read cgroup {}: {}", cgroup.display(), err);
+            return Vec::new();
+        }
+    };
+
+    let mut nested = Vec::new();
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|typ| typ.is_dir()).unwrap_or(false) {
+            continue;
+        }
+
+        let path = entry.path();
+        nested.extend(nested_cgroups(&path));
+        nested.push(path);
+    }
+    nested
+}
+
+fn procs(cgroup: &Path) -> Vec<pid_t> {
+    let path = cgroup.join("cgroup.procs");
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(err) => {
+            debug!(sl(), "read {}: {}", path.display(), err);
+            return Vec::new();
+        }
+    };
+
+    contents
+        .lines()
+        .filter_map(|line| line.trim().parse().ok())
+        .collect()
 }
 
 // /proc and OCI cgroup paths are relative to the hierarchy; a leading
@@ -134,6 +215,54 @@ mod tests {
         let procs = fs::read_to_string(init_scope.join("cgroup.procs")).unwrap();
         let extra_pid = extra_pid.to_string();
         assert!(procs.lines().any(|line| line == extra_pid.as_str()));
+    }
+
+    #[test]
+    #[serial(cgroup_v2_nesting)]
+    fn test_live_cgroup_v2_destroy_removes_nested_cgroups() {
+        use std::process::{Command, Stdio};
+
+        skip_if_not_root!();
+
+        let root = cgroups::hierarchies::auto().root();
+        let name = "kata-nest-test-destroy";
+        let container = root.join(name);
+        let leaf = container.join("init");
+        let _ = fs::remove_dir(&leaf);
+        let _ = fs::remove_dir(&container);
+        fs::create_dir(&container).unwrap();
+        fs::create_dir(&leaf).unwrap();
+
+        defer!({
+            let _ = fs::remove_dir(&leaf);
+            let _ = fs::remove_dir(&container);
+        });
+
+        let mut child = Command::new("sleep")
+            .arg("30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let child_pid = child.id() as i32;
+
+        fs::write(leaf.join("cgroup.procs"), child_pid.to_string()).unwrap();
+
+        // The container cgroup is empty, so only walking the nested cgroups
+        // finds the process that has to be killed.
+        let mut manager = FsManager::load_for_test(name);
+        assert!(fs::read_to_string(container.join("cgroup.procs"))
+            .unwrap()
+            .is_empty());
+        assert_eq!(CgroupManager::get_pids(&manager).unwrap(), vec![child_pid]);
+
+        child.kill().unwrap();
+        child.wait().unwrap();
+
+        CgroupManager::destroy(&mut manager).unwrap();
+        assert!(!leaf.exists());
+        assert!(!container.exists());
     }
 
     #[test]

@@ -19,7 +19,7 @@ use cgroups::{
     DeviceResource, HugePageResource, MaxValue, NetworkPriority,
 };
 
-use crate::cgroups::nested::init_cgroup;
+use crate::cgroups::nested::{init_cgroup, remove_nested_cgroups, subtree_pids};
 use crate::cgroups::{rule_for_all_devices, Manager as CgroupManager};
 use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
@@ -223,6 +223,8 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
+        remove_nested_cgroups(&self.cpath);
+
         if let Err(err) = self.cgroup.delete() {
             warn!(
                 sl(),
@@ -235,6 +237,10 @@ impl CgroupManager for Manager {
     }
 
     fn get_pids(&self) -> Result<Vec<pid_t>> {
+        if cgroups::hierarchies::is_cgroup2_unified_mode() {
+            return Ok(subtree_pids(&self.cpath));
+        }
+
         let mem_controller: &MemController = self.cgroup.controller_of().unwrap();
         let pids = mem_controller.tasks();
         let result = pids.iter().map(|x| x.pid as i32).collect::<Vec<i32>>();
