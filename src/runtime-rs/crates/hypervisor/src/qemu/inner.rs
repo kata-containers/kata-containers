@@ -110,6 +110,12 @@ impl QemuInner {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
 
+        // Create the runtime directory (side-effect of get_jailer_root) before
+        // QemuCmdLine::new() binds qmp.sock inside it. With shared_fs=none,
+        // prepare_before_start_vm() never calls get_jailer_root(), so it must
+        // be done here explicitly. In rootless mode the path is under XDG_RUNTIME_DIR.
+        let jailer_root = self.get_jailer_root().await?;
+
         check_bpf_enabled(self.config.security_info.seccomp_sandbox.as_deref());
 
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
@@ -366,7 +372,7 @@ impl QemuInner {
         //cmdline.add_serial_console("/dev/pts/23");
 
         // Add a console to the devices of the cmdline
-        let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
+        let console_socket_path = Path::new(&jailer_root).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
