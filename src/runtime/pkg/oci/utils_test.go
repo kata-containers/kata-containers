@@ -1333,6 +1333,20 @@ func getCtrResourceSpec(memory, quota int64, period uint64) *specs.Spec {
 
 }
 
+func makeCRIOSizingAnnotationsWithShares(memory, quota, period, shares string) *specs.Spec {
+	spec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+	spec.Annotations[crioPodLinuxResourcesKey] = fmt.Sprintf(
+		`{"cpu_period":%s,"cpu_quota":%s,"cpu_shares":%s,"memory_limit_in_bytes":%s}`,
+		period, quota, shares, memory)
+	return &spec
+}
+
+func makeCRIOSizingAnnotations(memory, quota, period string) *specs.Spec {
+	return makeCRIOSizingAnnotationsWithShares(memory, quota, period, "0")
+}
+
 func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec := specs.Spec{
 		Annotations: make(map[string]string),
@@ -1499,6 +1513,44 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			spec:        makeSizingAnnotationsWithShares("0", "-1", "100", "0"),
 			expectedCPU: 0,
 			expectedMem: 0,
+		},
+		// CRI-O PodLinuxResources annotation
+		{
+			spec:        makeCRIOSizingAnnotations("1048576", "200", "100"),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeCRIOSizingAnnotations("1024", "200", "1"),
+			expectedCPU: 200,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeCRIOSizingAnnotations("-1048576", "-100", "1"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		// Empty CRI-O JSON should not affect sizing
+		{
+			spec:        &specs.Spec{Annotations: map[string]string{crioPodLinuxResourcesKey: "{}"}},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		// Malformed CRI-O JSON should not affect sizing
+		{
+			spec:        &specs.Spec{Annotations: map[string]string{crioPodLinuxResourcesKey: "not-json"}},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeCRIOSizingAnnotations("foobar", "200", "spaghetti"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeCRIOSizingAnnotationsWithShares("1048576", "-1", "100", "2048"),
+			expectedCPU: 2,
+			expectedMem: 1,
 		},
 	}
 
