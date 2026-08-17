@@ -975,6 +975,13 @@ release would restore a file that predates every release and erase the surviving
 handlers. Installation therefore fails before modifying CRI configuration when
 that unsafe combination is detected.
 
+With whole-file configuration, uninstall restores the backup taken at install
+time. A node whose containerd had no configuration file at all gets one written
+for it, and uninstall deletes that file again. Any other whole-file configuration
+is left untouched, with a warning in the log: without a backup or a record of
+having written the file, kata-deploy cannot tell its own configuration from an
+administrator's.
+
 On the first upgrade from a chart version that predates that state ConfigMap, the
 chart verifies the previous identity from the existing mode-specific resource
 whose name derives from the suffix. If it cannot find one, the upgrade stops and

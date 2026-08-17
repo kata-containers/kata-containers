@@ -1487,10 +1487,12 @@ async fn cri_configuration_present(config: &config::Config, runtime: &str) -> bo
 
     match config.get_containerd_paths(runtime).await {
         Ok(paths) if paths.use_drop_in => std::path::Path::new(&paths.drop_in_file).exists(),
-        // Whole-file mode leaves no drop-in to look for. The backup is what it does
-        // leave behind, and it is evidence of this install's own edit rather than of
-        // a configuration that merely mentions the same paths.
-        Ok(paths) => std::path::Path::new(&paths.backup_file).exists(),
+        // Whole-file mode leaves no drop-in to look for, so ask the question the
+        // revert itself asks: is any of this configuration ours to undo?
+        Ok(paths) => !matches!(
+            runtime::containerd::whole_file_disposition(&paths.config_file, &paths.backup_file),
+            runtime::containerd::WholeFileConfig::Keep
+        ),
         Err(e) => {
             log::warn!(
                 "cleanup (revert-cri): could not resolve containerd paths to check drop-in \
