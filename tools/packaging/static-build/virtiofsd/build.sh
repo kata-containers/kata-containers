@@ -22,12 +22,14 @@ virtiofsd_repo="${virtiofsd_repo:-}"
 virtiofsd_version="${virtiofsd_version:-}"
 virtiofsd_toolchain="${virtiofsd_toolchain:-}"
 virtiofsd_zip="${virtiofsd_zip:-}"
+virtiofsd_zip_sha256="${virtiofsd_zip_sha256:-}"
 package_output_dir="${package_output_dir:-}"
 
 [[ -n "${virtiofsd_repo}" ]] || virtiofsd_repo=$(get_from_kata_deps ".externals.virtiofsd.url")
 [[ -n "${virtiofsd_version}" ]] || virtiofsd_version=$(get_from_kata_deps ".externals.virtiofsd.version")
 [[ -n "${virtiofsd_toolchain}" ]] || virtiofsd_toolchain=$(get_from_kata_deps ".externals.virtiofsd.toolchain")
 [[ -n "${virtiofsd_zip}" ]] || virtiofsd_zip=$(get_from_kata_deps ".externals.virtiofsd.meta.binary")
+[[ -n "${virtiofsd_zip_sha256}" ]] || virtiofsd_zip_sha256=$(get_from_kata_deps ".externals.virtiofsd.meta.binary_sha256")
 
 [[ -n "${virtiofsd_repo}" ]] || die "Failed to get virtiofsd repo"
 [[ -n "${virtiofsd_version}" ]] || die "Failed to get virtiofsd version or commit"
@@ -69,6 +71,7 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env virtiofsd_repo="${virtiofsd_repo}" \
 	--env virtiofsd_version="${virtiofsd_version}" \
 	--env virtiofsd_zip="${virtiofsd_zip}" \
+	--env virtiofsd_zip_sha256="${virtiofsd_zip_sha256}" \
 	--env ARCH="${ARCH}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
