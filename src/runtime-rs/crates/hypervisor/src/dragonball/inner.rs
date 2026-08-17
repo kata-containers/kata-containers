@@ -42,6 +42,10 @@ const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
 
+fn should_insert_host_rng(entropy_source: &str, confidential_guest: bool) -> bool {
+    !entropy_source.is_empty() && !confidential_guest
+}
+
 #[derive(Debug)]
 pub struct DragonballInner {
     /// sandbox id
@@ -178,7 +182,8 @@ impl DragonballInner {
 
         // insert the virtio-rng device before boot: it is cold-plug only
         let entropy_source = &self.config.machine_info.entropy_source;
-        if !entropy_source.is_empty() {
+        let confidential_guest = self.config.security_info.confidential_guest;
+        if should_insert_host_rng(entropy_source, confidential_guest) {
             let rng_config = RngDeviceConfigInfo {
                 src: entropy_source.clone(),
                 use_shared_irq: None,
@@ -187,6 +192,8 @@ impl DragonballInner {
             self.vmm_instance
                 .insert_rng_device(rng_config)
                 .context("insert rng device")?;
+        } else if confidential_guest && !entropy_source.is_empty() {
+            warn!(sl!(), "skip host-backed virtio-rng for confidential guest");
         }
 
         // add pending devices
@@ -527,6 +534,18 @@ impl DragonballInner {
 
     pub fn set_passfd_listener_port(&mut self, port: u32) {
         self.passfd_listener_port = Some(port);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_insert_host_rng;
+
+    #[test]
+    fn test_should_insert_host_rng() {
+        assert!(should_insert_host_rng("/dev/urandom", false));
+        assert!(!should_insert_host_rng("", false));
+        assert!(!should_insert_host_rng("/dev/urandom", true));
     }
 }
 
