@@ -26,7 +26,7 @@ architecture="${architecture:-X64}"
 if [[ "${ovmf_build}" == "arm64" ]]; then
 	architecture="AARCH64"
 fi
-toolchain="${toolchain:-GCC5}"
+toolchain="${toolchain:-GCC}"
 build_target="${build_target:-RELEASE}"
 
 [[ -n "${ovmf_repo}" ]] || die "failed to get ovmf repo"
