@@ -47,7 +47,8 @@ spec:
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 54
+      # 720s window, wider than POD_READY_TIMEOUT_INSTRUCT in k8s-nvidia-nim.bats
+      failureThreshold: 66
     env:
       - name: NGC_API_KEY
         valueFrom:
