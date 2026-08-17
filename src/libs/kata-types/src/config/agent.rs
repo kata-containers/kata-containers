@@ -250,6 +250,12 @@ impl Agent {
         if self.dial_timeout_ms == 0 {
             return Err(std::io::Error::other("dial_timeout_ms couldn't be 0."));
         }
+        if self.reconnect_timeout_ms < self.dial_timeout_ms {
+            return Err(std::io::Error::other(
+                "reconnect_timeout_ms must be >= dial_timeout_ms (reconnect_timeout_ms is the \
+                 overall agent connection budget; dial_timeout_ms is the sleep between retries)",
+            ));
+        }
 
         Ok(())
     }

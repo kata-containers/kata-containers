@@ -33,28 +33,46 @@ fn to_capshashset(cfd_log: RawFd, capabilities: &Option<HashSet<LinuxCapability>
     r
 }
 
-pub fn get_all_caps() -> CapsHashSet {
-    let mut caps_set =
-        runtime::procfs_all_supported(None).unwrap_or_else(|_| runtime::thread_all_supported());
+pub fn get_all_caps() -> Result<CapsHashSet> {
+    // This runs after joining the container mount namespace, so procfs may be
+    // controlled by the workload. Query the kernel directly before installing
+    // the workload seccomp filter, which may reject selected PR_CAPBSET_READ calls.
+    let caps_set = runtime::thread_all_supported();
     if caps_set.is_empty() {
-        caps_set = caps::all();
+        return Err(anyhow!(
+            "failed to enumerate supported capabilities with PR_CAPBSET_READ"
+        ));
     }
-    caps_set
+    Ok(caps_set)
 }
 
 pub fn reset_effective() -> Result<()> {
-    let all = get_all_caps();
+    let all = get_all_caps()?;
     caps::set(None, CapSet::Effective, &all).map_err(|e| anyhow!(e.to_string()))?;
     Ok(())
 }
 
-pub fn drop_privileges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
-    let all = get_all_caps();
+pub fn restrict_bounding_set(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
+    let all = get_all_caps()?;
+    let allowed_bounding = to_capshashset(cfd_log, caps.bounding());
 
-    for c in all.difference(&to_capshashset(cfd_log, caps.bounding())) {
+    for c in all.difference(&allowed_bounding) {
         caps::drop(None, CapSet::Bounding, *c).map_err(|e| anyhow!(e.to_string()))?;
     }
 
+    // Verify the kernel's post-drop bounding set is no broader than the OCI allowlist.
+    let remaining_bounding =
+        caps::read(None, CapSet::Bounding).map_err(|e| anyhow!(e.to_string()))?;
+    if !remaining_bounding.is_subset(&allowed_bounding) {
+        return Err(anyhow!(
+            "failed to remove disallowed capabilities from the bounding set"
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn drop_privileges(cfd_log: RawFd, caps: &LinuxCapabilities) -> Result<()> {
     caps::set(
         None,
         CapSet::Effective,

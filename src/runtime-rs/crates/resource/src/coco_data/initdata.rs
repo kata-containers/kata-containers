@@ -4,7 +4,7 @@
 //
 
 use hypervisor::BlockConfigModern;
-use kata_types::build_path;
+use kata_types::prefix_with_rootless_dir;
 
 /// The path /run/kata-containers/shared/initdata, combined with the sandbox ID,
 /// will form the default directory for storing the initdata image.
@@ -22,5 +22,5 @@ pub struct InitDataConfig(pub BlockConfigModern, pub String);
 /// will form the directory for storing the initdata image.
 /// The directory will be prefixed with the rootless directory when running in rootless mode
 pub fn kata_shared_init_data_path() -> String {
-    build_path(DEFAULT_KATA_SHARED_INIT_DATA_PATH)
+    prefix_with_rootless_dir(DEFAULT_KATA_SHARED_INIT_DATA_PATH)
 }

@@ -23,7 +23,7 @@ use crate::utils::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
-use kata_types::build_path;
+use kata_types::prefix_with_rootless_dir;
 use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::rootless::is_rootless;
 use kata_types::{
@@ -100,7 +100,8 @@ impl QemuInner {
             }
         }
 
-        let vm_path = Path::new(build_path(KATA_PATH).as_str()).join(self.id.as_str());
+        let vm_path =
+            Path::new(prefix_with_rootless_dir(KATA_PATH).as_str()).join(self.id.as_str());
         create_dir_all_with_inherit_owner(vm_path, 0o750)?;
 
         Ok(())
@@ -109,6 +110,12 @@ impl QemuInner {
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
+
+        // Create the runtime directory (side-effect of get_jailer_root) before
+        // QemuCmdLine::new() binds qmp.sock inside it. With shared_fs=none,
+        // prepare_before_start_vm() never calls get_jailer_root(), so it must
+        // be done here explicitly. In rootless mode the path is under XDG_RUNTIME_DIR.
+        let jailer_root = self.get_jailer_root().await?;
 
         check_bpf_enabled(self.config.security_info.seccomp_sandbox.as_deref());
 
@@ -366,7 +373,7 @@ impl QemuInner {
         //cmdline.add_serial_console("/dev/pts/23");
 
         // Add a console to the devices of the cmdline
-        let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
+        let console_socket_path = Path::new(&jailer_root).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
@@ -696,7 +703,11 @@ impl QemuInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
-        let vm_path = [build_path(KATA_PATH).as_str(), self.id.as_str()].join("/");
+        let vm_path = [
+            prefix_with_rootless_dir(KATA_PATH).as_str(),
+            self.id.as_str(),
+        ]
+        .join("/");
         vm_cleanup(&self.config, vm_path.as_str())
     }
 
