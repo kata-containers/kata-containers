@@ -223,6 +223,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: s390x
 
+      - name: Download ppc64le artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: kata-static-tarball-ppc64le
+
+      - name: Upload ppc64le static tarball to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: ppc64le
+
       - name: Download ppc64le Go runtime artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
