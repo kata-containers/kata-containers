@@ -6,13 +6,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use common::{
-    message::{Action, Message},
-    types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+    RESTORE_PHASE_COMPLETE, RESTORE_PHASE_OPTION, RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv, error::Error as CommonError, message::{Action, Message}, types::{
+        ContainerProcess, DEFAULT_SHM_SIZE, PlatformInfo, ProcessType, RestoreSandboxInfo, SandboxConfig, SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
     },
-    RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
 use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
@@ -288,6 +284,7 @@ impl RuntimeHandlerManagerInner {
 
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
+    sandbox_operation_guard: Arc<RwLock<()>>,
 }
 
 // todo: a more detailed impl for fmt::Debug
@@ -303,6 +300,7 @@ impl RuntimeHandlerManager {
             inner: Arc::new(RwLock::new(RuntimeHandlerManagerInner::new(
                 id, msg_sender,
             )?)),
+            sandbox_operation_guard: Arc::new(RwLock::new(())),
         })
     }
 
@@ -487,7 +485,92 @@ impl RuntimeHandlerManager {
                 .await
                 .context("init sandboxed runtime")?;
 
-            Ok(SandboxResponse::CreateSandbox)
+            return Ok(SandboxResponse::CreateSandbox);
+        }
+
+        let is_observer = matches!(
+            &req,
+            SandboxRequest::Platform(_)
+                | SandboxRequest::WaitSandbox(_)
+                | SandboxRequest::SandboxStatus(_)
+                | SandboxRequest::Ping(_)
+        );
+        if is_observer {
+            return self
+                .handler_sandbox_request(req)
+                .await
+                .context("handler request");
+        }
+
+        let is_ckpt_restore = matches!(
+            &req,
+            SandboxRequest::CheckpointSandbox(_) | SandboxRequest::RestoreSandbox(_)
+        );
+        if !is_ckpt_restore {
+            let _operation_guard = self.sandbox_operation_guard.read().await;
+            return self
+                .handler_sandbox_request(req)
+                .await
+                .context("handler request");
+        }
+
+        let _operation_guard = self.sandbox_operation_guard.write().await;
+        if let SandboxRequest::RestoreSandbox(req) = req {
+            let runtime_id = self.inner.read().await.id.clone();
+            if req.sandbox_config.sandbox_id != runtime_id {
+                return Err(CommonError::InvalidSandboxOperation(format!(
+                    "restore sandbox id {} does not match shim id {}",
+                    req.sandbox_config.sandbox_id, runtime_id
+                ))
+                .into());
+            }
+            let restore_phase = req.options.get(RESTORE_PHASE_OPTION).map(String::as_str);
+            if restore_phase != Some(RESTORE_PHASE_COMPLETE) {
+                self.sandbox_init_runtime_instance(req.sandbox_config.clone())
+                    .await
+                    .context("initialize runtime for sandbox restore")?;
+            }
+            let instance = self
+                .get_runtime_instance()
+                .await
+                .context("get runtime instance for sandbox restore")?;
+
+            let restore_future = async {
+                let _checkpoint_restore = instance.checkpoint_restore.as_ref().ok_or_else(|| {
+                    CommonError::SandboxOperationUnsupported(
+                        "sandbox restore is unsupported by this runtime".to_string(),
+                    )
+                })?;
+                let info: Option<RestoreSandboxInfo> = None;
+
+
+                // TODO: do real work here
+
+                Ok::<_, anyhow::Error>(info)
+            };
+
+            let restore_result = if let Some(timeout) = req.operation_timeout {
+                match tokio::time::timeout(timeout, restore_future).await {
+                    Ok(result) => result,
+                    Err(_) => Err(CommonError::SandboxOperationDeadline(format!(
+                        "sandbox restore exceeded its {:?} runtime budget",
+                        timeout
+                    ))
+                    .into()),
+                }
+            } else {
+                restore_future.await
+            };
+
+            match restore_result {
+                Ok(info) => Ok(SandboxResponse::RestoreSandbox(info.unwrap())),
+                Err(restore_err) => match instance.sandbox.shutdown().await {
+                    Ok(()) => Err(restore_err),
+                    Err(rollback_err) => Err(restore_err).with_context(|| {
+                        format!("failed to discard restored sandbox: {rollback_err:#}")
+                    }),
+                },
+            }
         } else {
             self.handler_sandbox_request(req)
                 .await
@@ -497,6 +580,19 @@ impl RuntimeHandlerManager {
 
     #[instrument(parent = &*(ROOTSPAN))]
     pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+        let task_is_observer = matches!(
+            &req,
+            TaskRequest::WaitProcess(_)
+                | TaskRequest::StateProcess(_)
+                | TaskRequest::StatsContainer(_)
+                | TaskRequest::Pid
+                | TaskRequest::ConnectContainer(_)
+        );
+        let _operation_guard = if task_is_observer {
+            None
+        } else {
+            Some(self.sandbox_operation_guard.read().await)
+        };
         if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
@@ -644,6 +740,20 @@ impl RuntimeHandlerManager {
 
                 Ok(SandboxResponse::ShutdownSandbox)
             }
+            SandboxRequest::CheckpointSandbox(mut _req) => {
+                let _checkpoint_restore = instance.checkpoint_restore.as_ref().ok_or_else(|| {
+                    CommonError::SandboxOperationUnsupported(
+                        "sandbox checkpoint is unsupported by this runtime".to_string(),
+                    )
+                })?;
+
+                // TODO; do real work here
+
+                Ok(SandboxResponse::CheckpointSandbox)
+            }
+            SandboxRequest::RestoreSandbox(_) => Err(anyhow!(
+                "restore request reached initialized sandbox dispatcher"
+            )),
         }
     }
 

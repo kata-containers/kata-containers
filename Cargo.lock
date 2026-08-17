@@ -1234,8 +1234,7 @@ dependencies = [
 [[package]]
 name = "containerd-shim-protos"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f714d7ff4f5e9d5f9b57d27152d70c8cab6639284e5c4f7dfaca774a7b94fa52"
+source = "git+https://github.com/Apokleos/rust-extensions?branch=ckpt-restore#8515b391aeac177288d1c9f7940b671e401a27d2"
 dependencies = [
  "async-trait",
  "protobuf",
@@ -7383,6 +7382,7 @@ dependencies = [
  "oci-spec 0.10.0",
  "protobuf",
  "runtime-spec",
+ "serde_json",
  "serial_test 0.10.0",
  "service",
  "sha2 0.11.0",
@@ -8817,6 +8817,7 @@ dependencies = [
  "sendfd",
  "serde",
  "serde_json",
+ "sha2 0.11.0",
  "slog",
  "slog-scope",
  "strum 0.24.1",

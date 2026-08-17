@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::atomic::Ordering;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tracing::instrument;
@@ -92,6 +94,39 @@ macro_rules! impl_agent {
                 let resp = client.$name(new_ttrpc_ctx(timeout * MILLISECOND_TO_NANOSECOND), &r).await?;
                 Ok(resp.into())
             })*
+
+            async fn wait_process(
+                &self,
+                req: crate::WaitProcessRequest,
+            ) -> Result<crate::WaitProcessResponse> {
+                let req = req.into();
+                loop {
+                    let generation = self.reconnect_generation.load(Ordering::Acquire);
+                    let client = match self.get_agent_client().await {
+                        Some((client, _, _)) => client,
+                        None => {
+                            let reconnected = self.reconnected.notified();
+                            if self.reconnecting.load(Ordering::Acquire) {
+                                reconnected.await;
+                                continue;
+                            }
+                            return Err(anyhow::anyhow!("get client"));
+                        }
+                    };
+                    match client.wait_process(new_ttrpc_ctx(0), &req).await {
+                        Ok(resp) => return Ok(resp.into()),
+                        Err(err) => {
+                            if self.reconnect_generation.load(Ordering::Acquire) == generation {
+                                return Err(err.into());
+                            }
+                            let reconnected = self.reconnected.notified();
+                            if self.reconnecting.load(Ordering::Acquire) {
+                                reconnected.await;
+                            }
+                        }
+                    }
+                }
+            }
         }
     };
 }
@@ -102,7 +137,6 @@ impl_agent!(
     remove_container | crate::RemoveContainerRequest | crate::Empty | None,
     exec_process | crate::ExecProcessRequest | crate::Empty | None,
     signal_process | crate::SignalProcessRequest | crate::Empty | None,
-    wait_process | crate::WaitProcessRequest | crate::WaitProcessResponse | Some(0),
     update_container | crate::UpdateContainerRequest | crate::Empty | None,
     stats_container | crate::ContainerID | crate::StatsContainerResponse | None,
     pause_container | crate::ContainerID | crate::Empty | None,
@@ -118,6 +152,7 @@ impl_agent!(
     list_interfaces | crate::Empty | crate::Interfaces | None,
     list_routes | crate::Empty | crate::Routes | None,
     create_sandbox | crate::CreateSandboxRequest | crate::Empty | None,
+    rebind_sandbox | crate::RebindSandboxRequest | crate::Empty | None,
     destroy_sandbox | crate::Empty | crate::Empty | None,
     copy_file | crate::CopyFileRequest | crate::Empty | None,
     get_oom_event | crate::Empty | crate::OomEventResponse | Some(0),
@@ -126,6 +161,8 @@ impl_agent!(
     get_volume_stats | crate::VolumeStatsRequest | crate::VolumeStatsResponse | None,
     resize_volume | crate::ResizeVolumeRequest | crate::Empty | None,
     online_cpu_mem | crate::OnlineCPUMemRequest | crate::Empty | None,
+    reseed_random_dev | crate::ReseedRandomDevRequest | crate::Empty | None,
+    set_guest_date_time | crate::SetGuestDateTimeRequest | crate::Empty | None,
     get_metrics | crate::Empty | crate::MetricsResponse | None,
     get_guest_details | crate::GetGuestDetailsRequest | crate::GuestDetailsResponse | None,
     add_swap | crate::AddSwapRequest | crate::Empty | None,

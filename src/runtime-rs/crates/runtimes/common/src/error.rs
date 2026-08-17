@@ -22,6 +22,14 @@ pub enum Error {
     AgentConnectionClosed,
     #[error("process already terminated")]
     ProcessAlreadyTerminated,
+    #[error("invalid sandbox checkpoint/restore request: {0}")]
+    InvalidSandboxOperation(String),
+    #[error("sandbox checkpoint/restore precondition failed: {0}")]
+    SandboxOperationPrecondition(String),
+    #[error("sandbox checkpoint/restore is unsupported: {0}")]
+    SandboxOperationUnsupported(String),
+    #[error("sandbox checkpoint/restore deadline exceeded: {0}")]
+    SandboxOperationDeadline(String),
 }
 
 /// Common error messages indicating normal OOM shutdowns due to network issues.

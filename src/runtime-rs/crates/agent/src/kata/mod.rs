@@ -9,13 +9,17 @@ mod trans;
 
 use std::{
     os::unix::io::RawFd,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;
+use nix::sys::socket::{shutdown, Shutdown};
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 use ttrpc::asynchronous::Client;
 
 use crate::{log_forwarder::LogForwarder, sock};
@@ -59,6 +63,9 @@ unsafe impl Sync for KataAgent {}
 #[derive(Debug)]
 pub struct KataAgent {
     pub(crate) inner: Arc<RwLock<KataAgentInner>>,
+    reconnecting: AtomicBool,
+    reconnect_generation: AtomicU64,
+    reconnected: Notify,
 }
 
 impl KataAgent {
@@ -71,6 +78,9 @@ impl KataAgent {
                 config,
                 log_forwarder: LogForwarder::new(),
             })),
+            reconnecting: AtomicBool::new(false),
+            reconnect_generation: AtomicU64::new(0),
+            reconnected: Notify::new(),
         }
     }
 
@@ -124,6 +134,8 @@ impl KataAgent {
         let c = Client::new(stream.into_ttrpc_socket());
         inner.client = Some(c);
         inner.client_fd = client_fd;
+        self.reconnecting.store(false, Ordering::Release);
+        self.reconnected.notify_waiters();
         Ok(())
     }
 
@@ -164,8 +176,17 @@ impl KataAgent {
 
     /// Disconnect from the agent gRPC server and clean up related resources.
     pub(crate) async fn disconnect(&self) -> Result<()> {
+        self.reconnect_generation.fetch_add(1, Ordering::AcqRel);
+        self.reconnecting.store(true, Ordering::Release);
         let mut inner = self.inner.write().await;
         inner.log_forwarder.stop();
+
+        // Long-running WaitProcess calls retain ttrpc client clones. Shut down
+        // the transport so the guest agent returns to accept before a VM
+        // snapshot; WaitProcess retries after the planned reconnect.
+        if inner.client_fd >= 0 {
+            shutdown(inner.client_fd, Shutdown::Both).context("shutdown agent client socket")?;
+        }
 
         // If there is a valid client, drop it (closes the connection).
         inner.client.take();

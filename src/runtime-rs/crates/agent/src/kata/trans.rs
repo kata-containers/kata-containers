@@ -335,6 +335,31 @@ impl From<ContainerID> for agent::ResumeContainerRequest {
     }
 }
 
+impl From<crate::RebindSandboxRequest> for agent::RebindSandboxRequest {
+    fn from(from: crate::RebindSandboxRequest) -> Self {
+        Self {
+            sandbox_id: from.sandbox_id,
+            hostname: from.hostname,
+            dns: from.dns,
+            containers: from
+                .containers
+                .into_iter()
+                .map(|mapping| agent::ContainerIDMapping {
+                    old_id: mapping.old_id,
+                    new_id: mapping.new_id,
+                    has_hosts_file: mapping.hosts_file.is_some(),
+                    hosts_file: mapping.hosts_file.unwrap_or_default(),
+                    process: mapping.process,
+                    has_linux_resources: mapping.linux_resources.is_some(),
+                    linux_resources: mapping.linux_resources.unwrap_or_default(),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
 impl From<SignalProcessRequest> for agent::SignalProcessRequest {
     fn from(from: SignalProcessRequest) -> Self {
         Self {

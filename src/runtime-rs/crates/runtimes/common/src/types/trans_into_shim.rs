@@ -143,6 +143,58 @@ impl TryFrom<SandboxResponse> for sandbox_api::ShutdownSandboxResponse {
     }
 }
 
+impl TryFrom<SandboxResponse> for sandbox_api::CheckpointSandboxResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::CheckpointSandbox => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::RestoreSandboxResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::RestoreSandbox(resp) => {
+                let spec = if resp.spec.is_empty() && resp.spec_type_url.is_empty() {
+                    None
+                } else {
+                    let mut spec = protobuf::well_known_types::any::Any::new();
+                    spec.type_url = resp.spec_type_url;
+                    spec.value = resp.spec;
+                    Some(spec)
+                };
+                Ok(Self {
+                    pid: resp.pid,
+                    created_at: option_system_time_into(Some(resp.created_at)),
+                    spec: spec.into(),
+                    tasks: resp
+                        .tasks
+                        .into_iter()
+                        .map(|task| sandbox_api::RestoredSandboxTask {
+                            checkpoint_key: task.checkpoint_key,
+                            task_id: task.task_id,
+                            ..Default::default()
+                        })
+                        .collect(),
+                    ..Default::default()
+                })
+            }
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
 impl From<ProcessExitStatus> for api::WaitResponse {
     fn from(from: ProcessExitStatus) -> Self {
         Self {
