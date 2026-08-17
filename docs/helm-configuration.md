@@ -65,13 +65,12 @@ defaultShim:
   amd64: qemu-runtime-rs
   arm64: qemu-runtime-rs
   s390x: qemu-runtime-rs
-  ppc64le: qemu
+  ppc64le: qemu-runtime-rs
 ```
 
 Since the Kata Containers **4.0 release**, the default is the **Rust runtime**
 (`runtime-rs`, `qemu-runtime-rs`) on every architecture that ships a
-`runtime-rs` build (x86_64, aarch64, s390x). ppc64le has no `runtime-rs` build
-yet and stays on the Go runtime (`qemu`). The Go runtime remains selectable
+`runtime-rs` build (x86_64, aarch64, s390x and ppc64le). The Go runtime remains selectable
 (e.g. via the `kata-qemu` RuntimeClass) but is
 [deprecated](migrating-config-go-runtime-to-runtime-rs.md#go-runtime-deprecation).
 See the [config migration guide](migrating-config-go-runtime-to-runtime-rs.md)

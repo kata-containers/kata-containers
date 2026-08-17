@@ -221,13 +221,11 @@ case "$(uname -m)" in
     ;;
 esac
 
-if [[ "${ARCH}" != "ppc64le" ]]; then
-  curl -fsSL -o kata-static.tar.zst \
-    "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-${ARCH}.tar.zst"
+curl -fsSL -o kata-static.tar.zst \
+  "https://github.com/kata-containers/kata-containers/releases/download/${VERSION}/kata-static-${VERSION}-${ARCH}.tar.zst"
 
-  # The archive uses an /opt/kata/ prefix.
-  sudo tar -xvf kata-static.tar.zst -C /
-fi
+# The archive uses an /opt/kata/ prefix.
+sudo tar -xvf kata-static.tar.zst -C /
 ```
 
 The `kata-static` archive contains runtime-rs, its configurations, composable
@@ -244,8 +242,7 @@ and `configuration-dragonball.toml` selects the built-in Dragonball VMM.
 
 !!! warning "The Go runtime is deprecated"
     Users who still require the Go runtime or monolithic guest images must
-    install the separate `kata-go-static` archive. This is also the only release
-    tarball available for `ppc64le`, where runtime-rs is not supported.
+    install the separate `kata-go-static` archive.
 
 ```sh
 curl -fsSL -o kata-go-static.tar.zst \
