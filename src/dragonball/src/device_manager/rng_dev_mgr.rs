@@ -7,6 +7,8 @@ use serde_derive::{Deserialize, Serialize};
 use slog::{error, info};
 use virtio::rng::Rng;
 
+#[cfg(target_arch = "x86_64")]
+use crate::api::v1::ConfidentialVmType;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 
@@ -127,14 +129,28 @@ impl RngDeviceMgr {
     ) -> std::result::Result<(), RngDeviceError> {
         let epoll_mgr = ctx.get_epoll_mgr().map_err(RngDeviceError::DeviceManager)?;
 
+        // A TDX guest can only DMA into shared memory, so the device has to
+        // advertise VIRTIO_F_ACCESS_PLATFORM for the guest to set up bounce
+        // buffers. Note that the kata runtime never inserts a host backed
+        // virtio-rng device into a confidential VM, this only applies to other
+        // users of the dragonball API.
+        #[cfg(not(target_arch = "x86_64"))]
+        let f_access_platform = false;
+        #[cfg(target_arch = "x86_64")]
+        let f_access_platform = ctx.get_confidential_vm_type() == Some(ConfidentialVmType::TDX);
+
         for info in self.info_list.iter_mut() {
             info!(ctx.logger(), "attach virtio-rng device";
                 "subsystem" => "rng_dev_mgr",
                 "src" => &info.config.src,
             );
 
-            let device = Rng::new(info.config.src.clone(), epoll_mgr.clone())
-                .map_err(RngDeviceError::CreateRngDevice)?;
+            let device = Rng::new(
+                info.config.src.clone(),
+                epoll_mgr.clone(),
+                f_access_platform,
+            )
+            .map_err(RngDeviceError::CreateRngDevice)?;
             let mmio_dev = DeviceManager::create_mmio_virtio_device(
                 Box::new(device),
                 ctx,

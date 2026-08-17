@@ -17,7 +17,7 @@ use dbs_utils::epoll_manager::{
     EpollManager, EventOps, EventSet, Events, MutEventSubscriber, SubscriberId,
 };
 use log::{debug, error, trace};
-use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::{VIRTIO_F_ACCESS_PLATFORM, VIRTIO_F_VERSION_1};
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{Bytes, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
 
@@ -196,10 +196,13 @@ pub struct Rng<AS: GuestAddressSpace> {
 
 impl<AS: GuestAddressSpace> Rng<AS> {
     /// Create a new virtio-rng device that gets random data from the host.
-    pub fn new(path: String, epoll_mgr: EpollManager) -> Result<Self> {
+    pub fn new(path: String, epoll_mgr: EpollManager, f_access_platform: bool) -> Result<Self> {
         trace!(target: RNG_DRIVER_NAME, "{}: Rng::new({})", RNG_DRIVER_NAME, path);
 
-        let avail_features = 1u64 << VIRTIO_F_VERSION_1;
+        let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
+        if f_access_platform {
+            avail_features |= 1u64 << VIRTIO_F_ACCESS_PLATFORM;
+        }
         let random_file = File::open(&path)?;
 
         // The virtio-rng device has no device configuration space.
@@ -370,7 +373,7 @@ pub(crate) mod tests {
         let dummy_file = TempFile::new().unwrap();
 
         let path = dummy_path(&dummy_file);
-        let mut dev = Rng::<Arc<GuestMemoryMmap>>::new(path.clone(), epoll_mgr).unwrap();
+        let mut dev = Rng::<Arc<GuestMemoryMmap>>::new(path.clone(), epoll_mgr, false).unwrap();
 
         assert_eq!(dev.id, path);
 
@@ -421,6 +424,24 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_rng_access_platform_feature() {
+        let epoll_mgr = EpollManager::default();
+        let dummy_file = TempFile::new().unwrap();
+
+        let dev =
+            Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr.clone(), false)
+                .unwrap();
+        assert_eq!(dev.device_info.avail_features(), 1u64 << VIRTIO_F_VERSION_1);
+
+        let dev =
+            Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr, true).unwrap();
+        assert_eq!(
+            dev.device_info.avail_features(),
+            (1u64 << VIRTIO_F_VERSION_1) | (1u64 << VIRTIO_F_ACCESS_PLATFORM)
+        );
+    }
+
+    #[test]
     fn test_rng_virtio_device_activate() {
         skip_if_kvm_unaccessable!();
         let epoll_mgr = EpollManager::default();
@@ -429,7 +450,7 @@ pub(crate) mod tests {
         // check queue sizes error
         {
             let mut dev =
-                Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr.clone())
+                Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr.clone(), false)
                     .unwrap();
             let queues = vec![
                 VirtioQueueConfig::<QueueSync>::create(16, 0).unwrap(),
@@ -458,7 +479,8 @@ pub(crate) mod tests {
         // success
         {
             let mut dev =
-                Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr).unwrap();
+                Rng::<Arc<GuestMemoryMmap>>::new(dummy_path(&dummy_file), epoll_mgr, false)
+                    .unwrap();
             let queues = vec![VirtioQueueConfig::<QueueSync>::create(QUEUE_SIZE, 0).unwrap()];
 
             let mem = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
