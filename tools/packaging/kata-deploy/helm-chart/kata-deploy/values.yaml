@@ -120,6 +120,11 @@ job:
   # also reaches nodes where the install failed half way, which are precisely
   # the nodes with something left on them.
   #
+  # With env.multiInstallSuffix this label is shared with the other installs, so
+  # the default reaches their nodes too and finds nothing of its own to remove
+  # there - the safe direction. Narrow it to this install's own mark
+  # (kata-deploy.katacontainers.io/<suffix>, Exists) to visit only its nodes.
+  #
   # Precedence: cleanup.nodes, else cleanup.nodeSelector (equality) ANDed with
   # cleanup.nodeAffinity - which is what the default below expresses. Setting all
   # three to empty is what means "every node". Override to clean a different set,

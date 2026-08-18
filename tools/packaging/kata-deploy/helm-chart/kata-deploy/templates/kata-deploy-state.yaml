@@ -1,0 +1,58 @@
+{{- /*
+The install directory, runtime handlers, resource names, and per-node ownership
+marker all derive from multiInstallSuffix. Changing it in place creates a second
+installation while the release forgets how to remove the first one, so persist
+the first value under a suffix-independent name and reject changes.
+*/ -}}
+{{- $name := printf "%s-kata-deploy-state" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $wantedSuffix := .Values.env.multiInstallSuffix | default "" | toString -}}
+{{- $wantedMode := .Values.deploymentMode | default "daemonset" | toString -}}
+{{- if not (has $wantedMode (list "daemonset" "job")) -}}
+{{- fail (printf "deploymentMode must be one of daemonset or job, got %q" $wantedMode) -}}
+{{- end -}}
+{{- $existing := lookup "v1" "ConfigMap" .Release.Namespace $name -}}
+{{- $previousSuffix := "" -}}
+{{- $previousMode := "" -}}
+{{- $known := false -}}
+{{- if $existing -}}
+{{- $previousSuffix = index ($existing.data | default dict) "multiInstallSuffix" | default "" -}}
+{{- $previousMode = index ($existing.data | default dict) "deploymentMode" | default "" -}}
+{{- $known = true -}}
+{{- else if .Release.IsUpgrade -}}
+{{- /* Releases installed before this state object existed can still prove that
+       the suffix is unchanged: the old mode-specific resource has the exact name
+       derived from it. A changed suffix finds neither and is rejected below. */ -}}
+{{- $base := .Chart.Name -}}
+{{- if $wantedSuffix -}}{{- $base = printf "%s-%s" .Chart.Name $wantedSuffix -}}{{- end -}}
+{{- $oldJobs := lookup "v1" "ConfigMap" .Release.Namespace (printf "%s-job-templates" $base | trunc 63 | trimSuffix "-") -}}
+{{- $oldDaemonSet := lookup "apps/v1" "DaemonSet" .Release.Namespace $base -}}
+{{- if $oldJobs -}}
+{{- $previousSuffix = $wantedSuffix -}}
+{{- $previousMode = "job" -}}
+{{- $known = true -}}
+{{- else if $oldDaemonSet -}}
+{{- $previousSuffix = $wantedSuffix -}}
+{{- $previousMode = "daemonset" -}}
+{{- $known = true -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Release.IsUpgrade (not $known) -}}
+{{- fail (printf "cannot verify the previous kata-deploy identity for release %q. Refusing the upgrade because changing env.multiInstallSuffix or deploymentMode would orphan nodes. Restore the release's previous values, or seed ConfigMap %q with data.multiInstallSuffix and data.deploymentMode before retrying." .Release.Name $name) -}}
+{{- end -}}
+{{- if and $known (ne $previousSuffix $wantedSuffix) -}}
+{{- fail (printf "env.multiInstallSuffix is immutable for an existing release: release %q was installed with %q and this upgrade asks for %q. Restore the previous value, uninstall that installation cleanly, then install the new suffix as a separate release." .Release.Name $previousSuffix $wantedSuffix) -}}
+{{- end -}}
+{{- if and $known (ne $previousMode $wantedMode) -}}
+{{- fail (printf "deploymentMode is immutable for an existing release: release %q was installed in %s mode and this upgrade asks for %s. Uninstall the existing mode cleanly before installing the other mode." .Release.Name $previousMode $wantedMode) -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  multiInstallSuffix: {{ $wantedSuffix | quote }}
+  deploymentMode: {{ $wantedMode | quote }}

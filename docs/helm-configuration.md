@@ -587,7 +587,9 @@ schedules onto a claimed node in the meantime, since the RuntimeClasses select t
 exact value `"true"`. For the same reason an uninstall demotes the label to
 `"false"` rather than removing it, and removes it only once that node's cleanup Job
 has succeeded: a cleanup that fails is still a node the next `helm uninstall` can
-find.
+find. Where several installations share a node, neither the demotion nor the removal
+happens while another one is still holding it — see
+[How installations keep out of each other's way on a node](#how-installations-keep-out-of-each-others-way-on-a-node).
 
 !!! warning "Claiming is best-effort, so this is not a guarantee"
 
@@ -908,6 +910,103 @@ kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
+
+#### How installations keep out of each other's way on a node
+
+One thing is deliberately *not* suffixed: the node label
+`katacontainers.io/kata-runtime`, which every installation's RuntimeClasses select.
+It says "this node can run Kata", not "this installation is here", so it cannot be
+used to work out whether removing it is safe.
+
+Each installation therefore also marks the nodes it holds with a label of its own,
+named after its suffix — `kata-deploy.katacontainers.io/cicd` for the example above,
+and `kata-deploy.katacontainers.io/default` for an installation that sets no suffix.
+The value follows the shared label's: `false` while the installation is being put in
+place, `true` once the node can run its workloads.
+
+```sh
+$ kubectl get node worker-1 -o jsonpath='{.metadata.labels}' | tr ',' '\n' | grep kata
+"katacontainers.io/kata-runtime":"true"
+"kata-deploy.katacontainers.io/default":"true"
+"kata-deploy.katacontainers.io/cicd":"true"
+```
+
+Every installation's RuntimeClasses select **both** labels — the shared one and
+its own mark, including `kata-deploy.katacontainers.io/default` when no suffix was
+set. The default installation can still share a node with a suffixed release, so
+it needs the same gate. Removing one mark stops that installation's workloads
+being sent there immediately, even when the shared label stays for another one.
+
+An uninstall removes its own mark from every node it reaches, and the shared label
+only from the nodes where no other mark is left. So uninstalling `kata-deploy-cicd`
+above leaves `worker-1` running Kata for the other installation, while a node that
+only ever had `cicd` on it loses the label and stops being a Kata node. Cleanup
+still restarts the shared CRI runtime after removing this installation's
+configuration: otherwise the live runtime could keep advertising a handler whose
+binary has just been deleted. The other installation's configuration remains and
+is reloaded by that restart.
+
+A mark reading `false` does not count as another installation serving Kata: if the
+last `true` mark goes and only a half-finished installation is left, the shared
+label is set back to `false` rather than removed. Nothing is scheduled on the
+strength of it, and the installation that is still working on the node keeps a
+label its own uninstall can find.
+
+!!! warning "Upgrade every installation before uninstalling any"
+
+    Nodes installed by a version that did not write marks carry none, and an
+    uninstall cannot attribute such a node to one release. Run `helm upgrade` on
+    every installation before uninstalling one of them, so each release has first
+    marked the nodes it owns.
+
+`env.multiInstallSuffix` is immutable for the life of a Helm release. The chart
+stores the first value under a suffix-independent ConfigMap name and rejects an
+upgrade that changes it: the install directory, handlers, resource names, and
+node marker all derive from the suffix, so changing it in place would create a
+second installation while forgetting how to remove the first.
+
+For containerd, a suffixed installation also requires drop-in configuration
+support. Older whole-file configuration has one shared backup; uninstalling one
+release would restore a file that predates every release and erase the surviving
+handlers. Installation therefore fails before modifying CRI configuration when
+that unsafe combination is detected.
+
+On the first upgrade from a chart version that predates that state ConfigMap, the
+chart verifies the previous identity from the existing mode-specific resource
+whose name derives from the suffix. If it cannot find one, the upgrade stops and
+the error names the ConfigMap data that can be seeded explicitly; guessing would
+be the unsafe choice.
+
+The same state makes `deploymentMode` immutable and rejects values other than
+`daemonset` and `job`. An in-place mode switch can strand nodes owned by the old
+controller, and recording a new mode before its hook succeeds can also make a
+rollback reject the previous mode. Uninstall the existing mode cleanly before
+installing the other one.
+
+In `job` mode this means an uninstall may visit a node that only ever belonged to
+another installation — the default cleanup selection is the shared label, which is
+by definition not yours alone — and find nothing of its own to remove. That is
+deliberately the safe direction: it reaches every node it might have touched. If you
+would rather it visited only its own nodes, select on its mark:
+
+```yaml title="values.yaml"
+job:
+  cleanup:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kata-deploy.katacontainers.io/cicd
+                operator: Exists
+```
+
+!!! note "Both deployment modes keep the same books"
+
+    The marks are the same labels in either mode — written by the dispatcher in
+    `job` mode and by the pod on the node in `daemonset` mode — so an uninstall in
+    one mode does see an installation running in the other. Mixing modes across
+    installations is not a combination we test, though: give every installation the
+    same `deploymentMode`.
 
 ## RuntimeClass Node Selectors for TEE Shims
 

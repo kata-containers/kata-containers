@@ -17,9 +17,18 @@ use serde_json::json;
 /// A concurrent taint update is a lost race, not a broken node.
 const TAINT_PATCH_ATTEMPTS: u32 = 3;
 
+/// Same for labels another install rewrote while we were deciding what to write.
+const LABEL_PATCH_ATTEMPTS: u32 = 5;
+
 /// A rejected precondition, as opposed to a request that failed on its merits.
 /// The apiserver answers a failing JSON Patch `test` with 422, and a genuine write
 /// conflict with 409.
+/// A label key as a JSON Pointer token: `~` and `/` are the two characters with a
+/// meaning of their own there (RFC 6901).
+fn escape_pointer(token: &str) -> String {
+    token.replace('~', "~0").replace('/', "~1")
+}
+
 fn is_precondition_failure(err: &kube::Error) -> bool {
     matches!(err, kube::Error::Api(status) if status.code == 409 || status.code == 422)
 }
@@ -70,15 +79,8 @@ impl K8sClient {
             })
     }
 
-    /// Return the value of a single label from `.metadata.labels` on the
-    /// bound node, or `None` if the label is absent.
-    pub async fn get_node_label(&self, key: &str) -> Result<Option<String>> {
-        let node = self.get_node().await?;
-        Ok(node
-            .metadata
-            .labels
-            .as_ref()
-            .and_then(|labels| labels.get(key).cloned()))
+    pub async fn get_node_labels(&self) -> Result<std::collections::BTreeMap<String, String>> {
+        Ok(self.get_node().await?.metadata.labels.unwrap_or_default())
     }
 
     pub async fn get_kubelet_runtime_request_timeout(&self) -> Result<Option<String>> {
@@ -143,6 +145,91 @@ impl K8sClient {
             .with_context(|| format!("Failed to patch node: {}", self.node_name))?;
 
         Ok(())
+    }
+
+    /// Read the bound node's labels, decide what to write from them, and write it
+    /// only if nothing else changed the node in between.
+    ///
+    /// The decision is read from marks other installs write at the same time, so an
+    /// unconditional write could act on a node that has already moved on: two
+    /// uninstalls each seeing the other's mark, each removing their own, leaving a
+    /// node advertising Kata with nothing installed.
+    ///
+    /// `decide` returns the label writes (`None` removes) and whatever the caller
+    /// concluded from the labels it saw.
+    pub async fn rewrite_node_labels<F, T>(&self, decide: F) -> Result<T>
+    where
+        F: Fn(&std::collections::BTreeMap<String, String>) -> (Vec<(String, Option<String>)>, T),
+    {
+        for attempt in 1..=LABEL_PATCH_ATTEMPTS {
+            let node = self.get_node().await?;
+            let version = node.metadata.resource_version.clone().unwrap_or_default();
+            let labels = node.metadata.labels.unwrap_or_default();
+
+            let (updates, outcome) = decide(&labels);
+            if updates.is_empty() {
+                return Ok(outcome);
+            }
+
+            let mut ops =
+                vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+            for (key, value) in &updates {
+                let path = format!("/metadata/labels/{}", escape_pointer(key));
+                match value {
+                    Some(value) => ops.push(json!({"op": "add", "path": path, "value": value})),
+                    // `remove` is what makes this rejectable: it fails when the key
+                    // is already gone, which is another way of saying we read a
+                    // stale node.
+                    None => ops.push(json!({"op": "remove", "path": path})),
+                }
+            }
+
+            let patch: json_patch::Patch =
+                serde_json::from_value(json!(ops)).context("Failed to build the label patch")?;
+
+            match self
+                .node_api
+                .patch(
+                    &self.node_name,
+                    &PatchParams::default(),
+                    &Patch::Json::<Node>(patch),
+                )
+                .await
+            {
+                Ok(_) => {
+                    for (key, value) in &updates {
+                        match value {
+                            Some(value) => {
+                                info!("Set label {}={} on node {}", key, value, self.node_name)
+                            }
+                            None => {
+                                info!("Removed label {} from node {}", key, self.node_name)
+                            }
+                        }
+                    }
+                    return Ok(outcome);
+                }
+                Err(e) if is_precondition_failure(&e) => {
+                    info!(
+                        "Labels on node {} changed while they were being rewritten (attempt \
+                         {}/{}); reading them again",
+                        self.node_name, attempt, LABEL_PATCH_ATTEMPTS
+                    );
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to patch the labels on node {}", self.node_name)
+                    })
+                }
+            }
+        }
+
+        anyhow::bail!(
+            "Gave up rewriting the labels on node {} after {} attempts: something keeps changing \
+             them concurrently",
+            self.node_name,
+            LABEL_PATCH_ATTEMPTS
+        )
     }
 
     /// Remove taints from the bound node.
@@ -318,9 +405,11 @@ pub async fn get_container_runtime_version(config: &Config) -> Result<String> {
     client.get_container_runtime_version().await
 }
 
-pub async fn get_node_label(config: &Config, key: &str) -> Result<Option<String>> {
+pub async fn get_node_labels(
+    config: &Config,
+) -> Result<std::collections::BTreeMap<String, String>> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.get_node_label(key).await
+    client.get_node_labels().await
 }
 
 pub async fn get_kubelet_runtime_request_timeout(config: &Config) -> Result<Option<String>> {
@@ -370,6 +459,14 @@ pub async fn label_node(
 ) -> Result<()> {
     let client = K8sClient::new(&config.node_name).await?;
     client.label_node(label_key, label_value, overwrite).await
+}
+
+pub async fn rewrite_node_labels<F, T>(config: &Config, decide: F) -> Result<T>
+where
+    F: Fn(&std::collections::BTreeMap<String, String>) -> (Vec<(String, Option<String>)>, T),
+{
+    let client = K8sClient::new(&config.node_name).await?;
+    client.rewrite_node_labels(decide).await
 }
 
 pub async fn remove_node_taints(config: &Config, matchers: &[String]) -> Result<Vec<String>> {
