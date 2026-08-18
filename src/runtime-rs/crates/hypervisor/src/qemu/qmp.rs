@@ -7,7 +7,8 @@ use crate::device::pci_path::PciPath;
 use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
-use crate::{BlockDeviceFormat, VcpuThreadIds};
+use crate::VcpuThreadIds;
+use crate::{BlockDeviceFormat, VmdkConfig};
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
@@ -1243,6 +1244,7 @@ impl Qmp {
         logical_block_size: u32,
         physical_block_size: u32,
         format: &BlockDeviceFormat,
+        vmdk: Option<&VmdkConfig>,
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
@@ -1273,6 +1275,7 @@ impl Qmp {
         let prepared_source = match prepare_block_source(
             path_on_host,
             format,
+            vmdk,
             is_readonly,
             is_direct.unwrap_or(false),
             |file, label| {
@@ -1848,15 +1851,28 @@ mod tests {
         let fdsets = vec![
             qmp::FdsetInfo {
                 fdset_id: 7,
+                fds: vec![
+                    qmp::FdsetFdInfo {
+                        fd: 21,
+                        opaque: Some(block_fd_opaque("drive-2", "vmdk-extent-0")),
+                    },
+                    qmp::FdsetFdInfo {
+                        fd: 22,
+                        opaque: Some(block_fd_opaque("drive-2", "vmdk-extent-1")),
+                    },
+                ],
+            },
+            qmp::FdsetInfo {
+                fdset_id: 8,
                 fds: vec![qmp::FdsetFdInfo {
-                    fd: 21,
-                    opaque: Some(block_fd_opaque("drive-2", "block-source")),
+                    fd: 23,
+                    opaque: Some(block_fd_opaque("drive-2", "vmdk-descriptor")),
                 }],
             },
             qmp::FdsetInfo {
                 fdset_id: 9,
                 fds: vec![qmp::FdsetFdInfo {
-                    fd: 22,
+                    fd: 24,
                     opaque: Some("unrelated".to_string()),
                 }],
             },
@@ -1864,7 +1880,7 @@ mod tests {
 
         assert_eq!(
             collect_block_fdsets(fdsets),
-            HashMap::from([("drive-2".to_string(), vec![7])])
+            HashMap::from([("drive-2".to_string(), vec![7, 8])])
         );
     }
 }

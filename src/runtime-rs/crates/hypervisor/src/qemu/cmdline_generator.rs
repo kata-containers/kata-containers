@@ -1028,6 +1028,12 @@ struct AddFd {
     opaque: String,
 }
 
+#[derive(Debug)]
+struct VmdkFormatNode {
+    id: String,
+    file: BlockBackend,
+}
+
 #[async_trait]
 impl ToQemuParams for AddFd {
     async fn qemu_params(&self) -> Result<Vec<String>> {
@@ -1092,34 +1098,85 @@ impl BlockBackend {
         self.discard_unmap = discard_unmap;
         self
     }
+
+    fn options(&self, prefix: &str, include_node_name: bool) -> Vec<String> {
+        let mut params = vec![format!("{prefix}driver={}", self.driver)];
+        if include_node_name {
+            params.push(format!("node-name=image-{}", self.id));
+        }
+        params.push(format!("{prefix}filename={}", self.path));
+        params.push(format!("{prefix}aio={}", self.aio));
+        params.push(format!(
+            "{prefix}cache.direct={}",
+            if self.cache_direct { "on" } else { "off" }
+        ));
+        params.push(format!(
+            "{prefix}cache.no-flush={}",
+            if self.cache_no_flush { "on" } else { "off" }
+        ));
+        params.push(format!(
+            "{prefix}read-only={}",
+            if self.read_only { "on" } else { "off" }
+        ));
+        if self.discard_unmap {
+            params.push(format!("{prefix}discard=unmap"));
+        }
+        params
+    }
 }
 
 #[async_trait]
 impl ToQemuParams for BlockBackend {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut params = Vec::new();
-        params.push(format!("driver={}", self.driver));
-        params.push(format!("node-name=image-{}", self.id));
-        params.push(format!("filename={}", self.path));
-        params.push(format!("aio={}", self.aio));
-        if self.cache_direct {
-            params.push("cache.direct=on".to_owned());
-        } else {
-            params.push("cache.direct=off".to_owned());
+        let params = self.options("", true);
+        Ok(vec!["-blockdev".to_owned(), params.join(",")])
+    }
+}
+
+impl VmdkFormatNode {
+    fn new(id: &str, file: BlockBackend) -> Self {
+        Self {
+            id: id.to_owned(),
+            file,
         }
-        if self.cache_no_flush {
-            params.push("cache.no-flush=on".to_owned());
-        } else {
-            params.push("cache.no-flush=off".to_owned());
-        }
-        params.push(format!(
-            "read-only={}",
-            if self.read_only { "on" } else { "off" }
-        ));
-        if self.discard_unmap {
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for VmdkFormatNode {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = vec![
+            "driver=vmdk".to_owned(),
+            format!("node-name=image-{}", self.id),
+            format!(
+                "read-only={}",
+                if self.file.read_only { "on" } else { "off" }
+            ),
+            "force-share=on".to_owned(),
+        ];
+        if self.file.discard_unmap {
             params.push("discard=unmap".to_owned());
         }
+        params.extend(self.file.options("file.", false));
         Ok(vec!["-blockdev".to_owned(), params.join(",")])
+    }
+}
+
+fn block_backend_node(
+    device_id: &str,
+    path: &str,
+    format: &crate::BlockDeviceFormat,
+    is_direct: bool,
+    is_readonly: bool,
+    discard_unmap: bool,
+) -> Box<dyn ToQemuParams> {
+    let mut backend = BlockBackend::new(device_id, path, is_direct);
+    backend.set_read_only(is_readonly);
+    backend.set_discard_unmap(discard_unmap);
+
+    match format {
+        crate::BlockDeviceFormat::Raw => Box::new(backend),
+        crate::BlockDeviceFormat::Vmdk => Box::new(VmdkFormatNode::new(device_id, backend)),
     }
 }
 
@@ -3178,6 +3235,7 @@ impl<'a> QemuCmdLine<'a> {
         device_id: &str,
         path: &str,
         format: &crate::BlockDeviceFormat,
+        vmdk: Option<&crate::VmdkConfig>,
         is_direct: bool,
         is_readonly: bool,
         is_scsi: bool,
@@ -3188,21 +3246,25 @@ impl<'a> QemuCmdLine<'a> {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
         }
         let mut fdset_ids = Vec::new();
-        let path = prepare_block_source(path, format, is_readonly, is_direct, |file, label| {
-            let (path, fdset_id) =
-                self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
-            fdset_ids.push(fdset_id);
-            Ok(path)
-        })?
-        .filename;
-        if !fdset_ids.is_empty() {
-            self.block_fdsets.insert(device_id.to_string(), fdset_ids);
-        }
+        let path =
+            prepare_block_source(path, format, vmdk, is_readonly, is_direct, |file, label| {
+                let (path, fdset_id) =
+                    self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
+                fdset_ids.push(fdset_id);
+                Ok(path)
+            })?
+            .filename;
+        self.block_fdsets.insert(device_id.to_string(), fdset_ids);
 
-        let mut backend = BlockBackend::new(device_id, &path, is_direct);
-        backend.set_read_only(is_readonly);
-        backend.set_discard_unmap(discard_unmap);
-        self.devices.push(Box::new(backend));
+        let backend = block_backend_node(
+            device_id,
+            &path,
+            format,
+            is_direct,
+            is_readonly,
+            discard_unmap,
+        );
+        self.devices.push(backend);
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
         if is_scsi {
             self.devices
@@ -3954,6 +4016,7 @@ mod tests {
             "rootfs",
             image.to_str().unwrap(),
             &BlockDeviceFormat::Raw,
+            None,
             false,
             true,
             false,
@@ -3983,6 +4046,41 @@ mod tests {
         );
     }
 
+    #[actix_rt::test]
+    async fn test_cold_plug_vmdk_uses_format_node() {
+        let format_node = block_backend_node(
+            "rootfs",
+            "/dev/fdset/2",
+            &BlockDeviceFormat::Vmdk,
+            false,
+            true,
+            false,
+        );
+
+        let format_params = format_node.qemu_params().await.unwrap();
+        assert_eq!(format_params[0], "-blockdev");
+        assert!(contains_param(&format_params[1..2], "driver=vmdk"));
+        assert!(contains_param(
+            &format_params[1..2],
+            "node-name=image-rootfs"
+        ));
+        assert!(contains_param(&format_params[1..2], "read-only=on"));
+        assert!(contains_param(&format_params[1..2], "force-share=on"));
+        assert!(contains_param(&format_params[1..2], "file.driver=file"));
+        assert!(contains_param(
+            &format_params[1..2],
+            "file.filename=/dev/fdset/2"
+        ));
+        assert!(contains_param(&format_params[1..2], "file.read-only=on"));
+        assert!(!format_params[1].contains("file.node-name="));
+
+        let frontend = DeviceVirtioBlk::new("rootfs", VirtioBusType::Pci, None)
+            .qemu_params()
+            .await
+            .unwrap();
+        assert!(contains_param(&frontend[1..2], "drive=image-rootfs"));
+    }
+
     #[rstest]
     #[case::read_only(true, "read-only=on")]
     #[case::writable(false, "read-only=off")]
@@ -4003,6 +4101,7 @@ mod tests {
                 "blk0",
                 image.to_str().unwrap(),
                 &BlockDeviceFormat::Raw,
+                None,
                 true,
                 is_readonly,
                 false,
