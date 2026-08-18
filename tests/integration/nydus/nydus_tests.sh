@@ -194,7 +194,7 @@ function setup() {
 	config_kata
 	config_containerd
 	restart_containerd_service
-	check_processes
+	check_processes "${KILL_TIMEOUT_SECS}"
 	check_nydus_snapshotter_exist
 	extract_kata_env
 }
@@ -260,7 +260,7 @@ function teardown() {
 	fi
 
 	clean_env_ctr || rc=1
-	check_processes
+	check_processes "${KILL_TIMEOUT_SECS}"
 	return "${rc}"
 }
 
