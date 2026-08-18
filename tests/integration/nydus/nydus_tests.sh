@@ -82,7 +82,9 @@ function config_kata() {
 	fi
 
 	echo "Enabling all debug options in file ${SYSCONFIG_FILE}"
-	sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${SYSCONFIG_FILE}"
+	# Both the commented out and the already set to false forms have to be
+	# handled: the shipped configurations carry "enable_debug = false".
+	sudo sed -i -e 's/^#\{0,1\}[[:space:]]*enable_debug[[:space:]]*=.*/enable_debug = true/g' "${SYSCONFIG_FILE}"
 	sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${SYSCONFIG_FILE}"
 
 	if [[ "${KATA_HYPERVISOR}" != "dragonball" ]]; then
