@@ -6,16 +6,25 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::os::fd::AsFd;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
+use kata_sys_util::mount::{
+    create_mount_destination, parse_mount_flags, parse_mount_options, Error as MountError,
+};
 use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
+use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
+use rustix::fs::CWD;
+use rustix::mount::{
+    fsconfig_create, fsconfig_set_flag, fsconfig_set_string, fsmount, fsopen, move_mount,
+    FsMountFlags, FsOpenFlags, MountAttrFlags, MoveMountFlags,
+};
 use slog::Logger;
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -395,6 +404,83 @@ pub(crate) fn common_storage_handler(logger: &Logger, storage: &Storage) -> Resu
     Ok(storage.mount_point.clone())
 }
 
+fn split_lowerdirs(lowerdirs: &str) -> Vec<String> {
+    let mut dirs = vec![String::new()];
+    let mut chars = lowerdirs.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(next @ (':' | '\\')) = chars.peek().copied() {
+                dirs.last_mut().unwrap().push(next);
+                chars.next();
+                continue;
+            }
+        } else if ch == ':' {
+            dirs.push(String::new());
+            continue;
+        }
+        dirs.last_mut().unwrap().push(ch);
+    }
+
+    dirs
+}
+
+fn mount_overlay_new_api(storage: &Storage) -> Result<()> {
+    let fs_fd = fsopen("overlay", FsOpenFlags::FSOPEN_CLOEXEC)?;
+    let mut flags = MsFlags::empty();
+
+    for option in &storage.options {
+        if let Some(lowerdirs) = option.strip_prefix("lowerdir=") {
+            for lowerdir in split_lowerdirs(lowerdirs) {
+                fsconfig_set_string(fs_fd.as_fd(), "lowerdir+", lowerdir)?;
+            }
+        } else if !option.contains('=') {
+            if let Some(next) = parse_mount_flags(flags, option) {
+                flags = next;
+            } else {
+                fsconfig_set_flag(fs_fd.as_fd(), option)?;
+            }
+        } else if let Some((key, value)) = option.split_once('=') {
+            fsconfig_set_string(fs_fd.as_fd(), key, value)?;
+        }
+    }
+
+    let mut attrs = MountAttrFlags::empty();
+    if flags.contains(MsFlags::MS_RDONLY) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_RDONLY);
+    }
+    if flags.contains(MsFlags::MS_NOSUID) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_NOSUID);
+    }
+    if flags.contains(MsFlags::MS_NODEV) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_NODEV);
+    }
+    if flags.contains(MsFlags::MS_NOEXEC) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_NOEXEC);
+    }
+    if flags.contains(MsFlags::MS_NODIRATIME) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_NODIRATIME);
+    }
+    if flags.contains(MsFlags::MS_STRICTATIME) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_STRICTATIME);
+    } else if flags.contains(MsFlags::MS_NOATIME) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_NOATIME);
+    } else if flags.contains(MsFlags::MS_RELATIME) {
+        attrs.insert(MountAttrFlags::MOUNT_ATTR_RELATIME);
+    }
+
+    fsconfig_create(fs_fd.as_fd())?;
+    let mount_fd = fsmount(fs_fd.as_fd(), FsMountFlags::FSMOUNT_CLOEXEC, attrs)?;
+    move_mount(
+        mount_fd.as_fd(),
+        "",
+        CWD,
+        storage.mount_point.as_str(),
+        MoveMountFlags::MOVE_MOUNT_F_EMPTY_PATH,
+    )?;
+    Ok(())
+}
+
 // mount_storage performs the mount described by the storage structure.
 #[instrument]
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
@@ -412,12 +498,25 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         return Ok(());
     }
 
-    let (flags, options) = parse_mount_options(&storage.options)?;
     let mount_path = Path::new(&storage.mount_point);
     let src_path = Path::new(&storage.source);
     create_mount_destination(src_path, mount_path, "", &storage.fstype)
         .context("Could not create mountpoint")?;
 
+    let mount_options = parse_mount_options(&storage.options);
+    if storage.fstype == "overlay"
+        && matches!(&mount_options, Err(MountError::MountOptionTooBig))
+        && storage.options.iter().any(|option| {
+            option
+                .strip_prefix("lowerdir=")
+                .is_some_and(|lowerdirs| split_lowerdirs(lowerdirs).len() > 1)
+        })
+    {
+        mount_overlay_new_api(storage).context("failed to mount overlay with new mount API")?;
+        return Ok(());
+    }
+
+    let (flags, options) = mount_options?;
     info!(logger, "mounting storage";
         "mount-source" => src_path.display(),
         "mount-destination" => mount_path.display(),
