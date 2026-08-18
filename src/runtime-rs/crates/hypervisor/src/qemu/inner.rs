@@ -1486,7 +1486,10 @@ mod tests {
         }
     }
 
+    // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
+    // variants stand for, so keep it despite clippy::enum_variant_names.
     #[derive(Debug, PartialEq)]
+    #[allow(clippy::enum_variant_names)]
     enum CredentialOperation {
         SetGroups(Vec<u32>),
         SetGid(u32),
@@ -1494,6 +1497,7 @@ mod tests {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
+    #[allow(clippy::enum_variant_names)]
     enum CredentialStep {
         SetGroups,
         SetGid,
