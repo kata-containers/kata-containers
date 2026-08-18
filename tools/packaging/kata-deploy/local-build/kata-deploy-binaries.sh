@@ -355,7 +355,7 @@ get_coco_guest_components_tarball_path() {
 	echo "${coco_guest_components_local_build_dir}/${coco_guest_components_tarball_name}"
 }
 
-get_latest_coco_guest_components_artefact_and_builder_image_version() {
+get_latest_coco_extension_artefact_version() {
 	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
 }
 
@@ -395,10 +395,6 @@ get_coco_extension_provenance_repo() {
 	url="$(get_from_kata_deps ".externals.coco-guest-components.url")"
 	url="${url%/}"
 	echo "${url#https://github.com/}"
-}
-
-get_latest_coco_extension_artefact_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
 }
 
 ensure_oras_installed() {
@@ -655,7 +651,7 @@ install_image() {
 
 		# Both the standard and NVIDIA confidential images bake the CoCo
 		# guest components (including the pause bundle) into the rootfs.
-		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_extension_artefact_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -995,7 +991,7 @@ install_initrd() {
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
-		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_extension_artefact_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -1695,7 +1691,7 @@ install_agent() {
 }
 
 install_coco_guest_components() {
-	latest_artefact="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+	latest_artefact="$(get_latest_coco_extension_artefact_version)"
 	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	latest_builder_image=""
 
