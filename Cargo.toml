@@ -225,6 +225,9 @@ which = "4.3.0"
 gpt = "4.1.0"
 devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
 
+[patch.crates-io]
+containerd-shim-protos = { git = "https://github.com/Apokleos/rust-extensions", branch = "ckpt-restore" }
+
 # Per-package release profile overrides for kata-deploy. The kata-deploy
 # binary runs once at pod start and then idles waiting for SIGTERM, so we
 # size-optimise it (opt-level = "z") and keep codegen-units = 1 to give

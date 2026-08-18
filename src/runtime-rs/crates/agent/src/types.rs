@@ -22,6 +22,23 @@ impl Empty {
     }
 }
 
+#[derive(PartialEq, Clone, Default)]
+pub struct ContainerIDMapping {
+    pub old_id: String,
+    pub new_id: String,
+    pub hosts_file: Option<Vec<u8>>,
+    pub process: Vec<u8>,
+    pub linux_resources: Option<Vec<u8>>,
+}
+
+#[derive(PartialEq, Clone, Default)]
+pub struct RebindSandboxRequest {
+    pub sandbox_id: String,
+    pub containers: Vec<ContainerIDMapping>,
+    pub hostname: String,
+    pub dns: Vec<String>,
+}
+
 #[derive(Default, Debug, Clone, PartialEq)]
 pub enum FSGroupChangePolicy {
     #[default]

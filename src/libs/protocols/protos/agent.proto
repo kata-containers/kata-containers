@@ -66,6 +66,7 @@ service AgentService {
 
 	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
 	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
+	rpc RebindSandbox(RebindSandboxRequest) returns (google.protobuf.Empty);
 	rpc DestroySandbox(DestroySandboxRequest) returns (google.protobuf.Empty);
 	rpc OnlineCPUMem(OnlineCPUMemRequest) returns (google.protobuf.Empty);
 	rpc ReseedRandomDev(ReseedRandomDevRequest) returns (google.protobuf.Empty);
@@ -79,6 +80,23 @@ service AgentService {
 	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
 	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
 	rpc SetPolicy(SetPolicyRequest) returns (google.protobuf.Empty);
+}
+
+message ContainerIDMapping {
+	string old_id = 1;
+	string new_id = 2;
+	bytes hosts_file = 3;
+	bool has_hosts_file = 4;
+	bytes process = 5;
+	bytes linux_resources = 6;
+	bool has_linux_resources = 7;
+}
+
+message RebindSandboxRequest {
+	string sandbox_id = 1;
+	repeated ContainerIDMapping containers = 2;
+	string hostname = 3;
+	repeated string dns = 4;
 }
 
 message CreateContainerRequest {

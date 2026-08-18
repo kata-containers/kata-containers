@@ -5,10 +5,10 @@
 //
 
 use super::{
-    ContainerConfig, ContainerID, ContainerProcess, ExecProcessRequest, KillRequest,
-    ResizePTYRequest, SandboxConfig, SandboxID, SandboxNetworkEnv, SandboxRequest,
-    SandboxStatusRequest, ShutdownRequest, StopSandboxRequest, TaskRequest, UpdateRequest,
-    DEFAULT_SHM_SIZE,
+    CheckpointSandboxRequest, ContainerConfig, ContainerID, ContainerProcess, ExecProcessRequest,
+    KillRequest, ResizePTYRequest, RestoreSandboxRequest, SandboxCheckpointTask, SandboxConfig,
+    SandboxID, SandboxNetworkEnv, SandboxRequest, SandboxRestoreTask, SandboxStatusRequest,
+    ShutdownRequest, StopSandboxRequest, TaskRequest, UpdateRequest, DEFAULT_SHM_SIZE,
 };
 
 use kata_types::mount::Mount;
@@ -26,6 +26,25 @@ use anyhow::{anyhow, Context, Result};
 use containerd_shim_protos::{api, sandbox_api};
 
 pub const SANDBOX_API_V1: &str = "runtime.v1.PodSandboxConfig";
+
+fn resolv_conf_lines(
+    servers: Vec<String>,
+    searches: Vec<String>,
+    options: Vec<String>,
+) -> Vec<String> {
+    let mut lines = servers
+        .into_iter()
+        .filter(|server| !server.is_empty())
+        .map(|server| format!("nameserver {server}"))
+        .collect::<Vec<_>>();
+    if !searches.is_empty() {
+        lines.push(format!("search {}", searches.join(" ")));
+    }
+    if !options.is_empty() {
+        lines.push(format!("options {}", options.join(" ")));
+    }
+    lines
+}
 
 fn trans_from_shim_mount(from: &api::Mount) -> Mount {
     let options = from.options.to_vec();
@@ -60,12 +79,12 @@ impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
 
         let config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
 
-        let mut dns: Vec<String> = vec![];
-        config.dns_config.map(|mut dns_config| {
-            dns.append(&mut dns_config.servers);
-            dns.append(&mut dns_config.servers);
-            dns.append(&mut dns_config.options);
-        });
+        let dns = config
+            .dns_config
+            .map(|dns_config| {
+                resolv_conf_lines(dns_config.servers, dns_config.searches, dns_config.options)
+            })
+            .unwrap_or_default();
 
         Ok(SandboxRequest::CreateSandbox(Box::new(SandboxConfig {
             sandbox_id: from.sandbox_id.clone(),
@@ -152,6 +171,94 @@ impl TryFrom<sandbox_api::ShutdownSandboxRequest> for SandboxRequest {
         Ok(SandboxRequest::ShutdownSandbox(SandboxID {
             sandbox_id: from.sandbox_id,
         }))
+    }
+}
+
+impl TryFrom<sandbox_api::CheckpointSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(from: sandbox_api::CheckpointSandboxRequest) -> Result<Self> {
+        Ok(SandboxRequest::CheckpointSandbox(
+            CheckpointSandboxRequest {
+                sandbox_id: from.sandbox_id,
+                output_path: from.output_path,
+                tasks: from
+                    .tasks
+                    .into_iter()
+                    .map(|task| SandboxCheckpointTask {
+                        checkpoint_key: task.checkpoint_key,
+                        task_id: task.task_id,
+                        rootfs_device_id: None,
+                    })
+                    .collect(),
+                options: from.options,
+                operation_timeout: None,
+            },
+        ))
+    }
+}
+
+impl TryFrom<sandbox_api::RestoreSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(from: sandbox_api::RestoreSandboxRequest) -> Result<Self> {
+        let type_url = from.sandbox_options.type_url.clone();
+        if type_url != SANDBOX_API_V1 {
+            return Err(anyhow!("unsupported type url: {type_url}"));
+        }
+        let config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.sandbox_options.value)?;
+        let dns = config
+            .dns_config
+            .into_option()
+            .map(|dns_config| {
+                resolv_conf_lines(dns_config.servers, dns_config.searches, dns_config.options)
+            })
+            .unwrap_or_default();
+        let sandbox_id = from.sandbox_id;
+        let sandbox_config = SandboxConfig {
+            sandbox_id: sandbox_id.clone(),
+            hostname: config.hostname,
+            dns,
+            network_env: SandboxNetworkEnv {
+                netns: (!from.netns_path.is_empty()).then_some(from.netns_path),
+                network_created: false,
+            },
+            annotations: config.annotations.clone(),
+            hooks: None,
+            state: runtime_spec::State {
+                version: Default::default(),
+                id: sandbox_id,
+                status: runtime_spec::ContainerState::Creating,
+                pid: 0,
+                bundle: from.bundle_path,
+                annotations: config.annotations,
+            },
+            shm_size: DEFAULT_SHM_SIZE,
+        };
+        let tasks = from
+            .tasks
+            .into_iter()
+            .map(|task| SandboxRestoreTask {
+                checkpoint_key: task.checkpoint_key,
+                task_id: task.task_id,
+                bundle: task.bundle,
+                terminal: task.terminal,
+                stdin: (!task.stdin.is_empty()).then_some(task.stdin),
+                stdout: (!task.stdout.is_empty()).then_some(task.stdout),
+                stderr: (!task.stderr.is_empty()).then_some(task.stderr),
+                options_type_url: task.options.type_url.clone(),
+                options: task.options.value.to_vec(),
+            })
+            .collect();
+        Ok(SandboxRequest::RestoreSandbox(Box::new(
+            RestoreSandboxRequest {
+                sandbox_config,
+                checkpoint_path: from.checkpoint_path,
+                options: from.options,
+                tasks,
+                operation_timeout: None,
+            },
+        )))
     }
 }
 
