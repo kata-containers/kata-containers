@@ -542,6 +542,8 @@ pub struct NamedHypervisorConfig {
     pub network_devices: Option<Vec<NetConfig>>,
     pub host_devices: Option<Vec<DeviceConfig>>,
 
+    pub boot_disks: Option<Vec<DiskConfig>>,
+
     // Set to the available guest protection *iff* BOTH of the following
     // conditions are true:
     //
