@@ -176,10 +176,24 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                     len += size;
 
                     if let Some(region) = mem.find_region(addr) {
-                        let host_addr = match mem.get_host_address(addr) {
-                            Ok(v) => v,
+                        // Validate the ENTIRE [addr, addr + size) range is a single
+                        // contiguous guest-memory mapping before issuing madvise()/
+                        // fallocate() against the host pointer. `get_host_address()` only
+                        // validates the start address, so without this check a compromised
+                        // guest could choose `addr` near the end of a guest-memory region
+                        // and have the `size`-byte madvise()/fallocate() cross the region
+                        // boundary into unrelated host memory (out-of-bounds host memory
+                        // discard / file hole-punch).
+                        let host_addr = match mem.get_slice(addr, size as usize) {
+                            Ok(slice) => slice.ptr_guard().as_ptr() as *mut u8,
                             Err(e) => {
-                                error!("virtio-balloon get host address failed! addr:{:x} size: {:x} error:{:?}", addr.0, size, e);
+                                error!(
+                                    "virtio-balloon: guest buffer [{:#x}, {:#x}) is not a \
+                                     valid contiguous guest-memory range: {:?}",
+                                    addr.0,
+                                    addr.0.wrapping_add(size as u64),
+                                    e
+                                );
                                 break;
                             }
                         };
