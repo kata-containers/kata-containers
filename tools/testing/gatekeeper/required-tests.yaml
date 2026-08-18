@@ -83,6 +83,8 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, small, oci-distribution)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure-runtime-rs, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure-runtime-rs, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, openvmm-azure-runtime-rs, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, openvmm-azure-runtime-rs, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, minimum)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, latest)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (dragonball, minimum)
