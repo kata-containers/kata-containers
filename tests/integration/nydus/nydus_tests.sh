@@ -220,9 +220,23 @@ function run_test() {
 	sudo -E crictl --timeout=20s rmp "${pod}"
 }
 
+function remove_leftover_pods() {
+	local pods
+	pods=$(sudo -E crictl --timeout=20s pods -q || true)
+	[[ -z "${pods}" ]] && return 0
+
+	for pod in ${pods}; do
+		echo "Removing leftover pod ${pod}"
+		sudo -E crictl --timeout=20s stopp "${pod}" || true
+		sudo -E crictl --timeout=20s rmp -f "${pod}" || true
+	done
+}
+
 function teardown() {
 	echo "Running teardown"
 	local rc=0
+
+	remove_leftover_pods
 
 	local pid
 	for bin in containerd-nydus-grpc nydusd; do
