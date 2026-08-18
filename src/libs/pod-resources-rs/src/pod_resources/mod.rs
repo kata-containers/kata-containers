@@ -14,10 +14,7 @@ use std::convert::TryFrom;
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::{
-    resolvable_cdi_devices, DEFAULT_CDI_SPEC_DIRS, POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN,
-    POD_RESOURCE_DEVICE_SOURCE_DRA,
-};
+use crate::{resolvable_cdi_devices, DeviceSource, DEFAULT_CDI_SPEC_DIRS};
 use hyper_util::rt::TokioIo;
 use tokio::net::UnixStream;
 use tokio::time::{timeout, Duration};
@@ -117,23 +114,50 @@ fn dedup_strings(input: &[String]) -> Vec<String> {
     out
 }
 
-/// Select the cold-plug device list from a PodResources response, reading the
-/// fields picked by `sources`: "device-plugin" (`container.devices`) and/or
-/// "dra" (`dynamic_resources` CDI devices). List both only for disjoint device
-/// sets: kubelet double-counts a device advertised via both at scheduling; a
-/// same-device collision here is caught by the overlap check. Fail closed: an
-/// unlisted source carrying CDI-resolvable data is an error, so misconfiguration
-/// cannot silently boot the guest without its devices; data that never resolves
-/// in the CDI cache is not cold-pluggable and is exempt.
+/// Cold-plug CDI device names selected from a PodResources response, kept per
+/// source so the caller can run cross-source enforcement (the physical overlap
+/// check) before flattening for attachment.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SelectedColdPlugDevices {
+    /// Devices from `container.devices` (device-plugin allocations).
+    pub device_plugin: Vec<String>,
+    /// Devices from `dynamic_resources` (DRA allocations).
+    pub dra: Vec<String>,
+}
+
+impl SelectedColdPlugDevices {
+    /// The final plug list: device-plugin devices first, then DRA devices,
+    /// deduplicated preserving order.
+    ///
+    /// Precondition when both lists are non-empty: run
+    /// `overlap::check_cross_source_physical_overlap` on the two lists
+    /// first. Flattening erases the source, and a same-physical-device
+    /// collision that was not rejected would be cold-plugged twice.
+    pub fn flattened(&self) -> Vec<String> {
+        let mut all = self.device_plugin.clone();
+        all.extend(self.dra.iter().cloned());
+        dedup_strings(&all)
+    }
+}
+
+/// Select the cold-plug devices from a PodResources response, reading the
+/// fields picked by `sources`: `DevicePlugin` (`container.devices`) and/or
+/// `Dra` (`dynamic_resources` CDI devices). An empty `sources` trusts neither
+/// field. Fail closed: an unlisted source carrying CDI-resolvable data is an
+/// error, so misconfiguration cannot silently boot the guest without its
+/// devices; data that never resolves in the CDI cache is not cold-pluggable
+/// and is exempt. No cross-source policy is applied here: the response is
+/// passed through per source, and the overlap check runs in the caller's
+/// device path.
 fn select_cold_plug_devices(
     pod_resources: &PodResources,
-    sources: &[String],
+    sources: &[DeviceSource],
     spec_dirs: &[&str],
-) -> Result<Vec<String>> {
-    let want_device_plugin = sources
-        .iter()
-        .any(|s| s == POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN);
-    let want_dra = sources.iter().any(|s| s == POD_RESOURCE_DEVICE_SOURCE_DRA);
+) -> Result<SelectedColdPlugDevices> {
+    let want_device_plugin = sources.contains(&DeviceSource::DevicePlugin);
+    let want_dra = sources.contains(&DeviceSource::Dra);
+    let sources_display =
+        |sources: &[DeviceSource]| sources.iter().map(|s| s.to_string()).collect::<Vec<_>>();
 
     let format_cdi_device_ids = |resource_name: &str, device_ids: &[String]| -> Vec<String> {
         device_ids
@@ -142,14 +166,15 @@ fn select_cold_plug_devices(
             .collect()
     };
 
-    let mut devices: Vec<String> = Vec::new();
-    let mut all_device_plugin_devs: Vec<String> = Vec::new();
-    let mut all_dra_devs: Vec<String> = Vec::new();
+    let mut selected = SelectedColdPlugDevices::default();
 
     for container in &pod_resources.containers {
         let mut device_plugin_devs: Vec<String> = Vec::new();
         for device in &container.devices {
-            device_plugin_devs.extend(format_cdi_device_ids(&device.resource_name, &device.device_ids));
+            device_plugin_devs.extend(format_cdi_device_ids(
+                &device.resource_name,
+                &device.device_ids,
+            ));
         }
 
         let dra_devs = collect_pod_resource_cdi_devices(container);
@@ -163,9 +188,9 @@ fn select_cold_plug_devices(
                      add {:?} to the config option or this data will be silently dropped",
                     container.name,
                     resolvable,
-                    POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN,
-                    sources,
-                    POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN,
+                    DeviceSource::DevicePlugin.to_string(),
+                    sources_display(sources),
+                    DeviceSource::DevicePlugin.to_string(),
                 ));
             }
         }
@@ -178,58 +203,46 @@ fn select_cold_plug_devices(
                      add {:?} to the config option or this data will be silently dropped",
                     container.name,
                     resolvable,
-                    POD_RESOURCE_DEVICE_SOURCE_DRA,
-                    sources,
-                    POD_RESOURCE_DEVICE_SOURCE_DRA,
+                    DeviceSource::Dra.to_string(),
+                    sources_display(sources),
+                    DeviceSource::Dra.to_string(),
                 ));
             }
         }
 
         if want_device_plugin {
-            let deduped = dedup_strings(&device_plugin_devs);
-            devices.extend(deduped.iter().cloned());
-            all_device_plugin_devs.extend(deduped);
+            selected
+                .device_plugin
+                .extend(dedup_strings(&device_plugin_devs));
         }
         if want_dra {
-            let deduped = dedup_strings(&dra_devs);
-            devices.extend(deduped.iter().cloned());
-            all_dra_devs.extend(deduped);
+            selected.dra.extend(dedup_strings(&dra_devs));
         }
     }
 
-    if want_device_plugin && want_dra {
-        overlap::check_cross_source_physical_overlap(
-            &dedup_strings(&all_device_plugin_devs),
-            &dedup_strings(&all_dra_devs),
-            spec_dirs,
-        )?;
-    }
-
-    Ok(dedup_strings(&devices))
+    selected.device_plugin = dedup_strings(&selected.device_plugin);
+    selected.dra = dedup_strings(&selected.dra);
+    Ok(selected)
 }
 
-/// Resolve the pod's cold-plug CDI device list from kubelet's PodResources
-/// API, trusting only the sources named in `sources`.
+/// Resolve the pod's cold-plug CDI devices from kubelet's PodResources API,
+/// trusting only the sources named in `sources`. An empty `sources` trusts
+/// neither: a pod without cold-pluggable data proceeds normally, one that
+/// carries it fails closed through the unlisted-source check.
 ///
-/// "device-plugin" and "dra" may be listed together: an operator can serve
+/// `DevicePlugin` and `Dra` may be listed together: an operator can serve
 /// different device classes through each API on the same node, and a node
 /// migrating between the two runs both for a while. The sets have to stay
 /// disjoint, because kubelet counts a device advertised via both APIs twice
-/// at scheduling; a same-device collision is rejected by the overlap check
-/// instead of being plugged twice.
+/// at scheduling. This function passes each source's devices through as-is;
+/// the caller runs `overlap::check_cross_source_physical_overlap` on the
+/// returned lists before attaching, where a same-device collision is
+/// rejected instead of being plugged twice.
 pub async fn get_pod_cdi_devices(
     socket: &str,
     annotations: &HashMap<String, String>,
-    sources: &[String],
-) -> Result<Vec<String>> {
-    if sources.is_empty() {
-        // Config loading defaults this to ["device-plugin"]; if it is empty
-        // anyway, fail closed rather than guess a source.
-        return Err(anyhow!(
-            "cold plug: pod_resource_device_sources is empty, refusing to guess a device source"
-        ));
-    }
-
+    sources: &[DeviceSource],
+) -> Result<SelectedColdPlugDevices> {
     let pod_name = annotations
         .get(SANDBOX_NAME_ANNOTATION)
         .or_else(|| annotations.get(CRIO_NAME_ANNOTATION))
@@ -345,13 +358,11 @@ mod tests {
         let spec = tempfile::tempdir().unwrap();
         let spec_dirs = [spec.path().to_str().unwrap()];
         let pod = pod_with_both_sources();
-        let devs = select_cold_plug_devices(
-            &pod,
-            &[POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()],
-            &spec_dirs,
-        )
-        .unwrap();
-        assert_eq!(devs, vec!["vendor.com/gpu=gpu0".to_string()]);
+        let devs =
+            select_cold_plug_devices(&pod, &[DeviceSource::DevicePlugin], &spec_dirs).unwrap();
+        assert_eq!(devs.device_plugin, vec!["vendor.com/gpu=gpu0".to_string()]);
+        assert!(devs.dra.is_empty());
+        assert_eq!(devs.flattened(), vec!["vendor.com/gpu=gpu0".to_string()]);
     }
 
     #[test]
@@ -359,13 +370,9 @@ mod tests {
         let spec = tempfile::tempdir().unwrap();
         let spec_dirs = [spec.path().to_str().unwrap()];
         let pod = pod_with_both_sources();
-        let devs = select_cold_plug_devices(
-            &pod,
-            &[POD_RESOURCE_DEVICE_SOURCE_DRA.to_string()],
-            &spec_dirs,
-        )
-        .unwrap();
-        assert_eq!(devs, vec!["vendor.com/dra=gpu1".to_string()]);
+        let devs = select_cold_plug_devices(&pod, &[DeviceSource::Dra], &spec_dirs).unwrap();
+        assert!(devs.device_plugin.is_empty());
+        assert_eq!(devs.dra, vec!["vendor.com/dra=gpu1".to_string()]);
     }
 
     #[test]
@@ -375,19 +382,85 @@ mod tests {
         let pod = pod_with_both_sources();
         let devs = select_cold_plug_devices(
             &pod,
-            &[
-                POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string(),
-                POD_RESOURCE_DEVICE_SOURCE_DRA.to_string(),
-            ],
+            &[DeviceSource::DevicePlugin, DeviceSource::Dra],
             &spec_dirs,
         )
         .unwrap();
+        assert_eq!(devs.device_plugin, vec!["vendor.com/gpu=gpu0".to_string()]);
+        assert_eq!(devs.dra, vec!["vendor.com/dra=gpu1".to_string()]);
         assert_eq!(
-            devs,
+            devs.flattened(),
             vec![
                 "vendor.com/gpu=gpu0".to_string(),
                 "vendor.com/dra=gpu1".to_string()
             ]
+        );
+    }
+
+    #[test]
+    fn test_select_both_sources_two_containers_groups_by_source() {
+        // The plug list groups by source (all device-plugin devices, then
+        // all DRA devices), not by container. This pins the order the
+        // flattened list feeds into VFIO attachment.
+        let spec = tempfile::tempdir().unwrap();
+        let spec_dirs = [spec.path().to_str().unwrap()];
+        let mut pod = pod_with_both_sources();
+        let mut second = pod.containers[0].clone();
+        second.name = "ctr-b".to_string();
+        second.devices[0].device_ids = vec!["gpu2".to_string()];
+        second.dynamic_resources[0].claim_resources[0].cdi_devices[0].name =
+            "vendor.com/dra=gpu3".to_string();
+        pod.containers.push(second);
+
+        let devs = select_cold_plug_devices(
+            &pod,
+            &[DeviceSource::DevicePlugin, DeviceSource::Dra],
+            &spec_dirs,
+        )
+        .unwrap();
+        assert_eq!(
+            devs.flattened(),
+            vec![
+                "vendor.com/gpu=gpu0".to_string(),
+                "vendor.com/gpu=gpu2".to_string(),
+                "vendor.com/dra=gpu1".to_string(),
+                "vendor.com/dra=gpu3".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_select_no_sources_without_resolvable_data_is_ok() {
+        // Explicit "trust neither": nothing resolves in the empty spec dir,
+        // so the pod proceeds with no cold-plug devices.
+        let spec = tempfile::tempdir().unwrap();
+        let spec_dirs = [spec.path().to_str().unwrap()];
+        let pod = pod_with_both_sources();
+        let devs = select_cold_plug_devices(&pod, &[], &spec_dirs).unwrap();
+        assert!(devs.device_plugin.is_empty());
+        assert!(devs.dra.is_empty());
+        assert!(devs.flattened().is_empty());
+    }
+
+    #[test]
+    fn test_select_no_sources_with_resolvable_data_errors() {
+        // Explicit "trust neither" still fails closed when the pod carries
+        // cold-pluggable data that would be silently dropped.
+        let spec = tempfile::tempdir().unwrap();
+        write_cdi_spec(
+            spec.path(),
+            "dp",
+            "vendor.com/gpu",
+            &[("gpu0", "/dev/null")],
+        );
+        let spec_dirs = [spec.path().to_str().unwrap()];
+        let pod = pod_with_both_sources();
+        let err = select_cold_plug_devices(&pod, &[], &spec_dirs).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("not in pod_resource_device_sources"),
+            "{}",
+            err
         );
     }
 
@@ -414,16 +487,15 @@ mod tests {
         let spec_dirs = [spec.path().to_str().unwrap()];
 
         let pod = pod_with_both_sources();
-        let err = select_cold_plug_devices(
-            &pod,
-            &[POD_RESOURCE_DEVICE_SOURCE_DRA.to_string()],
-            &spec_dirs,
-        )
-        .unwrap_err();
+        let err = select_cold_plug_devices(&pod, &[DeviceSource::Dra], &spec_dirs).unwrap_err();
 
         let msg = err.to_string();
-        assert!(msg.contains("not in pod_resource_device_sources"), "{}", msg);
-        assert!(msg.contains(POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN), "{}", msg);
+        assert!(
+            msg.contains("not in pod_resource_device_sources"),
+            "{}",
+            msg
+        );
+        assert!(msg.contains("device-plugin"), "{}", msg);
         assert!(msg.contains("vendor.com/gpu=gpu0"), "{}", msg);
     }
 
@@ -441,12 +513,12 @@ mod tests {
         let spec_dirs = [spec.path().to_str().unwrap()];
 
         let pod = pod_with_both_sources();
-        let devices = select_cold_plug_devices(
-            &pod,
-            &[POD_RESOURCE_DEVICE_SOURCE_DRA.to_string()],
-            &spec_dirs,
-        )
-        .expect("node-less unlisted device must not fail closed");
-        assert!(!devices.iter().any(|d| d.contains("gpu0")), "{:?}", devices);
+        let devices = select_cold_plug_devices(&pod, &[DeviceSource::Dra], &spec_dirs)
+            .expect("node-less unlisted device must not fail closed");
+        assert!(
+            !devices.flattened().iter().any(|d| d.contains("gpu0")),
+            "{:?}",
+            devices
+        );
     }
 }
