@@ -27,11 +27,28 @@ pub const EMPTYDIR_MODE_BLOCK_ENCRYPTED: &str = "block-encrypted";
 /// EmptyDir mode: plug a block device to be mounted directly in the guest.
 pub const EMPTYDIR_MODE_BLOCK_PLAIN: &str = "block-plain";
 
-/// Device source token for the legacy device-plugin API (container.Devices).
-pub const POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN: &str = "device-plugin";
+/// A kubelet PodResources source the cold-plug path may trust. Serialized
+/// as the tokens `"device-plugin"` / `"dra"`, so an unknown or misspelled
+/// token is rejected when the config is loaded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub enum PodResourceDeviceSource {
+    /// Legacy device-plugin allocations (container.Devices).
+    #[serde(rename = "device-plugin")]
+    DevicePlugin,
+    /// Dynamic Resource Allocation (KEP-3695).
+    #[serde(rename = "dra")]
+    Dra,
+}
 
-/// Device source token for Dynamic Resource Allocation (KEP-3695).
-pub const POD_RESOURCE_DEVICE_SOURCE_DRA: &str = "dra";
+impl PodResourceDeviceSource {
+    /// The config token this variant serializes as.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PodResourceDeviceSource::DevicePlugin => "device-plugin",
+            PodResourceDeviceSource::Dra => "dra",
+        }
+    }
+}
 
 /// Kata runtime configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -232,19 +249,30 @@ pub struct Runtime {
     pub pod_resource_api_sock: String,
 
     /// PodResources API sources feeding the cold-plug device list:
-    /// "device-plugin" and/or "dra". Defaults to ["device-plugin"],
-    /// preserving historical behavior. List both only for disjoint device
-    /// sets: kubelet double-counts a device advertised via both at scheduling.
-    #[serde(default = "default_pod_resource_device_sources")]
-    pub pod_resource_device_sources: Vec<String>,
+    /// "device-plugin" and/or "dra". `None` (key absent) means the
+    /// historical default of ["device-plugin"]; an explicit empty list
+    /// trusts neither source: a pod without cold-pluggable data runs
+    /// normally, one that carries it fails closed. `Option` keeps the two
+    /// apart even when the whole `[runtime]` section is absent and this
+    /// struct comes from `Default`. List both only for disjoint device
+    /// sets: kubelet double-counts a device advertised via both at
+    /// scheduling. Read through `pod_resource_device_sources()`.
+    #[serde(default)]
+    pub pod_resource_device_sources: Option<Vec<PodResourceDeviceSource>>,
+}
+
+impl Runtime {
+    /// The PodResources sources to trust: the configured list, or
+    /// ["device-plugin"] when the key is absent.
+    pub fn pod_resource_device_sources(&self) -> Vec<PodResourceDeviceSource> {
+        self.pod_resource_device_sources
+            .clone()
+            .unwrap_or_else(|| vec![PodResourceDeviceSource::DevicePlugin])
+    }
 }
 
 fn default_passfd_listener_port() -> u32 {
     default::DEFAULT_PASSFD_LISTENER_PORT
-}
-
-fn default_pod_resource_device_sources() -> Vec<String> {
-    vec![POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()]
 }
 
 impl ConfigOps for Runtime {
@@ -307,29 +335,19 @@ impl ConfigOps for Runtime {
             )));
         }
 
-        // pod_resource_device_sources: a missing key defaults via serde; an
-        // explicitly empty list, unknown token, or duplicate is a hard error
-        // at config load time.
-        let sources = &conf.runtime.pod_resource_device_sources;
-        if sources.is_empty() {
-            return Err(std::io::Error::other(format!(
-                "pod_resource_device_sources: must not be empty, allowed values: {:?}, {:?}",
-                POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN, POD_RESOURCE_DEVICE_SOURCE_DRA,
-            )));
-        }
-        let mut seen = std::collections::HashSet::new();
-        for s in sources {
-            if s != POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN && s != POD_RESOURCE_DEVICE_SOURCE_DRA
-            {
-                return Err(std::io::Error::other(format!(
-                    "pod_resource_device_sources: invalid source {:?}, allowed values: {:?}, {:?}",
-                    s, POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN, POD_RESOURCE_DEVICE_SOURCE_DRA,
-                )));
-            }
-            if !seen.insert(s.clone()) {
-                return Err(std::io::Error::other(format!(
-                    "pod_resource_device_sources: duplicate source {s:?}",
-                )));
+        // pod_resource_device_sources: a missing key means the default, an
+        // unknown token is rejected by serde at load, and an explicit empty
+        // list means "trust neither source". Only duplicates are left to
+        // check.
+        if let Some(sources) = &conf.runtime.pod_resource_device_sources {
+            let mut seen = std::collections::HashSet::new();
+            for s in sources {
+                if !seen.insert(*s) {
+                    return Err(std::io::Error::other(format!(
+                        "pod_resource_device_sources: duplicate source {:?}",
+                        s.as_str(),
+                    )));
+                }
             }
         }
 
@@ -485,9 +503,17 @@ emptydir_mode = "block-plain"
 "#;
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
+        // Key absent: the raw field stays None and the accessor supplies the
+        // historical default, even when the whole [runtime] section is
+        // missing (Runtime::default() would bypass a serde field default).
+        assert_eq!(config.runtime.pod_resource_device_sources, None);
         assert_eq!(
-            config.runtime.pod_resource_device_sources,
-            vec![POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN.to_string()]
+            config.runtime.pod_resource_device_sources(),
+            vec![PodResourceDeviceSource::DevicePlugin]
+        );
+        assert_eq!(
+            Runtime::default().pod_resource_device_sources(),
+            vec![PodResourceDeviceSource::DevicePlugin]
         );
     }
 
@@ -517,30 +543,39 @@ pod_resource_device_sources = ["device-plugin", "dra"]
         let config: TomlConfig = TomlConfig::load(content).unwrap();
         config.validate().unwrap();
         assert_eq!(
-            config.runtime.pod_resource_device_sources,
-            vec!["device-plugin".to_string(), "dra".to_string()]
+            config.runtime.pod_resource_device_sources(),
+            vec![
+                PodResourceDeviceSource::DevicePlugin,
+                PodResourceDeviceSource::Dra
+            ]
         );
-    }
 
-    #[test]
-    fn test_invalid_pod_resource_device_sources() {
-        // explicitly empty list is a hard error
+        // explicitly empty list is valid: trust neither source
         let content = r#"
 [runtime]
 pod_resource_device_sources = []
 "#;
         let config: TomlConfig = TomlConfig::load(content).unwrap();
-        config.validate().unwrap_err();
+        config.validate().unwrap();
+        assert_eq!(config.runtime.pod_resource_device_sources, Some(vec![]));
+        assert!(config.runtime.pod_resource_device_sources().is_empty());
+    }
 
-        // unknown token
+    #[test]
+    fn test_invalid_pod_resource_device_sources() {
+        // unknown token is rejected by serde at load time
         let content = r#"
 [runtime]
 pod_resource_device_sources = ["device-plugin", "bogus"]
 "#;
-        let config: TomlConfig = TomlConfig::load(content).unwrap();
-        config.validate().unwrap_err();
+        let err = TomlConfig::load(content).unwrap_err();
+        assert!(
+            err.to_string().contains("pod_resource_device_sources"),
+            "{}",
+            err
+        );
 
-        // duplicate token
+        // duplicate token is rejected by validate
         let content = r#"
 [runtime]
 pod_resource_device_sources = ["dra", "dra"]

@@ -27,13 +27,23 @@ const DEFAULT_STATIC_CDI_SPEC_PATH: &str = "/etc/cdi";
 pub const DEFAULT_CDI_SPEC_DIRS: [&str; 2] =
     [DEFAULT_DYNAMIC_CDI_SPEC_PATH, DEFAULT_STATIC_CDI_SPEC_PATH];
 
-/// Device source token for the legacy device-plugin API (container.devices);
-/// must match kata-types' `pod_resource_device_sources` tokens.
-pub const POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN: &str = "device-plugin";
+/// A kubelet PodResources field the cold-plug path is allowed to trust.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DeviceSource {
+    /// Legacy device-plugin allocations (`container.devices`).
+    DevicePlugin,
+    /// Dynamic Resource Allocation allocations (KEP-3695, `dynamic_resources`).
+    Dra,
+}
 
-/// Device source token for Dynamic Resource Allocation (KEP-3695); must match
-/// kata-types' `pod_resource_device_sources` tokens.
-pub const POD_RESOURCE_DEVICE_SOURCE_DRA: &str = "dra";
+impl std::fmt::Display for DeviceSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeviceSource::DevicePlugin => write!(f, "device-plugin"),
+            DeviceSource::Dra => write!(f, "dra"),
+        }
+    }
+}
 
 /// Build a CDI cache with auto-refresh disabled: callers refresh explicitly,
 /// and a racing background refresh makes device lookups flaky.
