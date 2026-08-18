@@ -17,7 +17,7 @@ use std::path::Path;
 use anyhow::{anyhow, Context, Result};
 
 use crate::sl;
-use crate::{POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN, POD_RESOURCE_DEVICE_SOURCE_DRA};
+use crate::DeviceSource;
 use slog::debug;
 
 /// Roots for device-node resolution; parameterized so tests can use fixtures.
@@ -27,7 +27,11 @@ const DEFAULT_DEV_ROOT: &str = "/dev";
 /// Error when a device-plugin CDI device and a DRA CDI device resolve to the
 /// same underlying physical device (see the module doc for why names are not
 /// compared as strings).
-pub(crate) fn check_cross_source_physical_overlap(
+///
+/// Exported for the runtime's device path: the parser hands the two source
+/// lists over as-is, and enforcement happens right before devices are
+/// attached, the last point where a device still carries its source.
+pub fn check_cross_source_physical_overlap(
     device_plugin_devs: &[String],
     dra_devs: &[String],
     spec_dirs: &[&str],
@@ -62,9 +66,9 @@ fn check_cross_source_physical_overlap_in(
                  {:?} (device-plugin CDI device {:?}) and {:?} (dra CDI device {:?}); \
                  this would double cold-plug the same underlying device",
                 coord,
-                POD_RESOURCE_DEVICE_SOURCE_DEVICE_PLUGIN,
+                DeviceSource::DevicePlugin.to_string(),
                 dp_name,
-                POD_RESOURCE_DEVICE_SOURCE_DRA,
+                DeviceSource::Dra.to_string(),
                 dra_name,
             ));
         }
@@ -166,8 +170,8 @@ fn normalize_iommu_group_cdev(group: &str, sys_root: &Path) -> Result<Vec<String
         .join("iommu_groups")
         .join(group)
         .join("devices");
-    let entries =
-        std::fs::read_dir(&devices_dir).with_context(|| format!("failed to list {devices_dir:?}"))?;
+    let entries = std::fs::read_dir(&devices_dir)
+        .with_context(|| format!("failed to list {devices_dir:?}"))?;
 
     let mut bdfs = Vec::new();
     for e in entries {
@@ -407,8 +411,18 @@ mod tests {
             let spec_dir = tempfile::tempdir().unwrap();
             let spec = spec_dir.path();
             let parent_bdf = "0000:88:00.0";
-            build_vfio_mdev_cdev(sys, "vfio-mdev1", parent_bdf, "11111111-1111-1111-1111-111111111111");
-            build_vfio_mdev_cdev(sys, "vfio-mdev2", parent_bdf, "22222222-2222-2222-2222-222222222222");
+            build_vfio_mdev_cdev(
+                sys,
+                "vfio-mdev1",
+                parent_bdf,
+                "11111111-1111-1111-1111-111111111111",
+            );
+            build_vfio_mdev_cdev(
+                sys,
+                "vfio-mdev2",
+                parent_bdf,
+                "22222222-2222-2222-2222-222222222222",
+            );
             write_cdi_spec(
                 spec,
                 "dp-mdev",
