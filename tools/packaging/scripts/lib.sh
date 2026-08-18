@@ -262,11 +262,6 @@ get_agent_image_name() {
 	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification "${agent_dir}")-${rust_toolchain}-$(uname -m)"
 }
 
-get_coco_guest_components_image_name() {
-	coco_guest_components_script_dir="${repo_root_dir}/tools/packaging/static-build/coco-guest-components"
-	echo "${BUILDER_REGISTRY}:coco-guest-components-$(get_from_kata_deps ".externals.coco-guest-components.toolchain")-$(get_last_modification "${coco_guest_components_script_dir}")-$(uname -m)"
-}
-
 get_pause_image_name() {
 	pause_image_script_dir="${repo_root_dir}/tools/packaging/static-build/pause-image"
 	echo "${BUILDER_REGISTRY}:pause-image-$(get_last_modification "${pause_image_script_dir}")-$(uname -m)"

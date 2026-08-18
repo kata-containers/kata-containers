@@ -788,7 +788,7 @@ partition_base() {
 # so it must carry veritysetup and its shared-library closure unconditionally -
 # regardless of whether the guest is confidential. This closure is also exactly
 # what cryptsetup links, so the cryptsetup binary shipped in the coco extension
-# (encrypted storage, see build-static-coco-guest-components.sh) resolves its
+# (encrypted storage, bundled in the published coco-extension image) resolves its
 # libraries against the base without bundling any of its own. Runs inside
 # ${ROOTFS_DIR}.
 chisseled_veritysetup() {
