@@ -628,10 +628,30 @@ EOF
 
 	# Load-bearing: the dispatcher decides which tainted nodes are eligible by
 	# reading the tolerations out of this very template, so dropping them here
-	# would silently skip every tainted node.
-	echo "${install}" | grep -q "key: node-role.kubernetes.io/control-plane"
-	echo "${install}" | grep -q "operator: Exists"
-	echo "${cleanup}" | grep -q "key: node-role.kubernetes.io/control-plane"
+	# would silently skip every tainted node. Asserted as whole entries, since a
+	# key on one line says nothing about the operator on another.
+	echo "${install}" | tolerations_of |
+		grep "key: node-role.kubernetes.io/control-plane" | grep -q "operator: Exists"
+
+	# Cleanup tolerates everything instead: a taint added after the install must
+	# not leave a node with Kata on it that no uninstall can reach. A key or an
+	# effect on that entry would narrow it back down.
+	[[ "$(echo "${cleanup}" | tolerations_of)" == "operator: Exists" ]]
+}
+
+@test "Helm template (job mode): install Jobs tolerate what a DaemonSet pod tolerates" {
+	# The DaemonSet controller adds these to its own pods, and job mode installs on
+	# the same nodes. not-ready matters most: the install restarts the CRI runtime,
+	# which takes the node NotReady long enough for the taint manager to evict a pod
+	# that does not tolerate it.
+	render_job_templates
+
+	local install taint
+	install=$(extract_pernode_job install)
+
+	for taint in not-ready unreachable disk-pressure memory-pressure pid-pressure unschedulable; do
+		echo "${install}" | grep -q "key: node.kubernetes.io/${taint}"
+	done
 }
 
 @test "Helm template (job mode): uninstall targets labeled nodes and ignores taints" {
@@ -829,4 +849,24 @@ EOF
 	# cluster, say - would select nodes it has nowhere to dispatch from.
 	echo "${rendered}" | grep -q 'tolerations:'
 	echo "${rendered}" | grep -q 'operator: Exists'
+}
+
+@test "Helm template (job mode): a per-node Job cannot run forever" {
+	# The dispatcher waits for every node it dispatched to, so one host wedged on a
+	# restart that never returns would hold up the whole rollout.
+	render_job_templates
+
+	local install
+	install=$(extract_pernode_job install)
+	echo "${install}" | grep -q "activeDeadlineSeconds: 3600"
+}
+
+@test "Helm template (job mode): a Job TTL the dispatcher could not observe is refused" {
+	# A Job deleted before the next poll leaves its node with no result, and that
+	# counts as a failure: an install that worked, reported as broken.
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set job.ttlSecondsAfterFinished=30
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q "too short for the dispatcher to observe"
 }
