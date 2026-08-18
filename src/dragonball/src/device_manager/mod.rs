@@ -669,7 +669,7 @@ pub struct DeviceManager {
     pub(crate) net_manager: NetworkDeviceMgr,
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
-    fs_manager: Arc<Mutex<FsDeviceMgr>>,
+    pub(crate) fs_manager: Arc<Mutex<FsDeviceMgr>>,
 
     #[cfg(feature = "virtio-mem")]
     pub(crate) mem_manager: MemDeviceMgr,
@@ -1578,6 +1578,9 @@ impl DeviceManager {
         }
     }
 }
+
+#[cfg(feature = "dbs-virtio-devices")]
+pub mod persist;
 
 #[cfg(test)]
 mod tests {
