@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::str::FromStr;
 use std::time::Duration;
@@ -32,14 +32,69 @@ use std::time::Duration;
 use qapi_spec::Dictionary;
 use std::thread;
 use std::time::Instant;
+use tokio::process::Child;
+
+use nix::errno::Errno;
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::sys::socket::sockopt::SocketError;
+use nix::sys::socket::{connect, getsockopt, socket, AddressFamily, SockFlag, SockType, UnixAddr};
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
 const DEFAULT_QMP_INIT_READ_TIMEOUT: u64 = 5000;
 const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 50000;
 const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
+/// Per-attempt connect(2) cap. Unbounded UnixStream::connect can hang forever
+/// when the parent still holds the QMP listen FD after QEMU has died.
+const DEFAULT_QMP_CONNECT_ATTEMPT_MS: u64 = 1000;
 
 const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Non-blocking AF_UNIX connect with a hard timeout.
+fn connect_unix_timeout(path: &str, timeout: Duration) -> std::io::Result<UnixStream> {
+    let addr = UnixAddr::new(path).map_err(std::io::Error::from)?;
+    let sock: OwnedFd = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::SOCK_CLOEXEC | SockFlag::SOCK_NONBLOCK,
+        None,
+    )
+    .map_err(std::io::Error::from)?;
+
+    match connect(sock.as_raw_fd(), &addr) {
+        Ok(()) => {}
+        Err(Errno::EINPROGRESS) => {
+            let mut pfd = libc::pollfd {
+                fd: sock.as_raw_fd(),
+                events: libc::POLLOUT,
+                revents: 0,
+            };
+            let ms = timeout.as_millis().min(i32::MAX as u128) as i32;
+            let n = unsafe { libc::poll(&mut pfd, 1, ms) };
+            if n == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "qmp unix connect timed out",
+                ));
+            }
+            if n < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let err = getsockopt(&sock, SocketError).map_err(std::io::Error::from)?;
+            if err != 0 {
+                return Err(std::io::Error::from_raw_os_error(err));
+            }
+        }
+        Err(e) => return Err(std::io::Error::from(e)),
+    }
+
+    // qapi expects a blocking stream for handshake / execute.
+    let flags = fcntl(&sock, FcntlArg::F_GETFL).map_err(std::io::Error::from)?;
+    let flags = OFlag::from_bits_truncate(flags) & !OFlag::O_NONBLOCK;
+    fcntl(&sock, FcntlArg::F_SETFL(flags)).map_err(std::io::Error::from)?;
+
+    Ok(unsafe { UnixStream::from_raw_fd(sock.into_raw_fd()) })
+}
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -76,9 +131,12 @@ impl Debug for Qmp {
 }
 
 impl Qmp {
-    pub fn new(qmp_sock_path: &str) -> Result<Self> {
+    pub fn new(qmp_sock_path: &str, mut qemu_process: Option<&mut Child>) -> Result<Self> {
         let try_new_once_fn = || -> Result<Qmp> {
-            let stream = UnixStream::connect(qmp_sock_path)?;
+            let stream = connect_unix_timeout(
+                qmp_sock_path,
+                Duration::from_millis(DEFAULT_QMP_CONNECT_ATTEMPT_MS),
+            )?;
 
             stream
                 .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_INIT_READ_TIMEOUT)))
@@ -104,6 +162,21 @@ impl Qmp {
         let mut last_err: Option<anyhow::Error> = None;
 
         while Instant::now() < deadline {
+            if let Some(child) = qemu_process.as_mut() {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        return Err(anyhow!(
+                            "QEMU exited before QMP ready (status={:?})",
+                            status
+                        ));
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        return Err(anyhow!("QEMU try_wait during QMP connect: {}", e));
+                    }
+                }
+            }
+
             match try_new_once_fn() {
                 Ok(qmp) => return Ok(qmp),
                 Err(e) => {
@@ -1683,6 +1756,51 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
         [get_jailer_root(sid).as_str(), QMP_SOCKET_FILE].join("/")
     } else {
         QMP_SOCKET_FILE.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    #[test]
+    fn connect_unix_timeout_does_not_hang_on_missing_socket() {
+        let path = format!(
+            "{}/kata-qmp-missing-{}.sock",
+            std::env::temp_dir().display(),
+            std::process::id()
+        );
+        let start = Instant::now();
+        let err = connect_unix_timeout(&path, Duration::from_millis(200)).unwrap_err();
+        assert_ne!(err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "connect to a missing QMP socket hung: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn connect_unix_timeout_returns_on_nonaccepting_listener() {
+        let path = format!(
+            "{}/kata-qmp-listen-{}.sock",
+            std::env::temp_dir().display(),
+            std::process::id()
+        );
+        let _ = std::fs::remove_file(&path);
+        let _listener = UnixListener::bind(&path).expect("bind qmp test socket");
+        let start = Instant::now();
+        let result = connect_unix_timeout(&path, Duration::from_millis(200));
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "connect to a non-accepting listener hung: {:?}",
+            start.elapsed()
+        );
+        // Linux may queue the connection (Ok) or time out; either is fine.
+        // The old UnixStream::connect could block until the 50s QMP deadline.
+        let _ = result;
     }
 }
 
