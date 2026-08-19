@@ -1341,7 +1341,12 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        self.hypervisor.stop_vm().await.context("stop vm")?;
+        if let Err(e) = self.hypervisor.stop_vm().await {
+            warn!(sl!(), "failed to stop vm, recording it as gone: {:?}", e);
+            self.record_stop(255, SystemTime::now()).await;
+            return Ok(());
+        }
+
         self.wait().await.context("wait for vm exit after stop")?;
         info!(sl!(), "sandbox stopped");
 
