@@ -23,7 +23,7 @@ use tokio::sync::RwLock;
 use crate::volume::{
     utils::{
         build_bind_mount_options, filter_block_storage_options, generate_shared_path,
-        KATA_MOUNT_BIND_TYPE, DEFAULT_VOLUME_FS_TYPE,
+        DEFAULT_VOLUME_FS_TYPE, KATA_MOUNT_BIND_TYPE,
     },
     Volume,
 };
@@ -59,13 +59,12 @@ impl VfioVolume {
             .context("do handle device failed.")?;
 
         let oci_opts = get_mount_options(m.options());
-        let mut storage_options: Vec<String> = filter_block_storage_options(
-            if !mount_info.options.is_empty() {
+        let mut storage_options: Vec<String> =
+            filter_block_storage_options(if !mount_info.options.is_empty() {
                 &mount_info.options
             } else {
                 &oci_opts
-            },
-        );
+            });
         if read_only && !storage_options.iter().any(|o| o == "ro") {
             storage_options.push("ro".to_string());
         }

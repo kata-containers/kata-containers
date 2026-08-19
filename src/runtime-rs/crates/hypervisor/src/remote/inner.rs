@@ -11,11 +11,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::{
     annotations::{
-        cri_containerd, crio,
-        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL,
-        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA,
-        KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
+        cri_containerd, crio, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_INIT_DATA, KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
     },
     capabilities::{Capabilities, CapabilityBits},
 };
@@ -233,7 +232,9 @@ impl RemoteInner {
     }
 
     pub(crate) async fn resume_vm(&self) -> Result<()> {
-        Err(anyhow::anyhow!("resume not supported for remote hypervisor"))
+        Err(anyhow::anyhow!(
+            "resume not supported for remote hypervisor"
+        ))
     }
 
     pub(crate) async fn save_vm(&self) -> Result<()> {

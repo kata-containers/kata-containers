@@ -14,10 +14,10 @@ use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::device::driver::virtio_blk_modern::BlockDeviceModern;
 use crate::vfio_device::VfioDeviceBase;
 use crate::{
-    BlockConfigModern, HybridVsockConfig, HybridVsockDevice,
-    Hypervisor as hypervisor, NetworkConfig, NetworkDevice, PCIePortDevice, PortDeviceConfig,
-    ProtectionDevice, ProtectionDeviceConfig, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice,
-    VhostUserConfig, VhostUserNetDevice, VsockConfig, VsockDevice,
+    BlockConfigModern, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
+    NetworkConfig, NetworkDevice, PCIePortDevice, PortDeviceConfig, ProtectionDevice,
+    ProtectionDeviceConfig, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice, VhostUserConfig,
+    VhostUserNetDevice, VsockConfig, VsockDevice,
 };
 use anyhow::Result;
 use async_trait::async_trait;

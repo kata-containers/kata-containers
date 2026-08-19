@@ -23,8 +23,8 @@ use crate::utils::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
-use kata_types::prefix_with_rootless_dir;
 use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
+use kata_types::prefix_with_rootless_dir;
 use kata_types::rootless::is_rootless;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -174,10 +174,7 @@ impl QemuInner {
                         continue;
                     }
                     match driver_option.as_str() {
-                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
-                            &path_on_host,
-                            is_readonly,
-                        )?,
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(&path_on_host, is_readonly)?,
                         KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
                             let serial = if serial_override.is_empty() {
                                 None
@@ -1456,12 +1453,7 @@ mod tests {
         true,
         Some("failed to convert bpf_jit_enable status to integer")
     )]
-    #[case::disabled(
-        Some("on"),
-        Ok("0\n"),
-        true,
-        Some("bpf_jit_enable is disabled")
-    )]
+    #[case::disabled(Some("on"), Ok("0\n"), true, Some("bpf_jit_enable is disabled"))]
     #[case::enabled(Some("on"), Ok("1\n"), true, None)]
     fn test_bpf_jit_check_warnings(
         #[case] seccomp_sandbox: Option<&str>,
@@ -1494,7 +1486,10 @@ mod tests {
         }
     }
 
+    // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
+    // variants stand for, so keep it despite clippy::enum_variant_names.
     #[derive(Debug, PartialEq)]
+    #[allow(clippy::enum_variant_names)]
     enum CredentialOperation {
         SetGroups(Vec<u32>),
         SetGid(u32),
@@ -1502,6 +1497,7 @@ mod tests {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
+    #[allow(clippy::enum_variant_names)]
     enum CredentialStep {
         SetGroups,
         SetGid,

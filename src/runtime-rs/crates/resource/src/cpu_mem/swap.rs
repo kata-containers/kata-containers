@@ -6,9 +6,11 @@
 use agent::Agent;
 use anyhow::{anyhow, Context, Error, Result};
 use hypervisor::{
-    BlockConfigModern, device::{
-        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
+    device::{
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        DeviceConfig, DeviceType,
     },
+    BlockConfigModern,
 };
 use nix::sched::sched_yield;
 use nix::sys::statvfs::statvfs;
@@ -175,7 +177,7 @@ impl SwapTask {
             DeviceType::BlockModern(ref device_mod) => {
                 let device = device_mod.lock().await.clone();
                 device.device_id.clone()
-            },
+            }
             _ => return Err(anyhow!("swap_task: device_info {} is not Block", swap_path)),
         };
 

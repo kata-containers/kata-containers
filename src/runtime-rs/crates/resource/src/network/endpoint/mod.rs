@@ -27,8 +27,8 @@ use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::driver::NetworkConfig;
 use hypervisor::device::{DeviceConfig, DeviceType};
 use hypervisor::Hypervisor;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use super::EndpointState;
 

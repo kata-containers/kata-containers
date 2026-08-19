@@ -227,8 +227,7 @@ pub fn is_kata_virtual_volume(m: &kata_types::mount::Mount) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::rootfs::virtual_volume::{
-        KATA_GUEST_ROOT_SHARED_FS, KATA_VIRTUAL_VOLUME_PREFIX,
-        KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS,
+        KATA_GUEST_ROOT_SHARED_FS, KATA_VIRTUAL_VOLUME_PREFIX, KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS,
     };
 
     use super::get_image_reference;

@@ -13,9 +13,11 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    BlockConfigModern, BlockDeviceAio, device::{
-        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
+    device::{
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        DeviceConfig, DeviceType,
     },
+    BlockConfigModern, BlockDeviceAio,
 };
 use kata_types::config::hypervisor::VIRTIO_PMEM;
 use kata_types::fs::VM_ROOTFS_FILESYSTEM_XFS;
@@ -65,9 +67,12 @@ impl BlockRootfs {
         };
 
         // create and insert block device into Kata VM
-        let device_info = do_handle_device(d, &DeviceConfig::BlockCfgModern(block_device_config.clone()))
-            .await
-            .context("do handle device failed.")?;
+        let device_info = do_handle_device(
+            d,
+            &DeviceConfig::BlockCfgModern(block_device_config.clone()),
+        )
+        .await
+        .context("do handle device failed.")?;
 
         let mut storage = Storage {
             fs_type: rootfs.fs_type.clone(),

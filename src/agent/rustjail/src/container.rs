@@ -1882,20 +1882,33 @@ mod tests {
     fn test_set_stdio_permissions() {
         skip_if_not_root!();
 
-        let meta = fs::metadata("/dev/stdin").unwrap();
-        let old_uid = meta.uid();
+        let null_rdev = fs::metadata("/dev/null").unwrap().rdev();
+        let fds = [
+            std::io::stdin().as_raw_fd(),
+            std::io::stdout().as_raw_fd(),
+            std::io::stderr().as_raw_fd(),
+        ];
+
+        // SAFETY: the stdio fds stay open for the duration of the test.
+        let old_uid = stat::fstat(unsafe { BorrowedFd::borrow_raw(fds[0]) })
+            .unwrap()
+            .st_uid;
 
         let uid = 1000;
         set_stdio_permissions(Uid::from_raw(uid)).unwrap();
 
-        let meta = fs::metadata("/dev/stdin").unwrap();
-        assert_eq!(meta.uid(), uid);
-
-        let meta = fs::metadata("/dev/stdout").unwrap();
-        assert_eq!(meta.uid(), uid);
-
-        let meta = fs::metadata("/dev/stderr").unwrap();
-        assert_eq!(meta.uid(), uid);
+        // Check the stdio fds themselves rather than the /dev/std* paths:
+        // the fds may not point at those nodes (e.g. when stdio is
+        // redirected), which is also why set_stdio_permissions operates on
+        // the fds. Mirror its skipping of /dev/null backed fds.
+        for fd in &fds {
+            // SAFETY: the stdio fds stay open for the duration of the test.
+            let stat = stat::fstat(unsafe { BorrowedFd::borrow_raw(*fd) }).unwrap();
+            if stat.st_rdev == null_rdev {
+                continue;
+            }
+            assert_eq!(stat.st_uid, uid);
+        }
 
         // restore the uid
         set_stdio_permissions(Uid::from_raw(old_uid)).unwrap();

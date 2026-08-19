@@ -26,9 +26,9 @@ use hypervisor::{
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation,
-    prefix_with_rootless_dir,
     config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
     mount::SHM_DEVICE,
+    prefix_with_rootless_dir,
     rootless::{is_rootless, rootless_dir, set_rootless},
 };
 #[cfg(feature = "linux")]
@@ -1052,8 +1052,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
 
     // Update the rootless dir prefix for guest_swap_path
-    config.memory_info.guest_swap_path =
-        prefix_with_rootless_dir("/run/kata-containers/swap");
+    config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
 
     let kvm_path = PathBuf::from("/dev/kvm");
     let metadata = std::fs::metadata(&kvm_path)?;

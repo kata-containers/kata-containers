@@ -133,6 +133,9 @@ mod tests {
         assert_eq!(mounts[0].source(), &Some(expected.clone()));
 
         let storages = volume.get_storage().unwrap();
-        assert_eq!(storages[0].mount_point, expected.to_string_lossy().into_owned());
+        assert_eq!(
+            storages[0].mount_point,
+            expected.to_string_lossy().into_owned()
+        );
     }
 }

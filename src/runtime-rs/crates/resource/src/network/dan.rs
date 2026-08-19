@@ -68,7 +68,8 @@ impl DanInner {
         let json_str = fs::read_to_string(&config.dan_conf_path)
             .await
             .context("Read DAN config from file")?;
-        let dan_config: DanConfig = serde_json::from_str(&json_str).context("Invalid DAN config")?;
+        let dan_config: DanConfig =
+            serde_json::from_str(&json_str).context("Invalid DAN config")?;
         info!(sl!(), "Dan config is loaded = {:?}", dan_config);
 
         let (connection, handle, _) = rtnetlink::new_connection().context("New connection")?;
@@ -83,39 +84,26 @@ impl DanInner {
             // The `network_queues` is a queue *pair* count.
             // Keep `queue_num` as a pair count and the hypervisor backend converts pairs into the actual virtqueue count.
             // A JSON-provided non-zero `queue_num` (also a pair count) with a higher priority always wins.
-            let (qnum, qsize) = device
-                .device
-                .get_effective_queues(config.network_queues);
+            let (qnum, qsize) = device.device.get_effective_queues(config.network_queues);
             let endpoint: Arc<dyn Endpoint> = match &device.device {
-                Device::VhostUser { path, .. } => {
-                    Arc::new(
-                        VhostUserEndpoint::new(
-                            dev_mgr,
-                            &name,
-                            &device.guest_mac,
-                            path,
-                            qnum,
-                            qsize,
-                        )
+                Device::VhostUser { path, .. } => Arc::new(
+                    VhostUserEndpoint::new(dev_mgr, &name, &device.guest_mac, path, qnum, qsize)
                         .await
                         .with_context(|| format!("create a vhost user endpoint, path: {path}"))?,
+                ),
+                Device::HostTap { tap_name, .. } => Arc::new(
+                    TapEndpoint::new(
+                        &handle,
+                        &name,
+                        tap_name,
+                        &device.guest_mac,
+                        qnum,
+                        qsize,
+                        dev_mgr,
                     )
-                }
-                Device::HostTap { tap_name, .. } => {
-                    Arc::new(
-                        TapEndpoint::new(
-                            &handle,
-                            &name,
-                            tap_name,
-                            &device.guest_mac,
-                            qnum,
-                            qsize,
-                            dev_mgr,
-                        )
-                        .await
-                        .with_context(|| format!("create a {tap_name} tap endpoint"))?,
-                    )
-                }
+                    .await
+                    .with_context(|| format!("create a {tap_name} tap endpoint"))?,
+                ),
             };
 
             let network_info = Arc::new(

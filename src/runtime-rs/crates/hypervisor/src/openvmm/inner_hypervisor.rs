@@ -185,8 +185,10 @@ impl OpenVmmInner {
         self.netns = netns;
 
         self.run_dir = format!("{}/{}", KATA_PATH, id);
-        fs::create_dir_all(&self.jailer_root)
-            .context(format!("failed to create jailer root: {}", self.jailer_root))?;
+        fs::create_dir_all(&self.jailer_root).context(format!(
+            "failed to create jailer root: {}",
+            self.jailer_root
+        ))?;
         fs::create_dir_all(&self.run_dir)
             .context(format!("failed to create run dir: {}", self.run_dir))?;
 
