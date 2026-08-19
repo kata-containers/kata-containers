@@ -764,6 +764,12 @@ function helm_helper() {
 					if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
 						base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
 					fi
+				# Firecracker reads images from devmapper, and its profile is
+				# what maps the shim to that snapshotter.
+				elif is_firecracker_hypervisor "${KATA_HYPERVISOR}"; then
+					if [[ -f "${helm_chart_dir}/try-kata-fc.values.yaml" ]]; then
+						base_values_file="${helm_chart_dir}/try-kata-fc.values.yaml"
+					fi
 				fi
 				;;
 		esac
@@ -853,6 +859,11 @@ function helm_helper() {
 				if is_se_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
 				elif is_snp_hypervisor "${shim}" || is_tdx_hypervisor "${shim}" || is_confidential_gpu_hypervisor "${shim}"; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
+				# Firecracker is built for amd64 only, which is what
+				# try-kata-fc.values.yaml says; without this the fallback
+				# below would widen it to every architecture.
+				elif is_firecracker_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 				# qemu-coco-dev-runtime-rs is checked explicitly because
 				# qemu-coco-dev (Go runtime) does not support arm64.

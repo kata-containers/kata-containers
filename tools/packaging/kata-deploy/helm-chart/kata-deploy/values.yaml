@@ -673,14 +673,6 @@ shims:
     containerd:
       snapshotter: ""
 
-  fc:
-    enabled: ~
-    supportedArches:
-      - amd64
-    allowedHypervisorAnnotations: []
-    containerd:
-      snapshotter: "devmapper" # requires pre-configuration on the user side
-
   qemu:
     enabled: ~
     supportedArches:
