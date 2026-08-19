@@ -435,6 +435,22 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        if let Err(e) = self
+            .finish_start_after_spawn(&mut cmdline, &console_socket_path)
+            .await
+        {
+            return Err(self.rollback_spawned_vm(e).await);
+        }
+
+        Ok(())
+    }
+
+    /// Post-spawn bring-up (QMP, virtio-mem, template boot, debug console).
+    async fn finish_start_after_spawn(
+        &mut self,
+        cmdline: &mut QemuCmdLine<'_>,
+        console_socket_path: &Path,
+    ) -> Result<()> {
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
@@ -494,6 +510,19 @@ impl QemuInner {
         }
 
         Ok(())
+    }
+
+    /// Kill and reap a QEMU that was spawned but whose start is returning Err.
+    /// Do not use this on the normal StopSandbox path: waiting for a large
+    /// guest can block teardown.
+    async fn rollback_spawned_vm(&mut self, start_err: anyhow::Error) -> anyhow::Error {
+        if let Err(e) = self.stop_vm().await {
+            warn!(sl!(), "start-fail rollback: stop_vm: {:#}", e);
+        }
+        if let Err(e) = self.wait_vm().await {
+            warn!(sl!(), "start-fail rollback: wait_vm: {:#}", e);
+        }
+        start_err
     }
 
     async fn boot_from_template(&mut self) -> Result<()> {
