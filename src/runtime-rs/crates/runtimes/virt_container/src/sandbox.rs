@@ -120,11 +120,6 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
-    // Whether sandbox resources (cgroup, network, mounts, ...) have already
-    // been released.  Teardown can be driven both by the sandbox container
-    // exiting and by an explicit shutdown RPC, so guard against running the
-    // cleanup twice.
-    cleaned: bool,
 }
 
 impl SandboxInner {
@@ -133,7 +128,6 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
-            cleaned: false,
         }
     }
 }
@@ -153,6 +147,9 @@ pub struct VirtSandbox {
     factory: Option<Factory>,
     cancel_token: CancellationToken,
     oom_notifier: Arc<CrioOomNotifier>,
+    // Held for the whole teardown, so a second caller waits instead of racing.
+    stopping: Arc<Mutex<()>>,
+    cleanup_done: Arc<Mutex<bool>>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -200,6 +197,8 @@ impl VirtSandbox {
             factory: Some(factory),
             cancel_token,
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            stopping: Arc::new(Mutex::new(())),
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -1331,6 +1330,10 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
+        // Both teardown paths reach this, and the loser would ask an already
+        // reaped hypervisor to stop.
+        let _stopping = self.stopping.lock().await;
+
         let state = {
             let sandbox_inner = self.inner.read().await;
             sandbox_inner.state
@@ -1352,7 +1355,12 @@ impl Sandbox for VirtSandbox {
             return Ok(());
         }
 
-        self.hypervisor.stop_vm().await.context("stop vm")?;
+        if let Err(e) = self.hypervisor.stop_vm().await {
+            warn!(sl!(), "failed to stop vm, recording it as gone: {:?}", e);
+            self.record_stop(255, SystemTime::now()).await;
+            return Ok(());
+        }
+
         self.wait().await.context("wait for vm exit after stop")?;
         info!(sl!(), "sandbox stopped");
 
@@ -1382,14 +1390,12 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
-        // Teardown may be triggered both when the sandbox container exits and
-        // by a later shutdown RPC; only release the resources once.
-        {
-            let mut inner = self.inner.write().await;
-            if inner.cleaned {
-                return Ok(());
-            }
-            inner.cleaned = true;
+        // Both the container exit and the shutdown RPC get here, and the one
+        // that arrives later blocks rather than skipping, so the shim does not
+        // exit on top of a teardown that is still running.
+        let mut cleanup_done = self.cleanup_done.lock().await;
+        if *cleanup_done {
+            return Ok(());
         }
 
         let rootless_uid = self
@@ -1423,6 +1429,10 @@ impl Sandbox for VirtSandbox {
                 );
             }
         }
+
+        // Only now, so that a cleanup which gave up part way is retried by
+        // whoever gets here next rather than skipped.
+        *cleanup_done = true;
 
         // TODO: cleanup other sandbox resource
         Ok(())
@@ -1686,6 +1696,8 @@ impl Persist for VirtSandbox {
             // A restored sandbox is handed back its containers by the shim, so
             // this starts out empty and fills up as they are created again.
             oom_notifier: Arc::new(CrioOomNotifier::default()),
+            stopping: Arc::new(Mutex::new(())),
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 }
