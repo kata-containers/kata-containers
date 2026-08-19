@@ -14,24 +14,53 @@ helm show values --version X.Y.Z oci://ghcr.io/kata-containers/kata-deploy-chart
 
 ### shims
 
-Kata ships with a number of pre-built artifacts and runtimes. You may selectively enable or disable specific shims. For example:
+Kata ships a number of pre-built hypervisor artifacts, and the chart creates one
+`RuntimeClass` per **enabled** shim. Every shim `values.yaml` lists is enabled by
+default, and the file lists exactly those shims that run on an ordinary node —
+they read images through whatever snapshotter containerd already uses, and ask
+nothing of the host beyond hardware virtualization:
+
+- `qemu` and `qemu-runtime-rs` — QEMU (amd64, arm64, s390x, ppc64le)
+- `clh` and `clh-runtime-rs` — Cloud Hypervisor (amd64)
+- `clh-azure`, `clh-azure-runtime-rs` and `openvmm-azure-runtime-rs` — Microsoft
+  Hypervisor (mshv) hosts (amd64)
+- `dragonball` — Dragonball (amd64)
+
+So a default `helm install` gives you a set of RuntimeClasses that can all
+actually start a pod on the node you installed on.
+
+!!! important "The hardware- and snapshotter-specific shims are not in `values.yaml`"
+
+    Confidential computing (SNP, TDX, IBM SE), NVIDIA, Firecracker and peer-pod
+    shims each come with a prerequisite the chart cannot satisfy on its own: a
+    particular containerd snapshotter (nydus, erofs, devmapper), a specific CPU, a
+    GPU, or a cloud provider running elsewhere. Enabled by default they would
+    create RuntimeClasses that look usable and fail the first pod scheduled onto
+    them, so each lives in a values file you opt into with `-f`, together with the
+    snapshotter setup and CRI configuration it needs.
+
+    Pick the one that matches your nodes from [Examples](#examples) below —
+    [`try-kata-tee.values.yaml`](#try-kata-teevaluesyaml),
+    [`try-kata-nvidia-gpu.values.yaml`](#try-kata-nvidia-gpuvaluesyaml),
+    [`try-kata-nvidia-cpu.values.yaml`](#try-kata-nvidia-cpuvaluesyaml),
+    [`try-kata-fc.values.yaml`](#try-kata-fcvaluesyaml) or
+    [`try-kata-remote.values.yaml`](#try-kata-remotevaluesyaml).
+
+You may selectively enable or disable specific shims. For example:
 
 ```yaml
 shims:
   disableAll: true
   qemu:
     enabled: true
-  qemu-nvidia-gpu:
-    enabled: true
-  qemu-nvidia-gpu-snp:
+  clh:
     enabled: false
-
 ```
 
 Shims can also have configuration options specific to them:
 
 ```yaml
-  qemu-nvidia-gpu:
+  qemu-runtime-rs:
     enabled: ~
     supportedArches:
       - amd64
@@ -42,16 +71,21 @@ Shims can also have configuration options specific to them:
     containerd:
       snapshotter: ""
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
-      # Uncomment once GPU Operator v26.3 is out
-      # nodeSelector:
-        # nvidia.com/cc.ready.state: "false"
+      nodeSelector:
+        example.io/feature: "true"
 ```
 
 The optional `shims.<shim>.dropIn` field lets you add a custom Kata drop-in for a
 default (non-custom) runtime. kata-deploy writes it as
 `config.d/50-user-overrides.toml` for that shim.
+
+!!! warning "`enabled: true` alone cannot bring back a shim that is not in `values.yaml`"
+
+    A shim is only considered for an architecture that its own `supportedArches`
+    lists, and a shim block that does not set the field matches none — so
+    `--set shims.qemu-tdx.enabled=true` on its own installs nothing and says
+    nothing. Use the profile that carries the shim, or copy its whole block out of
+    that profile, which is also where its snapshotter and guest-pull settings live.
 
 It's best to reference the default `values.yaml` file above for more details.
 
@@ -61,9 +95,10 @@ The NVIDIA GPU images boot [NVRC](https://github.com/NVIDIA/nvrc) as their init
 process, which brings the NVIDIA stack up before the Kata agent starts. The
 `shims.<shim>.nvrc` block configures it. Every key becomes an `nvrc.*` guest
 kernel parameter, so it applies to all sandboxes on that shim and takes effect
-when a sandbox boots:
+when a sandbox boots. The GPU shims are not in `values.yaml`, so the block lives
+in the profile that carries them:
 
-```yaml title="values.yaml"
+```yaml title="try-kata-nvidia-gpu.values.yaml"
 shims:
   qemu-nvidia-gpu:
     nvrc:
@@ -809,7 +844,31 @@ See the default [`values.yaml`](#parameters) for the remaining `job.*` options
 
 ## Examples
 
-We provide a few examples that you can pass to helm via the `-f`/`--values` flag.
+The shims that need a specific containerd snapshotter or specific hardware are
+deliberately absent from `values.yaml` (see [shims](#shims)). Each of them ships
+instead as a ready-made values file — a *profile* — that you pass to helm with
+`-f`/`--values`, and that brings along the snapshotter setup, CRI settings and
+`defaultShim` its shims need.
+
+The profiles are packaged with the chart, so you can get a copy to read and edit
+without cloning the repository:
+
+```sh
+helm pull oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION --untar
+ls kata-deploy/try-kata-*.values.yaml
+```
+
+!!! warning "Pick the profile that matches your nodes — don't stack two"
+
+    A profile is a complete values file, not a fragment: it starts from
+    `shims.disableAll: true`, enables its own shims, and sets its own
+    `snapshotter.setup`. Passing two of them lets the later `-f` win key by key,
+    which leaves a mixture neither profile describes — quite possibly shims mapped
+    to a snapshotter that was never set up. To serve genuinely different node
+    pools from one cluster, install one release per pool, each with its own
+    `nodeSelector` and `env.multiInstallSuffix` (see
+    [Multiple Kata installations on the Same Node](#multiple-kata-installations-on-the-same-node)).
 
 Each is published as a release asset and `-f` takes a URL, so helm fetches the
 file itself. Replace `VERSION` in both the flag and the URL, or use
@@ -822,7 +881,8 @@ file itself. Replace `VERSION` in both the flag and the URL, or use
 
 ### [`try-kata-tee.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-tee.values.yaml)
 
-This file enables only the TEE (Trusted Execution Environment) shims for confidential computing:
+Confidential computing: the TEE (Trusted Execution Environment) shims, with the
+nydus snapshotter and guest pull they need to keep the image off the host.
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -832,18 +892,24 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 Includes:
 
-- `qemu-snp` - AMD SEV-SNP (amd64)
-- `qemu-tdx` - Intel TDX (amd64)
-- `qemu-se` - IBM Secure Execution for Linux (SEL) (s390x)
-- `qemu-se-runtime-rs` - IBM Secure Execution for Linux (SEL) Rust runtime (s390x)
+- `qemu-snp` and `qemu-snp-runtime-rs` - AMD SEV-SNP (amd64)
+- `qemu-tdx` and `qemu-tdx-runtime-rs` - Intel TDX (amd64)
+- `qemu-se` and `qemu-se-runtime-rs` - IBM Secure Execution for Linux (SEL) (s390x)
 - `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
 - `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, arm64, s390x)
 
+The TEE RuntimeClasses also take part in
+[TEE key advertisement](#tee-key-advertisement) and get
+[NFD-based node selectors](#runtimeclass-node-selectors-for-tee-shims) when NFD is
+around, so confidential pods are only scheduled where the hardware is.
+
 ### [`try-kata-nvidia-cpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-cpu.values.yaml)
 
-This file enables only the NVIDIA CPU-only shims and installs them using the
+The NVIDIA CPU-only shims: the NVIDIA guest userspace without GPU passthrough.
+They run with `shared_fs=none`, so the profile sets up the erofs snapshotter with
+memory-backed rw layers and dm-verity, and installs using the
 [`job` deployment mode](#deployment-modes-daemonset-vs-job) (no always-on
-DaemonSet on the node):
+DaemonSet on the node).
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -857,11 +923,17 @@ Includes:
 - `qemu-nvidia-cpu-runtime-rs` - NVIDIA base image without GPU passthrough,
   using the Rust runtime (amd64, arm64)
 
+!!! info "erofs needs containerd 2.2.0 or newer"
+    The erofs snapshotter is containerd's own, and the profile configures it
+    through the auto-imported `conf.d` drop-in mechanism. Both arrived in
+    containerd 2.2.0, which is the minimum kata-deploy enforces for erofs.
+
 ### [`try-kata-nvidia-gpu.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml)
 
-This file enables only the NVIDIA GPU-enabled shims and installs them using the
-[`job` deployment mode](#deployment-modes-daemonset-vs-job) (no always-on
-DaemonSet on the node):
+The NVIDIA GPU shims, including their confidential variants. Also installs using
+the [`job` deployment mode](#deployment-modes-daemonset-vs-job), and sets up both
+snapshotters the shim set needs: erofs for the plain GPU handlers, nydus for the
+TEE ones.
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
@@ -871,9 +943,61 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 Includes:
 
-- `qemu-nvidia-gpu` - Standard NVIDIA GPU support (amd64)
-- `qemu-nvidia-gpu-snp` - NVIDIA GPU with AMD SEV-SNP (amd64)
-- `qemu-nvidia-gpu-tdx` - NVIDIA GPU with Intel TDX (amd64)
+- `qemu-nvidia-gpu` and `qemu-nvidia-gpu-runtime-rs` - GPU passthrough (amd64)
+- `qemu-nvidia-gpu-snp` and `qemu-nvidia-gpu-snp-runtime-rs` - GPU with AMD SEV-SNP (amd64)
+- `qemu-nvidia-gpu-tdx` and `qemu-nvidia-gpu-tdx-runtime-rs` - GPU with Intel TDX (amd64)
+
+The RuntimeClasses select on `nvidia.com/cc.ready.state`, the label the NVIDIA GPU
+Operator sets, so a node serves either the plain or the confidential handlers
+depending on the mode its GPUs are in. See
+[NVIDIA GPU passthrough and Kata QEMU](use-cases/NVIDIA-GPU-passthrough-and-Kata-QEMU.md)
+for the full setup.
+
+### [`try-kata-fc.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-fc.values.yaml)
+
+The Firecracker shim. Firecracker does not implement filesystem sharing, so images
+have to reach the guest as block devices — containerd's devmapper snapshotter.
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-fc.values.yaml
+```
+
+Includes:
+
+- `fc` - Firecracker (amd64)
+
+!!! warning "devmapper is the one snapshotter kata-deploy will not set up for you"
+    nydus and erofs it can configure; devmapper needs a thin-pool on the host,
+    which is a storage decision only you can make. Set it up on every node before
+    installing this profile — `ctr plugin ls | grep devmapper` must report `ok` —
+    otherwise the `kata-fc` RuntimeClass exists but every pod using it fails to
+    start. See
+    [How to use Kata Containers with Firecracker](how-to/how-to-use-kata-containers-with-firecracker.md).
+
+### [`try-kata-remote.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-remote.values.yaml)
+
+The remote hypervisor shim, better known as *peer pods*. It starts no VM on the
+node: sandbox creation is handed to a provider running elsewhere — in practice
+Confidential Containers' cloud-api-adaptor, which creates the VM in your cloud.
+Images are pulled inside that pod VM, hence nydus and guest pull.
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-remote.values.yaml
+```
+
+Includes:
+
+- `remote` - remote hypervisor / peer pods (amd64, ppc64le, s390x)
+
+!!! warning "The provider is not part of this chart"
+    This profile installs the shim and its `kata-remote` RuntimeClass, nothing
+    more. The provider, its cloud credentials and the pod VM image belong to the
+    cloud-api-adaptor deployment and have to be in place first, or the
+    RuntimeClass will exist with nothing behind it.
 
 ### `nodeSelector`
 
@@ -1076,22 +1200,21 @@ Now verify the installation by examining the `runtimeClasses`:
 
 ```sh
 $ kubectl get runtimeClasses
-NAME                            HANDLER                         AGE
-kata-clh-cicd                   kata-clh-cicd                   77s
-kata-clh-runtime-rs-cicd        kata-clh-runtime-rs-cicd        77s
-kata-dragonball-cicd            kata-dragonball-cicd            77s
-kata-fc-cicd                    kata-fc-cicd                    77s
-kata-qemu-cicd                  kata-qemu-cicd                  77s
-kata-qemu-coco-dev-cicd         kata-qemu-coco-dev-cicd         77s
-kata-qemu-nvidia-gpu-cicd       kata-qemu-nvidia-gpu-cicd       77s
-kata-qemu-nvidia-gpu-snp-cicd   kata-qemu-nvidia-gpu-snp-cicd   77s
-kata-qemu-nvidia-gpu-tdx-cicd   kata-qemu-nvidia-gpu-tdx-cicd   76s
-kata-qemu-runtime-rs-cicd       kata-qemu-runtime-rs-cicd       77s
-kata-qemu-se-runtime-rs-cicd    kata-qemu-se-runtime-rs-cicd    77s
-kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
-kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
-kata-stratovirt-cicd            kata-stratovirt-cicd            77s
+NAME                                 HANDLER                              AGE
+kata-clh-azure-cicd                  kata-clh-azure-cicd                  77s
+kata-clh-azure-runtime-rs-cicd       kata-clh-azure-runtime-rs-cicd       77s
+kata-clh-cicd                        kata-clh-cicd                        77s
+kata-clh-runtime-rs-cicd             kata-clh-runtime-rs-cicd             77s
+kata-dragonball-cicd                 kata-dragonball-cicd                 77s
+kata-openvmm-azure-runtime-rs-cicd   kata-openvmm-azure-runtime-rs-cicd   77s
+kata-qemu-cicd                       kata-qemu-cicd                       77s
+kata-qemu-runtime-rs-cicd            kata-qemu-runtime-rs-cicd            77s
 ```
+
+That is the default shim set ([shims](#shims)). Installing with one of the
+[profiles](#examples) instead gives you that profile's classes: adding
+`-f try-kata-tee.values.yaml` here would list the TEE set — `kata-qemu-snp-cicd`,
+`kata-qemu-tdx-cicd` and the rest — in place of the classes above.
 
 #### How installations keep out of each other's way on a node
 
