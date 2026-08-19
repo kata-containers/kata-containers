@@ -29,6 +29,12 @@
 #      must propagate the binding (memory + vCPU pinning land on the
 #      chosen host node, regardless of how small the workload is).
 #
+# The NVIDIA configurations ship with NUMA and vCPU pinning turned off,
+# so every test here turns both on through a config.d/ drop-in before it
+# starts a sandbox.  That keeps the suite running against the shipped
+# configuration whatever its defaults are, and it makes each test state
+# the feature it exercises instead of inheriting it.
+#
 # Guest-side checks use the quay.io/kata-containers/numa container image
 # which reads sysfs and prints results to stdout.  The bats test reads
 # the output via "kubectl logs" — no kubectl exec, no CoCo policy
@@ -46,11 +52,10 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu-snp}"
 
-# Hypervisors where NUMA is configured and supported by default.
-# qemu-nvidia-cpu and the qemu-nvidia-gpu variants ship enable_numa=true in their
-# base config.  runtime-rs does not yet implement NUMA; non-QEMU hypervisors
-# lack support.
-NUMA_CONFIGURED_SUPPORTED_BY_DEFAULT=(
+# Hypervisors that implement NUMA, and can therefore have it enabled by the
+# drop-in these tests write.  runtime-rs does not implement NUMA; non-QEMU
+# hypervisors lack support.
+NUMA_SUPPORTED=(
     "qemu-nvidia-cpu"
     "qemu-nvidia-gpu"
     "qemu-nvidia-gpu-snp"
@@ -110,14 +115,14 @@ setup() {
 # -----------------------------------------------------------------------------
 
 # numa_skip_reason returns a non-empty skip reason on stdout when the
-# current test should be skipped (hypervisor lacks default NUMA support
-# OR host has fewer than 2 NUMA nodes).  Empty stdout means run.
+# current test should be skipped (hypervisor does not support NUMA OR
+# host has fewer than 2 NUMA nodes).  Empty stdout means run.
 # Callers must invoke `skip` themselves — bats `skip` inside command
 # substitution does not propagate.
 numa_skip_reason() {
     # shellcheck disable=SC2076
-    if [[ ! " ${NUMA_CONFIGURED_SUPPORTED_BY_DEFAULT[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
-        echo "NUMA not configured by default on ${KATA_HYPERVISOR}"
+    if [[ ! " ${NUMA_SUPPORTED[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+        echo "NUMA not supported on ${KATA_HYPERVISOR}"
         return 0
     fi
     local nodes
@@ -271,7 +276,7 @@ gpu_numa_skip_reason() {
 }
 
 # -----------------------------------------------------------------------------
-# Explicit numa_mapping config helpers (drop-in based)
+# NUMA config helpers (drop-in based)
 # -----------------------------------------------------------------------------
 #
 # Both kata-runtime (Go) and runtime-rs (Rust) read TOML fragments from a
@@ -294,21 +299,31 @@ kata_hypervisor_section() {
     echo "${section}"
 }
 
-# patch_kata_numa_mapping <toml_value>
-# Writes a config.d/ drop-in that sets numa_mapping = <toml_value> under
-# the active hypervisor section.  Example values: '["1"]', '["0-1","2-3"]'.
-# Records the file path in KATA_NUMA_DROPIN_PATH so teardown() can remove
-# it.  No restart needed — the next sandbox start picks it up.
-patch_kata_numa_mapping() {
-    local value="${1}"
+# patch_kata_numa_config [numa_mapping_toml_value]
+# Writes a config.d/ drop-in that enables NUMA and vCPU pinning, optionally
+# binding the guest topology with numa_mapping = <toml_value> (e.g. '["1"]',
+# '["0-1","2-3"]').  Every test needs this because the shipped NVIDIA
+# configurations keep both features off.  Records the file path in
+# KATA_NUMA_DROPIN_PATH so teardown() can remove it.  No restart needed —
+# the next sandbox start picks it up.
+#
+# enable_numa and numa_mapping belong to the hypervisor table while
+# enable_vcpus_pinning belongs to [runtime], so the fragment carries both
+# tables.
+patch_kata_numa_config() {
+    local mapping="${1:-}"
     local local_dropin section
     section=$(kata_hypervisor_section)
 
     local_dropin="${BATS_FILE_TMPDIR}/99-numa-test.toml"
-    cat > "${local_dropin}" <<EOF
-${section}
-numa_mapping = ${value}
-EOF
+    {
+        echo "${section}"
+        echo "enable_numa = true"
+        [[ -z "${mapping}" ]] || echo "numa_mapping = ${mapping}"
+        echo
+        echo "[runtime]"
+        echo "enable_vcpus_pinning = true"
+    } > "${local_dropin}"
 
     KATA_NUMA_DROPIN_PATH="$(set_kata_runtime_config_dropin_file \
         "${node}" \
@@ -316,12 +331,13 @@ EOF
         die "failed to write Kata runtime config drop-in for ${KATA_HYPERVISOR}"
     export KATA_NUMA_DROPIN_PATH
 
-    echo "# Wrote drop-in ${KATA_NUMA_DROPIN_PATH}"
+    echo "# Wrote drop-in ${KATA_NUMA_DROPIN_PATH}:"
+    sed 's/^/# /' "${local_dropin}"
 }
 
-# restore_kata_numa_mapping removes the drop-in file written by
-# patch_kata_numa_mapping (no-op if nothing was patched).
-restore_kata_numa_mapping() {
+# restore_kata_numa_config removes the drop-in file written by
+# patch_kata_numa_config (no-op if nothing was patched).
+restore_kata_numa_config() {
     remove_kata_runtime_config_dropin_file "${node}" "${KATA_NUMA_DROPIN_PATH:-}" || return 1
     unset KATA_NUMA_DROPIN_PATH
 }
@@ -351,6 +367,8 @@ host_gpu_numa() {
     local skip_reason
     skip_reason=$(numa_skip_reason)
     [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
+
+    patch_kata_numa_config
 
     local host_nodes
     host_nodes=$(host_numa_node_count)
@@ -412,6 +430,8 @@ host_gpu_numa() {
     skip_reason=$(numa_skip_reason)
     [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
 
+    patch_kata_numa_config
+
     local guest_logs
     guest_logs=$(deploy_and_get_guest_logs "${NUMA_TEST_VCPUS_SMALL}" "${NUMA_TEST_MEMORY_SMALL}")
     echo "# Guest NUMA output:"
@@ -457,6 +477,8 @@ host_gpu_numa() {
     local skip_reason
     skip_reason=$(gpu_numa_skip_reason)
     [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
+
+    patch_kata_numa_config
 
     local host_nodes
     host_nodes=$(host_numa_node_count)
@@ -556,6 +578,8 @@ host_gpu_numa() {
     skip_reason=$(gpu_numa_skip_reason)
     [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
 
+    patch_kata_numa_config
+
     local gpu_yaml_in="${pod_config_dir}/${POD_NAME_NUMA_GPU}.yaml.in"
     local gpu_yaml="${pod_config_dir}/${POD_NAME_NUMA_GPU}.yaml"
 
@@ -653,7 +677,7 @@ host_gpu_numa() {
     [[ "${host_nodes}" -ge 2 ]] || skip "explicit-mapping test needs >=2 host NUMA nodes"
 
     # Patch the active runtime config; teardown() restores it.
-    patch_kata_numa_mapping '["1"]'
+    patch_kata_numa_config '["1"]'
 
     local guest_logs
     guest_logs=$(deploy_and_get_guest_logs "${NUMA_TEST_VCPUS_SMALL}" "${NUMA_TEST_MEMORY_SMALL}")
@@ -703,7 +727,7 @@ teardown() {
     kubectl logs "${POD_NAME_NUMA_GPU}" 2>/dev/null || true
 
     # Always restore the Kata config (no-op if no patch was applied).
-    restore_kata_numa_mapping || true
+    restore_kata_numa_config || true
 
     delete_tmp_policy_settings_dir "${policy_settings_dir}"
 
