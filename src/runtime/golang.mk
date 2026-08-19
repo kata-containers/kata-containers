@@ -6,7 +6,7 @@
 # Check that the system golang version is within the required version range
 # for this project.
 
-golang_version_raw=$(shell go version 2>/dev/null)
+golang_version_raw=$(shell go env GOVERSION 2>/dev/null)
 not_check_version=
 ifeq (,$(GOPATH))
     golang_version_raw=
@@ -52,12 +52,20 @@ ifeq (,$(not_check_version))
     golang_version_needed=$(golang_version_min_major).$(golang_version_min_minor)
 
     # determine actual version of golang
-    golang_version=$(subst go,,$(word 3,$(golang_version_raw)))
+    golang_version=$(golang_version_raw)
 
-    golang_version_fields=$(subst ., ,$(golang_version))
+    # Some distributions, such as Fedora 44, add suffixes such as "rc", distro patches, etc.
+    # Normalize to numeric major.minor for version comparisons.
+    golang_version_major=$(shell echo "$(golang_version)" | sed -nE 's/^go([0-9]+)\..*/\1/p')
+    golang_version_minor=$(shell echo "$(golang_version)" | sed -nE 's/^go[0-9]+\.([0-9]+).*/\1/p')
 
-    golang_version_major=$(word 1,$(golang_version_fields))
-    golang_version_minor=$(word 2,$(golang_version_fields))
+    ifeq (,$(golang_version_major))
+        $(error "ERROR: cannot parse golang major version from $(golang_version)")
+    endif
+
+    ifeq (,$(golang_version_minor))
+        $(error "ERROR: cannot parse golang minor version from $(golang_version)")
+    endif
 
     golang_major_ok=$(shell test $(golang_version_major) -ge $(golang_version_min_major) && echo ok)
     golang_minor_ok=$(shell test $(golang_version_major) -eq $(golang_version_min_major) -a $(golang_version_minor) -ge $(golang_version_min_minor) && echo ok)
