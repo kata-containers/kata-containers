@@ -146,6 +146,7 @@ pub struct VirtSandbox {
     factory: Option<Factory>,
     cancel_token: CancellationToken,
     // Held for the whole teardown, so a second caller waits instead of racing.
+    stopping: Arc<Mutex<()>>,
     cleanup_done: Arc<Mutex<bool>>,
 }
 
@@ -193,6 +194,7 @@ impl VirtSandbox {
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
+            stopping: Arc::new(Mutex::new(())),
             cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
@@ -1313,6 +1315,11 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
+        // Serialised like cleanup(), and for the same reason: both teardown
+        // paths land here, and the second one would ask an already reaped
+        // hypervisor to stop and get an error back for a sandbox that is gone.
+        let _stopping = self.stopping.lock().await;
+
         let state = {
             let sandbox_inner = self.inner.read().await;
             sandbox_inner.state
@@ -1691,6 +1698,7 @@ impl Persist for VirtSandbox {
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
             cancel_token: CancellationToken::default(),
+            stopping: Arc::new(Mutex::new(())),
             cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
