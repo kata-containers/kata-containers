@@ -8,10 +8,8 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
-export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-
 readonly QEMU_SANDBOX_PARAM="on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
-readonly QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS="${QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS:-30}"
+readonly ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS="${ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS:-30}"
 
 get_rootless_host_resources() {
 	local query="{ getent passwd | "
@@ -29,7 +27,7 @@ wait_for_rootless_host_resources() {
 	local attempt
 	local expected_resources="$1"
 
-	for ((attempt = 0; attempt < QEMU_SANDBOX_CLEANUP_TIMEOUT_SECONDS; attempt++)); do
+	for ((attempt = 0; attempt < ROOTLESS_VMM_CLEANUP_TIMEOUT_SECONDS; attempt++)); do
 		actual_resources="$(get_rootless_host_resources)"
 		[[ "${actual_resources}" == "${expected_resources}" ]] && return 0
 		sleep 1
@@ -45,12 +43,15 @@ wait_for_rootless_host_resources() {
 # Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
 # by default. Until then, explicitly request a GPU so this test exercises the
 # runtime-rs VFIO file-descriptor path.
+nvidia_gpu_request_supported() {
+	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
+	is_runtime_rs || return 1
+	is_nvidia_gpu_platform || return 1
+}
+
 request_gpu_for_nvidia_gpu_runtime_rs() {
 	local available_gpus
 	local config="$1"
-
-	is_runtime_rs || return 0
-	is_nvidia_gpu_platform || return 0
 
 	available_gpus="$(kubectl get node "${node}" \
 		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
@@ -61,13 +62,25 @@ request_gpu_for_nvidia_gpu_runtime_rs() {
 		"${config}"
 }
 
-qemu_rootless_sandbox_supported() {
-	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
+# Print why the current runtime cannot run this rootless VMM smoke test. A
+# non-zero return means the runtime is supported.
+rootless_vmm_skip_reason() {
+	case "${KATA_HYPERVISOR}" in
+		qemu*) qemu_rootless_skip_reason ;;
+		clh*) clh_rootless_skip_reason ;;
+		*)
+			echo "rootless VMM coverage supports only QEMU and Cloud Hypervisor"
+			return 0
+			;;
+	esac
+}
 
+qemu_rootless_skip_reason() {
 	# Runtime-go does not pass EROFS layers to rootless QEMU by file
 	# descriptor and therefore cannot traverse their snapshot directories.
 	if [[ "${SNAPSHOTTER:-}" == "erofs" ]] && ! is_runtime_rs; then
-		return 1
+		echo "rootless runtime-go QEMU does not support EROFS snapshot paths"
+		return 0
 	fi
 
 	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
@@ -75,7 +88,8 @@ qemu_rootless_sandbox_supported() {
 	# resources such as /dev/sev and the configured TDX QGS endpoint.
 	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
 		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
-		return 1
+		echo "rootless QEMU confidential host-resource access is not enabled yet"
+		return 0
 	fi
 
 	# Rootless policy testing is supported only by shared_fs=none runtime-rs
@@ -83,21 +97,101 @@ qemu_rootless_sandbox_supported() {
 	# used with filesystem sharing. With shared_fs=none, policy adds an
 	# init-data disk that only runtime-rs passes to QEMU by file descriptor.
 	if auto_generate_policy_enabled; then
-		is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" || return 1
-		is_runtime_rs || return 1
+		if ! is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
+			echo "rootless QEMU with generated policy and filesystem sharing is not supported"
+			return 0
+		fi
+		if ! is_runtime_rs; then
+			echo "rootless QEMU with generated policy requires runtime-rs block-source FD transport"
+			return 0
+		fi
 	fi
-	return 0
+
+	return 1
+}
+
+clh_rootless_skip_reason() {
+	local mshv_present
+
+	# Cloud Hypervisor prefers Microsoft Hypervisor whenever /dev/mshv is
+	# present. Managed AKS nodes currently expose that platform-owned device as
+	# root:root 0600, which cannot be authorized by adding its owning group to
+	# the temporary VMM user. Kata does not reconfigure the host-owned device;
+	# enable this coverage once the platform provides scoped non-root access.
+	mshv_present="$(exec_host "${node}" \
+		'[[ ! -e /dev/mshv ]] || echo present')"
+	if [[ "${mshv_present}" == "present" ]]; then
+		echo "rootless Cloud Hypervisor with /dev/mshv requires platform-provisioned non-root access"
+		return 0
+	fi
+
+	if is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
+		echo "rootless Cloud Hypervisor with shared_fs=none is not enabled yet"
+		return 0
+	fi
+
+	# An unprivileged Cloud Hypervisor cannot traverse the restrictive EROFS
+	# snapshot directories without a scoped-access mechanism.
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+		echo "rootless Cloud Hypervisor does not support EROFS snapshot paths"
+		return 0
+	fi
+
+	# Confidential Cloud Hypervisor handlers require additional host resources.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}"; then
+		echo "rootless Cloud Hypervisor confidential host-resource access is not enabled yet"
+		return 0
+	fi
+
+	# Generated CoCo policies add an init-data disk below a root-owned host path,
+	# which requires scoped VMM access. Eligible Cloud Hypervisor coverage also
+	# uses filesystem sharing, whose rootless guest paths generated policy does
+	# not authorize.
+	if auto_generate_policy_enabled; then
+		echo "rootless Cloud Hypervisor with generated policy is not enabled yet"
+		return 0
+	fi
+
+	return 1
+}
+
+vmm_config_section() {
+	case "${KATA_HYPERVISOR}" in
+		qemu*) echo "qemu" ;;
+		clh*) echo "clh" ;;
+	esac
+}
+
+append_vmm_seccomp_config() {
+	local config_file="$1"
+	local seccomp_key
+
+	case "${KATA_HYPERVISOR}" in
+		qemu*)
+			if is_runtime_rs; then
+				seccomp_key="seccomp_sandbox"
+			else
+				seccomp_key="seccompsandbox"
+			fi
+			echo "${seccomp_key} = \"${QEMU_SANDBOX_PARAM}\"" >> "${config_file}"
+			;;
+		clh*)
+			# Cloud Hypervisor enables its built-in seccomp filters by default,
+			# so no opt-in configuration is required here.
+			:
+			;;
+	esac
 }
 
 setup() {
 	local runtime_config_dropin_file
-	local seccomp_key
-
-	if ! qemu_rootless_sandbox_supported; then
-		skip "QEMU rootless and seccomp sandbox smoke testing does not cover ${KATA_HYPERVISOR}"
-	fi
+	local skip_reason
 
 	setup_common || die "setup_common failed"
+
+	if skip_reason="$(rootless_vmm_skip_reason)"; then
+		skip "${skip_reason} (KATA_HYPERVISOR=${KATA_HYPERVISOR})"
+	fi
 
 	pod_name="test-e2e"
 	pod_config="$(new_pod_config \
@@ -106,16 +200,13 @@ setup() {
 		"" "" "10")"
 	set_node "${pod_config}" "${node}"
 
-	# Adding emptyDir validates that rootless QEMU can access additional writable pod
-	# storage:
-	# - any runtime class with filesystem sharing can exercise emptyDir because QEMU
-	#   does not open a host block image.
-	# - Runtime-rs with shared_fs=none exercises this path by passing the image to
-	#   QEMU by file descriptor.
-	# - Runtime-go with shared_fs=none is skipped because the fd transport method is
-	#   not implemented.
-	# Other uses of block images for which file descriptors are passed by runtime-rs
-	# are:
+	# Adding emptyDir validates that a rootless VMM can access additional
+	# writable pod storage:
+	# - with filesystem sharing, the VMM does not open a host block image;
+	# - runtime-rs QEMU with shared_fs=none passes the image by file descriptor;
+	# - runtime-go QEMU with shared_fs=none omits the disk because that transport
+	#   is not implemented, while Cloud Hypervisor shared_fs=none is excluded.
+	# Other block images passed by file descriptor to runtime-rs QEMU are:
 	# - raw /dev/loop* volumes (see k8s-block-volume.bats), not exercised in this
 	# bats test to reduce complexity.
 	# - init-data images, implicitly exercised by jobs where policy annotations are
@@ -130,75 +221,85 @@ setup() {
 		' "${pod_config}"
 	fi
 	set_container_command "${pod_config}" 0 sleep 30
-	request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
+	if nvidia_gpu_request_supported; then
+		request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
+	fi
 
 	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
 	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
 	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
 	set_node "${watchable_pod_config}" "${node}"
-	request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
+	if nvidia_gpu_request_supported; then
+		request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
+	fi
 
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"
 
-	if is_runtime_rs; then
-		seccomp_key="seccomp_sandbox"
-	else
-		seccomp_key="seccompsandbox"
-	fi
-
-	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-qemu-sandbox.toml"
+	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-rootless-vmm.toml"
 	cat > "${runtime_config_dropin_file}" <<EOF
-[hypervisor.qemu]
+[hypervisor.$(vmm_config_section)]
 rootless = true
-${seccomp_key} = "${QEMU_SANDBOX_PARAM}"
 EOF
+	append_vmm_seccomp_config "${runtime_config_dropin_file}"
 
 	runtime_config_dropin="$(set_kata_runtime_config_dropin_file \
 		"${node}" \
 		"${runtime_config_dropin_file}")" || \
-		die "Failed to install QEMU sandbox config drop-in on ${node}"
+		die "Failed to install rootless VMM config drop-in on ${node}"
 }
 
-@test "QEMU runs rootless with its seccomp sandbox enabled" {
+@test "VMM runs rootless with seccomp enabled" {
 	local cmdline
 	local host_resources
-	local qemu_pid
-	local qemu_status
-	local qemu_gid
-	local qemu_uid
+	local seccomp_status
+	local vmm_gid
+	local vmm_pid
+	local vmm_status
+	local vmm_uid
 	host_resources="$(get_rootless_host_resources)"
 
 	retry_kubectl_apply "${pod_config}"
 	kubectl wait --for=condition=Ready --timeout="${timeout}" "pod/${pod_name}"
 
-	qemu_pid="$(get_qemu_pid_for_pod "${pod_name}")"
+	vmm_pid="$(get_vmm_pid_for_pod "${pod_name}")"
 
-	qemu_status="$(exec_host "${node}" "cat /proc/${qemu_pid}/status")"
-	qemu_uid="$(awk '/^Uid:/ {print $2}' <<< "${qemu_status}")"
-	qemu_gid="$(awk '/^Gid:/ {print $2}' <<< "${qemu_status}")"
+	vmm_status="$(exec_host "${node}" "cat /proc/${vmm_pid}/status")"
+	vmm_uid="$(awk '/^Uid:/ {print $2}' <<< "${vmm_status}")"
+	vmm_gid="$(awk '/^Gid:/ {print $2}' <<< "${vmm_status}")"
+	seccomp_status="${vmm_status}"
 
-	[[ "${qemu_uid}" =~ ^[0-9]+$ ]]
-	[[ "${qemu_gid}" =~ ^[0-9]+$ ]]
-	(( qemu_uid != 0 ))
-	(( qemu_gid != 0 ))
-	[[ "$(awk '/^Seccomp:/ {print $2}' <<< "${qemu_status}")" == "2" ]]
-	[[ "$(awk '/^NoNewPrivs:/ {print $2}' <<< "${qemu_status}")" == "1" ]]
+	[[ "${vmm_uid}" =~ ^[0-9]+$ ]]
+	[[ "${vmm_gid}" =~ ^[0-9]+$ ]]
+	(( vmm_uid != 0 ))
+	(( vmm_gid != 0 ))
 
-	cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${qemu_pid}/cmdline")"
-	[[ " ${cmdline} " == *" -sandbox ${QEMU_SANDBOX_PARAM} "* ]]
+	if [[ "${KATA_HYPERVISOR}" == qemu* ]]; then
+		cmdline="$(exec_host "${node}" "tr '\\0' ' ' < /proc/${vmm_pid}/cmdline")"
+		[[ " ${cmdline} " == *" -sandbox ${QEMU_SANDBOX_PARAM} "* ]]
+	else
+		# Cloud Hypervisor applies dedicated filters to its worker threads.
+		# Inspect the VMM thread rather than the unfiltered process leader.
+		seccomp_status="$(exec_host "${node}" \
+			"for status in /proc/${vmm_pid}/task/*/status; do \
+			grep -qE '^Name:[[:space:]]+vmm$' \"\${status}\" && \
+			cat \"\${status}\" && break; done")"
+	fi
+
+	[[ "$(awk '/^Seccomp:/ {print $2}' <<< "${seccomp_status}")" == "2" ]]
+	[[ "$(awk '/^NoNewPrivs:/ {print $2}' <<< "${seccomp_status}")" == "1" ]]
 
 	kubectl delete -f "${pod_config}" --ignore-not-found=true
 	wait_for_rootless_host_resources "${host_resources}"
 }
 
-@test "QEMU propagates ConfigMap updates while rootless" {
+@test "VMM propagates ConfigMap updates while rootless" {
 	local arch
 	local pod_termination_wait_time=180
 
 	# k8s-inotify.bats is excluded on these architectures. Apply the same
 	# scope only here because the per-architecture filters skip whole files,
-	# and the rootless QEMU launch test above is supported.
+	# and the rootless VMM launch test above is supported.
 	arch="$(uname -m)"
 	case "${arch}" in
 		aarch64|ppc64le|s390x)
@@ -227,9 +328,9 @@ EOF
 }
 
 teardown() {
-	qemu_rootless_sandbox_supported || return 0
+	rootless_vmm_skip_reason >/dev/null && return 0
 
-	echo "=== QEMU rootless sandbox pod describe ==="
+	echo "=== Rootless VMM pod describe ==="
 	kubectl describe pod "${pod_name:-test-e2e}" || true
 
 	remove_kata_runtime_config_dropin_file \
