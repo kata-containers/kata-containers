@@ -1165,7 +1165,7 @@ impl ToQemuParams for VmdkFormatNode {
 fn block_backend_node(
     device_id: &str,
     path: &str,
-    format: &crate::BlockDeviceFormat,
+    vmdk: Option<&crate::VmdkConfig>,
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
@@ -1174,9 +1174,10 @@ fn block_backend_node(
     backend.set_read_only(is_readonly);
     backend.set_discard_unmap(discard_unmap);
 
-    match format {
-        crate::BlockDeviceFormat::Raw => Box::new(backend),
-        crate::BlockDeviceFormat::Vmdk => Box::new(VmdkFormatNode::new(device_id, backend)),
+    if vmdk.is_some() {
+        Box::new(VmdkFormatNode::new(device_id, backend))
+    } else {
+        Box::new(backend)
     }
 }
 
@@ -3234,7 +3235,6 @@ impl<'a> QemuCmdLine<'a> {
         &mut self,
         device_id: &str,
         path: &str,
-        format: &crate::BlockDeviceFormat,
         vmdk: Option<&crate::VmdkConfig>,
         is_direct: bool,
         is_readonly: bool,
@@ -3246,20 +3246,19 @@ impl<'a> QemuCmdLine<'a> {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
         }
         let mut fdset_ids = Vec::new();
-        let path =
-            prepare_block_source(path, format, vmdk, is_readonly, is_direct, |file, label| {
-                let (path, fdset_id) =
-                    self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
-                fdset_ids.push(fdset_id);
-                Ok(path)
-            })?
-            .filename;
+        let path = prepare_block_source(path, vmdk, is_readonly, is_direct, |file, label| {
+            let (path, fdset_id) =
+                self.add_block_source_fd(file, &block_fd_opaque(device_id, label))?;
+            fdset_ids.push(fdset_id);
+            Ok(path)
+        })?
+        .filename;
         self.block_fdsets.insert(device_id.to_string(), fdset_ids);
 
         let backend = block_backend_node(
             device_id,
             &path,
-            format,
+            vmdk,
             is_direct,
             is_readonly,
             discard_unmap,
@@ -3909,7 +3908,6 @@ impl ToQemuParams for SeccompSandbox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BlockDeviceFormat;
     use rstest::rstest;
     use serial_test::serial;
     use tempfile::tempdir;
@@ -4015,7 +4013,6 @@ mod tests {
         let result = cmdline.add_block_device(
             "rootfs",
             image.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
             None,
             false,
             true,
@@ -4048,14 +4045,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_cold_plug_vmdk_uses_format_node() {
-        let format_node = block_backend_node(
-            "rootfs",
-            "/dev/fdset/2",
-            &BlockDeviceFormat::Vmdk,
-            false,
-            true,
-            false,
-        );
+        let vmdk = crate::VmdkConfig::default();
+        let format_node =
+            block_backend_node("rootfs", "/dev/fdset/2", Some(&vmdk), false, true, false);
 
         let format_params = format_node.qemu_params().await.unwrap();
         assert_eq!(format_params[0], "-blockdev");
@@ -4100,7 +4092,6 @@ mod tests {
             .add_block_device(
                 "blk0",
                 image.to_str().unwrap(),
-                &BlockDeviceFormat::Raw,
                 None,
                 true,
                 is_readonly,

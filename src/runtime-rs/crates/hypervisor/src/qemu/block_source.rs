@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{BlockDeviceFormat, VmdkConfig};
+use crate::VmdkConfig;
 
 use anyhow::{anyhow, Context, Result};
 use nix::sys::memfd::{memfd_create, MFdFlags};
@@ -159,7 +159,6 @@ fn create_vmdk_descriptor_file(
 /// once after their backing extents have been registered.
 pub(super) fn prepare_block_source<F>(
     path: &str,
-    format: &BlockDeviceFormat,
     vmdk: Option<&VmdkConfig>,
     is_readonly: bool,
     is_direct: bool,
@@ -168,7 +167,7 @@ pub(super) fn prepare_block_source<F>(
 where
     F: FnMut(File, &str) -> Result<String>,
 {
-    if *format == BlockDeviceFormat::Raw {
+    let Some(vmdk) = vmdk else {
         let (file, metadata) = open_block_source(path, is_readonly, is_direct, false)?;
         let is_regular_file = metadata.is_file();
         let filename = register(file, "block-source")?;
@@ -176,9 +175,8 @@ where
             filename,
             is_regular_file,
         });
-    }
+    };
 
-    let vmdk = vmdk.ok_or_else(|| anyhow!("VMDK block source is missing its extent layout"))?;
     if vmdk.extents.is_empty() {
         return Err(anyhow!("VMDK contains no extents"));
     }
@@ -264,18 +262,12 @@ mod tests {
         let path = dir.path().join("disk.img");
         std::fs::write(&path, b"disk").unwrap();
 
-        let prepared = prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            true,
-            false,
-            |file, _| {
+        let prepared =
+            prepare_block_source(path.to_str().unwrap(), None, true, false, |file, _| {
                 assert_eq!(file.metadata()?.len(), 4);
                 Ok("/dev/fdset/7".to_string())
-            },
-        )
-        .unwrap();
+            })
+            .unwrap();
 
         assert_eq!(prepared.filename, "/dev/fdset/7");
         assert!(prepared.is_regular_file);
@@ -287,18 +279,11 @@ mod tests {
         let path = dir.path().join("writable.raw");
         std::fs::write(&path, b"disk").unwrap();
 
-        prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            false,
-            false,
-            |mut file, _| {
-                file.seek(SeekFrom::End(0))?;
-                file.write_all(b"-writable")?;
-                Ok("/dev/fdset/8".to_string())
-            },
-        )
+        prepare_block_source(path.to_str().unwrap(), None, false, false, |mut file, _| {
+            file.seek(SeekFrom::End(0))?;
+            file.write_all(b"-writable")?;
+            Ok("/dev/fdset/8".to_string())
+        })
         .unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"disk-writable");
@@ -310,17 +295,10 @@ mod tests {
         let path = dir.path().join("readonly.raw");
         std::fs::write(&path, b"readonly").unwrap();
 
-        prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            true,
-            false,
-            |mut file, _| {
-                assert!(file.write_all(b"no").is_err());
-                Ok("/dev/fdset/8".to_string())
-            },
-        )
+        prepare_block_source(path.to_str().unwrap(), None, true, false, |mut file, _| {
+            assert!(file.write_all(b"no").is_err());
+            Ok("/dev/fdset/8".to_string())
+        })
         .unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"readonly");
@@ -341,7 +319,6 @@ mod tests {
         let registered = RefCell::new(Vec::new());
         let prepared = prepare_block_source(
             "merged.vmdk",
-            &BlockDeviceFormat::Vmdk,
             Some(&vmdk),
             true,
             false,
@@ -376,18 +353,11 @@ mod tests {
         let path = dir.path().join("disk.img");
         std::fs::write(&path, vec![0u8; 4096]).unwrap();
 
-        prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            true,
-            true,
-            |file, _| {
-                let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
-                assert!(flags.contains(OFlag::O_DIRECT));
-                Ok("/dev/fdset/8".to_string())
-            },
-        )
+        prepare_block_source(path.to_str().unwrap(), None, true, true, |file, _| {
+            let flags = OFlag::from_bits_truncate(fcntl(&file, FcntlArg::F_GETFL)?);
+            assert!(flags.contains(OFlag::O_DIRECT));
+            Ok("/dev/fdset/8".to_string())
+        })
         .unwrap();
     }
 
@@ -402,7 +372,6 @@ mod tests {
 
         prepare_block_source(
             descriptor.to_str().unwrap(),
-            &BlockDeviceFormat::Vmdk,
             Some(&vmdk),
             true,
             true,
@@ -429,18 +398,12 @@ mod tests {
         std::fs::write(&target, b"disk").unwrap();
         symlink(&target, &link).unwrap();
 
-        let prepared = prepare_block_source(
-            link.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            true,
-            false,
-            |file, _| {
+        let prepared =
+            prepare_block_source(link.to_str().unwrap(), None, true, false, |file, _| {
                 assert!(file.metadata()?.is_file());
                 Ok("/dev/fdset/1".to_string())
-            },
-        )
-        .unwrap();
+            })
+            .unwrap();
 
         assert_eq!(prepared.filename, "/dev/fdset/1");
         assert!(prepared.is_regular_file);
@@ -455,14 +418,9 @@ mod tests {
         vmdk.push_extent(extent.to_str().unwrap(), 1, 0);
         vmdk.push_extent(extent.to_str().unwrap(), 1, 1);
 
-        let error = prepare_block_source(
-            "disk.vmdk",
-            &BlockDeviceFormat::Vmdk,
-            Some(&vmdk),
-            true,
-            false,
-            |_, _| Ok("/dev/fdset/1".to_string()),
-        )
+        let error = prepare_block_source("disk.vmdk", Some(&vmdk), true, false, |_, _| {
+            Ok("/dev/fdset/1".to_string())
+        })
         .unwrap_err();
 
         assert!(error
@@ -477,17 +435,10 @@ mod tests {
         std::fs::write(&path, b"persistent").unwrap();
         let received = RefCell::new(None);
 
-        prepare_block_source(
-            path.to_str().unwrap(),
-            &BlockDeviceFormat::Raw,
-            None,
-            true,
-            false,
-            |file, _| {
-                *received.borrow_mut() = Some(file.try_clone()?);
-                Ok("/dev/fdset/1".to_string())
-            },
-        )
+        prepare_block_source(path.to_str().unwrap(), None, true, false, |file, _| {
+            *received.borrow_mut() = Some(file.try_clone()?);
+            Ok("/dev/fdset/1".to_string())
+        })
         .unwrap();
         std::fs::remove_file(&path).unwrap();
 

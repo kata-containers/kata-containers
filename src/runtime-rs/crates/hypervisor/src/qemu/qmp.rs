@@ -8,7 +8,7 @@ use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_blo
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
 use crate::VcpuThreadIds;
-use crate::{BlockDeviceFormat, VmdkConfig};
+use crate::VmdkConfig;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
@@ -1243,7 +1243,6 @@ impl Qmp {
         discard_unmap: bool,
         logical_block_size: u32,
         physical_block_size: u32,
-        format: &BlockDeviceFormat,
         vmdk: Option<&VmdkConfig>,
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
@@ -1274,7 +1273,6 @@ impl Qmp {
         let mut fdset_ids = Vec::new();
         let prepared_source = match prepare_block_source(
             path_on_host,
-            format,
             vmdk,
             is_readonly,
             is_direct.unwrap_or(false),
@@ -1319,8 +1317,8 @@ impl Qmp {
             }
         };
 
-        let blockdev_options = match format {
-            BlockDeviceFormat::Raw => BlockdevOptions::raw {
+        let blockdev_options = if vmdk.is_none() {
+            BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
@@ -1337,31 +1335,30 @@ impl Qmp {
                     offset: None,
                     size: None,
                 },
-            },
-            BlockDeviceFormat::Vmdk => {
-                info!(
-                    sl!(),
-                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
-                    path_on_host,
-                    is_readonly
-                );
-                BlockdevOptions::vmdk {
-                    base: BlockdevOptionsBase {
-                        detect_zeroes: None,
-                        cache: None,
-                        discard: discard_option(),
-                        force_share: Some(true),
-                        auto_read_only: None,
-                        node_name: Some(node_name.clone()),
-                        read_only: Some(is_readonly),
+            }
+        } else {
+            info!(
+                sl!(),
+                "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                path_on_host,
+                is_readonly
+            );
+            BlockdevOptions::vmdk {
+                base: BlockdevOptionsBase {
+                    detect_zeroes: None,
+                    cache: None,
+                    discard: discard_option(),
+                    force_share: Some(true),
+                    auto_read_only: None,
+                    node_name: Some(node_name.clone()),
+                    read_only: Some(is_readonly),
+                },
+                vmdk: BlockdevOptionsGenericCOWFormat {
+                    base: BlockdevOptionsGenericFormat {
+                        file: BlockdevRef::definition(Box::new(blockdev_file)),
                     },
-                    vmdk: BlockdevOptionsGenericCOWFormat {
-                        base: BlockdevOptionsGenericFormat {
-                            file: BlockdevRef::definition(Box::new(blockdev_file)),
-                        },
-                        backing: None,
-                    },
-                }
+                    backing: None,
+                },
             }
         };
 

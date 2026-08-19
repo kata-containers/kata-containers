@@ -147,7 +147,6 @@ impl QemuInner {
                     let (
                         device_id,
                         path_on_host,
-                        format,
                         vmdk,
                         is_direct,
                         is_readonly,
@@ -161,7 +160,6 @@ impl QemuInner {
                         (
                             device_id,
                             cfg.path_on_host.clone(),
-                            cfg.format.clone(),
                             cfg.vmdk.clone(),
                             cfg.is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
@@ -188,7 +186,6 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
-                                &format,
                                 vmdk.as_ref(),
                                 is_direct,
                                 is_readonly,
@@ -1213,7 +1210,6 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
-                    block_format,
                     vmdk,
                     discard_unmap,
                     driver,
@@ -1231,7 +1227,6 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
-                        cfg.format.clone(),
                         cfg.vmdk.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
@@ -1269,7 +1264,6 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        &block_format,
                         vmdk.as_ref(),
                         iothread,
                     )

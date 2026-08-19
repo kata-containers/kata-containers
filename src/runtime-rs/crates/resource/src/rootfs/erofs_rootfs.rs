@@ -25,7 +25,7 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, VmdkConfig,
+    BlockConfigModern, BlockDeviceAio, VmdkConfig,
 };
 use kata_types::gpt_disk::{
     extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
@@ -86,7 +86,7 @@ async fn generate_merged_erofs_vmdk(
     sid: &str,
     cid: &str,
     erofs_devices: &[String],
-) -> Result<(String, BlockDeviceFormat, Option<VmdkConfig>)> {
+) -> Result<(String, Option<VmdkConfig>)> {
     if erofs_devices.is_empty() {
         return Err(anyhow!("no EROFS devices provided"));
     }
@@ -103,13 +103,13 @@ async fn generate_merged_erofs_vmdk(
         }
     }
 
-    // For single device, use it directly with Raw format (no need for VMDK descriptor)
+    // For a single device, use it directly without a VMDK descriptor.
     if erofs_devices.len() == 1 {
         info!(
             sl!(),
-            "single EROFS device, using directly with Raw format: {}", erofs_devices[0]
+            "single EROFS device, using directly: {}", erofs_devices[0]
         );
-        return Ok((erofs_devices[0].clone(), BlockDeviceFormat::Raw, None));
+        return Ok((erofs_devices[0].clone(), None));
     }
 
     // This reserved path identifies the block device and is included in logs;
@@ -127,11 +127,7 @@ async fn generate_merged_erofs_vmdk(
 
     let vmdk = create_vmdk_config(erofs_devices).context("failed to create VMDK layout")?;
 
-    Ok((
-        vmdk_path.display().to_string(),
-        BlockDeviceFormat::Vmdk,
-        Some(vmdk),
-    ))
+    Ok((vmdk_path.display().to_string(), Some(vmdk)))
 }
 
 /// Create a VMDK layout for multiple EROFS extents (flatten device).
@@ -221,13 +217,7 @@ fn generate_gpt_vmdk_with_layout(
     sid: &str,
     cid: &str,
     erofs_layers: Vec<ErofsLayer>,
-) -> Result<(
-    String,
-    BlockDeviceFormat,
-    VmdkConfig,
-    GptDiskLayout,
-    GptMetadataFiles,
-)> {
+) -> Result<(String, VmdkConfig, GptDiskLayout, GptMetadataFiles)> {
     if erofs_layers.is_empty() {
         return Err(anyhow!("no EROFS layers provided for GPT VMDK generation"));
     }
@@ -263,13 +253,7 @@ fn generate_gpt_vmdk_with_layout(
         create_gpt_vmdk_config(&layout, &gpt_files).context("failed to create GPT VMDK layout")?;
     gpt_files.pad_paths = pad_paths;
 
-    Ok((
-        vmdk_path.display().to_string(),
-        BlockDeviceFormat::Vmdk,
-        vmdk,
-        layout,
-        gpt_files,
-    ))
+    Ok((vmdk_path.display().to_string(), vmdk, layout, gpt_files))
 }
 
 /// Create a structured VMDK layout for a GPT-partitioned disk.
@@ -471,7 +455,6 @@ impl ErofsMultiLayerRootfs {
 
                     let device_config = &mut BlockConfigModern {
                         driver_option: block_driver.clone(),
-                        format: BlockDeviceFormat::Raw, // rw layer should be raw format
                         path_on_host: mount.source.clone(),
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
                         num_queues: blkdev_info.num_queues,
@@ -590,7 +573,7 @@ impl ErofsMultiLayerRootfs {
                         }
 
                         // Generate GPT-partitioned VMDK and get layout information
-                        let (erofs_path, erofs_format, vmdk, layout, gpt_files) =
+                        let (erofs_path, vmdk, layout, gpt_files) =
                             generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
                                 .context("gptdisk: failed to generate GPT VMDK")?;
 
@@ -613,15 +596,13 @@ impl ErofsMultiLayerRootfs {
 
                         info!(
                             sl!(),
-                            "GPT VMDK layout created - id: {}, format: {:?}, {} partitions",
+                            "GPT VMDK layout created - id: {}, {} partitions",
                             erofs_path,
-                            erofs_format,
                             layout.partitions.len()
                         );
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            format: erofs_format,
                             vmdk: Some(vmdk),
                             path_on_host: erofs_path,
                             is_readonly: true,
@@ -760,21 +741,20 @@ impl ErofsMultiLayerRootfs {
 
                         // Build a merged VMDK layout from all EROFS devices.
                         // Multiple devices use VMDK; a single device remains Raw.
-                        let (erofs_path, erofs_format, vmdk) =
+                        let (erofs_path, vmdk) =
                             generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
                                 .await
                                 .context("failed to generate EROFS VMDK")?;
 
                         info!(
                             sl!(),
-                            "EROFS block device config - path: {}, format: {:?}",
+                            "EROFS block device config - path: {}, structured VMDK: {}",
                             erofs_path,
-                            erofs_format
+                            vmdk.is_some()
                         );
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            format: erofs_format, // Vmdk for multiple devices, Raw for single device
                             vmdk,
                             path_on_host: erofs_path,
                             is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors

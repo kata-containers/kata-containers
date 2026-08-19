@@ -56,13 +56,6 @@ impl std::fmt::Display for BlockDeviceAio {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum BlockDeviceFormat {
-    #[default]
-    Raw,
-    Vmdk,
-}
-
 const MAX_VMDK_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,16 +97,6 @@ impl VmdkConfig {
     }
 }
 
-impl std::fmt::Display for BlockDeviceFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceFormat::Raw => "raw".to_string(),
-            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
-        };
-        write!(f, "{to_string}")
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfigModern {
     /// Actual host path for a raw block source; every backend consumes this
@@ -137,13 +120,11 @@ pub struct BlockConfigModern {
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
 
-    /// raw, vmdk, etc. And default to raw if not set.
-    pub format: BlockDeviceFormat,
-
     /// Structured VMDK layout, currently consumed only by QEMU. When present,
     /// the QEMU backend opens the backing extents in the shim, renders an
     /// anonymous descriptor containing fdset paths, and passes it to QEMU by
     /// file descriptor. No descriptor file is created at `path_on_host`.
+    /// Without a structured layout, the block source is raw.
     pub vmdk: Option<VmdkConfig>,
 
     /// Specifies cache-related options for block devices.
