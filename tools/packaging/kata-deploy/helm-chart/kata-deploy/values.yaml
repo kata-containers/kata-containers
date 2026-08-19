@@ -535,8 +535,15 @@ health:
     failureThreshold: 3
     timeoutSeconds: 3
 
+# Snapshotters kata-deploy sets up in the node's containerd.
+#
+# Empty by default, because none of the shims this file enables asks for one:
+# they read images through whatever snapshotter containerd already uses. The
+# shims that do need one - guest pull through nydus, shared_fs=none through
+# erofs - are not in this file either; they come with the try-*.values.yaml
+# profile that sets the snapshotter up for them (see `shims` below).
 snapshotter:
-  setup: ["nydus"]  # ["nydus", "erofs"] or []
+  setup: []  # ["nydus", "erofs"] or []
   # EROFS merge mode: "merged" (default) or "unmerged".
   #
   # "merged" forces containerd's erofs snapshotter to merge all image layers
