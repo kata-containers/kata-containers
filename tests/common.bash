@@ -301,14 +301,22 @@ function extract_kata_env() {
 }
 
 # Checks that processes are not running
+#
+# timeout_secs: default 1s
 function check_processes() {
+	local timeout_secs="${1:-1}"
+
 	extract_kata_env
 
 	general_processes=( "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 
 	for i in "${general_processes[@]}"; do
 		[[ -z "${i}" ]] && continue
-		if pgrep -f "${i}"; then
+		# The shim and the hypervisor are torn down asynchronously, so
+		# they can still be listed for a while after the sandbox they
+		# belong to is removed.
+		if ! waitForProcess "${timeout_secs}" 1 "! pgrep -f \"${i}\" > /dev/null"; then
+			pgrep -af "${i}" || true
 			die "Found unexpected ${i} present"
 		fi
 	done
