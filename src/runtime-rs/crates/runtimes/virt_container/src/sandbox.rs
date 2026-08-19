@@ -119,11 +119,6 @@ struct SandboxInner {
     state: SandboxState,
     exit_info: Option<SandboxExitInfo>,
     created_at: Option<SystemTime>,
-    // Whether sandbox resources (cgroup, network, mounts, ...) have already
-    // been released.  Teardown can be driven both by the sandbox container
-    // exiting and by an explicit shutdown RPC, so guard against running the
-    // cleanup twice.
-    cleaned: bool,
 }
 
 impl SandboxInner {
@@ -132,7 +127,6 @@ impl SandboxInner {
             state: SandboxState::Init,
             exit_info: None,
             created_at: None,
-            cleaned: false,
         }
     }
 }
@@ -151,6 +145,8 @@ pub struct VirtSandbox {
     shm_size: u64,
     factory: Option<Factory>,
     cancel_token: CancellationToken,
+    // Held for the whole teardown, so a second caller waits instead of racing.
+    cleanup_done: Arc<Mutex<bool>>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -197,6 +193,7 @@ impl VirtSandbox {
             sandbox_config: Some(sandbox_config),
             factory: Some(factory),
             cancel_token,
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -1367,15 +1364,16 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn cleanup(&self) -> Result<()> {
-        // Teardown may be triggered both when the sandbox container exits and
-        // by a later shutdown RPC; only release the resources once.
-        {
-            let mut inner = self.inner.write().await;
-            if inner.cleaned {
-                return Ok(());
-            }
-            inner.cleaned = true;
+        // Both container exit and the shutdown RPC will get here.
+        //
+        // The one that arrives later ends up blocking rather than skipping,
+        // which allows any operation to be finished before shutting dow the
+        // shim.
+        let mut cleanup_done = self.cleanup_done.lock().await;
+        if *cleanup_done {
+            return Ok(());
         }
+        *cleanup_done = true;
 
         let rootless_uid = self
             .hypervisor
@@ -1668,6 +1666,7 @@ impl Persist for VirtSandbox {
             shm_size: DEFAULT_SHM_SIZE,
             factory: None,
             cancel_token: CancellationToken::default(),
+            cleanup_done: Arc::new(Mutex::new(false)),
         })
     }
 }
