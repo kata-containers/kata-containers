@@ -1370,9 +1370,14 @@ impl Sandbox for VirtSandbox {
     async fn shutdown(&self) -> Result<()> {
         info!(sl!(), "shutdown");
 
-        self.stop().await.context("stop")?;
-
-        self.cleanup().await.context("do the clean up")?;
+        // Only the shutdown message below breaks the service loop, so a
+        // failing teardown must not keep us from sending it.
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
 
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
@@ -1461,10 +1466,6 @@ impl Sandbox for VirtSandbox {
         let exit_status = cm.wait_process(&process_id).await?;
         info!(sl!(), "container process exited with {:?}", exit_status);
 
-        if cm.is_sandbox_container(&process_id).await {
-            self.stop().await.context("stop sandbox")?;
-        }
-
         let cid = process_id.container_id();
         if cid.is_empty() {
             return Err(anyhow!("container id is empty"));
@@ -1476,6 +1477,11 @@ impl Sandbox for VirtSandbox {
             eid.to_string()
         };
 
+        let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
+
+        // Publish before the teardown: containerd acts on this event, and a slow
+        // guest shutdown in front of it gets the shim SIGKILLed and a clean exit
+        // reported as 255.
         let event = TaskExit {
             container_id: cid.to_string(),
             id,
@@ -1485,8 +1491,23 @@ impl Sandbox for VirtSandbox {
             special_fields: SpecialFields::new(),
         };
         let msg = Message::new(Action::Event(Arc::new(event)));
-        let lock_sender = self.msg_sender.lock().await;
-        lock_sender.send(msg).await.context("send exit event")?;
+        {
+            let lock_sender = self.msg_sender.lock().await;
+            lock_sender.send(msg).await.context("send exit event")?;
+        }
+
+        // Docker only sends ShutdownContainer once the container is removed, so
+        // release everything here instead of leaking it until then.  A failed
+        // stop must still get a cleanup attempt, hence the logging.
+        if is_sandbox_container {
+            if let Err(e) = self.stop().await {
+                error!(sl!(), "failed to stop sandbox: {:?}", e);
+            }
+            if let Err(e) = self.cleanup().await {
+                error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+            }
+        }
+
         Ok(())
     }
 
