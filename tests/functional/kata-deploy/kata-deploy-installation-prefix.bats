@@ -59,11 +59,22 @@ setup_file() {
 env:
   installationPrefix: "${INSTALLATION_PREFIX}"
 
-shims:
-  ${CONFIDENTIAL_SHIM}:
-    enabled: true
+customRuntimes:
+  enabled: true
+  runtimes:
+    prefix-confidential:
+      baseConfig: "${CONFIDENTIAL_SHIM}"
+      runtimeClass: |
+        apiVersion: node.k8s.io/v1
+        kind: RuntimeClass
+        metadata:
+          name: kata-${CONFIDENTIAL_SHIM}-prefix-test
+        handler: ${CONFIDENTIAL_SHIM}
 EOF
 
+	# Keep the profile belonging to the hypervisor this job can boot. The custom
+	# runtime makes kata-deploy copy the confidential base configuration too,
+	# without combining that profile with the TEE profile.
 	deploy_kata "${values}"
 	rm -f "${values}"
 	echo "# kata-deploy deployed successfully" >&3
