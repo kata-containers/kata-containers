@@ -31,6 +31,7 @@ else
 		"kata-deploy-custom-runtimes.bats" \
 		"kata-deploy-lifecycle.bats" \
 		"kata-deploy-scheduling.bats" \
+		"kata-deploy-shim-profiles.bats" \
 		"kata-deploy-tee-keys.bats" \
 		"kata-deploy-distribution.bats" \
 		"kata-deploy-privileges.bats" \

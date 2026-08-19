@@ -738,8 +738,11 @@ function helm_helper() {
 	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Create temporary values file for customization
-	# Start with values.yaml which has all shims enabled by default
-	# Use example files only for specific hypervisor types that need different configurations
+	# Start with values.yaml, which enables the shims that need no particular
+	# snapshotter or hardware. The shims that do need one ship in a
+	# try-kata-*.values.yaml profile instead, so pick that as the base when the
+	# hypervisor under test is one of them - the profile is what sets up its
+	# snapshotter and CRI configuration.
 	values_yaml=$(mktemp -t values_yaml.XXXXXX)
 
 	# Determine which values file to use as base
