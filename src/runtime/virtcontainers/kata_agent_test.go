@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -136,7 +137,7 @@ func TestKataAgentSendReq(t *testing.T) {
 		assert.Nil(err)
 	}
 
-	sandbox := &Sandbox{}
+	sandbox := &Sandbox{config: &SandboxConfig{}}
 	container := &Container{}
 	execid := "processFooBar"
 
@@ -678,7 +679,7 @@ func TestConstrainGRPCSpec(t *testing.T) {
 	}
 
 	k := kataAgent{}
-	k.constrainGRPCSpec(g, true, true, "", true, nil)
+	k.constrainGRPCSpec(g, true, true, "", true, nil, false, 0)
 
 	// Check nil fields
 	assert.Nil(g.Hooks)
@@ -1452,4 +1453,144 @@ func TestTranslateHostMemsToGuestRangeNodes(t *testing.T) {
 
 	result = translateHostMemsToGuest("0,3", numaNodes)
 	assert.Equal("0-1", result)
+}
+
+func TestTranslateHostMemoryLimitToGuest(t *testing.T) {
+	const (
+		gib      = int64(1024 * 1024 * 1024)
+		hugePage = uint64(64) * uint64(gib)
+	)
+
+	for _, tt := range []struct {
+		description         string
+		resources           *pb.LinuxResources
+		guestMemMB          uint32
+		expectedLimit       int64
+		expectedReservation int64
+		expectedSwap        int64
+	}{
+		{
+			description: "the huge page reservation joins the limits the guest applies",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{
+					Limit:       2 * gib,
+					Reservation: 2 * gib,
+					Swap:        2 * gib,
+				},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: hugePage},
+				},
+			},
+			expectedLimit:       2*gib + int64(hugePage),
+			expectedReservation: 2*gib + int64(hugePage),
+			expectedSwap:        2*gib + int64(hugePage),
+		},
+		{
+			description: "a container reserving no huge pages keeps its limit",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 256 * gib / 1024},
+			},
+			expectedLimit: 256 * gib / 1024,
+		},
+		{
+			description: "an unset limit stays unlimited",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 0, Swap: -1},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: hugePage},
+				},
+			},
+			expectedLimit: 0,
+			expectedSwap:  -1,
+		},
+		{
+			description: "a reservation that cannot be added saturates",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 2 * gib},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: math.MaxUint64},
+				},
+			},
+			expectedLimit: math.MaxInt64,
+		},
+		{
+			description: "a sum reaching past a fixed size guest is held to what it can hold",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{
+					Limit:       2 * gib,
+					Reservation: 2 * gib,
+					Swap:        2 * gib,
+				},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: 192 * uint64(gib)},
+				},
+			},
+			// A 192Gi guest reports about 189Gi, so hold the container to
+			// 186Gi: 192Gi less a thirty-second of it.
+			guestMemMB:          192 * 1024,
+			expectedLimit:       186 * gib,
+			expectedReservation: 186 * gib,
+			expectedSwap:        186 * gib,
+		},
+		{
+			description: "a small guest keeps the whole reserve",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 256 * gib / 1024},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "2MB", Limit: 2 * uint64(gib)},
+				},
+			},
+			guestMemMB:    2 * 1024,
+			expectedLimit: (2*1024 - 128) * gib / 1024,
+		},
+		{
+			description: "a sum a fixed size guest can hold is left alone",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: gib / 4},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: 4 * uint64(gib)},
+				},
+			},
+			guestMemMB:    192 * 1024,
+			expectedLimit: gib/4 + 4*gib,
+		},
+		{
+			description: "holding the limit down leaves the swap the container was given",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{
+					Limit: 2 * gib,
+					Swap:  4 * gib,
+				},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: hugePage},
+				},
+			},
+			// The 2Gi of swap asked for above the memory limit stays
+			// above the 62Gi a 64Gi guest can hold.
+			guestMemMB:    64 * 1024,
+			expectedLimit: 62 * gib,
+			expectedSwap:  64 * gib,
+		},
+		{
+			description: "reservations of several page sizes saturate together",
+			resources: &pb.LinuxResources{
+				Memory: &pb.LinuxMemory{Limit: 2 * gib},
+				HugepageLimits: []*pb.LinuxHugepageLimit{
+					{Pagesize: "1GB", Limit: math.MaxUint64},
+					{Pagesize: "2MB", Limit: 2 * uint64(gib)},
+				},
+			},
+			expectedLimit: math.MaxInt64,
+		},
+	} {
+		assert := assert.New(t)
+
+		hugePages := hugePagesTotal(tt.resources.HugepageLimits)
+		translateHostMemoryLimitToGuest((&kataAgent{}).Logger(), tt.resources.Memory, hugePages, tt.guestMemMB)
+
+		memory := tt.resources.Memory
+		assert.Equal(tt.expectedLimit, memory.Limit, tt.description)
+		assert.Equal(tt.expectedReservation, memory.Reservation, tt.description)
+		assert.Equal(tt.expectedSwap, memory.Swap, tt.description)
+	}
 }
