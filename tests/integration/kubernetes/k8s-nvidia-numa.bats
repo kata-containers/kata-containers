@@ -403,7 +403,7 @@ host_gpu_numa() {
 
     # --- Host-side vCPU pinning balance ---
     local qemu_pid host_output
-    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
+    qemu_pid=$(get_vmm_pid_for_pod "${POD_NAME_NUMA}")
     echo "# QEMU PID: ${qemu_pid}"
     host_output=$(wait_for_host_pinning "${qemu_pid}" "${NUMA_TEST_VCPUS_LARGE}")
     echo "# Host pinning per NUMA node: ${host_output}"
@@ -461,7 +461,7 @@ host_gpu_numa() {
 
     # --- Host-side vCPU pinning collapsed to a single node ---
     local qemu_pid host_output
-    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
+    qemu_pid=$(get_vmm_pid_for_pod "${POD_NAME_NUMA}")
     echo "# QEMU PID: ${qemu_pid}"
     host_output=$(wait_for_host_pinning "${qemu_pid}" "${NUMA_TEST_VCPUS_SMALL}")
     echo "# Host pinning per NUMA node: ${host_output}"
@@ -525,7 +525,7 @@ host_gpu_numa() {
 
     # --- Host-side QEMU lookup (needed for the GPU NUMA assertion) ---
     local qemu_pid qemu_cmd host_bdf host_node
-    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA_GPU}")
+    qemu_pid=$(get_vmm_pid_for_pod "${POD_NAME_NUMA_GPU}")
     echo "# QEMU PID: ${qemu_pid}"
 
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
@@ -599,7 +599,7 @@ host_gpu_numa() {
 
     # --- Host-side QEMU lookup ---
     local qemu_pid qemu_cmd host_bdf host_node
-    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA_GPU}")
+    qemu_pid=$(get_vmm_pid_for_pod "${POD_NAME_NUMA_GPU}")
 
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
     host_bdf=$(extract_vfio_host_bdf "${qemu_cmd}")
@@ -694,7 +694,7 @@ host_gpu_numa() {
 
     # --- QEMU memory backend bound to host node 1 ---
     local qemu_pid qemu_cmd
-    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
+    qemu_pid=$(get_vmm_pid_for_pod "${POD_NAME_NUMA}")
     qemu_cmd=$(get_qemu_cmdline "${qemu_pid}")
     echo "# Checking QEMU cmdline for memory binding on host node 1..."
     [[ "${qemu_cmd}" == *"host-nodes=1"* ]] \

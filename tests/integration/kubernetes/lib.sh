@@ -190,15 +190,25 @@ get_pod_sandbox_id() {
 		pods --name \"${pod_name}\" --state ready -q | head -1"
 }
 
-# Return the QEMU PID for a running pod.
+# Return the VMM PID for a running pod.
 #
 # Parameters:
 #	$1 - pod name in the current Kubernetes namespace
-get_qemu_pid_for_pod() {
+get_vmm_pid_for_pod() {
 	local pod_name="$1"
 	local node
-	local qemu_pid
 	local sandbox_id
+	local vmm_pattern
+	local vmm_pid
+
+	# shellcheck disable=SC2154 # supplied by the Kubernetes test environment
+	case "${KATA_HYPERVISOR}" in
+		qemu*) vmm_pattern="[q]emu" ;;
+		clh*) vmm_pattern="[c]loud-hypervisor" ;;
+		*)
+			die "VMM PID lookup is only tested for QEMU and Cloud Hypervisor"
+			;;
+	esac
 
 	sandbox_id="$(get_pod_sandbox_id "${pod_name}")"
 	[[ -n "${sandbox_id}" ]] || die "No sandbox ID found for pod ${pod_name}"
@@ -206,11 +216,11 @@ get_qemu_pid_for_pod() {
 	node="$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}')"
 	[[ -n "${node}" ]] || die "No node found for pod ${pod_name}"
 
-	qemu_pid="$(exec_host "${node}" \
-		"pgrep -f \"qemu.*${sandbox_id}\" | head -1")"
-	[[ -n "${qemu_pid}" ]] || die "No QEMU PID found for sandbox ${sandbox_id}"
+	vmm_pid="$(exec_host "${node}" \
+		"pgrep -f \"${vmm_pattern}.*${sandbox_id}\" | head -1")"
+	[[ -n "${vmm_pid}" ]] || die "No VMM PID found for sandbox ${sandbox_id}"
 
-	echo "${qemu_pid}"
+	echo "${vmm_pid}"
 }
 
 # Check the logged messages on host have a given message.
