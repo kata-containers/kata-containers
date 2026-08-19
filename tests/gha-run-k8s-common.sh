@@ -663,6 +663,12 @@ function helm_helper() {
 					if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
 						base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
 					fi
+				# Firecracker reads images from devmapper, and its profile is
+				# what maps the shim to that snapshotter.
+				elif is_firecracker_hypervisor "${KATA_HYPERVISOR}"; then
+					if [[ -f "${helm_chart_dir}/try-kata-fc.values.yaml" ]]; then
+						base_values_file="${helm_chart_dir}/try-kata-fc.values.yaml"
+					fi
 				fi
 				;;
 		esac

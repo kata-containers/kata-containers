@@ -1,0 +1,44 @@
+# Example values file to enable the Firecracker shim (fc)
+#
+# Firecracker does not implement filesystem sharing, so a container's image has
+# to reach the guest as a block device: containerd's devmapper snapshotter.
+#
+# kata-deploy does NOT set devmapper up for you. Unlike nydus and erofs, it needs
+# a thin-pool on the host - a storage layout only you can decide on - so it has to
+# exist on every node before this profile is installed. Confirm it is loaded with
+# `ctr plugin ls | grep devmapper` (it must report `ok`) and see
+# docs/how-to/how-to-use-kata-containers-with-firecracker.md for setting one up.
+#
+# Usage:
+#   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION \
+#     -f try-kata-fc.values.yaml
+
+debug: false
+
+# Nothing for kata-deploy to set up: devmapper is configured on the host, and
+# kata-deploy only knows how to set up nydus and erofs.
+snapshotter:
+  setup: []
+
+# Enable the Firecracker shim
+# Disable all shims at once, then enable only the one we need.
+shims:
+  disableAll: true
+
+  fc:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "devmapper" # requires pre-configuration on the user side
+
+# Default shim per architecture.
+defaultShim:
+  amd64: fc
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
