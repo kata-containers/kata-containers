@@ -679,6 +679,13 @@ EOF
 
 	echo "${rendered}" | grep -q -- '--nodes=worker-1,worker-2'
 	refute_match "${rendered}" '--node-selector='
+
+	# Naming a node is an admission override, so its Job tolerates every taint. A
+	# key or an effect on that entry would narrow it back down.
+	render_job_templates --set 'job.nodes[0]=worker-1'
+	local install
+	install=$(extract_pernode_job install)
+	[[ "$(echo "${install}" | tolerations_of)" == "operator: Exists" ]]
 }
 
 @test "Helm template (job mode): install waits for nodes to become eligible" {
@@ -691,6 +698,8 @@ EOF
 	# selection matches are written by NFD, which starts with this very release.
 	# Resolving nodes off the first snapshot would install nowhere and exit 0.
 	echo "${rendered}" | grep -q -- '--wait-for-nodes-secs=120'
+	echo "${rendered}" | grep -q -- '--node-settle-secs=15'
+	echo "${rendered}" | grep -q -- '--cleanup-job-template=/etc/kata-job/cleanup-job.yaml'
 
 	rendered=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
@@ -799,6 +808,20 @@ EOF
 		--set 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].operator=In'
 	[ "${status}" -ne 0 ]
 	echo "${output}" | grep -q "matchFields cannot be used"
+}
+
+@test "Helm template (job mode): empty required affinity cannot invert to every node" {
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set-json 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms=[]'
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q 'nodeSelectorTerms must not be empty'
+
+	run helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=job \
+		--set-json 'affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms=[{}]'
+	[ "${status}" -ne 0 ]
+	echo "${output}" | grep -q 'an empty nodeSelectorTerm matches no nodes'
 }
 
 @test "Helm template (job mode): the dispatcher can be confined to trusted nodes" {

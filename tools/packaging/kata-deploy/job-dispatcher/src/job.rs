@@ -6,13 +6,13 @@ use crate::nodes::NodeFacts;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{EnvVar, PodSpec};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
-use std::collections::hash_map::DefaultHasher;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::hash::{Hash, Hasher};
 
 /// Carries `.status.nodeInfo.containerRuntimeVersion` into the per-node Job, so it
 /// need not read the Node object to detect the runtime.
 pub const CONTAINER_RUNTIME_VERSION_ENV: &str = "CONTAINER_RUNTIME_VERSION";
+pub const NODE_MACHINE_ID_ENV: &str = "KATA_DEPLOY_NODE_MACHINE_ID";
 
 /// Label applied to every per-node Job, set to the dispatcher's name prefix.
 /// Used as a server-side selector so the dispatcher only ever sees the Jobs it
@@ -58,22 +58,28 @@ pub fn sanitize_node(node: &str) -> String {
 /// Short, stable hex digest of an arbitrary string. Used to keep generated
 /// Job names unique when the sanitized/truncated form would otherwise collide.
 fn short_hash(s: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    format!("{:08x}", (hasher.finish() & 0xffff_ffff) as u32)
+    let digest = Sha256::digest(s.as_bytes());
+    digest[..12]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 /// Build a deterministic, RFC1123-label-safe Job name (`<= 63` chars) for a
 /// node. When `<prefix>-<sanitized-node>` fits it is used verbatim; otherwise
-/// it is truncated and a short hash of the *full* node name is appended so two
-/// different long node names cannot collide.
+/// it is truncated and a short hash of the full prefix-plus-node identity is
+/// appended so neither long node names nor long release prefixes can collide.
+///
+/// The derivation is free to change between releases: Jobs from an earlier run
+/// are found through [`OWNER_LABEL`] and their `ownerReference`, never by
+/// recomputing what they would be called today.
 pub fn job_name(prefix: &str, node: &str) -> String {
     let sanitized = sanitize_node(node);
     let base = format!("{prefix}-{sanitized}");
-    if base.len() <= MAX_LABEL_LEN {
+    if sanitized == node && base.len() <= MAX_LABEL_LEN {
         return base;
     }
-    let hash = short_hash(node);
+    let hash = short_hash(&format!("{prefix}\0{node}"));
     // Reserve room for "-" + hash.
     let keep = MAX_LABEL_LEN.saturating_sub(hash.len() + 1);
     let truncated = base.chars().take(keep).collect::<String>();
@@ -89,15 +95,25 @@ pub fn job_name(prefix: &str, node: &str) -> String {
 /// a Helm release/suffix) without risking an invalid or over-long label.
 pub fn sanitize_label_value(value: &str) -> String {
     let sanitized = sanitize_node(value);
-    if sanitized.len() <= MAX_LABEL_LEN {
+    if sanitized == value && sanitized.len() <= MAX_LABEL_LEN {
         return sanitized;
     }
-    sanitized
+    let hash = short_hash(value);
+    let keep = MAX_LABEL_LEN.saturating_sub(hash.len() + 1);
+    let prefix = sanitized
         .chars()
-        .take(MAX_LABEL_LEN)
+        .take(keep)
         .collect::<String>()
         .trim_end_matches('-')
-        .to_string()
+        .to_string();
+    format!(
+        "{}-{hash}",
+        if prefix.is_empty() {
+            "dispatcher"
+        } else {
+            &prefix
+        }
+    )
 }
 
 /// True if `job` carries [`OWNER_LABEL`] set to exactly `owner_value`. Used to
@@ -140,7 +156,7 @@ pub fn build_node_job(
 
     let labels = job.metadata.labels.get_or_insert_with(BTreeMap::new);
     labels.insert(OWNER_LABEL.to_string(), owner_value.to_string());
-    labels.insert(NODE_LABEL.to_string(), sanitize_node(node));
+    labels.insert(NODE_LABEL.to_string(), sanitize_label_value(node));
 
     let annotations = job.metadata.annotations.get_or_insert_with(BTreeMap::new);
     annotations.insert(NODE_ANNOTATION.to_string(), node.to_string());
@@ -175,9 +191,9 @@ pub fn build_node_job(
 /// processes, any of them may need the runtime, and an existing value is left
 /// alone so an explicit override in the chart still wins.
 fn inject_node_facts(pod_spec: &mut PodSpec, facts: &NodeFacts) {
-    let Some(version) = facts.container_runtime_version.as_deref() else {
+    if facts.container_runtime_version.is_none() && facts.machine_id.is_none() {
         return;
-    };
+    }
 
     let containers = pod_spec
         .init_containers
@@ -187,17 +203,27 @@ fn inject_node_facts(pod_spec: &mut PodSpec, facts: &NodeFacts) {
 
     for container in containers {
         let env = container.env.get_or_insert_with(Vec::new);
-        if env
-            .iter()
-            .any(|var| var.name == CONTAINER_RUNTIME_VERSION_ENV)
-        {
-            continue;
+        if let Some(version) = facts.container_runtime_version.as_deref() {
+            if !env
+                .iter()
+                .any(|var| var.name == CONTAINER_RUNTIME_VERSION_ENV)
+            {
+                env.push(EnvVar {
+                    name: CONTAINER_RUNTIME_VERSION_ENV.to_string(),
+                    value: Some(version.to_string()),
+                    value_from: None,
+                });
+            }
         }
-        env.push(EnvVar {
-            name: CONTAINER_RUNTIME_VERSION_ENV.to_string(),
-            value: Some(version.to_string()),
-            value_from: None,
-        });
+        if let Some(machine_id) = facts.machine_id.as_deref() {
+            if !env.iter().any(|var| var.name == NODE_MACHINE_ID_ENV) {
+                env.push(EnvVar {
+                    name: NODE_MACHINE_ID_ENV.to_string(),
+                    value: Some(machine_id.to_string()),
+                    value_from: None,
+                });
+            }
+        }
     }
 }
 
@@ -244,10 +270,17 @@ mod tests {
 
     #[rstest]
     #[case("kata-deploy-install", "kata-deploy-install")]
-    #[case("Kata_Deploy.Install", "kata-deploy-install")]
-    #[case("--weird--", "weird")]
     fn test_sanitize_label_value_short(#[case] input: &str, #[case] expected: &str) {
         assert_eq!(sanitize_label_value(input), expected);
+    }
+
+    #[test]
+    fn normalization_cannot_merge_release_identities() {
+        let dotted = sanitize_label_value("kata.foo");
+        let dashed = sanitize_label_value("kata-foo");
+        assert_ne!(dotted, dashed);
+        assert!(dotted.starts_with("kata-foo-"));
+        assert_eq!(dashed, "kata-foo");
     }
 
     #[test]
@@ -274,9 +307,16 @@ mod tests {
 
     #[rstest]
     #[case("kata-deploy-install", "worker-0", "kata-deploy-install-worker-0")]
-    #[case("kata-deploy-cleanup", "Worker.0", "kata-deploy-cleanup-worker-0")]
     fn test_job_name_short(#[case] prefix: &str, #[case] node: &str, #[case] expected: &str) {
         assert_eq!(job_name(prefix, node), expected);
+    }
+
+    #[test]
+    fn normalized_node_names_cannot_merge_job_names() {
+        assert_ne!(
+            job_name("kata-deploy-install", "worker.a"),
+            job_name("kata-deploy-install", "worker-a")
+        );
     }
 
     #[test]
@@ -304,6 +344,17 @@ mod tests {
             name_a, name_b,
             "different node names must yield different job names"
         );
+    }
+
+    #[test]
+    fn long_release_prefixes_cannot_merge_job_names() {
+        let shared = "kata-deploy-install-with-a-very-long-shared-prefix-";
+        let name_a = job_name(&format!("{shared}alpha"), "worker-0");
+        let name_b = job_name(&format!("{shared}bravo"), "worker-0");
+
+        assert_ne!(name_a, name_b);
+        assert!(name_a.len() <= MAX_LABEL_LEN);
+        assert!(name_b.len() <= MAX_LABEL_LEN);
     }
 
     #[test]
@@ -337,6 +388,7 @@ spec:
         let facts = NodeFacts {
             name: "node1".to_string(),
             container_runtime_version: Some("containerd://2.1.5".to_string()),
+            machine_id: Some("machine-1".to_string()),
         };
 
         let job = build_node_job(
@@ -411,6 +463,7 @@ spec:
             &NodeFacts {
                 name: "node1".to_string(),
                 container_runtime_version: None,
+                machine_id: None,
             },
         );
 
@@ -444,6 +497,7 @@ spec:
         let facts = NodeFacts {
             name: "node1".to_string(),
             container_runtime_version: Some("cri-o://1.31.0".to_string()),
+            machine_id: Some("machine-1".to_string()),
         };
         let job = build_node_job(&template, "j", "node1", "owner", None, &facts);
         let pod_spec = job.spec.unwrap().template.spec.unwrap();
@@ -459,6 +513,12 @@ spec:
                     .and_then(|var| var.value.clone())
                     .as_deref(),
                 Some("cri-o://1.31.0")
+            );
+            assert_eq!(
+                env.iter()
+                    .find(|var| var.name == NODE_MACHINE_ID_ENV)
+                    .and_then(|var| var.value.as_deref()),
+                Some("machine-1")
             );
         }
     }

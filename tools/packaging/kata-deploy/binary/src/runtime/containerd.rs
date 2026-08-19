@@ -457,8 +457,20 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
 
     if !paths.use_drop_in {
         // For non-drop-in, backup the correct config file for each runtime
-        if Path::new(&paths.config_file).exists() && !Path::new(&paths.backup_file).exists() {
-            fs::copy(&paths.config_file, &paths.backup_file)?;
+        if Path::new(&paths.config_file).exists() {
+            // Only what was found here before kata-deploy is worth preserving. A
+            // configuration an earlier run of this install created is not, and
+            // backing it up would make uninstall restore Kata's own handlers.
+            if matches!(
+                whole_file_disposition(&paths.config_file, &paths.backup_file),
+                WholeFileConfig::Keep
+            ) {
+                fs::copy(&paths.config_file, &paths.backup_file)?;
+            }
+        } else {
+            // Nothing to back up, so uninstall has no way to tell this file apart
+            // from one an administrator wrote unless we say we made it.
+            fs::write(created_marker_file(&paths.config_file), "")?;
         }
     } else {
         // Create the drop-in file directory and file
@@ -643,15 +655,52 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
         return Ok(());
     }
 
-    // For non-drop-in, restore from backup
-    if Path::new(&paths.backup_file).exists() {
-        fs::remove_file(&paths.config_file)?;
-        fs::rename(&paths.backup_file, &paths.config_file)?;
-    } else {
-        fs::remove_file(&paths.config_file).ok();
+    match whole_file_disposition(&paths.config_file, &paths.backup_file) {
+        WholeFileConfig::Restore => {
+            fs::remove_file(&paths.config_file)?;
+            fs::rename(&paths.backup_file, &paths.config_file)?;
+        }
+        WholeFileConfig::Delete => {
+            fs::remove_file(&paths.config_file).ok();
+            fs::remove_file(created_marker_file(&paths.config_file)).ok();
+        }
+        WholeFileConfig::Keep => log::warn!(
+            "Leaving {} in place: it has no kata-deploy backup and no record of having been \
+             created by kata-deploy, so its contents are not ours to remove",
+            paths.config_file
+        ),
     }
 
     Ok(())
+}
+
+/// What uninstall is entitled to do with a whole-file containerd configuration.
+pub enum WholeFileConfig {
+    /// An install replaced a configuration that was already there.
+    Restore,
+    /// An install created the configuration, so removing it restores the host.
+    Delete,
+    /// No evidence that any install wrote this file: leave it to its owner.
+    Keep,
+}
+
+/// A missing backup only means "we created this" if creating it was recorded. On
+/// anything weaker - a path this install also uses appearing in the file, say -
+/// deleting takes an administrator's whole containerd configuration with it.
+pub fn whole_file_disposition(config_file: &str, backup_file: &str) -> WholeFileConfig {
+    if Path::new(backup_file).exists() {
+        WholeFileConfig::Restore
+    } else if Path::new(&created_marker_file(config_file)).exists() {
+        WholeFileConfig::Delete
+    } else {
+        WholeFileConfig::Keep
+    }
+}
+
+/// Path of the record that an install created `config_file` from nothing, kept
+/// next to the configuration so it outlives the pod that wrote it.
+fn created_marker_file(config_file: &str) -> String {
+    format!("{config_file}.kata-deploy-created")
 }
 
 /// Setup containerd config files based on runtime type.
@@ -877,6 +926,36 @@ mod tests {
             container_annotations: "[\"io.kubernetes.container.terminationMessage*\"]",
             snapshotter: snapshotter.map(|s| s.to_string()),
         }
+    }
+
+    /// Uninstall may only delete a whole-file configuration it can prove an install
+    /// wrote. A file with neither a backup nor a creation record belongs to whoever
+    /// put it there.
+    #[test]
+    fn whole_file_configuration_is_only_removed_on_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("containerd.toml");
+        let backup = dir.path().join("containerd.toml.bak");
+        let config_path = config.to_str().unwrap();
+        let backup_path = backup.to_str().unwrap();
+        std::fs::write(&config, "version = 2\n").unwrap();
+
+        assert!(matches!(
+            whole_file_disposition(config_path, backup_path),
+            WholeFileConfig::Keep
+        ));
+
+        std::fs::write(created_marker_file(config_path), "").unwrap();
+        assert!(matches!(
+            whole_file_disposition(config_path, backup_path),
+            WholeFileConfig::Delete
+        ));
+
+        std::fs::write(&backup, "version = 2\n").unwrap();
+        assert!(matches!(
+            whole_file_disposition(config_path, backup_path),
+            WholeFileConfig::Restore
+        ));
     }
 
     #[test]

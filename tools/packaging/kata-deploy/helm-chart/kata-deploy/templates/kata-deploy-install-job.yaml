@@ -95,6 +95,7 @@ spec:
           command:
             - /usr/bin/kata-deploy-job-dispatcher
             - "--job-template=/etc/kata-job/install-job.yaml"
+            - "--cleanup-job-template=/etc/kata-job/cleanup-job.yaml"
             - "--name-prefix={{ $base }}-install"
             - "--owner-job-name={{ $dispatcherName }}"
             - "--parallelism={{ $root.Values.job.parallelism }}"
@@ -112,6 +113,7 @@ acting on the first snapshot it happens to see. Not passed with an explicit
 job.nodes list, which names nodes outright and needs no discovery.
 */}}
             - "--wait-for-nodes-secs={{ $root.Values.job.waitForNodesSeconds | default 0 }}"
+            - "--node-settle-secs={{ $root.Values.job.nodeSettleSeconds | default 15 }}"
 {{- end }}
 {{- include "kata-deploy.dispatcherNodeWorkFlags" (dict "root" $root "stage" "install") | nindent 12 }}
           env:

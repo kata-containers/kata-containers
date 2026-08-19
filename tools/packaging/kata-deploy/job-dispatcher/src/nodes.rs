@@ -115,6 +115,7 @@ pub struct NodeFacts {
     pub name: String,
     /// `.status.nodeInfo.containerRuntimeVersion`, e.g. `containerd://2.1.5-k3s1`.
     pub container_runtime_version: Option<String>,
+    pub machine_id: Option<String>,
 }
 
 impl NodeFacts {
@@ -126,15 +127,23 @@ impl NodeFacts {
             .and_then(|status| status.node_info.as_ref())
             .map(|info| info.container_runtime_version.clone())
             .filter(|version| !version.is_empty());
+        let machine_id = node
+            .status
+            .as_ref()
+            .and_then(|status| status.node_info.as_ref())
+            .map(|info| info.machine_id.clone())
+            .filter(|id| !id.is_empty());
 
         Self {
             name,
             container_runtime_version,
+            machine_id,
         }
     }
 }
 
 /// The node-level work the dispatcher performs around each per-node Job.
+#[derive(Clone)]
 pub struct NodeOps {
     api: Api<Node>,
     client: Client,
@@ -177,6 +186,16 @@ impl NodeOps {
             .with_context(|| format!("failed to get node {node}"))
     }
 
+    async fn ensure_uid(&self, node: &str, expected_uid: &str) -> Result<()> {
+        let current = self.get(node).await?;
+        anyhow::ensure!(
+            current.metadata.uid.as_deref() == Some(expected_uid),
+            "node {node} changed identity: expected UID {expected_uid}, found {:?}",
+            current.metadata.uid
+        );
+        Ok(())
+    }
+
     /// Demoting first is what makes cleanup safe: nothing new is scheduled onto a
     /// node whose label no longer says `true` (the RuntimeClasses require exactly
     /// that value), so the node stops taking Kata workloads before anything on it
@@ -186,16 +205,18 @@ impl NodeOps {
     /// selects on. A cleanup Job that fails - or is never created - would otherwise
     /// leave a node with Kata still installed that the next `helm uninstall` cannot
     /// even see. The key goes once the node's cleanup Job has actually succeeded.
-    pub async fn before_dispatch(&self, node: &str) -> Result<()> {
+    pub async fn before_dispatch(&self, node: &str, expected_uid: &str) -> Result<()> {
+        self.ensure_uid(node, expected_uid).await?;
         if self.remove_label {
-            self.demote(node).await?;
+            self.demote(node, expected_uid).await?;
         }
         if self.claim_pending {
-            self.claim(node).await;
+            self.claim(node, expected_uid).await?;
         }
         if let Some(threshold) = self.kubelet_timeout_warn {
             self.warn_on_low_kubelet_timeout(node, threshold).await;
         }
+        self.ensure_uid(node, expected_uid).await?;
         Ok(())
     }
 
@@ -203,13 +224,15 @@ impl NodeOps {
     /// restarted) before it is advertised as Kata-capable, and the start-up
     /// taints may only be lifted once that advertisement is in place - they are
     /// what keeps workloads off the node until then.
-    pub async fn after_success(&self, node: &str) -> Result<()> {
+    pub async fn after_success(&self, node: &str, expected_uid: &str) -> Result<()> {
+        self.ensure_uid(node, expected_uid).await?;
         // Cleanup: the node kept the label's key through its Job so that a failure
         // anywhere in it would still be found by the next uninstall. That reason is
         // spent now, and leaving the key behind would have a later uninstall clean
         // a node that has nothing left on it.
         if self.remove_label {
-            return self.release(node).await;
+            self.release(node, expected_uid).await?;
+            return self.ensure_uid(node, expected_uid).await;
         }
 
         let Some(value) = self.label_value.clone() else {
@@ -220,9 +243,12 @@ impl NodeOps {
             self.wait_till_ready(node, timeout).await?;
         }
 
+        self.ensure_uid(node, expected_uid).await?;
         self.verify_handlers(node).await?;
-        self.label_until_stable(node, &value).await?;
-        self.lift_taints(node).await;
+        self.ensure_uid(node, expected_uid).await?;
+        self.label_until_stable(node, &value, expected_uid).await?;
+        self.ensure_uid(node, expected_uid).await?;
+        self.lift_taints(node, expected_uid).await;
 
         Ok(())
     }
@@ -231,8 +257,8 @@ impl NodeOps {
     /// an uninstall selects on. A node that never had the label is left alone: it
     /// was never installed on, and adding a key here would only invite the next
     /// uninstall to come back for it.
-    async fn demote(&self, node: &str) -> Result<()> {
-        self.rewrite_labels(node, |labels, ours| {
+    async fn demote(&self, node: &str, expected_uid: &str) -> Result<()> {
+        self.rewrite_labels(node, expected_uid, |labels, ours| {
             let mut updates: Vec<(String, Option<String>)> = Vec::new();
 
             if labels.contains_key(ours) {
@@ -243,7 +269,8 @@ impl NodeOps {
             // this install's workloads off the node. The shared label is another
             // question: an install still serving Kata here needs it.
             let shared = labels.get(KATA_RUNTIME_LABEL).map(String::as_str);
-            match (shared, shared_label_after(labels, ours)) {
+            let verdict = shared_label_after(labels, ours);
+            match (shared, verdict) {
                 (None, _) | (Some(KATA_RUNTIME_PENDING), _) => (),
                 (Some(_), SharedLabel::Keep) => info!(
                     "node {node}: leaving {KATA_RUNTIME_LABEL} in place, another kata-deploy \
@@ -263,14 +290,15 @@ impl NodeOps {
     /// Give the node back: this install's marker goes, and the label it shares with
     /// every other install goes with it only if no other install is left holding
     /// this node.
-    async fn release(&self, node: &str) -> Result<()> {
-        self.rewrite_labels(node, |labels, ours| {
+    async fn release(&self, node: &str, expected_uid: &str) -> Result<()> {
+        self.rewrite_labels(node, expected_uid, |labels, ours| {
             let mut updates: Vec<(String, Option<String>)> = Vec::new();
             if labels.contains_key(ours) {
                 updates.push((ours.to_string(), None));
             }
 
-            match shared_label_after(labels, ours) {
+            let verdict = shared_label_after(labels, ours);
+            match verdict {
                 SharedLabel::Keep => info!(
                     "node {node}: keeping {KATA_RUNTIME_LABEL}, another kata-deploy install is \
                      still serving Kata from this node"
@@ -311,12 +339,16 @@ impl NodeOps {
     /// unconditional write could act on a node that has already moved on: two
     /// uninstalls each seeing the other's mark, each removing their own, leaving a
     /// node advertising Kata with nothing installed.
-    async fn rewrite_labels<F>(&self, node: &str, decide: F) -> Result<()>
+    async fn rewrite_labels<F>(&self, node: &str, expected_uid: &str, decide: F) -> Result<()>
     where
         F: Fn(&BTreeMap<String, String>, &str) -> Vec<(String, Option<String>)>,
     {
         for attempt in 1..=LABEL_PATCH_ATTEMPTS {
             let fetched = self.get(node).await?;
+            anyhow::ensure!(
+                fetched.metadata.uid.as_deref() == Some(expected_uid),
+                "node {node} changed identity before its labels could be rewritten"
+            );
             let version = fetched
                 .metadata
                 .resource_version
@@ -329,7 +361,10 @@ impl NodeOps {
                 return Ok(());
             }
 
-            match self.patch_labels_guarded(node, &version, &updates).await {
+            match self
+                .patch_labels_guarded(node, expected_uid, &version, &updates)
+                .await
+            {
                 Ok(()) => return Ok(()),
                 Err(err) if err.is_conflict => {
                     info!(
@@ -351,11 +386,14 @@ impl NodeOps {
     async fn patch_labels_guarded(
         &self,
         node: &str,
+        expected_uid: &str,
         version: &str,
         updates: &[(String, Option<String>)],
     ) -> std::result::Result<(), GuardedPatchError> {
-        let mut ops =
-            vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+        let mut ops = vec![
+            json!({"op": "test", "path": "/metadata/uid", "value": expected_uid}),
+            json!({"op": "test", "path": "/metadata/resourceVersion", "value": version}),
+        ];
         for (key, value) in updates {
             let path = format!("/metadata/labels/{}", escape_pointer(key));
             match value {
@@ -391,23 +429,19 @@ impl NodeOps {
         }
     }
 
-    /// Best-effort, like the in-pod claim it replaces: this only widens what a
-    /// later uninstall can find, so a node that cannot be claimed is still worth
-    /// installing on.
-    ///
     /// Conditional on the label still being absent when the write lands. Two
     /// dispatchers can be mid-flight over one node - an upgrade racing the install
     /// it replaces - and claiming a node another one has just finished labelling
     /// `true` would de-advertise a node that is serving Kata.
-    async fn claim(&self, node: &str) {
+    async fn claim(&self, node: &str, expected_uid: &str) -> Result<()> {
         for attempt in 1..=CLAIM_PATCH_ATTEMPTS {
-            let fetched = match self.get(node).await {
-                Ok(fetched) => fetched,
-                Err(err) => {
-                    warn!("node {node}: could not read its labels to claim it ({err:#})");
-                    return;
-                }
-            };
+            let fetched = self.get(node).await.with_context(|| {
+                format!("could not read node {node} to claim it before install")
+            })?;
+            anyhow::ensure!(
+                fetched.metadata.uid.as_deref() == Some(expected_uid),
+                "node {node} changed identity before it could be claimed"
+            );
 
             let labels = fetched.metadata.labels.unwrap_or_default();
             // Any value means someone has been here: a `true` must not be
@@ -417,7 +451,7 @@ impl NodeOps {
                 .filter(|key| !labels.contains_key(*key))
                 .collect();
             if missing.is_empty() {
-                return;
+                return Ok(());
             }
 
             let version = fetched
@@ -427,8 +461,10 @@ impl NodeOps {
                 .unwrap_or_default();
             // `add` needs its parent to exist; a Node without labels is only ever
             // seen in tests, but the patch has to be valid for it too.
-            let mut ops =
-                vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+            let mut ops = vec![
+                json!({"op": "test", "path": "/metadata/uid", "value": expected_uid}),
+                json!({"op": "test", "path": "/metadata/resourceVersion", "value": version}),
+            ];
             if labels.is_empty() {
                 let claimed: BTreeMap<&str, &str> = missing
                     .iter()
@@ -443,13 +479,8 @@ impl NodeOps {
                 }
             }
 
-            let patch: json_patch::Patch = match serde_json::from_value(json!(ops)) {
-                Ok(patch) => patch,
-                Err(err) => {
-                    warn!("node {node}: could not build the claim patch ({err})");
-                    return;
-                }
-            };
+            let patch: json_patch::Patch = serde_json::from_value(json!(ops))
+                .context("could not build the node claim patch")?;
 
             match self
                 .api
@@ -458,7 +489,7 @@ impl NodeOps {
             {
                 Ok(_) => {
                     info!("node {node}: marked as being installed on");
-                    return;
+                    return Ok(());
                 }
                 Err(err) if is_precondition_failure(&err) => {
                     info!(
@@ -467,20 +498,21 @@ impl NodeOps {
                     );
                 }
                 Err(err) => {
-                    warn!(
-                        "node {node}: could not mark it as being installed on ({err}). Should \
-                         this install fail before the node is labelled, `helm uninstall` will not \
-                         clean this node up"
-                    );
-                    return;
+                    return Err(err).with_context(|| {
+                        format!(
+                            "could not claim node {node} before install; refusing to mutate a host \
+                             that a later uninstall could not discover"
+                        )
+                    });
                 }
             }
         }
 
-        warn!(
-            "node {node}: gave up marking it as being installed on after \
-             {CLAIM_PATCH_ATTEMPTS} attempts; something keeps changing its labels"
-        );
+        anyhow::bail!(
+            "gave up claiming node {node} after {CLAIM_PATCH_ATTEMPTS} attempts: something keeps \
+             changing its labels; refusing to mutate a host that a later uninstall could not \
+             discover"
+        )
     }
 
     /// Refuse to advertise a node whose CRI runtime is not serving what the
@@ -573,7 +605,7 @@ impl NodeOps {
     /// undoing ours. `Ready` does not rule that out: the observation can predate
     /// the kubelet's own restart. So the label has to be seen to hold, and be
     /// re-applied when it drifts.
-    async fn label_until_stable(&self, node: &str, value: &str) -> Result<()> {
+    async fn label_until_stable(&self, node: &str, value: &str, expected_uid: &str) -> Result<()> {
         // Both labels, because the RuntimeClasses select both: a marker the kubelet
         // clobbered leaves the node advertised but unusable by this install.
         let wanted = [KATA_RUNTIME_LABEL, self.instance_label.as_str()];
@@ -583,13 +615,14 @@ impl NodeOps {
             .collect();
 
         for attempt in 1..=LABEL_APPLY_ATTEMPTS {
-            self.patch_labels(node, &updates).await?;
+            self.rewrite_labels(node, expected_uid, |_, _| updates.clone())
+                .await?;
 
             let mut stable = 0;
             while stable < LABEL_STABILITY_CHECKS {
                 tokio::time::sleep(LABEL_CHECK_INTERVAL).await;
 
-                match self.read_labels(node).await {
+                match self.read_labels(node, expected_uid).await {
                     Ok(labels) => {
                         let drifted: Vec<String> = wanted
                             .iter()
@@ -634,52 +667,29 @@ impl NodeOps {
         )
     }
 
-    /// Set (or, with `None`, remove) the Kata runtime label on `node`.
-    /// Apply label writes in one request, `None` removing a label.
-    async fn patch_labels(&self, node: &str, updates: &[(String, Option<String>)]) -> Result<()> {
-        if updates.is_empty() {
-            return Ok(());
-        }
-
-        // A JSON merge patch removes a key by setting it to null; omitting it
-        // would leave it untouched.
-        let labels: serde_json::Map<String, serde_json::Value> = updates
-            .iter()
-            .map(|(key, value)| {
-                let value = match value {
-                    Some(value) => serde_json::Value::String(value.clone()),
-                    None => serde_json::Value::Null,
-                };
-                (key.clone(), value)
-            })
-            .collect();
-        let patch = json!({"metadata": {"labels": labels}});
-
-        let described = describe_updates(updates);
-
-        self.api
-            .patch(node, &PatchParams::default(), &Patch::Merge(&patch))
-            .await
-            .with_context(|| format!("failed to write labels {described} on node {node}"))?;
-
-        info!("node {node}: labels {described}");
-        Ok(())
-    }
-
-    async fn read_labels(&self, node: &str) -> Result<BTreeMap<String, String>> {
-        Ok(self.get(node).await?.metadata.labels.unwrap_or_default())
+    async fn read_labels(
+        &self,
+        node: &str,
+        expected_uid: &str,
+    ) -> Result<BTreeMap<String, String>> {
+        let fetched = self.get(node).await?;
+        anyhow::ensure!(
+            fetched.metadata.uid.as_deref() == Some(expected_uid),
+            "node {node} changed identity while its labels were being verified"
+        );
+        Ok(fetched.metadata.labels.unwrap_or_default())
     }
 
     /// Best-effort on purpose: the runtime is installed and the node is labelled
     /// by now, and a taint left in place only keeps workloads away - the safe
     /// direction - so a failure here warns and leaves a later run to retry rather
     /// than failing an otherwise complete install.
-    async fn lift_taints(&self, node: &str) {
+    async fn lift_taints(&self, node: &str, expected_uid: &str) {
         if self.remove_taints.is_empty() {
             return;
         }
 
-        match self.try_lift_taints(node).await {
+        match self.try_lift_taints(node, expected_uid).await {
             Ok(removed) if removed.is_empty() => {
                 info!(
                     "node {node}: no matching start-up taint to remove ({})",
@@ -704,9 +714,13 @@ impl NodeOps {
     /// added in the meantime, in the direction that admits workloads. A JSON Patch
     /// that tests the resourceVersion it read makes that a rejected write instead,
     /// and rejection just means reading again.
-    async fn try_lift_taints(&self, node: &str) -> Result<Vec<String>> {
+    async fn try_lift_taints(&self, node: &str, expected_uid: &str) -> Result<Vec<String>> {
         for attempt in 1..=TAINT_PATCH_ATTEMPTS {
             let fetched = self.get(node).await?;
+            anyhow::ensure!(
+                fetched.metadata.uid.as_deref() == Some(expected_uid),
+                "node {node} changed identity before its taints could be removed"
+            );
             let version = fetched
                 .metadata
                 .resource_version
@@ -726,6 +740,7 @@ impl NodeOps {
             }
 
             let patch: json_patch::Patch = serde_json::from_value(json!([
+                {"op": "test", "path": "/metadata/uid", "value": expected_uid},
                 {"op": "test", "path": "/metadata/resourceVersion", "value": version},
                 {"op": "replace", "path": "/spec/taints", "value": retained},
             ]))
