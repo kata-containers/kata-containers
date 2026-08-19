@@ -1356,9 +1356,15 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
 
-        self.stop().await.context("stop")?;
-
-        self.cleanup().await.context("do the clean up")?;
+        // A failing teardown must not keep the shim alive: the message below is
+        // the only thing that breaks the service loop, and with the monitor
+        // stopped there is nothing left to reap us.
+        if let Err(e) = self.stop().await {
+            error!(sl!(), "failed to stop sandbox: {:?}", e);
+        }
+        if let Err(e) = self.cleanup().await {
+            error!(sl!(), "failed to cleanup sandbox: {:?}", e);
+        }
 
         info!(sl!(), "stop agent");
         self.agent.stop().await;
