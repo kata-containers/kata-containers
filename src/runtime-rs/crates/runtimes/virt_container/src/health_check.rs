@@ -112,12 +112,16 @@ impl HealthCheck {
             return;
         }
         info!(sl!(), "stop runtime keep alive");
-        self.stop_tx
-            .send(())
-            .await
-            .map_err(|e| {
+        match self.stop_tx.try_send(()) {
+            Ok(()) => {}
+            // Both teardown paths signal this, and a blocking send on the
+            // single-slot channel would stall the second one.
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                debug!(sl!(), "monitor stop already signalled");
+            }
+            Err(e) => {
                 warn!(sl!(), "failed send monitor channel. {:?}", e);
-            })
-            .ok();
+            }
+        }
     }
 }

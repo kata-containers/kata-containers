@@ -1344,12 +1344,14 @@ impl Sandbox for VirtSandbox {
     async fn shutdown(&self) -> Result<()> {
         info!(sl!(), "shutdown");
 
+        // The monitor answers a dead VM with process::exit(1), which would abort
+        // the teardown below.
+        info!(sl!(), "stop monitor");
+        self.monitor.stop().await;
+
         self.stop().await.context("stop")?;
 
         self.cleanup().await.context("do the clean up")?;
-
-        info!(sl!(), "stop monitor");
-        self.monitor.stop().await;
 
         info!(sl!(), "stop agent");
         self.agent.stop().await;
@@ -1446,6 +1448,13 @@ impl Sandbox for VirtSandbox {
         };
 
         let is_sandbox_container = cm.is_sandbox_container(&process_id).await;
+
+        // A dead VM makes the health check fail, and the monitor answers that
+        // with process::exit(1), aborting the teardown below.
+        if is_sandbox_container {
+            info!(sl!(), "stop monitor");
+            self.monitor.stop().await;
+        }
 
         // Publish before the teardown: containerd acts on this event, and a slow
         // guest shutdown in front of it gets the shim SIGKILLed and a clean exit
