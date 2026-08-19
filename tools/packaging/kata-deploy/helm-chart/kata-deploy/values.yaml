@@ -607,6 +607,47 @@ snapshotter:
 nodeBinaries: {}
 
 # Shim configuration
+#
+# The shims listed here are the ones that run on an ordinary node: they read
+# images through whatever snapshotter containerd already uses, and ask nothing
+# of the host beyond hardware virtualization. That is what makes enabling all of
+# them by default safe - every RuntimeClass a default install creates can
+# actually start a pod.
+#
+# The shims that are NOT here each come with a prerequisite this chart cannot
+# satisfy on its own: a particular containerd snapshotter (nydus, erofs,
+# devmapper), a confidential-computing capable CPU, an NVIDIA GPU, a peer-pod
+# provider. Enabled by default they would create RuntimeClasses that look usable
+# and fail the first pod scheduled onto them, so each lives in a values file you
+# opt into with `-f`, together with the snapshotter setup and CRI configuration it
+# needs:
+#
+#   try-kata-tee.values.yaml         AMD SEV-SNP, Intel TDX, IBM Secure Execution,
+#                                    coco-dev (nydus + guest pull)
+#   try-kata-nvidia-gpu.values.yaml  NVIDIA GPU passthrough, plus its SNP and TDX
+#                                    variants (erofs, dm-verity, nydus for TEE)
+#   try-kata-nvidia-cpu.values.yaml  NVIDIA userspace without GPU passthrough (erofs)
+#   try-kata-fc.values.yaml          Firecracker (devmapper, set up by you)
+#   try-kata-remote.values.yaml      remote hypervisor / peer pods (nydus + guest pull)
+#
+#   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION -f try-kata-tee.values.yaml
+#
+# Each file is packaged with the chart, so `helm pull --untar` gets you a copy to
+# read and edit:
+#
+#   helm pull oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION --untar
+#
+# A profile is a complete values file, not a fragment: it starts from
+# `disableAll: true` and enables its own shims. Pick the one that matches your
+# nodes rather than combining two - the last `-f` wins key by key, which for two
+# profiles means a mixture neither of them describes.
+#
+# Re-adding one of those shims by hand takes its whole block, not just
+# `enabled: true`: a shim with no `supportedArches` matches no architecture and
+# is skipped without a word. Copy the block out of the profile that has it.
+#
 # By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
 # Set disableAll: true to disable all shims, then explicitly enable specific ones:
 #   shims:
@@ -862,6 +903,11 @@ verification:
 #     helm install kata-deploy ./kata-deploy -f custom-runtimes.values.yaml
 #
 # Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, clh-runtime-rs, fc, etc.
+# The choice is not limited to the shims enabled above: every configuration the
+# kata-deploy image ships is laid down on the node, so a base config can name a
+# shim that has no RuntimeClass of its own. It still needs whatever that config
+# needs - a base of qemu-snp wants the nydus snapshotter configured under
+# `containerd` below, exactly as try-kata-tee.values.yaml does for qemu-snp itself.
 # The correct shim binary is automatically selected based on the baseConfig.
 #
 customRuntimes:
