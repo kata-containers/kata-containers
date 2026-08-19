@@ -67,6 +67,11 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    # Settings for NVRC, the init process of the NVIDIA guest images. Each key
+    # becomes an nvrc.* guest kernel parameter; see docs/helm-configuration.md.
+    nvrc:
+      # Run nv-hostengine and dcgm-exporter in the guest (nvrc.dcgm=on).
+      enableDCGM: false
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
@@ -80,6 +85,8 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: "erofs"
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
@@ -99,6 +106,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
@@ -121,6 +130,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
@@ -143,6 +154,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
@@ -165,6 +178,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
