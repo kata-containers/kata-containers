@@ -32,7 +32,7 @@ impl HybridVsock {
 impl Sock for HybridVsock {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
         let mut last_err = None;
-        let retry_times = config.reconnect_timeout_ms / config.dial_timeout_ms;
+        let retry_times = 1 + (config.reconnect_timeout_ms / config.dial_timeout_ms);
 
         for i in 0..retry_times {
             match connect_helper(&self.uds, self.port).await {
