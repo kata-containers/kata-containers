@@ -15,10 +15,15 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 CHART_PATH="$(get_chart_path)"
 RENDERED="/tmp/kata-deploy-tee-keys-rendered.yaml"
 
+# The confidential shims are not in the chart defaults - they ship in the TEE
+# profile, together with the nydus setup and guest pull they need - so every
+# render here goes through it. Without it there is no confidential RuntimeClass
+# to carry a key request and these tests would pass by having nothing to check.
 render_chart() {
 	helm template kata-deploy "${CHART_PATH}" \
 		--set image.reference=quay.io/kata-containers/kata-deploy \
 		--set image.tag=latest \
+		-f "${CHART_PATH}/try-kata-tee.values.yaml" \
 		"$@" > "${RENDERED}"
 }
 
