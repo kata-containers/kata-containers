@@ -695,21 +695,6 @@ shims:
     containerd:
       snapshotter: ""
 
-  remote:
-    enabled: false
-    supportedArches:
-      - amd64
-      - ppc64le
-      - s390x
-    allowedHypervisorAnnotations: []
-    containerd:
-      snapshotter: "nydus"
-    crio:
-      guestPull: true
-    agent:
-      httpsProxy: ""
-      noProxy: ""
-
   openvmm-azure-runtime-rs:
     enabled: ~
     supportedArches:
