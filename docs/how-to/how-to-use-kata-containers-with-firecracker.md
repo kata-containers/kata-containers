@@ -46,6 +46,13 @@ In order to run Kata with AWS Firecracker a block device as the backing store fo
 
 ## Configure `devmapper`
 
+!!! info "On Kubernetes this section is still yours to do"
+    `kata-deploy` installs the Firecracker shim and its `kata-fc` RuntimeClass
+    through [`try-kata-fc.values.yaml`](../helm-configuration.md#try-kata-fcvaluesyaml),
+    and maps the shim to the `devmapper` snapshotter — but it cannot create the
+    thin-pool below, which is a storage decision per node. Set it up on every node
+    that will run Firecracker workloads first.
+
 To check support for your `containerd` installation, you can run:
 
 ```
