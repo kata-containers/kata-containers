@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::cgroups::nested::{init_cgroup, normalize_cgroup_path};
 use crate::cgroups::Manager as CgroupManager;
-use crate::protocols::agent::CgroupStats;
-use anyhow::{anyhow, Result};
 use crate::cgroups_rs as cgroups;
+use crate::protocols::agent::CgroupStats;
+use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
+use cgroups::CgroupPid;
 use libc::{self, pid_t};
 use oci::LinuxResources;
 use oci_spec::runtime as oci;
@@ -18,13 +20,17 @@ use std::convert::TryInto;
 use std::string::String;
 use std::vec;
 
-use super::super::fs::Manager as FsManager;
+use super::super::fs::{load_cgroup, Manager as FsManager};
 
 use super::cgroups_path::CgroupsPath;
 use super::common::{CgroupHierarchy, Properties};
 use super::dbus_client::{DBusClient, SystemdInterface};
 use super::subsystem::transformer::Transformer;
 use super::subsystem::{cpu::Cpu, cpuset::CpuSet, memory::Memory, pids::Pids};
+
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "cgroups"))
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
@@ -41,10 +47,37 @@ pub struct Manager {
 }
 
 impl CgroupManager for Manager {
-    fn apply(&self, pid: pid_t) -> Result<()> {
+    fn apply(&self, pid: pid_t, init_pid: pid_t) -> Result<()> {
         if self.dbus_client.unit_exists()? {
-            let subcgroup = self.fs_manager.subcgroup();
-            self.dbus_client.add_process(pid, subcgroup)?;
+            let initial_err = match self.dbus_client.add_process(pid, "/") {
+                Ok(()) => return Ok(()),
+                Err(err) => err,
+            };
+
+            let Some(path) = init_cgroup(pid, init_pid) else {
+                return Err(initial_err);
+            };
+            debug!(
+                sl(),
+                "add process {} to systemd cgroup {} failed: {}; retrying init cgroup {}",
+                pid,
+                self.cpath,
+                initial_err,
+                path
+            );
+
+            let container_cgroup = normalize_cgroup_path(&self.cpath);
+            if path == container_cgroup {
+                self.dbus_client.add_process(pid, "/")?;
+            } else if let Some(rel) = path.strip_prefix(&format!("{container_cgroup}/")) {
+                self.dbus_client.add_process(pid, &format!("/{rel}"))?;
+            } else {
+                // systemd only accepts a unit-relative subcgroup.
+                let cgroup = load_cgroup(cgroups::hierarchies::auto(), &path);
+                cgroup
+                    .add_task_by_tgid(CgroupPid::from(pid as u64))
+                    .with_context(|| format!("add task {} to cgroup {}", pid, cgroup.path()))?;
+            }
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),

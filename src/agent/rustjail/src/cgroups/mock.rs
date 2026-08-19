@@ -6,9 +6,9 @@
 use protobuf::MessageField;
 
 use crate::cgroups::Manager as CgroupManager;
+use crate::cgroups_rs as cgroups;
 use crate::protocols::agent::{BlkioStats, CgroupStats, CpuStats, MemoryStats, PidsStats};
 use anyhow::Result;
-use crate::cgroups_rs as cgroups;
 use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::{LinuxResources, Spec};
@@ -29,7 +29,7 @@ pub struct Manager {
 }
 
 impl CgroupManager for Manager {
-    fn apply(&self, _: pid_t) -> Result<()> {
+    fn apply(&self, _: pid_t, _: pid_t) -> Result<()> {
         Ok(())
     }
 

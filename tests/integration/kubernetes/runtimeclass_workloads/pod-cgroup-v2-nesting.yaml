@@ -1,0 +1,54 @@
+#
+# Copyright (c) 2026 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cgroup-v2-nesting
+spec:
+  runtimeClassName: kata
+  securityContext:
+    supplementalGroups: [10]
+  restartPolicy: Never
+  containers:
+  - image: quay.io/prometheus/busybox:latest
+    name: dind
+    securityContext:
+      privileged: true
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      set -eu
+      parent=/sys/fs/cgroup
+      leaf="${parent}/init"
+      test -f "${parent}/cgroup.controllers"
+      grep -qw memory "${parent}/cgroup.controllers"
+      mkdir "${leaf}"
+      # Kubernetes collapses "$$" to "$" while expanding args, so the shell's
+      # $$ cannot be used here; a pid of 0 moves the writing process itself.
+      echo 0 > "${leaf}/cgroup.procs"
+      echo +memory > "${parent}/cgroup.subtree_control"
+      echo READY
+      exec sleep infinity
+  - image: quay.io/prometheus/busybox:latest
+    name: systemd
+    securityContext:
+      privileged: true
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      set -eu
+      parent=/sys/fs/cgroup
+      leaf="${parent}/init.scope"
+      test -f "${parent}/cgroup.controllers"
+      grep -qw memory "${parent}/cgroup.controllers"
+      mkdir "${leaf}"
+      # Kubernetes collapses "$$" to "$" while expanding args, so the shell's
+      # $$ cannot be used here; a pid of 0 moves the writing process itself.
+      echo 0 > "${leaf}/cgroup.procs"
+      echo +memory > "${parent}/cgroup.subtree_control"
+      echo READY
+      exec sleep infinity
