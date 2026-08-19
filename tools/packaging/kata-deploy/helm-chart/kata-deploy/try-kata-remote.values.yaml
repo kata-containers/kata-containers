@@ -1,0 +1,53 @@
+# Example values file to enable the remote hypervisor shim (peer pods)
+#
+# The remote shim starts no VM on the node. It hands sandbox creation to a
+# provider running elsewhere - in practice Confidential Containers'
+# cloud-api-adaptor, which creates the VM in your cloud and connects it back to
+# the node. This profile therefore only installs the shim and its `kata-remote`
+# RuntimeClass: the provider, its cloud credentials and the pod VM image are part
+# of the cloud-api-adaptor deployment, not of this chart. Install that first, or
+# the RuntimeClass will exist with nothing behind it.
+#
+# Images are pulled inside the pod VM (guest pull, through nydus), because the
+# node a pod is scheduled on never sees that sandbox's rootfs.
+#
+# Usage:
+#   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION \
+#     -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-remote.values.yaml
+
+debug: false
+
+snapshotter:
+  setup: ["nydus"]  # guest pull: the image is pulled in the pod VM
+
+# Enable the remote hypervisor shim
+# Disable all shims at once, then enable only the one we need.
+shims:
+  disableAll: true
+
+  remote:
+    enabled: true
+    supportedArches:
+      - amd64
+      - ppc64le
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture.
+defaultShim:
+  amd64: remote
+  ppc64le: remote
+  s390x: remote
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
