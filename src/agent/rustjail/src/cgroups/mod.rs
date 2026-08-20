@@ -43,7 +43,7 @@ pub trait Manager {
         Err(anyhow!("not supported!"))
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(&self) -> Result<()> {
         Err(anyhow!("not supported!"))
     }
 
