@@ -151,7 +151,6 @@ fn grace_4_gpu_and_nic() {
 // ---- Grace Config 5: vCMDQ, hugepages backing ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_5_vcmdq() {
     // Config 5 backs guest RAM with hugepages: with_hugepages() swaps the
     // primary backend to mem-path=/dev/hugepages/ with prealloc=on before
@@ -176,7 +175,6 @@ fn grace_5_vcmdq() {
 // ---- Grace Config 6: vEGM, 1 GPU per socket, 4 sockets ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_6_vegm_1_per_socket() {
     check(
         HostTopology {
@@ -210,7 +208,6 @@ fn grace_6_vegm_1_per_socket() {
 // ---- Grace Config 7: vEGM, 2 GPUs per socket, 2 sockets ----
 
 #[test]
-#[ignore = "Phase 5"]
 fn grace_7_vegm_2_per_socket() {
     check(
         HostTopology {
