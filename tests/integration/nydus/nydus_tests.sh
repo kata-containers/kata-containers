@@ -82,7 +82,9 @@ function config_kata() {
 	fi
 
 	echo "Enabling all debug options in file ${SYSCONFIG_FILE}"
-	sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${SYSCONFIG_FILE}"
+	# Both the commented out and the already set to false forms have to be
+	# handled: the shipped configurations carry "enable_debug = false".
+	sudo sed -i -e 's/^#\{0,1\}[[:space:]]*enable_debug[[:space:]]*=.*/enable_debug = true/g' "${SYSCONFIG_FILE}"
 	sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${SYSCONFIG_FILE}"
 
 	if [[ "${KATA_HYPERVISOR}" != "dragonball" ]]; then
@@ -194,7 +196,7 @@ function setup() {
 	config_kata
 	config_containerd
 	restart_containerd_service
-	check_processes
+	check_processes "${KILL_TIMEOUT_SECS}"
 	check_nydus_snapshotter_exist
 	extract_kata_env
 }
@@ -220,9 +222,23 @@ function run_test() {
 	sudo -E crictl --timeout=20s rmp "${pod}"
 }
 
+function remove_leftover_pods() {
+	local pods
+	pods=$(sudo -E crictl --timeout=20s pods -q || true)
+	[[ -z "${pods}" ]] && return 0
+
+	for pod in ${pods}; do
+		echo "Removing leftover pod ${pod}"
+		sudo -E crictl --timeout=20s stopp "${pod}" || true
+		sudo -E crictl --timeout=20s rmp -f "${pod}" || true
+	done
+}
+
 function teardown() {
 	echo "Running teardown"
 	local rc=0
+
+	remove_leftover_pods
 
 	local pid
 	for bin in containerd-nydus-grpc nydusd; do
@@ -260,7 +276,7 @@ function teardown() {
 	fi
 
 	clean_env_ctr || rc=1
-	check_processes
+	check_processes "${KILL_TIMEOUT_SECS}"
 	return "${rc}"
 }
 

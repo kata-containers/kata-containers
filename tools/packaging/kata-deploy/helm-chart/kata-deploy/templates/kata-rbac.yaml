@@ -1,3 +1,9 @@
+{{- if eq (.Values.deploymentMode | default "daemonset") "daemonset" }}
+{{- /*
+  Only daemonset mode needs this: its pod labels its own node and reads its own
+  kubelet config. Job mode creates no such identity, because its per-node Jobs
+  mount no token.
+*/}}
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -61,14 +67,12 @@ subjects:
   name: {{ .Chart.Name }}-sa
 {{- end }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
 ---
-# Dedicated, least-privilege identity for the job-mode dispatcher
-# (kata-deploy-job-dispatcher). It is a pure control-plane client: it lists nodes
-# (cluster-scoped) and manages per-node Jobs in the release namespace
-# (namespace-scoped). It deliberately does NOT get the privileged kata-deploy
-# host-mutation rights (node patch, runtimeclasses, NFD, etc.); those stay on
-# kata-deploy-sa, which only the per-node Jobs use.
+# The only long-lived identity job mode has. All the node-level API work is
+# gathered here so that it runs in one unprivileged pod, which can be kept on a
+# trusted node, instead of in a privileged pod on every node.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -80,10 +84,21 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: {{ .Chart.Name }}-dispatcher-noderole{{ with .Values.env.multiInstallSuffix }}-{{ . }}{{ end }}
 rules:
-# Enumerating nodes is inherently cluster-scoped.
+# Enumerating nodes is inherently cluster-scoped. `get` re-reads one node (its
+# readiness, and the label back after patching it); `patch` sets the
+# katacontainers.io/kata-runtime label and lifts start-up taints, which is the
+# work the per-node Jobs used to do with a token of their own.
 - apiGroups: [""]
   resources: ["nodes"]
-  verbs: ["list"]
+  verbs: ["list", "get", "patch"]
+{{- if include "kata-deploy.kubeletTimeoutWarnSecs" . | trim }}
+# Granted only when this configuration pulls or converts images inside
+# CreateContainer, which is the one case where the kubelet's
+# runtimeRequestTimeout is worth reading and warning about.
+- apiGroups: [""]
+  resources: ["nodes/proxy"]
+  verbs: ["get"]
+{{- end }}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -107,7 +122,7 @@ rules:
 # The dispatcher only ever creates, polls, and deletes per-node Jobs in its own namespace.
 - apiGroups: ["batch"]
   resources: ["jobs"]
-  verbs: ["create", "get", "delete"]
+  verbs: ["create", "get", "list", "delete"]
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

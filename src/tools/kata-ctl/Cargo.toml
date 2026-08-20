@@ -22,7 +22,8 @@ strum_macros = "0.24.3"
 serde.workspace = true
 url.workspace = true
 futures.workspace = true
-base64 = "0.13.0"
+base64.workspace = true
+tar.workspace = true
 toml.workspace = true
 sys-info = "0.9.1"
 
@@ -80,6 +81,11 @@ tempfile.workspace = true
 nix = { workspace = true }
 test-utils.workspace = true
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
+
+[features]
+default = ["cloud-hypervisor"]
+cloud-hypervisor = ["virt_container/cloud-hypervisor"]
+dragonball = ["virt_container/dragonball"]
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]

@@ -4,9 +4,9 @@
 //
 
 use crate::cgroups::Manager as CgroupManager;
+use crate::cgroups_rs as cgroups;
 use crate::protocols::agent::CgroupStats;
 use anyhow::{anyhow, Result};
-use crate::cgroups_rs as cgroups;
 use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::LinuxResources;
@@ -84,7 +84,7 @@ impl CgroupManager for Manager {
         }
     }
 
-    fn destroy(&mut self) -> Result<()> {
+    fn destroy(&self) -> Result<()> {
         self.dbus_client.kill_unit()?;
         self.fs_manager.destroy()
     }

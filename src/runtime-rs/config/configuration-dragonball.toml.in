@@ -272,6 +272,18 @@ guest_swap_size_percent = 100
 # Default 60.
 guest_swap_create_threshold_secs = 60
 
+[hypervisor.dragonball.factory]
+# VM templating support. Once enabled, new VMs are restored from the template
+# initialized with `kata-ctl factory init`.
+#
+# Default false
+enable_template = false
+
+# Specifies the path of the template memory and device-state files.
+#
+# Default "/run/vc/vm/template"
+template_path = "/run/vc/vm/template"
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size = @PIPESIZE@
 # If enabled, make the agent display debug-level messages.
@@ -310,11 +322,11 @@ enable_tracing = false
 
 debug_console_enabled = false
 
-# Agent dial timeout in millisecond.
+# Sleep between agent connection retries, in milliseconds.
 # (default: 10)
 dial_timeout_ms = 10
 
-# Agent reconnect timeout in millisecond.
+# Overall time budget for establishing the agent connection, in milliseconds.
 # Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
 # If you find pod cannot connect to the agent when starting, please
 # consider increasing this value to increase the retry times.

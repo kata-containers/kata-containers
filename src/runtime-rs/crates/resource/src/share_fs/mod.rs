@@ -31,7 +31,7 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::{build_path, config::hypervisor::SharedFsInfo};
+use kata_types::{config::hypervisor::SharedFsInfo, prefix_with_rootless_dir};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -46,7 +46,7 @@ const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 const DEFAULT_KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
 /// default share fs (for example virtio-fs) mount path in the guest
-const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+pub(crate) const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 /// The virtiofs mount point in the guest for nydusd mode.
 /// In nydusd mode, virtiofs is mounted at `/run/kata-containers/shared/`
@@ -56,16 +56,16 @@ pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
 pub fn kata_host_shared_dir() -> String {
-    build_path(DEFAULT_KATA_HOST_SHARED_DIR)
+    prefix_with_rootless_dir(DEFAULT_KATA_HOST_SHARED_DIR)
 }
 
 pub fn kata_guest_share_dir() -> String {
-    build_path(DEFAULT_KATA_GUEST_SHARE_DIR)
+    prefix_with_rootless_dir(DEFAULT_KATA_GUEST_SHARE_DIR)
 }
 
 /// The virtiofs mount point in the guest for nydusd mode.
 pub fn kata_guest_nydus_root_dir() -> String {
-    build_path(DEFAULT_KATA_GUEST_ROOT_DIR)
+    prefix_with_rootless_dir(DEFAULT_KATA_GUEST_ROOT_DIR)
 }
 
 #[async_trait]

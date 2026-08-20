@@ -35,6 +35,7 @@ members = [
   "src/dragonball/crates/dbs_interrupt",
   "src/dragonball/crates/dbs_legacy_devices",
   "src/dragonball/crates/dbs_pci",
+  "src/dragonball/crates/dbs_snapshot",
   "src/dragonball/crates/dbs_upcall",
   "src/dragonball/crates/dbs_utils",
   "src/dragonball/crates/dbs_virtio_devices",
@@ -113,6 +114,7 @@ dbs-interrupt = { path = "src/dragonball/crates/dbs_interrupt" }
 dbs-legacy-devices = { path = "src/dragonball/crates/dbs_legacy_devices" }
 dbs-pci = { path = "src/dragonball/crates/dbs_pci" }
 dbs-upcall = { path = "src/dragonball/crates/dbs_upcall" }
+dbs-snapshot = { path = "src/dragonball/crates/dbs_snapshot" }
 dbs-utils = { path = "src/dragonball/crates/dbs_utils" }
 dbs-virtio-devices = { path = "src/dragonball/crates/dbs_virtio_devices" }
 
@@ -206,6 +208,7 @@ slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
 strum_macros = "0.26.2"
 sysinfo = "0.39.5"
+tar = "0.4.46"
 tdx = "0.1.1"
 tempfile = "3.19.1"
 thiserror = "2.0.18"

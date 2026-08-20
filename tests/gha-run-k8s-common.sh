@@ -634,10 +634,7 @@ function helm_helper() {
 	ensure_yq
 	ensure_helm
 
-	# Update dependencies before configuring values
-	pushd "${helm_chart_dir}"
-	helm dependencies update
-	popd
+	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Create temporary values file for customization
 	# Start with values.yaml which has all shims enabled by default
@@ -768,7 +765,9 @@ function helm_helper() {
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 				# qemu-coco-dev-runtime-rs is checked explicitly because
 				# qemu-coco-dev (Go runtime) does not support arm64.
-				elif [[ "${shim}" == "qemu-runtime-rs" ]] || [[ "${shim}" == "qemu-coco-dev-runtime-rs" ]]; then
+				elif [[ "${shim}" == "qemu-runtime-rs" ]]; then
+					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\", \"ppc64le\"]" "${values_yaml}"
+				elif [[ "${shim}" == "qemu-coco-dev-runtime-rs" ]]; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
 				elif is_non_tee_hypervisor "${shim}"; then
 					yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"

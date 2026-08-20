@@ -11,11 +11,10 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use kata_types::{
     annotations::{
-        cri_containerd::{SANDBOX_NAMESPACE_LABEL_KEY, SANDBOX_NAME_LABEL_KEY},
-        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL,
-        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA,
-        KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
+        cri_containerd, crio, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_INIT_DATA, KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
     },
     capabilities::{Capabilities, CapabilityBits},
 };
@@ -25,7 +24,7 @@ use protocols::{
     remote_ttrpc_async::HypervisorClient,
 };
 use std::{collections::HashMap, time};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 use ttrpc::context::{self};
 use ttrpc::r#async::Client;
 
@@ -45,7 +44,6 @@ pub struct RemoteInner {
     pub(crate) client: Option<Client>,
 
     exit_notify: Option<mpsc::Sender<i32>>,
-    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl std::fmt::Debug for RemoteInner {
@@ -60,9 +58,7 @@ impl std::fmt::Debug for RemoteInner {
 }
 
 impl RemoteInner {
-    pub fn new() -> Self {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
+    pub fn new(exit_notify: mpsc::Sender<i32>) -> Self {
         Self {
             id: "".to_string(),
             config: HypervisorConfig::default(),
@@ -71,7 +67,6 @@ impl RemoteInner {
             client: None,
 
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -98,16 +93,18 @@ impl RemoteInner {
         let mut annotations: HashMap<String, String> = HashMap::new();
         let config = &self.config;
         annotations.insert(
-            SANDBOX_NAME_LABEL_KEY.to_string(),
+            cri_containerd::SANDBOX_NAME_LABEL_KEY.to_string(),
             oci_annotations
-                .get(SANDBOX_NAME_LABEL_KEY)
+                .get(cri_containerd::SANDBOX_NAME_LABEL_KEY)
+                .or_else(|| oci_annotations.get(crio::SANDBOX_NAME_LABEL_KEY))
                 .cloned()
                 .unwrap_or_default(),
         );
         annotations.insert(
-            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+            cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
             oci_annotations
-                .get(SANDBOX_NAMESPACE_LABEL_KEY)
+                .get(cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY)
+                .or_else(|| oci_annotations.get(crio::SANDBOX_NAMESPACE_LABEL_KEY))
                 .cloned()
                 .unwrap_or_default(),
         );
@@ -179,19 +176,23 @@ impl RemoteInner {
             .await
             .map_err(|e| anyhow::anyhow!("error creating VM: {e}"))?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
-        self.agent_socket_path = resp.agentSocketPath;
+        if resp.agentSocketPath.is_empty() {
+            return Err(anyhow::anyhow!("CAA did not return agent socket path"));
+        }
+        self.agent_socket_path = resp.agentSocketPath.clone();
         self.netns = netns;
         Ok(())
     }
 
-    pub(crate) async fn start_vm(&mut self, timeout: i32) -> Result<()> {
+    pub(crate) async fn start_vm(&mut self, mut timeout: i32) -> Result<()> {
         info!(sl!(), "Starting REMOTE VM");
 
-        let mut min_timeout = DEFAULT_MIN_TIMEOUT;
-        if self.config.remote_info.hypervisor_timeout > 0 {
-            min_timeout = self.config.remote_info.hypervisor_timeout.min(timeout);
-        }
-        let timeout = min_timeout;
+        let configured_timeout = if self.config.remote_info.hypervisor_timeout > 0 {
+            self.config.remote_info.hypervisor_timeout
+        } else {
+            DEFAULT_MIN_TIMEOUT
+        };
+        timeout = timeout.max(configured_timeout);
 
         let client = self.get_ttrpc_client().await?;
 
@@ -216,35 +217,28 @@ impl RemoteInner {
             id: self.id.clone(),
             ..Default::default()
         };
-        let _resp = client.stop_vm(ctx, &req).await?;
+        if let Err(e) = client.stop_vm(ctx, &req).await {
+            warn!(sl!(), "StopVM RPC failed (VM may already be gone): {}", e);
+        }
 
-        self.exit_notify.take().unwrap().send(1).await?;
+        if let Some(sender) = self.exit_notify.take() {
+            let _ = sender.send(1).await;
+        }
         Ok(())
     }
 
     pub(crate) async fn pause_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::pause_vm(): NOT YET IMPLEMENTED");
-        todo!()
-    }
-
-    pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        info!(sl!(), "Wait Remote VM");
-        let mut waiter = self.exit_waiter.lock().await;
-        if let Some(exitcode) = waiter.0.recv().await {
-            waiter.1 = exitcode;
-        }
-
-        Ok(waiter.1)
+        Err(anyhow::anyhow!("pause not supported for remote hypervisor"))
     }
 
     pub(crate) async fn resume_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::resume_vm(): NOT YET IMPLEMENTED");
-        todo!()
+        Err(anyhow::anyhow!(
+            "resume not supported for remote hypervisor"
+        ))
     }
 
     pub(crate) async fn save_vm(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::save_vm(): NOT YET IMPLEMENTED");
-        todo!()
+        Err(anyhow::anyhow!("save not supported for remote hypervisor"))
     }
 
     pub(crate) async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
@@ -267,8 +261,8 @@ impl RemoteInner {
     }
 
     pub(crate) async fn disconnect(&mut self) {
-        warn!(sl!(), "RemoteInner::disconnect(): NOT YET IMPLEMENTED");
-        todo!()
+        info!(sl!(), "RemoteInner::disconnect(): dropping ttrpc client");
+        self.client.take();
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
@@ -295,12 +289,14 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_ns_path(&self) -> Result<String> {
-        info!(sl!(), "RemoteInner::get_ns_path()");
-        Ok(self.netns.clone().unwrap_or_default())
+        // There is no local VMM process whose /proc/<pid>/ns we could
+        // point to.  Return the shim's own ns directory so that the
+        // caller's format!("{}/net", path) produces a valid path and
+        // NetnsGuard enters our own namespace (a no-op).
+        Ok(format!("/proc/{}/ns", nix::unistd::getpid()))
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
-        info!(sl!(), "RemoteInner::cleanup(): NOT YET IMPLEMENTED");
         Ok(())
     }
 
@@ -314,13 +310,11 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
-        warn!(sl!(), "RemoteInner::get_pids(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(vec![])
     }
 
     pub(crate) async fn check(&self) -> Result<()> {
-        warn!(sl!(), "RemoteInner::check(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
@@ -337,19 +331,14 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        warn!(
-            sl!(),
-            "RemoteInner::get_hypervisor_metrics(): NOT YET IMPLEMENTED"
-        );
-        todo!()
+        Err(anyhow::anyhow!(
+            "hypervisor metrics not supported for remote hypervisor"
+        ))
     }
 
     pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
-        warn!(
-            sl!(),
-            "RemoteInner::set_capabilities(): NOT YET IMPLEMENTED"
-        );
-        todo!()
+        let mut caps = Capabilities::default();
+        caps.set(_flag);
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
@@ -380,7 +369,7 @@ impl RemoteInner {
 #[async_trait]
 impl Persist for RemoteInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     /// Save a state of hypervisor
     async fn save(&self) -> Result<Self::State> {
@@ -395,11 +384,9 @@ impl Persist for RemoteInner {
 
     /// Restore hypervisor
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        exit_notify: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
         Ok(RemoteInner {
             id: hypervisor_state.id,
             config: hypervisor_state.config,
@@ -407,7 +394,6 @@ impl Persist for RemoteInner {
             netns: hypervisor_state.netns,
             client: None,
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

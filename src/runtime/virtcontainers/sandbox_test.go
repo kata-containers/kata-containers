@@ -228,7 +228,7 @@ func TestPrepareEphemeralMounts(t *testing.T) {
 		assert.Equal(t, s.Driver, KataEphemeralDevType)
 		assert.Equal(t, s.Source, "tmpfs")
 		assert.Equal(t, s.Fstype, "tmpfs")
-		assert.Equal(t, s.MountPoint, filepath.Join(ephemeralPath(), "tmp"))
+		assert.Equal(t, s.MountPoint, filepath.Join(defaultEphemeralPath, "tmp"))
 		assert.Equal(t, len(s.Options), 2) // remount, size=1024M
 
 		validSet := map[string]struct{}{

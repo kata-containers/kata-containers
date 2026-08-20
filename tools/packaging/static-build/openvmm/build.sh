@@ -15,7 +15,7 @@ readonly openvmm_builder="${script_dir}/build-static-openvmm.sh"
 source "${script_dir}/../../scripts/lib.sh"
 
 ARCH=${ARCH:-$(uname -m)}
-[[ "${ARCH}" != "x86_64" ]] && exit
+[[ "${ARCH}" != "aarch64" ]] && [[ "${ARCH}" != "x86_64" ]] && exit
 
 openvmm_repo="${openvmm_repo:-}"
 openvmm_version="${openvmm_version:-}"

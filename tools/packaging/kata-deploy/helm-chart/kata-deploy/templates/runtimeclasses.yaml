@@ -132,13 +132,23 @@ overhead:
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
+{{- $instanceMarker := include "kata-deploy.instanceMarkerLabel" .root }}
+{{- with $instanceMarker }}
+    {{ . }}: "true"
+{{- end }}
+{{- /* Both keys above are the ownership gate, so a shim's own nodeSelector may not
+       restate them: a duplicate key is resolved in the user's favour, which would
+       point the RuntimeClass at nodes this install does not hold. */}}
+{{- $ownershipKeys := list "katacontainers.io/kata-runtime" $instanceMarker }}
 {{- /* TEE shims: snp, tdx, -se, -se-runtime-rs (SE = IBM Secure Execution / SEL) */ -}}
 {{- $isTeeShim := or (contains "snp" .shim) (contains "tdx" .shim) (hasSuffix "-se" .shim) (hasSuffix "-se-runtime-rs" .shim) -}}
 {{- $isPureTeeShim := and $isTeeShim (not (contains "nvidia-gpu" .shim)) -}}
 {{- if or (and .shimConfig.runtimeClass .shimConfig.runtimeClass.nodeSelector) (and .useShimNodeSelectors $isPureTeeShim) }}
 {{- if and .shimConfig.runtimeClass .shimConfig.runtimeClass.nodeSelector }}
 {{- range $key, $value := .shimConfig.runtimeClass.nodeSelector }}
+{{- if not (has $key $ownershipKeys) }}
     {{ $key }}: {{ $value | quote }}
+{{- end }}
 {{- end }}
 {{- else }}
 {{- if contains "snp" .shim }}

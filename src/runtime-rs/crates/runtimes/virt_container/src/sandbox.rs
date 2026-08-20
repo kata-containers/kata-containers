@@ -43,11 +43,16 @@ use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{is_vfio_ap_device, BlockConfigModern, Hypervisor, VfioDeviceBase};
-#[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
+#[cfg(all(
+    feature = "openvmm",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{
-    utils::{get_hvsock_path, uses_native_ccw_bus},
+    utils::{
+        get_hvsock_path, remove_vmm_user_runtime_dir, uses_native_ccw_bus, vmm_user_runtime_dir,
+    },
     HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
 };
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
@@ -1372,6 +1377,14 @@ impl Sandbox for VirtSandbox {
             inner.cleaned = true;
         }
 
+        let rootless_uid = self
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .security_info
+            .rootless_user
+            .map(|user| user.uid);
+
         info!(sl!(), "delete hypervisor");
         self.hypervisor
             .cleanup()
@@ -1383,6 +1396,18 @@ impl Sandbox for VirtSandbox {
             .cleanup()
             .await
             .context("resource clean up")?;
+
+        if let Some(uid) = rootless_uid {
+            let path = vmm_user_runtime_dir(uid);
+            if let Err(err) = remove_vmm_user_runtime_dir(uid) {
+                warn!(
+                    sl!(),
+                    "failed to remove rootless runtime directory {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
 
         // TODO: cleanup other sandbox resource
         Ok(())
@@ -1543,7 +1568,10 @@ impl Persist for VirtSandbox {
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
-                #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
+                #[cfg(all(
+                    feature = "openvmm",
+                    any(target_arch = "x86_64", target_arch = "aarch64")
+                ))]
                 HYPERVISOR_NAME_OPENVMM => Ok(Some(hypervisor_state)),
                 _ => Err(anyhow!(
                     "Unsupported hypervisor {}",
@@ -1607,7 +1635,10 @@ impl Persist for VirtSandbox {
                 let hypervisor = Arc::new(Remote::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
             }
-            #[cfg(all(feature = "openvmm", target_arch = "x86_64"))]
+            #[cfg(all(
+                feature = "openvmm",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ))]
             HYPERVISOR_NAME_OPENVMM => {
                 let hypervisor = Arc::new(OpenVmm::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)

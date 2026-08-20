@@ -351,6 +351,22 @@ impl<T: InterruptManager> DeviceInterruptManager<T> {
         Err(Error::from_raw_os_error(libc::EINVAL))
     }
 
+    /// Get the (low_addr, high_addr, data) of a MSI message.
+    #[allow(irrefutable_let_patterns)]
+    pub fn get_msi_config(&self, index: u32) -> Result<(u32, u32, u32)> {
+        if (index as usize) < self.msi_config.len() {
+            if let InterruptSourceConfig::MsiIrq(ref msi) = self.msi_config[index as usize] {
+                return Ok((msi.low_addr, msi.high_addr, msi.data));
+            }
+        }
+        Err(Error::from_raw_os_error(libc::EINVAL))
+    }
+
+    /// Number of MSI vectors in the configuration space.
+    pub fn msi_config_count(&self) -> u32 {
+        self.msi_config.len() as u32
+    }
+
     /// Set msi irq MASK bit
     #[allow(irrefutable_let_patterns)]
     pub fn set_msi_mask(&mut self, index: u32, mask: bool) -> Result<()> {

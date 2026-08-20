@@ -65,13 +65,12 @@ defaultShim:
   amd64: qemu-runtime-rs
   arm64: qemu-runtime-rs
   s390x: qemu-runtime-rs
-  ppc64le: qemu
+  ppc64le: qemu-runtime-rs
 ```
 
 Since the Kata Containers **4.0 release**, the default is the **Rust runtime**
 (`runtime-rs`, `qemu-runtime-rs`) on every architecture that ships a
-`runtime-rs` build (x86_64, aarch64, s390x). ppc64le has no `runtime-rs` build
-yet and stays on the Go runtime (`qemu`). The Go runtime remains selectable
+`runtime-rs` build (x86_64, aarch64, s390x and ppc64le). The Go runtime remains selectable
 (e.g. via the `kata-qemu` RuntimeClass) but is
 [deprecated](migrating-config-go-runtime-to-runtime-rs.md#go-runtime-deprecation).
 See the [config migration guide](migrating-config-go-runtime-to-runtime-rs.md)
@@ -123,6 +122,30 @@ found [here](runtime-configuration.md#drop-in-files).
 You can also use the `customRuntimes.runtimes.[name].dropIn` configuration in the helm
 chart to achieve the same results.
 
+### k8sDistribution
+
+Different Kubernetes distributions keep containerd's configuration in different
+places, so the chart needs to be told which one this cluster is. The value picks the
+host directory that gets mounted into the install:
+
+```yaml title="values.yaml"
+k8sDistribution: k8s   # k8s | k3s | rke2 | k0s | microk8s
+```
+
+Any other value means the default location, `/etc/containerd/` — so `kubeadm` and
+`vanilla` are as good as `k8s`. Set `containerd.configDir` instead if your
+containerd matches none of the presets.
+
+!!! warning "A wrong value stops the install before changing the node"
+
+    This value picks the *directory*, while which *file* to write is worked out on
+    the node itself, from the CRI runtime actually running there. Declaring `k8s` on
+    a `k3s` cluster therefore describes a perfectly good `k3s` configuration inside a
+    directory `k3s` does not read — a node that never runs a Kata workload, with
+    nothing to show for it. The install compares the two and stops before writing
+    anything, naming the value to set. An explicit `containerd.configDir` overrides
+    the derivation this check is about, so it does not apply in that case.
+
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the
@@ -138,27 +161,125 @@ top-level `deploymentMode` value:
   pipeline as ordered `initContainers` and then exits:
 
   ```
-  host-check -> artifacts -> cri   (initContainers)  ->  label (main)
+  host-check -> artifacts   (initContainers)  ->  cri (main)
   ```
 
   On `helm uninstall`, a `pre-delete` dispatcher fans out per-node Jobs that run
-  the pipeline in reverse (`unlabel -> revert-cri -> remove-artifacts`). Unlike
+  the pipeline in reverse (`revert-cri -> remove-artifacts`). Unlike
   the DaemonSet, **nothing keeps running on the node after installation
   completes**, and the dispatcher itself only ever talks to the API server — it
   never touches the host (so it ships as a separate, minimal image,
   `job.dispatcherImage`).
 
-  The privilege split is explicit: the dispatcher pod runs **fully unprivileged**
-  (`runAsNonRoot`, all capabilities dropped, no privilege escalation, read-only
-  root filesystem, `RuntimeDefault` seccomp) under a **dedicated minimal
-  ServiceAccount** whose only rights are `nodes: list` (cluster-scoped) and
-  managing Jobs in the release namespace. All privileged, host-mutating work
-  stays in the per-node Jobs, which continue to use the `kata-deploy`
-  ServiceAccount.
+  The privilege split is explicit, and it is what `job` mode buys you over the
+  DaemonSet: **the privileged pods hold no API credentials at all**. Everything
+  that needs the API server is done by the dispatcher, which runs **fully
+  unprivileged** (`runAsNonRoot`, all capabilities dropped, no privilege
+  escalation, read-only root filesystem, `RuntimeDefault` seccomp), never touches
+  the host, and can be confined to nodes you trust.
 
 ```yaml title="values.yaml"
 deploymentMode: job
 ```
+
+#### Where the credentials live
+
+The pods that run on your nodes hold no API credentials at all: the per-node Jobs
+are rendered with `automountServiceAccountToken: false` and no ServiceAccount of
+their own. This matters because root on a node can read the ServiceAccount token
+of any pod running there.
+
+| | runs where | privileged on the host | API rights |
+|---|---|---|---|
+| dispatcher (install, uninstall) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured |
+| per-node Jobs | every node Kata is installed on | yes | **none — no token is mounted** |
+| `post-delete` hook (uninstall only) | one pod, wherever it schedules | no | `delete` on ClusterRoles, ClusterRoleBindings, Roles, RoleBindings and ServiceAccounts |
+| verification Job (only if `verification.pod` is set) | one pod, wherever it schedules | no | pods and pod logs (`create`, `delete`, `get`, `list`, `watch`), `nodes`/`events`/`daemonsets`/`jobs`: `get`, `list` |
+
+The last two rows are the exceptions worth knowing about, and both exist in either
+mode. The `post-delete` hook deletes the RBAC the release keeps, so its own rights
+have to outlive everything else; the verification Job runs the pod you gave it and
+reports what happened. Both are short-lived — one runs during `helm uninstall`, the
+other after `helm install`/`helm upgrade` — but neither is pinned, so for those few
+seconds their tokens can be on any schedulable node. The verification Job is opt-in:
+leave `verification.pod` unset and it does not exist.
+
+Three things need the Kubernetes API, so none of them happen inside a per-node Job:
+
+- **Labelling the node, and everything that gates it.** The dispatcher claims a node
+  with `katacontainers.io/kata-runtime=false` before its Job starts. It promotes the
+  label to `true` only once three things hold: that Job succeeded, the node reports
+  `Ready` again (`job.waitNodeReadySeconds`), and the node's own
+  `.status.runtimeHandlers` confirms its CRI runtime is serving the handlers this
+  release installed. Only then does it lift the configured `startupTaints`. A pod on
+  the node could not offer any of that. The label cannot appear on a node whose
+  pipeline failed half way, nor on one whose runtime quietly ignored the
+  configuration that was written. It survives a kubelet that re-registers after the
+  runtime restart and drops it, because the dispatcher re-applies it until it holds.
+  On uninstall the value drops to `false`, which stops workloads being scheduled,
+  *before* that node's Job starts taking the node apart — and the label itself goes
+  only once that Job has succeeded.
+
+    In `job` mode the claim is mandatory: the dispatcher refuses to start a
+    host-mutating Job unless both labels were written atomically. Otherwise a
+    half-failed install could modify a host that the default uninstall selector
+    cannot discover. In `daemonset` mode the claim stays best-effort.
+
+    The handler check has one limit worth knowing: `.status.runtimeHandlers` is
+    populated by kubelet from Kubernetes 1.30 on. A node that does not report the
+    field at all cannot answer, and is labelled on the strength of its Job
+    succeeding. A node that reports the field without any of this release's handlers
+    in it fails, and an empty list counts the same way: that node has answered, it
+    just has nothing this release installed. One handler is enough to pass, because
+    the release names the handlers for every architecture it can install and a node
+    only serves its own; the ones it does not serve are logged. A release that
+    registers no handler names — every shim disabled and no custom runtime — has
+    nothing to ask about, and skips the check.
+- **The node's container runtime version.** It is the one fact the install cannot
+  work out on the host itself, so the dispatcher reads it from the `Node` objects it
+  has already listed and passes it down as an environment variable. Everything else
+  the install needs to know about its node, the Kubernetes flavour included, it gets
+  by asking the host.
+- **The cluster-scoped objects**: the `RuntimeClass`es and the `NodeFeatureRule`
+  advertising TEE key counts are rendered by the chart (see
+  [TEE key advertisement](#tee-key-advertisement)), so nothing on a node needs
+  write access to them. `helm uninstall` removes them for free.
+
+!!! note "How this compares to `daemonset` mode"
+
+    Installing Kata means writing to the host and restarting the CRI runtime, so
+    something privileged has to run on each node in either mode. Two things differ.
+    The DaemonSet pod carries the `kata-deploy` ServiceAccount, which can patch any
+    node in the cluster and read any node's kubelet configuration, and it stays on
+    the node — token and all — for the life of the release. A per-node Job carries
+    no token and exits when it is done.
+
+    So in `job` mode a compromised worker node yields no cluster credentials, unless
+    the `post-delete` hook or the verification Job happens to be running there at that
+    moment. The component that does hold the node-patching token can be kept on the
+    control plane. In `daemonset` mode that token is, by construction, on every node
+    Kata runs on, for the life of the release.
+
+!!! warning "Switching an existing `daemonset` release to `job` mode"
+
+    The privileged `kata-deploy` ServiceAccount, ClusterRole and ClusterRoleBinding
+    are annotated `helm.sh/resource-policy: keep`, so that a DaemonSet pod being
+    terminated still has the API access its own cleanup needs. `keep` also means
+    Helm leaves them behind on an upgrade that no longer renders them — which is
+    exactly what switching to `job` mode does. The release stops using them, but the
+    credential that can patch any node in the cluster is still there.
+
+    They are cluster-scoped and un-suffixed, so a release in another namespace may
+    share them; the chart cannot safely delete them for you. Once no `daemonset`
+    release is left, remove them by hand:
+
+    ```sh
+    kubectl delete clusterrolebinding kata-deploy-rb
+    kubectl delete clusterrole kata-deploy-role
+    kubectl delete serviceaccount kata-deploy-sa -n <release namespace>
+    ```
+
+    With `env.multiInstallSuffix` set, the names carry that suffix.
 
 #### Why a dispatcher instead of Helm-rendered per-node Jobs
 
@@ -202,17 +323,19 @@ the dispatcher's placement. When `job.dispatcherTolerations` is empty it falls
 back to the top-level `tolerations`, so the dispatcher stays schedulable on a
 cluster whose every node is tainted.
 
-!!! warning "What this does, and what it leaves alone"
+!!! tip "What pinning does and does not cover"
 
-    Pinning moves one credential, not all of them. The per-node Jobs still run
-    under the `kata-deploy` ServiceAccount on every node Kata is installed on,
-    so a worker still hosts a token that can patch nodes and RuntimeClasses.
-    What it takes off those workers is the credential that reaches the *whole*
-    cluster: node enumeration, and the ability to create privileged Jobs
-    anywhere.
+    Pinning the dispatcher keeps the release's one cluster-wide, long-lived
+    identity — the one that can enumerate and patch every node — off your workers.
+    The privileged pods that do run on every node mount no token at all.
 
-    That much is a boundary `daemonset` mode cannot draw at all, since the pod
-    holding its token has to run on every node by definition.
+    It does not pin the two short-lived hooks: the `post-delete` RBAC cleanup and,
+    if you set `verification.pod`, the verification Job (see
+    [Where the credentials live](#where-the-credentials-live)). Both can land on
+    any schedulable node for as long as they run.
+
+    That is still a boundary `daemonset` mode cannot draw, since the pod holding
+    its node-patching token has to run on every node by definition.
 
 ### Adding nodes in `job` mode
 
@@ -240,10 +363,15 @@ What survives the dispatcher dying:
 
 - **Per-node Jobs already created keep running.** They are independent,
   `nodeName`-pinned Jobs, not children of the dispatcher pod, so installs that
-  were already dispatched run to completion and those nodes get labeled. Only
-  nodes still queued (never dispatched) are skipped, so at worst you get
-  *partial coverage* — never a half-mutated host, because each stage is
-  idempotent.
+  were already dispatched run to completion. Only nodes still queued (never
+  dispatched) are skipped, so at worst you get *partial coverage* — never a
+  half-mutated host, because each stage is idempotent.
+- **Those nodes are not labelled**, though. Labelling is the dispatcher's job (it
+  is what lets the per-node Jobs run without a token), so a node whose install
+  finished after the dispatcher died is left installed but not advertised, and no
+  Kata workload is scheduled there. It still carries
+  `katacontainers.io/kata-runtime=false` from being claimed, so `helm uninstall`
+  reaches it, and the re-run below labels it.
 - Those per-node Jobs carry a (non-controller) `ownerReference` to the dispatcher
   Job, so they survive *pod* deletion but are garbage-collected once the
   dispatcher **Job** itself is removed or its `job.ttlSecondsAfterFinished`
@@ -287,6 +415,11 @@ itself while enumerating nodes:
 An empty `nodeSelector` therefore does **not** mean "every node": step 2 still
 applies, and that is what keeps Kata off control-plane nodes by default without
 any label filtering.
+
+On upgrade, `job` mode also compares that desired set with the nodes carrying
+this installation's marker. Nodes in `owned - desired` run the cleanup pipeline
+before the desired nodes are installed, so narrowing or changing a selector does
+not leave the old nodes labelled and configured forever.
 
 ```yaml title="values.yaml"
 # Install on nodes carrying a specific label:
@@ -349,10 +482,17 @@ with no eligible node. Failing is deliberate: in `job` mode an empty selection
 is permanent — nothing installs the node later — so a silent success would leave
 the fleet without Kata and nothing to point at.
 
+Finding one eligible node is not the end of the wait either. Eligibility arrives
+per node, so the dispatcher waits until the set stays unchanged for
+`job.nodeSettleSeconds` (default `15`) or the overall wait expires. A single
+unchanged poll is not enough: the next node may be labelled a second later.
+
 ```yaml title="values.yaml"
 job:
   # Give a slow-labelling cluster longer (see the timeout warning below)...
   waitForNodesSeconds: 300
+  # Require a 30-second quiet period after the last newly eligible node.
+  nodeSettleSeconds: 30
   # ...or resolve once and treat "no eligible node" as a no-op, the way a
   # DaemonSet with no matching node quietly installs nothing.
   # waitForNodesSeconds: 0
@@ -369,6 +509,25 @@ job:
 
 The uninstall dispatcher never waits: it has to run to completion on a release
 that may never have labeled a node.
+
+#### Bounding a node that never finishes
+
+The dispatcher waits for every node it dispatched to, so one host wedged on
+something it cannot finish — a CRI restart that never returns, a hung mount —
+would otherwise hold up the whole rollout until Helm's own timeout fired. Two
+knobs bound that:
+
+```yaml title="values.yaml"
+job:
+  # Kubernetes fails a per-node Job that runs longer than this, and the
+  # dispatcher reports that node as failed and carries on with the others.
+  activeDeadlineSeconds: 3600
+  # How long a finished per-node Job is kept. The dispatcher reads each Job's
+  # result by polling it, so a Job collected before its next poll leaves its node
+  # with no result at all - which reads as a failure. The chart refuses anything
+  # below 60.
+  ttlSecondsAfterFinished: 600
+```
 
 #### Installing on control-plane nodes
 
@@ -425,12 +584,28 @@ cleanup selector can simply be "nodes carrying the
 touched, regardless of how the install selector has drifted since.
 
 The selector matches the label's *key*, not the value `"true"`, and that is
-deliberate. An install claims its node with `katacontainers.io/kata-runtime=false`
-before it writes anything to it, and only promotes it to `"true"` once the node
-is kata-capable. Uninstall therefore also reaches nodes where the install failed
-part way through — the ones most likely to have artifacts or CRI configuration
-left on them. Nothing schedules onto a claimed node in the meantime, since the
-RuntimeClasses select the exact value `"true"`.
+deliberate. A node is claimed with `katacontainers.io/kata-runtime=false` before
+anything is written to it — by the dispatcher in `job` mode, before it even creates
+that node's Job — and only promoted to `"true"` once the node is kata-capable.
+Uninstall therefore also reaches nodes where the install failed part way through —
+the ones most likely to have artifacts or CRI configuration left on them. Nothing
+schedules onto a claimed node in the meantime, since the RuntimeClasses select the
+exact value `"true"`. For the same reason an uninstall demotes the label to
+`"false"` rather than removing it, and removes it only once that node's cleanup Job
+has succeeded: a cleanup that fails is still a node the next `helm uninstall` can
+find. Where several installations share a node, neither the demotion nor the removal
+happens while another one is still holding it — see
+[How installations keep out of each other's way on a node](#how-installations-keep-out-of-each-others-way-on-a-node).
+
+In `job` mode claiming is a precondition for dispatch: if the labels cannot be
+written, that node fails before any host mutation begins. This keeps the default
+cleanup selector complete even when the API server rejects or times out a patch.
+
+Cleanup pods also tolerate **every** taint, unlike the install's, which carry the
+`tolerations` you configured. Where an install may run is your decision; where an
+uninstall must run is decided by what is already on the node. A `NoExecute` taint
+added since the install would otherwise evict the cleanup pod from a node that has
+Kata on it, and nothing would come back for it.
 
 Override it under `job.cleanup` (`cleanup.nodes`, then `cleanup.nodeSelector`
 ANDed with `cleanup.nodeAffinity`, else all nodes):
@@ -738,6 +913,112 @@ kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
 
+#### How installations keep out of each other's way on a node
+
+One thing is deliberately *not* suffixed: the node label
+`katacontainers.io/kata-runtime`, which every installation's RuntimeClasses select.
+It says "this node can run Kata", not "this installation is here", so it cannot be
+used to work out whether removing it is safe.
+
+Each installation therefore also marks the nodes it holds with a label of its own,
+named after its suffix — `kata-deploy.katacontainers.io/cicd` for the example above,
+and `kata-deploy.katacontainers.io/default` for an installation that sets no suffix.
+The value follows the shared label's: `false` while the installation is being put in
+place, `true` once the node can run its workloads.
+
+```sh
+$ kubectl get node worker-1 -o jsonpath='{.metadata.labels}' | tr ',' '\n' | grep kata
+"katacontainers.io/kata-runtime":"true"
+"kata-deploy.katacontainers.io/default":"true"
+"kata-deploy.katacontainers.io/cicd":"true"
+```
+
+Every installation's RuntimeClasses select **both** labels — the shared one and
+its own mark, including `kata-deploy.katacontainers.io/default` when no suffix was
+set. The default installation can still share a node with a suffixed release, so
+it needs the same gate. Removing one mark stops that installation's workloads
+being sent there immediately, even when the shared label stays for another one.
+
+An uninstall removes its own mark from every node it reaches, and the shared label
+only from the nodes where no other mark is left. So uninstalling `kata-deploy-cicd`
+above leaves `worker-1` running Kata for the other installation, while a node that
+only ever had `cicd` on it loses the label and stops being a Kata node. Cleanup
+still restarts the shared CRI runtime after removing this installation's
+configuration: otherwise the live runtime could keep advertising a handler whose
+binary has just been deleted. The other installation's configuration remains and
+is reloaded by that restart. Host-mutating stages from different releases take
+the same node-local lock, so concurrent installs or uninstalls cannot race their
+configuration edits and restarts.
+
+A mark reading `false` does not count as another installation serving Kata: if the
+last `true` mark goes and only a half-finished installation is left, the shared
+label is set back to `false` rather than removed. Nothing is scheduled on the
+strength of it, and the installation that is still working on the node keeps a
+label its own uninstall can find.
+
+!!! warning "Upgrade every installation before uninstalling any"
+
+    Nodes installed by a version that did not write marks carry none, and an
+    uninstall cannot attribute such a node to one release. Run `helm upgrade` on
+    every installation without changing its node selection before uninstalling or
+    narrowing one of them, so each release has first marked the nodes it owns.
+
+`env.multiInstallSuffix` is immutable for the life of a Helm release. The chart
+stores the first value under a suffix-independent ConfigMap name and rejects an
+upgrade that changes it: the install directory, handlers, resource names, and
+node marker all derive from the suffix, so changing it in place would create a
+second installation while forgetting how to remove the first.
+
+For containerd, a suffixed installation also requires drop-in configuration
+support. Older whole-file configuration has one shared backup; uninstalling one
+release would restore a file that predates every release and erase the surviving
+handlers. Installation therefore fails before modifying CRI configuration when
+that unsafe combination is detected.
+
+With whole-file configuration, uninstall restores the backup taken at install
+time. A node whose containerd had no configuration file at all gets one written
+for it, and uninstall deletes that file again. Any other whole-file configuration
+is left untouched, with a warning in the log: without a backup or a record of
+having written the file, kata-deploy cannot tell its own configuration from an
+administrator's.
+
+On the first upgrade from a chart version that predates that state ConfigMap, the
+chart verifies the previous identity from the existing mode-specific resource
+whose name derives from the suffix. If it cannot find one, the upgrade stops and
+the error names the ConfigMap data that can be seeded explicitly; guessing would
+be the unsafe choice.
+
+The same state makes `deploymentMode` immutable and rejects values other than
+`daemonset` and `job`. An in-place mode switch can strand nodes owned by the old
+controller, and recording a new mode before its hook succeeds can also make a
+rollback reject the previous mode. Uninstall the existing mode cleanly before
+installing the other one.
+
+In `job` mode this means an uninstall may visit a node that only ever belonged to
+another installation — the default cleanup selection is the shared label, which is
+by definition not yours alone — and find nothing of its own to remove. That is
+deliberately the safe direction: it reaches every node it might have touched. If you
+would rather it visited only its own nodes, select on its mark:
+
+```yaml title="values.yaml"
+job:
+  cleanup:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kata-deploy.katacontainers.io/cicd
+                operator: Exists
+```
+
+!!! note "Both deployment modes keep the same books"
+
+    The marks are the same labels in either mode — written by the dispatcher in
+    `job` mode and by the pod on the node in `daemonset` mode — so an uninstall in
+    one mode does see an installation running in the other. Mixing modes across
+    installations is not a combination we test, though: give every installation the
+    same `deploymentMode`.
+
 ## RuntimeClass Node Selectors for TEE Shims
 
 **Manual configuration:** Any `nodeSelector` you set under `shims.<shim>.runtimeClass.nodeSelector`
@@ -759,3 +1040,39 @@ no manual `runtimeClass.nodeSelector` is set for that shim.
 **Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
 cluster), external NFD is not seen, so auto-injected labels are not added. Manual
 `runtimeClass.nodeSelector` values are still applied in all cases.
+
+## TEE key advertisement
+
+A confidential VM consumes a *hardware key slot* — an encrypted-state ID on AMD
+SEV-SNP, a key ID on Intel TDX — and a node has a small, fixed number of them. The chart models that
+as an extended resource so the scheduler stops placing confidential pods on a node
+whose slots are all taken, instead of letting the VM fail to start:
+
+- a `NodeFeatureRule` tells node-feature-discovery to advertise the per-node counts
+  as `sev-snp.amd.com/esids` and `tdx.intel.com/keys`
+- the matching `RuntimeClass`es request one of them in `overhead.podFixed`, so every
+  pod that uses the class consumes a slot
+
+Both halves are one switch, because requesting a resource nothing advertises would
+leave confidential pods `Pending` forever:
+
+```yaml title="values.yaml"
+nodeFeatureRules:
+  create: auto   # auto | true | false
+```
+
+`auto` renders them when NFD is in the picture: installed by this chart
+(`node-feature-discovery.enabled=true`), already present in the cluster, or its CRD
+is registered. `true` and `false` decide outright.
+
+`false` turns off **both** halves: no rule, and no confidential `RuntimeClass` asks
+for a TEE key. It is the escape hatch for a cluster that wants no part of this — not
+the way to keep the requests while managing the rule elsewhere. If you create an
+equivalent rule yourself, leave this at `auto` (or set it to `true`) so the requests
+are still rendered, and delete the chart's rule if it duplicates yours.
+
+!!! note "Naming, and a rule you may have to delete by hand"
+    The chart's rule is named `kata-tee-keys`, suffixed with
+    `env.multiInstallSuffix` when that is set. A rule called `amd64-tee-keys`
+    belongs to a release that has not been upgraded yet, and can be deleted once
+    every release has been.

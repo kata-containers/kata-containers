@@ -319,6 +319,37 @@ impl DragonballInner {
 
     fn start_vmm_instance(&mut self) -> Result<()> {
         info!(sl!(), "Starting VM");
+        // Boot from a VM template snapshot instead of cold booting when
+        // configured (mirrors the QEMU boot_from_template flow).
+        #[cfg(target_arch = "x86_64")]
+        if self.config.vm_template.boot_from_template {
+            let template = &self.config.vm_template;
+            if template.device_state_path.is_empty() || template.memory_path.is_empty() {
+                return Err(anyhow!(
+                    "vm_template memory_path/device_state_path are not configured"
+                ));
+            }
+            info!(
+                sl!(),
+                "Starting VM from template snapshot";
+                "device_state_path" => &template.device_state_path,
+                "memory_path" => &template.memory_path,
+            );
+            self.vmm_instance
+                .instance_start_from_snapshot(
+                    template.device_state_path.clone(),
+                    template.memory_path.clone(),
+                )
+                .context("Failed to start vmm from template snapshot")?;
+            self.state = VmmState::VmRunning;
+            return Ok(());
+        }
+        #[cfg(not(target_arch = "x86_64"))]
+        if self.config.vm_template.boot_from_template {
+            return Err(anyhow!(
+                "boot_from_template is not supported on this architecture"
+            ));
+        }
         self.vmm_instance
             .instance_start()
             .context("Failed to start vmm")?;

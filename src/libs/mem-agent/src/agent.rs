@@ -42,7 +42,10 @@ async fn handle_agent_cmd(
 
     let need_reset_mas = match cmd {
         AgentCmd::MemcgStatus => {
-            ret_msg = AgentReturn::MemcgStatus(memcg.get_status().await);
+            ret_msg = match memcg.get_status().await {
+                Ok(status) => AgentReturn::MemcgStatus(status),
+                Err(e) => AgentReturn::Err(e),
+            };
             false
         }
         AgentCmd::MemcgSet(opt) => match memcg.set_config(opt).await {
@@ -55,7 +58,13 @@ async fn handle_agent_cmd(
                 false
             }
         },
-        AgentCmd::CompactSet(opt) => comp.set_config(opt).await,
+        AgentCmd::CompactSet(opt) => match comp.set_config(opt).await {
+            Ok(reset) => reset,
+            Err(e) => {
+                ret_msg = AgentReturn::Err(e);
+                false
+            }
+        },
     };
 
     ret_tx

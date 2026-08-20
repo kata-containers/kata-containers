@@ -37,11 +37,9 @@ job:
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
   #
-  # Worth setting: the dispatcher is the component that holds Kubernetes
-  # credentials, and root on whatever node it lands on can read them.
-  # Confining it to nodes you trust - typically the control plane - means a
-  # compromised worker cannot reach them, something a DaemonSet can never offer
-  # because it must run everywhere.
+  # Worth setting: the dispatcher is the only component that holds credentials,
+  # and root on the node it runs on can read them. The per-node Jobs hold no
+  # token, so they do not need this.
   #
   # Example (control plane only; the toleration is required because those nodes are
   # normally tainted):
@@ -71,7 +69,8 @@ job:
   #
   # The only job-mode-specific override is an explicit list of node names, which
   # takes precedence over the selection above and is used verbatim (including
-  # tainted nodes, since naming a node is unambiguous):
+  # tainted nodes, since naming a node is unambiguous). Those install Jobs receive
+  # a catch-all toleration so a NoExecute taint cannot evict a directly bound pod:
   #   job:
   #     nodes: ["worker-1", "worker-2"]
   nodes: []
@@ -98,6 +97,21 @@ job:
   # this alone just trades a dispatcher error that names the selectors it tried
   # for Helm's opaque "timed out waiting for the condition".
   waitForNodesSeconds: 120
+  # How long the eligible-node set must remain unchanged before dispatch starts
+  # (seconds). Labels commonly arrive one node at a time; this quiet period keeps
+  # the first labelled node from making the dispatcher miss the rest.
+  nodeSettleSeconds: 15
+  # On upgrade, nodes carrying this installation's marker but no longer matching
+  # the selection run the cleanup pipeline before the desired nodes are installed.
+  # This makes selector changes converge in both directions instead of leaving
+  # removed nodes permanently configured and advertised.
+  # How long to wait for a node to report Ready again after its install Job
+  # finished, before advertising it as Kata-capable.
+  #
+  # Install ends by restarting the node's CRI runtime, which makes the node
+  # NotReady for a moment. Waiting keeps the first Kata workload away until the
+  # runtime is back. A node that never becomes Ready stays unlabeled.
+  waitNodeReadySeconds: 300
   # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
   #
   # Deliberately independent of the install selection: uninstall has to reach
@@ -115,8 +129,15 @@ job:
   # also reaches nodes where the install failed half way, which are precisely
   # the nodes with something left on them.
   #
+  # With env.multiInstallSuffix this label is shared with the other installs, so
+  # the default reaches their nodes too and finds nothing of its own to remove
+  # there - the safe direction. Narrow it to this install's own mark
+  # (kata-deploy.katacontainers.io/<suffix>, Exists) to visit only its nodes.
+  #
   # Precedence: cleanup.nodes, else cleanup.nodeSelector (equality) ANDed with
-  # cleanup.nodeAffinity, else all nodes. Override to clean a different set, e.g.:
+  # cleanup.nodeAffinity - which is what the default below expresses. Setting all
+  # three to empty is what means "every node". Override to clean a different set,
+  # e.g.:
   #   job:
   #     cleanup:
   #       nodes: ["worker-1"]
@@ -131,7 +152,17 @@ job:
                 operator: Exists
   # How long finished per-node Jobs are retained before automatic garbage
   # collection (seconds). Applies to both install and cleanup per-node Jobs.
+  #
+  # The dispatcher polls each Job for its result. A Job deleted before the next
+  # poll leaves its node with no result, and that counts as a failed install.
+  # Values below 60 are refused.
   ttlSecondsAfterFinished: 600
+  # How long a single node's Job may run before Kubernetes fails it (seconds).
+  #
+  # The dispatcher waits for every node it dispatched to, so this limits how long
+  # one stuck node can hold up the whole rollout. The default is generous: a slow
+  # node pulling a large image is normal, an hour of it is not.
+  activeDeadlineSeconds: 3600
   # Per-node retry budget: retries for a single node's Job before it is marked
   # failed. One node failing never aborts the others.
   backoffLimit: 3
@@ -173,6 +204,15 @@ monitor:
       cpu: 200m
       memory: 300Mi
 
+# Which Kubernetes flavour this cluster runs. It picks the host directory that
+# holds containerd's configuration, which is mounted into the install.
+#
+# Getting it wrong used to pass unnoticed: the install detects the runtime on the
+# node itself, so it would write a correct configuration into whichever directory
+# was mounted - and if that is not the one this node's containerd reads, Kata is
+# configured where nothing looks for it. The install now refuses to continue when
+# the two disagree, naming the value to set. Setting containerd.configDir takes
+# that check out of the way, being an explicit override of this derivation.
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
 # Containerd configuration overrides
@@ -573,6 +613,7 @@ shims:
       - amd64
       - arm64
       - s390x
+      - ppc64le
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
@@ -844,15 +885,14 @@ shims:
 #
 # Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
 # "qemu-runtime-rs") is the default on every architecture that ships a
-# runtime-rs build. ppc64le has no runtime-rs build yet, so it stays on the
-# Go runtime ("qemu"). The Go runtime remains supported (no new features are
+# runtime-rs build. The Go runtime remains supported (no new features are
 # being added) and selectable (e.g. RuntimeClass "kata-qemu"); see the
 # deprecation notice in docs/migrating-config-go-runtime-to-runtime-rs.md.
 defaultShim:
   amd64: qemu-runtime-rs
   arm64: qemu-runtime-rs
   s390x: qemu-runtime-rs
-  ppc64le: qemu
+  ppc64le: qemu-runtime-rs
 
 runtimeClasses:
   enabled: true

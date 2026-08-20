@@ -7,10 +7,7 @@
 mod agent;
 mod trans;
 
-use std::{
-    os::unix::io::RawFd,
-    sync::Arc,
-};
+use std::{os::unix::io::RawFd, sync::Arc};
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;

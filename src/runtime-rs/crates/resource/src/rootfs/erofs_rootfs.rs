@@ -21,9 +21,11 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, device::{
-        DeviceConfig, DeviceType, device_manager::{DeviceManager, do_handle_device, get_block_device_info},
+    device::{
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
+        DeviceConfig, DeviceType,
     },
+    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat,
 };
 use kata_types::gpt_disk::{
     extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
@@ -72,9 +74,11 @@ const X_KATA_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 
 /// Create the per-container directory under the shared filesystem root.
 pub(crate) fn ensure_container_dir(sid: &str, cid: &str) -> Result<PathBuf> {
-    let dir = PathBuf::from(kata_types::build_path(DEFAULT_KATA_GUEST_ROOT_SHARED_FS))
-        .join(sid)
-        .join(cid);
+    let dir = PathBuf::from(kata_types::prefix_with_rootless_dir(
+        DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
+    ))
+    .join(sid)
+    .join(cid);
     fs::create_dir_all(&dir).context(format!(
         "failed to create container directory: {}",
         dir.display()
@@ -592,10 +596,9 @@ impl ErofsMultiLayerRootfs {
                     .await
                     .context("failed to attach rw block device")?;
 
-                    let (mut rwlayer, device_id) =
-                        extract_block_device_info(&device_info, false)
-                            .await
-                            .context("failed to get block device for rw layer")?;
+                    let (mut rwlayer, device_id) = extract_block_device_info(&device_info, false)
+                        .await
+                        .context("failed to get block device for rw layer")?;
                     info!(
                         sl!(),
                         "writable block device attached - device_id: {} guest_path: {}",
@@ -987,7 +990,7 @@ impl ErofsMultiLayerRootfs {
             erofs_storages,
             vmdk_path,
             gpt_metadata_paths,
-            generated_artifacts_dir: PathBuf::from(kata_types::build_path(
+            generated_artifacts_dir: PathBuf::from(kata_types::prefix_with_rootless_dir(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
             ))
             .join(sid)

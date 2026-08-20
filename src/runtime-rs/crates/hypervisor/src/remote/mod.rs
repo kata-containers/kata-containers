@@ -13,13 +13,14 @@ use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 mod inner;
 
 #[derive(Debug)]
 pub struct Remote {
     inner: Arc<RwLock<RemoteInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl Default for Remote {
@@ -30,8 +31,11 @@ impl Default for Remote {
 
 impl Remote {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(RemoteInner::new())),
+            inner: Arc::new(RwLock::new(RemoteInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -67,8 +71,12 @@ impl Hypervisor for Remote {
     }
 
     async fn wait_vm(&self) -> Result<i32> {
-        let inner = self.inner.read().await;
-        inner.wait_vm().await
+        info!(sl!(), "Wait Remote VM");
+        let mut waiter = self.exit_waiter.lock().await;
+        if let Some(exitcode) = waiter.0.recv().await {
+            waiter.1 = exitcode;
+        }
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -208,12 +216,14 @@ impl Persist for Remote {
 
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = RemoteInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+        let inner = RemoteInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

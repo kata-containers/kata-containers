@@ -47,17 +47,29 @@ qemu_rootless_sandbox_supported() {
 
 	# Additional QEMU configurations are tracked in:
 	# https://github.com/kata-containers/kata-containers/issues/13424
-	is_runtime_rs && return 1
-	is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" && return 1
 	# Rootless QEMU cannot access EROFS layers below root-owned
 	# snapshot directories.
 	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && return 1
-	is_confidential_runtime_class "${KATA_HYPERVISOR}" && return 1
+
+	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
+	# actual confidential handlers excluded until rootless QEMU can access
+	# resources such as /dev/sev and the configured TDX QGS endpoint.
+	if is_confidential_runtime_class "${KATA_HYPERVISOR}" &&
+		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
+		return 1
+	fi
+	# Generated CoCo policies add an init-data disk below a root-owned host
+	# path. Neither runtime passes that disk to rootless QEMU yet.
+	if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] &&
+		[[ "${AUTO_GENERATE_POLICY:-}" == "yes" ]]; then
+		return 1
+	fi
 	return 0
 }
 
 setup() {
 	local runtime_config_dropin_file
+	local seccomp_key
 
 	if ! qemu_rootless_sandbox_supported; then
 		skip "QEMU rootless and seccomp sandbox smoke testing does not cover ${KATA_HYPERVISOR}"
@@ -80,11 +92,17 @@ setup() {
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"
 
+	if is_runtime_rs; then
+		seccomp_key="seccomp_sandbox"
+	else
+		seccomp_key="seccompsandbox"
+	fi
+
 	runtime_config_dropin_file="${BATS_FILE_TMPDIR}/99-k8s-qemu-sandbox.toml"
 	cat > "${runtime_config_dropin_file}" <<EOF
 [hypervisor.qemu]
 rootless = true
-seccompsandbox = "${QEMU_SANDBOX_PARAM}"
+${seccomp_key} = "${QEMU_SANDBOX_PARAM}"
 EOF
 
 	runtime_config_dropin="$(set_kata_runtime_config_dropin_file \

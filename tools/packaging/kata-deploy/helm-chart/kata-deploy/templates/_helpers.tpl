@@ -684,6 +684,14 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: CONTAINERD_CONFIG_FILE_NAME
   value: {{ .Values.containerd.configFileName | trim | quote }}
 {{- end }}
+{{- if not (.Values.containerd.configDir | trim) }}
+{{- /* This value picks the host directory mounted at /etc/containerd, while the
+       install detects the runtime itself and picks the file written within it, so
+       the install needs it to refuse a directory its runtime does not read.
+       Omitted when configDir overrides the derivation being checked. */}}
+- name: K8S_DISTRIBUTION
+  value: {{ .Values.k8sDistribution | quote }}
+{{- end }}
 {{- if .Values.containerd.userDropIn | trim }}
 - name: CONTAINERD_USER_DROP_IN_SOURCE_FILE
   value: "/custom-containerd-config/containerd-user-dropin.toml"
@@ -748,6 +756,131 @@ Returns the comma-joined selector string (possibly empty, meaning "all nodes").
 {{- end -}}
 
 {{/*
+Flags handing the node-level API work to the dispatcher, for the stage named in
+`stage` ("install" or "cleanup").
+
+The per-node Jobs can run without a token because this work happens here instead.
+Install labels the node only after its runtime serves what was installed. Cleanup
+removes the label first, so no new Kata workload lands on a node that is about to
+lose its runtime.
+
+Arguments (dict): root, stage. Emitted at column 0; `nindent` at the call site.
+*/}}
+{{/*
+The label key this install marks its nodes with: the per-install half of the
+scheduling gate.
+
+katacontainers.io/kata-runtime is shared by every install on the node, so it
+cannot say *which* install is serving Kata there. With multiInstallSuffix set, the
+RuntimeClasses of an install therefore select this mark as well: taking it away is
+then what stops that install's workloads reaching the node, while the other
+installs keep theirs.
+*/}}
+{{- define "kata-deploy.instanceMarkerLabel" -}}
+{{- if .Values.env.multiInstallSuffix -}}
+kata-deploy.katacontainers.io/{{ .Values.env.multiInstallSuffix }}
+{{- else -}}
+kata-deploy.katacontainers.io/default
+{{- end -}}
+{{- end -}}
+
+{{- define "kata-deploy.dispatcherNodeWorkFlags" -}}
+{{- $root := .root -}}
+{{- /* Installs share katacontainers.io/kata-runtime, so each one also marks its
+       own nodes and gives the shared label up only once no other mark is left.
+       Both stages need to know which mark is ours. */}}
+{{- with $root.Values.env.multiInstallSuffix }}
+- "--multi-install-suffix={{ . }}"
+{{- end }}
+{{- if eq .stage "cleanup" }}
+- "--remove-node-label"
+{{- else }}
+- "--node-label=true"
+- "--claim-node-pending"
+- "--wait-node-ready-secs={{ $root.Values.job.waitNodeReadySeconds | default 300 }}"
+{{- with include "kata-deploy.criHandlers" $root | trim }}
+- "--require-node-handlers={{ . }}"
+{{- end }}
+{{- with $root.Values.startupTaints }}
+- "--remove-node-taints={{ join "," . }}"
+{{- end }}
+{{- with include "kata-deploy.kubeletTimeoutWarnSecs" $root | trim }}
+- "--kubelet-timeout-warn-secs={{ . }}"
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+The CRI runtime handlers this release installs, across every architecture.
+
+A node only serves the handlers built for its architecture, so look for any one of
+these rather than all of them. A node that serves none of them has a runtime that
+never read what the install wrote. Custom runtimes are included: on a release that
+configures nothing else, they are the only handlers there are.
+*/}}
+{{- define "kata-deploy.criHandlers" -}}
+{{- $root := . -}}
+{{- $suffix := $root.Values.env.multiInstallSuffix | default "" -}}
+{{- $handlers := list -}}
+{{- range $arch := list "amd64" "arm64" "s390x" "ppc64le" -}}
+{{- range $shim := include "kata-deploy.getEnabledShimsForArch" (dict "root" $root "arch" $arch) | trim | splitList " " -}}
+{{- if $shim -}}
+{{- $handler := printf "kata-%s" $shim -}}
+{{- if $suffix -}}
+{{- $handler = printf "kata-%s-%s" $shim $suffix -}}
+{{- end -}}
+{{- if not (has $handler $handlers) -}}
+{{- $handlers = append $handlers $handler -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and $root.Values.customRuntimes.enabled $root.Values.customRuntimes.runtimes -}}
+{{- range $name := keys $root.Values.customRuntimes.runtimes | sortAlpha -}}
+{{- $runtime := index $root.Values.customRuntimes.runtimes $name -}}
+{{- with $runtime.runtimeClass -}}
+{{- $handler := (fromYaml . | default dict).handler | default "" -}}
+{{- if and $handler (not (has $handler $handlers)) -}}
+{{- $handlers = append $handlers $handler -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $handlers -}}
+{{- end -}}
+
+{{/*
+Seconds below which a node's kubelet `runtimeRequestTimeout` is worth warning
+about, or EMPTY when this configuration has no reason to care.
+
+Only pulling or converting an image inside `CreateContainer` takes long enough to
+hit that timeout. The kubelet default is 2 minutes, so warning in any other case
+would warn about every cluster.
+*/}}
+{{- define "kata-deploy.kubeletTimeoutWarnSecs" -}}
+{{- $needed := false -}}
+{{- range $arch := list "amd64" "arm64" "s390x" "ppc64le" -}}
+{{- if include "kata-deploy.getForceGuestPullForArch" (dict "root" $ "arch" $arch) | trim -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- if contains "guest-pull" (include "kata-deploy.getPullTypeMappingForArch" (dict "root" $ "arch" $arch) | trim) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- end -}}
+{{- if contains "erofs" (include "kata-deploy.getSnapshotterSetup" . | trim) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- if .Values.customRuntimes.enabled -}}
+{{- range $runtime := (.Values.customRuntimes.runtimes | default list) -}}
+{{- if contains "guest-pull" (dig "crio" "pullType" "" $runtime | toString) -}}
+{{- $needed = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $needed -}}600{{- end -}}
+{{- end -}}
+
+{{/*
 Whether to render the NFD-derived resources: the `NodeFeatureRule` that advertises
 TEE key counts, and the matching `overhead.podFixed` entries that make Kata's
 confidential RuntimeClasses consume one of those keys per pod.
@@ -792,11 +925,11 @@ true
 Where a dispatcher pod may run: `nodeSelector` and `tolerations` blocks for the
 install and cleanup dispatchers.
 
-This is about the dispatcher pod, not about which nodes get Kata. The dispatcher
-holds the one token that reaches the whole cluster - it enumerates every node and
-creates the privileged per-node Jobs - and root on the node it lands on can read
-it; confining it to trusted nodes is a hardening step a DaemonSet cannot offer,
-having to run everywhere by definition.
+This is about the dispatcher pod, not about which nodes get Kata. The distinction
+matters because the dispatcher is the only part of job mode that holds
+credentials, and root on the node it lands on can read them; confining it to
+trusted nodes is a hardening step a DaemonSet cannot offer. The per-node Jobs,
+which do run on every target node, hold no token at all.
 
 Tolerations fall back to the top-level `tolerations` so the dispatcher stays
 schedulable wherever the per-node Jobs are allowed to run - without that, a
@@ -868,13 +1001,20 @@ the install does not tolerate, mirroring what the scheduler does for a DaemonSet
 {{- $eq := .Values.nodeSelector | default dict -}}
 {{- $terms := list -}}
 {{- $nodeAffinity := (.Values.affinity | default dict).nodeAffinity | default dict -}}
+{{- $hasRequired := hasKey $nodeAffinity "requiredDuringSchedulingIgnoredDuringExecution" -}}
 {{- with $nodeAffinity -}}
 {{- $required := .requiredDuringSchedulingIgnoredDuringExecution | default dict -}}
 {{- $terms = $required.nodeSelectorTerms | default list -}}
 {{- end -}}
+{{- if and $hasRequired (not $terms) -}}
+{{- fail "affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms must not be empty with deploymentMode: job. Kubernetes defines an empty required term list as matching no nodes; remove requiredDuringSchedulingIgnoredDuringExecution to select every otherwise eligible node." -}}
+{{- end -}}
 {{- range $term := $terms -}}
 {{- if $term.matchFields -}}
 {{- fail "affinity.nodeAffinity: matchFields cannot be used with deploymentMode: job. Node selection is a label-selector LIST against the Kubernetes API server, which cannot match on fields. To target nodes by name, use job.nodes instead." -}}
+{{- end -}}
+{{- if not ($term.matchExpressions | default list) -}}
+{{- fail "affinity.nodeAffinity: an empty nodeSelectorTerm matches no nodes in Kubernetes and cannot be represented as an API label selector in job mode. Remove the empty term or add a matchExpressions requirement." -}}
 {{- end -}}
 {{- end -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
@@ -952,8 +1092,12 @@ Arguments (dict):
   root  - top-level context (.)
   stage - "install" | "cleanup"
 
-install pipeline:  host-check -> artifacts -> cri (initContainers) ; label (main)
-cleanup pipeline:  unlabel -> revert-cri    (initContainers) ; remove-artifacts (main)
+install pipeline:  host-check -> artifacts (initContainers) ; cri (main)
+cleanup pipeline:  revert-cri              (initContainer)  ; remove-artifacts (main)
+
+The node label is not a stage here: the dispatcher sets it once the Job as a whole
+has succeeded (and removes it before a cleanup Job runs), which is what lets these
+pods run without a ServiceAccount token.
 
 Emitted at column 0 (a standalone Job document); embed with `indent` at the call
 site under a ConfigMap data key.
@@ -961,6 +1105,11 @@ site under a ConfigMap data key.
 {{- define "kata-deploy.perNodeJob" -}}
 {{- $root := .root -}}
 {{- $stage := .stage -}}
+{{- /* The dispatcher polls each Job for its result. A Job deleted before the next
+       poll leaves its node with no result, and that counts as a failure. */}}
+{{- if lt (int $root.Values.job.ttlSecondsAfterFinished) 60 -}}
+{{- fail (printf "job.ttlSecondsAfterFinished is %v, which is too short for the dispatcher to observe a per-node Job finishing: the Job is deleted before it is next polled and its node is reported as failed even though its install succeeded. Use 60 or more." $root.Values.job.ttlSecondsAfterFinished) -}}
+{{- end -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -971,6 +1120,9 @@ metadata:
 spec:
   backoffLimit: {{ $root.Values.job.backoffLimit }}
   ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}
+  {{- /* The dispatcher waits for every node it dispatched to. Without a deadline,
+         one stuck pod would hold up the whole rollout. */}}
+  activeDeadlineSeconds: {{ $root.Values.job.activeDeadlineSeconds | default 3600 }}
   template:
     metadata:
       labels:
@@ -990,11 +1142,50 @@ spec:
       imagePullSecrets:
 {{- toYaml . | nindent 8 }}
 {{- end }}
-      serviceAccountName: {{ include "kata-deploy.serviceAccountName" $root }}
+      {{- /* Without this, Kubernetes mounts the namespace's default token. These
+             pods need no API access: the dispatcher does all of it. */}}
+      automountServiceAccountToken: false
       restartPolicy: Never
-{{- with $root.Values.tolerations }}
+{{- if eq $stage "cleanup" }}
+      {{- /* nodeName gets the pod past the scheduler, but not past the taint
+             manager, which evicts even a bound pod. A node tainted after the
+             install would keep its Kata configuration for good. */}}
       tolerations:
+        - operator: Exists
+{{- else }}
+      {{- /* The DaemonSet controller adds these to its own pods, and job mode
+             installs on the same nodes. not-ready matters most: this Job
+             restarts the CRI runtime, which takes the node NotReady long enough
+             for the taint manager to evict it mid-install. */}}
+      tolerations:
+{{- if $root.Values.job.nodes }}
+        {{- /* Explicit names are a deliberate admission override. nodeName gets
+               past the scheduler, but an untolerated NoExecute taint can still
+               evict the bound pod before it finishes. */}}
+        - operator: Exists
+{{- else }}
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/memory-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/pid-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+          effect: NoSchedule
+{{- end }}
+{{- with $root.Values.tolerations }}
 {{- toYaml . | nindent 8 }}
+{{- end }}
 {{- end }}
 {{- with $root.Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
@@ -1003,12 +1194,10 @@ spec:
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "label" "action" "install-stage-label" "privileged" false "mountHost" false) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true) | nindent 8 }}
 {{- else }}
       initContainers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "unlabel" "action" "cleanup-stage-unlabel" "privileged" false "mountHost" false) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
@@ -1018,8 +1207,10 @@ spec:
 {{- end -}}
 
 {{/*
-Service account name (honoring multiInstallSuffix), shared by all kata-deploy
-workloads (DaemonSet and staged Jobs).
+Service account name (honoring multiInstallSuffix) for the DaemonSet, the only
+workload that carries the privileged host-mutation rights. Job mode's per-node
+Jobs deliberately have no ServiceAccount; its dispatcher uses
+kata-deploy.dispatcherServiceAccountName.
 */}}
 {{- define "kata-deploy.serviceAccountName" -}}
 {{- if .Values.env.multiInstallSuffix -}}
@@ -1118,6 +1309,11 @@ host. Emitted at column 0; indent with `nindent` at the call site.
 - name: boot
   mountPath: /boot
   readOnly: true
+- name: host-machine-id
+  mountPath: /host-machine-id
+  readOnly: true
+- name: host-run-lock
+  mountPath: /host-run-lock
 - name: host-usr-bin
   mountPath: /host-usr/bin
   readOnly: true
@@ -1175,6 +1371,16 @@ indent with `nindent` at the call site.
 - name: boot
   hostPath:
     path: /boot
+- name: host-machine-id
+  hostPath:
+    path: /etc/machine-id
+    type: File
+{{- /* Writable, unlike the other host mounts: this is where the lock the
+       installs on this node take against each other is created. */}}
+- name: host-run-lock
+  hostPath:
+    path: /run/lock
+    type: DirectoryOrCreate
 - name: host-usr-bin
   hostPath:
     path: /usr/bin

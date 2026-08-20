@@ -1052,15 +1052,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
 
                 continue;
             }
@@ -1390,15 +1385,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
                 continue;
             }
 
@@ -1557,15 +1547,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
                 continue;
             }
 
@@ -1684,15 +1669,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
                 continue;
             }
 
@@ -1776,15 +1756,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
                 continue;
             }
 
@@ -2204,15 +2179,10 @@ mod tests {
                 eprintln!("DEBUG: {}", msg);
             }
 
-            if d.result.is_err() {
+            if let Err(expected_err) = &d.result {
                 assert!(result.is_err(), "{}", msg);
 
-                assert_eq!(
-                    &result.unwrap_err(),
-                    d.result.as_ref().unwrap_err(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(&result.unwrap_err(), expected_err, "{}", msg);
                 continue;
             }
 

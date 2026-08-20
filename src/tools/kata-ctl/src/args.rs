@@ -49,13 +49,16 @@ pub enum Commands {
     /// Test if system can run Kata Containers
     Check(CheckArgument),
 
+    /// Copy files and directories between the host and a guest VM
+    Cp(CpArguments),
+
     /// Directly assign a volume to Kata Containers to manage
     DirectVolume(DirectVolumeCommand),
 
     /// Display settings
     Env(EnvArgument),
 
-    /// Enter into guest VM by debug console
+    /// Enter into guest VM by debug console, or run a single command there
     Exec(ExecArguments),
 
     /// Manage VM factory
@@ -210,6 +213,34 @@ pub struct DirectVolResizeArgs {
 pub struct ExecArguments {
     /// pod sandbox ID.
     pub sandbox_id: String,
+    #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
+    /// kata debug console vport same as configuration, default is 1026.
+    pub vport: u32,
+    #[clap(last = true)]
+    /// Command to run in the guest, e.g. `kata-ctl exec <sandbox-id> -- ls -l /`.
+    /// Without one, a terminal is attached to the console shell instead. The
+    /// debug console carries a single stream, so the command's stderr arrives
+    /// interleaved on stdout; kata-ctl exits with the command's exit status.
+    pub command: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+#[clap(
+    after_help = "Copies travel over the agent debug console, so the sandbox has to have been \
+started with it enabled, and the guest needs the devkit extension for the \
+shell, tar and base64 a copy drives there. A kata-<shim>-devkit RuntimeClass \
+gives you both.
+
+EXAMPLES:
+    kata-ctl cp ./tool <sandbox-id>:/tmp/tool
+    kata-ctl cp <sandbox-id>:/var/log ./guest-logs"
+)]
+pub struct CpArguments {
+    /// Source: either a host path, or <sandbox-id>:<absolute-guest-path>.
+    pub src: String,
+    /// Destination: either a host path, or <sandbox-id>:<absolute-guest-path>.
+    /// An existing directory is copied into, anything else names the copy.
+    pub dst: String,
     #[clap(short = 'p', long = "kata-debug-port", default_value_t = 1026)]
     /// kata debug console vport same as configuration, default is 1026.
     pub vport: u32,

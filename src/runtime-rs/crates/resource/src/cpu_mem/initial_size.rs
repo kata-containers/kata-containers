@@ -238,6 +238,9 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
 }
 
 #[cfg(test)]
+// rstest cases expand to functions taking one argument per #[case] value,
+// which can exceed clippy's argument-count limit.
+#[allow(clippy::too_many_arguments)]
 mod tests {
     use super::*;
     use kata_types::annotations::cri_containerd;

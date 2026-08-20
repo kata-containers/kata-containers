@@ -227,6 +227,21 @@ pub struct Config {
     /// removes the taint as its final install step, closing the window in which a
     /// pod could land on a not-yet-ready node.
     pub startup_taints: Vec<String>,
+    /// This node's `status.nodeInfo.containerRuntimeVersion`, supplied by
+    /// whoever launched this process (`CONTAINER_RUNTIME_VERSION`).
+    ///
+    /// The job-mode dispatcher already holds every Node object it selected, so it
+    /// passes this down to the per-node Job. That is what lets those Jobs run
+    /// without a ServiceAccount token: they are the privileged, host-mutating part
+    /// of the install, and the less they can reach the better. Absent (the
+    /// DaemonSet), the value is read from the Node.
+    pub container_runtime_version: Option<String>,
+    /// The Kubernetes flavour the chart was configured for (`K8S_DISTRIBUTION`),
+    /// which is what chose the host directory mounted at /etc/containerd.
+    ///
+    /// Absent when the operator pinned that directory themselves, or when this
+    /// process was not started by the chart.
+    pub k8s_distribution: Option<String>,
 }
 
 impl Config {
@@ -420,6 +435,18 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
 
+        // Empty is treated as absent, so a template that renders the env var
+        // unconditionally still means "look it up".
+        let container_runtime_version = env::var("CONTAINER_RUNTIME_VERSION")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let k8s_distribution = env::var("K8S_DISTRIBUTION")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         let config = Config {
             node_name,
             debug,
@@ -452,6 +479,8 @@ impl Config {
             erofs_snapshotter_mode,
             erofs_dmverity,
             startup_taints,
+            container_runtime_version,
+            k8s_distribution,
         };
 
         // Validate the configuration
@@ -724,6 +753,22 @@ impl Config {
         log::debug!("Resolved kata-deploy configuration:\n{:#?}", self);
     }
 
+    /// This node's container runtime version, e.g. `containerd://2.1.5-k3s1`.
+    ///
+    /// Every caller goes through here so there is a single place where the value
+    /// can come from the environment (job mode, where the dispatcher passes it in
+    /// and the pod holds no credentials) instead of from the Node object.
+    pub async fn resolve_container_runtime_version(&self) -> Result<String> {
+        match self.container_runtime_version.as_deref() {
+            Some(version) => Ok(version.to_string()),
+            None => k8s::get_container_runtime_version(self).await.context(
+                "could not read this node's container runtime version from the apiserver. In job \
+                 mode the dispatcher passes it in CONTAINER_RUNTIME_VERSION precisely because \
+                 these pods hold no credentials, so reaching this means it did not",
+            ),
+        }
+    }
+
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
@@ -733,7 +778,7 @@ impl Config {
         let container_runtime_version = if matches!(runtime, "k0s-worker" | "k0s-controller") {
             None
         } else {
-            Some(k8s::get_container_runtime_version(self).await?)
+            Some(self.resolve_container_runtime_version().await?)
         };
         let use_drop_in = manager::is_containerd_capable_of_drop_in(
             runtime,
@@ -1072,7 +1117,7 @@ fn get_default_shims_for_arch(arch: &str) -> &'static str {
         "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
         "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
-        "ppc64le" => "qemu",
+        "ppc64le" => "qemu qemu-runtime-rs",
         _ => "qemu", // Fallback to qemu for unknown architectures
     }
 }
@@ -1081,13 +1126,11 @@ fn get_default_shims_for_arch(arch: &str) -> &'static str {
 ///
 /// Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
 /// "qemu-runtime-rs") is the default wherever a runtime-rs build exists.
-/// ppc64le has no runtime-rs build yet, so it keeps the Go runtime ("qemu").
 /// This only acts as a fallback: the Helm chart normally provides DEFAULT_SHIM
 /// explicitly via values.yaml (`defaultShim`).
 fn get_default_shim_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" | "aarch64" | "s390x" => "qemu-runtime-rs",
-        "ppc64le" => "qemu",
+        "x86_64" | "aarch64" | "s390x" | "ppc64le" => "qemu-runtime-rs",
         _ => "qemu", // Fallback to the Go runtime for unknown architectures
     }
 }
@@ -1241,7 +1284,7 @@ mod tests {
     #[case("x86_64", "qemu-runtime-rs")]
     #[case("aarch64", "qemu-runtime-rs")]
     #[case("s390x", "qemu-runtime-rs")]
-    #[case("ppc64le", "qemu")]
+    #[case("ppc64le", "qemu-runtime-rs")]
     #[case("riscv64", "qemu")]
     fn test_get_default_shim_for_arch(#[case] arch: &str, #[case] expected: &str) {
         assert_eq!(get_default_shim_for_arch(arch), expected);

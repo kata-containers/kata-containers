@@ -4,10 +4,9 @@
 
 Starting with the **4.0.0 release**, the **Rust runtime (`runtime-rs`)** is the
 **default** runtime shipped by `kata-deploy` on every architecture that has a
-`runtime-rs` build (x86_64, aarch64 and s390x). The default RuntimeClass
+`runtime-rs` build (x86_64, aarch64, s390x and ppc64le). The default RuntimeClass
 therefore resolves to `qemu-runtime-rs` rather than the Go runtime's
-`kata-qemu`. ppc64le has no `runtime-rs` build yet and stays on the Go
-runtime.
+`kata-qemu`.
 
 **The Go runtime is deprecated, but it is not removed.** It remains supported
 (no new features are being added) and selectable — for example via the

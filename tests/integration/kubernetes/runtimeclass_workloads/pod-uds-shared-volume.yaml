@@ -1,0 +1,54 @@
+#
+# Copyright (c) NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Two containers of the same pod talking to each other over a unix domain
+# socket bound on an emptyDir volume that both of them mount.
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-uds-shared-volume
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  volumes:
+  # The medium is pinned to Memory: a socket needs the tmpfs the agent creates
+  # inside the guest, and cannot be bound on a disk-backed emptyDir, which the
+  # guest gets from the host over the shared filesystem or as a block device.
+  - name: uds-vol
+    emptyDir:
+      medium: Memory
+  containers:
+  - name: uds-server
+    image: ${NGINX_IMAGE}
+    volumeMounts:
+    - name: uds-vol
+      mountPath: /uds
+    command:
+    - /bin/sh
+    - -c
+    - |
+      cat > /etc/nginx/conf.d/uds.conf <<'CONF'
+      server {
+          listen unix:/uds/echo.sock;
+          location / {
+              return 200 "uds reply from the shared emptyDir\n";
+          }
+      }
+      CONF
+      exec nginx -g "daemon off;"
+    # The socket has to be bound before the pod is Ready, so the test does not
+    # have to poll for it. A volume that cannot hold a socket keeps the pod
+    # NotReady instead of failing the exec later on.
+    readinessProbe:
+      exec:
+        command: ["test", "-S", "/uds/echo.sock"]
+      periodSeconds: 2
+  - name: uds-client
+    image: quay.io/kata-containers/alpine-bash-curl:latest
+    volumeMounts:
+    - name: uds-vol
+      mountPath: /uds
+    command: ["tail", "-f", "/dev/null"]

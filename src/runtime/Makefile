@@ -502,9 +502,9 @@ ifneq (,$(QEMUCMD))
     # Best practice for production is to set this to true
     DEFSANDBOXCGROUPONLY_NV = true
 
-    DEFENABLEVCPUPINNING_NV = true
+    DEFENABLEVCPUPINNING_NV = false
 
-    DEFENABLENUMA_NV = true
+    DEFENABLENUMA_NV = false
 
     # NVIDIA profile: rootfs filesystem type (erofs for read-only, compressed images)
     DEFROOTFSTYPE_NV := $(ROOTFSTYPE_EROFS)

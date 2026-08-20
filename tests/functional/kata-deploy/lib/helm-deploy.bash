@@ -15,6 +15,40 @@
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
 
+# The tolerations of a rendered pod spec, one entry per line, its fields joined
+# by "; " in the order they were rendered.
+#
+# Grepping for a single field cannot say which entry that field belongs to, and
+# the difference matters here: a bare `operator: Exists` tolerates every taint,
+# while the same operator next to a key tolerates exactly one.
+tolerations_of() {
+	awk '
+		!inside && /^[[:space:]]*tolerations:[[:space:]]*$/ {
+			match($0, /^[[:space:]]*/)
+			indent = RLENGTH
+			inside = 1
+			next
+		}
+		inside && /^[[:space:]]*$/ { next }
+		inside {
+			match($0, /^[[:space:]]*/)
+			if (RLENGTH <= indent) {
+				if (entry != "") { print entry; entry = "" }
+				inside = 0
+				next
+			}
+			field = substr($0, RLENGTH + 1)
+			if (sub(/^- /, "", field)) {
+				if (entry != "") print entry
+				entry = field
+			} else {
+				entry = entry "; " field
+			}
+		}
+		END { if (entry != "") print entry }
+	'
+}
+
 # Get the path to the helm chart
 get_chart_path() {
 	local script_dir
@@ -86,12 +120,7 @@ deploy_kata() {
 	# Generate base values
 	generate_base_values "${values_yaml}"
 
-	# Add required helm repos for dependencies
-	helm repo add node-feature-discovery https://kubernetes-sigs.github.io/node-feature-discovery/charts 2>/dev/null || true
-	helm repo update
-
-	# Build helm dependencies
-	helm dependency build "${chart_path}"
+	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Build helm command
 	local helm_cmd=(

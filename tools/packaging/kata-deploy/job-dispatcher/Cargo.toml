@@ -14,6 +14,11 @@ path = "src/main.rs"
 anyhow.workspace = true
 clap.workspace = true
 env_logger = "0.10"
+# Parses the kubelet's runtimeRequestTimeout, which /configz reports Go-style
+# ("2m0s"), for the advisory pre-flight warning.
+humantime = "2.1.0"
+# JSON Patch, for the test-then-replace precondition on a node's taints.
+json-patch = "4"
 k8s-openapi = { version = "0.26", default-features = false, features = [
     "v1_33",
 ] }
@@ -23,10 +28,13 @@ k8s-openapi = { version = "0.26", default-features = false, features = [
 # enabled, otherwise rustls panics at startup.
 kube = { version = "2.0", default-features = false, features = [
     "client",
+    "jsonpatch",
     "rustls-tls",
     "ring",
 ] }
 log.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 serde_yaml = "0.9"
 tokio = { workspace = true, features = [
     "rt-multi-thread",

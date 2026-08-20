@@ -15,11 +15,6 @@ PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = containerd-shim-kata-v2
 CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
-# This snippet finds all packages inside runtime-rs. Used for tessting.
-PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
-                    jq -r '.packages[] | select(.manifest_path | contains("runtime-rs")) | .name')
-PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
-
 include ../../utils.mk
 
 ##VAR RELEASE_LTO=true|false|thin|fat LTO setting used for release builds
@@ -94,7 +89,7 @@ else
         Specify "USE_BUILTIN_DB=true" to force enable.)
 endif
 
-ARCH_SUPPORT_OPENVMM := x86_64
+ARCH_SUPPORT_OPENVMM := x86_64 aarch64
 ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_OPENVMM)),)
     USE_OPENVMM := true
 else
@@ -541,7 +536,7 @@ endif
     DEFAULTPCIEROOTPORT_NV := 8
     DEFDISABLEIMAGENVDIMM_NV := true
     DEFSANDBOXCGROUPONLY_NV := true
-    DEFENABLEVCPUSPINNING_NV := true
+    DEFENABLEVCPUSPINNING_NV := false
     DEFSTATICRESOURCEMGMT_NV := true
     DEFVFIOMODE_NV := guest-kernel
     DEFKUBELETROOTDIR := /var/lib/kubelet
@@ -1192,6 +1187,10 @@ install-runtime: runtime
 install-configs: $(CONFIGS)
 	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
 	ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
+ifeq ($(ARCH),powerpc64le)
+	sed -i 's|^image = .*|initrd = "$(PREFIX)/share/kata-containers/kata-containers-initrd.img"|' \
+		$(DESTDIR)$(CONFIG_PATH_QEMU)
+endif
 
 .PHONY: \
 	help \

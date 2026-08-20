@@ -7,12 +7,31 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use k8s_openapi::api::core::v1::Node;
 use kube::{
-    api::{Api, GetParams, Patch, PatchParams},
+    api::{Api, GetParams, ListParams, Patch, PatchParams},
     core::Request,
     Client,
 };
 use log::info;
 use serde_json::json;
+
+/// A concurrent taint update is a lost race, not a broken node.
+const TAINT_PATCH_ATTEMPTS: u32 = 3;
+
+/// Same for labels another install rewrote while we were deciding what to write.
+const LABEL_PATCH_ATTEMPTS: u32 = 5;
+
+/// A rejected precondition, as opposed to a request that failed on its merits.
+/// The apiserver answers a failing JSON Patch `test` with 422, and a genuine write
+/// conflict with 409.
+/// A label key as a JSON Pointer token: `~` and `/` are the two characters with a
+/// meaning of their own there (RFC 6901).
+fn escape_pointer(token: &str) -> String {
+    token.replace('~', "~0").replace('/', "~1")
+}
+
+fn is_precondition_failure(err: &kube::Error) -> bool {
+    matches!(err, kube::Error::Api(status) if status.code == 409 || status.code == 422)
+}
 
 pub struct K8sClient {
     client: Client,
@@ -60,15 +79,8 @@ impl K8sClient {
             })
     }
 
-    /// Return the value of a single label from `.metadata.labels` on the
-    /// bound node, or `None` if the label is absent.
-    pub async fn get_node_label(&self, key: &str) -> Result<Option<String>> {
-        let node = self.get_node().await?;
-        Ok(node
-            .metadata
-            .labels
-            .as_ref()
-            .and_then(|labels| labels.get(key).cloned()))
+    pub async fn get_node_labels(&self) -> Result<std::collections::BTreeMap<String, String>> {
+        Ok(self.get_node().await?.metadata.labels.unwrap_or_default())
     }
 
     pub async fn get_kubelet_runtime_request_timeout(&self) -> Result<Option<String>> {
@@ -135,6 +147,91 @@ impl K8sClient {
         Ok(())
     }
 
+    /// Read the bound node's labels, decide what to write from them, and write it
+    /// only if nothing else changed the node in between.
+    ///
+    /// The decision is read from marks other installs write at the same time, so an
+    /// unconditional write could act on a node that has already moved on: two
+    /// uninstalls each seeing the other's mark, each removing their own, leaving a
+    /// node advertising Kata with nothing installed.
+    ///
+    /// `decide` returns the label writes (`None` removes) and whatever the caller
+    /// concluded from the labels it saw.
+    pub async fn rewrite_node_labels<F, T>(&self, decide: F) -> Result<T>
+    where
+        F: Fn(&std::collections::BTreeMap<String, String>) -> (Vec<(String, Option<String>)>, T),
+    {
+        for attempt in 1..=LABEL_PATCH_ATTEMPTS {
+            let node = self.get_node().await?;
+            let version = node.metadata.resource_version.clone().unwrap_or_default();
+            let labels = node.metadata.labels.unwrap_or_default();
+
+            let (updates, outcome) = decide(&labels);
+            if updates.is_empty() {
+                return Ok(outcome);
+            }
+
+            let mut ops =
+                vec![json!({"op": "test", "path": "/metadata/resourceVersion", "value": version})];
+            for (key, value) in &updates {
+                let path = format!("/metadata/labels/{}", escape_pointer(key));
+                match value {
+                    Some(value) => ops.push(json!({"op": "add", "path": path, "value": value})),
+                    // `remove` is what makes this rejectable: it fails when the key
+                    // is already gone, which is another way of saying we read a
+                    // stale node.
+                    None => ops.push(json!({"op": "remove", "path": path})),
+                }
+            }
+
+            let patch: json_patch::Patch =
+                serde_json::from_value(json!(ops)).context("Failed to build the label patch")?;
+
+            match self
+                .node_api
+                .patch(
+                    &self.node_name,
+                    &PatchParams::default(),
+                    &Patch::Json::<Node>(patch),
+                )
+                .await
+            {
+                Ok(_) => {
+                    for (key, value) in &updates {
+                        match value {
+                            Some(value) => {
+                                info!("Set label {}={} on node {}", key, value, self.node_name)
+                            }
+                            None => {
+                                info!("Removed label {} from node {}", key, self.node_name)
+                            }
+                        }
+                    }
+                    return Ok(outcome);
+                }
+                Err(e) if is_precondition_failure(&e) => {
+                    info!(
+                        "Labels on node {} changed while they were being rewritten (attempt \
+                         {}/{}); reading them again",
+                        self.node_name, attempt, LABEL_PATCH_ATTEMPTS
+                    );
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to patch the labels on node {}", self.node_name)
+                    })
+                }
+            }
+        }
+
+        anyhow::bail!(
+            "Gave up rewriting the labels on node {} after {} attempts: something keeps changing \
+             them concurrently",
+            self.node_name,
+            LABEL_PATCH_ATTEMPTS
+        )
+    }
+
     /// Remove taints from the bound node.
     ///
     /// `matchers` is a list of `key` or `key:effect` entries. A bare key removes
@@ -144,90 +241,204 @@ impl K8sClient {
     /// Returns the matcher labels that matched and were removed. A matcher that
     /// matches nothing is not an error: the node simply had no such taint, which
     /// is the expected steady state on re-runs and pod restarts.
+    ///
+    /// `.spec.taints` is an atomic list server-side, so removing one means writing
+    /// the whole list back - which would silently drop a taint some controller
+    /// added in the meantime, in the direction that admits workloads. Testing the
+    /// resourceVersion that was read makes that a rejected write instead, and a
+    /// rejection just means reading again.
     pub async fn remove_node_taints(&self, matchers: &[String]) -> Result<Vec<String>> {
         if matchers.is_empty() {
             return Ok(Vec::new());
         }
 
-        let node = self.get_node().await?;
-        let current = node
-            .spec
-            .as_ref()
-            .and_then(|s| s.taints.clone())
-            .unwrap_or_default();
+        for attempt in 1..=TAINT_PATCH_ATTEMPTS {
+            let node = self.get_node().await?;
+            let version = node.metadata.resource_version.clone().unwrap_or_default();
+            let current = node
+                .spec
+                .as_ref()
+                .and_then(|s| s.taints.clone())
+                .unwrap_or_default();
 
-        if current.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let (retained, removed) = partition_taints(current, matchers);
-
-        if removed.is_empty() {
-            return Ok(removed);
-        }
-
-        for label in &removed {
-            info!("Removing taint {} from node {}", label, self.node_name);
-        }
-
-        // `.spec.taints` is an atomic list server-side, so we replace it wholesale
-        // with the retained set. A JSON-merge patch on the whole array is
-        // equivalent here; we use a merge patch for consistency with label_node
-        // and to avoid resourceVersion juggling.
-        let patch = Patch::Merge(json!({
-            "spec": {
-                "taints": retained,
+            if current.is_empty() {
+                return Ok(Vec::new());
             }
-        }));
 
-        let pp = PatchParams::default();
-        self.node_api
-            .patch(&self.node_name, &pp, &patch)
-            .await
-            .with_context(|| format!("Failed to patch node {} to remove taints", self.node_name))?;
+            let (retained, removed) = partition_taints(current, matchers);
 
-        Ok(removed)
+            if removed.is_empty() {
+                return Ok(removed);
+            }
+
+            for label in &removed {
+                info!("Removing taint {} from node {}", label, self.node_name);
+            }
+
+            let patch: json_patch::Patch = serde_json::from_value(json!([
+                {"op": "test", "path": "/metadata/resourceVersion", "value": version},
+                {"op": "replace", "path": "/spec/taints", "value": retained},
+            ]))
+            .context("Failed to build the taint patch")?;
+
+            match self
+                .node_api
+                .patch(
+                    &self.node_name,
+                    &PatchParams::default(),
+                    &Patch::Json::<Node>(patch),
+                )
+                .await
+            {
+                Ok(_) => return Ok(removed),
+                Err(e) if is_precondition_failure(&e) => {
+                    info!(
+                        "Taints on node {} changed while they were being removed (attempt {}/{}); \
+                         reading them again",
+                        self.node_name, attempt, TAINT_PATCH_ATTEMPTS
+                    );
+                }
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to patch node {} to remove taints", self.node_name)
+                    })
+                }
+            }
+        }
+
+        anyhow::bail!(
+            "Gave up removing taints from node {} after {} attempts: something keeps changing \
+             them concurrently",
+            self.node_name,
+            TAINT_PATCH_ATTEMPTS
+        )
     }
 
-    /// Returns whether a non-terminating DaemonSet with this exact name
-    /// exists in the current namespace. Used to decide whether this pod is
-    /// being restarted (true) or uninstalled (false).
-    pub async fn own_daemonset_exists(&self, daemonset_name: &str) -> Result<bool> {
+    /// Whether this DaemonSet still wants a pod on the bound node.
+    ///
+    /// Existence alone cannot distinguish a rolling restart from selector
+    /// shrinkage: in both cases the old pod terminates while the DaemonSet
+    /// remains. Cleanup is skipped only in the first case.
+    pub async fn own_daemonset_selects_node(&self, daemonset_name: &str) -> Result<bool> {
         use k8s_openapi::api::apps::v1::DaemonSet;
         use kube::api::Api;
 
         let ds_api: Api<DaemonSet> = Api::default_namespaced(self.client.clone());
         match ds_api.get_opt(daemonset_name).await? {
-            Some(ds) => Ok(ds.metadata.deletion_timestamp.is_none()),
-            None => Ok(false),
+            Some(ds) if ds.metadata.deletion_timestamp.is_none() => {
+                let node = self.get_node().await?;
+                Ok(daemonset_selects_node(&ds, &node))
+            }
+            _ => Ok(false),
         }
     }
 
-    /// Returns how many non-terminating DaemonSets across all namespaces
-    /// have a name containing "kata-deploy". Used to decide whether shared
-    /// node-level resources (node label, CRI restart) should be cleaned up:
-    /// they are only safe to remove when no kata-deploy instance remains
-    /// on the cluster.
-    pub async fn count_any_kata_deploy_daemonsets(&self) -> Result<usize> {
+    /// Whether another kata-deploy DaemonSet actually selects this node.
+    ///
+    /// A cluster-wide DaemonSet count is not ownership: a release selecting a
+    /// different pool must not preserve this node's label. Legacy releases have
+    /// no per-install marker, so their live pod is the node-local evidence.
+    pub async fn other_kata_deploy_daemonset_selects_node(&self, ours: &str) -> Result<bool> {
         use k8s_openapi::api::apps::v1::DaemonSet;
-        use kube::api::{Api, ListParams};
 
-        let ds_api: Api<DaemonSet> = Api::all(self.client.clone());
-        let daemonsets = ds_api.list(&ListParams::default()).await?;
-
-        let count = daemonsets
-            .iter()
-            .filter(|ds| {
-                ds.metadata.deletion_timestamp.is_none()
-                    && ds
+        let node = self.get_node().await?;
+        let own_uid = Api::<DaemonSet>::default_namespaced(self.client.clone())
+            .get_opt(ours)
+            .await?
+            .and_then(|daemonset| daemonset.metadata.uid);
+        let daemonsets: Api<DaemonSet> = Api::all(self.client.clone());
+        Ok(daemonsets
+            .list(&ListParams::default())
+            .await?
+            .items
+            .into_iter()
+            .any(|daemonset| {
+                daemonset.metadata.deletion_timestamp.is_none()
+                    && daemonset.metadata.uid != own_uid
+                    && daemonset
                         .metadata
                         .name
-                        .as_ref()
-                        .is_some_and(|n| n.contains("kata-deploy"))
-            })
-            .count();
+                        .as_deref()
+                        .is_some_and(|name| name.contains("kata-deploy"))
+                    && daemonset_selects_node(&daemonset, &node)
+            }))
+    }
+}
 
-        Ok(count)
+fn daemonset_selects_node(daemonset: &k8s_openapi::api::apps::v1::DaemonSet, node: &Node) -> bool {
+    let Some(pod_spec) = daemonset
+        .spec
+        .as_ref()
+        .and_then(|spec| spec.template.spec.as_ref())
+    else {
+        return false;
+    };
+    let labels = node.metadata.labels.as_ref().cloned().unwrap_or_default();
+    if pod_spec.node_selector.as_ref().is_some_and(|selector| {
+        selector
+            .iter()
+            .any(|(key, value)| labels.get(key) != Some(value))
+    }) {
+        return false;
+    }
+
+    let required = pod_spec
+        .affinity
+        .as_ref()
+        .and_then(|affinity| affinity.node_affinity.as_ref())
+        .and_then(|affinity| {
+            affinity
+                .required_during_scheduling_ignored_during_execution
+                .as_ref()
+        });
+    let Some(required) = required else {
+        return true;
+    };
+
+    required.node_selector_terms.iter().any(|term| {
+        // Kubernetes reads a term with no requirement in it as matching no nodes,
+        // while `all` over nothing is true. Left alone, an empty term would hand
+        // the whole cluster to a DaemonSet that asked for none of it.
+        if term.match_expressions.iter().flatten().next().is_none()
+            && term.match_fields.iter().flatten().next().is_none()
+        {
+            return false;
+        }
+        term.match_expressions.iter().flatten().all(|requirement| {
+            selector_requirement_matches(
+                labels.get(&requirement.key).map(String::as_str),
+                &requirement.operator,
+                requirement.values.as_deref().unwrap_or_default(),
+            )
+        }) && term.match_fields.iter().flatten().all(|requirement| {
+            let value = match requirement.key.as_str() {
+                "metadata.name" => node.metadata.name.as_deref(),
+                _ => None,
+            };
+            selector_requirement_matches(
+                value,
+                &requirement.operator,
+                requirement.values.as_deref().unwrap_or_default(),
+            )
+        })
+    })
+}
+
+fn selector_requirement_matches(value: Option<&str>, operator: &str, values: &[String]) -> bool {
+    match operator {
+        "In" => value.is_some_and(|value| values.iter().any(|candidate| candidate == value)),
+        "NotIn" => value.is_none_or(|value| values.iter().all(|candidate| candidate != value)),
+        "Exists" => value.is_some(),
+        "DoesNotExist" => value.is_none(),
+        "Gt" => value
+            .and_then(|value| value.parse::<i64>().ok())
+            .zip(values.first().and_then(|value| value.parse::<i64>().ok()))
+            .is_some_and(|(actual, threshold)| actual > threshold),
+        "Lt" => value
+            .and_then(|value| value.parse::<i64>().ok())
+            .zip(values.first().and_then(|value| value.parse::<i64>().ok()))
+            .is_some_and(|(actual, threshold)| actual < threshold),
+        _ => false,
     }
 }
 
@@ -280,9 +491,11 @@ pub async fn get_container_runtime_version(config: &Config) -> Result<String> {
     client.get_container_runtime_version().await
 }
 
-pub async fn get_node_label(config: &Config, key: &str) -> Result<Option<String>> {
+pub async fn get_node_labels(
+    config: &Config,
+) -> Result<std::collections::BTreeMap<String, String>> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.get_node_label(key).await
+    client.get_node_labels().await
 }
 
 pub async fn get_kubelet_runtime_request_timeout(config: &Config) -> Result<Option<String>> {
@@ -311,24 +524,17 @@ pub async fn get_node_ready_status(config: &Config) -> Result<String> {
 ///
 /// `None` means the node does not report them at all - the kubelet only fills
 /// this in with RecursiveReadOnlyMounts or UserNamespacesSupport enabled, and an
-/// older runtime returns none - which is not the same as kata being missing.
+/// older runtime returns none - which is not the same as kata being missing. An
+/// empty list, on the other hand, is an answer: a runtime serving no handler at
+/// all.
 pub async fn get_node_runtime_handlers(config: &Config) -> Result<Option<Vec<String>>> {
     let client = K8sClient::new(&config.node_name).await?;
     let node = client.get_node().await?;
 
-    let handlers: Vec<String> = node
+    Ok(node
         .status
         .and_then(|status| status.runtime_handlers)
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|handler| handler.name)
-        .collect();
-
-    if handlers.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(handlers))
+        .map(|handlers| handlers.into_iter().filter_map(|h| h.name).collect()))
 }
 
 pub async fn label_node(
@@ -341,25 +547,38 @@ pub async fn label_node(
     client.label_node(label_key, label_value, overwrite).await
 }
 
+pub async fn rewrite_node_labels<F, T>(config: &Config, decide: F) -> Result<T>
+where
+    F: Fn(&std::collections::BTreeMap<String, String>) -> (Vec<(String, Option<String>)>, T),
+{
+    let client = K8sClient::new(&config.node_name).await?;
+    client.rewrite_node_labels(decide).await
+}
+
 pub async fn remove_node_taints(config: &Config, matchers: &[String]) -> Result<Vec<String>> {
     let client = K8sClient::new(&config.node_name).await?;
     client.remove_node_taints(matchers).await
 }
 
-pub async fn own_daemonset_exists(config: &Config) -> Result<bool> {
+pub async fn own_daemonset_selects_node(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.own_daemonset_exists(&config.daemonset_name).await
+    client
+        .own_daemonset_selects_node(&config.daemonset_name)
+        .await
 }
 
-pub async fn count_any_kata_deploy_daemonsets(config: &Config) -> Result<usize> {
+pub async fn other_kata_deploy_daemonset_selects_node(config: &Config) -> Result<bool> {
     let client = K8sClient::new(&config.node_name).await?;
-    client.count_any_kata_deploy_daemonsets().await
+    client
+        .other_kata_deploy_daemonset_selects_node(&config.daemonset_name)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::partition_taints;
-    use k8s_openapi::api::core::v1::Taint;
+    use super::{daemonset_selects_node, partition_taints};
+    use k8s_openapi::api::apps::v1::DaemonSet;
+    use k8s_openapi::api::core::v1::{Node, Taint};
     use rstest::rstest;
 
     fn taint(key: &str, effect: &str) -> Taint {
@@ -380,6 +599,108 @@ mod tests {
             .iter()
             .map(|t| (t.key.clone(), t.effect.clone()))
             .collect()
+    }
+
+    #[test]
+    fn daemonset_ownership_follows_node_selector_and_required_affinity() {
+        let daemonset: DaemonSet = serde_yaml::from_str(
+            r#"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      nodeSelector:
+        pool: kata
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: [amd64]
+      containers:
+        - name: kata-deploy
+          image: example.invalid/kata-deploy
+"#,
+        )
+        .unwrap();
+        let mut node: Node = serde_yaml::from_str(
+            r#"
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    pool: kata
+    kubernetes.io/arch: amd64
+"#,
+        )
+        .unwrap();
+
+        assert!(daemonset_selects_node(&daemonset, &node));
+        node.metadata
+            .labels
+            .as_mut()
+            .unwrap()
+            .insert("pool".to_string(), "other".to_string());
+        assert!(!daemonset_selects_node(&daemonset, &node));
+    }
+
+    /// An empty required term, or an empty list of them, selects no nodes in
+    /// Kubernetes. Reading either as "every node" would let a DaemonSet that wants
+    /// nothing keep this node's label or block its cleanup.
+    #[rstest]
+    #[case::empty_term("\n              - {}")]
+    #[case::no_terms(" []")]
+    fn a_required_affinity_that_matches_nothing_selects_no_node(#[case] terms: &str) {
+        let daemonset: DaemonSet = serde_yaml::from_str(&format!(
+            r#"
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:{terms}
+      containers:
+        - name: kata-deploy
+          image: example.invalid/kata-deploy
+"#
+        ))
+        .unwrap();
+        let node: Node = serde_yaml::from_str(
+            r#"
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    pool: kata
+"#,
+        )
+        .unwrap();
+
+        assert!(!daemonset_selects_node(&daemonset, &node));
     }
 
     /// `partition_taints` keeps every taint except those matched by a matcher.

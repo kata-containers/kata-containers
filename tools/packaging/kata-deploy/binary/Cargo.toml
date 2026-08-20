@@ -26,8 +26,10 @@ k8s-openapi = { version = "0.26", default-features = false, features = [
 # `ring` matches kube's own default crypto provider for rustls 0.23+ and
 # must stay enabled — without it, rustls panics at runtime with
 # "Could not automatically determine the process-level CryptoProvider".
+json-patch = "4"
 kube = { version = "2.0", default-features = false, features = [
     "client",
+    "jsonpatch",
     "rustls-tls",
     "ring",
 ] }

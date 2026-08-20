@@ -32,8 +32,8 @@ use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
 
-use crate::log_child;
 use crate::cgroups_rs as cgroups;
+use crate::log_child;
 use safe_path::scoped_join;
 
 // Info reveals information about a particular mounted filesystem. This
@@ -1642,7 +1642,7 @@ mod tests {
             },
             TestData {
                 mountinfo_data: Some(
-                    "22 933 0:20 /foo\x20-\x20bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
+                    r"22 933 0:20 /foo\040-\040bar /sys rw,nodev shared:2 - sysfs sysfs rw,noexec",
                 ),
                 result: Ok(vec![Info {
                     mount_point: "/sys".to_string(),

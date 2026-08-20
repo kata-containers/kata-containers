@@ -198,17 +198,12 @@ impl Template {
         }
         .await;
 
-        let teardown_result: Result<()> = async {
-            vm.stop().await.context("stop template vm")?;
-            vm.cleanup().await.context("cleanup template vm")
-        }
-        .await;
+        let teardown_result = vm.teardown().await;
 
         if let Err(teardown_error) = teardown_result {
             if result.is_ok() {
                 return Err(teardown_error);
             }
-
             warn!(
                 sl!(),
                 "failed to tear down template VM after template creation failed: {}",

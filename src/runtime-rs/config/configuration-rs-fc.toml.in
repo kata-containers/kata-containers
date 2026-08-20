@@ -299,7 +299,7 @@ kernel_modules = []
 
 debug_console_enabled = false
 
-# Agent connection dialing timeout value in milliseconds
+# Sleep between agent connection retries, in milliseconds.
 # (default: 45000)
 dial_timeout_ms = 45000
 

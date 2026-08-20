@@ -14,8 +14,8 @@ use nix::sys::eventfd::{EfdFlags, EventFd};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc::{channel, Receiver};
 
-use crate::pipestream::PipeStream;
 use crate::cgroups_rs as cgroups;
+use crate::pipestream::PipeStream;
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {

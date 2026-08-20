@@ -72,6 +72,13 @@ impl ConfigPlugin for RemoteConfig {
             }
         }
 
+        // The remote hypervisor uses CAA for networking via a VXLAN tunnel.
+        // The runtime must not do its own network setup (internetworking_model
+        // must be "none"), and must not clear the netns path that CAA needs
+        // for tunnel setup (disable_new_netns must be false).
+        conf.runtime.internetworking_model = "none".to_string();
+        conf.runtime.disable_new_netns = false;
+
         Ok(())
     }
 

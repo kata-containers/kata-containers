@@ -10,19 +10,13 @@ metadata:
   labels:
     app: ${POD_NAME_INSTRUCT}
 spec:
-  # block-plain emptyDir volumes are formatted and mounted in the guest.
-  # Set fsGroup so the agent makes the cache writable by the NIM user.
-  securityContext:
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
-  restartPolicy: Never
+  restartPolicy: OnFailure
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    image: nvcr.io/nim/meta/llama-3.2-1b-instruct:1.12.0
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
@@ -49,31 +43,40 @@ spec:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 360
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 30
+      # 720s window, wider than POD_READY_TIMEOUT_INSTRUCT in k8s-nvidia-nim.bats
+      failureThreshold: 66
     env:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
             name: ngc-api-key-instruct
             key: api-key
+      - name: NIM_JSONL_LOGGING
+        value: "1"
+      - name: NIM_LOG_LEVEL
+        value: "INFO"
     # GPU resource limit (for NVIDIA GPU)
     resources:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "48Gi"
+        memory: "40Gi"
+    # Mount the local .cache directory into the container
     volumeMounts:
       - name: nim-cache
         mountPath: /opt/nim/.cache
 
+  # Host path volume for the local .cache directory.
+  # Adjust 'path' to match your $LOCAL_NIM_CACHE location.
   volumes:
   - name: nim-cache
-    emptyDir:
-      sizeLimit: 64Gi
+    hostPath:
+      path: "${LOCAL_NIM_CACHE}"
+      type: DirectoryOrCreate
 ---
 apiVersion: v1
 kind: Secret

@@ -20,6 +20,15 @@
 {{- $runtimeOverhead := dig "overhead" "podFixed" (dict) $runtimeClassObj }}
 {{- $_ := set $runtimeClassObj "overhead" (dict "podFixed" (mergeOverwrite $defaultOverhead $runtimeOverhead)) }}
 {{- end }}
+{{- /* Custom RuntimeClasses need the same gate as the built-in ones, or they would
+       keep scheduling onto a node this install is being removed from, on the
+       strength of a label another install holds. */}}
+{{- with include "kata-deploy.instanceMarkerLabel" $ }}
+{{- $scheduling := dig "scheduling" (dict) $runtimeClassObj }}
+{{- $selector := dig "nodeSelector" (dict) $scheduling }}
+{{- $_ := set $selector . "true" }}
+{{- $_ := set $runtimeClassObj "scheduling" (merge (dict "nodeSelector" $selector) $scheduling) }}
+{{- end }}
 {{ toYaml $runtimeClassObj }}
 ---
 {{- end }}
