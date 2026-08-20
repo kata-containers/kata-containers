@@ -319,8 +319,15 @@ mod tests {
         async fn unseal_secret(
             &self,
             _ctx: &::ttrpc::asynchronous::TtrpcContext,
-            _req: confidential_data_hub::UnsealSecretInput,
+            req: confidential_data_hub::UnsealSecretInput,
         ) -> ttrpc::error::Result<confidential_data_hub::UnsealSecretOutput> {
+            if req.secret == b"sealed.fail" {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "injected unseal failure".to_string(),
+                )));
+            }
+
             let mut output = confidential_data_hub::UnsealSecretOutput::new();
             output.set_plaintext("unsealed".into());
             Ok(output)
@@ -398,6 +405,7 @@ mod tests {
         let normal_env = String::from("key=testdata");
         let unchanged_env = unseal_env(&normal_env).await.unwrap();
         assert_eq!(unchanged_env, String::from("key=testdata"));
+        assert!(unseal_env("key=sealed.fail").await.is_err());
 
         // Test sealed secret as files
         let sealed_dir = test_dir_path.join("..test");

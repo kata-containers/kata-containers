@@ -163,3 +163,24 @@ results in:
 ```bash
 {"msg":"announce","level":"INFO","subsystem":"root","version":"0.1.0","pid":"214","source":"agent","name":"kata-agent","config":"AgentConfig { debug_console: true, dev_mode: false, log_level: Debug, hotplug_timeout: 10s, debug_console_vport: 0, log_vport: 0, container_pipe_size: 0, server_addr: "vsock://-1:1024", passfd_listener_port: 0, unified_cgroup_hierarchy: false, tracing: false, supports_seccomp: true }","agent-version":"3.3.0-alpha0"}
 ```
+
+## Confidential Containers
+
+### Sealed environment variables
+
+When the Confidential Data Hub (CDH) is running, the Kata agent treats an
+environment variable value beginning with `sealed.` as a
+[CoCo sealed secret](https://github.com/confidential-containers/guest-components/blob/main/confidential-data-hub/docs/SEALED_SECRET.md).
+The agent asks CDH to unseal the value before it creates the container. If CDH
+cannot unseal the value, container creation fails and the agent logs the error.
+
+When CDH is not running, the agent leaves all environment variable values
+unchanged. This keeps sealed-secret handling opt-in through
+`agent.guest_components_procs`.
+
+This only defines how the agent handles an unseal error. It does not verify
+that the host supplied the complete intended environment. For host request
+validation, `genpolicy` can generate an Agent Policy from the pod YAML and add
+it to `cc_init_data`; see [Kata Agent Policy](../../docs/how-to/how-to-use-the-kata-agent-policy.md).
+The current Agent Policy permits the host to omit an expected environment
+variable.
