@@ -22,6 +22,11 @@ spec:
         app.kubernetes.io/name: kata-monitor
       annotations:
         prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        # To enable TLS, replace the two annotations above with:
+        # prometheus.io/scrape: "true"
+        # prometheus.io/scheme: "https"
+        # prometheus.io/port: "8443"
     spec:
       containers:
       - name: kata-monitor
@@ -36,8 +41,16 @@ spec:
           - -listen-address=0.0.0.0:8090
           - -log-level=debug
           - -runtime-endpoint=unix:///run/containerd/containerd.sock
+          # To enable TLS, replace -listen-address above with:
+          #   -listen-address=0.0.0.0:8443
+          # and add the following args:
+          #   -tls-cert-file=/etc/kata-monitor/certs/cert.pem
+          #   -tls-key-file=/etc/kata-monitor/certs/key.pem
+          # See src/runtime/cmd/kata-monitor/README.md § "TLS" for
+          # certificate generation and Secret creation steps.
         ports:
           - containerPort: 8090
+          # To enable TLS, replace containerPort 8090 above with 8443.
         resources:
           limits:
             cpu: 200m
@@ -52,6 +65,10 @@ spec:
         - name: sbs
           mountPath: /run/vc/sbs/
           readOnly: true
+        # To enable TLS, also add:
+        # - name: certs
+        #   mountPath: /etc/kata-monitor/certs
+        #   readOnly: true
       terminationGracePeriodSeconds: 30
       volumes:
       - name: containerd-sock
@@ -62,3 +79,7 @@ spec:
         hostPath:
           path: /run/vc/sbs/
           type: DirectoryOrCreate
+      # To enable TLS, also add:
+      # - name: certs
+      #   secret:
+      #     secretName: kata-monitor-certs
