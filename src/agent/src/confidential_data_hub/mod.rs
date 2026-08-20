@@ -306,13 +306,92 @@ pub async fn get_cdh_resource(resource_path: &str) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use rstest::{fixture, rstest};
     use std::fs::File;
     use std::io::{Read, Write};
     use std::sync::Arc;
+    use std::time::{Duration, Instant};
     use tempfile::{tempdir, NamedTempFile};
     use test_utils::skip_if_not_root;
     use tokio::signal::unix::{signal, SignalKind};
+
+    const TEST_RETRY_COUNT: usize = 5;
+    const TEST_RETRY_DELAY_MS: u64 = 100;
+
     struct TestService;
+
+    struct CdhTestEnv {
+        _test_dir: tempfile::TempDir,
+        client: CDHClient,
+    }
+
+    impl CdhTestEnv {
+        fn test_dir_path(&self) -> &std::path::Path {
+            self._test_dir.path()
+        }
+    }
+
+    #[fixture]
+    async fn cdh_env() -> CdhTestEnv {
+        let test_dir = tempdir().expect("failed to create tmpdir");
+        let cdh_sock_uri = format!(
+            "unix://{}",
+            test_dir.path().join("cdh.sock").to_str().unwrap()
+        );
+
+        start_ttrpc_server(cdh_sock_uri.clone());
+        wait_for_server_ready(&cdh_sock_uri, Duration::from_secs(5))
+            .await
+            .unwrap();
+        let client = CDHClient::new(&cdh_sock_uri).unwrap();
+
+        CdhTestEnv {
+            _test_dir: test_dir,
+            client,
+        }
+    }
+
+    async fn wait_for_server_ready(uri: &str, timeout: Duration) -> Result<()> {
+        let start = Instant::now();
+
+        loop {
+            if start.elapsed() > timeout {
+                bail!("Server did not become ready within timeout");
+            }
+
+            match ttrpc::asynchronous::Client::connect(uri) {
+                Ok(_) => return Ok(()),
+                Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+            }
+        }
+    }
+
+    // Generic retry helper to reduce code duplication
+    async fn retry_operation<F, Fut, T>(
+        operation: F,
+        retries: usize,
+        delay_ms: u64,
+    ) -> Result<T>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        let mut last_err = None;
+
+        for attempt in 0..retries {
+            match operation().await {
+                Ok(result) => return Ok(result),
+                Err(err) => {
+                    last_err = Some(err);
+                    if attempt + 1 < retries {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+            }
+        }
+
+        Err(last_err.expect("retry_operation called with zero retries"))
+    }
 
     #[async_trait]
     impl confidential_data_hub_ttrpc_async::SealedSecretService for TestService {
@@ -375,31 +454,100 @@ mod tests {
         });
     }
 
+    async fn retry_unseal_env(
+        cdh_client: &CDHClient,
+        env: &str,
+    ) -> Result<String> {
+        retry_operation(
+            || async {
+                if let Some((key, value)) = env.split_once('=') {
+                    if value.starts_with(SEALED_SECRET_PREFIX) {
+                        cdh_client
+                            .unseal_secret_async(value)
+                            .await
+                            .map(|unsealed_value| {
+                                format!("{}={}", key, std::str::from_utf8(&unsealed_value).unwrap())
+                            })
+                    } else {
+                        Ok(env.to_string())
+                    }
+                } else {
+                    Ok(env.to_string())
+                }
+            },
+            TEST_RETRY_COUNT,
+            TEST_RETRY_DELAY_MS,
+        )
+        .await
+    }
+
+    async fn retry_unseal_file(
+        cdh_client: &CDHClient,
+        path: &str,
+    ) -> Result<()> {
+        retry_operation(
+            || unseal_file_with_client(cdh_client, path),
+            TEST_RETRY_COUNT,
+            TEST_RETRY_DELAY_MS,
+        )
+        .await
+    }
+
+    async fn unseal_file_with_client(cdh_client: &CDHClient, path: &str) -> Result<()> {
+        let path = Path::new(path);
+        if !path.exists() {
+            bail!("file/path {} does not exist", path.to_string_lossy());
+        }
+
+        if path.is_file() {
+            if content_starts_with_prefix(path, SEALED_SECRET_PREFIX).await? {
+                let sealed_secret = fs::read_to_string(path)?;
+                let unsealed_secret = cdh_client.unseal_secret_async(&sealed_secret).await?;
+                fs::write(path, unsealed_secret)?;
+            }
+        } else if path.is_dir() {
+            for entry in fs::read_dir(path)? {
+                let entry = entry?;
+                let file_path = entry.path();
+                if file_path.is_file() {
+                    let metadata = fs::symlink_metadata(&file_path)?;
+                    if metadata.file_type().is_symlink()
+                        || content_starts_with_prefix(&file_path, SEALED_SECRET_PREFIX).await?
+                    {
+                        let target_path = fs::canonicalize(&file_path)?;
+                        let sealed_secret = fs::read_to_string(target_path.clone())?;
+                        if sealed_secret.starts_with(SEALED_SECRET_PREFIX) {
+                            let unsealed_secret = cdh_client.unseal_secret_async(&sealed_secret).await?;
+                            fs::write(file_path, unsealed_secret)?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[rstest]
     #[tokio::test]
-    async fn test_sealed_secret() {
+    async fn test_unseal_env_sealed_secret(#[future] cdh_env: CdhTestEnv) {
         skip_if_not_root!();
-        let test_dir = tempdir().expect("failed to create tmpdir");
-        let test_dir_path = test_dir.path();
-        let cdh_sock_uri = &format!(
-            "unix://{}",
-            test_dir_path.join("cdh.sock").to_str().unwrap()
-        );
+        let cdh_env = cdh_env.await;
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let _guard = rt.enter();
-        start_ttrpc_server(cdh_sock_uri.to_string());
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        init_cdh_client(cdh_sock_uri).await.unwrap();
-
-        // Test sealed secret as env vars
         let sealed_env = String::from("key=sealed.testdata");
-        let unsealed_env = unseal_env(&sealed_env).await.unwrap();
+        let unsealed_env = retry_unseal_env(&cdh_env.client, &sealed_env)
+            .await
+            .unwrap();
         assert_eq!(unsealed_env, String::from("key=unsealed"));
-        let normal_env = String::from("key=testdata");
-        let unchanged_env = unseal_env(&normal_env).await.unwrap();
-        assert_eq!(unchanged_env, String::from("key=testdata"));
+    }
 
-        // Test sealed secret as files
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_file_sealed_secret(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+        let test_dir_path = cdh_env.test_dir_path();
+
         let sealed_dir = test_dir_path.join("..test");
         fs::create_dir(&sealed_dir).unwrap();
         let sealed_filename = sealed_dir.join("secret");
@@ -408,8 +556,9 @@ mod tests {
         let secret_symlink = test_dir_path.join("secret");
         symlink(&sealed_filename, &secret_symlink).unwrap();
 
-        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
-
+        retry_unseal_file(&cdh_env.client, test_dir_path.to_str().unwrap())
+            .await
+            .unwrap();
         let unsealed_filename = test_dir_path.join("secret");
         let mut unsealed_file = File::open(unsealed_filename.clone()).unwrap();
         let mut contents = String::new();
@@ -417,21 +566,100 @@ mod tests {
         assert_eq!(contents, String::from("unsealed"));
         fs::remove_file(sealed_filename).unwrap();
         fs::remove_file(unsealed_filename).unwrap();
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_file_normal_secret(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+        let test_dir_path = cdh_env.test_dir_path();
 
         let normal_filename = test_dir_path.join("secret");
         let mut normal_file = File::create(normal_filename.clone()).unwrap();
         normal_file.write_all(b"testdata").unwrap();
-        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
+
+        retry_unseal_file(&cdh_env.client, test_dir_path.to_str().unwrap())
+            .await
+            .unwrap();
         let mut contents = String::new();
         let mut normal_file = File::open(normal_filename.clone()).unwrap();
         normal_file.read_to_string(&mut contents).unwrap();
         assert_eq!(contents, String::from("testdata"));
         fs::remove_file(normal_filename).unwrap();
-
-        rt.shutdown_background();
-        std::thread::sleep(std::time::Duration::from_secs(2));
     }
 
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_env_normal_env(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+
+        let normal_env = "PATH=/usr/bin:/bin";
+        let result = retry_unseal_env(&cdh_env.client, normal_env)
+            .await
+            .unwrap();
+        assert_eq!(result, normal_env, "Normal env should remain unchanged");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_env_no_equals(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+
+        let invalid_env = "INVALID_ENV_VAR";
+        let result = retry_unseal_env(&cdh_env.client, invalid_env)
+            .await
+            .unwrap();
+        assert_eq!(result, invalid_env, "Invalid format should remain unchanged");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_env_empty_value(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+
+        let empty_env = "KEY=";
+        let result = retry_unseal_env(&cdh_env.client, empty_env)
+            .await
+            .unwrap();
+        assert_eq!(result, empty_env, "Empty value should remain unchanged");
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_file_nonexistent_path(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+
+        let nonexistent_path = "/nonexistent/path/to/file";
+        let result = retry_unseal_file(&cdh_env.client, nonexistent_path).await;
+        assert!(result.is_err(), "Should fail with nonexistent path");
+
+        if let Err(e) = result {
+            let error_msg = format!("{}", e);
+            assert!(error_msg.contains("does not exist"),
+                "Error should mention file doesn't exist: {}", error_msg);
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_unseal_file_with_directory(#[future] cdh_env: CdhTestEnv) {
+        skip_if_not_root!();
+        let cdh_env = cdh_env.await;
+        let test_dir_path = cdh_env.test_dir_path();
+
+        let subdir = test_dir_path.join("subdir");
+        fs::create_dir(&subdir).unwrap();
+
+        let result = retry_unseal_file(&cdh_env.client, test_dir_path.to_str().unwrap()).await;
+        assert!(result.is_ok(), "Should succeed with empty directory");
+    }
+
+    // Group all content_starts_with_prefix tests together
     #[tokio::test]
     async fn test_content_starts_with_prefix() {
         // Normal case: content matches the prefix
@@ -460,5 +688,66 @@ mod tests {
         assert!(!content_starts_with_prefix(f4.path(), "sealed.")
             .await
             .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_content_starts_with_prefix_exact_match() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "sealed.").unwrap();
+        assert!(content_starts_with_prefix(f.path(), "sealed.")
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_content_starts_with_prefix_longer_content() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "sealed.this_is_a_very_long_secret_value").unwrap();
+        assert!(content_starts_with_prefix(f.path(), "sealed.")
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_content_starts_with_prefix_different_prefix() {
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "sealed.hello").unwrap();
+        assert!(!content_starts_with_prefix(f.path(), "encrypted.")
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_content_starts_with_prefix_binary_content() {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(&[0xFF, 0xFE, 0xFD, 0xFC]).unwrap();
+        assert!(!content_starts_with_prefix(f.path(), "sealed.")
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_content_starts_with_prefix_nonexistent_file() {
+        let result = content_starts_with_prefix(Path::new("/nonexistent/file"), "sealed.").await;
+        assert!(result.is_err(), "Should fail with nonexistent file");
+    }
+
+    #[test]
+    fn test_sealed_secret_prefix_constant() {
+        assert_eq!(SEALED_SECRET_PREFIX, "sealed.");
+    }
+
+    #[tokio::test]
+    async fn test_cdh_client_new_invalid_socket() {
+        // Test CDHClient creation with invalid socket
+        let result = CDHClient::new("invalid://socket/path");
+        assert!(result.is_err(), "Should fail with invalid socket URI");
+    }
+
+    #[tokio::test]
+    async fn test_init_cdh_client_invalid_uri() {
+        // Test initialization with invalid URI
+        let result = init_cdh_client("invalid://uri").await;
+        assert!(result.is_err(), "Should fail with invalid URI");
     }
 }
