@@ -56,7 +56,6 @@ jobs:
           - nydus
           - openvmm
           - ovmf
-          - pause-image
           - qemu
           - qemu-no-shared-fs
           - virtiofsd
@@ -281,7 +280,6 @@ jobs:
         asset:
           - busybox
           - coco-guest-components
-          - pause-image
           - kernel-nvidia-gpu-modules
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
