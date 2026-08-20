@@ -31,8 +31,28 @@ ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 ##TARGET default: build code
 default: runtime show-header
 ##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
-test: static-checks-build
+test: test-dragonball-config static-checks-build
 	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
+
+##TARGET test-dragonball-config: verify architecture-specific generated configuration defaults.
+test-dragonball-config:
+	@tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	for arch_driver in "aarch64 virtio-blk-mmio" "x86_64 virtio-blk-pci"; do \
+		set -- $$arch_driver; \
+		arch="$$1"; \
+		expected="$$2"; \
+		config="$$tmp_dir/configuration-dragonball-$$arch.toml"; \
+		cp config/configuration-dragonball.toml.in "$$config.in"; \
+		$(MAKE) --no-print-directory ARCH="$$arch" CONFIG_DB="$$config" "$$config"; \
+		for field in vm_rootfs_driver block_device_driver; do \
+			actual=$$(awk -F'"' -v field="$$field" '$$1 == field " = " { print $$2 }' "$$config"); \
+			if [ "$$actual" != "$$expected" ]; then \
+				printf '%s: expected %s=%s, got %s\n' "$$arch" "$$field" "$$expected" "$$actual" >&2; \
+				exit 1; \
+			fi; \
+		done; \
+	done
 install: install-runtime install-configs
 
 ifeq (,$(realpath $(ARCH_FILE)))
@@ -302,9 +322,14 @@ ifneq (,$(DBCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_DB)
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
+ifeq ($(ARCH),aarch64)
+    VMROOTFSDRIVER_DB := virtio-blk-mmio
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
+else
     VMROOTFSDRIVER_DB := virtio-blk-pci
-    DEFMAXVCPUS_DB := 0
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-pci
+endif
+    DEFMAXVCPUS_DB := 0
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
     KERNELTYPE_DB = uncompressed
@@ -1194,4 +1219,5 @@ endif
 	help \
 	optimize \
 	show-header \
-	show-summary
+	show-summary \
+	test-dragonball-config
