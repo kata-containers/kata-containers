@@ -67,7 +67,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           },
           {
@@ -77,7 +77,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
             "type_": "bind"
           },
           {
@@ -87,7 +87,7 @@
               "rprivate",
               "ro"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDIvMDI=",
             "type_": "bind"
           }
         ],
@@ -288,7 +288,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/invalid-mount",
             "type_": "bind"
           }
         ],
@@ -489,7 +489,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           },
           {
@@ -499,7 +499,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDMvMDM=",
             "type_": "bind"
           }
         ],
@@ -695,7 +695,7 @@
         "Mounts": [
           {
             "destination": "/mnt/test",
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
         ],
@@ -896,7 +896,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           },
           {
@@ -906,7 +906,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
         ],
@@ -982,7 +982,61 @@
           "Readonly": false
         },
         "Version": "1.1.0"
-      }
+      },
+      "storages": [
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+          "options": [],
+          "source": "00/00",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+          "options": [],
+          "source": "01/01",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
+          "options": [],
+          "source": "02/02",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
+          "options": [],
+          "source": "03/03",
+          "shared": true
+        }
+      ]
     }
   },
   {
@@ -1053,17 +1107,17 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           },
           {
-            "destination": "/mnt/test",
+            "destination": "/mnt/unexpected",
             "options": [
               "rbind",
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
             "type_": "bind"
           }
         ],
@@ -1139,7 +1193,61 @@
           "Readonly": false
         },
         "Version": "1.1.0"
-      }
+      },
+      "storages": [
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+          "options": [],
+          "source": "00/00",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+          "options": [],
+          "source": "01/01",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
+          "options": [],
+          "source": "02/02",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
+          "options": [],
+          "source": "03/03",
+          "shared": true
+        }
+      ]
     }
   },
   {
@@ -1210,7 +1318,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           },
           {
@@ -1220,7 +1328,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
             "type_": "bind"
           },
           {
@@ -1230,7 +1338,7 @@
               "rprivate",
               "ro"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDIvMDI=",
             "type_": "bind"
           },
           {
@@ -1240,7 +1348,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDMvMDM=",
             "type_": "bind"
           },
           {
@@ -1250,7 +1358,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
         ],
@@ -1448,10 +1556,10 @@
             "destination": "/mnt/test",
             "options": [
               "rbind",
-              "rshared",
-              "ro"
+              "rprivate",
+              "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
         ],
@@ -1660,7 +1768,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "",
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
         ],
@@ -1785,6 +1893,207 @@
           ],
           "fs_group": null,
           "fstype": "invalid_fstype",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
+          "options": [],
+          "source": "03/03",
+          "shared": true
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "volumeMount: invalid mount options",
+    "kind": "CreateContainerRequest",
+    "request": {
+      "OCI": {
+        "Annotations": {
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "dummy",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "MountLabel": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            },
+            {
+              "Path": "/run/netns/podns",
+              "Type": "network"
+            }
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ],
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": ""
+        },
+        "Mounts": [
+          {
+            "destination": "/mnt/test",
+            "options": [
+              "rbind",
+              "rshared",
+              "rw"
+            ],
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+            "type_": "bind"
+          }
+        ],
+        "Process": {
+          "Args": [
+            "/pause"
+          ],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          },
+          "Cwd": "/",
+          "NoNewPrivileges": false,
+          "SelinuxLabel": "",
+          "User": {
+            "AdditionalGids": [
+              0
+            ],
+            "GID": 0,
+            "UID": 65535,
+            "Username": ""
+          }
+        },
+        "Root": {
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+          "Readonly": false
+        },
+        "Version": "1.1.0"
+      },
+      "storages": [
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+          "options": [],
+          "source": "00/00",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+          "options": [],
+          "source": "01/01",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
+          "options": [],
+          "source": "02/02",
+          "shared": true
+        },
+        {
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
           "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
           "options": [],
           "source": "03/03",
