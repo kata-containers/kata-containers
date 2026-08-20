@@ -116,16 +116,21 @@ impl HdrWrapper {
         }
         // TODO: check buffer alignment
 
-        mem.checked_offset(desc.addr(), VSOCK_PKT_HDR_SIZE)
-            .ok_or_else(|| VsockError::GuestMemoryBounds(desc.addr().0, VSOCK_PKT_HDR_SIZE))?;
+        // Validate the ENTIRE [desc.addr(), desc.addr() + VSOCK_PKT_HDR_SIZE) range is a
+        // single contiguous guest-memory mapping before building the raw header pointer.
+        // `get_host_address()` only validates the start address, so without this check a
+        // compromised guest could place the header at the end of a guest-memory region and
+        // have the 44-byte header access cross the region boundary into unrelated host
+        // memory (out-of-bounds read/write in the shim).
+        let slice = mem
+            .get_slice(desc.addr(), VSOCK_PKT_HDR_SIZE)
+            .map_err(VsockError::GuestMemory)?;
 
         // It's safe to create the wrapper from this pointer, as:
         // - the guest driver aligned the data; and
-        // - `GuestMemory` is page-aligned.
-        Ok(Self::from_ptr_unchecked(
-            mem.get_host_address(desc.addr())
-                .map_err(VsockError::GuestMemory)?,
-        ))
+        // - `GuestMemory` is page-aligned; and
+        // - the full header range was validated above.
+        Ok(Self::from_ptr_unchecked(slice.ptr_guard().as_ptr()))
     }
 
     /// Create the wrapper from a raw pointer.
@@ -197,17 +202,21 @@ impl BufWrapper {
         offset: usize,
         size: usize,
     ) -> Result<Self> {
-        // Check the guest provided pointer and data size.
-        mem.checked_offset(desc.addr(), desc.len() as usize)
-            .ok_or_else(|| VsockError::GuestMemoryBounds(desc.addr().0, desc.len() as usize))?;
+        let base = desc
+            .addr()
+            .checked_add(offset as u64)
+            .ok_or(VsockError::Overflow(desc.addr(), offset))?;
+
+        // Validate the ENTIRE [base, base + size) range actually accessed by the data
+        // buffer is a single contiguous guest-memory mapping. `get_host_address()` only
+        // validates the start address, so without this check a compromised guest could
+        // place the buffer at the end of a guest-memory region and have the `size`-byte
+        // access cross the region boundary into unrelated host memory (out-of-bounds
+        // read/write in the shim).
+        let slice = mem.get_slice(base, size).map_err(VsockError::GuestMemory)?;
 
         Ok(Self::from_fat_ptr_unchecked(
-            mem.get_host_address(
-                desc.addr()
-                    .checked_add(offset as u64)
-                    .ok_or(VsockError::Overflow(desc.addr(), offset))?,
-            )
-            .map_err(VsockError::GuestMemory)?,
+            slice.ptr_guard().as_ptr(),
             size,
         ))
     }
