@@ -345,7 +345,7 @@ async fn main() -> Result<()> {
 /// dispatcher passed down. An older chart passes none, and then there is nothing to
 /// compare against.
 fn verify_node_machine_id() -> Result<()> {
-    const EXPECTED_ENV: &str = "KATA_DEPLOY_NODE_MACHINE_ID";
+    const EXPECTED_ENV: &str = "NODE_MACHINE_ID";
     const HOST_MACHINE_ID: &str = "/host-machine-id";
 
     let Ok(expected) = std::env::var(EXPECTED_ENV) else {

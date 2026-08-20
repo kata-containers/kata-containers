@@ -463,15 +463,16 @@ reference:tag (tag defaults to Chart.AppVersion).
 {{- end -}}
 
 {{/*
-Dispatcher image reference for the job-mode dispatcher (kata-deploy-job-dispatcher).
-Supports tag (reference:tag) and digest (reference@sha256:...) formats; tag
-defaults to Chart.AppVersion.
+Image reference for k8s-job-dispatcher.
+Supports tag (reference:tag) and digest (reference@sha256:...) formats.
 */}}
 {{- define "kata-deploy.dispatcherImage" -}}
 {{- $ref := .Values.job.dispatcherImage.reference -}}
-{{- $tag := default .Chart.AppVersion .Values.job.dispatcherImage.tag | toString -}}
+{{- $tag := .Values.job.dispatcherImage.tag | toString -}}
 {{- if contains "@" $ref -}}
 {{- $ref -}}
+{{- else if eq $tag "" -}}
+{{- fail "job.dispatcherImage.tag is required when job.dispatcherImage.reference is not a digest" -}}
 {{- else -}}
 {{- printf "%s:%s" $ref $tag -}}
 {{- end -}}
@@ -719,7 +720,7 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{/*
 Build a Kubernetes label-selector STRING (the form accepted by the apiserver
 and `kubectl --selector`) from an equality map plus a list of match-expression
-requirements. This is handed to `kata-deploy-job-dispatcher --node-selector`, which
+requirements. This is handed to `k8s-job-dispatcher --node-selector`, which
 resolves the actual target nodes LIVE at run time (so node membership is never
 frozen into the Helm release).
 
@@ -786,6 +787,13 @@ kata-deploy.katacontainers.io/default
 
 {{- define "kata-deploy.dispatcherNodeWorkFlags" -}}
 {{- $root := .root -}}
+{{- /* Preserve the tracking and node-management contract of the dispatcher that
+       originally lived in this repository. */ -}}
+- "--tracking-label-prefix=kata-deploy-job-dispatcher"
+- "--node-label-key=katacontainers.io/kata-runtime"
+- "--instance-label-prefix=kata-deploy.katacontainers.io"
+- "--require-node-runtime-version"
+- "--require-node-machine-id"
 {{- /* Installs share katacontainers.io/kata-runtime, so each one also marks its
        own nodes and gives the shared label up only once no other mark is left.
        Both stages need to know which mark is ours. */}}
@@ -1084,7 +1092,7 @@ Same return contract as `kata-deploy.installNodeSelectors`.
 
 {{/*
 Per-node staged Job manifest (deploymentMode: job), embedded verbatim into the
-job-templates ConfigMap. The dispatcher (kata-deploy-job-dispatcher) clones this once per
+job-templates ConfigMap. k8s-job-dispatcher clones this once per
 target node, injecting metadata.name + spec.template.spec.nodeName, so the
 template itself carries NO node identity and NO Helm hook annotations.
 
@@ -1221,7 +1229,7 @@ kata-deploy.dispatcherServiceAccountName.
 {{- end -}}
 
 {{/*
-ServiceAccount name for the job-mode dispatcher (kata-deploy-job-dispatcher). Separate from
+ServiceAccount name for k8s-job-dispatcher. Separate from
 kata-deploy.serviceAccountName: the dispatcher is a pure API client (list nodes,
 manage Jobs) and must NOT carry the privileged kata-deploy host-mutation rights.
 */}}

@@ -2,7 +2,7 @@
 Cleanup dispatcher (deploymentMode: job, pre-delete hook).
 
 The mirror image of the install dispatcher: a single tiny pre-delete hook Job that
-runs the dispatcher (kata-deploy-job-dispatcher) to fan out one node-pinned cleanup Job
+runs k8s-job-dispatcher to fan out one node-pinned cleanup Job
 per selected node, paced to job.parallelism. Each per-node Job runs the install
 pipeline in reverse and exits:
 
@@ -87,7 +87,7 @@ spec:
               drop:
                 - ALL
           command:
-            - /usr/bin/kata-deploy-job-dispatcher
+            - /usr/bin/k8s-job-dispatcher
             - "--job-template=/etc/kata-job/cleanup-job.yaml"
             - "--name-prefix={{ $base }}-cleanup"
             - "--owner-job-name={{ $dispatcherName }}"

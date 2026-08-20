@@ -1,8 +1,8 @@
 # Deployment model for installing/cleaning up Kata on nodes.
 #   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
 #              every matching node and reverts it on pod termination (uninstall).
-#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
-#              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
+#   job:       no always-on component. A tiny k8s-job-dispatcher Job runs as a
+#              post-install/upgrade hook, enumerates
 #              the selected nodes LIVE, and creates one node-pinned install Job
 #              per node - paced to job.parallelism and guaranteeing one install
 #              per node. Each per-node Job runs the staged pipeline as ordered
@@ -28,11 +28,11 @@ deploymentMode: daemonset  # daemonset | job
 job:
   # Dispatcher image: the dispatcher that fans out per-node Jobs. It only talks to
   # the Kubernetes API (lists nodes, creates/watches Jobs); it never touches the
-  # host. Supports reference:tag or reference@sha256:digest; tag defaults to the
-  # chart appVersion.
+  # host. Supports reference:tag or reference@sha256:digest. This component is
+  # released independently of Kata Containers, so its version is pinned here.
   dispatcherImage:
-    reference: quay.io/kata-containers/kata-deploy-job-dispatcher
-    tag: ""
+    reference: ghcr.io/kata-containers/k8s-job-dispatcher
+    tag: "0.1.0"
   # Where the dispatcher pods themselves may run (install and uninstall). Nothing
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
