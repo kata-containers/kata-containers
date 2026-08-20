@@ -1100,7 +1100,7 @@ Arguments (dict):
   root  - top-level context (.)
   stage - "install" | "cleanup"
 
-install pipeline:  host-check -> artifacts (initContainers) ; cri (main)
+install pipeline:  load-kernel-modules -> host-check -> artifacts (initContainers) ; cri (main)
 cleanup pipeline:  revert-cri              (initContainer)  ; remove-artifacts (main)
 
 The node label is not a stage here: the dispatcher sets it once the Job as a whole
@@ -1200,6 +1200,8 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
+{{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
@@ -1208,10 +1210,20 @@ spec:
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true) | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
+        - name: modules-load-d
+          hostPath:
+            path: /etc/modules-load.d
+            type: DirectoryOrCreate
+{{- if eq $stage "install" }}
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -1264,6 +1276,8 @@ Arguments (dict):
   action      - kata-deploy subcommand (e.g. install-stage-cri)
   privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
+  mountHostRoot - bool, whether to mount the host root read-only at /host
+  mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
 
 Emitted at column 0; indent with `nindent` at the call site.
 */}}
@@ -1282,6 +1296,15 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
 {{- else }}
 {{- include "kata-deploy.tmpVolumeMount" . | nindent 4 }}
+{{- end }}
+{{- if .mountHostRoot }}
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+{{- end }}
+{{- if .mountModulesLoad }}
+    - name: modules-load-d
+      mountPath: /host-modules-load.d
 {{- end }}
 {{- end -}}
 

@@ -578,8 +578,10 @@ function deploy_k8s() {
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# Load device-mapper and dm-verity kernel modules.
-				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
+				# The kata-deploy host module job leaves these unloaded, so that
+				# its own privileged stage is what has to load them.
+				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]] &&
+					[[ "${KATA_DEPLOY_MANAGES_HOST_MODULES:-no}" != "yes" ]]; then
 					load_dm_verity_modules
 				fi
 
