@@ -502,6 +502,57 @@ impl Platform {
                 root_ports,
             });
         }
+
+        // NIC groups: own pxb+smmuv3 complex, no GI links, no extra NUMA nodes.
+        // pxb numbering continues from where GPU groups left off.
+        let gpu_group_count = topo.gpu_smmu_groups.len();
+        let mut nic_dev_idx = gpu_idx;
+        for (nic_group_idx, group) in topo.nic_smmu_groups.iter().enumerate() {
+            let n_ports = group.pci_bus_addrs.len();
+            let bus_nr = 1u8 + bus_nr_running;
+            bus_nr_running += if n_ports <= 1 { 1 } else { n_ports as u8 * 4 };
+
+            let cpu_mem_node = socket_numa_node(&topo.sockets, group.socket);
+            let global_group_idx = gpu_group_count + nic_group_idx;
+            let pxb_id = format!("pcie.{}", global_group_idx + 1);
+
+            let mut root_ports = Vec::new();
+            for pci_addr in &group.pci_bus_addrs {
+                let dev_id = format!("dev{nic_dev_idx}");
+                let rp_id = format!("pcie.port{port_idx}");
+
+                root_ports.push(PciRootPort {
+                    id: rp_id,
+                    chassis: (nic_dev_idx + 1) as u8,
+                    slot: None,
+                    multifunction: None,
+                    io_reserve: Some(0),
+                    device: Some(VfioDevice {
+                        id: dev_id,
+                        host: pci_addr.clone(),
+                        rombar: Some(false),
+                        kind: VfioDeviceKind::Nic,
+                        iommufd_id: None,
+                        pci_vendor_id: None,
+                        pci_device_id: None,
+                    }),
+                });
+
+                nic_dev_idx += 1;
+                port_idx += 1;
+            }
+
+            self.pci.roots.push(PciRootComplex {
+                id: pxb_id,
+                bus_nr,
+                numa_node: Some(cpu_mem_node),
+                iommu: Some(BusIommu::SmmuV3(SmmuV3Config {
+                    id: format!("smmuv3.{}", global_group_idx + 1),
+                    ..SmmuV3Config::default()
+                })),
+                root_ports,
+            });
+        }
     }
 
     pub(crate) fn with_hugepages(self, path: &str) -> Self {
