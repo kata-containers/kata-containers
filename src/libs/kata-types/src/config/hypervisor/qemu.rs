@@ -116,9 +116,7 @@ impl ConfigPlugin for QemuConfig {
                 ));
             }
 
-            if !qemu.blockdev_info.disable_block_device_use
-                && qemu.blockdev_info.block_device_driver == VIRTIO_BLK_MMIO
-            {
+            if qemu.blockdev_info.block_device_driver == VIRTIO_BLK_MMIO {
                 return Err(std::io::Error::other(
                     "Qemu doesn't support virtio-blk-mmio",
                 ));

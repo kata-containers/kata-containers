@@ -114,9 +114,6 @@ pub const SHA512: &str = "sha512";
 /// Specify the driver to be used for block device either VirtioSCSI or VirtioBlock
 pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER: &str =
     "io.katacontainers.config.hypervisor.block_device_driver";
-/// A sandbox annotation that disallows a block device from being used.
-pub const KATA_ANNO_CFG_HYPERVISOR_DISABLE_BLOCK_DEV_USE: &str =
-    "io.katacontainers.config.hypervisor.disable_block_device_use";
 /// A sandbox annotation that specifies cache-related options will be set to block devices or not.
 pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_SET: &str =
     "io.katacontainers.config.hypervisor.block_device_cache_set";
@@ -569,16 +566,6 @@ impl Annotation {
                     // Hypervisor Block Device related annotations
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER => {
                         hv.blockdev_info.block_device_driver = value.to_string();
-                    }
-                    KATA_ANNO_CFG_HYPERVISOR_DISABLE_BLOCK_DEV_USE => {
-                        match self.get_value::<bool>(key) {
-                            Ok(r) => {
-                                hv.blockdev_info.disable_block_device_use = r.unwrap_or_default();
-                            }
-                            Err(_e) => {
-                                return Err(bool_err);
-                            }
-                        }
                     }
                     KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_SET => {
                         match self.get_value::<bool>(key) {
