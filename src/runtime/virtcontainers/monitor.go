@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	defaultCheckInterval = 5 * time.Second
-	watcherChannelSize   = 128
+	defaultCheckInterval    = 5 * time.Second
+	watcherChannelSize      = 128
+	defaultFailureThreshold = 12
 )
 
 var monitorLog = virtLog.WithField("subsystem", "virtcontainers/monitor")
@@ -31,7 +32,9 @@ type monitor struct {
 	stopCh        chan bool
 	checkInterval time.Duration
 
-	running bool
+	running             bool
+	consecutiveFailures int
+	failureThreshold    int
 }
 
 func newMonitor(s *Sandbox) *monitor {
@@ -39,9 +42,10 @@ func newMonitor(s *Sandbox) *monitor {
 	// so it's safe to let monitorLog as a global variable.
 	monitorLog = monitorLog.WithField("sandbox", s.ID())
 	return &monitor{
-		sandbox:       s,
-		checkInterval: defaultCheckInterval,
-		stopCh:        make(chan bool, 1),
+		sandbox:          s,
+		checkInterval:    defaultCheckInterval,
+		stopCh:           make(chan bool, 1),
+		failureThreshold: defaultFailureThreshold,
 	}
 }
 
@@ -142,8 +146,20 @@ func (m *monitor) stop() {
 func (m *monitor) watchAgent(ctx context.Context) {
 	err := m.sandbox.agent.check(ctx)
 	if err != nil {
-		// TODO: define and export error types
-		m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
+		m.consecutiveFailures++
+		monitorLog.WithField("consecutive", m.consecutiveFailures).
+			WithField("threshold", m.failureThreshold).
+			WithError(err).Warn("agent health check failed")
+
+		// TODO: define and export error tyoes
+		if m.consecutiveFailures >= m.failureThreshold {
+			m.notify(ctx, errors.Wrapf(err, "failed to ping agent after %d consecutive attempts", m.consecutiveFailures))
+		}
+		return
+	}
+	if m.consecutiveFailures > 0 {
+		monitorLog.WithField("recovered_after", m.consecutiveFailures).Info("agent recovered")
+		m.consecutiveFailures = 0
 	}
 }
 
