@@ -1199,32 +1199,22 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 		hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
 	}
 
-	// If modeVFIO is enabled we need 1st to attach the VFIO control group
-	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
-	// Sort the devices starting with device #1 being the VFIO control group
-	// device and the next the actuall device(s) /dev/vfio/<group>
+	// Cold-plugged devices are already attached to the VM, but workload
+	// containers keep them in their device list because the agent needs
+	// the entries: to create the in-guest /dev/vfio nodes (vfio_mode =
+	// "vfio") and to build the host->guest PCI mapping that
+	// PCIDEVICE_<RES> env var translation relies on (vfio_mode =
+	// "guest-kernel"). FindDevice matches the sandbox-level device, so
+	// nothing double-attaches.
 	//
-	// Cold-plug VFIO devices must also reach the agent in
-	// `VfioMode == GuestKernel`. The agent's `vfio-pci-gk` handler
-	// returns `dev: None` (so /dev/vfio/<group> is *not* materialised in
-	// the container spec — `constrainGRPCSpec(stripVfio=true)` will have
-	// already removed it from `grpcSpec.Linux.Devices`), but it still
-	// records the host->guest PCI mapping into `sandbox.pcimap[cid]`.
-	// Without that mapping, `update_env_pci` cannot translate the
-	// `PCIDEVICE_<RES>=<host-BDF>` env vars set by the SR-IOV device
-	// plugin and aborts the container creation with
-	// "No PCI mapping found for container <id>".
-	//
-	// `devManager.NewDevice` calls `FindDevice` first, which matches the
-	// already-cold-plugged sandbox-level device by HostPath/major/minor,
-	// so this does not double-attach.
-	if coldPlugVFIO {
-		// DeviceInfo should still be added to the sandbox's device manager
-		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
-		// This ensures that ociSpec.Linux.Devices is updated with
-		// this information before the container is created on the guest.
+	// The CRI sandbox (pause) container never owns any VFIO device, and
+	// the guest rejects a pause CreateContainer that carries one.
+	isCriSandbox := ContainerType(c.config.Annotations[vcAnnotations.ContainerTypeKey]).IsCriSandbox()
+	if coldPlugVFIO && !isCriSandbox {
 		sortedVFIODevices := sortContainerVFIODevices(vfioColdPlugDevices)
-		// Combine sorted VFIO devices with hot-plug devices
+		// The container needs the cold-plug VFIO devices AND the hot-plug
+		// devices (e.g. disks, network) for proper functioning, see
+		// https://github.com/kata-containers/kata-containers/issues/11288
 		deviceInfos = append(sortedVFIODevices, hotPlugDevices...)
 	} else {
 		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
