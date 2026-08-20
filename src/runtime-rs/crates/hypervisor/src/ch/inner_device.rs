@@ -334,8 +334,11 @@ impl CloudHypervisorInner {
         // Convert pairs into the actual queue count.
         clh_net_config.num_queues = netdev.config.queue_num.max(1) * 2;
 
-        let files = open_named_tuntap(&netdev.config.host_dev_name, netdev.config.queue_num.max(1) as u32)
-            .context("open named tuntap")?;
+        let files = open_named_tuntap(
+            &netdev.config.host_dev_name,
+            netdev.config.queue_num.max(1) as u32,
+        )
+        .context("open named tuntap")?;
 
         let fds = files.iter().map(|f| f.as_raw_fd()).collect();
 
