@@ -8,9 +8,9 @@ use anyhow::{anyhow, Context, Result};
 use common::{
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxMetricsInfo,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest,
+        TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -643,6 +643,14 @@ impl RuntimeHandlerManager {
                 sandbox.shutdown().await.context("shutdown sandbox")?;
 
                 Ok(SandboxResponse::ShutdownSandbox)
+            }
+            SandboxRequest::SandboxMetrics(req) => {
+                let stats = sandbox.metrics().await.context("get sandbox metrics")?;
+                Ok(SandboxResponse::SandboxMetrics(SandboxMetricsInfo {
+                    sandbox_id: req.sandbox_id,
+                    timestamp: SystemTime::now(),
+                    stats,
+                }))
             }
         }
     }
