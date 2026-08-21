@@ -321,9 +321,7 @@
       "storages": [
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/gid\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"gid\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"ghcr.io/burgerdev/weird-images/gid@sha256:bdbb485bb9e3baf381a2957b9369b6051c6113097a5f8dcee27faff17624a2c0\",\"io.kubernetes.cri.sandbox-id\":\"8667fea11fc4fc70d427cc3645950ac83cc7d33ca515a8774ab95043f0096bb8\",\"io.kubernetes.cri.sandbox-name\":\"gid-experiment\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"io.kubernetes.cri.sandbox-uid\":\"31df313a-931f-4979-a405-cc3f3ccb6a56\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/gid/rootfs",
@@ -655,9 +653,7 @@
       "storages": [
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/gid\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"gid\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"ghcr.io/burgerdev/weird-images/gid@sha256:bdbb485bb9e3baf381a2957b9369b6051c6113097a5f8dcee27faff17624a2c0\",\"io.kubernetes.cri.sandbox-id\":\"8667fea11fc4fc70d427cc3645950ac83cc7d33ca515a8774ab95043f0096bb8\",\"io.kubernetes.cri.sandbox-name\":\"gid-experiment\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"io.kubernetes.cri.sandbox-uid\":\"31df313a-931f-4979-a405-cc3f3ccb6a56\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/gid/rootfs",
