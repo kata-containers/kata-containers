@@ -25,7 +25,7 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat,
+    BlockConfigModern, BlockDeviceAio, VmdkConfig,
 };
 use kata_types::gpt_disk::{
     extract_dmverity_annotation, extract_snapshot_id, generate_dmverity_options,
@@ -36,8 +36,7 @@ use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufWriter, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -53,19 +52,7 @@ const EROFS_MERGED_VMDK: &str = "merged_fs.vmdk";
 /// This is a pre-flight sanity check before VMDK merging, to prevent excessive block devices
 /// when many layers are used without fsmerge.
 const MAX_ROOTFS_LAYER_DEVICES: usize = 129; // 128 EROFS layers + 1 rw layer (129 total)
-/// Maximum sectors per 2GB extent (2GB / 512 bytes per sector)
-const MAX_2GB_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
-/// Sectors per track for VMDK geometry
-const SECTORS_PER_TRACK: u64 = 63;
-/// Number of heads for VMDK geometry
-const NUMBER_HEADS: u64 = 16;
-/// VMDK subformat type (twoGbMaxExtentFlat for large files)
-const VMDK_SUBFORMAT: &str = "twoGbMaxExtentFlat";
-/// VMDK adapter type
-const VMDK_ADAPTER_TYPE: &str = "ide";
-/// VMDK hardware version
-const VMDK_HW_VERSION: &str = "4";
-/// Default shared directory for guest rootfs VMDK files (for multi-layer EROFS)
+/// Default runtime directory for generated multi-layer EROFS metadata.
 pub(crate) const DEFAULT_KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
 /// Template for mkdir option in overlay mount (X-containerd.mkdir.path)
 const X_CONTAINERD_MKDIR_PATH: &str = "X-containerd.mkdir.path=";
@@ -87,18 +74,19 @@ pub(crate) fn ensure_container_dir(sid: &str, cid: &str) -> Result<PathBuf> {
     Ok(dir)
 }
 
-/// Generate merged VMDK file from multiple EROFS devices
+/// Generate a merged VMDK layout from multiple EROFS devices.
 ///
-/// Creates a VMDK descriptor that combines multiple EROFS images into a single
-/// virtual block device (flatten device). For a single device, the EROFS image
-/// is used directly without a VMDK wrapper.
+/// For a single device, the EROFS image is used directly without a VMDK
+/// wrapper. For multiple devices, this returns a reserved descriptor path and
+/// a structured layout but does not create a file at that path. The QEMU
+/// backend serializes the layout after preparing its backing files.
 ///
 /// And `erofs_devices` are for host paths to EROFS image files (from `source` and `device=` options)
 async fn generate_merged_erofs_vmdk(
     sid: &str,
     cid: &str,
     erofs_devices: &[String],
-) -> Result<(String, BlockDeviceFormat)> {
+) -> Result<(String, Option<VmdkConfig>)> {
     if erofs_devices.is_empty() {
         return Err(anyhow!("no EROFS devices provided"));
     }
@@ -115,143 +103,37 @@ async fn generate_merged_erofs_vmdk(
         }
     }
 
-    // For single device, use it directly with Raw format (no need for VMDK descriptor)
+    // For a single device, use it directly without a VMDK descriptor.
     if erofs_devices.len() == 1 {
         info!(
             sl!(),
-            "single EROFS device, using directly with Raw format: {}", erofs_devices[0]
+            "single EROFS device, using directly: {}", erofs_devices[0]
         );
-        return Ok((erofs_devices[0].clone(), BlockDeviceFormat::Raw));
+        return Ok((erofs_devices[0].clone(), None));
     }
 
-    // For multiple devices, create VMDK descriptor
+    // This reserved path identifies the block device and is included in logs;
+    // no descriptor file is created here. The QEMU backend serializes the
+    // structured layout using its fdset transport.
     let container_dir = ensure_container_dir(sid, cid)?;
     let vmdk_path = container_dir.join(EROFS_MERGED_VMDK);
 
     info!(
         sl!(),
-        "creating VMDK descriptor for {} EROFS devices: {}",
+        "creating VMDK layout for {} EROFS devices: {}",
         erofs_devices.len(),
         vmdk_path.display()
     );
 
-    // create_vmdk_descriptor uses atomic write (temp + rename) internally,
-    // so a failure will not leave a corrupt descriptor file.
-    create_vmdk_descriptor(&vmdk_path, erofs_devices)
-        .context("failed to create VMDK descriptor")?;
+    let vmdk = create_vmdk_config(erofs_devices).context("failed to create VMDK layout")?;
 
-    Ok((vmdk_path.display().to_string(), BlockDeviceFormat::Vmdk))
+    Ok((vmdk_path.display().to_string(), Some(vmdk)))
 }
 
-/// Helper struct for writing VMDK descriptor files atomically.
-///
-/// Encapsulates the common VMDK descriptor format: header, extent descriptions,
-/// DDB footer, and atomic write (temp file + rename). Used by both fsmerge mode
-/// (`create_vmdk_descriptor`) and GPT mode (`create_gpt_vmdk_descriptor`).
-struct VmdkDescriptorWriter {
-    writer: BufWriter<fs::File>,
-    temp_path: PathBuf,
-    final_path: PathBuf,
-}
-
-impl VmdkDescriptorWriter {
-    fn new(vmdk_path: &Path) -> Result<Self> {
-        let temp_path = vmdk_path.with_extension("vmdk.tmp");
-        if temp_path.components().any(|c| c == Component::ParentDir) {
-            return Err(anyhow!("Invalid input: {}", temp_path.display()));
-        }
-        let file = fs::File::create(&temp_path).context(format!(
-            "failed to create temp VMDK file: {}",
-            temp_path.display()
-        ))?;
-        let mut writer = BufWriter::new(file);
-
-        writeln!(writer, "# Disk DescriptorFile")?;
-        writeln!(writer, "version=1")?;
-        writeln!(writer, "CID=fffffffe")?;
-        writeln!(writer, "parentCID=ffffffff")?;
-        writeln!(writer, "createType=\"{}\"", VMDK_SUBFORMAT)?;
-        writeln!(writer)?;
-        writeln!(writer, "# Extent description")?;
-
-        Ok(Self {
-            writer,
-            temp_path,
-            final_path: vmdk_path.to_path_buf(),
-        })
-    }
-
-    // Write a single extent line (no 2GB chunking).
-    fn write_extent(&mut self, path: &str, sectors: u64, file_offset: u64) -> Result<()> {
-        writeln!(
-            self.writer,
-            "RW {} FLAT \"{}\" {}",
-            sectors, path, file_offset
-        )?;
-        Ok(())
-    }
-
-    // Write extent lines with 2GB chunking for large files.
-    fn write_extent_chunked(&mut self, path: &str, total_sectors: u64) -> Result<()> {
-        let mut remaining = total_sectors;
-        let mut file_offset: u64 = 0;
-        while remaining > 0 {
-            let chunk = remaining.min(MAX_2GB_EXTENT_SECTORS);
-            self.write_extent(path, chunk, file_offset)?;
-            file_offset += chunk;
-            remaining -= chunk;
-        }
-        Ok(())
-    }
-
-    // Write DDB footer, flush, and atomically rename to final path.
-    fn finalize(mut self, total_sectors: u64) -> Result<()> {
-        writeln!(self.writer)?;
-
-        let cylinders = total_sectors.div_ceil(SECTORS_PER_TRACK * NUMBER_HEADS);
-
-        writeln!(self.writer, "# The Disk Data Base")?;
-        writeln!(self.writer, "#DDB")?;
-        writeln!(self.writer)?;
-        writeln!(
-            self.writer,
-            "ddb.virtualHWVersion = \"{}\"",
-            VMDK_HW_VERSION
-        )?;
-        writeln!(self.writer, "ddb.geometry.cylinders = \"{}\"", cylinders)?;
-        writeln!(self.writer, "ddb.geometry.heads = \"{}\"", NUMBER_HEADS)?;
-        writeln!(
-            self.writer,
-            "ddb.geometry.sectors = \"{}\"",
-            SECTORS_PER_TRACK
-        )?;
-        writeln!(self.writer, "ddb.adapterType = \"{}\"", VMDK_ADAPTER_TYPE)?;
-
-        self.writer
-            .flush()
-            .context("failed to flush VMDK descriptor")?;
-        drop(self.writer);
-
-        fs::rename(&self.temp_path, &self.final_path).context(format!(
-            "failed to rename temp VMDK {} -> {}",
-            self.temp_path.display(),
-            self.final_path.display()
-        ))?;
-
-        Ok(())
-    }
-}
-
-/// Create VMDK descriptor for multiple EROFS extents (flatten device)
-///
-/// Generates a VMDK descriptor file (twoGbMaxExtentFlat format) that references
-/// multiple EROFS images as flat extents, allowing them to be treated as a single
-/// contiguous block device in the VM.
-fn create_vmdk_descriptor(vmdk_path: &Path, erofs_paths: &[String]) -> Result<()> {
+/// Create a VMDK layout for multiple EROFS extents (flatten device).
+fn create_vmdk_config(erofs_paths: &[String]) -> Result<VmdkConfig> {
     if erofs_paths.is_empty() {
-        return Err(anyhow!(
-            "empty EROFS path list, cannot create VMDK descriptor"
-        ));
+        return Err(anyhow!("empty EROFS path list, cannot create VMDK layout"));
     }
 
     struct ExtentInfo {
@@ -302,43 +184,40 @@ fn create_vmdk_descriptor(vmdk_path: &Path, erofs_paths: &[String]) -> Result<()
 
     if total_sectors == 0 {
         return Err(anyhow!(
-            "no valid EROFS files to create VMDK descriptor (all files are empty)"
+            "no valid EROFS files to create VMDK layout (all files are empty)"
         ));
     }
 
-    let mut vmdk = VmdkDescriptorWriter::new(vmdk_path)?;
+    let mut vmdk = VmdkConfig::default();
     for extent in &extents {
-        vmdk.write_extent_chunked(&extent.path, extent.total_sectors)?;
+        vmdk.push_extent_chunked(&extent.path, extent.total_sectors);
         info!(
             sl!(),
-            "VMDK extent: {} ({} sectors, {} extent chunk(s))",
-            extent.path,
-            extent.total_sectors,
-            extent.total_sectors.div_ceil(MAX_2GB_EXTENT_SECTORS)
+            "VMDK extent: {} ({} sectors)", extent.path, extent.total_sectors
         );
     }
 
-    vmdk.finalize(total_sectors)?;
-
     info!(
         sl!(),
-        "VMDK descriptor created: {} (total {} sectors, {} extents)",
-        vmdk_path.display(),
+        "VMDK layout created: total {} sectors, {} source extents",
         total_sectors,
         extents.len()
     );
 
-    Ok(())
+    Ok(vmdk)
 }
 
-/// Generate GPT-partitioned VMDK and return layout information for per-partition storage creation
+/// Generate a GPT-partitioned VMDK layout for per-partition storage creation.
 ///
-/// Returns: (vmdk_path, BlockDeviceFormat::Vmdk, GptDiskLayout, GptMetadataFiles)
+/// Returns a reserved descriptor path, structured VMDK layout, GPT layout,
+/// and generated metadata files. This function does not create a descriptor
+/// file at that path; the QEMU backend serializes the layout using its fdset
+/// transport.
 fn generate_gpt_vmdk_with_layout(
     sid: &str,
     cid: &str,
     erofs_layers: Vec<ErofsLayer>,
-) -> Result<(String, BlockDeviceFormat, GptDiskLayout, GptMetadataFiles)> {
+) -> Result<(String, VmdkConfig, GptDiskLayout, GptMetadataFiles)> {
     if erofs_layers.is_empty() {
         return Err(anyhow!("no EROFS layers provided for GPT VMDK generation"));
     }
@@ -361,7 +240,7 @@ fn generate_gpt_vmdk_with_layout(
 
     info!(
         sl!(),
-        "creating GPT-partitioned VMDK for {} EROFS layers: {}",
+        "creating GPT-partitioned VMDK layout for {} EROFS layers: {}",
         erofs_layers.len(),
         vmdk_path.display()
     );
@@ -370,36 +249,29 @@ fn generate_gpt_vmdk_with_layout(
     let (layout, mut gpt_files) = generate_gpt_metadata(sid, cid, erofs_layers, &container_dir)
         .context("failed to generate GPT metadata")?;
 
-    // Create VMDK descriptor with GPT layout and collect generated padding paths
-    let pad_paths = create_gpt_vmdk_descriptor(&vmdk_path, &layout, &gpt_files)
-        .context("failed to create GPT VMDK descriptor")?;
+    let (vmdk, pad_paths) =
+        create_gpt_vmdk_config(&layout, &gpt_files).context("failed to create GPT VMDK layout")?;
     gpt_files.pad_paths = pad_paths;
 
-    Ok((
-        vmdk_path.display().to_string(),
-        BlockDeviceFormat::Vmdk,
-        layout,
-        gpt_files,
-    ))
+    Ok((vmdk_path.display().to_string(), vmdk, layout, gpt_files))
 }
 
-/// Create VMDK descriptor for GPT-partitioned disk
+/// Create a structured VMDK layout for a GPT-partitioned disk.
 ///
 /// Returns the list of generated padding file paths for cleanup tracking.
-fn create_gpt_vmdk_descriptor(
-    vmdk_path: &Path,
+fn create_gpt_vmdk_config(
     layout: &GptDiskLayout,
     gpt_files: &GptMetadataFiles,
-) -> Result<Vec<PathBuf>> {
-    let mut vmdk = VmdkDescriptorWriter::new(vmdk_path)?;
+) -> Result<(VmdkConfig, Vec<PathBuf>)> {
+    let mut vmdk = VmdkConfig::default();
     let mut pad_paths: Vec<PathBuf> = Vec::new();
 
     // 1. GPT head metadata
-    vmdk.write_extent(
+    vmdk.push_extent(
         &gpt_files.head_path.display().to_string(),
         gpt_files.head_sectors,
         0,
-    )?;
+    );
     info!(
         sl!(),
         "VMDK extent: GPT head ({} sectors) at {}",
@@ -429,11 +301,11 @@ fn create_gpt_vmdk_descriptor(
                 pad_path.display()
             ))?;
 
-            vmdk.write_extent(&pad_path.display().to_string(), gap_sectors, 0)?;
+            vmdk.push_extent(&pad_path.display().to_string(), gap_sectors, 0);
             pad_paths.push(pad_path);
         }
 
-        vmdk.write_extent_chunked(&part.layer.path, part.layer.size_sectors)?;
+        vmdk.push_extent_chunked(&part.layer.path, part.layer.size_sectors);
         info!(
             sl!(),
             "VMDK extent: {} (partition {}, LBA {}-{}, {} sectors)",
@@ -447,17 +319,22 @@ fn create_gpt_vmdk_descriptor(
         prev_end_lba = part.end_lba;
     }
 
-    vmdk.finalize(layout.total_sectors)?;
-
     info!(
         sl!(),
-        "GPT VMDK descriptor created: {} (total {} sectors, {} partitions)",
-        vmdk_path.display(),
+        "GPT VMDK layout created: total {} sectors, {} partitions",
         layout.total_sectors,
         layout.partitions.len()
     );
 
-    Ok(pad_paths)
+    if vmdk.total_sectors() != Some(layout.total_sectors) {
+        return Err(anyhow!(
+            "GPT VMDK extent size does not match disk layout: {:?} != {}",
+            vmdk.total_sectors(),
+            layout.total_sectors
+        ));
+    }
+
+    Ok((vmdk, pad_paths))
 }
 
 async fn extract_block_device_info(
@@ -498,8 +375,6 @@ pub(crate) struct ErofsMultiLayerRootfs {
     rwlayer_storage: Option<Storage>,
     // Read-only EROFS layer storages (lower layers), one per partition in GPT mode
     erofs_storages: Vec<Storage>,
-    // Path to generated VMDK descriptor (only set when multiple EROFS devices are merged)
-    vmdk_path: Option<PathBuf>,
     // Paths to generated GPT metadata files (head, padding) for cleanup
     gpt_metadata_paths: Vec<PathBuf>,
     // Container-scoped runtime directory that may only contain generated helper artifacts.
@@ -523,7 +398,6 @@ impl ErofsMultiLayerRootfs {
         let mut device_ids = Vec::new();
         let mut rwlayer_storage: Option<Storage> = None;
         let mut erofs_storages: Vec<Storage> = Vec::new();
-        let mut vmdk_path: Option<PathBuf> = None;
         let mut gpt_metadata_paths: Vec<PathBuf> = Vec::new();
         // Track whether GPT+VMDK erofs layers have already been processed in bulk.
         let mut gpt_erofs_processed = false;
@@ -581,7 +455,6 @@ impl ErofsMultiLayerRootfs {
 
                     let device_config = &mut BlockConfigModern {
                         driver_option: block_driver.clone(),
-                        format: BlockDeviceFormat::Raw, // rw layer should be raw format
                         path_on_host: mount.source.clone(),
                         blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
                         num_queues: blkdev_info.num_queues,
@@ -700,12 +573,9 @@ impl ErofsMultiLayerRootfs {
                         }
 
                         // Generate GPT-partitioned VMDK and get layout information
-                        let (erofs_path, erofs_format, layout, gpt_files) =
+                        let (erofs_path, vmdk, layout, gpt_files) =
                             generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
                                 .context("gptdisk: failed to generate GPT VMDK")?;
-
-                        // Track VMDK path for cleanup
-                        vmdk_path = Some(PathBuf::from(&erofs_path));
 
                         // Track GPT metadata files (head + padding) for cleanup
                         gpt_metadata_paths.push(gpt_files.head_path.clone());
@@ -726,15 +596,14 @@ impl ErofsMultiLayerRootfs {
 
                         info!(
                             sl!(),
-                            "GPT VMDK created - path: {}, format: {:?}, {} partitions",
+                            "GPT VMDK layout created - id: {}, {} partitions",
                             erofs_path,
-                            erofs_format,
                             layout.partitions.len()
                         );
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            format: erofs_format,
+                            vmdk: Some(vmdk),
                             path_on_host: erofs_path,
                             is_readonly: true,
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
@@ -870,28 +739,23 @@ impl ErofsMultiLayerRootfs {
 
                         info!(sl!(), "EROFS devices count: {}", erofs_devices.len());
 
-                        // Generate merged VMDK file from all EROFS devices
-                        // Returns (path, format) - format is Vmdk for multiple devices, Raw for single device
-                        let (erofs_path, erofs_format) =
+                        // Build a merged VMDK layout from all EROFS devices.
+                        // Multiple devices use VMDK; a single device remains Raw.
+                        let (erofs_path, vmdk) =
                             generate_merged_erofs_vmdk(sid, cid, &erofs_devices)
                                 .await
                                 .context("failed to generate EROFS VMDK")?;
 
-                        // Track VMDK path for cleanup (only when VMDK is actually created)
-                        if erofs_format == BlockDeviceFormat::Vmdk {
-                            vmdk_path = Some(PathBuf::from(&erofs_path));
-                        }
-
                         info!(
                             sl!(),
-                            "EROFS block device config - path: {}, format: {:?}",
+                            "EROFS block device config - path: {}, structured VMDK: {}",
                             erofs_path,
-                            erofs_format
+                            vmdk.is_some()
                         );
 
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
-                            format: erofs_format, // Vmdk for multiple devices, Raw for single device
+                            vmdk,
                             path_on_host: erofs_path,
                             is_readonly: true, // EROFS layers are read-only, must set to avoid "resize" lock errors
                             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
@@ -988,7 +852,6 @@ impl ErofsMultiLayerRootfs {
             device_ids,
             rwlayer_storage,
             erofs_storages,
-            vmdk_path,
             gpt_metadata_paths,
             generated_artifacts_dir: PathBuf::from(kata_types::prefix_with_rootless_dir(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
@@ -1048,11 +911,6 @@ impl Rootfs for ErofsMultiLayerRootfs {
         let mut dm = device_manager.write().await;
         for device_id in &self.device_ids {
             dm.try_remove_device(device_id).await?;
-        }
-
-        // Clean up generated VMDK descriptor file if it exists.
-        if let Some(ref vmdk) = self.vmdk_path {
-            safely_remove_file(vmdk, &self.generated_artifacts_dir)?;
         }
 
         // Clean up GPT metadata files (head, padding).

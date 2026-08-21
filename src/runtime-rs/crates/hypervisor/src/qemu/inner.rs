@@ -147,6 +147,7 @@ impl QemuInner {
                     let (
                         device_id,
                         path_on_host,
+                        vmdk,
                         is_direct,
                         is_readonly,
                         discard_unmap,
@@ -159,6 +160,7 @@ impl QemuInner {
                         (
                             device_id,
                             cfg.path_on_host.clone(),
+                            cfg.vmdk.clone(),
                             cfg.is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                             cfg.is_readonly,
@@ -184,6 +186,7 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
+                                vmdk.as_ref(),
                                 is_direct,
                                 is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
@@ -373,9 +376,13 @@ impl QemuInner {
         let console_socket_path = Path::new(&jailer_root).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
-        info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
+        let qemu_args = cmdline.build().await?;
+        info!(sl!(), "qemu args: {}", qemu_args.join(" "));
         let mut command = Command::new(&self.config.path);
-        command.args(cmdline.build().await?);
+        command.args(qemu_args);
+        let ccw_subchannel = cmdline.take_ccw_subchannel();
+        let block_fdsets = cmdline.take_block_fdsets();
+        let has_memory_hotplug_region = cmdline.has_memory_hotplug_region();
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
@@ -420,6 +427,9 @@ impl QemuInner {
         }
 
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
+        // QEMU inherited its startup descriptors during spawn. Drop the
+        // privileged shim's copies immediately; QEMU owns the fdsets from here.
+        drop(cmdline);
         let stderr = qemu_process.stderr.take().unwrap();
         self.qemu_process = Mutex::new(Some(qemu_process));
 
@@ -436,9 +446,10 @@ impl QemuInner {
 
         match Qmp::new(&qmp_socket_path) {
             Ok(mut qmp) => {
-                if let Some(subchannel) = cmdline.take_ccw_subchannel() {
+                if let Some(subchannel) = ccw_subchannel {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                qmp.verify_block_fdsets(block_fdsets)?;
                 // Setup virtio-mem device if enabled.  It requires a memory
                 // hotplug region (maxmem) on the QEMU command line; that region
                 // is not reserved for every configuration (e.g. on s390x the
@@ -449,7 +460,7 @@ impl QemuInner {
                 // boot memory -- instead of failing VM start with
                 // "the configuration is not prepared for memory devices".
                 if self.config.memory_info.enable_virtio_mem {
-                    if cmdline.has_memory_hotplug_region() {
+                    if has_memory_hotplug_region {
                         qmp.setup_virtio_mem(
                             self.config.memory_info.default_memory,
                             self.config.memory_info.default_maxmemory,
@@ -1199,7 +1210,7 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
-                    block_format,
+                    vmdk,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1216,7 +1227,7 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
-                        cfg.format.clone(),
+                        cfg.vmdk.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
@@ -1253,7 +1264,7 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        &block_format,
+                        vmdk.as_ref(),
                         iothread,
                     )
                     .context("hotplug block device")?;

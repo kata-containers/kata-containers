@@ -4,10 +4,11 @@
 //
 
 use crate::device::pci_path::PciPath;
+use crate::qemu::block_source::{block_fd_node_name, block_fd_opaque, prepare_block_source};
 use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
-use crate::BlockDeviceFormat;
 use crate::VcpuThreadIds;
+use crate::VmdkConfig;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
@@ -41,6 +42,22 @@ const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
 const DEVICE_DELETED_TIMEOUT: Duration = Duration::from_secs(10);
 
+fn collect_block_fdsets(fdsets: Vec<qmp::FdsetInfo>) -> HashMap<String, Vec<i64>> {
+    let mut block_fdsets: HashMap<String, Vec<i64>> = HashMap::new();
+    for fdset in fdsets {
+        for fd in fdset.fds {
+            let Some(node_name) = fd.opaque.as_deref().and_then(block_fd_node_name) else {
+                continue;
+            };
+            let ids = block_fdsets.entry(node_name.to_string()).or_default();
+            if !ids.contains(&fdset.fdset_id) {
+                ids.push(fdset.fdset_id);
+            }
+        }
+    }
+    block_fdsets
+}
+
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
 
@@ -64,6 +81,11 @@ pub struct Qmp {
     // Hot-plug slot tracking for cold-plugged pci-bridge-N devices. Mirrors
     // virtcontainers/types/bridges.go Bridge.Devices (slots 1..30).
     pci_bridge_devices: HashMap<String, HashMap<i64, String>>,
+
+    // QMP fdsets backing hot-plugged block devices. Keep them until the
+    // backend is removed because format drivers such as VMDK may reopen an
+    // extent after blockdev-add completes.
+    block_fdsets: HashMap<String, Vec<i64>>,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -92,10 +114,12 @@ impl Qmp {
                 guest_memory_block_size: 0,
                 ccw_subchannel: None,
                 pci_bridge_devices: HashMap::new(),
+                block_fdsets: HashMap::new(),
             };
 
             let info = qmp.qmp.handshake().context("qmp handshake failed")?;
             info!(sl!(), "QMP initialized: {:#?}", info);
+            qmp.refresh_block_fdsets()?;
 
             Ok(qmp)
         };
@@ -116,6 +140,31 @@ impl Qmp {
 
         Err(last_err.unwrap_or_else(|| anyhow!("QMP init timed out")))
             .with_context(|| format!("timed out waiting for QMP ready: {}", qmp_sock_path))
+    }
+
+    fn refresh_block_fdsets(&mut self) -> Result<()> {
+        let fdsets = self
+            .qmp
+            .execute(&qmp::query_fdsets {})
+            .context("query QEMU fdsets")?;
+        self.block_fdsets = collect_block_fdsets(fdsets);
+        Ok(())
+    }
+
+    pub fn verify_block_fdsets(&self, mut expected: HashMap<String, Vec<i64>>) -> Result<()> {
+        let mut actual = self.block_fdsets.clone();
+        for ids in expected.values_mut() {
+            ids.sort_unstable();
+        }
+        for ids in actual.values_mut() {
+            ids.sort_unstable();
+        }
+        if actual != expected {
+            return Err(anyhow!(
+                "QEMU startup block fdsets do not match the descriptors passed by the shim"
+            ));
+        }
+        Ok(())
     }
 
     pub fn set_ccw_subchannel(&mut self, subchannel: CcwSubChannel) {
@@ -842,6 +891,57 @@ impl Qmp {
         }
     }
 
+    fn pass_block_fd(&mut self, fd: RawFd, opaque: &str) -> Result<qmp::AddfdInfo> {
+        let command = serde_json::json!({
+            "execute": "add-fd",
+            "arguments": { "opaque": opaque },
+        })
+        .to_string();
+        let bufs = &mut [std::io::IoSlice::new(command.as_bytes())][..];
+        let fds = [fd];
+        let cmsg = [ControlMessage::ScmRights(&fds)];
+
+        sendmsg::<()>(
+            self.qmp.inner_mut().get_mut_write().as_raw_fd(),
+            bufs,
+            &cmsg,
+            MsgFlags::empty(),
+            None,
+        )
+        .with_context(|| format!("send QEMU block fd for {opaque}"))?;
+
+        self.qmp
+            .read_response::<&qmp::add_fd>()
+            .with_context(|| format!("add QEMU block fd for {opaque}"))
+    }
+
+    fn remove_block_fdsets(&mut self, node_name: &str) {
+        let Some(fdset_ids) = self.block_fdsets.remove(node_name) else {
+            return;
+        };
+
+        self.remove_fdset_ids(node_name, fdset_ids);
+    }
+
+    fn remove_fdset_ids(&mut self, node_name: &str, fdset_ids: Vec<i64>) {
+        let mut failed = Vec::new();
+        for fdset_id in fdset_ids {
+            if let Err(err) = self.qmp.execute(&qmp::remove_fd { fd: None, fdset_id }) {
+                warn!(
+                    sl!(),
+                    "failed to remove QEMU block fdset {} for {}: {:?}", fdset_id, node_name, err
+                );
+                failed.push(fdset_id);
+            }
+        }
+        if !failed.is_empty() {
+            self.block_fdsets
+                .entry(node_name.to_string())
+                .or_default()
+                .extend(failed);
+        }
+    }
+
     pub fn hotplug_network_device(
         &mut self,
         netdev: &Netdev,
@@ -1023,13 +1123,17 @@ impl Qmp {
             driver: driver.to_owned(),
             arguments,
         }) {
-            if let Err(e) = self.qmp.execute(&qapi_qmp::blockdev_del {
+            if let Err(blockdev_err) = self.qmp.execute(&qapi_qmp::blockdev_del {
                 node_name: node_name.to_owned(),
             }) {
                 warn!(
                     sl!(),
-                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}", node_name, e
+                    "device_add_with_rollback(): blockdev_del failed for {}: {:?}",
+                    node_name,
+                    blockdev_err
                 );
+            } else {
+                self.remove_block_fdsets(node_name);
             }
             return Err(anyhow!("device_add {:?}", e));
         }
@@ -1139,11 +1243,14 @@ impl Qmp {
         discard_unmap: bool,
         logical_block_size: u32,
         physical_block_size: u32,
-        format: &BlockDeviceFormat,
+        vmdk: Option<&VmdkConfig>,
         iothread: Option<&str>,
     ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
         let node_name = block_node_name(index);
+        if self.block_fdsets.contains_key(&node_name) {
+            return Err(anyhow!("duplicate QEMU block device ID {node_name}"));
+        }
         let discard_option = || discard_unmap.then_some(BlockdevDiscardOptions::unmap);
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
@@ -1163,6 +1270,26 @@ impl Qmp {
             read_only: Some(is_readonly),
         };
 
+        let mut fdset_ids = Vec::new();
+        let prepared_source = match prepare_block_source(
+            path_on_host,
+            vmdk,
+            is_readonly,
+            is_direct.unwrap_or(false),
+            |file, label| {
+                let opaque = block_fd_opaque(&node_name, label);
+                let info = self.pass_block_fd(file.as_raw_fd(), &opaque)?;
+                fdset_ids.push(info.fdset_id);
+                Ok(format!("/dev/fdset/{}", info.fdset_id))
+            },
+        ) {
+            Ok(source) => source,
+            Err(err) => {
+                self.remove_fdset_ids(&node_name, fdset_ids);
+                return Err(err);
+            }
+        };
+
         let create_backend_options = || qapi_qmp::BlockdevOptionsFile {
             aio: Some(
                 BlockdevAioOptions::from_str(blkdev_aio).unwrap_or(BlockdevAioOptions::io_uring),
@@ -1172,11 +1299,11 @@ impl Qmp {
             locking: None,
             pr_manager: None,
             x_check_cache_dropped: None,
-            filename: path_on_host.to_owned(),
+            filename: prepared_source.filename.clone(),
         };
 
         // Add block device backend and check if the file is a regular file or device
-        let blockdev_file = if std::fs::metadata(path_on_host)?.is_file() {
+        let blockdev_file = if prepared_source.is_regular_file {
             // Regular file
             qmp::BlockdevOptions::file {
                 base: create_base_options(),
@@ -1190,8 +1317,8 @@ impl Qmp {
             }
         };
 
-        let blockdev_options = match format {
-            BlockDeviceFormat::Raw => BlockdevOptions::raw {
+        let blockdev_options = if vmdk.is_none() {
+            BlockdevOptions::raw {
                 base: BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
@@ -1208,38 +1335,41 @@ impl Qmp {
                     offset: None,
                     size: None,
                 },
-            },
-            BlockDeviceFormat::Vmdk => {
-                info!(
-                    sl!(),
-                    "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
-                    path_on_host,
-                    is_readonly
-                );
-                BlockdevOptions::vmdk {
-                    base: BlockdevOptionsBase {
-                        detect_zeroes: None,
-                        cache: None,
-                        discard: discard_option(),
-                        force_share: Some(true),
-                        auto_read_only: None,
-                        node_name: Some(node_name.clone()),
-                        read_only: Some(is_readonly),
+            }
+        } else {
+            info!(
+                sl!(),
+                "hotplug_block_device: using VMDK format driver for {} (read_only={}, force_share=true)",
+                path_on_host,
+                is_readonly
+            );
+            BlockdevOptions::vmdk {
+                base: BlockdevOptionsBase {
+                    detect_zeroes: None,
+                    cache: None,
+                    discard: discard_option(),
+                    force_share: Some(true),
+                    auto_read_only: None,
+                    node_name: Some(node_name.clone()),
+                    read_only: Some(is_readonly),
+                },
+                vmdk: BlockdevOptionsGenericCOWFormat {
+                    base: BlockdevOptionsGenericFormat {
+                        file: BlockdevRef::definition(Box::new(blockdev_file)),
                     },
-                    vmdk: BlockdevOptionsGenericCOWFormat {
-                        base: BlockdevOptionsGenericFormat {
-                            file: BlockdevRef::definition(Box::new(blockdev_file)),
-                        },
-                        backing: None,
-                    },
-                }
+                    backing: None,
+                },
             }
         };
 
-        self.qmp
-            .execute(&qapi_qmp::blockdev_add(blockdev_options))
-            .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
-            .map(|_| ())?;
+        if !fdset_ids.is_empty() {
+            self.block_fdsets.insert(node_name.clone(), fdset_ids);
+        }
+
+        if let Err(err) = self.qmp.execute(&qapi_qmp::blockdev_add(blockdev_options)) {
+            self.remove_block_fdsets(&node_name);
+            return Err(anyhow!("blockdev-add backend {:?}", err));
+        }
 
         // block device
         // `device_add`
@@ -1305,6 +1435,7 @@ impl Qmp {
                     self.qmp.execute(&qapi_qmp::blockdev_del {
                         node_name: node_name.to_owned(),
                     })?;
+                    self.remove_block_fdsets(&node_name);
 
                     return Err(anyhow!(
                         "CCW subchannel not available for virtio-blk-ccw hotplug"
@@ -1318,6 +1449,7 @@ impl Qmp {
                     self.qmp.execute(&qapi_qmp::blockdev_del {
                         node_name: node_name.to_owned(),
                     })?;
+                    self.remove_block_fdsets(&node_name);
 
                     return Err(anyhow!("CCW subchannel add_device failed: {:?}", e));
                 }
@@ -1355,7 +1487,21 @@ impl Qmp {
 
             Ok((None, Some(ccw_addr)))
         } else {
-            let (bus, slot) = self.find_free_slot()?;
+            let (bus, slot) = match self.find_free_slot() {
+                Ok(value) => value,
+                Err(err) => {
+                    if self
+                        .qmp
+                        .execute(&qapi_qmp::blockdev_del {
+                            node_name: node_name.clone(),
+                        })
+                        .is_ok()
+                    {
+                        self.remove_block_fdsets(&node_name);
+                    }
+                    return Err(err);
+                }
+            };
             blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
             if !is_readonly {
                 blkdev_add_args.insert("share-rw".to_string(), true.into());
@@ -1423,6 +1569,8 @@ impl Qmp {
                     node_name: node_name.clone(),
                 })
                 .map_err(|e| anyhow!("blockdev_del for block device {}: {:?}", node_name, e))?;
+
+            self.remove_block_fdsets(&node_name);
 
             Ok(())
         })();
@@ -1689,4 +1837,47 @@ pub fn get_qmp_socket_path(sid: &str) -> String {
 /// Generate a blockdev node name based on the given index.
 fn block_node_name(index: u64) -> String {
     format!("drive-{index}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconstructs_kata_block_fdsets_from_qmp() {
+        let fdsets = vec![
+            qmp::FdsetInfo {
+                fdset_id: 7,
+                fds: vec![
+                    qmp::FdsetFdInfo {
+                        fd: 21,
+                        opaque: Some(block_fd_opaque("drive-2", "vmdk-extent-0")),
+                    },
+                    qmp::FdsetFdInfo {
+                        fd: 22,
+                        opaque: Some(block_fd_opaque("drive-2", "vmdk-extent-1")),
+                    },
+                ],
+            },
+            qmp::FdsetInfo {
+                fdset_id: 8,
+                fds: vec![qmp::FdsetFdInfo {
+                    fd: 23,
+                    opaque: Some(block_fd_opaque("drive-2", "vmdk-descriptor")),
+                }],
+            },
+            qmp::FdsetInfo {
+                fdset_id: 9,
+                fds: vec![qmp::FdsetFdInfo {
+                    fd: 24,
+                    opaque: Some("unrelated".to_string()),
+                }],
+            },
+        ];
+
+        assert_eq!(
+            collect_block_fdsets(fdsets),
+            HashMap::from([("drive-2".to_string(), vec![7, 8])])
+        );
+    }
 }

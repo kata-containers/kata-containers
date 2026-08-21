@@ -50,6 +50,7 @@ persist = { workspace = true }
 ch-config = { workspace = true, optional = true }
 safe-path = { workspace = true }
 tests_utils = { workspace = true }
+tempfile = { workspace = true }
 
 # Dependencies that only exist to support hypervisors which upstream only
 # build on x86_64 and aarch64 (dragonball, firecracker). Keeping them in a
@@ -95,7 +96,6 @@ openvmm = ["dep:protobuf"]
 [dev-dependencies]
 rstest = { workspace = true }
 serial_test = "2.0.0"
-tempfile = { workspace = true }
 
 # Local dev-dependencies
 hypervisor = { workspace = true }
