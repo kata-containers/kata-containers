@@ -21,13 +21,19 @@ use async_trait::async_trait;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use tokio::process::Child;
 use tokio::sync::RwLock;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, watch, Mutex};
 
 #[derive(Debug)]
 pub struct Qemu {
     inner: Arc<RwLock<QemuInner>>,
     exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
+    /// Exit code published by the sole OS-thread reaper (fix10).
+    /// `None` until QEMU has been reaped.
+    reaped_exit: watch::Sender<Option<i32>>,
 }
 
 impl Default for Qemu {
@@ -39,16 +45,69 @@ impl Default for Qemu {
 impl Qemu {
     pub fn new() -> Self {
         let (exit_notify, exit_waiter) = mpsc::channel(1);
+        let (reaped_exit, _) = watch::channel(None);
 
         Self {
             inner: Arc::new(RwLock::new(QemuInner::new(exit_notify))),
             exit_waiter: Mutex::new((exit_waiter, 0)),
+            reaped_exit,
         }
     }
 
     pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
+    }
+
+    /// Reap QEMU on a dedicated OS thread using sync `try_wait()`.
+    ///
+    /// fix10 (kata-containers#13564): a tokio task awaiting `Child::wait()` can
+    /// be cancelled when containerd SIGKILLs / abandons the shim after a
+    /// non-blocking Shutdown — Dropping the Child without a successful wait
+    /// leaves QEMU as a zombie under the (still-alive) orphaned shim. An OS
+    /// thread is not cancelled with the tokio task; `try_wait` reaps on Unix.
+    fn spawn_os_reaper(child: Child, reaped_exit: watch::Sender<Option<i32>>) {
+        let pid = child.id();
+        let _ = thread::Builder::new()
+            .name("qemu-reap".into())
+            .spawn(move || {
+                let mut child = child;
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            let code = status.code().unwrap_or(0);
+                            info!(
+                                sl!(),
+                                "fix10 OS reaper: qemu pid={:?} exited code={}", pid, code
+                            );
+                            let _ = reaped_exit.send(Some(code));
+                            return;
+                        }
+                        Ok(None) => thread::sleep(Duration::from_millis(200)),
+                        Err(e) => {
+                            // ECHILD if a racing reaper already collected the status.
+                            warn!(
+                                sl!(),
+                                "fix10 OS reaper: try_wait pid={:?} err={:?}", pid, e
+                            );
+                            let _ = reaped_exit.send(Some(0));
+                            return;
+                        }
+                    }
+                }
+            });
+    }
+
+    async fn wait_for_reaped_exit(&self) -> i32 {
+        let mut rx = self.reaped_exit.subscribe();
+        loop {
+            if let Some(code) = *rx.borrow_and_update() {
+                return code;
+            }
+            if rx.changed().await.is_err() {
+                return 0;
+            }
+        }
     }
 }
 
@@ -71,8 +130,35 @@ impl Hypervisor for Qemu {
     }
 
     async fn stop_vm(&self) -> Result<()> {
-        let mut inner = self.inner.write().await;
-        inner.stop_vm().await
+        // Signal under the write lock only (start_kill). Do not await QEMU
+        // exit here: large confidential guests can take minutes to reclaim,
+        // and containerd will SIGKILL the shim mid-wait.
+        // Take the Child and reap on an OS thread so a cancelled tokio
+        // waiter cannot leave a zombie.
+        let (kill_result, child) = {
+            let mut inner = self.inner.write().await;
+            let kill_result = inner.stop_vm().await;
+            let child = if kill_result.is_ok() {
+                inner.take_qemu_child().await
+            } else {
+                None
+            };
+            (kill_result, child)
+        };
+        if let Some(child) = child {
+            info!(
+                sl!(),
+                "stop_vm took qemu Child pid={:?}; spawning OS reaper",
+                child.id()
+            );
+            Self::spawn_os_reaper(child, self.reaped_exit.clone());
+        } else if kill_result.is_ok() {
+            info!(
+                sl!(),
+                "stop_vm Child already taken; start_vm waiter / prior reaper owns wait"
+            );
+        }
+        kill_result
     }
 
     async fn wait_vm(&self) -> Result<i32> {
@@ -80,15 +166,33 @@ impl Hypervisor for Qemu {
 
         let mut waiter = self.exit_waiter.lock().await;
 
-        //wait until the qemu process exited.
+        // Wait until qemu stderr EOF (process exited / closed stderr).
         waiter.0.recv().await;
 
-        let inner = self.inner.read().await;
-        if let Ok(exit_code) = inner.wait_vm().await {
-            waiter.1 = exit_code;
+        // Already reaped by stop_vm's OS thread?
+        if let Some(code) = *self.reaped_exit.borrow() {
+            waiter.1 = code;
+            return Ok(code);
         }
 
-        Ok(waiter.1)
+        // Take Child for OS-thread reaping (same fix10 path as stop_vm).
+        // Do NOT Child::wait().await on this cancellable task.
+        let child = {
+            let inner = self.inner.read().await;
+            inner.take_qemu_child().await
+        };
+        if let Some(child) = child {
+            info!(
+                sl!(),
+                "fix10: wait_vm took qemu Child pid={:?}; spawning OS reaper",
+                child.id()
+            );
+            Self::spawn_os_reaper(child, self.reaped_exit.clone());
+        }
+
+        let code = self.wait_for_reaped_exit().await;
+        waiter.1 = code;
+        Ok(code)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -239,11 +343,13 @@ impl Persist for Qemu {
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         let (exit_notify, exit_waiter) = mpsc::channel(1);
+        let (reaped_exit, _) = watch::channel(None);
 
         let inner = QemuInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
             exit_waiter: Mutex::new((exit_waiter, 0)),
+            reaped_exit,
         })
     }
 }
