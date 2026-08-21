@@ -96,6 +96,7 @@ impl BlockEmptyDirVolume {
                 fs_type: "ext4".to_string(),
                 metadata: block_emptydir_metadata(encrypted, dir_gid),
                 options: block_emptydir_mount_options(discard_unmap),
+                confidential_storage: None,
             };
 
             add_volume_mount_info(&source, &mount_info)

@@ -490,6 +490,22 @@ message SharedMount {
 	string dst_path = 5;
 }
 
+// ConfidentialStorageProfile selects a fixed in-guest storage protection
+// contract. New profiles must use new enum values rather than changing the
+// meaning of an existing value.
+enum ConfidentialStorageProfile {
+	Unspecified = 0;
+	Luks2IntegrityExt4 = 1;
+}
+
+// ConfidentialStorage contains non-secret inputs for a storage activation
+// that is authorized by measured init-data and executed inside the guest.
+message ConfidentialStorage {
+	ConfidentialStorageProfile profile = 1;
+	string volume_id = 2;
+	string key_uri = 3;
+}
+
 // Storage represents both the rootfs of the container, and any volume that
 // could have been defined through the Mount list of the OCI specification.
 message Storage {
@@ -526,6 +542,9 @@ message Storage {
 	// the storage when a container using it exits, as other containers
 	// may still need it. Cleanup will happen when the sandbox is destroyed.
 	bool shared = 8;
+	// ConfidentialStorage asks the agent to activate this block device through
+	// CDH only after matching the complete request against measured init-data.
+	ConfidentialStorage confidential_storage = 9;
 }
 
 // Device represents only the devices that could have been defined through the

@@ -247,6 +247,7 @@ impl ShareFs for ShareVirtioFsStandalone {
             options: vec![String::from("nodev")],
             mount_point: kata_guest_share_dir(),
             shared: false,
+            confidential_storage: None,
         };
 
         storages.push(shared_volume);

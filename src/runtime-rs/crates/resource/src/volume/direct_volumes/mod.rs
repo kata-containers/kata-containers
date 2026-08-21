@@ -7,13 +7,14 @@ use anyhow::{anyhow, Context, Result};
 
 use kata_types::mount::{
     get_volume_mount_info, join_path, kata_direct_volume_root_path, DirectVolumeMountInfo,
+    KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE,
 };
 
 pub mod rawblock_volume;
 pub mod spdk_volume;
 pub mod vfio_volume;
 
-pub const KATA_DIRECT_VOLUME_TYPE: &str = "directvol";
+pub const KATA_DIRECT_VOLUME_TYPE: &str = KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE;
 pub const KATA_VFIO_VOLUME_TYPE: &str = "vfiovol";
 pub const KATA_SPDK_VOLUME_TYPE: &str = "spdkvol";
 pub const KATA_SPOOL_VOLUME_TYPE: &str = "spoolvol";

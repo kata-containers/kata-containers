@@ -109,6 +109,7 @@ impl ShareFsMount for VirtiofsShareMount {
                 options: config.mount_options.clone(),
                 mount_point: watchable_guest_mount.clone(),
                 shared: false,
+                confidential_storage: None,
             };
 
             // Update the guest_path, in order to identify what will

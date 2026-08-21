@@ -8,7 +8,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
-use kata_types::mount::DirectVolumeMountInfo;
+use kata_types::mount::{record_direct_volume_sandbox_id, DirectVolumeMountInfo};
 use nix::sys::{stat, stat::SFlag};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -48,7 +48,8 @@ pub(crate) async fn handle_direct_volume(
     // If the source is not in the path with error kind *NotFound*, we ignore the error
     // and we treat it as block volume with oci Mount.type *bind*. Just fill in the block
     // volume info in the DirectVolumeMountInfo
-    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&get_mount_path(m.source())) {
+    let volume_path = get_mount_path(m.source());
+    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&volume_path) {
         Ok(mount_info) => mount_info,
         Err(e) => {
             // First, We need filter the non-io::ErrorKind.
@@ -93,6 +94,9 @@ pub(crate) async fn handle_direct_volume(
                 .with_context(|| format!("new vfio volume {m:?}"))?,
         ),
     };
+
+    record_direct_volume_sandbox_id(&volume_path, sid)
+        .context("record direct-volume runtime-rs sandbox mapping")?;
 
     Ok(Some(direct_volume))
 }

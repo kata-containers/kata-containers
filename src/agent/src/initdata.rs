@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::{collections::BTreeMap, sync::OnceLock};
 #[cfg(feature = "init-data")]
 use std::{os::unix::fs::FileTypeExt, path::Path};
 
@@ -17,6 +18,7 @@ use async_compression::tokio::bufread::GzipDecoder;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use const_format::concatcp;
 use kata_types::initdata::InitData;
+use serde::Deserialize;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use slog::Logger;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
@@ -27,6 +29,95 @@ pub const INITDATA_PATH: &str = "/run/confidential-containers/initdata";
 const AA_CONFIG_KEY: &str = "aa.toml";
 const CDH_CONFIG_KEY: &str = "cdh.toml";
 const POLICY_KEY: &str = "policy.rego";
+pub(crate) const CONFIDENTIAL_STORAGE_CLAIM: &str = "confidential_storage";
+pub(crate) const CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4: &str = "luks2-integrity-ext4";
+const CONFIDENTIAL_STORAGE_REGISTRY_VERSION: u32 = 1;
+const CONFIDENTIAL_STORAGE_MAX_VOLUMES: usize = 64;
+const CONFIDENTIAL_STORAGE_VOLUME_ID_MAX_BYTES: usize = 256;
+const CONFIDENTIAL_STORAGE_KEY_URI_MAX_BYTES: usize = 2048;
+
+static CONFIDENTIAL_STORAGE_REGISTRY: OnceLock<BTreeMap<String, ConfidentialStorageClaim>> =
+    OnceLock::new();
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConfidentialStorageClaim {
+    pub(crate) profile: String,
+    pub(crate) volume_id: String,
+    pub(crate) key_uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConfidentialStorageRegistryDocument {
+    version: u32,
+    volumes: Vec<ConfidentialStorageClaim>,
+}
+
+pub(crate) fn confidential_storage_claim(
+    volume_id: &str,
+) -> Option<&'static ConfidentialStorageClaim> {
+    CONFIDENTIAL_STORAGE_REGISTRY
+        .get()
+        .and_then(|registry| registry.get(volume_id))
+}
+
+fn canonical_confidential_storage_volume_id(value: &str) -> bool {
+    if value.is_empty() || value.len() > CONFIDENTIAL_STORAGE_VOLUME_ID_MAX_BYTES {
+        return false;
+    }
+    if value
+        .split('/')
+        .any(|component| component.is_empty() || component == "." || component == "..")
+    {
+        return false;
+    }
+    value.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/' | b'@')
+    })
+}
+
+fn canonical_confidential_storage_key_uri(value: &str) -> bool {
+    value.len() > "kbs:///".len()
+        && value.len() <= CONFIDENTIAL_STORAGE_KEY_URI_MAX_BYTES
+        && value.starts_with("kbs:///")
+        && value.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
+fn confidential_storage_registry_from_initdata(
+    initdata: &InitData,
+) -> Result<Option<BTreeMap<String, ConfidentialStorageClaim>>> {
+    let Some(document) = initdata.get_coco_data(CONFIDENTIAL_STORAGE_CLAIM) else {
+        return Ok(None);
+    };
+
+    let document: ConfidentialStorageRegistryDocument = serde_json::from_str(document)
+        .context("parse confidential storage registry from measured init-data")?;
+    if document.version != CONFIDENTIAL_STORAGE_REGISTRY_VERSION {
+        bail!("unsupported confidential storage registry version");
+    }
+    if document.volumes.len() > CONFIDENTIAL_STORAGE_MAX_VOLUMES {
+        bail!("confidential storage registry contains too many volumes");
+    }
+
+    let mut registry = BTreeMap::new();
+    for claim in document.volumes {
+        if claim.profile != CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4 {
+            bail!("unsupported confidential storage profile in measured init-data");
+        }
+        if !canonical_confidential_storage_volume_id(&claim.volume_id) {
+            bail!("invalid confidential storage volume ID in measured init-data");
+        }
+        if !canonical_confidential_storage_key_uri(&claim.key_uri) {
+            bail!("invalid confidential storage key URI in measured init-data");
+        }
+        if registry.insert(claim.volume_id.clone(), claim).is_some() {
+            bail!("duplicate confidential storage volume ID in measured init-data");
+        }
+    }
+
+    Ok(Some(registry))
+}
 
 /// The path of initdata toml
 pub const INITDATA_TOML_PATH: &str = concatcp!(INITDATA_PATH, "/initdata.toml");
@@ -148,6 +239,12 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
     info!(logger, "Initdata version: {}", initdata.version());
     initdata.validate()?;
 
+    if let Some(registry) = confidential_storage_registry_from_initdata(&initdata)? {
+        CONFIDENTIAL_STORAGE_REGISTRY.set(registry).map_err(|_| {
+            anyhow::anyhow!("confidential storage registry initialized more than once")
+        })?;
+    }
+
     tokio::fs::write(INITDATA_TOML_PATH, &initdata_content)
         .await
         .context("write initdata toml failed")?;
@@ -185,7 +282,7 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
 
 #[cfg(test)]
 mod tests {
-    use crate::initdata::read_initdata;
+    use super::*;
 
     const INITDATA_IMG_PATH: &str = "testdata/initdata.img";
     const INITDATA_PLAINTEXT: &[u8] = b"some content";
@@ -194,5 +291,53 @@ mod tests {
     async fn parse_initdata() {
         let initdata = read_initdata(INITDATA_IMG_PATH).await.unwrap();
         assert_eq!(initdata, INITDATA_PLAINTEXT);
+    }
+
+    #[test]
+    fn extracts_versioned_confidential_storage_registry() {
+        let mut initdata = InitData::new("sha384", "0.1.0");
+        initdata.insert_data(
+            CONFIDENTIAL_STORAGE_CLAIM,
+            r#"{"version":1,"volumes":[{"profile":"luks2-integrity-ext4","volumeId":"tenant/workload/volume","keyUri":"kbs:///tenant/storage/key"}]}"#,
+        );
+
+        let registry = confidential_storage_registry_from_initdata(&initdata)
+            .unwrap()
+            .unwrap();
+        assert_eq!(registry.len(), 1);
+        assert_eq!(
+            registry.get("tenant/workload/volume"),
+            Some(&ConfidentialStorageClaim {
+                profile: CONFIDENTIAL_STORAGE_PROFILE_LUKS2_INTEGRITY_EXT4.to_string(),
+                volume_id: "tenant/workload/volume".to_string(),
+                key_uri: "kbs:///tenant/storage/key".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_confidential_storage_registries() {
+        for document in [
+            r#"{"version":2,"volumes":[]}"#,
+            r#"{"version":1,"unexpected":true,"volumes":[]}"#,
+            r#"{"version":1,"volumes":[{"profile":"unknown","volumeId":"tenant/volume","keyUri":"kbs:///tenant/key"}]}"#,
+            r#"{"version":1,"volumes":[{"profile":"luks2-integrity-ext4","volumeId":"tenant//volume","keyUri":"kbs:///tenant/key"}]}"#,
+            r#"{"version":1,"volumes":[{"profile":"luks2-integrity-ext4","volumeId":"tenant/volume","keyUri":"https://example.invalid/key"}]}"#,
+            r#"{"version":1,"volumes":[{"profile":"luks2-integrity-ext4","volumeId":"tenant/volume","keyUri":"kbs:///tenant/key"},{"profile":"luks2-integrity-ext4","volumeId":"tenant/volume","keyUri":"kbs:///tenant/other"}]}"#,
+        ] {
+            let mut initdata = InitData::new("sha384", "0.1.0");
+            initdata.insert_data(CONFIDENTIAL_STORAGE_CLAIM, document);
+
+            assert!(confidential_storage_registry_from_initdata(&initdata).is_err());
+        }
+    }
+
+    #[test]
+    fn absent_confidential_storage_registry_authorizes_nothing() {
+        let initdata = InitData::new("sha384", "0.1.0");
+
+        assert!(confidential_storage_registry_from_initdata(&initdata)
+            .unwrap()
+            .is_none());
     }
 }
