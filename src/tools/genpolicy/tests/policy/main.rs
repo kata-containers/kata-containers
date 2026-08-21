@@ -346,6 +346,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_image_guest_pull_storage_validation() {
+        runtests("createcontainer/image_guest_pull_storage_validation").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_gpu_vfio_cdi() {
         runtests("createcontainer/gpu_vfio_cdi").await;
     }
