@@ -160,10 +160,20 @@ rbac_doc() {
 }
 
 @test "Helm template (job mode): the dispatcher does the node-level work" {
-	local install cleanup
+	local install cleanup rendered
 	install=$(render_job_mode kata-deploy-install-job.yaml \
 		--set 'startupTaints[0]=kata/installing:NoSchedule')
 	cleanup=$(render_job_mode kata-deploy-cleanup-job.yaml)
+
+	for rendered in "${install}" "${cleanup}"; do
+		echo "${rendered}" | grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.1.0'
+		echo "${rendered}" | grep -q -- '/usr/bin/k8s-job-dispatcher'
+		echo "${rendered}" | grep -q -- '--tracking-label-prefix=kata-deploy-job-dispatcher'
+		echo "${rendered}" | grep -q -- '--node-label-key=katacontainers.io/kata-runtime'
+		echo "${rendered}" | grep -q -- '--instance-label-prefix=kata-deploy.katacontainers.io'
+		echo "${rendered}" | grep -q -- '--require-node-runtime-version'
+		echo "${rendered}" | grep -q -- '--require-node-machine-id'
+	done
 
 	# Labelling last, and only once the node is Ready again: the install restarts
 	# the node's CRI runtime, and the label is what admits workloads.

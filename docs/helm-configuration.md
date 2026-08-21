@@ -154,13 +154,14 @@ top-level `deploymentMode` value:
 - **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
   uninstall). This is the historical behavior and is unchanged.
-- **`job`**: there is **no always-on component**. A tiny *dispatcher* Job (the
-  dispatcher, `kata-deploy-job-dispatcher`) runs as a `post-install`/`post-upgrade` hook,
-  enumerates the selected nodes **live** via the Kubernetes API, and creates one
+- **`job`**: there is **no always-on component**. A tiny
+  [`k8s-job-dispatcher`](https://github.com/kata-containers/k8s-job-dispatcher)
+  Job runs as a `post-install`/`post-upgrade` hook, enumerates the selected nodes
+  **live** via the Kubernetes API, and creates one
   node-pinned install `Job` per node. Each per-node Job runs the staged install
   pipeline as ordered `initContainers` and then exits:
 
-  ```
+  ```text
   host-check -> artifacts   (initContainers)  ->  cri (main)
   ```
 
