@@ -12,7 +12,8 @@
           "io.kubernetes.cri.container-type": "container",
           "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
           "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default"
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
         },
         "Linux": {
           "GIDMappings": [],
@@ -131,7 +132,19 @@
         },
         "Version": "1.1.0"
       },
-      "storages": []
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+          "options": [],
+          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+        }
+      ]
     }
   }
 ]
