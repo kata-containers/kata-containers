@@ -47,6 +47,7 @@ const MODE_SETGID: u32 = 0o2000;
 #[derive(Debug)]
 pub struct StorageContext<'a> {
     cid: &'a Option<String>,
+    is_pod_sandbox: bool,
     logger: &'a Logger,
     sandbox: &'a Arc<Mutex<Sandbox>>,
 }
@@ -257,6 +258,7 @@ pub async fn add_storages(
     storages: Vec<Storage>,
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
+    is_pod_sandbox: bool,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
     let mut processed_mount_points = HashSet::new();
@@ -350,6 +352,7 @@ pub async fn add_storages(
                 logger.new(o!("subsystem" => "storage", "storage-type" => storage.driver.clone()));
             let mut ctx = StorageContext {
                 cid: &cid,
+                is_pod_sandbox,
                 logger: &logger,
                 sandbox,
             };
