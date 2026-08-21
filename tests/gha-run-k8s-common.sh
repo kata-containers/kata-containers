@@ -171,11 +171,19 @@ function install_bats() {
 	source /etc/os-release
 	case "${ID}" in
 		ubuntu)
-			# Installing bats from the noble repo.
-			sudo apt install -y software-properties-common
-			sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
-			sudo apt install -y bats
-			sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+			# Only jammy and older need bats fetched from somewhere else:
+			# their own universe carries one too old for these suites,
+			# while noble onwards already ships a new enough bats. Pulling
+			# noble's repo into a later release would be reaching backwards.
+			if dpkg --compare-versions "${VERSION_ID:-}" lt 24.04; then
+				# Installing bats from the noble repo.
+				sudo apt install -y software-properties-common
+				sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+				sudo apt install -y bats
+				sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+			else
+				sudo apt install -y bats
+			fi
 			;;
 		*)
 			echo "${ID} is not a supported distro, install bats manually"
@@ -561,7 +569,7 @@ function deploy_k8s() {
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
 		microk8s) deploy_microk8s ;;
-		vanilla)
+		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
 				install_erofs_utils
 

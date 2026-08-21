@@ -65,12 +65,17 @@ generate_base_values() {
 	local output_file="$1"
 	local extra_values_file="${2:-}"
 
+	local k8s_distribution="${KUBERNETES}"
+	if [[ "${k8s_distribution}" == "kubeadm" ]]; then
+		k8s_distribution="k8s"
+	fi
+
 	cat > "${output_file}" <<EOF
 image:
   reference: ${DOCKER_REGISTRY}/${DOCKER_REPO}
   tag: ${DOCKER_TAG}
 
-k8sDistribution: "${KUBERNETES}"
+k8sDistribution: "${k8s_distribution}"
 debug: true
 
 # Disable all shims at once, then enable only the one we need
