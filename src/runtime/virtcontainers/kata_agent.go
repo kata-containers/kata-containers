@@ -1932,7 +1932,7 @@ func getContainerTypeforCRI(c *Container) (string, string) {
 	return "", ""
 }
 
-func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.KataVirtualVolume, vol *grpc.Storage) (*grpc.Storage, error) {
+func handleImageGuestPullBlockVolume(c *Container, vol *grpc.Storage) (*grpc.Storage, error) {
 	containerAnnotations := c.GetAnnotations()
 	containerType, criContainerType := getContainerTypeforCRI(c)
 
@@ -1965,20 +1965,8 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 			return nil, fmt.Errorf("Failed to get image name from annotations")
 		}
 	}
-	virtualVolumeInfo.Source = imageRef
-
-	//merge virtualVolumeInfo.ImagePull.Metadata and container_annotations
-	for k, v := range containerAnnotations {
-		virtualVolumeInfo.ImagePull.Metadata[k] = v
-	}
-
-	no, err := json.Marshal(virtualVolumeInfo.ImagePull)
-	if err != nil {
-		return nil, err
-	}
 	vol.Driver = types.KataVirtualVolumeImageGuestPullType
-	vol.DriverOptions = append(vol.DriverOptions, types.KataVirtualVolumeImageGuestPullType+"="+string(no))
-	vol.Source = virtualVolumeInfo.Source
+	vol.Source = imageRef
 	vol.Fstype = typeOverlayFS
 	return vol, nil
 }
@@ -1989,7 +1977,7 @@ func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVo
 	if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
 		var err error
 		vol = &grpc.Storage{}
-		vol, err = handleImageGuestPullBlockVolume(c, virtVolume, vol)
+		vol, err = handleImageGuestPullBlockVolume(c, vol)
 		if err != nil {
 			return nil, err
 		}
