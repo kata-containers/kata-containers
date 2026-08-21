@@ -26,6 +26,15 @@ CUSTOM_RUNTIME_HANDLER="kata-my-custom-handler"
 TEST_POD_NAME="kata-deploy-custom-verify"
 CHART_PATH="$(get_chart_path)"
 
+# The two runtimes spell the agent dial timeout differently, and runtime-rs
+# refuses a config carrying a field it does not know, so a drop-in meant to be
+# applied for real has to match the base config it extends.
+if [[ "${KATA_HYPERVISOR:-qemu-runtime-rs}" == *-runtime-rs ]]; then
+	DROP_IN_SETTING="dial_timeout_ms = 999"
+else
+	DROP_IN_SETTING="dial_timeout = 999"
+fi
+
 # =============================================================================
 # Template Rendering Tests (no cluster required)
 # =============================================================================
@@ -62,7 +71,7 @@ CHART_PATH="$(get_chart_path)"
 		> /tmp/rendered.yaml
 
 	grep -q "dropin-${CUSTOM_RUNTIME_HANDLER}.toml" /tmp/rendered.yaml
-	grep -q "dial_timeout = 999" /tmp/rendered.yaml
+	grep -q "${DROP_IN_SETTING}" /tmp/rendered.yaml
 }
 
 @test "Helm template: CUSTOM_RUNTIMES_ENABLED env var is set" {
@@ -306,7 +315,7 @@ customRuntimes:
       baseConfig: "${KATA_HYPERVISOR}"
       dropIn: |
         [agent.kata]
-        dial_timeout = 999
+        ${DROP_IN_SETTING}
       runtimeClass: |
         kind: RuntimeClass
         apiVersion: node.k8s.io/v1
@@ -344,7 +353,7 @@ customRuntimes:
       baseConfig: "${KATA_HYPERVISOR:-qemu-runtime-rs}"
       dropIn: |
         [agent.kata]
-        dial_timeout = 999
+        ${DROP_IN_SETTING}
       runtimeClass: |
         kind: RuntimeClass
         apiVersion: node.k8s.io/v1
