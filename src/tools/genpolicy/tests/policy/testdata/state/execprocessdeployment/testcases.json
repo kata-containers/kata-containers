@@ -321,9 +321,7 @@
       "storages": [
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/de22f4859da69a058e9d7f162d8e27244919c24d3ff2262e46cf56f695a34b5d\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"execprocessnamed\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/prometheus/busybox:latest\",\"io.kubernetes.cri.sandbox-id\":\"c069a0850eb7894c6499133e2c6b5ccd543ebf3c32966a7c87512c9d0322061f\",\"io.kubernetes.cri.sandbox-name\":\"execprocessnamed-7c56d66754-pq9qp\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"io.kubernetes.cri.sandbox-uid\":\"e6a10dbc-f413-427c-b59c-cdbd2dcb5003\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/de22f4859da69a058e9d7f162d8e27244919c24d3ff2262e46cf56f695a34b5d/rootfs",
