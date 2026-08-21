@@ -16,7 +16,8 @@ use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevDiscardOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericCOWFormat, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
-    MigrationInfo, PciDeviceInfo,
+    ChardevBackend, ChardevCommon, ChardevSocket as QmpChardevSocket, ChardevSocketWrapper,
+    MigrationInfo, PciDeviceInfo, SocketAddressLegacy, UnixSocketAddress, UnixSocketAddressWrapper,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -1532,6 +1533,110 @@ impl Qmp {
             .context("get device by qdev_id failed")?;
 
         Ok(Some(pci_path))
+    }
+
+    pub fn hotplug_vhost_user_blk_device(
+        &mut self,
+        device_id: &str,
+        socket_path: &str,
+        num_queues: usize,
+        queue_size: u32,
+        reconnect_timeout: u32,
+    ) -> Result<PciPath> {
+        let unix_path = socket_path
+            .split_once("://")
+            .map(|(_, p)| p)
+            .unwrap_or(socket_path);
+
+        let chardev_id = format!("char-{device_id}");
+
+        let chardev_socket = QmpChardevSocket {
+            base: ChardevCommon {
+                logappend: None,
+                logfile: None,
+            },
+            addr: SocketAddressLegacy::unix(UnixSocketAddressWrapper::from(UnixSocketAddress {
+                path: unix_path.to_owned(),
+                abstract_: None,
+                tight: None,
+            })),
+            server: Some(false),
+            reconnect: if reconnect_timeout > 0 {
+                Some(reconnect_timeout as i64)
+            } else {
+                None
+            },
+            nodelay: None,
+            telnet: None,
+            tls_authz: None,
+            tls_creds: None,
+            tn3270: None,
+            wait: None,
+            websocket: None,
+        };
+
+        self.qmp
+            .execute(&qmp::chardev_add {
+                id: chardev_id.clone(),
+                backend: ChardevBackend::socket(ChardevSocketWrapper::from(chardev_socket)),
+            })
+            .map_err(|e| anyhow!("chardev-add {:?}", e))
+            .map(|_| ())?;
+
+        let mut device_args = Dictionary::new();
+        device_args.insert("chardev".to_owned(), chardev_id.clone().into());
+        if num_queues > 0 {
+            device_args.insert("num-queues".to_owned(), (num_queues as i64).into());
+        }
+        if queue_size > 0 {
+            device_args.insert("queue-size".to_owned(), (queue_size as i64).into());
+        }
+
+        let (bus, slot) = self.find_free_slot()?;
+        device_args.insert("addr".to_owned(), format!("{slot:02}").into());
+
+        let result = self.qmp.execute(&qmp::device_add {
+            bus: Some(bus),
+            id: Some(device_id.to_string()),
+            driver: "vhost-user-blk-pci".to_string(),
+            arguments: device_args,
+        });
+        if let Err(e) = result {
+            let _ = self.qmp.execute(&qmp::chardev_remove {
+                id: chardev_id,
+            });
+            return Err(anyhow!("device_add vhost-user-blk-pci {:?}", e));
+        }
+
+        let pci_path = self
+            .get_device_by_qdev_id(device_id)
+            .context("get device by qdev_id failed")?;
+
+        Ok(pci_path)
+    }
+
+    pub fn hotunplug_vhost_user_blk_device(&mut self, device_id: &str) -> Result<()> {
+        let chardev_id = format!("char-{device_id}");
+
+        self.qmp
+            .execute(&qmp::device_del {
+                id: device_id.to_string(),
+            })
+            .map_err(|e| anyhow!("device_del {}: {:?}", device_id, e))?;
+
+        // device_del is asynchronous — wait for the guest to acknowledge
+        // before tearing down the chardev backend.
+        self.wait_for_device_deleted(device_id, DEVICE_DELETED_TIMEOUT)
+            .context("hotunplug_vhost_user_blk_device: waiting for DEVICE_DELETED")?;
+
+        self.qmp
+            .execute(&qmp::chardev_remove {
+                id: chardev_id.clone(),
+            })
+            .map_err(|e| anyhow!("chardev-remove {}: {:?}", chardev_id, e))
+            .map(|_| ())?;
+
+        Ok(())
     }
 
     pub fn qmp_stop(&mut self) -> Result<()> {
