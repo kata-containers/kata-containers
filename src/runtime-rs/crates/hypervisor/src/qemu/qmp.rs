@@ -1534,6 +1534,71 @@ impl Qmp {
         Ok(Some(pci_path))
     }
 
+    /// Hotunplug a VFIO device.
+    pub fn hotunplug_vfio_device(&mut self, hostdev_id: &str) -> Result<()> {
+        if !self
+            .device_exists(hostdev_id)
+            .context("query VFIO device before hotunplug")?
+        {
+            info!(
+                sl!(),
+                "hotunplug_vfio_device(): {} is already absent", hostdev_id
+            );
+            return Ok(());
+        }
+
+        if let Err(delete_err) = self.qmp.execute(&qmp::device_del {
+            id: hostdev_id.to_owned(),
+        }) {
+            return match self.device_exists(hostdev_id) {
+                Ok(false) => Ok(()),
+                Ok(true) => Err(anyhow!(
+                    "device_del for VFIO device {}: {:?}",
+                    hostdev_id,
+                    delete_err
+                )),
+                Err(query_err) => Err(anyhow!(
+                    "device_del for VFIO device {} failed: {:?}; state reconciliation failed: {:#}",
+                    hostdev_id,
+                    delete_err,
+                    query_err
+                )),
+            };
+        }
+
+        if let Err(wait_err) = self.wait_for_device_deleted(hostdev_id, DEVICE_DELETED_TIMEOUT) {
+            return match self.device_exists(hostdev_id) {
+                Ok(false) => Ok(()),
+                Ok(true) => Err(wait_err).context(
+                    format!(
+                        "hotunplug_vfio_device(): waiting for DEVICE_DELETED for {}",
+                        hostdev_id
+                    )
+                ),
+                Err(query_err) => Err(anyhow!(
+                    "waiting for DEVICE_DELETED for {} failed: {:#}; state reconciliation failed: {:#}",
+                    hostdev_id,
+                    wait_err,
+                    query_err
+                )),
+            };
+        }
+
+        info!(
+            sl!(),
+            "hotunplug_vfio_device(): successfully removed {}", hostdev_id
+        );
+
+        Ok(())
+    }
+
+    pub fn device_exists(&mut self, device_name: &str) -> Result<bool> {
+        let devices = self.qmp.execute(&qapi_qmp::qom_list {
+            path: "/machine/peripheral".to_owned(),
+        })?;
+        Ok(devices.iter().any(|device| device.name == device_name))
+    }
+
     pub fn qmp_stop(&mut self) -> Result<()> {
         self.qmp
             .execute(&qmp::stop {})
