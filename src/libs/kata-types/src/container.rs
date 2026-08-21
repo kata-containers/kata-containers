@@ -58,7 +58,7 @@ impl ContainerType {
         matches!(self, ContainerType::PodContainer)
     }
 
-    /// Check whether it's a pod container.
+    /// Check whether it's a pod sandbox.
     pub fn is_pod_sandbox(&self) -> bool {
         matches!(self, ContainerType::PodSandbox)
     }
@@ -201,6 +201,9 @@ mod tests {
 
         assert!(ContainerType::PodSandbox.is_pod_sandbox());
         assert!(!ContainerType::PodSandbox.is_pod_container());
+
+        assert!(!ContainerType::SingleContainer.is_pod_container());
+        assert!(!ContainerType::SingleContainer.is_pod_sandbox());
     }
 
     #[test]
