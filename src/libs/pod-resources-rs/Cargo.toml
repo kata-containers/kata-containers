@@ -20,3 +20,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
