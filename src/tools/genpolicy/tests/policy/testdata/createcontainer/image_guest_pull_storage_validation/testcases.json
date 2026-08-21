@@ -161,9 +161,7 @@
         },
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
@@ -335,9 +333,7 @@
         },
         {
           "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
+          "driver_options": [],
           "fs_group": null,
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/unexpected/rootfs",
@@ -509,8 +505,180 @@
         },
         {
           "driver": "image_guest_pull",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+          "options": [],
+          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+        }
+      ]
+    }
+  },
+  {
+    "allowed": false,
+    "description": "image_guest_pull storage with driver options",
+    "kind": "CreateContainerRequest",
+    "request": {
+      "OCI": {
+        "Annotations": {
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "dummy",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "MountLabel": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            },
+            {
+              "Path": "/run/netns/podns",
+              "Type": "network"
+            }
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ],
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": ""
+        },
+        "Mounts": [
+          {
+            "destination": "/mnt/test",
+            "options": [
+              "rbind",
+              "rprivate",
+              "rw"
+            ],
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+            "type_": "bind"
+          }
+        ],
+        "Process": {
+          "Args": [
+            "/pause"
+          ],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          },
+          "Cwd": "/",
+          "NoNewPrivileges": false,
+          "SelinuxLabel": "",
+          "User": {
+            "AdditionalGids": [
+              0
+            ],
+            "GID": 0,
+            "UID": 65535,
+            "Username": ""
+          }
+        },
+        "Root": {
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+          "Readonly": false
+        },
+        "Version": "1.1.0"
+      },
+      "storages": [
+        {
+          "driver": "blk",
           "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
+            "encryption_key=ephemeral",
+            "create_filesystem"
+          ],
+          "fs_group": null,
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+          "options": [],
+          "source": "00/00",
+          "shared": true
+        },
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{}}"
           ],
           "fs_group": null,
           "fstype": "overlay",
