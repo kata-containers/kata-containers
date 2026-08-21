@@ -23,6 +23,9 @@
 #   installed nodes are skipped). This is intentional: it avoids an always-on
 #   privileged component on every node.
 #
+#   On a fleet that grows on its own, `job.reconcile` does that re-run on a
+#   schedule instead.
+#
 # NOTE on host kernel modules in "job" mode:
 #   Each per-node install Job starts with one short-lived privileged, tokenless
 #   init container that loads the modules the enabled runtimes and snapshotters
@@ -45,7 +48,7 @@ job:
   # released independently of Kata Containers, so its version is pinned here.
   dispatcherImage:
     reference: ghcr.io/kata-containers/k8s-job-dispatcher
-    tag: "0.1.0"
+    tag: "0.2.0"
   # Where the dispatcher pods themselves may run (install and uninstall). Nothing
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
@@ -125,6 +128,27 @@ job:
   # NotReady for a moment. Waiting keeps the first Kata workload away until the
   # runtime is back. A node that never becomes Ready stays unlabeled.
   waitNodeReadySeconds: 300
+  # Scheduled reconcile: covers the nodes that join after the release was applied.
+  #
+  # The dispatcher runs as a release hook, so a node joining later is never
+  # dispatched to and stays without Kata until the next `helm upgrade`. Enable
+  # this and a CronJob does that upgrade's work on a schedule instead, running the
+  # same dispatcher against the same selectors and per-node templates.
+  #
+  # A tick stands aside while a release rollout is in flight, and leaves out the
+  # nodes that already show a finished install, so a tick over a settled fleet is
+  # a couple of API calls and no pods.
+  #
+  # Off by default, for two reasons. A recurring privileged rollout is something
+  # to ask for explicitly, and this only ever ADDS nodes: one that fell out of the
+  # selection is usually a label gone wrong somewhere, so it is left for the next
+  # upgrade rather than dismantled on a timer with nobody watching.
+  #
+  # Requires job.dispatcherImage 0.2.0 or newer.
+  reconcile:
+    enabled: false
+    # Cron expression, interpreted in the cluster's own timezone.
+    schedule: "*/15 * * * *"
   # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
   #
   # Deliberately independent of the install selection: uninstall has to reach
