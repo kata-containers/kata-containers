@@ -18,6 +18,7 @@ virtcontainers
 bootc
 distroless
 materialx
+ORAS
 ostree
 
 # Hardware & Architecture
@@ -109,6 +110,7 @@ vsock
 GHSA
 LUKS
 ocicrypt
+SLSA
 
 # Container, Runtime & Misc terms
 Burstable
