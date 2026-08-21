@@ -82,15 +82,16 @@ sequenceDiagram
         Containerd/Kubelet->>runtime.kata_agent: createContainer(ctx,sandbox,c)
         runtime.kata_agent->>runtime.fs_share_linux: ShareRootFilesystem(ctx,c)
         runtime.fs_share_linux->>runtime.kata_agent: handleVirtualVolumeStorageObject(c,...,KataVolumeType)
-        runtime.kata_agent->>runtime.kata_agent: handleImageGuestPullBlockVolume(c,virtVolume,vol)
+        runtime.kata_agent->>runtime.kata_agent: handleImageGuestPullBlockVolume(c,vol)
         runtime.kata_agent->>runtime.fs_share_linux: ret:storage
         runtime.fs_share_linux->>runtime.kata_agent: ret:sharedFile
     and Guest Side
         runtime.kata_agent->>agent.rpc: CreateContainerRequest(cid,...,storages,...,oci,...)
-        agent.rpc->>agent.storage: add_storage(storages...)
+        agent.rpc->>agent.rpc: derive is_pod_sandbox from OCI annotations
+        agent.rpc->>agent.storage: add_storages(storages,is_pod_sandbox)
         agent.storage->>agent.storage: StorageHandler.handler(driver)
-        agent.storage->>agent.storage.StorageHandler.ImagePullHandler: create_device(storage)
-        agent.storage.StorageHandler.ImagePullHandler->>agent.confidential_data_hub: pull_image(img,cid,img_metadata)
+        agent.storage->>agent.storage.StorageHandler.ImagePullHandler: create_device(storage,storage_context)
+        agent.storage.StorageHandler.ImagePullHandler->>agent.confidential_data_hub: pull_image(img,bundle_path)
         agent.confidential_data_hub->>Confidential Data Hub: pull_image(img,bundle_path)
         Confidential Data Hub->>agent.confidential_data_hub: ret
         agent.confidential_data_hub->>agent.storage.StorageHandler.ImagePullHandler: ret: bundle_path
@@ -103,12 +104,12 @@ sequenceDiagram
 ```
 
 First and foremost, the guest pull code path is only activated when `nydus snapshotter` requires the handling of a volume which type is `image_guest_pull`, as can be seen on the message below:
+
 ```json
 {
-  {
   "volume_type": "image_guest_pull",
-  "source":"quay.io/kata-containers/confidential-containers:unsigned",
-  "fs_type":"overlayfs"
+  "source": "quay.io/kata-containers/confidential-containers:unsigned",
+  "fs_type": "overlayfs",
   "options": [
     "containerd.io/snapshot/cri.layer-digest=sha256:24fb2886d6f6c5d16481dd7608b47e78a8e92a13d6e64d87d57cb16d5f766d63",
     "containerd.io/snapshot/nydus-proxy-mode=true"
@@ -117,50 +118,37 @@ First and foremost, the guest pull code path is only activated when `nydus snaps
     "metadata": {
       "containerd.io/snapshot/cri.layer-digest": "sha256:24fb2886d6f6c5d16481dd7608b47e78a8e92a13d6e64d87d57cb16d5f766d63",
       "containerd.io/snapshot/nydus-proxy-mode": "true"
-         }
-       }
+    }
   }
 }
 ```
 In other words, `VolumeType` of `KataVirtualVolumeType` is set to `image_guest_pull`.
 
-Next the `handleImageGuestPullBlockVolume()` is called to build the Storage object that will be attached to the message later sent to kata-agent via the `CreateContainerRequest()` RPC. It is in the `handleImageGuestPullBlockVolume()` that it will begin the handling of the pause image if the request is for a sandbox container type (see more about pause image below).
+Next the `handleImageGuestPullBlockVolume()` is called to build the Storage object that will be attached to the message later sent to kata-agent via the `CreateContainerRequest()` RPC. The storage carries the image reference, while the container type remains available in the request's OCI annotations.
 
 Below is an example of storage information packaged in the message sent to the kata-agent:
 
 ```json
-"driver": "image_guest_pull",
-    "driver_options": [
-        "image_guest_pull"{
-            "metadata":{
-                "containerd.io/snapshot/cri.layer-digest": "sha256:24fb2886d6f6c5d16481dd7608b47e78a8e92a13d6e64d87d57cb16d5f766d63",
-                "containerd.io/snapshot/nydus-proxy-mode": "true",
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6",
-                "io.katacontainers.pkg.oci.container_type": "pod_container",
-                "io.kubernetes.cri.container-name": "coco-container",
-                "io.kubernetes.cri.container-type": "container",
-                "io.kubernetes.cri.image-name": "quay.io/kata-containers/confidential-containers:unsigned",
-                "io.kubernetes.cri.sandbox-id":"7a0d058477e280604ae02de6a016959e8a05fcd3165c47af41eabcf205b55517",
-                "io.kubernetes.cri.sandbox-name": "coco-pod","io.kubernetes.cri.sandbox-namespace": "default",
-                "io.kubernetes.cri.sandbox-uid": "de7c6a0c-79c0-44dc-a099-69bb39f180af",
-            }
-        }
-    ],
-    "source": "quay.io/kata-containers/confidential-containers:unsigned",
-    "fstype": "overlay",
-    "options": [],
-    "mount_point": "/run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs",
+{
+  "driver": "image_guest_pull",
+  "driver_options": [],
+  "source": "quay.io/kata-containers/confidential-containers:unsigned",
+  "fstype": "overlay",
+  "options": [],
+  "mount_point": "/run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs"
+}
 ```
 Next, the kata-agent's RPC module will handle the create container request which, among other things, involves adding storages to the sandbox. The storage module contains implementations of `StorageHandler` interface for various storage types, being the `ImagePullHandler` in charge of handling the storage object for the container image (the storage manager instantiates the handler based on the value of the "driver").
 
 `ImagePullHandler` delegates the image pulling operation to the `confidential_data_hub.pull_image()` that is going to create the image's bundle directory on the guest filesystem and, in turn, the `ImagePullService` of Confidential Data Hub to fetch, uncompress and mount the image's rootfs.
 
 > **Notes:**
-> In this flow, `confidential_data_hub.pull_image()` parses the image metadata, looking for either the `io.kubernetes.cri.container-type: sandbox` or `io.kubernetes.cri-o.ContainerType: sandbox` (CRI-IO case) annotation, then it never calls the `pull_image()` RPC of Confidential Data Hub because the pause image is expected to already be inside the guest's filesystem, so instead `confidential_data_hub.unpack_pause_image()` is called.
+> In this flow, the kata-agent RPC handler determines whether the request is for a pod sandbox from the `CreateContainerRequest` OCI annotations, including the containerd `io.kubernetes.cri.container-type` and CRI-O `io.kubernetes.cri-o.ContainerType` annotations. It passes that decision through `StorageContext` to `ImagePullHandler`. For a pod sandbox, the handler calls `confidential_data_hub.unpack_pause_image()` instead of the Confidential Data Hub `pull_image()` RPC because the pause image is expected to already be present in the guest filesystem.
 
 ## Using guest image pull with `nerdctl`
 
 When running a workload, add the `--annotation io.kubernetes.cri.image-name=<image>` option e.g.:
+
 ```sh
 nerdctl run --runtime io.containerd.kata.v2 --snapshotter nydus --annotation io.kubernetes.cri.image-name=docker.io/library/busybox:latest --rm docker.io/library/busybox:latest uname -r
 ```
