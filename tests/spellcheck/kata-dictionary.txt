@@ -1,6 +1,7 @@
 # Kata Containers Dictionary
 
 # Project-Specific Terms
+devkit
 Dragonball
 genpolicy
 kata
@@ -28,8 +29,10 @@ DCAP
 DGPU
 ioctls
 IOMMU
+IOMMUFD
 IOVA
 MDEV
+microvm
 MKVP
 MMDS
 mmio
@@ -49,6 +52,7 @@ VPMU
 
 # GPU & NVIDIA
 CUDA
+DGX
 Gramine
 Mellanox
 MOFED
@@ -78,6 +82,7 @@ hugepage
 MACVTAP
 memdisk
 pmem
+tmpfs
 Sharedfs
 Initdata
 fsmerge
@@ -101,6 +106,7 @@ vmservice
 vsock
 
 # Security & Encryption
+GHSA
 LUKS
 ocicrypt
 
@@ -109,6 +115,7 @@ Burstable
 cgroupsv1
 coredump
 CPUSET
+CRIU
 crio
 nerdctl
 crictl

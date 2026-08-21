@@ -1298,6 +1298,7 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 		hotPlugVFIO   config.PCIePort
 		coldPlugVFIO  config.PCIePort
 		vfioMode      config.VFIOModeType
+		containerType ContainerType
 		expectVFIODev bool
 	}{
 		{
@@ -1321,6 +1322,25 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			vfioMode:      config.VFIOModeGuestKernel,
 			expectVFIODev: true,
 		},
+		{
+			// The pause container never owns VFIO devices: cold-plugged
+			// devices are sandbox-level and consumed only by workload
+			// containers.
+			name:          "VFIO device with cold plug enabled skipped for CRI sandbox container",
+			hotPlugVFIO:   config.NoPort,
+			coldPlugVFIO:  config.BridgePort,
+			vfioMode:      config.VFIOModeGuestKernel,
+			containerType: PodSandbox,
+			expectVFIODev: false,
+		},
+		{
+			name:          "VFIO device with cold plug enabled kept for CRI workload container",
+			hotPlugVFIO:   config.NoPort,
+			coldPlugVFIO:  config.BridgePort,
+			vfioMode:      config.VFIOModeGuestKernel,
+			containerType: PodContainer,
+			expectVFIODev: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1341,6 +1361,10 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			// Setup container config with the VFIO device
 			contConfig := &ContainerConfig{
 				DeviceInfos: []config.DeviceInfo{vfioDevice},
+				Annotations: map[string]string{},
+			}
+			if tt.containerType != "" {
+				contConfig.Annotations[vcAnnotations.ContainerTypeKey] = string(tt.containerType)
 			}
 
 			// Create mock URL for kata agent

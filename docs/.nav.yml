@@ -23,6 +23,8 @@ nav:
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
     - Contributing:
       - Documentation: doc-contributing.md
+  - Releases:
+    - "4.1.0": releases/4.1.0.md
   - Misc:
     - Architecture: design/architecture_4.0/architecture.md
     - Config Migration (runtime to runtime-rs): migrating-config-go-runtime-to-runtime-rs.md

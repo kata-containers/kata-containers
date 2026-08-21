@@ -366,7 +366,7 @@ externals:
       package_output_dir: "AmdSev"
     tdx:
       description: "UEFI for Intel TDX virtual machines."
-      version: "edk2-stable202605"
+      version: "edk2-stable202511"
       package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
       package_output_dir: "IntelTdx"
     arm64:
