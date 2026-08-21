@@ -355,8 +355,23 @@ get_coco_guest_components_tarball_path() {
 	echo "${coco_guest_components_local_build_dir}/${coco_guest_components_tarball_name}"
 }
 
+get_coco_guest_components_tarball_checksum() {
+	local tarball
+	tarball="$(get_coco_guest_components_tarball_path)"
+	[[ -f "${tarball}" ]] || die "CoCo guest components tarball not found: ${tarball}"
+
+	sha256sum "${tarball}" | cut -d' ' -f1
+}
+
+get_coco_extension_variant() {
+	local variant
+	variant="$(get_from_kata_deps ".externals.coco-guest-components.variant")"
+	[[ -n "${variant}" ]] || die "Failed to get coco-guest-components variant from versions.yaml"
+	echo "${variant}"
+}
+
 get_latest_coco_guest_components_artefact_and_builder_image_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)-$(get_coco_extension_oci_arch)-$(get_coco_guest_components_container_image_digest)"
 }
 
 get_coco_extension_oci_arch() {
@@ -366,26 +381,41 @@ get_coco_extension_oci_arch() {
 # Multi-arch scratch OCI container image from guest-components' "Publish OCI
 # container image" step (coco-extension-image.yml). This is the assembled guest
 # components rootfs as a container, not the EROFS disk image (extension_image).
+# Tags are ABI-qualified as "<version>-<variant>" (e.g. "<sha>-ubuntu26.04").
 get_coco_guest_components_container_image_ref() {
-	local version image
+	local version image variant
 	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	image="$(get_from_kata_deps ".externals.coco-guest-components.container_image")"
+	variant="$(get_coco_extension_variant)"
 	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
 	[[ -n "${image}" ]] || die "Failed to get coco-guest-components container_image from versions.yaml"
 
-	echo "${image}:${version}"
+	echo "${image}:${version}-${variant}"
+}
+
+get_coco_guest_components_container_image_digest() {
+	ensure_oras_installed >&2
+
+	local image_ref go_arch
+	image_ref="$(get_coco_guest_components_container_image_ref)"
+	go_arch="$(get_coco_extension_oci_arch)"
+
+	oras resolve --platform "linux/${go_arch}" "${image_ref}" \
+		|| die "Failed to resolve ${image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
 }
 
 # The extension disk image is published as a multi-arch OCI index tagged with the
-# guest-components commit; the per-arch selection happens at pull time.
+# guest-components commit and Ubuntu variant; the per-arch selection happens at
+# pull time.
 get_coco_extension_disk_image_ref() {
-	local version image
+	local version image variant
 	version="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	image="$(get_from_kata_deps ".externals.coco-guest-components.extension_image")"
+	variant="$(get_coco_extension_variant)"
 	[[ -n "${version}" ]] || die "Failed to get coco-guest-components version from versions.yaml"
 	[[ -n "${image}" ]] || die "Failed to get coco-guest-components extension_image from versions.yaml"
 
-	echo "${image}:${version}"
+	echo "${image}:${version}-${variant}"
 }
 
 # GitHub "owner/repo" that owns the provenance attestation, derived from the
@@ -398,7 +428,7 @@ get_coco_extension_provenance_repo() {
 }
 
 get_latest_coco_extension_artefact_version() {
-	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_oci_arch)"
+	echo "$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)-$(get_coco_extension_oci_arch)"
 }
 
 ensure_oras_installed() {
@@ -474,15 +504,12 @@ verify_guest_components_oci_provenance() {
 # Pull the published scratch OCI container image (coco-extension), verify its
 # provenance, and export the rootfs into destdir for monolithic confidential images.
 install_coco_guest_components_from_oci() {
-	ensure_oras_installed
-
 	local image_ref image go_arch digest cid
 	image_ref="$(get_coco_guest_components_container_image_ref)"
 	image="${image_ref%%:*}"
 	go_arch="$(get_coco_extension_oci_arch)"
 
-	digest="$(oras resolve --platform "linux/${go_arch}" "${image_ref}")" \
-		|| die "Failed to resolve ${image_ref} for linux/${go_arch}; bump .externals.coco-guest-components.version in versions.yaml once guest-components has published the image"
+	digest="$(get_coco_guest_components_container_image_digest)"
 
 	verify_guest_components_oci_provenance "${image}" "${digest}"
 
@@ -656,6 +683,7 @@ install_image() {
 		# Both the standard and NVIDIA confidential images bake the CoCo
 		# guest components (including the pause bundle) into the rootfs.
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_coco_guest_components_tarball_checksum)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -856,7 +884,7 @@ install_image_coco_extension() {
 install_image_devkit_extension() {
 	local component="rootfs-image-devkit-extension"
 
-	# Reuse the guest image's Ubuntu release (e.g. "noble") so the devkit matches
+	# Reuse the guest image's Ubuntu release (e.g. "resolute") so the devkit matches
 	# the base userspace ABI (glibc) the guest ships.
 	local os_name os_version
 	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
@@ -996,6 +1024,7 @@ install_initrd() {
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_coco_guest_components_tarball_checksum)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
@@ -1696,7 +1725,7 @@ install_agent() {
 
 install_coco_guest_components() {
 	latest_artefact="$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")"
+	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_coco_extension_variant)"
 	latest_builder_image=""
 
 	install_cached_tarball_component \

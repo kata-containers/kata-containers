@@ -8,7 +8,7 @@
 # shellcheck disable=SC2034
 
 OS_NAME=ubuntu
-# Ubuntu code name (e.g. "noble"), passed down from the guest image release so
+# Ubuntu code name (e.g. "resolute"), passed down from the guest image release so
 # the devkit matches the base userspace ABI (glibc).
 OS_VERSION=${OS_VERSION:-""}
 [[ -z "${OS_VERSION}" ]] && echo "OS_VERSION is required, but was not set" && exit 1

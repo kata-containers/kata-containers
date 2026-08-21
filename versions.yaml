@@ -114,52 +114,52 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-extension:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
       s390x:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         mariner:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-extension:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
 
   initrd:
     description: |
@@ -168,39 +168,39 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
       s390x:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "noble"  # 24.04 LTS
+        version: "resolute"  # 26.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "noble"  # 24.04 LTS
+          version: "resolute"  # 26.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
@@ -236,25 +236,25 @@ externals:
       repo:
         x86_64:
           # yamllint disable-line rule:line-length
-          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/"
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/"
           pkg: "cuda-keyring_1.1-1_all.deb"
         aarch64:
           # yamllint disable-line rule:line-length
-          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
     tools:
       desc: "NVIDIA container toolkit and tools repository"
       repo:
         x86_64:
           # yamllint disable-line rule:line-length
-          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/"
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/"
           pkg: "cuda-keyring_1.1-1_all.deb"
         aarch64:
           # yamllint disable-line rule:line-length
-          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
     ctk:
-      version: "1.18.1-1"
+      version: "1.19.1-1"
       url: "https://github.com/NVIDIA/nvidia-container-toolkit"
     nvat:
       desc: "NVIDIA Attestation SDK"
@@ -279,7 +279,11 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "d4dce5ce62294cfa741225f7e5b4527ea276f326"
+    version: "304c21f29e26dbbb968783e41109f3b6d630e872"
+    # Guest Ubuntu release qualifier published by coco-extension-image.yml
+    # (tags are "<version>-<variant>", e.g. "<sha>-ubuntu26.04"). The
+    # extension ships no libc, so this must match the guest rootfs ABI.
+    variant: "ubuntu26.04"
     # Scratch OCI container image (guest-components "Publish OCI container
     # image" step). Consumed by monolithic confidential rootfs builds.
     # yamllint disable-line rule:line-length
