@@ -1652,14 +1652,18 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "event-manager",
+ "kvm-ioctls",
  "libc",
  "log",
  "nix 0.31.3",
  "serde",
  "serde_json",
+ "tdx",
  "test-utils",
  "thiserror 2.0.18",
+ "threadpool",
  "timerfd",
+ "vm-memory",
  "vmm-sys-util 0.15.0",
 ]
 
