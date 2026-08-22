@@ -244,7 +244,20 @@
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
-      }
+      },
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.katacontainers.pkg.oci.container_type\":\"pod_sandbox\",\"io.kubernetes.cri.container-type\":\"sandbox\",\"io.kubernetes.cri.sandbox-cpu-period\":\"100000\",\"io.kubernetes.cri.sandbox-cpu-quota\":\"0\",\"io.kubernetes.cri.sandbox-cpu-shares\":\"2\",\"io.kubernetes.cri.sandbox-id\":\"a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.kubernetes.cri.sandbox-log-directory\":\"/var/log/pods/kata-containers-k8s-tests_dummy_fd055c20-d44c-4fc5-aa90-283f629201af\",\"io.kubernetes.cri.sandbox-memory\":\"0\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"kata-containers-k8s-tests\",\"io.kubernetes.cri.sandbox-uid\":\"fd055c20-d44c-4fc5-aa90-283f629201af\",\"nerdctl/network-namespace\":\"/var/run/netns/cni-50720768-bd65-bf4b-6185-5d5a2adf5305\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+          "options": [],
+          "source": "pause"
+        }
+      ]
     }
   },
   {
@@ -577,7 +590,20 @@
         "Version": "1.1.0",
         "Windows": null
       },
-      "container_id": "dummy"
+      "container_id": "dummy",
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/kata-containers/test-images/opstree/redis:sha256-2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48\",\"io.kubernetes.cri.sandbox-id\":\"5cd5b1a9a4ccc5c9fcf9fcc66fb72bf01e0920a1f34ef505f744119db6679c41\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"kata-containers-k8s-tests\",\"io.kubernetes.cri.sandbox-uid\":\"3cfbfd7a-3065-4862-805e-3f5e4142bcbd\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+          "options": [],
+          "source": "quay.io/kata-containers/test-images/opstree/redis:sha256-2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48"
+        }
+      ]
     }
   },
   {
@@ -825,7 +851,20 @@
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
-      }
+      },
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.katacontainers.pkg.oci.container_type\":\"pod_sandbox\",\"io.kubernetes.cri.container-type\":\"sandbox\",\"io.kubernetes.cri.sandbox-cpu-period\":\"100000\",\"io.kubernetes.cri.sandbox-cpu-quota\":\"0\",\"io.kubernetes.cri.sandbox-cpu-shares\":\"2\",\"io.kubernetes.cri.sandbox-id\":\"a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.kubernetes.cri.sandbox-log-directory\":\"/var/log/pods/kata-containers-k8s-tests_dummy_fd055c20-d44c-4fc5-aa90-283f629201af\",\"io.kubernetes.cri.sandbox-memory\":\"0\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"kata-containers-k8s-tests\",\"io.kubernetes.cri.sandbox-uid\":\"fd055c20-d44c-4fc5-aa90-283f629201af\",\"nerdctl/network-namespace\":\"/var/run/netns/cni-50720768-bd65-bf4b-6185-5d5a2adf5305\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+          "options": [],
+          "source": "pause"
+        }
+      ]
     }
   },
   {
@@ -1073,7 +1112,20 @@
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
-      }
+      },
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.katacontainers.pkg.oci.container_type\":\"pod_sandbox\",\"io.kubernetes.cri.container-type\":\"sandbox\",\"io.kubernetes.cri.sandbox-cpu-period\":\"100000\",\"io.kubernetes.cri.sandbox-cpu-quota\":\"0\",\"io.kubernetes.cri.sandbox-cpu-shares\":\"2\",\"io.kubernetes.cri.sandbox-id\":\"a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4\",\"io.kubernetes.cri.sandbox-log-directory\":\"/var/log/pods/kata-containers-k8s-tests_dummy_fd055c20-d44c-4fc5-aa90-283f629201af\",\"io.kubernetes.cri.sandbox-memory\":\"0\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"kata-containers-k8s-tests\",\"io.kubernetes.cri.sandbox-uid\":\"fd055c20-d44c-4fc5-aa90-283f629201af\",\"nerdctl/network-namespace\":\"/var/run/netns/cni-50720768-bd65-bf4b-6185-5d5a2adf5305\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+          "options": [],
+          "source": "pause"
+        }
+      ]
     }
   }
 ]

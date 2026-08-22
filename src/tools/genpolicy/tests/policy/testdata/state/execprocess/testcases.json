@@ -17,7 +17,8 @@
           "io.kubernetes.cri.sandbox-memory": "0",
           "io.kubernetes.cri.sandbox-name": "busybox",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd"
+          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd",
+          "io.kubernetes.cri.image-name": "quay.io/prometheus/busybox:latest"
         },
         "Hooks": null,
         "Hostname": "busybox",
@@ -299,7 +300,19 @@
       "exec_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "sandbox_pidns": false,
       "shared_mounts": [],
-      "storages": [],
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"first-test-container\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/prometheus/busybox:latest\",\"io.kubernetes.cri.sandbox-cpu-period\":\"100000\",\"io.kubernetes.cri.sandbox-cpu-quota\":\"0\",\"io.kubernetes.cri.sandbox-cpu-shares\":\"2\",\"io.kubernetes.cri.sandbox-id\":\"257a671dd451a8bf7ea4950d722106db358ef5ded2997c60f7dc1101b31b727a\",\"io.kubernetes.cri.sandbox-memory\":\"0\",\"io.kubernetes.cri.sandbox-name\":\"busybox\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"io.kubernetes.cri.sandbox-uid\":\"eb1495ed-331a-44ff-ad6d-fce1a69280cd\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "options": [],
+          "source": "quay.io/prometheus/busybox:latest"
+        }
+      ],
       "string_user": null
     }
   },
@@ -321,7 +334,8 @@
           "io.kubernetes.cri.sandbox-memory": "0",
           "io.kubernetes.cri.sandbox-name": "busybox",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd"
+          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd",
+          "io.kubernetes.cri.image-name": "quay.io/prometheus/busybox:latest"
         },
         "Hooks": null,
         "Hostname": "busybox",
@@ -603,7 +617,19 @@
       "exec_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "sandbox_pidns": false,
       "shared_mounts": [],
-      "storages": [],
+      "storages": [
+        {
+          "driver": "image_guest_pull",
+          "driver_options": [
+            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"second-test-container\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/prometheus/busybox:latest\",\"io.kubernetes.cri.sandbox-cpu-period\":\"100000\",\"io.kubernetes.cri.sandbox-cpu-quota\":\"0\",\"io.kubernetes.cri.sandbox-cpu-shares\":\"2\",\"io.kubernetes.cri.sandbox-id\":\"257a671dd451a8bf7ea4950d722106db358ef5ded2997c60f7dc1101b31b727a\",\"io.kubernetes.cri.sandbox-memory\":\"0\",\"io.kubernetes.cri.sandbox-name\":\"busybox\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"io.kubernetes.cri.sandbox-uid\":\"eb1495ed-331a-44ff-ad6d-fce1a69280cd\"}}"
+          ],
+          "fs_group": null,
+          "fstype": "overlay",
+          "mount_point": "/run/kata-containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "options": [],
+          "source": "quay.io/prometheus/busybox:latest"
+        }
+      ],
       "string_user": null
     }
   },
