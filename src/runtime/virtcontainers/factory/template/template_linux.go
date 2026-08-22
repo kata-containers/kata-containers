@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -24,8 +23,6 @@ type template struct {
 	statePath string
 	config    vc.VMConfig
 }
-
-var templateWaitForAgent = 2 * time.Second
 
 // Fetch finds and returns a pre-built template factory.
 // TODO: save template metadata and fetch from storage.
@@ -147,14 +144,9 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 		return err
 	}
 
-	// Sleep a bit to let the agent grpc server clean up
-	// When we close connection to the agent, it needs sometime to cleanup
-	// and restart listening on the communication( serial or vsock) port.
-	// That time can be saved if we sleep a bit to wait for the agent to
-	// come around and start listening again. The sleep is only done when
-	// creating new vm templates and saves time for every new vm that are
-	// created from template, so it worth the invest.
-	time.Sleep(templateWaitForAgent)
+	if err = vm.CheckAgentReady(ctx); err != nil {
+		return err
+	}
 
 	if err = vm.Pause(ctx); err != nil {
 		return err
