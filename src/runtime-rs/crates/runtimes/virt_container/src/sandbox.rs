@@ -871,6 +871,8 @@ impl VirtSandbox {
             is_readonly: true,
             driver_option: block_driver.clone(),
             blkdev_aio: BlockDeviceAio::Native,
+            num_queues: hypervisor_config.blockdev_info.num_queues,
+            queue_size: hypervisor_config.blockdev_info.queue_size,
             ..Default::default()
         };
         let initdata_config = InitDataConfig(block_config, initdata_digest);

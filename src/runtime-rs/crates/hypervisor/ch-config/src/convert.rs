@@ -123,6 +123,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
         let fs = n.shared_fs_devices;
         let net = n.network_devices;
         let host_devices = n.host_devices;
+        let boot_disks = n.boot_disks;
         let protection_dev = n.protection_device;
 
         let template_memory = if cfg.vm_template.boot_to_be_template {
@@ -175,6 +176,12 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
             disks.push(disk);
         };
+
+        // Append the cold-plugged block devices (such as the initdata image)
+        // after the VM rootfs so that the rootfs keeps the first slot.
+        if let Some(boot_disks) = boot_disks {
+            disks.extend(boot_disks);
+        }
 
         let disks = if !disks.is_empty() { Some(disks) } else { None };
 

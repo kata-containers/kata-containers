@@ -211,6 +211,9 @@ function deploy_kata() {
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
 		ANNOTATIONS="image initrd kernel default_vcpus"
 	fi
+	if [[ "${KATA_HYPERVISOR}" = "clh-runtime-rs" ]]; then
+		ANNOTATIONS+=" cc_init_data"
+	fi
 	# The NVIDIA runtime classes ship with the hypervisor annotations disabled,
 	# so the ones a few tests depend on have to be opted into here.
 	if is_nvidia_hypervisor "${KATA_HYPERVISOR}" || is_confidential_gpu_hypervisor "${KATA_HYPERVISOR}"; then
