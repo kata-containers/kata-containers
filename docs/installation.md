@@ -154,6 +154,14 @@ runtimes use the `-runtime-rs` suffix (for example `kata-qemu-runtime-rs`);
 `kata-dragonball` (the built-in Dragonball VMM) is `runtime-rs` only. The
 deprecated Go runtime is available as `kata-qemu`.
 
+!!! info "Confidential, NVIDIA, Firecracker and peer-pod classes need a profile"
+    A default install enables only the shims that run on any node with hardware
+    virtualization, so every class it creates can actually start a pod. The shims
+    that need a particular containerd snapshotter or particular hardware ship as
+    ready-made values files you install with `-f` instead — see
+    [Examples](helm-configuration.md#examples) for the one that matches your
+    nodes.
+
 List the runtime classes available on your cluster:
 
 ```sh
