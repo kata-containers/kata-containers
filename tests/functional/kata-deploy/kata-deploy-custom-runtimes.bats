@@ -35,6 +35,15 @@ else
 	DROP_IN_SETTING="dial_timeout = 999"
 fi
 
+# A custom runtime inherits the rootfs type of the base config it extends, so it
+# needs the very snapshotter that base config was built around -- an EROFS
+# configuration cannot make sense of the overlayfs rootfs containerd hands out
+# by default.
+CUSTOM_RUNTIME_SNAPSHOTTER=""
+if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+	CUSTOM_RUNTIME_SNAPSHOTTER="erofs"
+fi
+
 # =============================================================================
 # Template Rendering Tests (no cluster required)
 # =============================================================================
@@ -332,7 +341,7 @@ customRuntimes:
           nodeSelector:
             katacontainers.io/kata-runtime: "true"
       containerd:
-        snapshotter: ""
+        snapshotter: "${CUSTOM_RUNTIME_SNAPSHOTTER}"
       crio:
         pullType: ""
 EOF
@@ -370,7 +379,7 @@ customRuntimes:
           nodeSelector:
             katacontainers.io/kata-runtime: "true"
       containerd:
-        snapshotter: ""
+        snapshotter: "${CUSTOM_RUNTIME_SNAPSHOTTER}"
       crio:
         pullType: ""
 EOF
