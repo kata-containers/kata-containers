@@ -210,6 +210,38 @@ type runtime struct {
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
 	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
 	KubeletRootDir            string   `toml:"kubelet_root_dir"`
+	PodResourceDeviceSources  []string `toml:"pod_resource_device_sources"`
+}
+
+// podResourceDeviceSources validates pod_resource_device_sources, defaulting
+// to ["device-plugin"] (the historical behavior) when the key is unset.
+func (r runtime) podResourceDeviceSources() ([]string, error) {
+	sources := r.PodResourceDeviceSources
+	if sources == nil {
+		return []string{oci.PodResourceDeviceSourceDevicePlugin}, nil
+	}
+
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("pod_resource_device_sources: must not be empty, allowed values: %q, %q",
+			oci.PodResourceDeviceSourceDevicePlugin, oci.PodResourceDeviceSourceDRA)
+	}
+
+	seen := make(map[string]struct{}, len(sources))
+	for _, s := range sources {
+		switch s {
+		case oci.PodResourceDeviceSourceDevicePlugin, oci.PodResourceDeviceSourceDRA:
+		default:
+			return nil, fmt.Errorf("pod_resource_device_sources: invalid source %q, allowed values: %q, %q",
+				s, oci.PodResourceDeviceSourceDevicePlugin, oci.PodResourceDeviceSourceDRA)
+		}
+
+		if _, ok := seen[s]; ok {
+			return nil, fmt.Errorf("pod_resource_device_sources: duplicate source %q", s)
+		}
+		seen[s] = struct{}{}
+	}
+
+	return sources, nil
 }
 
 // emptyDirMode returns a valid emptydir_mode value, defaulting to shared-fs
@@ -1550,6 +1582,12 @@ func updateRuntimeConfigRuntime(configPath string, tomlConf tomlConfig, config *
 		return fmt.Errorf("%v: %v", configPath, err)
 	}
 	config.EmptyDirMode = emptyDirMode
+
+	podResourceDeviceSources, err := tomlConf.Runtime.podResourceDeviceSources()
+	if err != nil {
+		return fmt.Errorf("%v: %v", configPath, err)
+	}
+	config.PodResourceDeviceSources = podResourceDeviceSources
 
 	return nil
 }
