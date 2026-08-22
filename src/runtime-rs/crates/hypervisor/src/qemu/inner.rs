@@ -53,6 +53,7 @@ use tokio::{
 };
 
 const VSOCK_SCHEME: &str = "vsock";
+const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
 
 #[derive(Debug)]
 pub struct QemuInner {
@@ -247,8 +248,9 @@ impl QemuInner {
                 }
                 DeviceType::VfioModern(vfio_dev) => {
                     // Snapshot parameters under the lock; release before doing cmdline work.
-                    let (device_type, ap_sysfs_path, devices, bus_port_id) = {
+                    let (vfio_device_id, device_type, ap_sysfs_path, devices, iommufd, bus_port_id) = {
                         let vfio_device = vfio_dev.lock().await;
+                        let vfio_device_id = vfio_device.device_id.clone();
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
@@ -262,9 +264,11 @@ impl QemuInner {
                             .map(|g| g.devices.clone())
                             .unwrap_or_else(|| vfio_device.device.devices.clone());
                         (
+                            vfio_device_id,
                             device_type,
                             ap_sysfs_path,
                             devices,
+                            vfio_device.device.iommufd.clone(),
                             vfio_device.config.bus_port_id.clone(),
                         )
                     };
@@ -279,15 +283,24 @@ impl QemuInner {
                         );
                     } else {
                         // PCI cold plug devices
-                        for dev in devices.iter() {
+                        for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
 
-                            let vfio_cfg = VfioDeviceConfig::new(
+                            let mut vfio_cfg = VfioDeviceConfig::new(
                                 host_bdf,
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
                             .with_vfio_bus(bus_port_id.0.clone());
+                            if let (Some(iommufd), Some(cdev)) =
+                                (iommufd.as_ref(), dev.vfio_cdev.as_ref())
+                            {
+                                vfio_cfg = vfio_cfg.with_device_fds(
+                                    &iommufd.iommufd_dev,
+                                    &cdev.devnode,
+                                    format!("vfio-{vfio_device_id}-{index}"),
+                                );
+                            }
 
                             cmdline.add_pcie_vfio_device(vfio_cfg)?;
                         }
@@ -383,6 +396,9 @@ impl QemuInner {
         let ccw_subchannel = cmdline.take_ccw_subchannel();
         let block_fdsets = cmdline.take_block_fdsets();
         let has_memory_hotplug_region = cmdline.has_memory_hotplug_region();
+        let memlock_limit = cmdline.requires_memlock().then(|| {
+            memlock_limit_with_headroom(megs_to_bytes(self.config.memory_info.default_memory))
+        });
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
@@ -418,6 +434,10 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
+                    if let Some(limit) = memlock_limit {
+                        set_memlock_rlimit(limit)
+                            .map_err(|err| io::Error::other(format!("{err:#}")))?;
+                    }
                     set_process_credentials(user)
                         .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
@@ -1024,6 +1044,22 @@ fn set_process_credentials(user: &RootlessUser) -> Result<()> {
     )
 }
 
+fn memlock_limit_with_headroom(guest_memory: u64) -> u64 {
+    guest_memory.saturating_add(guest_memory / MEMLOCK_HEADROOM_DIVISOR)
+}
+
+fn set_memlock_rlimit(memlock_limit: u64) -> Result<()> {
+    let limit = libc::rlimit {
+        rlim_cur: memlock_limit,
+        rlim_max: memlock_limit,
+    };
+    let result = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &limit) };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error()).context("set RLIMIT_MEMLOCK failed");
+    }
+    Ok(())
+}
+
 fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
     user: &RootlessUser,
     set_groups_fn: SetGroups,
@@ -1447,6 +1483,12 @@ mod tests {
             .await
             .unwrap()
             .is_network_device_hotplug_supported());
+    }
+
+    #[test]
+    fn test_memlock_limit_adds_headroom() {
+        assert_eq!(memlock_limit_with_headroom(10 * 1024), 11 * 1024);
+        assert_eq!(memlock_limit_with_headroom(u64::MAX), u64::MAX);
     }
 
     #[rstest]
