@@ -742,6 +742,10 @@ EOF
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
 			;;
+		"alpine")
+			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
+			chrony_systemd_service=""
+			;;
 		*)
 			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
 			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
@@ -749,6 +753,7 @@ EOF
 	esac
 
 	info "Configure chrony file ${chrony_conf_file}"
+	mkdir -p "$(dirname "${chrony_conf_file}")"
 	cat >> "${chrony_conf_file}" <<EOF
 refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
 # Step the system clock instead of slewing it if the adjustment is larger than
@@ -758,7 +763,7 @@ EOF
 
 	# Comment out ntp sources for chrony to be extra careful
 	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
-	sed -i 's/^\(server \|pool \|peer \)/# &/g'  "${chrony_conf_file}"
+	sed -i 's/^\(server \|pool \|peer \|initstepslew \)/# &/g' "${chrony_conf_file}"
 
 	if [[ -f "${chrony_systemd_service}" ]]; then
 		# Remove user option, user could not exist in the rootfs
