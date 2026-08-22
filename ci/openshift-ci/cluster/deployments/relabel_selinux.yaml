@@ -12,29 +12,76 @@ spec:
       labels:
         app: restorecon
     spec:
-      serviceAccountName: kata-deploy-sa
       hostPID: true
       containers:
         - name: relabel-selinux-container
           image: alpine
           securityContext:
             privileged: true
-          command: ["/bin/sh", "-c", "
-            set -e;
-            echo Starting the relabel;
-            nsenter --target 1 --mount bash -xc '
-                command -v semanage &>/dev/null || { echo Does not look like a SELINUX cluster, skipping; exit 0; };
-                for ENTRY in \
-                    \"/(.*/)?opt/kata/bin(/.*)?\" \
-                    \"/(.*/)?opt/kata/runtime-rs/bin(/.*)?\" \
-                    \"/(.*/)?opt/kata/share/kata-.*(/.*)?(/.*)?\" \
-                    \"/(.*/)?opt/kata/share/ovmf(/.*)?\" \
-                    \"/(.*/)?opt/kata/share/tdvf(/.*)?\" \
-                    \"/(.*/)?opt/kata/libexec(/.*)?\";
-                do
-                    semanage fcontext -a -t qemu_exec_t \"$ENTRY\" || semanage fcontext -m -t qemu_exec_t \"$ENTRY\" || { echo \"Error in semanage command\"; exit 1; }
-                done;
-                restorecon -v -R /opt/kata || { echo \"Error in restorecon command\"; exit 1; }
-            ';
-            echo NSENTER_FINISHED_WITH: $?;
-            sleep infinity"]
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Starting the relabel and SELinux policy update"
+              nsenter --target 1 --mount -- bash -xc '
+                command -v semodule &>/dev/null || { echo "Does not look like an SELinux cluster, skipping"; exit 0; }
+                cat << '\''EOF'\'' > /tmp/kata_opt_fix.cil
+              (block kata_opt_fix
+                    (typeattributeset cil_gen_require init_t)
+                    (typeattributeset cil_gen_require var_t)
+                    (typeattributeset cil_gen_require container_t)
+                    (typeattributeset cil_gen_require container_config_t)
+                    (typeattributeset cil_gen_require container_var_lib_t)
+                    (typeattributeset cil_gen_require init_var_run_t)
+                    (typeattributeset cil_gen_require qemu_exec_t)
+                    (typeattributeset cil_gen_require default_t)
+                    (typeattributeset cil_gen_require install_t)
+                    (typeattributeset cil_gen_require initrc_t)
+                    (typeattributeset cil_gen_require systemd_unit_file_t)
+
+                    ;; kata-deploy related policies
+                    (allow container_t init_t (system (reload status)))
+                    (allow container_t systemd_unit_file_t (service (start status)))
+                    (allow init_t install_t (process (siginh)))
+                    (allow init_t initrc_t (process (siginh)))
+                    (allow container_t container_config_t (dir (add_name create remove_name write read open search)))
+                    (allow container_t container_config_t (file (append create open write read getattr setattr unlink)))
+                    (allow container_t init_t (unix_stream_socket (connectto)))
+                    (allow container_t init_var_run_t (sock_file (write)))
+                    (allow container_t var_t (dir (add_name create remove_name write search read open rmdir)))
+                    (allow container_t var_t (file (append create open read write setattr unlink lock getattr)))
+                    (allow container_t var_t (lnk_file (create rename unlink)))
+                    (allow container_t qemu_exec_t (dir (add_name create remove_name write search read open rmdir)))
+                    (allow container_t qemu_exec_t (file (append create open read write setattr unlink lock getattr)))
+                    (allow container_t qemu_exec_t (lnk_file (create rename unlink)))
+                    (allow container_t default_t (file (append create open read write setattr unlink lock getattr)))
+                    (allow container_t default_t (dir (add_name write remove_name create search read open)))
+                    (allow container_t container_var_lib_t (sock_file (write)))
+
+                    ;; Use both full paths otherwise the default /var/opt policy is longer and takes precedence
+                    (filecon "/opt/kata/bin(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/opt/kata/runtime-rs/bin(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/opt/kata/share/kata-.*(/.*)?(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/opt/kata/share/ovmf(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/opt/kata/share/tdvf(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/opt/kata/libexec(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+
+                    (filecon "/var/opt/kata/bin(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/var/opt/kata/runtime-rs/bin(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/var/opt/kata/share/kata-.*(/.*)?(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/var/opt/kata/share/ovmf(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/var/opt/kata/share/tdvf(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+                    (filecon "/var/opt/kata/libexec(/.*)?" any (system_u object_r qemu_exec_t ((s0) (s0))))
+              )
+              EOF
+                semodule -i /tmp/kata_opt_fix.cil || { echo "Error installing SELinux CIL policy"; exit 1; }
+                rm -f /tmp/kata_opt_fix.cil
+                for PTH in "/opt/kata" "/var/opt/kata"; do
+                  if [ -e "$PTH" ]; then
+                    restorecon -v -R "$PTH" || { echo "Failed to relable $PTH"; exit 1; }
+                  fi
+                done
+              '
+              echo "NSENTER_FINISHED_WITH: $?"
+              sleep infinity
