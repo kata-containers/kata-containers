@@ -122,12 +122,9 @@ impl MuxerKillQ {
     /// This will succeed and return a connection key, only if the connection at
     /// the front of the queue has expired. Otherwise, `None` is returned.
     pub fn pop(&mut self) -> Option<ConnMapKey> {
-        if let Some(item) = self.q.front() {
-            if Instant::now() > item.kill_time {
-                return Some(self.q.pop_front().unwrap().key);
-            }
-        }
-        None
+        self.q
+            .pop_front_if(|item| Instant::now() > item.kill_time)
+            .map(|item| item.key)
     }
 
     /// Check if the kill queue is synchronized with the connection pool.

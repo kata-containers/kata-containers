@@ -41,8 +41,8 @@ RUN \
 #### Build binary package
 FROM ubuntu:22.04 AS rust-builder
 
-# Default to Rust 1.95
-ARG RUST_TOOLCHAIN=1.95
+# Default to Rust 1.96
+ARG RUST_TOOLCHAIN=1.96
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RUSTUP_HOME="/opt/rustup"
 ENV CARGO_HOME="/opt/cargo"
