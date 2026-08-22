@@ -76,7 +76,7 @@ mod tests {
     /// should be exactly one entry with a PodSpec. The test case file must contain
     /// a JSON list of [TestCase] instances. Each instance will be of type enum TestRequest,
     /// with the tag `type` listing the exact type of request.
-    async fn runtests(test_case_dir: &str) {
+    async fn runtests(test_case_dir: &str, guest_pull: bool) {
         // Check if config_map.yaml exists.
         // If it does, we need to copy it to the workdir.
         let is_config_map_file_present = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -104,6 +104,11 @@ mod tests {
             None
         };
 
+        let mut settings = genpolicy::settings::Settings::new(
+            workdir.join("genpolicy-settings.json").to_str().unwrap(),
+        );
+        settings.cluster_config.guest_pull = guest_pull;
+
         let config = genpolicy::utils::Config {
             base64_out: false,
             config_files,
@@ -113,9 +118,7 @@ mod tests {
             raw_out: false,
             rego_rules_path: workdir.join("rules.rego").to_str().unwrap().to_string(),
             runtime_class_names: Vec::new(),
-            settings: genpolicy::settings::Settings::new(
-                workdir.join("genpolicy-settings.json").to_str().unwrap(),
-            ),
+            settings,
             silent_unsupported_fields: false,
             use_cache: false,
             version: false,
@@ -247,111 +250,116 @@ mod tests {
 
     #[tokio::test]
     async fn test_copyfile() {
-        runtests("copyfile").await;
+        runtests("copyfile", true).await;
     }
 
     #[tokio::test]
     async fn test_create_sandbox() {
-        runtests("createsandbox").await;
+        runtests("createsandbox", true).await;
     }
 
     #[tokio::test]
     async fn test_update_routes() {
-        runtests("updateroutes").await;
+        runtests("updateroutes", true).await;
     }
 
     #[tokio::test]
     async fn test_update_interface() {
-        runtests("updateinterface").await;
+        runtests("updateinterface", true).await;
     }
 
     #[tokio::test]
     async fn test_add_arp_neighbors() {
-        runtests("addarpneighbors").await;
+        runtests("addarpneighbors", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_network_namespace() {
-        runtests("createcontainer/network_namespace").await;
+        runtests("createcontainer/network_namespace", true).await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_image_host_pull() {
+        runtests("createcontainer/image_host_pull", false).await;
     }
 
     #[tokio::test]
     async fn test_create_container_sysctls() {
-        runtests("createcontainer/sysctls").await;
+        runtests("createcontainer/sysctls", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_generate_name() {
-        runtests("createcontainer/generate_name").await;
+        runtests("createcontainer/generate_name", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_gid() {
-        runtests("createcontainer/gid").await;
+        runtests("createcontainer/gid", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_cgroup_mount_extras() {
-        runtests("createcontainer/cgroup_mount_extras").await;
+        runtests("createcontainer/cgroup_mount_extras", true).await;
     }
 
     #[tokio::test]
     async fn test_state_create_container() {
-        runtests("state/createcontainer").await;
+        runtests("state/createcontainer", true).await;
     }
 
     #[tokio::test]
     async fn test_state_exec_process() {
-        runtests("state/execprocess").await;
+        runtests("state/execprocess", true).await;
     }
 
     #[tokio::test]
     async fn test_state_exec_process_deployment() {
-        runtests("state/execprocessdeployment").await;
+        runtests("state/execprocessdeployment", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_security_context() {
-        runtests("createcontainer/security_context/runas").await;
+        runtests("createcontainer/security_context/runas", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_security_context_supplemental_groups() {
-        runtests("createcontainer/security_context/supplemental_groups").await;
+        runtests("createcontainer/security_context/supplemental_groups", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_security_context_fsgroup() {
-        runtests("createcontainer/security_context/fsgroup").await;
+        runtests("createcontainer/security_context/fsgroup", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_volumes_empty_dir() {
-        runtests("createcontainer/volumes/emptydir").await;
+        runtests("createcontainer/volumes/emptydir", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_volumes_config_map() {
-        runtests("createcontainer/volumes/config_map").await;
+        runtests("createcontainer/volumes/config_map", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_volumes_container_image() {
-        runtests("createcontainer/volumes/container_image").await;
+        runtests("createcontainer/volumes/container_image", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_gpu_vfio_cdi() {
-        runtests("createcontainer/gpu_vfio_cdi").await;
+        runtests("createcontainer/gpu_vfio_cdi", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_ignored_fields() {
-        runtests("createcontainer/ignored_fields").await;
+        runtests("createcontainer/ignored_fields", true).await;
     }
 
     #[tokio::test]
     async fn test_create_container_env_vars() {
-        runtests("createcontainer/env_vars").await;
+        runtests("createcontainer/env_vars", true).await;
     }
 }
