@@ -126,6 +126,28 @@ func TestCreateGetTunTapLink(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
+	tests := []struct {
+		multiQueueSupported bool
+		queues   int
+	}{
+		{
+			multiQueueSupported: false,
+			queues: 1,
+		},
+		{
+			multiQueueSupported: true,
+			queues: 1,
+		},
+		{
+			multiQueueSupported: true,
+			queues: 2,
+		},
+		{
+			multiQueueSupported: false,
+			queues: 2,
+		},
+	}
+
 	assert := assert.New(t)
 
 	netHandle, err := netlink.NewHandle()
@@ -135,16 +157,24 @@ func TestCreateGetTunTapLink(t *testing.T) {
 	assert.NoError(err)
 
 	tapName := "testtap0"
-	tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
-	assert.NoError(err)
-	assert.NotNil(tapLink)
-	assert.NotZero(len(fds))
 
-	tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
-	assert.NoError(err)
+	for _, tc := range tests {
+		tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, tc.multiQueueSupported, tc.queues)
 
-	err = netHandle.LinkDel(tapLink)
-	assert.NoError(err)
+		if tc.queues > 1 && !tc.multiQueueSupported {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+			assert.NotNil(tapLink)
+			assert.NotZero(len(fds))
+
+			tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
+			assert.NoError(err)
+
+			err = netHandle.LinkDel(tapLink)
+			assert.NoError(err)
+		}
+	}
 }
 
 func TestCreateMacVtap(t *testing.T) {
@@ -152,6 +182,28 @@ func TestCreateMacVtap(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
+	tests := []struct {
+		multiQueueSupported bool
+		queues   int
+	}{
+		{
+			multiQueueSupported: false,
+			queues: 1,
+		},
+		{
+			multiQueueSupported: true,
+			queues: 1,
+		},
+		{
+			multiQueueSupported: true,
+			queues: 2,
+		},
+		{
+			multiQueueSupported: false,
+			queues: 2,
+		},
+	}
+
 	assert := assert.New(t)
 
 	netHandle, err := netlink.NewHandle()
@@ -159,37 +211,45 @@ func TestCreateMacVtap(t *testing.T) {
 	defer netHandle.Close()
 
 	assert.NoError(err)
-
 	tapName := "testtap0"
-	tapLink, _, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
-	assert.NoError(err)
 
-	attrs := tapLink.Attrs()
+	for _, tc := range tests {
+		tapLink, _, err := createLink(netHandle, tapName, &netlink.Tuntap{}, true, 1)
 
-	mcLink := &netlink.Macvtap{
-		Macvlan: netlink.Macvlan{
-			LinkAttrs: netlink.LinkAttrs{
-				TxQLen:      attrs.TxQLen,
-				ParentIndex: attrs.Index,
+		assert.NoError(err)
+
+		attrs := tapLink.Attrs()
+
+		mcLink := &netlink.Macvtap{
+			Macvlan: netlink.Macvlan{
+				LinkAttrs: netlink.LinkAttrs{
+					TxQLen:      attrs.TxQLen,
+					ParentIndex: attrs.Index,
+				},
 			},
-		},
+		}
+
+		macvtapName := "testmc0"
+		_, err = createMacVtap(netHandle, macvtapName, mcLink, tc.multiQueueSupported, tc.queues)
+
+		if tc.queues > 1 && !tc.multiQueueSupported {
+			assert.Error(err)
+		} else {
+			assert.NoError(err)
+
+			macvtapLink, err := getLinkByName(netHandle, macvtapName, &netlink.Macvtap{})
+			assert.NoError(err)
+
+			err = netHandle.LinkDel(macvtapLink)
+			assert.NoError(err)
+		}
+
+		tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
+		assert.NoError(err)
+
+		err = netHandle.LinkDel(tapLink)
+		assert.NoError(err)
 	}
-
-	macvtapName := "testmc0"
-	_, err = createMacVtap(netHandle, macvtapName, mcLink, 1)
-	assert.NoError(err)
-
-	macvtapLink, err := getLinkByName(netHandle, macvtapName, &netlink.Macvtap{})
-	assert.NoError(err)
-
-	err = netHandle.LinkDel(macvtapLink)
-	assert.NoError(err)
-
-	tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
-	assert.NoError(err)
-
-	err = netHandle.LinkDel(tapLink)
-	assert.NoError(err)
 }
 
 func TestTcRedirectNetwork(t *testing.T) {
@@ -219,7 +279,10 @@ func TestTcRedirectNetwork(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(context.Background(), endpoint, 1, true)
+	multiQueueSupported := false
+	numVCPUs := uint32(1)
+	disableVhostNet := true
+	err = setupTCFiltering(context.Background(), endpoint, multiQueueSupported, numVCPUs, disableVhostNet)
 	assert.NoError(err)
 
 	err = removeTCFiltering(context.Background(), endpoint)
@@ -257,7 +320,10 @@ func TestRxRateLimiter(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(context.Background(), endpoint, 1, true)
+	multiQueueSupported := false
+	numVCPUs := uint32(1)
+	disableVhostNet := true
+	err = setupTCFiltering(context.Background(), endpoint, multiQueueSupported, numVCPUs, disableVhostNet)
 	assert.NoError(err)
 
 	// 10Mb
@@ -306,7 +372,10 @@ func TestTxRateLimiter(t *testing.T) {
 	err = netHandle.LinkSetUp(link)
 	assert.NoError(err)
 
-	err = setupTCFiltering(context.Background(), endpoint, 1, true)
+	multiQueueSupported := false
+	numVCPUs := uint32(1)
+	disableVhostNet := true
+	err = setupTCFiltering(context.Background(), endpoint, multiQueueSupported, numVCPUs, disableVhostNet)
 	assert.NoError(err)
 
 	// 10Mb
