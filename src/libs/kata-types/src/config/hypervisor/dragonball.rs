@@ -139,6 +139,7 @@ impl ConfigPlugin for DragonballConfig {
                 ));
             }
 
+            #[cfg(not(target_arch = "x86_64"))]
             if !db.boot_info.firmware.is_empty() {
                 return Err(std::io::Error::other(
                     "Firmware for dragonball hypervisor should be empty",

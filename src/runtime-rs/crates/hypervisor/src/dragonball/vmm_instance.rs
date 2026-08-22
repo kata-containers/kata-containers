@@ -15,6 +15,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+#[cfg(target_arch = "x86_64")]
+use dragonball::api::v1::ConfidentialVmType;
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -56,11 +58,15 @@ pub struct VmmInstance {
 }
 
 impl VmmInstance {
-    pub fn new(id: &str, exit_notify: mpsc::Sender<i32>) -> Self {
+    pub fn new(
+        id: &str,
+        exit_notify: mpsc::Sender<i32>,
+        #[cfg(target_arch = "x86_64")] confidential_vm_type: Option<ConfidentialVmType>,
+    ) -> Self {
         let vmm_shared_info = Arc::new(RwLock::new(InstanceInfo::new(
             String::from(id),
             DRAGONBALL_VERSION.to_string(),
-            None,
+            confidential_vm_type,
         )));
 
         let to_vmm_fd = EventFd::new(libc::EFD_NONBLOCK)
