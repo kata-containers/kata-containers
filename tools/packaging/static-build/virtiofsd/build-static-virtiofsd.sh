@@ -20,6 +20,7 @@ source "${script_dir}/../../scripts/lib.sh"
 virtiofsd_repo="${virtiofsd_repo:-}"
 virtiofsd_version="${virtiofsd_version:-}"
 virtiofsd_zip="${virtiofsd_zip:-}"
+virtiofsd_zip_sha256="${virtiofsd_zip_sha256:-}"
 
 [[ -n "${virtiofsd_repo}" ]] || die "failed to get virtiofsd repo"
 [[ -n "${virtiofsd_version}" ]] || die "failed to get virtiofsd version"
@@ -42,6 +43,8 @@ pull_virtiofsd_released_binary() {
 
 	pushd virtiofsd
 	curl --fail -L "${virtiofsd_zip}" -o virtiofsd.zip || return 1
+	printf "%s  %s\n" "${virtiofsd_zip_sha256}" "virtiofsd.zip" | \
+		sha256sum -c || die "virtiofsd release archive checksum mismatch"
 	unzip virtiofsd.zip
 	mv -f target/x86_64-unknown-linux-musl/release/virtiofsd virtiofsd
 	chmod +x virtiofsd
