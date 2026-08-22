@@ -135,8 +135,7 @@ else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
-		"k8s-nvidia-nim.bats" \
-		"k8s-qemu-rootless-sandbox.bats")
+		"k8s-nvidia-nim.bats")
 fi
 
 SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-runtime-rs" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")

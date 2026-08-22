@@ -6,11 +6,11 @@
 
 use std::{
     collections::HashSet,
-    fs::{metadata, set_permissions, File, OpenOptions, Permissions},
+    fs::{metadata as fs_metadata, set_permissions, File, OpenOptions, Permissions},
     io,
     os::{
         fd::{BorrowedFd, RawFd},
-        unix::fs::{MetadataExt, PermissionsExt},
+        unix::fs::{FileTypeExt, MetadataExt, PermissionsExt},
     },
     path::{Path, PathBuf},
     process::Command,
@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::{
-    config::{Hypervisor, KATA_PATH},
+    config::{hypervisor::RootlessUser, Hypervisor, KATA_PATH},
     prefix_with_rootless_dir,
 };
 use lazy_static::lazy_static;
@@ -127,6 +127,174 @@ pub fn set_groups(groups: &[u32]) -> Result<()> {
     setgroups(&group).context("set groups failed")?;
 
     Ok(())
+}
+
+fn rootless_resource_group(
+    path: &Path,
+    mode: u32,
+    gid: u32,
+    required_permissions: u32,
+) -> Result<Option<u32>> {
+    if required_permissions == 0 || required_permissions & !0o7 != 0 {
+        return Err(anyhow!(
+            "invalid rootless VMM permissions {:o} for {}",
+            required_permissions,
+            path.display()
+        ));
+    }
+
+    if mode & required_permissions == required_permissions {
+        return Ok(None);
+    }
+
+    let group_permissions = required_permissions << 3;
+    if mode & group_permissions != group_permissions {
+        return Err(anyhow!(
+            "rootless VMM requires group permissions {:03o} on {} (mode {:04o})",
+            group_permissions,
+            path.display(),
+            mode & 0o7777,
+        ));
+    }
+
+    if gid == 0 {
+        return Err(anyhow!(
+            "rootless VMM refuses group-root access to {}",
+            path.display()
+        ));
+    }
+
+    Ok(Some(gid))
+}
+
+pub fn authorize_rootless_device(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless device {}", path.display()))?;
+    if !metadata.file_type().is_char_device() {
+        return Err(anyhow!(
+            "rootless VMM device {} is not a character device",
+            path.display()
+        ));
+    }
+
+    authorize_rootless_resource_group(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        user,
+    )
+}
+
+pub fn authorize_rootless_socket(
+    path: &Path,
+    user: &mut RootlessUser,
+    required_permissions: u32,
+) -> Result<()> {
+    let metadata = fs_metadata(path)
+        .with_context(|| format!("get metadata for rootless socket {}", path.display()))?;
+    if !metadata.file_type().is_socket() {
+        return Err(anyhow!(
+            "rootless VMM endpoint {} is not a Unix socket",
+            path.display()
+        ));
+    }
+
+    let mut candidate = user.clone();
+    authorize_rootless_resource_group(
+        path,
+        metadata.uid(),
+        metadata.gid(),
+        metadata.mode(),
+        required_permissions,
+        &mut candidate,
+    )?;
+
+    let mut parent = path.parent();
+    while let Some(directory) = parent {
+        let metadata = fs_metadata(directory).with_context(|| {
+            format!(
+                "get metadata for rootless socket parent {}",
+                directory.display()
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(anyhow!(
+                "rootless VMM socket parent {} is not a directory",
+                directory.display()
+            ));
+        }
+        if !rootless_user_has_permission(
+            &candidate,
+            metadata.uid(),
+            metadata.gid(),
+            metadata.mode(),
+            0o1,
+        ) {
+            return Err(anyhow!(
+                "rootless VMM cannot traverse socket parent {} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+                directory.display(),
+                metadata.mode() & 0o7777,
+            ));
+        }
+        parent = directory.parent();
+    }
+
+    user.groups = candidate.groups;
+    Ok(())
+}
+
+fn authorize_rootless_resource_group(
+    path: &Path,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    required_permissions: u32,
+    user: &mut RootlessUser,
+) -> Result<()> {
+    if rootless_user_has_permission(user, uid, gid, mode, required_permissions) {
+        return Ok(());
+    }
+
+    if uid == user.uid || gid == user.gid || user.groups.contains(&gid) {
+        return Err(anyhow!(
+            "rootless VMM cannot access {} with required permissions {:o} (mode {:04o}); configure host ownership and permissions before starting the sandbox",
+            path.display(),
+            required_permissions,
+            mode & 0o7777,
+        ));
+    }
+
+    if let Some(gid) = rootless_resource_group(path, mode, gid, required_permissions)? {
+        if !user.groups.contains(&gid) {
+            user.groups.push(gid);
+        }
+    }
+
+    Ok(())
+}
+
+fn rootless_user_has_permission(
+    user: &RootlessUser,
+    uid: u32,
+    gid: u32,
+    mode: u32,
+    permission: u32,
+) -> bool {
+    let permission = if uid == user.uid {
+        permission << 6
+    } else if gid == user.gid || user.groups.contains(&gid) {
+        permission << 3
+    } else {
+        permission
+    };
+
+    mode & permission == permission
 }
 
 pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
@@ -245,7 +413,7 @@ pub fn chown_to_parent<P: AsRef<Path>>(path: P) -> io::Result<()> {
 
 fn first_valid_executable_path(paths: &[&str]) -> Result<String> {
     for p in paths {
-        if let Ok(m) = metadata(p) {
+        if let Ok(m) = fs_metadata(p) {
             if m.is_file() && m.mode() & 0o111 != 0 {
                 return Ok(p.to_string());
             }
@@ -523,8 +691,9 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
+    use kata_types::config::hypervisor::RootlessUser;
     use nix::unistd::chown;
     use nix::unistd::geteuid;
     use nix::unistd::Gid;
@@ -539,6 +708,52 @@ mod tests {
     use super::remove_dir_all_if_exists;
     use super::vmm_user_runtime_dir;
     use super::SocketAddress;
+    use super::{authorize_rootless_resource_group, rootless_resource_group};
+
+    fn rootless_user() -> RootlessUser {
+        RootlessUser {
+            uid: 1000,
+            gid: 1000,
+            groups: Vec::new(),
+            user_name: "kata-test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_rootless_resource_group_selection() {
+        let path = Path::new("/dev/test");
+
+        assert_eq!(rootless_resource_group(path, 0o666, 0, 0o6).unwrap(), None);
+        assert_eq!(
+            rootless_resource_group(path, 0o660, 2000, 0o6).unwrap(),
+            Some(2000)
+        );
+
+        let error = rootless_resource_group(path, 0o640, 2000, 0o6)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 060"));
+
+        let error =
+            rootless_resource_group(path, 0o660, 0, 0o6).expect_err("group root must be rejected");
+        assert!(error.to_string().contains("refuses group-root access"));
+    }
+
+    #[test]
+    fn test_authorize_rootless_resource_group() {
+        let path = Path::new("/run/test.sock");
+        let mut user = rootless_user();
+
+        authorize_rootless_resource_group(path, 0, 2000, 0o660, 0o2, &mut user).unwrap();
+        assert_eq!(user.groups, vec![2000]);
+
+        let error = authorize_rootless_resource_group(path, 0, 2001, 0o640, 0o2, &mut user)
+            .expect_err("group without write permission must be rejected");
+        assert!(error.to_string().contains("requires group permissions 020"));
+
+        let mut user = rootless_user();
+        authorize_rootless_resource_group(path, 0, 2000, 0o666, 0o2, &mut user).unwrap();
+        assert!(user.groups.is_empty());
+    }
 
     #[test]
     fn test_ctreate_fds() {

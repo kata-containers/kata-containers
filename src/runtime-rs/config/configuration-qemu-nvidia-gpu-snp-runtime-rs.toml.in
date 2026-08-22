@@ -74,7 +74,7 @@ vm_rootfs_driver = "@VMROOTFSDRIVER_NV@"
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
-rootless = false
+rootless = @DEFROOTLESS_NV@
 
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
@@ -125,7 +125,7 @@ machine_accelerators = "@MACHINEACCELERATORS@"
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 # Recommended value when enabling: "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
-seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM@"
+seccomp_sandbox = "@DEFSECCOMPSANDBOXPARAM_NV@"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
