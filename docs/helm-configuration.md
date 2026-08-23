@@ -1077,3 +1077,8 @@ are still rendered, and delete the chart's rule if it duplicates yours.
     `env.multiInstallSuffix` when that is set. A rule called `amd64-tee-keys`
     belongs to a release that has not been upgraded yet, and can be deleted once
     every release has been.
+
+## kata-monitor
+
+When `monitor.enabled=true` is set, the Helm chart also deploys [`kata-monitor`](https://github.com/kata-containers/kata-containers/blob/main/src/runtime/cmd/kata-monitor/README.md) DaemonSet.
+Note that a number of top level Helm chart values, such as tolerations and affinity, are applied to both `kata-deploy` and `kata-monitor`. See [Helm chart values](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml) for full configuration.

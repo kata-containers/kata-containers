@@ -179,6 +179,10 @@ kubectlImage:
   reference: quay.io/kata-containers/kubectl
   tag: latest
 
+# monitor configures kata-monitor DaemonSet.
+# https://github.com/kata-containers/kata-containers/blob/main/src/runtime/cmd/kata-monitor/README.md
+# Note that some of the top level chart values outside this block, such as
+# node selectors and affinity get applied to this DaemonSet.
 monitor:
   enabled: false
   image:
@@ -246,7 +250,7 @@ containerd:
   #     default_size = "20G"
   userDropIn: ""
 
-# Which nodes Kata is installed on, and which taints that installation tolerates.
+# Which nodes kata-deploy and, if enabled, kata-monitor is installed on, and which taints that installation tolerates.
 #
 # These apply to BOTH deployment modes. In daemonset mode they are set on the
 # kata-deploy DaemonSet pods and the scheduler decides where those land; in job
@@ -261,6 +265,7 @@ containerd:
 # An empty nodeSelector does NOT mean "every node": nodes whose taints are not
 # tolerated are still excluded, which is what keeps Kata off control-plane nodes
 # by default.
+#
 #
 # Examples:
 # nodeSelector:
@@ -328,7 +333,7 @@ podLabels: {}
 #   prometheus.io/scrape: "false"
 podAnnotations: {}
 
-# Affinity rules for kata-deploy.
+# Affinity rules for the kata-deploy and, if enabled, kata-monitor.
 # nodeSelector matches exact key/value pairs; affinity supports matchExpressions
 # and rules about other pods on the same node (e.g. podAntiAffinity).
 #
@@ -373,7 +378,7 @@ podAnnotations: {}
 #         topologyKey: kubernetes.io/hostname
 affinity: {}
 
-# Priority class name for the kata-deploy DaemonSet pods.
+# Priority class name for the kata-deploy and, if enabled, kata-monitor DaemonSet pods.
 #
 # kata-deploy is an infrastructure DaemonSet that installs Kata runtime
 # artifacts on every node. If it gets evicted under node pressure, the
