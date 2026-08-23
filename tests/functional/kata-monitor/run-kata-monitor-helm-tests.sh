@@ -20,6 +20,7 @@ if [[ -n "${KATA_MONITOR_HELM_TEST_UNION:-}" ]]; then
 else
 	KATA_MONITOR_HELM_TEST_UNION=( \
 		"kata-monitor.bats" \
+		"kata-monitor-scheduling.bats" \
 	)
 fi
 
