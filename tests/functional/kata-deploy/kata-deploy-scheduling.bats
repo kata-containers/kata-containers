@@ -24,13 +24,6 @@ CHART_PATH="$(get_chart_path)"
 RENDERED="/tmp/kata-deploy-scheduling-rendered.yaml"
 RENDERED_JOBS="/tmp/kata-deploy-scheduling-rendered-jobs.yaml"
 
-render_chart() {
-	helm template kata-deploy "${CHART_PATH}" \
-		--set image.reference=quay.io/kata-containers/kata-deploy \
-		--set image.tag=latest \
-		"$@" > "${RENDERED}"
-}
-
 # Render only the per-node Job templates ConfigMap (deploymentMode: job).
 render_job_templates() {
 	helm template kata-deploy "${CHART_PATH}" \
@@ -82,31 +75,7 @@ extract_pernode_job() {
 
 # Extract the kata-deploy DaemonSet manifest (not kata-monitor or NFD subchart).
 extract_kata_deploy_ds() {
-	awk '
-		/^kind: DaemonSet$/ { buf = $0 "\n"; in_ds = 1; has_name = 0; next }
-		in_ds {
-			buf = buf $0 "\n"
-			if ($0 ~ /^  name: kata-deploy$/) { has_name = 1 }
-			if ($0 ~ /^---$/) {
-				if (has_name) { printf "%s", buf; exit }
-				in_ds = 0; buf = ""; has_name = 0
-				next
-			}
-		}
-		END { if (has_name && in_ds) { printf "%s", buf } }
-	' "${RENDERED}"
-}
-
-# Count nodeSelectorTerms under requiredDuringSchedulingIgnoredDuringExecution in a manifest.
-count_required_node_selector_terms() {
-	local manifest="${1}"
-	echo "${manifest}" | awk '
-		/requiredDuringSchedulingIgnoredDuringExecution:/ { in_req = 1; next }
-		in_req && /preferredDuringSchedulingIgnoredDuringExecution:/ { exit }
-		in_req && /^        [a-zA-Z]/ { exit }
-		in_req && /- match(Expressions|Fields):/ { count++ }
-		END { print count + 0 }
-	'
+	extract_daemonset "kata-deploy"
 }
 
 # =============================================================================
