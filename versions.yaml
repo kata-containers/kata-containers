@@ -405,6 +405,8 @@ externals:
       #
       # yamllint disable-line rule:line-length
       binary: "https://gitlab.com/-/project/21523468/uploads/f505704014ae7a816e515f2a05a93d8b/virtiofsd-v1.14.0.zip"
+      # yamllint disable-line rule:line-length
+      binary_sha256: "2e4fe9571f492b00baa34bc4e708e950039c5da05b830b31a8d179cb6ac8978e"
 
 languages:
   description: |
