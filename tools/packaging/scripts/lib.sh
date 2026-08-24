@@ -245,7 +245,7 @@ get_tools_image_name() {
 	libs_dir="${repo_root_dir}/src/libs"
 	agent_dir="${repo_root_dir}/src/agent"
 
-	echo "${BUILDER_REGISTRY}:tools-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:tools-go-$(get_from_kata_deps ".languages.golang.meta.newest-version")-rust-$(get_from_kata_deps ".languages.rust.meta.newest-version")-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-$(uname -m)"
 }
 
 get_agent_image_name() {
