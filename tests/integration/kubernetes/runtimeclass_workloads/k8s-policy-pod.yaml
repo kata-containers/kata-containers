@@ -38,6 +38,8 @@ spec:
               apiVersion: v1
               fieldPath: metadata.labels['some-test-label']
       securityContext:
+        runAsUser: 65534
+        runAsGroup: 65534
         seccompProfile:
           type: RuntimeDefault
       livenessProbe:
@@ -90,8 +92,8 @@ spec:
               - not-a-real-hostname
   resources:
     limits:
-      memory: "1Gi"
+      memory: "2Gi"
       cpu: "500m"
     requests:
-      memory: "1Gi"
+      memory: "2Gi"
       cpu: "500m"
