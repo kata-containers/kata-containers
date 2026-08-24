@@ -568,7 +568,7 @@ type HypervisorConfig struct {
 	// when the remote end goes away. Zero disables reconnecting.
 	VhostUserDeviceReconnect uint32
 
-	// GuestCoredumpPath is the path in host for saving guest memory dump
+	// GuestMemoryDumpPath is the path in host for saving guest memory dump
 	GuestMemoryDumpPath string
 
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
@@ -581,7 +581,7 @@ type HypervisorConfig struct {
 	// VMStorePath is the location on disk where VM information will persist
 	VMStorePath string
 
-	// VMStorePath is the location on disk where runtime information will persist
+	// RunStorePath is the location on disk where runtime information will persist
 	RunStorePath string
 
 	// SELinux label for the VM
@@ -614,7 +614,7 @@ type HypervisorConfig struct {
 	// SeccompSandbox is the qemu function which enables the seccomp feature
 	SeccompSandbox string
 
-	// BlockiDeviceAIO specifies the I/O API to be used.
+	// BlockDeviceAIO specifies the I/O API to be used.
 	BlockDeviceAIO string
 
 	// The socket to connect to the remote hypervisor implementation on
@@ -653,7 +653,7 @@ type HypervisorConfig struct {
 	// Enable SGX. Hardware-based isolation and memory encryption.
 	SGXEPCSize int64
 
-	// DiskRateLimiterBwRate is used to control disk I/O bandwidth on VM level.
+	// DiskRateLimiterBwMaxRate is used to control disk I/O bandwidth on VM level.
 	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
 	DiskRateLimiterBwMaxRate int64
 
@@ -662,7 +662,7 @@ type HypervisorConfig struct {
 	// and can be used for an *initial* burst of data.
 	DiskRateLimiterBwOneTimeBurst int64
 
-	// DiskRateLimiterOpsRate is used to control disk I/O operations on VM level.
+	// DiskRateLimiterOpsMaxRate is used to control disk I/O operations on VM level.
 	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
 	DiskRateLimiterOpsMaxRate int64
 
@@ -677,7 +677,7 @@ type HypervisorConfig struct {
 	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
 	TxRateLimiterMaxRate uint64
 
-	// NetRateLimiterBwRate is used to control network I/O bandwidth on VM level.
+	// NetRateLimiterBwMaxRate is used to control network I/O bandwidth on VM level.
 	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
 	NetRateLimiterBwMaxRate int64
 
@@ -686,7 +686,7 @@ type HypervisorConfig struct {
 	// and can be used for an *initial* burst of data.
 	NetRateLimiterBwOneTimeBurst int64
 
-	// NetRateLimiterOpsRate is used to control network I/O operations on VM level.
+	// NetRateLimiterOpsMaxRate is used to control network I/O operations on VM level.
 	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
 	NetRateLimiterOpsMaxRate int64
 
@@ -706,7 +706,7 @@ type HypervisorConfig struct {
 	// decisions
 	VhostUserBlkDevices []config.DeviceInfo
 
-	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
+	// HotPlugVFIO is used to indicate if devices need to be hotplugged on the
 	// root port or a switch
 	HotPlugVFIO config.PCIePort
 
@@ -720,13 +720,13 @@ type HypervisorConfig struct {
 	// PCIeSwitchPort is the number of switch-port to create for the VM
 	PCIeSwitchPort uint32
 
-	// NumVCPUs specifies default number of vCPUs for the VM.
+	// NumVCPUsF specifies default number of vCPUs for the VM.
 	NumVCPUsF float32
 
 	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
 	DefaultMaxVCPUs uint32
 
-	// DefaultMem specifies default memory size in MiB for the VM.
+	// MemorySize specifies default memory size in MiB for the VM.
 	MemorySize uint32
 
 	// DefaultMaxMemorySize specifies the maximum amount of RAM in MiB for the VM.
