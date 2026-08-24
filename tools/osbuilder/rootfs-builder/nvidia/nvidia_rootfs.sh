@@ -686,14 +686,6 @@ assemble_nvidia_gpu_extension() {
 			"${fm_cfg}"
 	fi
 
-	# The topology files are only available under the GPU extension mount.
-	# Point Fabric Manager there so it can find them.
-	local fm_cfg="${extension}/usr/share/nvidia/nvswitch/fabricmanager.cfg"
-	if [[ -f "${fm_cfg}" ]]; then
-		sed -i 's|^TOPOLOGY_FILE_PATH=.*|TOPOLOGY_FILE_PATH=/run/kata-extensions/gpu/usr/share/nvidia/nvswitch|' \
-			"${fm_cfg}"
-	fi
-
 	# GPU firmware (GSP, ...); NVRC binds this onto /lib/firmware/nvidia.
 	[[ -d "${source}/lib/firmware/nvidia" ]] \
 		&& cp -a "${source}/lib/firmware/nvidia" "${extension}/lib/firmware/"
