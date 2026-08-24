@@ -939,6 +939,16 @@ fn mem_agent_compactconfig_to_compact_optionconfig(
     }
 }
 
+async fn run_blocking_metrics<F>(collect: F) -> ttrpc::Result<String>
+where
+    F: FnOnce() -> Result<String> + Send + 'static,
+{
+    tokio::task::spawn_blocking(collect)
+        .await
+        .map_ttrpc_err(same)?
+        .map_ttrpc_err(same)
+}
+
 #[async_trait]
 impl agent_ttrpc::AgentService for AgentService {
     async fn create_container(
@@ -1753,7 +1763,10 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "get_metrics", req);
         is_allowed(&req).await?;
 
-        let s = get_metrics(&req).map_ttrpc_err(same)?;
+        // Metrics collection performs synchronous procfs and statfs reads. Keep
+        // that work off the async executor so a slow scrape cannot starve
+        // lifecycle, stats, or health RPCs.
+        let s = run_blocking_metrics(move || get_metrics(&req)).await?;
         let mut metrics = Metrics::new();
         metrics.set_metrics(s);
         Ok(metrics)
@@ -2783,6 +2796,49 @@ mod tests {
             metadata: std::collections::HashMap::new(),
             timeout_nano: 0,
         }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_metrics_collection_does_not_block_async_executor() {
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+
+        struct ReleaseOnDrop(Option<std::sync::mpsc::Sender<()>>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                if let Some(release) = self.0.take() {
+                    let _ = release.send(());
+                }
+            }
+        }
+        let mut release_guard = ReleaseOnDrop(Some(release_tx));
+
+        let metrics = tokio::spawn(run_blocking_metrics(move || {
+            started_tx.send(())?;
+            release_rx.recv()?;
+            Ok("agent_metric 1\n".to_string())
+        }));
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                if started_rx.try_recv().is_ok() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("metrics collection did not start");
+
+        tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            tokio::time::sleep(std::time::Duration::from_millis(10)),
+        )
+        .await
+        .expect("blocking metrics collection starved the async executor");
+
+        release_guard.0.take().unwrap().send(()).unwrap();
+        assert_eq!(metrics.await.unwrap().unwrap(), "agent_metric 1\n");
     }
 
     fn create_dummy_opts() -> CreateOpts {

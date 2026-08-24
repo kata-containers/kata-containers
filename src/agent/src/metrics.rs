@@ -84,13 +84,15 @@ lazy_static! {
 
 #[instrument]
 pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
-    let mut registered = REGISTERED
-        .lock()
-        .map_err(|e| anyhow!("failed to check agent metrics register status {:?}", e))?;
+    {
+        let mut registered = REGISTERED
+            .lock()
+            .map_err(|e| anyhow!("failed to check agent metrics register status {:?}", e))?;
 
-    if !(*registered) {
-        register_metrics()?;
-        *registered = true;
+        if !(*registered) {
+            register_metrics()?;
+            *registered = true;
+        }
     }
 
     AGENT_SCRAPE_COUNT.inc();
