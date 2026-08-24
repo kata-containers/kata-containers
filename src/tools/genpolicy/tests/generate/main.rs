@@ -7,7 +7,15 @@ use assert_cmd::prelude::*;
 use std::fs::{self};
 use std::io::Write;
 use std::path;
-use std::process::Command;
+use std::process::{Command, Output};
+use std::thread;
+use std::time::Duration;
+
+/// Number of genpolicy invocations a test attempts before giving up.
+const GENPOLICY_ATTEMPTS: u32 = 6;
+
+/// Delay between genpolicy invocations.
+const GENPOLICY_RETRY_DELAY: Duration = Duration::from_secs(10);
 
 #[test]
 fn config_map_in_separate_file_config_map_flag() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,14 +25,17 @@ fn config_map_in_separate_file_config_map_flag() -> Result<(), Box<dyn std::erro
     let config_file = "config_map.yaml";
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.assert().failure();
+    genpolicy_fails_with(
+        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP",
+        |cmd| {
+            cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        },
+    )?;
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.arg("--config-map-file").arg(workdir.join(config_file));
-    cmd.assert().success();
+    genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        cmd.arg("--config-map-file").arg(workdir.join(config_file));
+    })?;
 
     Ok(())
 }
@@ -37,14 +48,17 @@ fn config_map_in_separate_file_workdir_flag() -> Result<(), Box<dyn std::error::
     let config_file = "config_map.yaml";
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.assert().failure();
+    genpolicy_fails_with(
+        "Couldn't get the value of env var: ENV_FROM_CONFIGMAP",
+        |cmd| {
+            cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        },
+    )?;
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.arg("--config-file").arg(workdir.join(config_file));
-    cmd.assert().success();
+    genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        cmd.arg("--config-file").arg(workdir.join(config_file));
+    })?;
 
     Ok(())
 }
@@ -57,14 +71,17 @@ fn secret_in_separate_file() -> Result<(), Box<dyn std::error::Error>> {
     let config_file = "secret.yaml";
     let workdir = prepare_workdir(test_case_dir, &[pod_yaml_name, config_file]);
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.assert().failure();
+    genpolicy_fails_with(
+        "Couldn't get the value of env var: ENV_FROM_SECRET",
+        |cmd| {
+            cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        },
+    )?;
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
-    cmd.arg("--config-file").arg(workdir.join(config_file));
-    cmd.assert().success();
+    genpolicy_succeeds(|cmd| {
+        cmd.arg("--yaml-file").arg(workdir.join(pod_yaml_name));
+        cmd.arg("--config-file").arg(workdir.join(config_file));
+    })?;
 
     Ok(())
 }
@@ -95,14 +112,11 @@ spec:
 "#,
     )?;
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(&pod_yaml_path);
-
-    let output = cmd.output()?;
-    assert!(!output.status.success());
+    let output = genpolicy_fails_with("ERROR: guest_pull is enabled", |cmd| {
+        cmd.arg("--yaml-file").arg(&pod_yaml_path);
+    })?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("ERROR: guest_pull is enabled"));
     assert!(stderr.contains("Set explicit Kubernetes securityContext values"));
     assert!(!stderr.contains("      runAsUser: 0"), "{stderr}");
     assert!(!stderr.contains("      runAsGroup: 0"), "{stderr}");
@@ -139,14 +153,11 @@ spec:
 "#,
     )?;
 
-    let mut cmd = Command::cargo_bin("genpolicy")?;
-    cmd.arg("--yaml-file").arg(&pod_yaml_path);
-
-    let output = cmd.output()?;
-    assert!(!output.status.success());
+    let output = genpolicy_fails_with("ERROR: guest_pull is enabled", |cmd| {
+        cmd.arg("--yaml-file").arg(&pod_yaml_path);
+    })?;
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("ERROR: guest_pull is enabled"));
     assert!(stderr.contains("      runAsUser: 33"), "{stderr}");
     assert!(stderr.contains("      runAsGroup: 33"), "{stderr}");
     assert!(!stderr.contains("supplementalGroups:"), "{stderr}");
@@ -210,9 +221,9 @@ spec:
         let pod_yaml_path = workdir.join(format!("{name}.yaml"));
         fs::write(&pod_yaml_path, yaml)?;
 
-        let mut cmd = Command::cargo_bin("genpolicy")?;
-        cmd.arg("--yaml-file").arg(&pod_yaml_path);
-        cmd.assert().success();
+        genpolicy_succeeds(|cmd| {
+            cmd.arg("--yaml-file").arg(&pod_yaml_path);
+        })?;
     }
 
     Ok(())
@@ -281,9 +292,9 @@ spec:
         let pod_yaml_path = workdir.join(format!("{name}.yaml"));
         fs::write(&pod_yaml_path, yaml)?;
 
-        let mut cmd = Command::cargo_bin("genpolicy")?;
-        cmd.arg("--yaml-file").arg(&pod_yaml_path);
-        cmd.assert().success();
+        genpolicy_succeeds(|cmd| {
+            cmd.arg("--yaml-file").arg(&pod_yaml_path);
+        })?;
     }
 
     Ok(())
@@ -362,32 +373,21 @@ fn output_behavior() -> Result<(), Box<dyn std::error::Error>> {
         let pod_yaml_path = workdir.join("simple_pod.yaml");
 
         let output = if tc.use_yaml_file {
-            let mut cmd = Command::cargo_bin("genpolicy")?;
-            cmd.arg("--yaml-file").arg(&pod_yaml_path);
-            if let Some(flag) = tc.flag {
-                cmd.arg(flag);
-            }
-            cmd.output()?
+            genpolicy_succeeds(|cmd| {
+                cmd.arg("--yaml-file").arg(&pod_yaml_path);
+                if let Some(flag) = tc.flag {
+                    cmd.arg(flag);
+                }
+            })?
         } else {
             let pod_yaml_content = fs::read_to_string(&pod_yaml_path)?;
-            let mut cmd = Command::cargo_bin("genpolicy")?;
-            cmd.current_dir(&workdir);
-            if let Some(flag) = tc.flag {
-                cmd.arg(flag);
-            }
-            let mut child = cmd
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()?;
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(pod_yaml_content.as_bytes())?;
-            child.wait_with_output()?
+            genpolicy_succeeds_stdin(pod_yaml_content.as_bytes(), |cmd| {
+                cmd.current_dir(&workdir);
+                if let Some(flag) = tc.flag {
+                    cmd.arg(flag);
+                }
+            })?
         };
-
-        assert!(output.status.success(), "{}: command failed", tc.name);
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let has_yaml = stdout.contains("apiVersion:");
@@ -412,6 +412,101 @@ fn output_behavior() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Run genpolicy through `run` until `accept` approves its output.
+///
+/// genpolicy reads image manifests, config blobs and layers from a container
+/// registry while generating a policy. Those requests are unreliable enough to
+/// fail a whole test run, so an unexpected outcome is retried instead of being
+/// reported right away.
+fn run_genpolicy<R, A>(run: R, accept: A) -> Result<Output, Box<dyn std::error::Error>>
+where
+    R: Fn() -> Result<Output, Box<dyn std::error::Error>>,
+    A: Fn(&Output) -> bool,
+{
+    for attempt in 1..=GENPOLICY_ATTEMPTS {
+        let output = run()?;
+        if accept(&output) {
+            return Ok(output);
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(
+            attempt < GENPOLICY_ATTEMPTS,
+            "genpolicy did not produce the expected outcome in {GENPOLICY_ATTEMPTS} attempts\nstdout: {stdout}\nstderr: {stderr}"
+        );
+
+        println!("retrying genpolicy, attempt {attempt} produced an unexpected outcome\nstdout: {stdout}\nstderr: {stderr}");
+        thread::sleep(GENPOLICY_RETRY_DELAY);
+    }
+
+    unreachable!("the loop either returns or asserts on the last attempt");
+}
+
+/// Run genpolicy with the arguments applied by `configure` and expect success.
+fn genpolicy_succeeds<C>(configure: C) -> Result<Output, Box<dyn std::error::Error>>
+where
+    C: Fn(&mut Command),
+{
+    run_genpolicy(
+        || {
+            let mut cmd = Command::cargo_bin("genpolicy")?;
+            configure(&mut cmd);
+            Ok(cmd.output()?)
+        },
+        |output| output.status.success(),
+    )
+}
+
+/// Like [`genpolicy_succeeds`], but feed `stdin` to genpolicy instead of
+/// passing `--yaml-file`.
+fn genpolicy_succeeds_stdin<C>(
+    stdin: &[u8],
+    configure: C,
+) -> Result<Output, Box<dyn std::error::Error>>
+where
+    C: Fn(&mut Command),
+{
+    run_genpolicy(
+        || {
+            let mut cmd = Command::cargo_bin("genpolicy")?;
+            configure(&mut cmd);
+            let mut child = cmd
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()?;
+            child.stdin.take().unwrap().write_all(stdin)?;
+            Ok(child.wait_with_output()?)
+        },
+        |output| output.status.success(),
+    )
+}
+
+/// Run genpolicy with the arguments applied by `configure` and expect it to
+/// fail with `expected_stderr` on its standard error.
+///
+/// Requiring that message keeps a failure caused by a registry error from
+/// passing as the failure the test asks for.
+fn genpolicy_fails_with<C>(
+    expected_stderr: &str,
+    configure: C,
+) -> Result<Output, Box<dyn std::error::Error>>
+where
+    C: Fn(&mut Command),
+{
+    run_genpolicy(
+        || {
+            let mut cmd = Command::cargo_bin("genpolicy")?;
+            configure(&mut cmd);
+            Ok(cmd.output()?)
+        },
+        |output| {
+            !output.status.success()
+                && String::from_utf8_lossy(&output.stderr).contains(expected_stderr)
+        },
+    )
 }
 
 fn prepare_workdir(test_case_dir: &str, files_to_copy: &[&str]) -> path::PathBuf {
