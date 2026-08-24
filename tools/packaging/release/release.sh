@@ -260,16 +260,18 @@ function _upload_libseccomp_tarball()
 
 	GOPATH=${HOME}/go ./ci/install_yq.sh
 
-	versions_yaml="versions.yaml"
+	versions_yaml="${repo_root_dir}/versions.yaml"
 	version=$("${HOME}"/go/bin/yq ".externals.libseccomp.version" "${versions_yaml}")
 	repo_url=$("${HOME}"/go/bin/yq ".externals.libseccomp.url" "${versions_yaml}")
-	download_url="${repo_url}releases/download/v${version}"
+	download_url="${repo_url%/}/releases/download/v${version}"
 	tarball="libseccomp-${version}.tar.gz"
 	asc="${tarball}.asc"
-	curl -sSLO "${download_url}/${tarball}"
-	curl -sSLO "${download_url}/${asc}"
-	gh release upload "${RELEASE_VERSION}" "${tarball}"
-	gh release upload "${RELEASE_VERSION}" "${asc}"
+	# --fail is a must here, otherwise the error page returned by GitHub
+	# would silently be uploaded in place of the actual assets.
+	curl -fsSL --retry 5 --retry-delay 5 -O "${download_url}/${tarball}"
+	curl -fsSL --retry 5 --retry-delay 5 -O "${download_url}/${asc}"
+	gh release upload --clobber "${RELEASE_VERSION}" "${tarball}"
+	gh release upload --clobber "${RELEASE_VERSION}" "${asc}"
 }
 
 function _upload_helm_chart_tarball()
