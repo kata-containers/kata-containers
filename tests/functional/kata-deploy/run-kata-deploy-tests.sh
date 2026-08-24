@@ -37,6 +37,7 @@ else
 		"kata-deploy-multi-install.bats" \
 		"kata-deploy-reconcile.bats" \
 		"kata-deploy-node-binaries.bats" \
+		"kata-deploy-installation-prefix.bats" \
 	)
 fi
 
