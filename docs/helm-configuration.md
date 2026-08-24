@@ -1077,3 +1077,97 @@ are still rendered, and delete the chart's rule if it duplicates yours.
     `env.multiInstallSuffix` when that is set. A rule called `amd64-tee-keys`
     belongs to a release that has not been upgraded yet, and can be deleted once
     every release has been.
+
+`nodeFeatureRules.create` is one switch for every rule the chart ships, so it also
+governs the NVIDIA GPU rule below.
+
+## NVIDIA GPU discovery
+
+Kata's NVIDIA shims have to land on a node that actually has the GPU they are built
+for, so the chart ships a second `NodeFeatureRule`, `kata-nvidia-gpu`, asking
+node-feature-discovery for three labels:
+
+`nvidia.feature.node.kubernetes.io/gpu`
+:   `"true"` when the node has an NVIDIA display or 3D controller (PCI vendor
+    `10de`, class `0300` or `0302`). Matched by device *class*, so a GPU newer than
+    your chart still gets it.
+
+`nvidia.feature.node.kubernetes.io/gpu.family`
+:   The family the GPU's PCI device ID belongs to — `hopper` or `blackwell` out of
+    the box.
+
+`nvidia.feature.node.kubernetes.io/cc.capable`
+:   `"true"` when the node pairs a GPU family that can run confidentially with a CPU
+    reporting SEV-SNP or TDX.
+
+!!! info "Why the chart carries these at all"
+    NVIDIA's GPU Operator published equivalent labels under `nvidia.com` until
+    v25.10 and removed them in v26.3.0, so on a current GPU Operator nothing
+    provides GPU family or CC-capability labels any more.
+
+    The labels sit under `nvidia.feature.node.kubernetes.io` rather than
+    `nvidia.com` because NFD publishes subdomains of `feature.node.kubernetes.io`
+    without further configuration, while `nvidia.com` needs `-extra-label-ns` on
+    nfd-master — which the chart cannot set for an NFD installation it does not own.
+    The TEE rule uses `amd.`/`intel.` for the same reason.
+
+### Teaching it about a new GPU
+
+Family membership is a device-ID list in values, not something baked into the rule,
+so a GPU released after your chart is one override away:
+
+```yaml title="values.yaml"
+nodeFeatureRules:
+  nvidiaGpu:
+    families:
+      blackwell:
+        - "2901"   # B200
+        - "31c2"   # GB300
+        - "abcd"   # the one your chart has never heard of
+    ccCapableFamilies:
+      - hopper
+      - blackwell
+```
+
+Device IDs are hex, without the `0x`, as listed for vendor `10de` in the
+[PCI ID repository](https://pci-ids.ucw.cz/read/PC/10de). Overriding a family
+replaces its whole list. A family in `ccCapableFamilies` with no entry under
+`families` can never match, so keep the two in step; adding a family key is enough
+to have it labelled.
+
+!!! note "A node with two GPU families"
+    `gpu.family` is a single label, so a node holding both a Hopper and a Blackwell
+    card reports whichever rule matched last. Select on `gpu` or `cc.capable` for
+    such a node, not on `gpu.family`.
+
+### What the RuntimeClasses select
+
+The plain GPU shims select the chart's own presence label, so a GPU passthrough
+sandbox no longer waits on a label only the GPU Operator can write:
+
+```yaml title="values.yaml"
+shims:
+  qemu-nvidia-gpu:
+    runtimeClass:
+      nodeSelector:
+        nvidia.feature.node.kubernetes.io/gpu: "true"
+```
+
+The confidential GPU shims (`qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`, and their
+`-runtime-rs` variants) deliberately keep selecting the GPU Operator's
+`nvidia.com/cc.ready.state: "true"`.
+
+!!! warning "`cc.capable` is not a substitute for `cc.ready.state`"
+    `cc.capable` says the node *could* run a confidential GPU workload.
+    `cc.ready.state` says the GPU has actually been put into that mode, which only
+    whatever programs the GPU — the GPU Operator's CC manager — knows. Selecting on
+    capability alone would let a confidential sandbox land on a node whose GPU is
+    running in the clear.
+
+    So these shims still need a GPU Operator. If you drive GPU CC mode some other
+    way, point them at whatever label that produces via
+    `shims.<shim>.runtimeClass.nodeSelector`.
+
+Since the plain GPU classes now match any GPU node, a cluster that runs both plain
+and confidential GPU workloads should keep them apart explicitly — select
+`nvidia.com/cc.ready.state: "false"` on the plain classes, as the chart did before.

@@ -644,10 +644,14 @@ shims:
     containerd:
       snapshotter: ""
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # Published by this chart's NVIDIA GPU NodeFeatureRule (see
+      # nodeFeatureRules.nvidiaGpu), so the class finds a GPU node without the
+      # GPU Operator having to label it. It says nothing about the GPU's
+      # confidential computing mode: to keep this class off the nodes your
+      # confidential workloads use, select on the GPU Operator's
+      # `nvidia.com/cc.ready.state: "false"` instead.
       nodeSelector:
-        nvidia.com/cc.ready.state: "false"
+        nvidia.feature.node.kubernetes.io/gpu: "true"
 
   qemu-nvidia-gpu-runtime-rs:
     enabled: ~
@@ -658,10 +662,9 @@ shims:
     containerd:
       snapshotter: ""
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # See qemu-nvidia-gpu above.
       nodeSelector:
-        nvidia.com/cc.ready.state: "false"
+        nvidia.feature.node.kubernetes.io/gpu: "true"
 
   qemu-nvidia-gpu-snp:
     enabled: ~
@@ -677,10 +680,14 @@ shims:
       httpsProxy: ""
       noProxy: ""
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
-      # If you don't have NFD, you need to add the snp label by other
-      # means to your SNP nodes.
+      # cc.ready.state is added by the GPU Operator's CC manager, the snp label by
+      # NFD. Override if you want to use different labels; without NFD, the snp
+      # label has to reach your SNP nodes some other way.
+      #
+      # Deliberately not this chart's nvidia.feature.node.kubernetes.io/cc.capable:
+      # that one says the node's GPU *could* run confidentially, while
+      # cc.ready.state says it has actually been put in that mode, which is what a
+      # confidential workload needs.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         amd.feature.node.kubernetes.io/snp: "true"
@@ -717,10 +724,14 @@ shims:
       httpsProxy: ""
       noProxy: ""
     runtimeClass:
-      # These labels are automatically added by gpu-operator and NFD
-      # respectively. Override if you want to use a different label.
-      # If you don't have NFD, you need to add the tdx label by other
-      # means to your TDX nodes.
+      # cc.ready.state is added by the GPU Operator's CC manager, the tdx label by
+      # NFD. Override if you want to use different labels; without NFD, the tdx
+      # label has to reach your TDX nodes some other way.
+      #
+      # Deliberately not this chart's nvidia.feature.node.kubernetes.io/cc.capable:
+      # that one says the node's GPU *could* run confidentially, while
+      # cc.ready.state says it has actually been put in that mode, which is what a
+      # confidential workload needs.
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
         intel.feature.node.kubernetes.io/tdx: "true"
@@ -931,10 +942,16 @@ env:
 node-feature-discovery:
   enabled: false
 
-# The NodeFeatureRule that makes node-feature-discovery advertise each node's TEE
-# key counts (AMD SEV-SNP encrypted-state IDs, Intel TDX key slots), together with
-# the matching `overhead.podFixed` request on Kata's confidential RuntimeClasses so
-# a sandbox consumes one key and the scheduler cannot oversubscribe them.
+# The NodeFeatureRules this chart hands to node-feature-discovery, and the
+# RuntimeClass fields that go with them:
+#
+#   - TEE keys: each node's TEE key count (AMD SEV-SNP encrypted-state IDs, Intel
+#     TDX key slots) as an extended resource, together with the matching
+#     `overhead.podFixed` request on Kata's confidential RuntimeClasses so a
+#     sandbox consumes one key and the scheduler cannot oversubscribe them.
+#   - NVIDIA GPUs: whether a node has one, which family it belongs to, and whether
+#     that family together with the host CPU TEE can back a confidential VM. See
+#     `nvidiaGpu` below.
 #
 #   auto (default) - create them when NFD is around: installed by this release,
 #                    found already running, or its CRD registered in the cluster.
@@ -942,11 +959,75 @@ node-feature-discovery:
 #                    renders nothing under `auto`.
 #   true / false   - decide explicitly.
 #
-# The rule and the key requests are gated together on purpose: an extended-resource
-# request that nothing advertises makes every pod on that RuntimeClass unschedulable,
-# so the keys must never be requested without the rule that produces them.
+# The TEE rule and the key requests are gated together on purpose: an
+# extended-resource request that nothing advertises makes every pod on that
+# RuntimeClass unschedulable, so the keys must never be requested without the rule
+# that produces them.
 nodeFeatureRules:
   create: auto
+
+  # NVIDIA GPU discovery. The labels published are, all under
+  # `nvidia.feature.node.kubernetes.io`:
+  #
+  #   gpu: "true"              an NVIDIA display or 3D controller is present
+  #   gpu.family: <family>     the key from `families` its device ID belongs to
+  #   cc.capable: "true"       a family from `ccCapableFamilies` on a host whose
+  #                            CPU reports SEV-SNP or TDX
+  #
+  # NVIDIA's GPU Operator published equivalent labels under `nvidia.com` until
+  # v25.10 and dropped them in v26.3.0, so on a current GPU Operator nothing
+  # provides them. `nvidia.feature.node.kubernetes.io` rather than `nvidia.com`
+  # because NFD publishes subdomains of `feature.node.kubernetes.io` out of the
+  # box, while `nvidia.com` needs `-extra-label-ns` on nfd-master, which we cannot
+  # set for an NFD installation we do not own.
+  #
+  # `families` maps a family name to the PCI device IDs (hex, vendor 10de) that
+  # belong to it, so a GPU newer than your chart is one value override away rather
+  # than a chart release. Device IDs are the datacenter parts named in the PCI ID
+  # repository (https://pci-ids.ucw.cz/read/PC/10de); the comments are those names.
+  # A node holding two families gets the label of whichever rule matched last, so
+  # `gpu.family` describes a mixed node only loosely.
+  nvidiaGpu:
+    families:
+      hopper:
+        - "230c"  # H20 NVL16
+        - "230e"  # H20 NVL16
+        - "2313"  # H100 CNX
+        - "2321"  # H100L 94GB
+        - "2322"  # H800 PCIe
+        - "2324"  # H800
+        - "2328"  # H20B
+        - "2329"  # H20
+        - "232c"  # H20 HBM3e
+        - "2330"  # H100 SXM5 80GB
+        - "2331"  # H100 PCIe
+        - "2335"  # H200 SXM 141GB
+        - "2336"  # H100
+        - "2337"  # H100 SXM5 64GB
+        - "2338"  # H100 SXM5 96GB
+        - "2339"  # H100 SXM5 94GB
+        - "233a"  # H800L 94GB
+        - "233b"  # H200 NVL
+        - "233d"  # H100 96GB
+        - "2342"  # GH200 120GB / 480GB
+        - "2348"  # GH200 144G HBM3e
+        - "237e"  # H100 GH3
+      blackwell:
+        - "2901"  # B200
+        - "2909"  # HGX B200 168GB
+        - "2920"  # TS4 / B100
+        - "2941"  # HGX GB200
+        - "29bc"  # B100
+        - "3182"  # B300 SXM6 AC
+        - "31a1"  # GB300 MaxQ
+        - "31c2"  # GB300
+        - "31c3"  # GB300
+
+    # Families whose GPUs can be put into a confidential computing mode, and so
+    # can serve a confidential VM once the host CPU offers a TEE to run it in.
+    ccCapableFamilies:
+      - hopper
+      - blackwell
 
 # Verification
 # Post-install verification to validate Kata Containers is working correctly.

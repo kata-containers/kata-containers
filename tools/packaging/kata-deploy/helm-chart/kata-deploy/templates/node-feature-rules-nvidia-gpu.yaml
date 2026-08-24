@@ -1,0 +1,114 @@
+{{- /*
+NodeFeatureRule teaching node-feature-discovery about a node's NVIDIA GPU: that
+one is there at all, which family it belongs to, and whether that family on this
+host can back a confidential VM. Kata's NVIDIA shims select their nodes on these
+labels.
+
+NVIDIA's GPU Operator published equivalent labels under `nvidia.com` until v25.10
+and removed them in v26.3.0, so a cluster on a current GPU Operator gets no GPU
+family or CC-capability label from anywhere.
+
+The labels sit under `nvidia.feature.node.kubernetes.io` because NFD publishes
+subdomains of `feature.node.kubernetes.io` without further configuration, while
+`nvidia.com` needs `-extra-label-ns` on nfd-master, which we cannot set for an NFD
+we do not own. The TEE rules use `amd.`/`intel.` for the same reason.
+
+One object rather than one per concern: a rule reading `rule.matched` only sees
+rules processed before it, and between objects that order is just alphabetical by
+name.
+
+Everything matches on PCI devices and CPU features, so the rules are inert on a
+node without an NVIDIA GPU; no architecture gating is needed.
+*/ -}}
+{{- if eq (include "kata-deploy.nfdRulesActive" . | trim) "true" }}
+{{- $nvidiaGpu := (.Values.nodeFeatureRules | default dict).nvidiaGpu | default dict }}
+{{- $families := $nvidiaGpu.families | default dict }}
+{{- $ccFamilies := $nvidiaGpu.ccCapableFamilies | default list }}
+apiVersion: nfd.k8s-sigs.io/v1alpha1
+kind: NodeFeatureRule
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: kata-nvidia-gpu-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: kata-nvidia-gpu
+{{- end }}
+  labels:
+    app.kubernetes.io/managed-by: kata-deploy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    kata-deploy/instance: {{ .Values.env.multiInstallSuffix | default "default" | quote }}
+spec:
+  rules:
+    - name: "nvidia.gpu"
+      labels:
+        "nvidia.feature.node.kubernetes.io/gpu": "true"
+      matchFeatures:
+        - feature: pci.device
+{{- /* 0300 is a VGA-compatible controller and 0302 a 3D controller; a datacenter
+       GPU reports the latter. Matching the class keeps NVIDIA's non-GPU PCI
+       devices - NVSwitch, the DPU side of a converged card - out of it.
+
+       The classes NFD's own pci source is configured to label (its
+       deviceClassWhitelist, source of `feature.node.kubernetes.io/pci-10de.present`)
+       do not constrain this: rules match the discovered pci.device feature, which
+       holds every PCI device on the node. */}}
+          matchExpressions:
+            vendor: { op: In, value: ["10de"] }
+            class: { op: In, value: ["0300", "0302"] }
+{{- range $family, $devices := $families }}
+{{- if $devices }}
+    - name: "nvidia.gpu.family.{{ $family }}"
+      labels:
+        "nvidia.feature.node.kubernetes.io/gpu.family": {{ $family | quote }}
+{{- /* Also a var, so the CC rules below can backreference the family without
+       depending on how NFD keys a namespaced label in rule.matched. */}}
+      vars:
+        "kata.nvidia.gpu.family.{{ $family }}": "true"
+      matchFeatures:
+        - feature: pci.device
+          matchExpressions:
+            vendor: { op: In, value: ["10de"] }
+            device:
+              op: In
+              value:
+{{- range $devices }}
+                - {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $ccFamilies }}
+{{- /* Collapsing the CC-capable families into one var first keeps the rule below
+       at two branches - one per host TEE - instead of one per family per TEE. */}}
+    - name: "nvidia.gpu.cc-capable-family"
+      vars:
+        "kata.nvidia.gpu.cc-capable-family": "true"
+      matchAny:
+{{- range $ccFamilies }}
+        - matchFeatures:
+            - feature: rule.matched
+              matchExpressions:
+                "kata.nvidia.gpu.family.{{ . }}": { op: IsTrue }
+{{- end }}
+{{- /* Both ends are needed: a GPU that can run in CC mode, and a host CPU TEE to
+       hold the guest it gets passed into. The label says the node could do it,
+       not that the GPU is in that mode - only whoever programs the GPU (the GPU
+       Operator's CC manager, through nvidia.com/cc.ready.state) knows that. */}}
+    - name: "nvidia.cc.capable"
+      labels:
+        "nvidia.feature.node.kubernetes.io/cc.capable": "true"
+      matchAny:
+        - matchFeatures:
+            - feature: rule.matched
+              matchExpressions:
+                "kata.nvidia.gpu.cc-capable-family": { op: IsTrue }
+            - feature: cpu.security
+              matchExpressions:
+                sev.snp.enabled: { op: IsTrue }
+        - matchFeatures:
+            - feature: rule.matched
+              matchExpressions:
+                "kata.nvidia.gpu.cc-capable-family": { op: IsTrue }
+            - feature: cpu.security
+              matchExpressions:
+                tdx.enabled: { op: IsTrue }
+{{- end }}
+{{- end }}

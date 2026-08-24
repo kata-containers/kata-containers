@@ -55,10 +55,12 @@ shims:
     containerd:
       snapshotter: ""
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # Published by this chart's NVIDIA GPU NodeFeatureRule, so no GPU Operator
+      # is needed to find a GPU node. Select on the GPU Operator's
+      # `nvidia.com/cc.ready.state: "false"` instead to keep this class off the
+      # nodes your confidential workloads use.
       nodeSelector:
-        nvidia.com/cc.ready.state: "false"
+        nvidia.feature.node.kubernetes.io/gpu: "true"
 
   qemu-nvidia-gpu-runtime-rs:
     enabled: true
@@ -68,10 +70,9 @@ shims:
     containerd:
       snapshotter: "erofs"
     runtimeClass:
-      # This label is automatically added by gpu-operator. Override it
-      # if you want to use a different label.
+      # See qemu-nvidia-gpu above.
       nodeSelector:
-        nvidia.com/cc.ready.state: "false"
+        nvidia.feature.node.kubernetes.io/gpu: "true"
 
   qemu-nvidia-gpu-snp:
     enabled: true
