@@ -5303,7 +5303,7 @@ dependencies = [
 [[package]]
 name = "pcilibs-rs"
 version = "0.1.0"
-source = "git+https://github.com/kata-containers/pcilibs-rs?rev=ce6486db#ce6486db79ade33028583a9e81245db5f4de2079"
+source = "git+https://github.com/kata-containers/pcilibs-rs?rev=d248714e#d248714ed4b34b5738dbafab510611f543802e27"
 dependencies = [
  "nix 0.31.3",
  "pci-ids",
