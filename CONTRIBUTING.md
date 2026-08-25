@@ -110,16 +110,13 @@ know that you are planning to work on an item.
 
 ### Issue tracking
 
-To report a bug that is not already documented, please open a GitHub issue for the repository in question.
-
-If it is unclear which repository to raise your query against, first try to
-get in [contact](#contact) with us. If in doubt, raise the issue
-[here](https://github.com/kata-containers/community/issues/new) and we will
-help you to handle the query by routing it to the correct area for resolution.
+To report a bug that is not already documented, please open a GitHub issue for the kata-containers repo.
 
 ### Closing issues
 
-Our tooling requires adding a `Fixes` comment to at least one commit in the PR, which triggers GitHub to automatically close the issue once the PR is merged:
+If you are fixing an issues with a commit, then it's helpful to add a `Fixes` comment to at
+least one commit in the PR, which triggers GitHub to automatically close the issue once the
+PR is merged:
 
 ```
 pod: Remove token from Cmd structure
