@@ -417,6 +417,39 @@ Builds per-shim semicolon-separated list: "shim1=value1;shim2=value2"
 {{- end -}}
 
 {{/*
+Get the shims that run DCGM in the guest from structured config
+Builds a semicolon-separated list of shim names: "shim1;shim2"
+
+The value is a set rather than the "shim=value" mapping the proxies use,
+because the setting is a boolean: naming a shim here means it is on.
+
+A shim with no nvrc block at all reads as off, so a values file written before
+this setting existed - or one defining a shim the chart does not - keeps
+upgrading cleanly instead of failing to render.
+*/}}
+{{- define "kata-deploy.getNvrcEnableDcgm" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- $shims := list -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- $nvrc := $shimConfig.nvrc | default dict -}}
+{{- if and $shimEnabled ($nvrc.enableDCGM | default false) -}}
+{{- $shims = append $shims $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join ";" $shims -}}
+{{- end -}}
+
+{{/*
 Main kata-deploy image reference for the DaemonSet.
 Supports tag (reference:tag) and digest (reference@sha256:...) formats.
 When reference contains "@" (digest), use reference as-is; otherwise use reference:tag (tag defaults to Chart.AppVersion).
@@ -618,6 +651,11 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if $agentNoProxy }}
 - name: AGENT_NO_PROXY
   value: {{ $agentNoProxy | quote }}
+{{- end }}
+{{- $nvrcEnableDcgm := include "kata-deploy.getNvrcEnableDcgm" . | trim -}}
+{{- if $nvrcEnableDcgm }}
+- name: NVRC_ENABLE_DCGM
+  value: {{ $nvrcEnableDcgm | quote }}
 {{- end }}
 {{- $pullTypeMappingAmd64 := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $pullTypeMappingAmd64 }}
