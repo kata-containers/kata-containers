@@ -108,7 +108,7 @@ pod: Remove token from Cmd structure
 The token and pid data will be hold by the new Process structure and
 they are related to a container.
 
-Fixes #123
+Fixes: #123
 
 Signed-off-by: Sebastien Boeuf <sebastien.boeuf@intel.com>
 ```
@@ -119,7 +119,7 @@ The issue is automatically closed by GitHub when the
 ## GitHub workflow
 
 Kata Containers employs certain augmentations to a
-[standard GitHub workflow](https://guides.github.com/introduction/flow/).
+[standard GitHub workflow](https://docs.github.com/en/get-started/using-github/github-flow).
 In this section, we explain these augmentations in more detail. Follow these guidelines when contributing to Kata Containers repositories, except where noted below.
 
 * Complete the [GitHub basic setup](#github-basic-setup) above before continuing.
@@ -142,9 +142,7 @@ In this section, we explain these augmentations in more detail. Follow these gui
 
 ### Configure your environment
 
-Most [Kata Containers repositories](https://github.com/kata-containers)
-contain code written in the [Go language (golang)](https://golang.org/). Go
-requires all code to be put inside the directory specified by the `$GOPATH`
+By convention in Go, code is put inside the directory specified by the `$GOPATH`
 variable. Follow this example to put the code in the standard location.
 
 ```sh
@@ -167,7 +165,7 @@ In this example, we configure a Git environment to contribute to this
 
 1. [Clone your forked copy of the upstream repository](https://help.github.com/articles/cloning-a-repository):
 
-1. While on your *forked copy*, select the green button `Clone or download`
+1. While on your *forked copy*, select the green button `Code`
    and copy the URL.
 
 1. Run the commands below and **paste the copied URL** (previous step),
@@ -416,10 +414,10 @@ Running these checks should result in **no errors**. If errors are reported, fix
 
 To replicate the static checks performed by the CI system:
 
-- [x] Ensure you have a "clean" source tree, as the checks cover all files
+- Ensure you have a "clean" source tree, as the checks cover all files
   present. Checks might fail if you have extra files or your files are out of date in your tree.
 
-- [x] Ensure [`golangci-lint`](https://github.com/golangci/golangci-lint) is
+- Ensure [`golangci-lint`](https://github.com/golangci/golangci-lint) is
 current or has not been previously installed (the static check scripts will
 install it if necessary). Changing the linters used or the Kata
 Containers code base can produce spurious errors that do not fail inside the
@@ -459,7 +457,7 @@ subsystem: One line change summary
 More detailed explanation of your changes (why and how)
 that spans as many lines as required.
 
-A "Fixes #XXX" comment listing the GitHub issue this change resolves.
+A "Fixes: #XXX" comment listing the GitHub issue this change resolves.
 This comment is required for the main patch in a sequence. See the following examples.
 
 Signed-off-by: Contributors Name <contributor@foo.com>
@@ -538,7 +536,7 @@ Correct formatting of the PR patches is verified using the commit-message-check 
 
 #### Main patch
 
-The following is an example of a full patch description for the main change that shows the required "`Fixes #XXX`" comment, which references the GitHub issue this patch resolves:
+The following is an example of a full patch description for the main change that shows the required "`Fixes: #XXX`" comment, which references the GitHub issue this patch resolves:
 
 ```
 pod: Remove token from Cmd structure
@@ -553,7 +551,7 @@ Signed-off-by: Sebastien Boeuf <sebastien.boeuf@intel.com>
 
 #### Supplementary patch
 
-If a PR contains multiple patches, [only one of those patches](#main-patch) needs to specify the "`Fixes #XXX`" comment. Supplementary patches have an identical format to the main patch, but do not need to specify a "`Fixes #XXX`"
+If a PR contains multiple patches, [only one of those patches](#main-patch) needs to specify the "`Fixes: #XXX`" comment. Supplementary patches have an identical format to the main patch, but do not need to specify a "`Fixes: #XXX`"
 comment.
 
 Example:
