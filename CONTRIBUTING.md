@@ -430,21 +430,6 @@ CI systems.
 Some submitted PRs fail to pass static checks. After such a PR fails,
 view its build logs to determine the cause of failure.
 
-1. At the bottom of the PR, if a message appears, "Some checks were not
-   successful,"  select "Details", as shown below.
-
-    ![Failed CI-CD](fig1-ci-cd-failure.png)
-
-1. Upon entering the Travis CI* web page, select the first number that
-   appears below "Build jobs."
-
-1. Scroll to the bottom of the build log and view the `ERROR` message(s).
-   In the example below, the `ERROR` reads: `... no
-   signed-off-by specified`. This is a requirement. To fix, use the signed-off-by method while pushing a commit. See [Patch format](
-   #patch-format) for more details.
-
-    ![Build log error messages](fig2-ci-cd-log.png)
-
 ### Kata runtime static checks
 
 If working on `kata-runtime`, first ensure you run `make` and `make install`
@@ -615,7 +600,7 @@ lgtm
 
 The Kata Containers project has a gating process to prevent introducing
 regressions. When your PR is submitted, a Continuous Integration (CI) system
-will run different checks on different platforms, based upon your changes. Currently Kata uses [Jenkins](http://jenkins.katacontainers.io)
+will run different checks on different platforms, based upon your changes. Currently Kata uses GitHub actions
 for testing your changes.
 
 Some of the checks are:
@@ -625,8 +610,8 @@ Some of the checks are:
 - Functional tests.
 - Integration tests.
 
-The Jenkins jobs will wait to be triggered. A maintainer must add a `/test`
-comment on the PR to let the CI jobs run.
+The CI tests jobs will wait to be triggered. A maintainer must add an `ok-to-test`
+label on the PR to let the CI jobs run.
 
 All CI jobs must pass in order to merge your PR.
 
@@ -641,7 +626,7 @@ The Kata Containers project maintainers are the people accepting or
 rejecting any PR. Although [anyone can review PRs](#reviews), only the
 acknowledgement (or "ack") from an Approver counts towards the approval of a PR.
 
-Approvers are listed in GitHub teams, one for each repository. The project
+Approvers are listed in GitHub teams. The project
 uses the
 [GitHub required status checks](https://help.github.com/en/articles/enabling-required-status-checks)
 along with the [GitHub `CODEOWNERS`file](https://help.github.com/en/articles/about-code-owners) to specify who can approve PRs. All repositories are configured to require:
