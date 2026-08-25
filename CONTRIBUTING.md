@@ -4,7 +4,6 @@
 * [Pull requests](#pull-requests)
 * [GitHub basic setup](#github-basic-setup)
     * [Prerequisites](#prerequisites)
-    * [Contributor roles](#contributor-roles)
     * [Golang coding style](#golang-coding-style)
     * [Rust coding style](#rust-coding-style)
     * [Certificate of Origin](#certificate-of-origin)
@@ -53,9 +52,6 @@ To get started, complete the prerequisites below.
 
 ### Prerequisites
 
-- Review [Contributor roles](#contributor-roles) that require special Git
-  configuration.
-
 - [Set up Git](https://help.github.com/en/github/getting-started-with-github/set-up-git).
 
   >**Note:** The email address you specify must match the email address you
@@ -67,20 +63,9 @@ To get started, complete the prerequisites below.
    Example: Your local clone should show `your-github-username`, as follows.
    `https://github.com/${your-github-username}/community`.
 
-### Contributor roles
-
-Special Git configuration is required for these contributors:
-
-* [Golang coding style](#golang-coding-style)
-* [Rust coding style](#rust-coding-style)
-* [Kata runtime static checks](#kata-runtime-static-checks)
-
-For all other contributor roles, follow the standard configuration, shown in
-Prerequisites.
-
 ### Golang coding style
 
-* Review [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments) to avoid common `Golang` errors.
+* Review [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) to avoid common `Golang` errors.
 * Use `gofmt` to fix any mechanical style issues.
 
 ### Rust coding style
