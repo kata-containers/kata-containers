@@ -14,7 +14,6 @@
 * [GitHub workflow](#github-workflow)
     * [Configure your environment](#configure-your-environment)
     * [GitHub labels and keywords that block PRs](#github-labels-and-keywords-that-block-prs)
-* [Re-vendor PRs](#re-vendor-prs)
 * [Use static checks for validation](#use-static-checks-for-validation)
     * [Fix failed static checks after submitting PRs](#fix-failed-static-checks-after-submitting-prs)
     * [Kata runtime static checks](#kata-runtime-static-checks)
@@ -399,61 +398,6 @@ automatically blocked from merging.
 >shorthand for `do-not-merge`. The CI systems only recognise the above
 >phrases as shown.
 
-## Re-vendor PRs
-
-If you raise a PR to update the vendored copy of one or more golang packages,
-after running the
-[`dep`](https://github.com/kata-containers/kata-containers/blob/main/VENDORING.md) command, ensure you add any modified files under the `vendor/` directory to Git before committing the changes:
-
-```sh
-$ git add vendor/
-```
-
-There are two critical pieces of information you need to add to the commit
-body:
-
-- A brief explanation why the re-vendor is required.
-
-  For example, you should state if an important bug fix or new feature is
-  required, or if a particular commit is needed.
-
-- The range of commits being added for these third-party packages.
-
-  It is possible that re-vendoring a particular package will also result in
-  updates to other dependent packages. However, it is important to include
-  the commit range (even if it is big) for the primary package(s) the
-  re-vendor PR is raised for.
-
-  These details allow for easier troubleshooting if the re-vendor PR
-  introduces bug or behavioral changes.
-
-  Generate the list of new commits added to the primary re-vendored
-  package by comparing the previous and latest commits for the package being re-vendored.
-
-  The following example lists the steps you should take if a new version of
-  `libcontainer` (part of the `runc` repository) is required:
-
-  1. Determine the previous and latest commits for the package by looking at
-     the `diff` of the `Gopkg.toml` file in your branch.
-
-  1. Run the commands below:
-
-     ```bash
-     $ go get -d -u github.com/opencontainers/runc
-     $ cd $GOPATH/src/github.com/opencontainers/runc
-     $ old_commit="..."
-     $ new_commit="..."
-     $ git log --no-merges --abbrev-commit --pretty=oneline "${old_commit}..${new_commit}" | sed 's/^/    /g'
-     ```
-
-  Paste the output of the previous command directly into the commit "as-is".
-  Note that the four space indent added by the `sed` command is used to force
-  GitHub to render the list in a fixed-width font, which makes it easier to
-  read.
-
-For additional information on using the `dep` tool, see
-"[Performing vendoring for the Kata Containers project](https://github.com/kata-containers/community/blob/main/VENDORING.md)".
-
 ## Use static checks for validation
 
 * Kata Containers utilizes [Continuous Integration (CI)](#continuous-integration) to automatically check every PR.
@@ -578,7 +522,6 @@ Examples:
 | `cli` | Change affecting command line options or commands |
 | `docs` | Documentation change |
 | `logging` | Logging change |
-| `vendor` | [Re-vendoring](#re-vendor-prs) change |
 
 To see the subsystem values chosen for existing commits:
 
