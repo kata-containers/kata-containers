@@ -61,7 +61,7 @@ To get started, complete the prerequisites below.
   [Kata Containers Project](https://github.com/kata-containers).
 
    Example: Your local clone should show `your-github-username`, as follows.
-   `https://github.com/${your-github-username}/community`.
+   `https://github.com/${your-github-username}/kata-containers`.
 
 ### Golang coding style
 
@@ -161,8 +161,8 @@ For further details on `golang`, refer to the
 
 #### Fork and clone
 
-In this example, we configure a Git environment to contribute to this very
-`Community` repo. We create a sample branch, incorporate reviewer feedback, and rebase our commits.
+In this example, we configure a Git environment to contribute to this
+`kata-containers` repo. We create a sample branch, incorporate reviewer feedback, and rebase our commits.
 
 1. Fork the [upstream repository](https://help.github.com/articles/cloning-a-repository):
 
@@ -178,8 +178,8 @@ In this example, we configure a Git environment to contribute to this very
 $ dir="$GOPATH/src/github.com/kata-containers"
 $ mkdir -p "$dir"
 $ cd "$dir"
-$ git clone https://github.com/{your-github-username}/community
-$ cd community
+$ git clone https://github.com/{your-github-username}/kata-containers
+$ cd kata-containers
 ```
 
 >**Note:** Cloning a forked repository automatically gives a remote `origin`.
@@ -188,23 +188,23 @@ $ cd community
 
 Next, add the remote `upstream`. Configuring this remote allows you to
 synchronize your forked copy, `origin`, with the `upstream`. The
-`upstream` URL varies by repository. We use the `upstream` from the Community for this example.
+`upstream` URL varies by repository. We use the `upstream` from the kata-containers for this example.
 
-1. Change directory into `community`.
+1. Change directory into `kata-containers`.
 
 1. Set the remote `upstream` as follows.
 
     ```sh
-    $ git remote add upstream https://github.com/kata-containers/community
+    $ git remote add upstream https://github.com/kata-containers/kata-containers
     ```
 
 1. Run `git remote -v`. Your remotes should appear similar to these:
 
     ```
-    origin  https://github.com/your-github-username/community.git (fetch)
-    origin  https://github.com/your-github-username/community.git (push)
-    upstream  https://github.com/kata-containers/community (fetch)
-    upstream  https://github.com/kata-containers/community (push)
+    origin  https://github.com/your-github-username/kata-containers.git (fetch)
+    origin  https://github.com/your-github-username/kata-containers.git (push)
+    upstream  https://github.com/kata-containers/kata-containers (fetch)
+    upstream  https://github.com/kata-containers/kata-containers (push)
     ```
 
 For more details, see how to [set up a git remote](https://help.github.com/articles/configuring-a-remote-for-a-fork).
@@ -256,7 +256,7 @@ For more details, see how to [set up a git remote](https://help.github.com/artic
    >for a new clone.
 
 1. Create the PR:
-  - Browse to https://github.com/kata-containers/community.
+  - Browse to https://github.com/kata-containers/kata-containers.
   - Click the "Compare & pull request" button that appears.
   - Click the "Create pull request" button.
 
@@ -294,7 +294,7 @@ multiple commits on your branch. Follow these steps.
    repository:
 
     ```
-    $ cd $GOPATH/src/github.com/kata-containers/community
+    $ cd $GOPATH/src/github.com/kata-containers/kata-containers
     $ git checkout main
     $ git pull --rebase upstream main
     ```
@@ -403,7 +403,7 @@ automatically blocked from merging.
 
 If you raise a PR to update the vendored copy of one or more golang packages,
 after running the
-[`dep`](https://github.com/kata-containers/community/blob/main/VENDORING.md) command, ensure you add any modified files under the `vendor/` directory to Git before committing the changes:
+[`dep`](https://github.com/kata-containers/kata-containers/blob/main/VENDORING.md) command, ensure you add any modified files under the `vendor/` directory to Git before committing the changes:
 
 ```sh
 $ git add vendor/
