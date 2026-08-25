@@ -11,9 +11,61 @@
 #   DOCKER_TAG      - Image tag to test
 #   KATA_HYPERVISOR - Hypervisor to test (qemu, clh, etc.)
 #   KUBERNETES      - K8s distribution (microk8s, k3s, rke2, etc.)
+# Optional EROFS settings:
+#   SNAPSHOTTER                 - Set to "erofs" to configure the EROFS snapshotter
+#   EROFS_SNAPSHOTTER_MODE      - "disk" or "memory"
+#   EROFS_DMVERITY              - Set to "dmverity" to enable dm-verity
+#   EROFS_MERGE_MODE            - "merged" or "unmerged"
 
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
+
+# Run a command against the host node's filesystem, mounted at /host inside a
+# short-lived privileged pod.
+# Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
+#
+# We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
+# into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
+run_on_host() {
+	local cmd="$1"
+	local node_name
+	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
+	local pod_name="host-exec-${RANDOM}"
+
+	kubectl run "${pod_name}" \
+		--image=quay.io/kata-containers/alpine-bash-curl:latest \
+		--restart=Never \
+		--overrides="{
+			\"spec\": {
+				\"nodeName\": \"${node_name}\",
+				\"activeDeadlineSeconds\": 300,
+				\"tolerations\": [{\"operator\": \"Exists\"}],
+				\"containers\": [{
+					\"name\": \"exec\",
+					\"image\": \"quay.io/kata-containers/alpine-bash-curl:latest\",
+					\"imagePullPolicy\": \"IfNotPresent\",
+					\"command\": [\"sh\", \"-c\", \"${cmd}\"],
+					\"securityContext\": {\"privileged\": true},
+					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": true}]
+				}],
+				\"volumes\": [{\"name\": \"host\", \"hostPath\": {\"path\": \"/\"}}]
+			}
+		}" > /dev/null 2>&1
+
+	local deadline=$((SECONDS + 60))
+	while (( SECONDS < deadline )); do
+		local phase
+		phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null) || true
+		case "${phase}" in
+			Succeeded|Failed) break ;;
+		esac
+		sleep 1
+	done
+
+	kubectl logs "${pod_name}" 2>/dev/null
+	kubectl delete pod "${pod_name}" --ignore-not-found=true > /dev/null 2>&1
+	[[ "${phase}" == "Succeeded" ]]
+}
 
 # The tolerations of a rendered pod spec, one entry per line, its fields joined
 # by "; " in the order they were rendered.
@@ -70,6 +122,30 @@ generate_base_values() {
 		k8s_distribution="k8s"
 	fi
 
+	local shim_snapshotter_values=""
+	local snapshotter_values=""
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+		local erofs_dmverity="false"
+		if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
+			erofs_dmverity="true"
+		fi
+
+		shim_snapshotter_values="    containerd:
+      snapshotter: erofs"
+		snapshotter_values="snapshotter:
+  setup: [\"erofs\"]
+  erofsSnapshotterMode: \"${EROFS_SNAPSHOTTER_MODE:-}\"
+  erofsDmverity: ${erofs_dmverity}
+  erofsMergeMode: \"${EROFS_MERGE_MODE:-}\"
+
+# fs-verity would also need the backing filesystem prepared for it, and these
+# tests only care about dm-verity.
+containerd:
+  userDropIn: |
+    [plugins.'io.containerd.snapshotter.v1.erofs']
+      enable_fsverity = false"
+	fi
+
 	cat > "${output_file}" <<EOF
 image:
   reference: ${DOCKER_REGISTRY}/${DOCKER_REPO}
@@ -83,6 +159,7 @@ shims:
   disableAll: true
   ${KATA_HYPERVISOR}:
     enabled: true
+${shim_snapshotter_values}
 
 defaultShim:
   amd64: ${KATA_HYPERVISOR}
@@ -91,6 +168,8 @@ defaultShim:
 runtimeClasses:
   enabled: true
   createDefault: true
+
+${snapshotter_values}
 EOF
 }
 

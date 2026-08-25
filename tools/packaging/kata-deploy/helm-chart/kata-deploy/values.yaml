@@ -22,6 +22,19 @@
 #   and installs the new nodes (the staged actions are idempotent, so already-
 #   installed nodes are skipped). This is intentional: it avoids an always-on
 #   privileged component on every node.
+#
+# NOTE on host kernel modules in "job" mode:
+#   Each per-node install Job starts with one short-lived privileged, tokenless
+#   init container that loads the modules the enabled runtimes and snapshotters
+#   need. It mounts the host root read-only because only the host's own modprobe
+#   matches the running kernel, and it fails the node before anything on it is
+#   changed if a required module cannot be loaded, or if x86 ends up with
+#   neither /dev/kvm nor /dev/mshv.
+#
+#   Those modules are also recorded under the host's /etc/modules-load.d so they
+#   come back after a reboot. Uninstall drops that file but never unloads a
+#   module, because module state is host-global and may be in use by something
+#   else.
 deploymentMode: daemonset  # daemonset | job
 
 # Settings specific to deploymentMode: job
