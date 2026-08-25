@@ -96,6 +96,10 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
 		"numa-topology-test"
 		"numa-topology-gpu-test"
+		"vllm-qwen2-5-0-5b-instruct"
+		"vllm-qwen2-5-0-5b-instruct-tee"
+		"vllm-all-minilm-l6-v2"
+		"vllm-all-minilm-l6-v2-tee"
 	)
 	local -a existing_pods=()
 	local pod
@@ -136,6 +140,7 @@ else
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-nim.bats" \
+		"k8s-nvidia-vllm.bats" \
 		"k8s-qemu-rootless-sandbox.bats")
 fi
 

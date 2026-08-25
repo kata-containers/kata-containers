@@ -1,0 +1,102 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_INSTRUCT}
+  labels:
+    app: ${POD_NAME_INSTRUCT}
+spec:
+  # block-plain emptyDir volumes are formatted and mounted in the guest.
+  # Set fsGroup so the agent makes the model directory writable.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  restartPolicy: Never
+  runtimeClassName: kata
+  # The weights ship as an OCI image, so nothing is fetched from a model hub at
+  # run time and the guest stays offline.
+  initContainers:
+  - name: model
+    image: ${MODEL_IMAGE_INSTRUCT}
+    command:
+      - sh
+      - -c
+      - cp -dR /models/. /mnt/models/
+    resources:
+      limits:
+        cpu: "2"
+        memory: "2Gi"
+    volumeMounts:
+      - name: model
+        mountPath: /mnt/models
+  containers:
+  - name: ${POD_NAME_INSTRUCT}
+    image: ${VLLM_IMAGE}
+    # Overriding the entrypoint keeps this working whether the tag ships
+    # "vllm serve" or the older api_server module.
+    command:
+      - vllm
+      - serve
+    args:
+      - /mnt/models
+      - --served-model-name=${MODEL_NAME_INSTRUCT}
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=4096
+      - --enforce-eager
+    ports:
+      - containerPort: 8000
+        name: http-openai
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http-openai
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      # 630s window, wider than POD_READY_TIMEOUT_INSTRUCT in k8s-nvidia-vllm.bats
+      failureThreshold: 60
+    # The image has no passwd entry for uid 1000, and torch resolves its cache
+    # directory through getpass.getuser(), which reads USER before that
+    # database.  HOME keeps the caches themselves off the unwritable /.
+    env:
+      - name: USER
+        value: vllm
+      - name: HOME
+        value: /tmp
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        cpu: "16"
+        memory: "16Gi"
+    volumeMounts:
+      - name: model
+        mountPath: /mnt/models
+  volumes:
+  - name: model
+    emptyDir:
+      sizeLimit: 8Gi
