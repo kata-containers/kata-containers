@@ -38,6 +38,8 @@ pub const KATA_ANNO_PREFIX: &str = "io.katacontainers.";
 pub const KATA_ANNO_CFG_PREFIX: &str = "io.katacontainers.config.";
 /// Prefix for Kata container annotations
 pub const KATA_ANNO_CONTAINER_PREFIX: &str = "io.katacontainers.container.";
+/// Pod annotation that declares measured authorization for confidential volumes.
+pub const KATA_ANNO_CONFIDENTIAL_VOLUME: &str = "io.katacontainers.volume.confidential";
 // OCI section
 /// The annotation key to fetch the OCI configuration file path.
 pub const BUNDLE_PATH_KEY: &str = "io.katacontainers.pkg.oci.bundle_path";

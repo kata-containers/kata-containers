@@ -15,9 +15,10 @@ mod sock;
 pub mod types;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
-    BlkioStatsEntry, CheckRequest, CloseStdinRequest, ContainerID, ContainerProcessID,
-    CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, Empty, ExecProcessRequest,
-    FSGroup, FSGroupChangePolicy, GetDiagnosticDataRequest, GetDiagnosticDataResponse,
+    BlkioStatsEntry, CheckRequest, CloseStdinRequest, ConfidentialStorage,
+    ConfidentialStorageAccess, ContainerID, ContainerProcessID, CopyFileRequest,
+    CreateContainerRequest, CreateSandboxRequest, Empty, ExecProcessRequest, FSGroup,
+    FSGroupChangePolicy, GetDiagnosticDataRequest, GetDiagnosticDataResponse,
     GetGuestDetailsRequest, GetIPTablesRequest, GetIPTablesResponse, GuestDetailsResponse,
     HealthCheckResponse, IPAddress, IPFamily, Interface, Interfaces, ListProcessesRequest,
     MemHotplugByProbeRequest, MetricsResponse, OnlineCPUMemRequest, OomEventResponse,

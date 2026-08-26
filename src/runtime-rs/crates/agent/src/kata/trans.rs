@@ -15,18 +15,18 @@ use crate::{
     types::{
         ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
         AgentDetails, BlkioStats, BlkioStatsEntry, CgroupStats, CheckRequest, CloseStdinRequest,
-        ContainerID, CopyFileRequest, CpuStats, CpuUsage, CreateContainerRequest,
-        CreateSandboxRequest, Device, Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy,
-        GetIPTablesRequest, GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse,
-        HugetlbStats, IPAddress, IPFamily, Interface, Interfaces, KernelModule,
-        MemHotplugByProbeRequest, MemoryData, MemoryStats, MetricsResponse, NetworkStats,
-        OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
-        RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
-        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SharedMount,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-        WriteStreamRequest,
+        ConfidentialStorage, ConfidentialStorageAccess, ContainerID, CopyFileRequest, CpuStats,
+        CpuUsage, CreateContainerRequest, CreateSandboxRequest, Device, Empty, ExecProcessRequest,
+        FSGroup, FSGroupChangePolicy, GetIPTablesRequest, GetIPTablesResponse,
+        GuestDetailsResponse, HealthCheckResponse, HugetlbStats, IPAddress, IPFamily, Interface,
+        Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData, MemoryStats,
+        MetricsResponse, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
+        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest,
+        Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse,
+        SharedMount, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
+        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     GetDiagnosticDataRequest, GetDiagnosticDataResponse, GetGuestDetailsRequest, OomEventResponse,
     SetPolicyRequest, WaitProcessResponse, WriteStreamResponse,
@@ -115,6 +115,22 @@ impl From<Storage> for agent::Storage {
             options: trans_vec(from.options),
             mount_point: from.mount_point,
             shared: from.shared,
+            confidential_storage: from_option(from.confidential_storage),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<ConfidentialStorage> for agent::ConfidentialStorage {
+    fn from(from: ConfidentialStorage) -> Self {
+        let requested_access = match from.requested_access {
+            ConfidentialStorageAccess::ReadOnly => agent::ConfidentialStorageAccess::ReadOnly,
+            ConfidentialStorageAccess::ReadWrite => agent::ConfidentialStorageAccess::ReadWrite,
+        };
+
+        Self {
+            manifest_uri: from.manifest_uri,
+            requested_access: protobuf::EnumOrUnknown::new(requested_access),
             ..Default::default()
         }
     }
@@ -921,5 +937,52 @@ impl From<AddSwapPathRequest> for agent::AddSwapPathRequest {
             path: from.path,
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn storage_transport_preserves_confidential_request_exactly() {
+        let storage = Storage {
+            driver: "blk".to_string(),
+            driver_options: Vec::new(),
+            source: "00/00".to_string(),
+            fs_type: "confidential-storage".to_string(),
+            options: Vec::new(),
+            mount_point: "/run/kata-containers/shared/containers/passthrough/confidential-test"
+                .to_string(),
+            shared: false,
+            fs_group: Some(FSGroup {
+                group_id: 3000,
+                group_change_policy: FSGroupChangePolicy::OnRootMismatch,
+            }),
+            confidential_storage: Some(ConfidentialStorage {
+                manifest_uri: "kbs:///tenant/storage-manifests/workspace-v1".to_string(),
+                requested_access: ConfidentialStorageAccess::ReadWrite,
+            }),
+        };
+
+        let wire: agent::Storage = storage.into();
+        let request = wire.confidential_storage.as_ref().unwrap();
+
+        assert_eq!(
+            request.manifest_uri,
+            "kbs:///tenant/storage-manifests/workspace-v1"
+        );
+        assert_eq!(
+            request.requested_access.enum_value().unwrap(),
+            agent::ConfidentialStorageAccess::ReadWrite
+        );
+        assert_eq!(wire.fs_group.group_id, 3000);
+        assert_eq!(
+            wire.fs_group.group_change_policy.enum_value().unwrap(),
+            protocols::types::FSGroupChangePolicy::OnRootMismatch
+        );
+        assert!(wire.driver_options.is_empty());
+        assert!(wire.options.is_empty());
+        assert!(!wire.shared);
     }
 }

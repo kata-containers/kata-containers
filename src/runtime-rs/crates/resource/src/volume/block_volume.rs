@@ -81,10 +81,17 @@ impl BlockVolume {
         .await
         .context("do handle device failed.")?;
 
-        let block_volume =
-            handle_block_volume(device_info, m, read_only, sid, DEFAULT_VOLUME_FS_TYPE, None)
-                .await
-                .context("do handle block volume failed")?;
+        let block_volume = handle_block_volume(
+            device_info,
+            m,
+            read_only,
+            sid,
+            DEFAULT_VOLUME_FS_TYPE,
+            None,
+            None,
+        )
+        .await
+        .context("do handle block volume failed")?;
 
         Ok(Self {
             storage: Some(block_volume.0),

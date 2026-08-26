@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, Context, Error, Result};
 use base64::Engine as _;
+use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -43,6 +44,17 @@ pub const KATA_VOLUME_OVERLAYFS_CREATE_DIR: &str =
 
 /// Key to request filesystem creation for a fresh block volume.
 pub const KATA_BLOCK_VOLUME_CREATE_FS: &str = "create_filesystem";
+
+/// The direct-volume type used to carry confidential block storage.
+pub const KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE: &str = "directvol";
+
+/// Fail-closed filesystem discriminator for confidential storage.
+pub const KATA_CONFIDENTIAL_STORAGE_FS_TYPE: &str = "confidential-storage";
+
+const CONFIDENTIAL_STORAGE_MANIFEST_URI_MAX_BYTES: usize = 2048;
+const CONFIDENTIAL_STORAGE_MOUNT_NAME_PREFIX: &str = "confidential-";
+const DIRECT_VOLUME_METADATA_FS_GROUP: &str = "fsGroup";
+const DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY: &str = "fsGroupChangePolicy";
 
 /// SANDBOX_BIND_MOUNTS_DIR is for sandbox bindmounts
 pub const SANDBOX_BIND_MOUNTS_DIR: &str = "sandbox-mounts";
@@ -142,6 +154,182 @@ pub struct DirectVolumeMountInfo {
     /// Additional mount options.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
+    /// Optional typed confidential-storage activation request.
+    #[serde(
+        rename = "confidential-storage",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub confidential_storage: Option<ConfidentialStorage>,
+}
+
+/// Access requested for a confidential volume.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConfidentialStorageAccess {
+    /// Mount the volume read-only.
+    ReadOnly,
+    /// Mount the volume read-write.
+    ReadWrite,
+}
+
+/// Non-secret inputs for manifest-driven in-guest activation.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConfidentialStorage {
+    /// Immutable Trustee/KBS resource containing the storage manifest.
+    #[serde(rename = "manifest-uri")]
+    pub manifest_uri: String,
+    /// Access derived from the CSI publish request.
+    #[serde(rename = "requested-access")]
+    pub requested_access: ConfidentialStorageAccess,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StrictDirectVolumeMountInfo {
+    #[serde(rename = "volume-type")]
+    volume_type: String,
+    device: String,
+    #[serde(rename = "fstype")]
+    fs_type: String,
+    #[serde(default)]
+    metadata: HashMap<String, String>,
+    #[serde(default)]
+    options: Vec<String>,
+    #[serde(rename = "confidential-storage")]
+    confidential_storage: Option<ConfidentialStorage>,
+}
+
+impl From<StrictDirectVolumeMountInfo> for DirectVolumeMountInfo {
+    fn from(value: StrictDirectVolumeMountInfo) -> Self {
+        Self {
+            volume_type: value.volume_type,
+            device: value.device,
+            fs_type: value.fs_type,
+            metadata: value.metadata,
+            options: value.options,
+            confidential_storage: value.confidential_storage,
+        }
+    }
+}
+
+/// Validate an immutable local KBS resource URI used for a confidential-volume manifest.
+pub fn validate_confidential_manifest_uri(value: &str) -> Result<()> {
+    if value.len() <= "kbs:///".len()
+        || value.len() > CONFIDENTIAL_STORAGE_MANIFEST_URI_MAX_BYTES
+        || !value.starts_with("kbs:///")
+        || value.contains(['?', '#'])
+    {
+        return Err(anyhow!(
+            "confidential storage manifest URI must be a canonical local KBS resource URI"
+        ));
+    }
+
+    let components: Vec<&str> = value["kbs:///".len()..].split('/').collect();
+    if components.len() != 3
+        || components.iter().any(|component| {
+            component.is_empty()
+                || matches!(*component, "." | "..")
+                || !component
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+    {
+        return Err(anyhow!(
+            "confidential storage manifest URI must be a canonical local KBS resource URI"
+        ));
+    }
+
+    Ok(())
+}
+
+/// Return the stable sandbox-local mount name for an authorized manifest.
+///
+/// The name contains no secret material. Its stability lets multiple containers in one
+/// sandbox share one Agent/CDH activation and reference count it by mount point.
+pub fn confidential_storage_mount_name(manifest_uri: &str) -> Result<String> {
+    validate_confidential_manifest_uri(manifest_uri)?;
+    let digest = Sha256::digest(manifest_uri.as_bytes());
+    let digest = digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok(format!("{CONFIDENTIAL_STORAGE_MOUNT_NAME_PREFIX}{digest}"))
+}
+
+impl DirectVolumeMountInfo {
+    /// Validate the complete runtime-rs-to-agent confidential-storage request.
+    pub fn validated_confidential_storage(&self) -> Result<Option<&ConfidentialStorage>> {
+        let Some(request) = self.confidential_storage.as_ref() else {
+            if self.fs_type == KATA_CONFIDENTIAL_STORAGE_FS_TYPE {
+                return Err(anyhow!(
+                    "invalid confidential storage metadata: activation request is missing"
+                ));
+            }
+            return Ok(None);
+        };
+
+        if self.volume_type != KATA_CONFIDENTIAL_STORAGE_VOLUME_TYPE {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: volume type must be directvol"
+            ));
+        }
+        if self.fs_type != KATA_CONFIDENTIAL_STORAGE_FS_TYPE {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: filesystem discriminator must be confidential-storage"
+            ));
+        }
+        if !self.options.is_empty() {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: mount options are not supported"
+            ));
+        }
+
+        for (key, value) in &self.metadata {
+            match key.as_str() {
+                DIRECT_VOLUME_METADATA_FS_GROUP => {
+                    value.parse::<u32>().map_err(|_| {
+                        anyhow!("invalid confidential storage metadata: invalid fsGroup")
+                    })?;
+                }
+                DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY
+                    if value == "Always" || value == "OnRootMismatch" => {}
+                DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY => {
+                    return Err(anyhow!(
+                        "invalid confidential storage metadata: invalid fsGroup change policy"
+                    ));
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "invalid confidential storage metadata: unsupported metadata key {key:?}"
+                    ));
+                }
+            }
+        }
+
+        if self
+            .metadata
+            .contains_key(DIRECT_VOLUME_METADATA_FS_GROUP_CHANGE_POLICY)
+            && !self.metadata.contains_key(DIRECT_VOLUME_METADATA_FS_GROUP)
+        {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: fsGroup change policy requires fsGroup"
+            ));
+        }
+        validate_confidential_manifest_uri(&request.manifest_uri).map_err(|_| {
+            anyhow!(
+                "invalid confidential storage metadata: manifest URI must be a canonical local KBS resource URI"
+            )
+        })?;
+        if request.requested_access != ConfidentialStorageAccess::ReadWrite {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: only readWrite access is supported"
+            ));
+        }
+
+        Ok(Some(request))
+    }
 }
 
 /// Nydus extra options
@@ -527,8 +715,37 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
     let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let mount_info_file = std::fs::read_to_string(mount_info_file_path)?;
-    let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
+    parse_direct_volume_mount_info(&mount_info_file)
+}
 
+/// Parse direct-volume metadata, applying strict validation when the
+/// confidential-storage extension is present.
+pub fn parse_direct_volume_mount_info(value: &str) -> Result<DirectVolumeMountInfo> {
+    let json: serde_json::Value = serde_json::from_str(value)?;
+    let has_confidential_storage = json
+        .as_object()
+        .is_some_and(|fields| fields.contains_key("confidential-storage"));
+
+    let mount_info = if has_confidential_storage {
+        if json
+            .get("confidential-storage")
+            .is_some_and(serde_json::Value::is_null)
+        {
+            return Err(anyhow!(
+                "invalid confidential storage metadata: confidential-storage must be an object"
+            ));
+        }
+        // Parse the original bytes again so serde can reject duplicate fields. Parsing the
+        // intermediate Value would silently collapse duplicates before strict validation.
+        let strict: StrictDirectVolumeMountInfo = serde_json::from_str(value).context(
+            "invalid confidential storage metadata: direct-volume object contains an unknown or malformed field",
+        )?;
+        DirectVolumeMountInfo::from(strict)
+    } else {
+        serde_json::from_value(json)?
+    };
+
+    mount_info.validated_confidential_storage()?;
     Ok(mount_info)
 }
 
@@ -536,6 +753,7 @@ pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo>
 /// for the given `volume_path`.
 #[cfg(feature = "safe-path")]
 pub fn add_volume_mount_info(volume_path: &str, mount_info: &DirectVolumeMountInfo) -> Result<()> {
+    mount_info.validated_confidential_storage()?;
     let root = kata_direct_volume_root_path();
     // safe_path::scoped_join requires the root to exist; ensure it does before
     // calling join_path (mirrors Go's os.MkdirAll behaviour in AddMountInfo).
@@ -635,6 +853,117 @@ pub fn adjust_rootfs_mounts() -> Result<Vec<Mount>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const CONFIDENTIAL_MOUNT_INFO: &str = r#"{
+        "volume-type":"directvol",
+        "device":"/dev/longhorn/workspace",
+        "fstype":"confidential-storage",
+        "metadata":{"fsGroup":"3000","fsGroupChangePolicy":"OnRootMismatch"},
+        "confidential-storage":{
+            "manifest-uri":"kbs:///tenant/storage-manifests/workspace-v1",
+            "requested-access":"readWrite"
+        }
+    }"#;
+
+    #[test]
+    fn parses_strict_confidential_direct_volume() {
+        let mount_info = parse_direct_volume_mount_info(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        let request = mount_info.confidential_storage.unwrap();
+
+        assert_eq!(
+            request.manifest_uri,
+            "kbs:///tenant/storage-manifests/workspace-v1"
+        );
+        assert_eq!(
+            request.requested_access,
+            ConfidentialStorageAccess::ReadWrite
+        );
+    }
+
+    #[test]
+    fn confidential_direct_volume_rejects_unknown_and_mixed_fields() {
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["profile"] = serde_json::json!("luks2-integrity-rw");
+        assert!(parse_direct_volume_mount_info(&value.to_string()).is_err());
+
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["options"] = serde_json::json!(["discard"]);
+        assert!(parse_direct_volume_mount_info(&value.to_string()).is_err());
+
+        let duplicate_outer = CONFIDENTIAL_MOUNT_INFO.replace(
+            r#""device":"/dev/longhorn/workspace""#,
+            r#""device":"/dev/longhorn/workspace","device":"/dev/other""#,
+        );
+        assert!(parse_direct_volume_mount_info(&duplicate_outer).is_err());
+
+        let duplicate_manifest = CONFIDENTIAL_MOUNT_INFO.replace(
+            r#""manifest-uri":"kbs:///tenant/storage-manifests/workspace-v1""#,
+            r#""manifest-uri":"kbs:///tenant/storage-manifests/workspace-v1","manifest-uri":"kbs:///tenant/storage-manifests/other-v1""#,
+        );
+        assert!(parse_direct_volume_mount_info(&duplicate_manifest).is_err());
+    }
+
+    #[test]
+    fn confidential_direct_volume_rejects_downgrade_and_mutable_uri() {
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["fstype"] = serde_json::json!("ext4");
+        assert!(parse_direct_volume_mount_info(&value.to_string()).is_err());
+
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["confidential-storage"]["manifest-uri"] =
+            serde_json::json!("kbs:///tenant/storage-manifests/latest?revision=1");
+        assert!(parse_direct_volume_mount_info(&value.to_string()).is_err());
+    }
+
+    #[test]
+    fn confidential_direct_volume_rejects_unsupported_read_only_access() {
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["confidential-storage"]["requested-access"] = serde_json::json!("readOnly");
+        assert!(parse_direct_volume_mount_info(&value.to_string()).is_err());
+    }
+
+    #[test]
+    fn confidential_direct_volume_preserves_explicit_root_fsgroup() {
+        let mut value: serde_json::Value = serde_json::from_str(CONFIDENTIAL_MOUNT_INFO).unwrap();
+        value["metadata"]["fsGroup"] = serde_json::json!("0");
+
+        let mount_info = parse_direct_volume_mount_info(&value.to_string()).unwrap();
+
+        assert_eq!(
+            mount_info.metadata.get("fsGroup").map(String::as_str),
+            Some("0")
+        );
+    }
+
+    #[test]
+    fn confidential_mount_name_is_stable_and_opaque() {
+        let manifest_uri = "kbs:///tenant/storage-manifests/workspace-v1";
+
+        assert_eq!(
+            confidential_storage_mount_name(manifest_uri).unwrap(),
+            "confidential-1add35069081285fe11d1174dcfde93faf6097a48d3182b5f909c64ab3530bde"
+        );
+        assert_eq!(
+            confidential_storage_mount_name(manifest_uri).unwrap(),
+            confidential_storage_mount_name(manifest_uri).unwrap()
+        );
+        assert_ne!(
+            confidential_storage_mount_name(manifest_uri).unwrap(),
+            confidential_storage_mount_name("kbs:///tenant/storage-manifests/cache-v1").unwrap()
+        );
+        assert!(confidential_storage_mount_name("https://example.invalid/manifest").is_err());
+    }
+
+    #[test]
+    fn ordinary_direct_volume_keeps_legacy_unknown_field_compatibility() {
+        let value = r#"{
+            "volume-type":"block",
+            "device":"/dev/sda",
+            "fstype":"ext4",
+            "legacy-extension":"preserved-by-older-writers"
+        }"#;
+        assert!(parse_direct_volume_mount_info(value).is_ok());
+    }
 
     #[test]
     fn test_kata_guest_sandbox_dir() {
@@ -767,6 +1096,7 @@ mod tests {
             fs_type: "ext4".to_string(),
             metadata,
             options: vec!["ro".to_string()],
+            confidential_storage: None,
         };
         KataVirtualVolume::try_from(&direct).unwrap_err();
 

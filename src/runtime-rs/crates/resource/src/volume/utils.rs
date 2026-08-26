@@ -103,8 +103,19 @@ pub(crate) async fn generate_shared_path(
     device_id: &str,
     sid: &str,
 ) -> Result<String> {
+    generate_shared_path_with_name(dest, device_id, sid, None).await
+}
+
+pub(crate) async fn generate_shared_path_with_name(
+    dest: PathBuf,
+    device_id: &str,
+    sid: &str,
+    stable_mount_name: Option<&str>,
+) -> Result<String> {
     let file_name = get_file_name(&dest).context("failed to get file name.")?;
-    let mount_name = generate_mount_path(device_id, file_name.as_str());
+    let mount_name = stable_mount_name
+        .map(str::to_owned)
+        .unwrap_or_else(|| generate_mount_path(device_id, file_name.as_str()));
     let guest_path = do_get_guest_path(&mount_name, device_id, true, false);
     // Note: directories should always be created under the rw/ path. The ro/ directory is a
     // read-only bind mount of rw/, so creating directories directly under ro/ would fail with a read-only FS.
@@ -127,6 +138,7 @@ pub async fn handle_block_volume(
     sid: &str,
     fstype: &str,
     volume_options: Option<&[String]>,
+    stable_mount_name: Option<&str>,
 ) -> Result<(agent::Storage, oci::Mount, String)> {
     let oci_opts = get_mount_options(m.options());
     let mut storage_options: Vec<String> =
@@ -155,9 +167,10 @@ pub async fn handle_block_volume(
     }
 
     // generate host guest shared path
-    let guest_path = generate_shared_path(m.destination().clone(), &device_id, sid)
-        .await
-        .context("generate host-guest shared path failed")?;
+    let guest_path =
+        generate_shared_path_with_name(m.destination().clone(), &device_id, sid, stable_mount_name)
+            .await
+            .context("generate host-guest shared path failed")?;
     storage.mount_point = guest_path.clone();
 
     // In some case, dest is device /dev/xxx

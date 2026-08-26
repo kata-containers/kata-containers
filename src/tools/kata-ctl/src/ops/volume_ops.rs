@@ -251,6 +251,7 @@ mod tests {
             fs_type: String::from("ext4"),
             metadata: HashMap::new(),
             options: vec![String::from("journal_dev"), String::from("noload")],
+            confidential_storage: None,
         };
         // serialize volumemountinfo into json string
         let mount_info = serde_json::to_string(&actual).unwrap();
