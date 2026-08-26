@@ -238,6 +238,20 @@ async fn update_storage_device(
         }
         if let Err(e) = device.cleanup() {
             error!(logger, "failed to clean state for storage device"; "mount-point" => mount_point, "error" => ?e);
+        } else if let Some(activation_id) = sandbox
+            .lock()
+            .await
+            .confidential_storage_activations
+            .remove(mount_point)
+        {
+            if let Err(e) = crate::confidential_data_hub::deactivate_volume(&activation_id).await {
+                sandbox
+                    .lock()
+                    .await
+                    .confidential_storage_activations
+                    .insert(mount_point.to_string(), activation_id);
+                error!(logger, "failed to deactivate confidential storage"; "mount-point" => mount_point, "error" => ?e);
+            }
         }
         return Err(anyhow!(
             "failed to update device for storage: {}",
@@ -257,6 +271,48 @@ pub async fn add_storages(
     storages: Vec<Storage>,
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
+) -> Result<Vec<String>> {
+    // Reject malformed confidential requests as one pure preflight pass. This keeps a later
+    // invalid entry from leaving an earlier volume mounted or activated.
+    for storage in &storages {
+        block_handler::validate_confidential_storage_contract(storage)?;
+    }
+
+    let mut storage_references = Vec::new();
+    let result = add_storages_inner(
+        logger,
+        storages,
+        sandbox,
+        cid.clone(),
+        &mut storage_references,
+    )
+    .await;
+    if let Err(error) = result {
+        let rollback = {
+            let mut sandbox = sandbox.lock().await;
+            let rollback = remove_storage_references(&mut sandbox, &storage_references).await;
+            if rollback.is_err() {
+                if let Some(cid) = cid {
+                    sandbox
+                        .container_mounts
+                        .insert(cid.clone(), storage_references);
+                    sandbox.pending_storage_cleanup.insert(cid);
+                }
+            }
+            rollback
+        };
+        return Err(error).context(format!("roll back added storages: {rollback:?}"));
+    }
+
+    result
+}
+
+async fn add_storages_inner(
+    logger: Logger,
+    storages: Vec<Storage>,
+    sandbox: &Arc<Mutex<Sandbox>>,
+    cid: Option<String>,
+    storage_references: &mut Vec<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
     let mut processed_mount_points = HashSet::new();
@@ -288,6 +344,7 @@ pub async fn add_storages(
                     .find(|s| s.mount_point == *mp)
                     .map_or(storage.shared, |s| s.shared);
                 let state = sandbox.lock().await.add_sandbox_storage(mp, shared).await;
+                storage_references.push(mp.clone());
 
                 // Only update device for the first occurrence
                 if state.ref_count().await == 1 {
@@ -334,6 +391,7 @@ pub async fn add_storages(
             .await
             .add_sandbox_storage(&path, storage.shared)
             .await;
+        storage_references.push(path.clone());
         if state.ref_count().await > 1 {
             if let Some(p) = state.path() {
                 if !p.is_empty() {
@@ -381,6 +439,42 @@ pub async fn add_storages(
     }
 
     Ok(mount_list)
+}
+
+/// Release storage references in mount-before-activation order.
+///
+/// The CDH handle remains recorded until deactivation succeeds, so a failed rollback can be
+/// retried by normal container or sandbox cleanup.
+pub(crate) async fn remove_storage_references(
+    sandbox: &mut Sandbox,
+    mount_points: &[String],
+) -> Result<()> {
+    for mount_point in mount_points {
+        let removed = if sandbox.storages.contains_key(mount_point) {
+            sandbox
+                .remove_sandbox_storage(mount_point)
+                .await
+                .with_context(|| format!("remove sandbox storage {mount_point}"))?
+        } else {
+            true
+        };
+        if !removed {
+            continue;
+        }
+
+        if let Some(activation_id) = sandbox
+            .confidential_storage_activations
+            .get(mount_point)
+            .cloned()
+        {
+            crate::confidential_data_hub::deactivate_volume(&activation_id)
+                .await
+                .with_context(|| format!("deactivate confidential storage {mount_point}"))?;
+            sandbox.confidential_storage_activations.remove(mount_point);
+        }
+    }
+
+    Ok(())
 }
 
 pub(crate) fn new_device(path: String) -> Result<Arc<dyn StorageDevice>> {
@@ -541,10 +635,73 @@ mod tests {
     use nix::mount::MsFlags;
     use protocols::agent::FSGroup;
     use std::fs::File;
+    use std::sync::atomic::{AtomicU32, Ordering};
     use tempfile::{tempdir, Builder};
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
+
+    #[tokio::test]
+    async fn storage_rollback_releases_every_reference() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let mount_point = "/run/kata-containers/shared/containers/passthrough/rollback-test";
+        sandbox.add_sandbox_storage(mount_point, false).await;
+        sandbox.add_sandbox_storage(mount_point, false).await;
+
+        remove_storage_references(
+            &mut sandbox,
+            &[mount_point.to_string(), mount_point.to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert!(!sandbox.storages.contains_key(mount_point));
+    }
+
+    #[tokio::test]
+    async fn storage_cleanup_failure_keeps_activation_for_ordered_retry() {
+        struct FailingDevice(Arc<AtomicU32>);
+
+        impl StorageDevice for FailingDevice {
+            fn path(&self) -> Option<&str> {
+                None
+            }
+
+            fn cleanup(&self) -> Result<()> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Err(anyhow!("injected cleanup failure"))
+            }
+        }
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let mount_point = "/run/kata-containers/shared/containers/passthrough/ordered-test";
+        let attempts = Arc::new(AtomicU32::new(0));
+        sandbox.add_sandbox_storage(mount_point, false).await;
+        assert!(sandbox
+            .update_sandbox_storage(mount_point, Arc::new(FailingDevice(attempts.clone())))
+            .is_ok());
+        sandbox
+            .register_confidential_storage_activation(mount_point, "activation-1".to_string())
+            .unwrap();
+
+        assert!(
+            remove_storage_references(&mut sandbox, &[mount_point.to_string()])
+                .await
+                .is_err()
+        );
+
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert!(sandbox.storages.contains_key(mount_point));
+        assert_eq!(
+            sandbox
+                .confidential_storage_activations
+                .get(mount_point)
+                .map(String::as_str),
+            Some("activation-1")
+        );
+    }
 
     #[test]
     fn test_mount_storage() {

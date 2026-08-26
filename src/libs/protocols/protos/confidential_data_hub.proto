@@ -26,6 +26,40 @@ message SecureMountRequest {
 
 message SecureMountResponse {}
 
+enum VolumeAccess {
+    VOLUME_ACCESS_UNSPECIFIED = 0;
+    VOLUME_ACCESS_READ_ONLY = 1;
+    VOLUME_ACCESS_READ_WRITE = 2;
+}
+
+message ActivateVolumeRequest {
+    // Guest block device in MAJ:MIN form.
+    string device_id = 1;
+
+    // Versioned, write-once secure-volume manifest stored in Trustee/KBS.
+    string manifest_uri = 2;
+
+    // Access authorized by measured kata-agent policy.
+    VolumeAccess requested_access = 3;
+}
+
+message ActivateVolumeResponse {
+    // Opaque handle used to release the activation.
+    string activation_id = 1;
+
+    // Activated plaintext block device inside the guest.
+    string device_path = 2;
+
+    // Access actually enforced by CDH.
+    VolumeAccess effective_access = 3;
+}
+
+message DeactivateVolumeRequest {
+    string activation_id = 1;
+}
+
+message DeactivateVolumeResponse {}
+
 message ImagePullRequest {
     // - `image_url`: The reference of the image to pull
     string image_url = 1;
@@ -47,6 +81,11 @@ service SealedSecretService {
 
 service SecureMountService {
     rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
+}
+
+service SecureVolumeService {
+    rpc ActivateVolume(ActivateVolumeRequest) returns (ActivateVolumeResponse) {};
+    rpc DeactivateVolume(DeactivateVolumeRequest) returns (DeactivateVolumeResponse) {};
 }
 
 message GetResourceRequest {

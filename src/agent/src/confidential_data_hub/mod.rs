@@ -17,7 +17,7 @@ use protocols::{
     confidential_data_hub_ttrpc_async,
     confidential_data_hub_ttrpc_async::{
         GetResourceServiceClient, ImagePullServiceClient, SealedSecretServiceClient,
-        SecureMountServiceClient,
+        SecureMountServiceClient, SecureVolumeServiceClient,
     },
 };
 use safe_path::scoped_join;
@@ -47,6 +47,8 @@ pub struct CDHClient {
     #[derivative(Debug = "ignore")]
     secure_mount_client: SecureMountServiceClient,
     #[derivative(Debug = "ignore")]
+    secure_volume_client: SecureVolumeServiceClient,
+    #[derivative(Debug = "ignore")]
     get_resource_client: GetResourceServiceClient,
     #[derivative(Debug = "ignore")]
     image_pull_client: ImagePullServiceClient,
@@ -61,11 +63,14 @@ impl CDHClient {
             confidential_data_hub_ttrpc_async::ImagePullServiceClient::new(client.clone());
         let secure_mount_client =
             confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client.clone());
+        let secure_volume_client =
+            confidential_data_hub_ttrpc_async::SecureVolumeServiceClient::new(client.clone());
         let get_resource_client =
             confidential_data_hub_ttrpc_async::GetResourceServiceClient::new(client);
         Ok(CDHClient {
             sealed_secret_client,
             secure_mount_client,
+            secure_volume_client,
             get_resource_client,
             image_pull_client,
         })
@@ -123,6 +128,51 @@ impl CDHClient {
         Ok(res.Resource)
     }
 
+    pub async fn activate_volume(
+        &self,
+        device_id: &str,
+        manifest_uri: &str,
+        requested_access: confidential_data_hub::VolumeAccess,
+    ) -> Result<ActivatedVolume> {
+        let req = confidential_data_hub::ActivateVolumeRequest {
+            device_id: device_id.to_string(),
+            manifest_uri: manifest_uri.to_string(),
+            requested_access: protobuf::EnumOrUnknown::new(requested_access),
+            ..Default::default()
+        };
+        let response = self
+            .secure_volume_client
+            .activate_volume(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+        let effective_access = response
+            .effective_access
+            .enum_value()
+            .map_err(|value| anyhow::anyhow!("CDH returned unknown volume access {value}"))?;
+
+        Ok(ActivatedVolume {
+            activation_id: response.activation_id,
+            device_path: response.device_path,
+            effective_access,
+        })
+    }
+
+    pub async fn deactivate_volume(&self, activation_id: &str) -> Result<()> {
+        let req = confidential_data_hub::DeactivateVolumeRequest {
+            activation_id: activation_id.to_string(),
+            ..Default::default()
+        };
+        self.secure_volume_client
+            .deactivate_volume(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn pull_image(&self, image: &str, bundle_path: &str) -> Result<()> {
         let req = confidential_data_hub::ImagePullRequest {
             image_url: image.to_string(),
@@ -142,6 +192,13 @@ impl CDHClient {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct ActivatedVolume {
+    pub activation_id: String,
+    pub device_path: String,
+    pub effective_access: confidential_data_hub::VolumeAccess,
+}
+
 pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
     CDH_CLIENT
         .get_or_try_init(|| async {
@@ -157,6 +214,26 @@ pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
 /// Check if the CDH client is initialized
 pub fn is_cdh_client_initialized() -> bool {
     CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
+}
+
+pub async fn activate_volume(
+    device_id: &str,
+    manifest_uri: &str,
+    requested_access: confidential_data_hub::VolumeAccess,
+) -> Result<ActivatedVolume> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .context("Confidential Data Hub not initialized")?;
+    cdh_client
+        .activate_volume(device_id, manifest_uri, requested_access)
+        .await
+}
+
+pub async fn deactivate_volume(activation_id: &str) -> Result<()> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .context("Confidential Data Hub not initialized")?;
+    cdh_client.deactivate_volume(activation_id).await
 }
 
 pub async fn unseal_env(env: &str) -> Result<String> {
@@ -339,6 +416,42 @@ mod tests {
         }
     }
 
+    #[async_trait]
+    impl confidential_data_hub_ttrpc_async::SecureVolumeService for TestService {
+        async fn activate_volume(
+            &self,
+            _ctx: &::ttrpc::asynchronous::TtrpcContext,
+            req: confidential_data_hub::ActivateVolumeRequest,
+        ) -> ttrpc::error::Result<confidential_data_hub::ActivateVolumeResponse> {
+            assert_eq!(req.device_id, "8:16");
+            assert_eq!(
+                req.manifest_uri,
+                "kbs:///tenant/storage-manifests/workspace-v1"
+            );
+            assert_eq!(
+                req.requested_access.enum_value().unwrap(),
+                confidential_data_hub::VolumeAccess::VOLUME_ACCESS_READ_WRITE
+            );
+            Ok(confidential_data_hub::ActivateVolumeResponse {
+                activation_id: "activation-1".to_string(),
+                device_path: "/dev/mapper/coco-pv-workspace".to_string(),
+                effective_access: protobuf::EnumOrUnknown::new(
+                    confidential_data_hub::VolumeAccess::VOLUME_ACCESS_READ_WRITE,
+                ),
+                ..Default::default()
+            })
+        }
+
+        async fn deactivate_volume(
+            &self,
+            _ctx: &::ttrpc::asynchronous::TtrpcContext,
+            req: confidential_data_hub::DeactivateVolumeRequest,
+        ) -> ttrpc::error::Result<confidential_data_hub::DeactivateVolumeResponse> {
+            assert_eq!(req.activation_id, "activation-1");
+            Ok(confidential_data_hub::DeactivateVolumeResponse::new())
+        }
+    }
+
     fn remove_if_sock_exist(sock_addr: &str) -> std::io::Result<()> {
         let path = sock_addr
             .strip_prefix("unix://")
@@ -355,14 +468,18 @@ mod tests {
         tokio::spawn(async move {
             let ss = Box::new(TestService {});
             let ss = Arc::new(*ss);
-            let ss_service = confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss);
+            let ss_service =
+                confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss.clone());
+            let secure_volume_service =
+                confidential_data_hub_ttrpc_async::create_secure_volume_service(ss);
 
             remove_if_sock_exist(&cdh_socket_uri).unwrap();
 
             let mut server = ttrpc::asynchronous::Server::new()
                 .bind(&cdh_socket_uri)
                 .unwrap()
-                .register_service(ss_service);
+                .register_service(ss_service)
+                .register_service(secure_volume_service);
 
             server.start().await.unwrap();
 
@@ -373,6 +490,42 @@ mod tests {
                 }
             };
         });
+    }
+
+    #[tokio::test]
+    async fn test_secure_volume_client() {
+        let test_dir = tempdir().expect("failed to create tmpdir");
+        let socket_path = test_dir.path().join("cdh-volume.sock");
+        let cdh_sock_uri = format!("unix://{}", socket_path.to_str().unwrap());
+        start_ttrpc_server(cdh_sock_uri.clone());
+        for _ in 0..100 {
+            if socket_path.exists() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        let client = CDHClient::new(&cdh_sock_uri).await.unwrap();
+        let activation = client
+            .activate_volume(
+                "8:16",
+                "kbs:///tenant/storage-manifests/workspace-v1",
+                confidential_data_hub::VolumeAccess::VOLUME_ACCESS_READ_WRITE,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            activation,
+            ActivatedVolume {
+                activation_id: "activation-1".to_string(),
+                device_path: "/dev/mapper/coco-pv-workspace".to_string(),
+                effective_access: confidential_data_hub::VolumeAccess::VOLUME_ACCESS_READ_WRITE,
+            }
+        );
+        client
+            .deactivate_volume(&activation.activation_id)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

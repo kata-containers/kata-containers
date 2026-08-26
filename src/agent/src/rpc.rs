@@ -87,7 +87,9 @@ use crate::passfd_io;
 use crate::pci;
 use crate::random;
 use crate::sandbox::{Sandbox, SandboxError};
-use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
+use crate::storage::{
+    add_storages, remove_storage_references, update_ephemeral_mounts, STORAGE_HANDLERS,
+};
 use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
@@ -257,8 +259,22 @@ impl AgentService {
         };
 
         let cid = req.container_id.clone();
+        let storages = req.storages.clone();
+        let shared_mounts = req.shared_mounts.clone();
 
         kata_sys_util::validate::verify_id(&cid)?;
+
+        {
+            let mut sandbox = self.sandbox.lock().await;
+            if sandbox.pending_storage_cleanup.contains(&cid) {
+                remove_container_resources(&mut sandbox, &cid)
+                    .await
+                    .with_context(|| format!("complete pending storage cleanup for {cid}"))?;
+            }
+            if sandbox.containers.contains_key(&cid) {
+                return Err(anyhow!("Container {} already exists", cid));
+            }
+        }
 
         let use_sandbox_pidns = req.sandbox_pidns();
 
@@ -273,10 +289,7 @@ impl AgentService {
         let container_name = k8s::container_name(&oci);
 
         info!(sl(), "receive createcontainer, spec: {:?}", &oci);
-        info!(
-            sl(),
-            "receive createcontainer, storages: {:?}", &req.storages
-        );
+        info!(sl(), "receive createcontainer, storages: {:?}", &storages);
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -322,96 +335,109 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(
-            sl(),
-            req.storages.clone(),
-            &self.sandbox,
-            Some(req.container_id),
-        )
-        .await?;
-
-        // Handle sealed secrets after storage is mounted
-        cdh_handler_sealed_secrets(&mut oci)
+        let m = add_storages(sl(), storages.clone(), &self.sandbox, Some(cid.clone())).await?;
+        self.sandbox
+            .lock()
             .await
-            .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
+            .container_mounts
+            .insert(cid.clone(), m);
 
-        let mut s = self.sandbox.lock().await;
-        s.container_mounts.insert(cid.clone(), m);
+        let create_result: Result<()> = async {
+            // Handle sealed secrets after storage is mounted.
+            cdh_handler_sealed_secrets(&mut oci)
+                .await
+                .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
 
-        update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
+            let mut s = self.sandbox.lock().await;
+            update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
-        // Append guest hooks
-        append_guest_hooks(&s, &mut oci)?;
+            // Append guest hooks.
+            append_guest_hooks(&s, &mut oci)?;
 
-        // write spec to bundle path, hooks might
-        // read ocispec
-        let olddir = setup_bundle(&cid, &mut oci)?;
-        // restore the cwd for kata-agent process.
-        defer!(unistd::chdir(&olddir).unwrap());
+            // Write spec to bundle path; hooks might read ocispec.
+            let olddir = setup_bundle(&cid, &mut oci)?;
+            // Restore the cwd for kata-agent process.
+            defer!(unistd::chdir(&olddir).unwrap());
 
-        // determine which cgroup driver to take and then assign to use_systemd_cgroup
-        // systemd: "[slice]:[prefix]:[name]"
-        // fs: "/path_a/path_b"
-        // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
-        let cgroups_path = &oci
-            .linux()
-            .as_ref()
-            .and_then(|linux| linux.cgroups_path().as_ref())
-            .map(|cgrps_path| cgrps_path.display().to_string())
-            .unwrap_or_default();
+            // Determine which cgroup driver to use.
+            let cgroups_path = &oci
+                .linux()
+                .as_ref()
+                .and_then(|linux| linux.cgroups_path().as_ref())
+                .map(|cgrps_path| cgrps_path.display().to_string())
+                .unwrap_or_default();
 
-        let use_systemd_cgroup = if self.init_mode {
-            false
-        } else {
-            SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
-        };
+            let use_systemd_cgroup = if self.init_mode {
+                false
+            } else {
+                SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
+            };
 
-        let opts = CreateOpts {
-            cgroup_name: "".to_string(),
-            use_systemd_cgroup,
-            no_pivot_root: s.no_pivot_root,
-            no_new_keyring: false,
-            spec: Some(oci.clone()),
-            rootless_euid: false,
-            rootless_cgroup: false,
-            container_name,
-        };
+            let opts = CreateOpts {
+                cgroup_name: "".to_string(),
+                use_systemd_cgroup,
+                no_pivot_root: s.no_pivot_root,
+                no_new_keyring: false,
+                spec: Some(oci.clone()),
+                rootless_euid: false,
+                rootless_cgroup: false,
+                container_name,
+            };
 
-        let mut ctr: LinuxContainer = LinuxContainer::new(
-            cid.as_str(),
-            CONTAINER_BASE,
-            Some(s.devcg_info.clone()),
-            opts,
-            &sl(),
-        )?;
+            let mut ctr: LinuxContainer = LinuxContainer::new(
+                cid.as_str(),
+                CONTAINER_BASE,
+                Some(s.devcg_info.clone()),
+                opts,
+                &sl(),
+            )?;
 
-        let pipe_size = AGENT_CONFIG.container_pipe_size;
+            let Some(p) = oci.process() else {
+                info!(sl(), "no process configurations!");
+                return Err(anyhow!(nix::Error::EINVAL));
+            };
 
-        let Some(p) = oci.process() else {
-            info!(sl(), "no process configurations!");
-            return Err(anyhow!(nix::Error::EINVAL));
-        };
+            let new_p = confidential_data_hub::image::get_process(p, &oci, storages)?;
+            let p = Process::new(
+                &sl(),
+                &new_p,
+                cid.as_str(),
+                true,
+                AGENT_CONFIG.container_pipe_size,
+                proc_io,
+            )?;
 
-        let new_p = confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
-        let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
-
-        // if starting container failed, we will do some rollback work
-        // to ensure no resources are leaked.
-        if let Err(err) = ctr.start(p).await {
-            error!(sl(), "failed to start container: {:?}", err);
-            if let Err(e) = ctr.destroy().await {
-                error!(sl(), "failed to destroy container: {:?}", e);
+            if let Err(error) = ctr.start(p).await {
+                error!(sl(), "failed to start container: {:?}", error);
+                if let Err(cleanup_error) = ctr.destroy().await {
+                    error!(sl(), "failed to destroy container: {:?}", cleanup_error);
+                }
+                return Err(error);
             }
-            if let Err(e) = remove_container_resources(&mut s, &cid).await {
-                error!(sl(), "failed to remove container resources: {:?}", e);
+
+            if let Err(error) = s
+                .update_shared_pidns(&ctr)
+                .and_then(|_| s.setup_shared_mounts(&ctr, &shared_mounts))
+            {
+                if let Err(cleanup_error) = ctr.destroy().await {
+                    error!(sl(), "failed to destroy container: {:?}", cleanup_error);
+                }
+                return Err(error);
             }
-            return Err(err);
+            s.add_container(ctr);
+            info!(sl(), "created container!");
+
+            Ok(())
         }
+        .await;
 
-        s.update_shared_pidns(&ctr)?;
-        s.setup_shared_mounts(&ctr, &req.shared_mounts)?;
-        s.add_container(ctr);
-        info!(sl(), "created container!");
+        if let Err(error) = create_result {
+            let cleanup = {
+                let mut sandbox = self.sandbox.lock().await;
+                remove_container_resources(&mut sandbox, &cid).await
+            };
+            return Err(error).context(format!("roll back container storage: {cleanup:?}"));
+        }
 
         Ok(())
     }
@@ -453,6 +479,13 @@ impl AgentService {
 
         if req.timeout == 0 {
             let mut sandbox = self.sandbox.lock().await;
+            if sandbox.pending_storage_cleanup.contains(&cid) {
+                remove_container_resources(&mut sandbox, &cid).await?;
+                return Ok(());
+            }
+            if !sandbox.containers.contains_key(&cid) {
+                return Err(anyhow!("Invalid container id"));
+            }
             sandbox.bind_watcher.remove_container(&cid).await;
             sandbox
                 .get_container(&cid)
@@ -464,16 +497,32 @@ impl AgentService {
         }
 
         // timeout != 0
+        {
+            let mut sandbox = self.sandbox.lock().await;
+            if sandbox.pending_storage_cleanup.contains(&cid) {
+                remove_container_resources(&mut sandbox, &cid).await?;
+                return Ok(());
+            }
+            if !sandbox.containers.contains_key(&cid) {
+                return Err(anyhow!("Invalid container id"));
+            }
+        }
         let s = self.sandbox.clone();
         let cid2 = cid.clone();
         let handle = tokio::spawn(async move {
             let mut sandbox = s.lock().await;
             sandbox.bind_watcher.remove_container(&cid2).await;
-            sandbox
+            let result = sandbox
                 .get_container(&cid2)
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
-                .await
+                .await;
+            if result.is_ok() {
+                // Record destruction before releasing the sandbox lock. If the caller times out
+                // or a retry races the follow-up cleanup, it must not destroy this container twice.
+                sandbox.pending_storage_cleanup.insert(cid2);
+            }
+            result
         });
 
         let to = Duration::from_secs(req.timeout.into());
@@ -1592,8 +1641,10 @@ impl agent_ttrpc::AgentService for AgentService {
         is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
-        // destroy all containers, clean up, notify agent to exit etc.
         sandbox.destroy().await.map_ttrpc_err(same)?;
+        destroy_sandbox_resources(&mut sandbox)
+            .await
+            .map_ttrpc_err(same)?;
         // Close get_oom_event connection,
         // otherwise it will block the shutdown of ttrpc.
         drop(sandbox.event_tx.take());
@@ -2167,28 +2218,27 @@ fn update_container_namespaces(
 }
 
 async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+    // Mark this transaction before its first fallible cleanup. If it fails, callers can retry
+    // cleanup without attempting to destroy an already-destroyed container a second time.
+    sandbox.pending_storage_cleanup.insert(cid.to_string());
+
     let mut cmounts: Vec<String> = vec![];
 
     // Find the sandbox storage used by this container
     let mounts = sandbox.container_mounts.get(cid);
     if let Some(mounts) = mounts {
         for m in mounts.iter() {
-            if sandbox.storages.contains_key(m) {
+            if sandbox.storages.contains_key(m)
+                || sandbox.confidential_storage_activations.contains_key(m)
+            {
                 cmounts.push(m.to_string());
             }
         }
     }
 
-    for m in cmounts.iter() {
-        if let Err(err) = sandbox.remove_sandbox_storage(m).await {
-            error!(
-                sl(),
-                "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",
-                cid,
-                err
-            );
-        }
-    }
+    remove_storage_references(sandbox, &cmounts)
+        .await
+        .with_context(|| format!("remove storage references for container {cid}"))?;
 
     // Cleanup dm-verity devices for this container (after all mounts are unmounted)
     if let Some(verity_devices) = sandbox.container_verity_devices.remove(cid) {
@@ -2200,9 +2250,30 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
     }
 
     sandbox.container_mounts.remove(cid);
+    sandbox.pending_storage_cleanup.remove(cid);
     sandbox.containers.remove(cid);
     // Remove any host -> guest mappings for this container
     sandbox.pcimap.remove(cid);
+    Ok(())
+}
+
+async fn destroy_sandbox_resources(sandbox: &mut Sandbox) -> Result<()> {
+    // Clean every destroyed container and failed create transaction. Sandbox::destroy marks
+    // successful destruction before this starts, so a retry resumes here without repeating it.
+    let mut cleanup_ids: Vec<String> = sandbox
+        .containers
+        .keys()
+        .chain(sandbox.container_mounts.keys())
+        .chain(sandbox.pending_storage_cleanup.iter())
+        .cloned()
+        .collect();
+    cleanup_ids.sort_unstable();
+    cleanup_ids.dedup();
+
+    for cid in cleanup_ids {
+        remove_container_resources(sandbox, &cid).await?;
+    }
+
     Ok(())
 }
 
@@ -2909,6 +2980,65 @@ mod tests {
         let mut oci = Spec::default();
         append_guest_hooks(&s, &mut oci).unwrap();
         assert_eq!(s.hooks, oci.hooks().clone());
+    }
+
+    #[tokio::test]
+    async fn remove_container_resumes_pending_storage_cleanup_without_container() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let cid = "failed-create";
+        let mount_point = "/run/kata-containers/shared/containers/passthrough/failed-create";
+        sandbox.add_sandbox_storage(mount_point, false).await;
+        sandbox
+            .container_mounts
+            .insert(cid.to_string(), vec![mount_point.to_string()]);
+        sandbox.pending_storage_cleanup.insert(cid.to_string());
+
+        let service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+        service
+            .do_remove_container(protocols::agent::RemoveContainerRequest {
+                container_id: cid.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let sandbox = service.sandbox.lock().await;
+        assert!(!sandbox.storages.contains_key(mount_point));
+        assert!(!sandbox.container_mounts.contains_key(cid));
+        assert!(!sandbox.pending_storage_cleanup.contains(cid));
+    }
+
+    #[tokio::test]
+    async fn destroy_sandbox_cleans_normal_and_pending_storage_transactions() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let normal_cid = "normal-container";
+        let pending_cid = "failed-create";
+        let normal_mount = "/run/kata-containers/shared/containers/passthrough/normal";
+        let pending_mount = "/run/kata-containers/shared/containers/passthrough/pending";
+
+        sandbox.add_sandbox_storage(normal_mount, false).await;
+        sandbox.add_sandbox_storage(pending_mount, false).await;
+        sandbox
+            .container_mounts
+            .insert(normal_cid.to_string(), vec![normal_mount.to_string()]);
+        sandbox
+            .container_mounts
+            .insert(pending_cid.to_string(), vec![pending_mount.to_string()]);
+        sandbox
+            .pending_storage_cleanup
+            .insert(pending_cid.to_string());
+
+        destroy_sandbox_resources(&mut sandbox).await.unwrap();
+
+        assert!(sandbox.storages.is_empty());
+        assert!(sandbox.container_mounts.is_empty());
+        assert!(sandbox.pending_storage_cleanup.is_empty());
     }
 
     #[tokio::test]

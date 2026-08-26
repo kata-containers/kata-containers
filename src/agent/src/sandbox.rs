@@ -4,7 +4,7 @@
 //
 
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, IntoRawFd};
@@ -120,8 +120,12 @@ pub struct Sandbox {
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
+    /// Container IDs whose create transaction failed before storage cleanup completed.
+    pub pending_storage_cleanup: HashSet<String>,
     /// dm-verity devices per container for cleanup
     pub container_verity_devices: HashMap<String, Vec<String>>,
+    /// CDH activation IDs keyed by the sandbox storage mount point.
+    pub confidential_storage_activations: HashMap<String, String>,
     pub uevent_map: HashMap<String, Uevent>,
     pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
@@ -156,7 +160,9 @@ impl Sandbox {
             containers: HashMap::new(),
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
+            pending_storage_cleanup: HashSet::new(),
             container_verity_devices: HashMap::new(),
+            confidential_storage_activations: HashMap::new(),
             uevent_map: HashMap::new(),
             uevent_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
@@ -235,14 +241,42 @@ impl Sandbox {
                         state.count.store(1, Ordering::Release);
                         return Ok(false);
                     }
-                    if let Some(storage) = self.storages.remove(path) {
-                        storage.device.cleanup()?;
+                    if let Err(error) = state.device.cleanup() {
+                        // The final reference still owns a live device when cleanup fails. Keep
+                        // both so normal container or sandbox cleanup can retry in order.
+                        state.count.store(1, Ordering::Release);
+                        return Err(error);
                     }
+                    self.storages.remove(path);
                     Ok(true)
                 } else {
                     Ok(false)
                 }
             }
+        }
+    }
+
+    /// Associate a mounted sandbox storage with one CDH activation.
+    pub fn register_confidential_storage_activation(
+        &mut self,
+        path: &str,
+        activation_id: String,
+    ) -> Result<()> {
+        if activation_id.is_empty() {
+            return Err(anyhow!("confidential storage activation ID is empty"));
+        }
+        match self
+            .confidential_storage_activations
+            .entry(path.to_string())
+        {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(activation_id);
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Occupied(_) => Err(anyhow!(
+                "confidential storage activation already exists for path {}",
+                path
+            )),
         }
     }
 
@@ -337,10 +371,19 @@ impl Sandbox {
             .map_err(|_| SandboxError::InvalidExecId)
     }
 
+    /// Destroy every live container and mark each completed destruction for resumable storage
+    /// cleanup. A retry skips IDs already marked so container destruction is never repeated.
     #[instrument]
     pub async fn destroy(&mut self) -> Result<()> {
-        for ctr in self.containers.values_mut() {
-            ctr.destroy().await?;
+        let container_ids: Vec<String> = self.containers.keys().cloned().collect();
+        for cid in container_ids {
+            if self.pending_storage_cleanup.contains(&cid) {
+                continue;
+            }
+            if let Some(container) = self.containers.get_mut(&cid) {
+                container.destroy().await?;
+                self.pending_storage_cleanup.insert(cid);
+            }
         }
         Ok(())
     }
@@ -877,6 +920,102 @@ mod tests {
             s.remove_sandbox_storage(storage_path).await.is_err(),
             "Expects false as the reference counter should no exist."
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn confidential_storage_activation_follows_final_reference() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let storage_path = "/run/kata-containers/shared/containers/passthrough/confidential-test";
+
+        sandbox.add_sandbox_storage(storage_path, false).await;
+        sandbox
+            .register_confidential_storage_activation(storage_path, "activation-1".to_string())
+            .unwrap();
+        sandbox.add_sandbox_storage(storage_path, false).await;
+
+        assert!(!sandbox.remove_sandbox_storage(storage_path).await.unwrap());
+        assert_eq!(
+            sandbox
+                .confidential_storage_activations
+                .get(storage_path)
+                .map(String::as_str),
+            Some("activation-1")
+        );
+
+        assert!(sandbox.remove_sandbox_storage(storage_path).await.unwrap());
+        assert_eq!(
+            sandbox
+                .confidential_storage_activations
+                .remove(storage_path),
+            Some("activation-1".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn confidential_storage_activation_registration_is_unique_and_nonempty() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let storage_path = "/run/kata-containers/shared/containers/passthrough/confidential-test";
+
+        assert!(sandbox
+            .register_confidential_storage_activation(storage_path, String::new())
+            .is_err());
+        sandbox
+            .register_confidential_storage_activation(storage_path, "activation-1".to_string())
+            .unwrap();
+        assert!(sandbox
+            .register_confidential_storage_activation(storage_path, "activation-2".to_string())
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn failed_storage_cleanup_preserves_final_reference_for_retry() {
+        struct FailsOnceDevice {
+            attempts: Arc<AtomicU32>,
+        }
+
+        impl StorageDevice for FailsOnceDevice {
+            fn path(&self) -> Option<&str> {
+                None
+            }
+
+            fn cleanup(&self) -> Result<()> {
+                if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    return Err(anyhow!("injected cleanup failure"));
+                }
+                Ok(())
+            }
+        }
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut sandbox = Sandbox::new(&logger).unwrap();
+        let storage_path = "/run/kata-containers/shared/containers/passthrough/retry-test";
+        let attempts = Arc::new(AtomicU32::new(0));
+        sandbox.add_sandbox_storage(storage_path, false).await;
+        assert!(sandbox
+            .update_sandbox_storage(
+                storage_path,
+                Arc::new(FailsOnceDevice {
+                    attempts: attempts.clone(),
+                }),
+            )
+            .is_ok());
+
+        assert!(sandbox.remove_sandbox_storage(storage_path).await.is_err());
+        assert_eq!(
+            sandbox
+                .storages
+                .get(storage_path)
+                .unwrap()
+                .ref_count()
+                .await,
+            1
+        );
+        assert!(sandbox.remove_sandbox_storage(storage_path).await.unwrap());
+        assert!(!sandbox.storages.contains_key(storage_path));
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     fn create_dummy_opts() -> CreateOpts {
