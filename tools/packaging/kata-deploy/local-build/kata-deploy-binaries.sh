@@ -363,6 +363,27 @@ get_coco_guest_components_tarball_checksum() {
 	sha256sum "${tarball}" | cut -d' ' -f1
 }
 
+get_nvidia_kernel_modules_tarball_path() {
+	local dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	local appendix=""
+	# Must match nvidia_stack_has() in nvidia_rootfs.sh, which picks this tarball.
+	[[ ",${NVIDIA_GPU_STACK:-}," == *",dragonball,"* ]] && appendix="-dragonball-experimental"
+
+	echo "${dir}/kata-static-kernel-nvidia-gpu${appendix}-modules.tar.zst"
+}
+
+# The NVIDIA modules are signed with a key each kernel build generates for
+# itself, so only the kernel they were built against loads them. The
+# source-derived kernel artefact version is equal across rebuilds, the key is
+# not, so hash the tarball instead.
+get_nvidia_kernel_modules_tarball_checksum() {
+	local tarball
+	tarball="$(get_nvidia_kernel_modules_tarball_path)"
+	[[ -f "${tarball}" ]] || die "NVIDIA kernel modules tarball not found: ${tarball}"
+
+	sha256sum "${tarball}" | cut -d' ' -f1
+}
+
 get_coco_extension_variant() {
 	local variant
 	variant="$(get_from_kata_deps ".externals.coco-guest-components.variant")"
@@ -648,6 +669,7 @@ install_image() {
 	if [[ "${variant}" == "nvidia-gpu-extension" ]]; then
 		latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${image_type}"
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 	else
@@ -671,6 +693,7 @@ install_image() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -689,6 +712,7 @@ install_image() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# Monolith: Kata NVIDIA modules + pinned driver/CTK userspace + NVRC init.
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1015,6 +1039,7 @@ install_initrd() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 			latest_artefact+="-$(get_latest_nvidia_driver_version)"
 			latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 			latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
@@ -1030,6 +1055,7 @@ install_initrd() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_nvidia_kernel_modules_tarball_checksum)"
 		latest_artefact+="-$(get_latest_nvidia_driver_version)"
 		latest_artefact+="-$(get_latest_nvidia_ctk_version)"
 		latest_artefact+="-$(get_latest_nvidia_nvrc_version)"
