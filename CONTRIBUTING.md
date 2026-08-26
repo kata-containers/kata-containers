@@ -1,6 +1,7 @@
 # Contribute to the Kata Containers project
 
 * [Code of Conduct](#code-of-conduct)
+* [AI generated code](#ai-generated-code)
 * [Pull requests](#pull-requests)
 * [GitHub basic setup](#github-basic-setup)
     * [Prerequisites](#prerequisites)
@@ -40,6 +41,29 @@ process documented here.
 ## Code of Conduct
 
 All contributors must agree to the project [code of conduct](CODE_OF_CONDUCT.md).
+
+## AI generated code
+
+Contributions produced with the help of AI tools are accepted, provided
+they follow the
+[OpenInfra Foundation AI Policy](https://openinfra.org/legal/ai-policy/).
+In particular, contributors must:
+
+* Disclose AI usage in the commit message using the trailers defined by
+  the policy:
+    * `Assisted-By:` for predictive auto-complete or minor generative
+      assistance.
+    * `Generated-By:` when substantial portions of the change were
+      produced by a generative AI tool.
+* Stay "in the loop" and be able to fully understand, explain, and debug
+  any AI-produced code they submit.
+* Configure AI tools to respect open source licensing, and ensure the
+  output is compatible with the project license and does not infringe
+  third-party copyrights.
+
+The standard [Certificate of Origin](#certificate-of-origin) sign-off
+still applies, and reviewers may apply additional scrutiny to AI-assisted
+contributions as the policy recommends.
 
 ## Pull requests
 
