@@ -7,12 +7,18 @@ package katamonitor
 
 import (
 	"bytes"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/expfmt"
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -36,6 +42,60 @@ go_gc_duration_seconds_count 6491
 ttt 999
 `
 )
+
+func withMonitorLogHook(t *testing.T) *logrustest.Hook {
+	t.Helper()
+	logger, hook := logrustest.NewNullLogger()
+	logger.SetLevel(logrus.DebugLevel)
+	previousMonitorLog := monitorLog
+	monitorLog = logger.WithField("source", "kata-monitor")
+	t.Cleanup(func() { monitorLog = previousMonitorLog })
+	return hook
+}
+
+func TestMetricsErrorKeepsErrorWhileSandboxExists(t *testing.T) {
+	hook := withMonitorLogHook(t)
+	sandboxID := "sandbox-live"
+	goPath, rustPath := t.TempDir(), t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(rustPath, sandboxID), 0o755))
+
+	logSandboxMetricsError(sandboxID, io.ErrUnexpectedEOF, []string{goPath, rustPath})
+
+	entry := hook.LastEntry()
+	require.NotNil(t, entry)
+	assert.Equal(t, logrus.ErrorLevel, entry.Level)
+	assert.Equal(t, "failed to get metrics for sandbox", entry.Message)
+}
+
+func TestMetricsErrorDowngradesAfterSandboxRemoval(t *testing.T) {
+	hook := withMonitorLogHook(t)
+	sandboxID := "sandbox-removed"
+	goPath, rustPath := t.TempDir(), t.TempDir()
+	sandboxPath := filepath.Join(goPath, sandboxID)
+	require.NoError(t, os.Mkdir(sandboxPath, 0o755))
+	require.NoError(t, os.RemoveAll(sandboxPath))
+
+	logSandboxMetricsError(sandboxID, io.ErrUnexpectedEOF, []string{goPath, rustPath})
+
+	entry := hook.LastEntry()
+	require.NotNil(t, entry)
+	assert.Equal(t, logrus.DebugLevel, entry.Level)
+	assert.Equal(t, "sandbox removed while collecting metrics", entry.Message)
+}
+
+func TestSandboxExistsInAnyWatchedPath(t *testing.T) {
+	sandboxID := "sandbox-dual-path"
+	goPath, rustPath := t.TempDir(), t.TempDir()
+
+	exists, err := sandboxExistsInPaths(sandboxID, []string{goPath, rustPath})
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	require.NoError(t, os.Mkdir(filepath.Join(rustPath, sandboxID), 0o755))
+	exists, err = sandboxExistsInPaths(sandboxID, []string{goPath, rustPath})
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
 
 func TestParsePrometheusMetrics(t *testing.T) {
 	assert := assert.New(t)
