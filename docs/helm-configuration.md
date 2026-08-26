@@ -192,7 +192,7 @@ of any pod running there.
 
 | | runs where | privileged on the host | API rights |
 |---|---|---|---|
-| dispatcher (install, uninstall) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured |
+| dispatcher (install, uninstall, and each scheduled reconcile) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured; `pods: get` and `cronjobs: get, delete` only with [`job.reconcile`](#doing-it-on-a-schedule-instead) enabled |
 | per-node Jobs | every node Kata is installed on | yes | **none — no token is mounted** |
 | `post-delete` hook (uninstall only) | one pod, wherever it schedules | no | `delete` on ClusterRoles, ClusterRoleBindings, Roles, RoleBindings and ServiceAccounts |
 | verification Job (only if `verification.pod` is set) | one pod, wherever it schedules | no | pods and pod logs (`create`, `delete`, `get`, `list`, `watch`), `nodes`/`events`/`daemonsets`/`jobs`: `get`, `list` |
@@ -351,6 +351,52 @@ helm upgrade kata-deploy "${CHART}" --version "${VERSION}" --reuse-values
 
 Each per-node stage is idempotent (it skips when already applied), so the
 upgrade only does real work on the newly added nodes.
+
+#### Doing it on a schedule instead
+
+On a fleet that grows on its own — an autoscaler, or nodes joining faster than
+anybody notices — the upgrade above needs somebody to run it, and until they do the
+new node adds no Kata capacity. Nothing lands on it wrongly (every RuntimeClass
+selects `katacontainers.io/kata-runtime`, which is exactly what the install has not
+written there yet), so a pod asking for a Kata runtime class stays `Pending` while a
+node that could have run it takes non-Kata work instead — and if it was the pending
+pod that grew the fleet in the first place, the next node changes nothing either.
+`job.reconcile` turns that upgrade into a `CronJob` running the same dispatcher,
+against the same selectors and the same per-node templates:
+
+```yaml title="values.yaml"
+job:
+  reconcile:
+    enabled: true
+    schedule: "*/15 * * * *"
+```
+
+A tick installs the nodes that have nothing to show yet and leaves the rest of the
+fleet untouched, so a tick over a settled fleet lists nodes, finds nothing to do,
+and exits without creating a single pod. It also stands aside when a release
+rollout is in flight, rather than deleting the per-node Jobs that rollout is
+waiting on. Failures are visible where you would look for them: the CronJob keeps
+its last three failed Jobs, and a tick that failed on a node fails as a Job rather
+than being retried immediately — the next tick is the retry.
+
+!!! note "It only ever adds nodes"
+
+    A node that has dropped out of the selection is left alone, where `helm
+    upgrade` would run the cleanup pipeline on it. That asymmetry is deliberate: a
+    node falling out is usually a label gone wrong somewhere, and taking a host
+    apart on a timer with nobody watching is the worse of the two outcomes. Removals
+    stay with the upgrade you run yourself.
+
+!!! warning "Off by default"
+
+    Enabling this stands up a recurring, privileged rollout, so it is opt-in. It
+    also needs a `job.dispatcherImage` of `0.2.0` or newer; older dispatchers do
+    not understand the flags a scheduled run needs and every tick fails at startup.
+
+`helm uninstall` takes the schedule away before it starts reverting nodes (a
+`pre-delete` hook that runs ahead of the uninstall dispatcher and removes the
+CronJob together with anything it still has in flight), so a tick cannot reinstall
+a node the uninstall has just cleaned.
 
 ### Recovering from a failed or deleted dispatcher
 
