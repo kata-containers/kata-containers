@@ -163,6 +163,10 @@ endif
 FIRMWAREPATH_NV_CPU :=
 FIRMWAREVOLUMEPATH_NV_CPU :=
 
+# Direct-kernel Cloud Hypervisor does not need UEFI firmware. Keep a dedicated
+# empty variable so CLH configs do not inherit the QEMU AAVMF or OVMF path.
+FIRMWAREPATH_CLH :=
+
 KERNELVERITYPARAMS ?= ""
 
 # TDX
