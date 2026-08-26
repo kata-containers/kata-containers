@@ -1328,7 +1328,12 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
 # confidential Storage as an authorization token.
 allow_confidential_volumes(p_volumes, i_mounts, i_storages) if {
     confidential_storage_indices := {index | some index; is_confidential_storage(i_storages[index])}
-    count(confidential_storage_indices) == count(p_volumes)
+    # One Kubernetes PVC produces one Storage request, but the same PVC may be
+    # mounted at several destinations in one container. Count distinct
+    # manifest-backed volumes here; the policy and mount sets below still
+    # require every individual destination to match exactly.
+    authorized_manifest_uris := {volume.manifest_uri | some volume in p_volumes}
+    count(confidential_storage_indices) == count(authorized_manifest_uris)
 
     matched_policy_indices := {p_index |
         some p_index

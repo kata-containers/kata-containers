@@ -268,6 +268,20 @@ ConfidentialStorageTest if {
         });
         assert!(allowed(&rules, &valid).await);
 
+        let mut second_policy = valid["policy"][0].clone();
+        second_policy["mount_destination"] = serde_json::json!("/home/codewire");
+        let mut second_mount = valid["mounts"][0].clone();
+        second_mount["destination"] = serde_json::json!("/home/codewire");
+        let multiple_mounts = serde_json::json!({
+            "policy": [valid["policy"][0].clone(), second_policy],
+            "mounts": [valid["mounts"][0].clone(), second_mount],
+            "storages": [valid["storages"][0].clone()]
+        });
+        assert!(
+            allowed(&rules, &multiple_mounts).await,
+            "one confidential Storage may back several exactly authorized mounts"
+        );
+
         let mut explicit_root_group = valid.clone();
         explicit_root_group["policy"][0]["fs_group"]["group_id"] = serde_json::json!(0);
         explicit_root_group["storages"][0]["fs_group"]["group_id"] = serde_json::json!(0);

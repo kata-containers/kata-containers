@@ -1816,6 +1816,49 @@ spec:
     }
 
     #[test]
+    fn confidential_volume_policy_preserves_every_mount_of_one_pvc() {
+        let resource = confidential_pod(
+            r#"{"workspace":{"manifestUri":"kbs:///tenant/storage-manifests/workspace-v1","access":"readWrite"}}"#,
+            "    persistentVolumeClaim:\n      claimName: workspace",
+            "    - name: workspace\n      mountPath: /home/codewire",
+        );
+        let container = &resource.get_containers()[0];
+        let mut mounts = ["/workspace", "/home/codewire"]
+            .into_iter()
+            .map(|destination| KataMount {
+                destination: destination.to_string(),
+                source: "untrusted-generated-source".to_string(),
+                type_: "bind".to_string(),
+                options: vec![
+                    "rbind".to_string(),
+                    "rprivate".to_string(),
+                    "rw".to_string(),
+                ],
+            })
+            .collect::<Vec<_>>();
+
+        let policies =
+            confidential_volume_policies(resource.as_ref(), container, &mut mounts).unwrap();
+        let destinations = policies
+            .iter()
+            .map(|policy| policy.mount_destination.as_str())
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(policies.len(), 2);
+        assert_eq!(
+            destinations,
+            BTreeSet::from(["/home/codewire", "/workspace"])
+        );
+        assert_eq!(
+            policies[0].manifest_uri, policies[1].manifest_uri,
+            "several destinations share one manifest-backed Storage request"
+        );
+        assert!(mounts
+            .iter()
+            .all(|mount| mount.source == policies[0].mount_source));
+    }
+
+    #[test]
     fn confidential_volume_policy_preserves_explicit_root_fsgroup() {
         let pod_spec: pod::PodSpec = serde_yaml::from_str(
             "containers: []\nsecurityContext:\n  fsGroup: 0\n  fsGroupChangePolicy: Always\n",
