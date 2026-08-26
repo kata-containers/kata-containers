@@ -98,22 +98,6 @@ predicate_has_shim_metric() {
 	grep -E '^kata_shim_[a-z_]+\{[^}]*sandbox_id="[0-9a-f-]+' >/dev/null
 }
 
-wait_for_pods_to_exist() {
-	local selector="$1"
-	local deadline=$((SECONDS + 120))
-
-	while (( SECONDS < deadline )); do
-		if [[ -n "$(kubectl -n "${HELM_NAMESPACE}" get pods -l "${selector}" \
-			-o name 2>/dev/null)" ]]; then
-			return 0
-		fi
-		sleep 2
-	done
-
-	echo "Timed out waiting for pods matching '${selector}' to be created" >&2
-	return 1
-}
-
 @test "kata-monitor helm chart rolls out and exposes per-sandbox metrics" {
 	pushd "${repo_root_dir}"
 
@@ -131,13 +115,22 @@ wait_for_pods_to_exist() {
 	# deploy_kata's readiness wait is best-effort, so make sure kata-deploy has
 	# really finished here: everything below is written around containerd having
 	# already been bounced by the install.
-	wait_for_pods_to_exist "name=kata-deploy"
+	#
+	# --for=create is what makes the readiness wait below trustworthy: on its
+	# own it would give up rather than wait while the selector still matches
+	# nothing, which is exactly the state a cluster only seconds old is in.
+	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+		--for=create --timeout="${helm_timeout}"
 	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
 		--for=condition=Ready --timeout="${helm_timeout}"
 
 	echo ""
 	echo "::group::kata-monitor DaemonSet rollout"
-	wait_for_pods_to_exist "app.kubernetes.io/name=kata-monitor"
+	# Same for the rollout: a DaemonSet with nothing scheduled yet counts as
+	# rolled out, so wait for a pod to exist before believing the status.
+	kubectl -n "${HELM_NAMESPACE}" wait pod \
+		-l app.kubernetes.io/name=kata-monitor \
+		--for=create --timeout="${rollout_timeout}"
 	kubectl -n "${HELM_NAMESPACE}" rollout status ds/kata-monitor \
 		--timeout="${rollout_timeout}"
 	echo "::endgroup::"
