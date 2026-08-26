@@ -296,7 +296,7 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "258ea4acb7b9bd865fce5c63a539f2120dba8298"
+    version: "bc80356aaa774db455f9c82173b329ab692cfbc1"
     toolchain: "1.90.0"
     # Helm chart deploys three separate images; tags match version.
     images:
