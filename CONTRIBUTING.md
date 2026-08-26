@@ -65,6 +65,25 @@ The standard [Certificate of Origin](#certificate-of-origin) sign-off
 still applies, and reviewers may apply additional scrutiny to AI-assisted
 contributions as the policy recommends.
 
+### Best practices
+
+#### Don't use AI for prose
+
+Writing your own commit messages and PR summaries shows care and thoughtfulness in your contributions.
+It's fine if English isn't your first language — perfect grammar isn't required.
+More practically, these descriptions help maintainers understand what you've done and why, saving everyone time.
+
+Similarly, avoid opening issues or posting comments that are entirely AI-generated.
+Issues are meant for genuine, thoughtful community discussion.
+
+Long blocks of AI-generated prose are unlikely to be prioritized by committers. A little extra effort writing
+clearly and concisely will generally get your work reviewed and merged more quickly.
+
+This applies especially to CVE reports: AI can be a useful tool for finding vulnerabilities, but you should
+understand the trust model and the implications yourself, and ensure that the finding is a genuine vulnerability
+that breaks the trust model and not just a bug (in which case an issue is welcomed),then write your own focused
+description rather than submitting whatever the AI produced.
+
 ## Pull requests
 
 All the repositories accept contributions via [GitHub Pull requests (PR)](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests). Submit PRs by following the [GitHub workflow](#github-workflow).
