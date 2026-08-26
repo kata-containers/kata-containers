@@ -116,6 +116,10 @@ impl yaml::K8sResource for Job {
         );
     }
 
+    fn get_pod_spec(&self) -> Option<&pod::PodSpec> {
+        Some(&self.spec.template.spec)
+    }
+
     fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
         agent_policy.generate_initdata_anno(self)
     }

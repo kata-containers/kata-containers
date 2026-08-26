@@ -192,6 +192,159 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_confidential_storage_policy_exact_contract() {
+        let rules_path = path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("rules.rego");
+        let mut rules = fs::read_to_string(rules_path).expect("rules.rego should open");
+        rules.push_str(
+            r#"
+policy_data := {}
+default ConfidentialStorageTest := false
+ConfidentialStorageTest if {
+    allow_storages([], input.storages, "", "")
+    allow_confidential_volumes(input.policy, input.mounts, input.storages)
+}
+"#,
+        );
+
+        let manifest_uri = "kbs:///tenant/storage-manifests/workspace-v1";
+        let mount_name = kata_types::mount::confidential_storage_mount_name(manifest_uri).unwrap();
+        let mount_point =
+            format!("/run/kata-containers/shared/containers/passthrough/{mount_name}");
+        let policy = serde_json::json!({
+            "volume_name": "workspace",
+            "manifest_uri": manifest_uri,
+            "requested_access": 2,
+            "mount_destination": "/workspace",
+            "mount_source": format!("^{mount_point}$"),
+            "mount_type": "bind",
+            "mount_options": ["rbind", "rprivate", "rw"],
+            "storage_fstype": "confidential-storage",
+            "filesystem_type": "ext4",
+            "filesystem_options": ["nodev", "nosuid", "rw"],
+            "fs_group": {
+                "group_id": 3000,
+                "group_change_policy": 1
+            }
+        });
+        let mount = serde_json::json!({
+            "destination": "/workspace",
+            "source": mount_point,
+            "type_": "bind",
+            "options": ["rbind", "rprivate", "rw"]
+        });
+        let storage = serde_json::json!({
+            "driver": "blk",
+            "driver_options": [],
+            "fs_group": {
+                "group_id": 3000,
+                "group_change_policy": 1
+            },
+            "fstype": "confidential-storage",
+            "mount_point": mount_point,
+            "options": [],
+            "source": "00/00",
+            "shared": false,
+            "confidential_storage": {
+                "manifest_uri": manifest_uri,
+                "requested_access": 2
+            }
+        });
+
+        async fn allowed(rules: &str, input: &serde_json::Value) -> bool {
+            let mut policy = AgentPolicy::new();
+            policy.set_policy(rules).await.unwrap();
+            policy
+                .allow_request("ConfidentialStorageTest", &input.to_string())
+                .await
+                .unwrap()
+                .0
+        }
+
+        let valid = serde_json::json!({
+            "policy": [policy],
+            "mounts": [mount],
+            "storages": [storage]
+        });
+        assert!(allowed(&rules, &valid).await);
+
+        let mut explicit_root_group = valid.clone();
+        explicit_root_group["policy"][0]["fs_group"]["group_id"] = serde_json::json!(0);
+        explicit_root_group["storages"][0]["fs_group"]["group_id"] = serde_json::json!(0);
+        assert!(allowed(&rules, &explicit_root_group).await);
+
+        let mut invalid_cases = Vec::new();
+
+        let mut manifest_substitution = valid.clone();
+        manifest_substitution["storages"][0]["confidential_storage"]["manifest_uri"] =
+            serde_json::json!("kbs:///tenant/storage-manifests/other-v1");
+        invalid_cases.push(("manifest substitution", manifest_substitution));
+
+        let mut access_downgrade = valid.clone();
+        access_downgrade["storages"][0]["confidential_storage"]["requested_access"] =
+            serde_json::json!(1);
+        invalid_cases.push(("access downgrade", access_downgrade));
+
+        let mut target_substitution = valid.clone();
+        target_substitution["mounts"][0]["destination"] = serde_json::json!("/other");
+        invalid_cases.push(("target substitution", target_substitution));
+
+        let mut plaintext_downgrade = valid.clone();
+        plaintext_downgrade["storages"][0]["fstype"] = serde_json::json!("ext4");
+        invalid_cases.push(("plaintext downgrade", plaintext_downgrade));
+
+        let mut wrong_driver = valid.clone();
+        wrong_driver["storages"][0]["driver"] = serde_json::json!("local");
+        invalid_cases.push(("wrong storage driver", wrong_driver));
+
+        let mut wrong_device_source = valid.clone();
+        wrong_device_source["storages"][0]["source"] = serde_json::json!("/dev/vda");
+        invalid_cases.push(("wrong device source", wrong_device_source));
+
+        let mut mount_correlation_substitution = valid.clone();
+        mount_correlation_substitution["mounts"][0]["source"] = serde_json::json!(
+            "/run/kata-containers/shared/containers/passthrough/confidential-0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        invalid_cases.push((
+            "mount and storage correlation substitution",
+            mount_correlation_substitution,
+        ));
+
+        let mut fs_group_substitution = valid.clone();
+        fs_group_substitution["storages"][0]["fs_group"]["group_id"] = serde_json::json!(3001);
+        invalid_cases.push(("fsGroup substitution", fs_group_substitution));
+
+        let mut invalid_fs_group = valid.clone();
+        invalid_fs_group["storages"][0]["fs_group"]["group_id"] = serde_json::json!(-1);
+        invalid_cases.push(("invalid fsGroup", invalid_fs_group));
+
+        let mut filesystem_contract_substitution = valid.clone();
+        filesystem_contract_substitution["policy"][0]["filesystem_options"] =
+            serde_json::json!(["rw"]);
+        invalid_cases.push((
+            "filesystem contract substitution",
+            filesystem_contract_substitution,
+        ));
+
+        let mut extra_storage = valid.clone();
+        extra_storage["storages"]
+            .as_array_mut()
+            .unwrap()
+            .push(valid["storages"][0].clone());
+        invalid_cases.push(("extra confidential storage", extra_storage));
+
+        let mut missing_authorization = valid.clone();
+        missing_authorization["policy"] = serde_json::json!([]);
+        invalid_cases.push(("missing policy authorization", missing_authorization));
+
+        for (description, invalid) in invalid_cases {
+            assert!(
+                !allowed(&rules, &invalid).await,
+                "unexpectedly allowed {description}"
+            );
+        }
+    }
+
     fn decode_policy(initdata_anno: &str) -> String {
         let initdata = kata_types::initdata::decode_initdata(initdata_anno)
             .expect("should decode initdata anno");

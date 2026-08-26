@@ -417,6 +417,9 @@ pub struct PodSecurityContext {
     pub fsGroup: Option<i64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub fsGroupChangePolicy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub supplementalGroups: Option<Vec<u32>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1024,6 +1027,10 @@ impl yaml::K8sResource for Pod {
             settings,
             &self.spec,
         );
+    }
+
+    fn get_pod_spec(&self) -> Option<&PodSpec> {
+        Some(&self.spec)
     }
 
     fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {

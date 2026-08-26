@@ -151,6 +151,39 @@ impl yaml::K8sResource for StatefulSet {
         );
     }
 
+    fn get_pod_spec(&self) -> Option<&pod::PodSpec> {
+        Some(&self.spec.template.spec)
+    }
+
+    fn has_persistent_volume_claim(&self, name: &str) -> bool {
+        let volume_count = yaml::K8sResource::get_pod_spec(self)
+            .and_then(|spec| spec.volumes.as_ref())
+            .map_or(0, |volumes| {
+                volumes
+                    .iter()
+                    .filter(|volume| {
+                        volume.name == name
+                            && volume.persistentVolumeClaim.is_some()
+                            && volume.emptyDir.is_none()
+                            && volume.hostPath.is_none()
+                            && volume.configMap.is_none()
+                            && volume.azureFile.is_none()
+                            && volume.projected.is_none()
+                            && volume.secret.is_none()
+                            && volume.downwardAPI.is_none()
+                    })
+                    .count()
+            });
+        let template_count = self.spec.volumeClaimTemplates.as_ref().map_or(0, |claims| {
+            claims
+                .iter()
+                .filter(|claim| claim.metadata.name.as_deref() == Some(name))
+                .count()
+        });
+
+        volume_count + template_count == 1
+    }
+
     fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
         agent_policy.generate_initdata_anno(self)
     }

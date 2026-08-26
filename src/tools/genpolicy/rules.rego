@@ -112,6 +112,8 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     allow_anno(p_container, i_oci)
 
     p_storages := p_container.storages
+    p_confidential_volumes := p_container.confidential_volumes
+    allow_confidential_volumes(p_confidential_volumes, i_oci.Mounts, i_storages)
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
 
     p_devices := p_container.devices
@@ -1240,9 +1242,10 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
     p_count := count(p_storages)
     i_count := count(i_storages)
     img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
-    print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
+    confidential_storage_count := count([s | s := i_storages[_]; is_confidential_storage(s)])
+    print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count, "confidential_storage_count =", confidential_storage_count)
 
-    p_count == i_count - img_pull_count
+    p_count == i_count - img_pull_count - confidential_storage_count
 
     every i_storage in i_storages {
         allow_storage(p_storages, i_storage, bundle_id, sandbox_id)
@@ -1283,6 +1286,24 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with image_guest_pull: true")
 }
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
+    print("allow_storage with confidential scsi: start")
+
+    i_storage.driver == "scsi"
+    regex.match("^[0-9]+:[0-9]+$", i_storage.source)
+    is_confidential_storage(i_storage)
+
+    print("allow_storage with confidential scsi: true")
+}
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
+    print("allow_storage with confidential blk: start")
+
+    i_storage.driver == "blk"
+    regex.match("^[0-9a-f]{2}(/[0-9a-f]{2})?$", i_storage.source)
+    is_confidential_storage(i_storage)
+
+    print("allow_storage with confidential blk: true")
+}
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with scsi: start")
 
     i_storage.driver == "scsi"
@@ -1303,11 +1324,99 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id) if {
     print("allow_storage with blk: true")
 }
 
+# Validate the complete measured authorization rather than treating a structurally valid
+# confidential Storage as an authorization token.
+allow_confidential_volumes(p_volumes, i_mounts, i_storages) if {
+    confidential_storage_indices := {index | some index; is_confidential_storage(i_storages[index])}
+    count(confidential_storage_indices) == count(p_volumes)
+
+    matched_policy_indices := {p_index |
+        some p_index
+        some storage_index
+        some mount_index
+        confidential_volume_matches(
+            p_volumes[p_index],
+            i_storages[storage_index],
+            i_mounts[mount_index],
+        )
+    }
+    count(matched_policy_indices) == count(p_volumes)
+
+    matched_storage_indices := {storage_index |
+        some storage_index
+        some p_index
+        some mount_index
+        confidential_volume_matches(
+            p_volumes[p_index],
+            i_storages[storage_index],
+            i_mounts[mount_index],
+        )
+    }
+    matched_storage_indices == confidential_storage_indices
+
+    matched_mount_indices := {mount_index |
+        some mount_index
+        some p_index
+        some storage_index
+        confidential_volume_matches(
+            p_volumes[p_index],
+            i_storages[storage_index],
+            i_mounts[mount_index],
+        )
+    }
+    count(matched_mount_indices) == count(p_volumes)
+}
+
+confidential_volume_matches(policy, storage, mount) if {
+    count(policy.volume_name) > 0
+    policy.requested_access == 2
+    policy.storage_fstype == "confidential-storage"
+    policy.filesystem_type == "ext4"
+    policy.filesystem_options == ["nodev", "nosuid", "rw"]
+
+    is_confidential_storage(storage)
+    storage.fstype == policy.storage_fstype
+    storage.confidential_storage.manifest_uri == policy.manifest_uri
+    storage.confidential_storage.requested_access == policy.requested_access
+    storage.fs_group == policy.fs_group
+
+    mount.destination == policy.mount_destination
+    mount.type_ == policy.mount_type
+    mount.options == policy.mount_options
+    mount.source == storage.mount_point
+    regex.match(policy.mount_source, mount.source)
+}
+
+is_confidential_storage(storage) if {
+    count(storage.driver_options) == 0
+    storage.fstype == "confidential-storage"
+    count(storage.options) == 0
+    storage.shared == false
+    regex.match("^/run/kata-containers/shared/containers/passthrough/confidential-[0-9a-f]{64}$", storage.mount_point)
+    allow_confidential_storage_fs_group(storage.fs_group)
+
+    storage.confidential_storage != null
+    count(storage.confidential_storage.manifest_uri) > count("kbs:///")
+    count(storage.confidential_storage.manifest_uri) <= 2048
+    regex.match("^kbs:///[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", storage.confidential_storage.manifest_uri)
+    storage.confidential_storage.requested_access == 2
+}
+
+allow_confidential_storage_fs_group(fs_group) if {
+    is_null(fs_group)
+}
+allow_confidential_storage_fs_group(fs_group) if {
+    fs_group.group_id >= 0
+    fs_group.group_id <= 4294967295
+    fs_group.group_change_policy in {0, 1}
+}
+
 # Validates all storage fields except driver and source.
 allow_storage_base(p_storage, i_storage, bundle_id, sandbox_id) if {
     # Not logging as this is reused multiple times.
 
     p_storage.driver_options == i_storage.driver_options
+    p_storage.confidential_storage == i_storage.confidential_storage
     p_storage.fs_group       == i_storage.fs_group
     p_storage.fstype         == i_storage.fstype
     p_storage.shared         == i_storage.shared

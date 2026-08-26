@@ -111,6 +111,29 @@ pub trait K8sResource {
         None
     }
 
+    fn get_pod_spec(&self) -> Option<&pod::PodSpec> {
+        None
+    }
+
+    fn has_persistent_volume_claim(&self, name: &str) -> bool {
+        let Some(volumes) = self.get_pod_spec().and_then(|spec| spec.volumes.as_ref()) else {
+            return false;
+        };
+        let matching = volumes
+            .iter()
+            .filter(|volume| volume.name == name)
+            .collect::<Vec<_>>();
+        matching.len() == 1
+            && matching[0].persistentVolumeClaim.is_some()
+            && matching[0].emptyDir.is_none()
+            && matching[0].hostPath.is_none()
+            && matching[0].configMap.is_none()
+            && matching[0].azureFile.is_none()
+            && matching[0].projected.is_none()
+            && matching[0].secret.is_none()
+            && matching[0].downwardAPI.is_none()
+    }
+
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         vec![]
     }
