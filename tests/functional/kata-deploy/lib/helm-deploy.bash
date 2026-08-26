@@ -238,6 +238,50 @@ deploy_kata() {
 	return 0
 }
 
+# Render the kata-deploy helm chart to the file named by the caller-set
+# ${RENDERED} variable.
+# Arguments:
+#   $@ - Additional helm template arguments
+render_chart() {
+	helm template kata-deploy "$(get_chart_path)" \
+		--set image.reference=quay.io/kata-containers/kata-deploy \
+		--set image.tag=latest \
+		"$@" > "${RENDERED}"
+}
+
+# Extract a DaemonSet manifest by name from the ${RENDERED} chart output.
+# Arguments:
+#   $1 - DaemonSet name (e.g. kata-deploy, kata-monitor)
+extract_daemonset() {
+	local name_line="  name: $1"
+	awk -v name_line="${name_line}" '
+		/^kind: DaemonSet$/ { buf = $0 "\n"; in_ds = 1; has_name = 0; next }
+		in_ds {
+			buf = buf $0 "\n"
+			if ($0 == name_line) { has_name = 1 }
+			if ($0 ~ /^---$/) {
+				if (has_name) { printf "%s", buf; exit }
+				in_ds = 0; buf = ""; has_name = 0
+				next
+			}
+		}
+		END { if (has_name && in_ds) { printf "%s", buf } }
+	' "${RENDERED}"
+}
+
+# Count nodeSelectorTerms under requiredDuringSchedulingIgnoredDuringExecution
+# in a manifest.
+count_required_node_selector_terms() {
+	local manifest="${1}"
+	echo "${manifest}" | awk '
+		/requiredDuringSchedulingIgnoredDuringExecution:/ { in_req = 1; next }
+		in_req && /preferredDuringSchedulingIgnoredDuringExecution:/ { exit }
+		in_req && /^        [a-zA-Z]/ { exit }
+		in_req && /- match(Expressions|Fields):/ { count++ }
+		END { print count + 0 }
+	'
+}
+
 # Uninstall kata-deploy
 uninstall_kata() {
 	helm uninstall "${HELM_RELEASE_NAME}" -n "${HELM_NAMESPACE}" \
