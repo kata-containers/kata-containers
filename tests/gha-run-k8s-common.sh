@@ -1057,8 +1057,16 @@ VERIFICATION_POD_EOF
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	# Ensure any potential leftover is cleaned up ... and this secret usually is not in case of previous failures
-	kubectl delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
+	# A failed dispatcher hook leaves the release non-deployed, after which
+	# `helm upgrade --install` refuses with `no deployed releases`. Deleting only
+	# the v1 secret is not enough once more than one revision exists. Skip hooks:
+	# the pre-delete dispatcher may be broken too, and a fresh install re-applies
+	# node state anyway.
+	if helm status kata-deploy -n kube-system >/dev/null 2>&1; then
+		echo "Found a leftover kata-deploy release; removing it before install"
+		helm uninstall kata-deploy -n kube-system --no-hooks || true
+	fi
+	kubectl delete secret -n kube-system -l "owner=helm,name=kata-deploy" 2>/dev/null || true
 
 	max_tries=3
 	interval=10
