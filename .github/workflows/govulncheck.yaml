@@ -3,10 +3,6 @@ on:
 
 name: Govulncheck
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
@@ -23,6 +19,9 @@ jobs:
           - binary: "kata-monitor"
             make_target: "monitor"
       fail-fast: false
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}-golvulncheck
+      cancel-in-progress: true
 
     steps:
       - name: Checkout the code
