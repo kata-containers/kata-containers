@@ -28,7 +28,7 @@ function install_dependencies() {
 		jq
 	)
 
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq

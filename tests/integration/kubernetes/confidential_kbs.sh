@@ -267,7 +267,7 @@ kbs_install_cli() {
 		debian|ubuntu)
 			local pkgs="build-essential pkg-config libssl-dev"
 
-			sudo apt-get update -y
+			apt_get_update
 			# shellcheck disable=2086
 			sudo apt-get install -y ${pkgs}
 			;;
