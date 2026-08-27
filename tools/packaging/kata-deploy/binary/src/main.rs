@@ -1511,8 +1511,9 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
                 "install (cri): no readable CRI config predates this attempt; a restart is needed"
             ),
             Some(before) => {
-                let unchanged =
-                    runtime::cri_config_snapshot(config, runtime).await.as_ref() == Some(&before);
+                let unchanged = runtime::cri_config_snapshot(config, runtime)
+                    .await
+                    .is_some_and(|after| after.same_config_as(&before));
                 if !unchanged {
                     info!(
                         "install (cri): configuring {runtime} changed its CRI config; a restart is \
