@@ -511,8 +511,9 @@ fn install_stage_load_kernel_modules(config: &config::Config) -> Result<()> {
         return Ok(());
     }
 
-    let modprobe = find_host_modprobe()?;
     let _node_lock = acquire_node_mutation_lock()?;
+    // Lazily, so modules that are already loaded need no modprobe.
+    let mut modprobe = None;
     let mut loaded = Vec::new();
     for module in &plan.modules {
         if host_module_visible(module.name) {
@@ -528,7 +529,17 @@ fn install_stage_load_kernel_modules(config: &config::Config) -> Result<()> {
             "install (kernel-modules): loading host module {}",
             module.name
         );
-        match run_host_modprobe(&modprobe, module.name) {
+        let path = match &modprobe {
+            Some(path) => path,
+            None => match find_host_modprobe() {
+                Ok(path) => modprobe.insert(path),
+                Err(error) => {
+                    handle_module_load_failure(*module, error)?;
+                    continue;
+                }
+            },
+        };
+        match run_host_modprobe(path, module.name) {
             Ok(()) => loaded.push(module.name),
             Err(error) => handle_module_load_failure(*module, error)?,
         }
