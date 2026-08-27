@@ -167,4 +167,9 @@ jobs:
 
       - name: Delete AKS cluster
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 300
+          command: bash tests/integration/kubernetes/gha-run.sh delete-cluster
