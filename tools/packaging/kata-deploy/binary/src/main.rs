@@ -768,11 +768,7 @@ fn find_host_modprobe() -> Result<String> {
 
     CANDIDATES
         .iter()
-        .find(|path| {
-            std::path::Path::new(HOST_ROOT)
-                .join(path.trim_start_matches('/'))
-                .is_file()
-        })
+        .find(|path| host_path_is_file(std::path::Path::new(HOST_ROOT), std::path::Path::new(path)))
         .map(|path| (*path).to_string())
         .with_context(|| {
             format!(
@@ -780,6 +776,36 @@ fn find_host_modprobe() -> Result<String> {
                  deploying Kata"
             )
         })
+}
+
+/// An absolute symlink target belongs to the host, not to this image.
+fn host_path_is_file(root: &std::path::Path, path: &std::path::Path) -> bool {
+    // The kernel's MAXSYMLINKS: fewer would reject chains the chroot resolves.
+    const MAX_HOPS: usize = 40;
+
+    let mut current = path.to_path_buf();
+    for _ in 0..MAX_HOPS {
+        let mounted = root.join(current.strip_prefix("/").unwrap_or(&current));
+        let Ok(metadata) = std::fs::symlink_metadata(&mounted) else {
+            return false;
+        };
+        if !metadata.is_symlink() {
+            return metadata.is_file();
+        }
+        let Ok(target) = std::fs::read_link(&mounted) else {
+            return false;
+        };
+        current = if target.is_absolute() {
+            target
+        } else {
+            // ".." is left for the kernel to resolve against the real dir.
+            current
+                .parent()
+                .unwrap_or(std::path::Path::new("/"))
+                .join(target)
+        };
+    }
+    false
 }
 
 fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
@@ -2276,5 +2302,51 @@ mod tests {
             anyhow::anyhow!("no fsverity")
         )
         .is_ok());
+    }
+
+    /// /bin/sh exists here but not on the fake host, so only a resolution that
+    /// escapes the root answers true for it.
+    #[rstest]
+    #[case::absolute_symlink("/bin/kmod", true)]
+    #[case::relative_symlink("../bin/kmod", true)]
+    #[case::escapes_the_host_root("/bin/sh", false)]
+    #[case::dangling("/bin/nowhere", false)]
+    fn host_symlinks_resolve_inside_the_host_root(#[case] target: &str, #[case] expected: bool) {
+        let host = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(host.path().join("usr/sbin")).expect("usr/sbin");
+        std::fs::create_dir_all(host.path().join("usr/bin")).expect("usr/bin");
+        std::fs::write(host.path().join("usr/bin/kmod"), b"#!/bin/sh\n").expect("kmod");
+        // usrmerge, so /bin/kmod lands on usr/bin/kmod.
+        std::os::unix::fs::symlink("usr/bin", host.path().join("bin")).expect("bin symlink");
+        std::os::unix::fs::symlink(target, host.path().join("usr/sbin/modprobe"))
+            .expect("modprobe symlink");
+
+        assert_eq!(
+            host_path_is_file(host.path(), std::path::Path::new("/usr/sbin/modprobe")),
+            expected,
+            "modprobe -> {target}"
+        );
+    }
+
+    #[test]
+    fn a_missing_host_path_is_not_a_file() {
+        let host = tempfile::tempdir().expect("tempdir");
+        assert!(!host_path_is_file(
+            host.path(),
+            std::path::Path::new("/usr/sbin/modprobe")
+        ));
+    }
+
+    #[test]
+    fn a_symlink_loop_under_the_host_root_terminates() {
+        let host = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(host.path().join("usr/sbin")).expect("usr/sbin");
+        std::os::unix::fs::symlink("/usr/sbin/b", host.path().join("usr/sbin/a")).expect("a");
+        std::os::unix::fs::symlink("/usr/sbin/a", host.path().join("usr/sbin/b")).expect("b");
+
+        assert!(!host_path_is_file(
+            host.path(),
+            std::path::Path::new("/usr/sbin/a")
+        ));
     }
 }
