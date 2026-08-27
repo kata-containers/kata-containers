@@ -546,12 +546,22 @@ impl Machine {
         )))]
         let is_nvdimm_supported = false;
 
+        // ppc64le (pseries) uses its own in-kernel irqchip negotiation via
+        // ic-mode; forcing kernel_irqchip=on here prevents QEMU from falling
+        // back from XIVE to XICS when the host doesn't support XIVE, causing
+        // a boot hang.  All other architectures keep the "on" default so that
+        // VFIO split-irqchip can be enabled later when needed.
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        let kernel_irqchip = None;
+        #[cfg(not(all(target_arch = "powerpc64", target_endian = "little")))]
+        let kernel_irqchip = Some("on".to_owned());
+
         Machine {
             r#type: config.machine_info.machine_type.clone(),
             accel: "kvm".to_owned(),
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
-            kernel_irqchip: Some("on".to_owned()), // default to off, will be turned on if needed by VFIO devices
+            kernel_irqchip,
             confidential_guest_support: "".to_owned(),
             is_nvdimm_supported,
             memory_backend: None,
