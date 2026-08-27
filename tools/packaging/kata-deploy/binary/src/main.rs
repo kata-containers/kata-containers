@@ -178,7 +178,18 @@ async fn main() -> Result<()> {
         Action::CleanupStageRemoveArtifacts => "cleanup-stage-remove-artifacts",
         Action::InternalPostInstallWait => "internal-post-install-wait",
     };
-    config.print_info(action_str);
+    // Every stage of a staged run resolves the same pod env, so repeating the
+    // configuration in each one buries the few lines that differ. Only the stage
+    // that opens a run prints it; keep this in sync with the chart's stage order.
+    let opens_a_run = matches!(
+        args.action,
+        Action::Install
+            | Action::Cleanup
+            | Action::Reset
+            | Action::InstallStageLoadKernelModules
+            | Action::CleanupStageRevertCri
+    );
+    config.print_info(action_str, opens_a_run);
 
     // After re-exec we already know which runtime we committed to during
     // install — trust the env var and skip the apiserver round-trip. For
