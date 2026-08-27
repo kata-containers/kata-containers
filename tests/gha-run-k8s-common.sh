@@ -395,7 +395,7 @@ function deploy_microk8s() {
 function install_system_dependencies() {
 	dependencies="${1}"
 
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install "${dependencies}"
 }
 
@@ -452,7 +452,7 @@ function do_deploy_k8s() {
 		Pin-Priority: 1000
 		EOF
 
-		sudo apt-get update
+		apt_get_update
 		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl cri-tools \
 			--allow-downgrades >/dev/null 2>&1; then
 			version="${candidate}"

@@ -29,7 +29,7 @@ function install_dependencies() {
 		umoci
 	)
 
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install "${deps[@]}"
 
 	info "Installing bats"

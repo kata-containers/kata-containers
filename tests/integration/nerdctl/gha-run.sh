@@ -29,7 +29,7 @@ function install_dependencies() {
 		pip
 	)
 
-	sudo apt update
+	apt_get_update
 	sudo apt -y install "${system_deps[@]}"
 
 	# Install lastversion from pip
