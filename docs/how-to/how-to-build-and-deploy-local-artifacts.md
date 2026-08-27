@@ -27,7 +27,8 @@ cd tools/packaging/kata-deploy/local-build
 
 make kernel-nvidia-gpu-tarball          # guest kernel + modules
 make rootfs-image-nvidia-gpu-tarball    # rootfs image (builds the kernel first)
-make shim-v2-tarball                    # shim + configs
+make shim-v2-rust-tarball               # runtime-rs shim + configs
+make shim-v2-go-tarball                 # Go runtime shim + configs
 ```
 
 ### USE_CACHE
