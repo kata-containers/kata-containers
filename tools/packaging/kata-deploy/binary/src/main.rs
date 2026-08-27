@@ -1504,20 +1504,32 @@ async fn install_stage_cri(config: &config::Config, runtime: &str, staged: bool)
     let handlers = config.shim_handlers();
 
     if staged {
-        if let Some(before) = config_before {
-            let unchanged =
-                runtime::cri_config_snapshot(config, runtime).await.as_ref() == Some(&before);
-            if unchanged
-                && runtime::lifecycle::cri_serving_config_from(runtime, before.written_at()).await
-            {
-                info!(
-                    "install (cri): CRI config for {runtime} is unchanged from a previous \
-                     attempt, and {runtime} has been up since it was written. Skipping the \
-                     (self-terminating) restart and checking the runtime is up instead."
-                );
-                runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
-                info!("install (cri): runtime is up; CRI stage complete without restart");
-                return Ok(());
+        // Every path out of here that keeps the restart says why: a retry loop that
+        // restarts forever is otherwise indistinguishable from one that never tried.
+        match config_before {
+            None => info!(
+                "install (cri): no readable CRI config predates this attempt; a restart is needed"
+            ),
+            Some(before) => {
+                let unchanged =
+                    runtime::cri_config_snapshot(config, runtime).await.as_ref() == Some(&before);
+                if !unchanged {
+                    info!(
+                        "install (cri): configuring {runtime} changed its CRI config; a restart is \
+                         needed"
+                    );
+                } else if runtime::lifecycle::cri_serving_config_from(runtime, before.written_at())
+                    .await
+                {
+                    info!(
+                        "install (cri): CRI config for {runtime} is unchanged from a previous \
+                         attempt, and {runtime} has been up since it was written. Skipping the \
+                         (self-terminating) restart and checking the runtime is up instead."
+                    );
+                    runtime::lifecycle::wait_till_cri_unit_active(runtime, 300).await?;
+                    info!("install (cri): runtime is up; CRI stage complete without restart");
+                    return Ok(());
+                }
             }
         }
     }
