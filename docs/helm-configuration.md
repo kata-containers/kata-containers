@@ -55,6 +55,43 @@ default (non-custom) runtime. kata-deploy writes it as
 
 It's best to reference the default `values.yaml` file above for more details.
 
+### NVIDIA guest settings
+
+The NVIDIA GPU images boot [NVRC](https://github.com/NVIDIA/nvrc) as their init
+process, which brings the NVIDIA stack up before the Kata agent starts. The
+`shims.<shim>.nvrc` block configures it. Every key becomes an `nvrc.*` guest
+kernel parameter, so it applies to all sandboxes on that shim and takes effect
+when a sandbox boots:
+
+```yaml title="values.yaml"
+shims:
+  qemu-nvidia-gpu:
+    nvrc:
+      enableDCGM: true
+```
+
+`enableDCGM` runs `nv-hostengine` and `dcgm-exporter` inside the guest. The
+exporter serves GPU metrics on port 9400 of the sandbox, which is the pod IP, so
+anything that can reach the pod can scrape `/metrics` without a sidecar:
+
+```sh
+curl "http://$(kubectl get pod my-gpu-pod -o jsonpath='{.status.podIP}'):9400/metrics"
+```
+
+It is off by default because it costs guest memory and an extra process in every
+sandbox on the shim. Enable it per shim, on the shims whose workloads you want to
+observe.
+
+!!! note
+    The block is only meaningful on the `qemu-nvidia-gpu*` shims, and kata-deploy
+    refuses to install if it finds it on any other shim. DCGM itself ships in the
+    NVIDIA GPU guest images — with composable images it arrives in the GPU
+    extension — so a shim using a guest image without it will not serve metrics.
+
+Under the hood kata-deploy appends `nvrc.dcgm=on` to the shim's kernel command
+line, in the same `config.d/30-kernel-params.toml` drop-in that carries the proxy
+and debug settings.
+
 ### defaultShim
 
 `defaultShim` selects, per architecture, which shim the auto-created default

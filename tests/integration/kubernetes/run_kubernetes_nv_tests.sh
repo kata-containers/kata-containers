@@ -90,6 +90,7 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 	local pods=(
 		"aa-test-cc"
 		"nvidia-cuda-vectoradd"
+		"nvidia-dcgm-exporter"
 		"nvidia-nim-llama-3-2-1b-instruct"
 		"nvidia-nim-llama-3-2-1b-instruct-tee"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
@@ -159,6 +160,7 @@ else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
+		"k8s-nvidia-dcgm.bats" \
 		"k8s-nvidia-vllm.bats" \
 		"k8s-qemu-rootless-sandbox.bats")
 

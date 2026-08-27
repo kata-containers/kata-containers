@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_DCGM}
+  labels:
+    app: ${POD_NAME_DCGM}
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - name: dcgm-exporter-probe
+    # The container only has to hold the sandbox open: the exporter runs in the
+    # guest next to NVRC, not in here. Reuse the CUDA sample the other GPU tests
+    # already pull so this costs no extra image on the runner.
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubuntu22.04"
+    command: ["sleep", "infinity"]
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        memory: 16Gi
