@@ -119,10 +119,16 @@ predicate_has_shim_metric() {
 	# --for=create is what makes the readiness wait below trustworthy: on its
 	# own it would give up rather than wait while the selector still matches
 	# nothing, which is exactly the state a cluster only seconds old is in.
-	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
-		--for=create --timeout="${helm_timeout}"
-	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
-		--for=condition=Ready --timeout="${helm_timeout}"
+	#
+	# Only in daemonset mode: job mode has no pod to wait for, and helm already
+	# waited for the dispatcher hook, which does not return until every per-node
+	# install Job has finished.
+	if kata_deploy_ds_exists; then
+		kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+			--for=create --timeout="${helm_timeout}"
+		kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+			--for=condition=Ready --timeout="${helm_timeout}"
+	fi
 
 	echo ""
 	echo "::group::kata-monitor DaemonSet rollout"

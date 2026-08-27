@@ -24,10 +24,13 @@ CHART_PATH="$(get_chart_path)"
 RENDERED="/tmp/kata-deploy-scheduling-rendered.yaml"
 RENDERED_JOBS="/tmp/kata-deploy-scheduling-rendered-jobs.yaml"
 
+# Pinned to daemonset mode: every caller reads the DaemonSet back out, and job
+# mode renders none.
 render_chart() {
 	helm template kata-deploy "${CHART_PATH}" \
 		--set image.reference=quay.io/kata-containers/kata-deploy \
 		--set image.tag=latest \
+		--set deploymentMode=daemonset \
 		"$@" > "${RENDERED}"
 }
 

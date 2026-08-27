@@ -101,6 +101,22 @@ tolerations_of() {
 	'
 }
 
+# Whether the release installed a kata-deploy DaemonSet, i.e. whether it is in
+# daemonset mode. Callers that take the chart default cannot know the mode, and
+# the DaemonSet pods and the per-node Job pods share no label.
+kata_deploy_ds_exists() {
+	[[ -n "$(kubectl -n "${HELM_NAMESPACE}" get ds -l name=kata-deploy -o name 2>/dev/null)" ]]
+}
+
+# The label selector matching whichever pods run the install.
+kata_deploy_pod_selector() {
+	if kata_deploy_ds_exists; then
+		echo "name=kata-deploy"
+	else
+		echo "app.kubernetes.io/name=kata-deploy"
+	fi
+}
+
 # Get the path to the helm chart
 get_chart_path() {
 	local script_dir
@@ -214,14 +230,9 @@ deploy_kata() {
 		--wait --timeout "${HELM_TIMEOUT:-10m}"
 	)
 
-	# Run helm install.
-	# --wait makes helm block until all DaemonSet pods are Ready. The readiness
-	# probe returns 200 only after install completes (artifacts extracted, CRI
-	# restarted, node labeled), so no extra rollout/sleep polling is needed.
-	#
-	# Exception: on single-node clusters with maxUnavailable=1, helm --wait can
-	# consider the DaemonSet ready with 0 ready pods. Belt-and-suspenders: also
-	# kubectl wait on the pod readiness condition.
+	# The install is complete once helm returns: --wait blocks on DaemonSet
+	# readiness, whose probe only passes after install, and hooks always block -
+	# the job-mode dispatcher is one, and it waits for every per-node Job.
 	"${helm_cmd[@]}"
 	local ret=$?
 
@@ -232,8 +243,12 @@ deploy_kata() {
 		return "${ret}"
 	fi
 
-	kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
-		--for=condition=Ready --timeout="${HELM_TIMEOUT:-10m}" 2>/dev/null || true
+	# helm --wait can call a single-node maxUnavailable=1 DaemonSet ready with 0
+	# ready pods.
+	if kata_deploy_ds_exists; then
+		kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+			--for=condition=Ready --timeout="${HELM_TIMEOUT:-10m}" 2>/dev/null || true
+	fi
 
 	return 0
 }

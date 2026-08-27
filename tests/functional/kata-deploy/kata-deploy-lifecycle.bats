@@ -39,7 +39,8 @@ setup_file() {
 	echo "# Hypervisor: ${KATA_HYPERVISOR}" >&3
 	echo "# K8s distribution: ${KUBERNETES}" >&3
 	echo "# Deploying kata-deploy..." >&3
-	deploy_kata
+	# `rollout restart daemonset/kata-deploy` below needs a DaemonSet.
+	deploy_kata "" --set deploymentMode=daemonset
 	echo "# kata-deploy deployed successfully" >&3
 }
 

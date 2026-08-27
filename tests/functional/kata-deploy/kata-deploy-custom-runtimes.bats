@@ -205,7 +205,7 @@ EOF
 	run kubectl get runtimeclass "${CUSTOM_RUNTIME_HANDLER}" -o name
 	if [[ "${status}" -ne 0 ]]; then
 		echo "# RuntimeClass not found. kata-deploy logs:" >&3
-		kubectl -n kube-system logs -l name=kata-deploy 2>/dev/null || true
+		kubectl -n kube-system logs -l "$(kata_deploy_pod_selector)" 2>/dev/null || true
 		die "Custom RuntimeClass ${CUSTOM_RUNTIME_HANDLER} not found"
 	fi
 
@@ -391,7 +391,7 @@ teardown() {
 		echo "# Test failed, gathering diagnostics..." >&3
 		kubectl describe pod "${TEST_POD_NAME}" 2>/dev/null || true
 		echo "# kata-deploy logs:" >&3
-		kubectl -n kube-system logs -l name=kata-deploy 2>/dev/null || true
+		kubectl -n kube-system logs -l "$(kata_deploy_pod_selector)" 2>/dev/null || true
 	fi
 
 	# Clean up test pod

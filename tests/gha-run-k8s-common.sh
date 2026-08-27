@@ -793,10 +793,13 @@ function helm_helper() {
 	fi
 	yq -i ".image.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
 
-	# Resolve the deployment mode coming from the (base) values file so the
-	# post-install wait below knows whether to expect a DaemonSet or per-node Jobs.
+	# Guessing wrong makes the wait below expect something the release never
+	# creates, so take the chart default rather than assuming one.
 	local deployment_mode
-	deployment_mode="$(yq -r '.deploymentMode // "daemonset"' "${values_yaml}")"
+	deployment_mode="$(yq -r '.deploymentMode // ""' "${values_yaml}")"
+	if [[ -z "${deployment_mode}" ]]; then
+		deployment_mode="$(yq -r '.deploymentMode' "${helm_chart_dir}/values.yaml")"
+	fi
 
 	# No node-selection override is needed for "job" mode: with an empty
 	# nodeSelector the dispatcher targets every node whose taints the install
