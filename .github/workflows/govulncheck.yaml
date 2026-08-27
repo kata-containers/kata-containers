@@ -13,6 +13,7 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     strategy:
       matrix:
         include:

@@ -43,6 +43,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}

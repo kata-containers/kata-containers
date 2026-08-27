@@ -35,6 +35,7 @@ jobs:
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       security-events: write # required to upload SARIF results to code-scanning dashboard
       packages: read # required to fetch internal or private CodeQL packs

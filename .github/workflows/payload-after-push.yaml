@@ -214,6 +214,7 @@ jobs:
   publish-manifest:
     name: publish-manifest
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: write # needed to push manifest images to ghcr.io
@@ -241,6 +242,7 @@ jobs:
   publish-kata-monitor-manifest:
     name: publish-kata-monitor-manifest
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: write # needed to push manifest images to ghcr.io
@@ -276,6 +278,7 @@ jobs:
     name: upload-helm-chart-tarball
     needs: publish-manifest
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       packages: write # needed to push the helm chart to ghcr.io
     steps:

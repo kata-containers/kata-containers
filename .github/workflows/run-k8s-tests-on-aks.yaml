@@ -73,6 +73,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-k8s-tests-aks-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write # Used for OIDC access to log into Azure

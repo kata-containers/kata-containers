@@ -43,6 +43,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: arm64-k8s
+    timeout-minutes: 60
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}

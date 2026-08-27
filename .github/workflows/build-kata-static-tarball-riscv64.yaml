@@ -31,6 +31,7 @@ jobs:
   build-asset:
     name: build-asset
     runs-on: riscv-builder
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io

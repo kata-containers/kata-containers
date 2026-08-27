@@ -18,6 +18,7 @@ concurrency:
 jobs:
   pr_wip_check:
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     name: WIP Check
     steps:
     - name: WIP Check
