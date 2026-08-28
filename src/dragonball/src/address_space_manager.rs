@@ -170,6 +170,15 @@ pub enum AddressManagerError {
     #[error("memory snapshot layout mismatch for guest address 0x{0:x}")]
     SnapshotLayoutMismatch(u64),
 
+    /// The memory snapshot has a different number of regions than the current address space.
+    #[error("memory snapshot region count mismatch: expected {expected}, found {actual}")]
+    SnapshotRegionCountMismatch {
+        /// Number of regions in the current guest address space.
+        expected: usize,
+        /// Number of regions recorded in the snapshot state.
+        actual: usize,
+    },
+
     /// The memory snapshot file is smaller than the mapped regions require.
     #[error(
         "memory snapshot file too small: region at guest address 0x{guest_addr:x} \
@@ -880,41 +889,53 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             .ok_or(AddressManagerError::GuestMemoryNotInitialized)?;
         let guard = vm_as.memory();
 
-        // Validate the snapshot file is large enough for every region *before*
-        // installing any mapping. mmap(MAP_PRIVATE) happily maps past the end
-        // of a truncated file; the shortfall only surfaces later as a SIGBUS
-        // in the VMM when the guest first touches a page beyond EOF. Refuse a
-        // too-small file up front with a clear error instead.
+        let expected_region_count = guard.num_regions();
+        if state.regions.len() != expected_region_count {
+            return Err(AddressManagerError::SnapshotRegionCountMismatch {
+                expected: expected_region_count,
+                actual: state.regions.len(),
+            });
+        }
+
+        // Validate the complete layout *before* installing any mapping. The
+        // fresh address space describes every region expected from the current
+        // VM configuration; walking both lists in guest-address order catches
+        // omitted, extra, reordered and malformed snapshot regions.
         let file_len = file
             .metadata()
             .map_err(AddressManagerError::SnapshotFile)?
             .len();
-        for region_state in &state.regions {
-            let needed = region_state
-                .file_offset
-                .checked_add(region_state.size)
-                .ok_or(AddressManagerError::SnapshotLayoutMismatch(
+        let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        if page_size <= 0 {
+            return Err(AddressManagerError::InvalidOperation);
+        }
+        let page_size = page_size as u64;
+        let mut expected_file_offset = 0u64;
+        for (region, region_state) in guard.iter().zip(&state.regions) {
+            let guest_addr = region.start_addr().raw_value();
+            if region_state.guest_addr != guest_addr
+                || region_state.size != region.len()
+                || region_state.file_offset != expected_file_offset
+                || region_state.file_offset % page_size != 0
+            {
+                return Err(AddressManagerError::SnapshotLayoutMismatch(
                     region_state.guest_addr,
-                ))?;
-            if needed > file_len {
+                ));
+            }
+
+            expected_file_offset = expected_file_offset.checked_add(region.len()).ok_or(
+                AddressManagerError::SnapshotLayoutMismatch(region_state.guest_addr),
+            )?;
+            if expected_file_offset > file_len {
                 return Err(AddressManagerError::SnapshotFileTooSmall {
                     guest_addr: region_state.guest_addr,
-                    needed,
+                    needed: expected_file_offset,
                     file_len,
                 });
             }
         }
 
-        for region_state in &state.regions {
-            let guest_addr = GuestAddress(region_state.guest_addr);
-            let region = guard.find_region(guest_addr).ok_or(
-                AddressManagerError::SnapshotLayoutMismatch(region_state.guest_addr),
-            )?;
-            if region.start_addr() != guest_addr || region.len() != region_state.size {
-                return Err(AddressManagerError::SnapshotLayoutMismatch(
-                    region_state.guest_addr,
-                ));
-            }
+        for (region, region_state) in guard.iter().zip(&state.regions) {
             // Back this region with a copy-on-write mapping of the template
             // file instead of copying it in: pages fault in lazily from the
             // template, guest writes stay private (MAP_PRIVATE), and the
@@ -924,16 +945,6 @@ impl<'a> dbs_snapshot::Persist<'a> for AddressSpaceMgr {
             let host_addr = region
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|e| AddressManagerError::AccessGuestMemory(region_state.guest_addr, e))?;
-            // mmap requires a page-aligned file offset. Regions are written
-            // back-to-back at page-aligned sizes, so this holds by
-            // construction; validate it anyway and refuse a malformed snapshot
-            // with a clear error rather than letting mmap fail with EINVAL.
-            let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) } as u64;
-            if page_size == 0 || region_state.file_offset % page_size != 0 {
-                return Err(AddressManagerError::SnapshotLayoutMismatch(
-                    region_state.guest_addr,
-                ));
-            }
             // SAFETY: `host_addr .. host_addr + size` is exactly this region's
             // own existing mapping; we atomically replace it with a private,
             // file-backed mapping of the same length and protection. The
@@ -988,12 +999,20 @@ mod tests {
 
     #[test]
     fn test_memory_save_restore_roundtrip() {
-        let numa_region_infos = vec![NumaRegionInfo {
-            size: 16,
-            host_numa_node_id: None,
-            guest_numa_node_id: Some(0),
-            vcpu_ids: vec![0],
-        }];
+        let numa_region_infos = vec![
+            NumaRegionInfo {
+                size: 8,
+                host_numa_node_id: None,
+                guest_numa_node_id: Some(0),
+                vcpu_ids: vec![0],
+            },
+            NumaRegionInfo {
+                size: 8,
+                host_numa_node_id: None,
+                guest_numa_node_id: Some(1),
+                vcpu_ids: vec![1],
+            },
+        ];
         let create_mgr = || {
             let res_mgr = ResourceManager::new(None);
             AddressSpaceMgrBuilder::new("shmem", "")
@@ -1017,10 +1036,13 @@ mod tests {
 
         let mut file = TempFile::new().unwrap().into_file();
         let state = dbs_snapshot::Persist::save_state(&mut src_mgr, &mut file).unwrap();
-        assert_eq!(state.regions.len(), 1);
+        assert_eq!(state.regions.len(), 2);
         assert_eq!(state.regions[0].guest_addr, GUEST_MEM_START);
-        assert_eq!(state.regions[0].size, 16 << 20);
+        assert_eq!(state.regions[0].size, 8 << 20);
         assert_eq!(state.regions[0].file_offset, 0);
+        assert_eq!(state.regions[1].guest_addr, GUEST_MEM_START + (8 << 20));
+        assert_eq!(state.regions[1].size, 8 << 20);
+        assert_eq!(state.regions[1].file_offset, 8 << 20);
 
         // The state must survive a JSON round-trip.
         let json = serde_json::to_string(&state).unwrap();
@@ -1038,13 +1060,71 @@ mod tests {
             .unwrap();
         assert_eq!(val, 0xa5);
 
+        // Missing or additional regions must be rejected even when every
+        // region listed in the snapshot individually matches the fresh guest
+        // address space.
+        let mut incomplete_state = state.clone();
+        incomplete_state.regions.pop();
+        let mut incomplete_mgr = create_mgr();
+        assert!(matches!(
+            dbs_snapshot::Persist::restore_state(&mut incomplete_mgr, &incomplete_state, &mut file),
+            Err(AddressManagerError::SnapshotRegionCountMismatch {
+                expected: 2,
+                actual: 1
+            })
+        ));
+
+        let mut extra_state = state.clone();
+        extra_state.regions.push(state.regions[1].clone());
+        let mut extra_mgr = create_mgr();
+        assert!(matches!(
+            dbs_snapshot::Persist::restore_state(&mut extra_mgr, &extra_state, &mut file),
+            Err(AddressManagerError::SnapshotRegionCountMismatch {
+                expected: 2,
+                actual: 3
+            })
+        ));
+
+        // Validate the whole layout before replacing any anonymous mappings.
+        // A mismatch in the second region must leave the first one untouched.
+        let mut malformed_state = state.clone();
+        malformed_state.regions[1].file_offset = 0;
+        let mut untouched_mgr = create_mgr();
+        {
+            let vm_as = untouched_mgr.get_vm_as().unwrap();
+            vm_as
+                .memory()
+                .write_obj(0x11223344u32, GuestAddress(GUEST_MEM_START))
+                .unwrap();
+        }
+        assert!(matches!(
+            dbs_snapshot::Persist::restore_state(&mut untouched_mgr, &malformed_state, &mut file),
+            Err(AddressManagerError::SnapshotLayoutMismatch(_))
+        ));
+        let vm_as = untouched_mgr.get_vm_as().unwrap();
+        assert_eq!(
+            vm_as
+                .memory()
+                .read_obj::<u32>(GuestAddress(GUEST_MEM_START))
+                .unwrap(),
+            0x11223344
+        );
+
         // A layout mismatch must be refused.
-        let small_infos = vec![NumaRegionInfo {
-            size: 8,
-            host_numa_node_id: None,
-            guest_numa_node_id: Some(0),
-            vcpu_ids: vec![0],
-        }];
+        let small_infos = vec![
+            NumaRegionInfo {
+                size: 4,
+                host_numa_node_id: None,
+                guest_numa_node_id: Some(0),
+                vcpu_ids: vec![0],
+            },
+            NumaRegionInfo {
+                size: 4,
+                host_numa_node_id: None,
+                guest_numa_node_id: Some(1),
+                vcpu_ids: vec![1],
+            },
+        ];
         let res_mgr = ResourceManager::new(None);
         let mut small_mgr = AddressSpaceMgrBuilder::new("shmem", "")
             .unwrap()

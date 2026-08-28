@@ -894,6 +894,43 @@ impl DeviceManager {
         address_space: Option<&AddressSpace>,
         vm_config: &VmConfigInfo,
     ) -> std::result::Result<(), StartMicroVmError> {
+        self.create_devices_with_boot_args(
+            vm_as,
+            epoll_mgr,
+            Some(kernel_config),
+            dmesg_fifo,
+            address_space,
+            vm_config,
+        )
+    }
+
+    pub(crate) fn create_devices_from_snapshot(
+        &mut self,
+        vm_as: GuestAddressSpaceImpl,
+        epoll_mgr: EpollManager,
+        dmesg_fifo: Option<Box<dyn io::Write + Send>>,
+        address_space: Option<&AddressSpace>,
+        vm_config: &VmConfigInfo,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        self.create_devices_with_boot_args(
+            vm_as,
+            epoll_mgr,
+            None,
+            dmesg_fifo,
+            address_space,
+            vm_config,
+        )
+    }
+
+    fn create_devices_with_boot_args(
+        &mut self,
+        vm_as: GuestAddressSpaceImpl,
+        epoll_mgr: EpollManager,
+        kernel_config: Option<&mut KernelConfigInfo>,
+        dmesg_fifo: Option<Box<dyn io::Write + Send>>,
+        address_space: Option<&AddressSpace>,
+        vm_config: &VmConfigInfo,
+    ) -> std::result::Result<(), StartMicroVmError> {
         let mut ctx = DeviceOpContext::new(
             Some(epoll_mgr),
             self,
@@ -935,9 +972,15 @@ impl DeviceManager {
         self.vsock_manager.attach_devices(&mut ctx)?;
 
         #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
-        self.block_manager
-            .generate_kernel_boot_args(kernel_config)
-            .map_err(StartMicroVmError::DeviceManager)?;
+        let kernel_config = {
+            let mut kernel_config = kernel_config;
+            if let Some(kernel_config) = kernel_config.as_deref_mut() {
+                self.block_manager
+                    .generate_kernel_boot_args(kernel_config)
+                    .map_err(StartMicroVmError::DeviceManager)?;
+            }
+            kernel_config
+        };
 
         #[cfg(feature = "host-device")]
         {
@@ -947,10 +990,13 @@ impl DeviceManager {
             ctx.set_vfio_manager(self.vfio_manager.clone())
         }
 
-        // Ensure that all devices are attached before kernel boot args are
-        // generated.
-        ctx.generate_kernel_boot_args(kernel_config)
-            .map_err(StartMicroVmError::DeviceManager)?;
+        if let Some(kernel_config) = kernel_config {
+            // Ensure that all devices are attached before kernel boot args are
+            // generated for a cold boot. Restored memory already contains the
+            // finalized command line from the source VM.
+            ctx.generate_kernel_boot_args(kernel_config)
+                .map_err(StartMicroVmError::DeviceManager)?;
+        }
 
         #[cfg(target_arch = "aarch64")]
         {

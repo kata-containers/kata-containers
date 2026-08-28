@@ -201,9 +201,9 @@ pub enum VmmAction {
     },
 
     /// Launch the microVM by restoring it from a snapshot instead of cold
-    /// booting. The microVM must have been configured with the same
-    /// configuration the snapshot was taken with. This action can only be
-    /// called before the microVM has booted.
+    /// booting. The microVM must have been configured with the same machine
+    /// and devices the snapshot was taken with; no boot source is required.
+    /// This action can only be called before the microVM has booted.
     #[cfg(target_arch = "x86_64")]
     StartMicroVmFromSnapshot {
         /// Path of the snapshot state file to read.
