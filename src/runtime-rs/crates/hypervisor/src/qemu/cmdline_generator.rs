@@ -1019,6 +1019,7 @@ struct BlockBackend {
     cache_direct: bool,
     cache_no_flush: bool,
     read_only: bool,
+    locking: bool,
     discard_unmap: bool,
 }
 
@@ -1060,6 +1061,7 @@ impl BlockBackend {
             cache_direct,
             cache_no_flush: false,
             read_only: true,
+            locking: true,
             discard_unmap: false,
         }
     }
@@ -1094,6 +1096,11 @@ impl BlockBackend {
         self
     }
 
+    fn set_locking(&mut self, locking: bool) -> &mut Self {
+        self.locking = locking;
+        self
+    }
+
     #[allow(dead_code)]
     fn set_discard_unmap(&mut self, discard_unmap: bool) -> &mut Self {
         self.discard_unmap = discard_unmap;
@@ -1119,6 +1126,9 @@ impl BlockBackend {
             "{prefix}read-only={}",
             if self.read_only { "on" } else { "off" }
         ));
+        if !self.locking {
+            params.push(format!("{prefix}locking=off"));
+        }
         if self.discard_unmap {
             params.push(format!("{prefix}discard=unmap"));
         }
@@ -1170,10 +1180,14 @@ fn block_backend_node(
     is_direct: bool,
     is_readonly: bool,
     discard_unmap: bool,
+    disable_locking: bool,
 ) -> Box<dyn ToQemuParams> {
     let mut backend = BlockBackend::new(device_id, path, is_direct);
     backend.set_read_only(is_readonly);
     backend.set_discard_unmap(discard_unmap);
+    if disable_locking {
+        backend.set_locking(false);
+    }
 
     if vmdk.is_some() {
         Box::new(VmdkFormatNode::new(device_id, backend))
@@ -3329,6 +3343,7 @@ impl<'a> QemuCmdLine<'a> {
         is_scsi: bool,
         discard_unmap: bool,
         serial_override: Option<&str>,
+        disable_locking: bool,
     ) -> Result<()> {
         if self.block_fdsets.contains_key(device_id) {
             return Err(anyhow!("duplicate QEMU block device ID {device_id}"));
@@ -3350,6 +3365,7 @@ impl<'a> QemuCmdLine<'a> {
             is_direct,
             is_readonly,
             discard_unmap,
+            disable_locking,
         );
         self.devices.push(backend);
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
@@ -4222,6 +4238,7 @@ mod tests {
             false,
             false,
             None,
+            false,
         );
         result.unwrap();
 
@@ -4249,8 +4266,15 @@ mod tests {
     #[actix_rt::test]
     async fn test_cold_plug_vmdk_uses_format_node() {
         let vmdk = crate::VmdkConfig::default();
-        let format_node =
-            block_backend_node("rootfs", "/dev/fdset/2", Some(&vmdk), false, true, false);
+        let format_node = block_backend_node(
+            "rootfs",
+            "/dev/fdset/2",
+            Some(&vmdk),
+            false,
+            true,
+            false,
+            false,
+        );
 
         let format_params = format_node.qemu_params().await.unwrap();
         assert_eq!(format_params[0], "-blockdev");
@@ -4277,12 +4301,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case::read_only(true, "read-only=on")]
-    #[case::writable(false, "read-only=off")]
+    #[case::shared_read_only(true, true, "read-only=on")]
+    #[case::read_only_with_locking(true, false, "read-only=on")]
+    #[case::writable(false, false, "read-only=off")]
     #[actix_rt::test]
     #[serial]
     async fn test_qemu_block_backend_read_only_params(
         #[case] is_readonly: bool,
+        #[case] disable_locking: bool,
         #[case] expected_param: &str,
     ) {
         let dir = tempdir().unwrap();
@@ -4301,6 +4327,7 @@ mod tests {
                 false,
                 false,
                 None,
+                disable_locking,
             )
             .unwrap();
 
@@ -4310,6 +4337,10 @@ mod tests {
                 && args[1].contains("node-name=image-blk0")
                 && contains_param(&args[1..2], expected_param)
         }));
+        assert_eq!(
+            params.iter().any(|arg| arg.contains("locking=off")),
+            disable_locking
+        );
         assert!(!params.iter().any(|arg| arg.contains("auto-read-only=")));
 
         drop(cmdline);
