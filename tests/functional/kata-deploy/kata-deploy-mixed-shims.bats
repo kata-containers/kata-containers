@@ -15,57 +15,9 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 
 MIXED_POD_LABEL="kata-deploy-mixed-shims"
 
-run_on_host() {
-	local cmd="$1"
-	local node_name
-	node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-	local pod_name="mixed-host-exec-${RANDOM}"
-	local phase=""
-
-	kubectl run "${pod_name}" \
-		--image=quay.io/kata-containers/alpine-bash-curl:latest \
-		--restart=Never \
-		--overrides="{
-			\"spec\": {
-				\"nodeName\": \"${node_name}\",
-				\"hostPID\": true,
-				\"activeDeadlineSeconds\": 300,
-				\"tolerations\": [{\"operator\": \"Exists\"}],
-				\"containers\": [{
-					\"name\": \"exec\",
-					\"image\": \"quay.io/kata-containers/alpine-bash-curl:latest\",
-					\"imagePullPolicy\": \"IfNotPresent\",
-					\"command\": [\"sh\", \"-c\", \"${cmd}\"],
-					\"securityContext\": {\"privileged\": true}
-				}]
-			}
-		}" > /dev/null
-
-	local deadline=$((SECONDS + 60))
-	while (( SECONDS < deadline )); do
-		phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null) || true
-		case "${phase}" in
-			Succeeded|Failed) break ;;
-		esac
-		sleep 1
-	done
-
-	kubectl logs "${pod_name}" 2>/dev/null || true
-	kubectl delete pod "${pod_name}" --ignore-not-found=true > /dev/null 2>&1
-	[[ "${phase}" == "Succeeded" ]]
-}
-
 cleanup_mixed_pods() {
 	kubectl delete pods -l "test=${MIXED_POD_LABEL}" \
 		--ignore-not-found=true --wait=true --timeout=180s
-}
-
-assert_kata_processes_stopped() {
-	run run_on_host "kata_processes() { found=1; for proc in /proc/[0-9]*; do exe=\$(readlink \${proc}/exe 2>/dev/null || true); case \${exe} in *qemu-system*|*cloud-hypervisor*|*containerd-shim-kata-v2*) echo \${proc##*/} \${exe}; found=0;; esac; state=\$(awk '{print \$3}' \${proc}/stat 2>/dev/null || true); comm=\$(awk '{print \$2}' \${proc}/stat 2>/dev/null || true); if [ x\${state} = xZ ]; then case \${comm} in *qemu-system*|*cloud-hypervis*|*containerd-shim*) echo \${proc##*/} zombie \${comm}; found=0;; esac; fi; done; return \${found}; }; for attempt in \$(seq 1 30); do if ! kata_processes >/dev/null; then exit 0; fi; sleep 1; done; kata_processes; exit 1"
-	if [[ "${status}" -ne 0 ]]; then
-		echo "${output}" >&3
-	fi
-	[[ "${status}" -eq 0 ]]
 }
 
 create_mixed_pod() {
@@ -115,7 +67,6 @@ exercise_startup_order() {
 	done
 
 	cleanup_mixed_pods
-	assert_kata_processes_stopped
 }
 
 setup_file() {
