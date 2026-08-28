@@ -183,6 +183,32 @@ impl Vm {
         vm_as: GuestAddressSpaceImpl,
         request_ts: TimestampUs,
     ) -> std::result::Result<(), StartMicroVmError> {
+        self.init_microvm_with_boot_mode(epoll_mgr, vm_as, request_ts, false)
+    }
+
+    /// Initialize a microVM that will resume from a snapshot.
+    ///
+    /// Unlike a cold boot, a snapshot restore does not need to load the guest
+    /// kernel or construct its initial boot register state: guest memory and
+    /// every vCPU register are replaced by the saved state before the vCPUs
+    /// start. Avoiding that throwaway work keeps the restore path focused on
+    /// rebuilding host-side devices and applying the snapshot.
+    pub fn init_microvm_from_snapshot(
+        &mut self,
+        epoll_mgr: EpollManager,
+        vm_as: GuestAddressSpaceImpl,
+        request_ts: TimestampUs,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        self.init_microvm_with_boot_mode(epoll_mgr, vm_as, request_ts, true)
+    }
+
+    fn init_microvm_with_boot_mode(
+        &mut self,
+        epoll_mgr: EpollManager,
+        vm_as: GuestAddressSpaceImpl,
+        request_ts: TimestampUs,
+        restore_from_snapshot: bool,
+    ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: start initializing microvm ...");
 
         self.init_tss()?;
@@ -201,6 +227,18 @@ impl Vm {
         if self.vm_config.cpu_pm == "on" {
             // TODO: add cpu_pm support. issue #4590.
             info!(self.logger, "VM: enable CPU disable_idle_exits capability");
+        }
+
+        // On a standard cold start, vCPU creation is deferred to
+        // `create_boot_vcpus()` until after the kernel has been loaded.
+        if restore_from_snapshot {
+            let boot_vcpu_count = self.vm_config.vcpu_count;
+            self.vcpu_manager()
+                .map_err(StartMicroVmError::Vcpu)?
+                .create_vcpus(boot_vcpu_count, Some(request_ts), None, None)
+                .map_err(StartMicroVmError::Vcpu)?;
+
+            return Ok(());
         }
 
         let vm_memory = vm_as.memory();

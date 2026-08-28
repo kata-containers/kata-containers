@@ -933,11 +933,10 @@ impl Vm {
                 .unwrap_or_default(),
         )
         .map_err(StartMicroVmError::Vcpu)?;
-        // Creates devices and boot vCPUs. The boot-time vCPU register setup
-        // performed here is overwritten by the snapshot state below; the
-        // boot-time system configuration (`init_configure_system`) is
-        // skipped entirely since guest memory is reloaded from the snapshot.
-        self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
+        // Recreate host-side devices and fresh vCPU objects, but skip loading
+        // the kernel and setting boot registers because the snapshot replaces
+        // guest memory and all vCPU state before execution resumes.
+        self.init_microvm_from_snapshot(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
         #[cfg(feature = "dbs-upcall")]
         self.init_upcall()?;
 
