@@ -341,6 +341,9 @@ type BlockDrive struct {
 	// ReadOnly sets the device file readonly
 	ReadOnly bool
 
+	// DisableLocking disables VMM advisory locking for immutable shared files.
+	DisableLocking bool
+
 	// DiscardUnmap enables discard/unmap support for this block device.
 	DiscardUnmap bool
 
