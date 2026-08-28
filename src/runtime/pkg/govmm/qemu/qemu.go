@@ -1378,6 +1378,9 @@ type BlockDevice struct {
 	// ReadOnly sets the block device in readonly mode
 	ReadOnly bool
 
+	// DisableLocking disables QEMU advisory locking for the file backend.
+	DisableLocking bool
+
 	// DiscardUnmap enables discard/unmap support for this block device.
 	DiscardUnmap bool
 
@@ -1435,7 +1438,12 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("serial=%s", blkdev.ID))
 
 	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
-	blkParams = append(blkParams, fmt.Sprintf("file=%s", blkdev.File))
+	if blkdev.DisableLocking {
+		blkParams = append(blkParams, fmt.Sprintf("file.filename=%s", blkdev.File))
+		blkParams = append(blkParams, "file.locking=off")
+	} else {
+		blkParams = append(blkParams, fmt.Sprintf("file=%s", blkdev.File))
+	}
 	blkParams = append(blkParams, fmt.Sprintf("aio=%s", blkdev.AIO))
 	blkParams = append(blkParams, fmt.Sprintf("format=%s", blkdev.Format))
 	blkParams = append(blkParams, fmt.Sprintf("if=%s", blkdev.Interface))
