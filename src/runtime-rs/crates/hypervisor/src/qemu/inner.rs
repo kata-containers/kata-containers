@@ -837,7 +837,8 @@ impl QemuInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        todo!()
+        warn!(sl!(), "Get Hypervisor Metrics: Not implemented");
+        Ok(String::new())
     }
 
     pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
@@ -1521,6 +1522,16 @@ mod tests {
     fn test_memlock_limit_adds_headroom() {
         assert_eq!(memlock_limit_with_headroom(10 * 1024), 11 * 1024);
         assert_eq!(memlock_limit_with_headroom(u64::MAX), u64::MAX);
+    }
+
+    #[tokio::test]
+    async fn test_unsupported_hypervisor_metrics_are_empty() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let qemu = QemuInner::new(exit_notify);
+
+        for _ in 0..3 {
+            assert_eq!(qemu.get_hypervisor_metrics().await.unwrap(), "");
+        }
     }
 
     #[rstest]

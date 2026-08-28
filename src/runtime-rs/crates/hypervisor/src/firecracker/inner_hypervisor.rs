@@ -222,6 +222,22 @@ impl FcInner {
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
         warn!(sl(), "Get Hypervisor Metrics: Not implemented");
-        todo!()
+        Ok(String::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_unsupported_hypervisor_metrics_are_empty() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let firecracker = FcInner::new(exit_notify);
+
+        for _ in 0..3 {
+            assert_eq!(firecracker.get_hypervisor_metrics().await.unwrap(), "");
+        }
     }
 }
