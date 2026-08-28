@@ -720,7 +720,14 @@ impl Config {
         Ok(())
     }
 
-    pub fn print_info(&self, action: &str) {
+    /// `full` prints the resolved configuration too. See its caller for why the
+    /// later stages of a staged run leave it out.
+    pub fn print_info(&self, action: &str, full: bool) {
+        if !full {
+            info!("Action: {action}");
+            return;
+        }
+
         info!("Action:");
         info!("* {action}");
         info!("");

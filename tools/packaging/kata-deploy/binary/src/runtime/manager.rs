@@ -307,7 +307,10 @@ pub async fn configure_cri_runtime(config: &Config, runtime: &str) -> Result<()>
 }
 
 /// What the kata CRI configuration for a runtime looked like at a point in time.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Deliberately not `PartialEq`: a re-apply rewrites the same bytes and bumps
+/// `written_at`, so comparing whole snapshots always reports a change and the
+/// restart it is meant to avoid becomes unconditional.
+#[derive(Debug, Clone)]
 pub struct CriConfigSnapshot {
     fingerprint: String,
     written_at: Option<SystemTime>,
@@ -316,6 +319,11 @@ pub struct CriConfigSnapshot {
 impl CriConfigSnapshot {
     pub fn written_at(&self) -> Option<SystemTime> {
         self.written_at
+    }
+
+    /// Whether both snapshots describe the same configuration, mtimes aside.
+    pub fn same_config_as(&self, other: &Self) -> bool {
+        self.fingerprint == other.fingerprint
     }
 }
 
@@ -430,6 +438,8 @@ pub async fn restart_and_wait_for_ready(
 mod tests {
     use super::*;
     use rstest::rstest;
+    use std::thread::sleep;
+    use std::time::Duration;
     use tempfile::tempdir;
 
     #[test]
@@ -451,9 +461,8 @@ mod tests {
     fn absent_primary_file_is_none() {
         let dir = tempdir().unwrap();
 
-        assert_eq!(
-            snapshot_files(&[dir.path().join("kata-deploy.toml")]),
-            None,
+        assert!(
+            snapshot_files(&[dir.path().join("kata-deploy.toml")]).is_none(),
             "no config on disk yet must read as None (fresh install -> restart)"
         );
     }
@@ -500,6 +509,31 @@ mod tests {
             before.fingerprint,
             snapshot_files(&files).unwrap().fingerprint
         );
+    }
+
+    #[test]
+    fn rewriting_the_same_bytes_is_not_a_change() {
+        let dir = tempdir().unwrap();
+        let drop_in = dir.path().join("kata-deploy.toml");
+        let main_config = dir.path().join("config.toml");
+        fs::write(&drop_in, "kata").unwrap();
+        fs::write(&main_config, "imports = [\"kata-deploy.toml\"]").unwrap();
+
+        let files = [drop_in.clone(), main_config.clone()];
+        let before = snapshot_files(&files).unwrap();
+
+        // What a re-apply does: same bytes, later mtime. Reading that as a change
+        // makes a job-mode retry restart the runtime it just decided not to.
+        sleep(Duration::from_millis(10));
+        fs::write(&drop_in, "kata").unwrap();
+        fs::write(&main_config, "imports = [\"kata-deploy.toml\"]").unwrap();
+
+        let after = snapshot_files(&files).unwrap();
+        assert!(
+            after.written_at() > before.written_at(),
+            "the re-apply has to have moved the mtime for this test to mean anything"
+        );
+        assert!(after.same_config_as(&before));
     }
 
     #[test]
