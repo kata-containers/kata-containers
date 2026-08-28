@@ -227,15 +227,6 @@ pub fn get_hypervisor_plugin(name: &str) -> Option<Arc<dyn ConfigPlugin>> {
 /// Configuration information for block device.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BlockDeviceInfo {
-    /// Disable block device from being used for a container's rootfs.
-    ///
-    /// In case of a storage driver like devicemapper where a container's root file system is
-    /// backed by a block device, the block device is passed directly to the hypervisor for
-    /// performance reasons. This flag prevents the block device from being passed to the
-    /// hypervisor, shared fs is used instead to pass the rootfs.
-    #[serde(default)]
-    pub disable_block_device_use: bool,
-
     /// Block storage driver to be used for the hypervisor in case the container rootfs is backed
     /// by a block device. Options include:
     /// - `virtio-scsi`
@@ -343,13 +334,6 @@ pub struct BlockDeviceInfo {
 impl BlockDeviceInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
-        if self.disable_block_device_use {
-            self.block_device_driver = "".to_string();
-            self.enable_vhost_user_store = false;
-            self.memory_offset = 0;
-            return Ok(());
-        }
-
         if self.block_device_driver.is_empty() {
             self.block_device_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
         }
@@ -395,9 +379,6 @@ impl BlockDeviceInfo {
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
-        if self.disable_block_device_use {
-            return Ok(());
-        }
         let l = [
             VIRTIO_BLK_PCI,
             VIRTIO_BLK_CCW,
