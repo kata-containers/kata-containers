@@ -650,6 +650,48 @@ pub fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
     Ok(infos)
 }
 
+/// Collect the mount points nested under `root`, deepest first.
+///
+/// The ordering lets callers unmount children before their parents, and `root`
+/// itself is never included.
+fn get_nested_mount_points(mountinfo_path: &str, root: &str) -> Result<Vec<String>> {
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+
+    let mut mount_points: Vec<String> = parse_mount_table(mountinfo_path)?
+        .into_iter()
+        .map(|info| info.mount_point)
+        .filter(|mount_point| mount_point.starts_with(&prefix))
+        .collect();
+
+    mount_points.sort_by_key(|mount_point| std::cmp::Reverse(mount_point.matches('/').count()));
+
+    Ok(mount_points)
+}
+
+/// Unmount everything still mounted under `root`.
+///
+/// Callers that are about to delete `root` recursively must do this first: a
+/// recursive delete is mount-unaware, so it would either fail on a read-only
+/// filesystem or descend into a writable one and destroy its contents.
+///
+/// A plain unmount is attempted before falling back to a lazy one, so that
+/// callers tearing down the backing devices afterwards do not race with a
+/// detach that has not completed yet.
+pub fn umount_nested_mount_points(root: &str, logger: &slog::Logger) -> Result<()> {
+    for mount_point in get_nested_mount_points(MOUNTINFO_PATH, root)? {
+        if let Err(e) = umount2(mount_point.as_str(), MntFlags::empty())
+            .or_else(|_| umount2(mount_point.as_str(), MntFlags::MNT_DETACH))
+        {
+            warn!(
+                logger,
+                "failed to umount {} nested under {}: {:?}", mount_point, root, e
+            );
+        }
+    }
+
+    Ok(())
+}
+
 #[inline(always)]
 #[cfg(not(test))]
 fn chroot<P: ?Sized + NixPath>(path: &P) -> Result<(), nix::Error> {
@@ -1716,6 +1758,53 @@ mod tests {
 
             assert_result!(d.result, result, msg);
         }
+    }
+
+    #[test]
+    fn test_get_nested_mount_points() {
+        let mountinfo_data = r#"22 933 0:20 / / rw,nodev - tmpfs tmpfs rw
+                               23 22 0:21 / /run/kata-containers/cid/rootfs rw shared:2 - overlay overlay rw
+                               24 22 0:22 / /run/kata-containers/cid/multi-layer/upper rw shared:3 - ext4 /dev/vda rw
+                               25 22 0:23 / /run/kata-containers/cid/multi-layer/lower-0 ro shared:4 - erofs /dev/vdb ro
+                               26 22 0:24 / /run/kata-containers/cid-other/rootfs rw shared:5 - overlay overlay rw
+                               27 22 0:25 / /run/kata-containers/cid rw shared:6 - tmpfs tmpfs rw"#;
+
+        let tempdir = tempdir().unwrap();
+        let mountinfo_path = tempdir.path().join("mountinfo");
+        std::fs::write(&mountinfo_path, mountinfo_data).unwrap();
+
+        let result =
+            get_nested_mount_points(mountinfo_path.to_str().unwrap(), "/run/kata-containers/cid")
+                .unwrap();
+
+        // A sibling bundle sharing the same prefix, and the bundle itself, are
+        // both excluded. The remaining mount points come back deepest first.
+        assert_eq!(
+            result,
+            vec![
+                "/run/kata-containers/cid/multi-layer/upper".to_string(),
+                "/run/kata-containers/cid/multi-layer/lower-0".to_string(),
+                "/run/kata-containers/cid/rootfs".to_string(),
+            ]
+        );
+
+        // A trailing separator on the root must not change the outcome.
+        assert_eq!(
+            get_nested_mount_points(
+                mountinfo_path.to_str().unwrap(),
+                "/run/kata-containers/cid/"
+            )
+            .unwrap(),
+            result
+        );
+
+        // A bundle with nothing mounted underneath it.
+        assert!(get_nested_mount_points(
+            mountinfo_path.to_str().unwrap(),
+            "/run/kata-containers/cid-other/rootfs"
+        )
+        .unwrap()
+        .is_empty());
     }
 
     #[test]

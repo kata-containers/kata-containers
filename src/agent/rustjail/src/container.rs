@@ -1363,6 +1363,13 @@ impl BaseContainer for LinuxContainer {
             warn!(self.logger, "rootfs not mounted");
             Ok(())
         })?;
+
+        // Storage handlers may place backing mounts inside the bundle, and the
+        // recursive delete below is mount-unaware: it would fail on a read-only
+        // filesystem such as EROFS, and silently wipe the contents of a
+        // writable one. Detach them first.
+        mount::umount_nested_mount_points(&self.root, &self.logger)?;
+
         fs::remove_dir_all(&self.root)?;
 
         Ok(())
