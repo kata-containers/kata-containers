@@ -454,13 +454,13 @@ impl AgentService {
         if req.timeout == 0 {
             let mut sandbox = self.sandbox.lock().await;
             sandbox.bind_watcher.remove_container(&cid).await;
-            sandbox
+            let destroyed = sandbox
                 .get_container(&cid)
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
-                .await?;
-            remove_container_resources(&mut sandbox, &cid).await?;
-            return Ok(());
+                .await;
+            log_container_destroy_failure(&cid, &destroyed);
+            return remove_container_resources(&mut sandbox, &cid).await;
         }
 
         // timeout != 0
@@ -476,10 +476,13 @@ impl AgentService {
                 .await
         });
 
+        // A timeout leaves destroy() running and holding the sandbox lock, so
+        // there is no safe way to carry on reclaiming resources here.
         let to = Duration::from_secs(req.timeout.into());
-        tokio::time::timeout(to, handle)
+        let destroyed = tokio::time::timeout(to, handle)
             .await
-            .map_err(|_| anyhow!(nix::Error::ETIME))???;
+            .map_err(|_| anyhow!(nix::Error::ETIME))??;
+        log_container_destroy_failure(&cid, &destroyed);
 
         remove_container_resources(&mut *self.sandbox.lock().await, &cid).await
     }
@@ -2164,6 +2167,17 @@ fn update_container_namespaces(
     }
 
     Ok(())
+}
+
+// Tearing the bundle down and reclaiming the container's resources are
+// independent steps, and the resources are what the host waits on before it
+// cleans up its own volumes and rootfs. So a destroy() failure is reported but
+// never allowed to skip remove_container_resources(); whatever is left of the
+// bundle is reclaimed when the sandbox itself is destroyed.
+fn log_container_destroy_failure(cid: &str, result: &Result<()>) {
+    if let Err(e) = result {
+        error!(sl(), "failed to destroy container {}: {:?}", cid, e);
+    }
 }
 
 async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
