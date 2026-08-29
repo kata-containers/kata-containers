@@ -15,7 +15,7 @@
 
 [hypervisor.qemu]
 path = "@QEMUNOSHAREDFSPATH@"
-kernel = "@KERNELPATH_NV@"
+kernel = "@KERNELPATH_NV_CPU@"
 image = "@IMAGEPATH_NV_BASE@"
 machine_type = "@MACHINETYPE@"
 

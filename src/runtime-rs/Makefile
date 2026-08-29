@@ -508,6 +508,11 @@ endif
     KERNELTYPE_NV = compressed
     KERNELNAME_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE_NV))
     KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
+    # The CPU-only class boots the ELF kernel: self-decompressing the bzImage
+    # costs ~56ms per sandbox and buys nothing, both images already shipping.
+    KERNELTYPE_NV_CPU = uncompressed
+    KERNELNAME_NV_CPU = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE_NV_CPU))
+    KERNELPATH_NV_CPU = $(KERNELDIR)/$(KERNELNAME_NV_CPU)
     IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
     IMAGEPATH_NV = $(PKGDATADIR)/$(IMAGENAME_NV)
     # Composable NVIDIA stack: driver-agnostic nvidia base boot image plus the
@@ -766,6 +771,7 @@ USER_VARS += KERNELTYPE
 USER_VARS += KERNELPATH_DB
 USER_VARS += KERNELPATH_QEMU
 USER_VARS += KERNELPATH_NV
+USER_VARS += KERNELPATH_NV_CPU
 USER_VARS += KERNELPATH_QEMU_SE
 USER_VARS += KERNEL_NAME_QEMU_SE_RUNTIME_RS
 USER_VARS += KERNELPATH_QEMU_SE_RUNTIME_RS
