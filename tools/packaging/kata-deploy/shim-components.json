@@ -45,7 +45,7 @@
       "aarch64": ["shim-v2-go", "qemu", "virtiofsd", "kernel-nvidia-gpu", "rootfs-image-nvidia"]
     },
     "qemu-nvidia-cpu-runtime-rs": {
-      "x86_64":  ["shim-v2-rust", "qemu-no-shared-fs", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
+      "x86_64":  ["shim-v2-rust", "qemu-no-shared-fs", "qemu-microvm", "kernel-nvidia-gpu", "rootfs-image-nvidia"],
       "aarch64": ["shim-v2-rust", "qemu-no-shared-fs", "kernel-nvidia-gpu", "rootfs-image-nvidia"]
     },
     "qemu-nvidia-gpu-snp": {

@@ -23,6 +23,7 @@ BASE_TARBALLS = serial-targets \
 	ovmf-tdx-tarball \
 	ovmf-tarball \
 	qemu-no-shared-fs-tarball \
+	qemu-microvm-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tdx-experimental-tarball \
 	qemu-tarball \
@@ -113,6 +114,7 @@ NVGPU_BASE_TARBALLS = \
 	ovmf-tarball \
 	pause-image-tarball \
 	qemu-no-shared-fs-tarball \
+	qemu-microvm-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tdx-experimental-tarball \
 	qemu-tarball \
@@ -143,6 +145,7 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-static-ovmf.tar.zst \
 	kata-static-pause-image.tar.zst \
 	kata-static-qemu-no-shared-fs.tar.zst \
+	kata-static-qemu-microvm.tar.zst \
 	kata-static-qemu-snp-experimental.tar.zst \
 	kata-static-qemu-tdx-experimental.tar.zst \
 	kata-static-qemu.tar.zst \

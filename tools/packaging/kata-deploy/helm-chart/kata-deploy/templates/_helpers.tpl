@@ -699,6 +699,10 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: EROFS_DMVERITY
   value: "dmverity"
 {{- end }}
+{{- if not (dig "qemu-nvidia-cpu-runtime-rs" "vfio" "enabled" true .Values.shims) }}
+- name: QEMU_NVIDIA_CPU_VFIO
+  value: "false"
+{{- end }}
 {{- $forceGuestPullAmd64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $forceGuestPullAmd64 }}
 - name: EXPERIMENTAL_FORCE_GUEST_PULL_X86_64

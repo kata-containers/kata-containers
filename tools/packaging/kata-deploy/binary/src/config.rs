@@ -215,6 +215,10 @@ pub struct Config {
     /// the devkit drop-in enables the agent debug console, which must never come
     /// up without debug.
     pub devkit_enabled: bool,
+    /// Whether the NVIDIA CPU runtime class keeps VFIO device assignment.
+    /// When off it runs on the microvm qemu build, which is smaller and boots
+    /// faster but has no PCI bus to host vfio-pci.
+    pub qemu_nvidia_cpu_vfio: bool,
     /// EROFS snapshotter rw-layer backing mode ("disk" or "memory").
     pub erofs_snapshotter_mode: Option<String>,
     /// Enable dm-verity integrity for EROFS lower layers.
@@ -300,6 +304,9 @@ impl Config {
             .collect();
 
         let pull_type_mapping_for_arch = get_arch_var_or_base("PULL_TYPE_MAPPING", &arch);
+
+        let qemu_nvidia_cpu_vfio =
+            env::var("QEMU_NVIDIA_CPU_VFIO").unwrap_or_else(|_| "true".to_string()) == "true";
 
         let installation_prefix = env::var("INSTALLATION_PREFIX")
             .ok()
@@ -488,6 +495,7 @@ impl Config {
             custom_runtimes_enabled,
             custom_runtimes,
             devkit_enabled,
+            qemu_nvidia_cpu_vfio,
             erofs_snapshotter_mode,
             erofs_dmverity,
             startup_taints,

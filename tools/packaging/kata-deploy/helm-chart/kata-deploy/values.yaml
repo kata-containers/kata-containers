@@ -572,6 +572,8 @@ snapshotter:
 #         forceGuestPull: false       # force guest-side image pull in containerd
 #       crio:
 #         guestPull: false            # enable guest-pull in CRI-O
+#       vfio:
+#         enabled: true               # qemu-nvidia-cpu-runtime-rs only, see below
 #       agent:
 #         httpsProxy: ""             # HTTPS proxy for the Kata agent
 #         noProxy: ""                # no-proxy list for the Kata agent
@@ -672,6 +674,11 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    vfio:
+      # Keep VFIO device assignment (SR-IOV NICs, GPUs). Turning it off moves
+      # the class to the microvm QEMU build, which boots faster but has no PCI
+      # bus to host vfio-pci. amd64 only.
+      enabled: true
 
   qemu-nvidia-gpu:
     enabled: ~
