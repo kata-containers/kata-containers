@@ -508,10 +508,11 @@ endif
     KERNELTYPE_NV = compressed
     KERNELNAME_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE_NV))
     KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
-    # The CPU-only class boots the ELF kernel: self-decompressing the bzImage
-    # costs ~56ms per sandbox and buys nothing, both images already shipping.
+    # The CPU-only class boots the generic kernel, not the GPU one: it assigns
+    # no device, so the NVIDIA build is only extra bytes to unpack.  ELF rather
+    # than bzImage, self-decompressing costs ~56ms per sandbox and buys nothing.
     KERNELTYPE_NV_CPU = uncompressed
-    KERNELNAME_NV_CPU = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE_NV_CPU))
+    KERNELNAME_NV_CPU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_NV_CPU))
     KERNELPATH_NV_CPU = $(KERNELDIR)/$(KERNELNAME_NV_CPU)
     IMAGENAME_NV = $(PROJECT_TAG)-nvidia-gpu.img
     IMAGEPATH_NV = $(PKGDATADIR)/$(IMAGENAME_NV)
