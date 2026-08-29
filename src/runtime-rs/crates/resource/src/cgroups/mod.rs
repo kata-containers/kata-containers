@@ -53,7 +53,7 @@ impl CgroupConfig {
         let overhead_path = utils::gen_overhead_path(is_systemd_cgroup(&path), sid);
 
         // Dragonball and runtime are the same process, so that the
-        // sandbox_cgroup_only is overwriten to true.
+        // sandbox_cgroup_only is overwritten to true.
         let sandbox_cgroup_only = if toml_config.runtime.hypervisor_name == HYPERVISOR_DRAGONBALL {
             true
         } else {
