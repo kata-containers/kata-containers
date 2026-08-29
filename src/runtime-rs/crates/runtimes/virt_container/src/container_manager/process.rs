@@ -367,9 +367,8 @@ impl Process {
         Ok(())
     }
 
-    /// A container is considered exited once its IO ended.
-    /// This function waits for IO to end. And then, do some cleanup
-    /// things.
+    /// A container is considered exited once the guest process exits.
+    /// IO completion is handled independently from process exit reporting.
     async fn run_io_wait(
         &mut self,
         containers: Arc<RwLock<HashMap<String, Container>>>,
@@ -385,23 +384,46 @@ impl Process {
         let status = self.status.clone();
 
         tokio::spawn(async move {
-            // wait on all of the container's io stream terminated
-            info!(logger, "begin wait group io");
-            wg.wait().await;
-            info!(logger, "end wait group for io");
+            let io_logger = logger.clone();
+            let mut io_wait_task = tokio::spawn(async move {
+                // wait on all of the container's io stream terminated
+                info!(io_logger, "begin wait group io");
+                wg.wait().await;
+                info!(io_logger, "end wait group for io");
 
-            if let Some(binary_logger) = binary_logger {
-                binary_logger.shutdown().await;
-            }
+                if let Some(binary_logger) = binary_logger {
+                    binary_logger.shutdown().await;
+                }
+            });
 
             let req = agent::WaitProcessRequest {
                 process_id: process.clone().into(),
             };
 
             info!(logger, "begin wait process");
+
+            let wait_process = agent.wait_process(req);
+            tokio::pin!(wait_process);
+
+            let wait_result = tokio::select! {
+                biased;
+
+                io_result = &mut io_wait_task => {
+                    if let Err(err) = io_result {
+                        warn!(logger, "io wait task failed: {:?}", err);
+                    }
+
+                    wait_process.as_mut().await
+                }
+
+                result = wait_process.as_mut() => {
+                    result
+                }
+            };
+
             // If wait_process fails (e.g., VM died), we still set status to Stopped
             // This ensures that subsequent Kill() calls see the process as already stopped and return success.
-            let exit_code = match agent.wait_process(req).await {
+            let exit_code = match wait_result {
                 Ok(ret) => {
                     info!(logger, "end wait process exit code {}", ret.status);
                     ret.status
@@ -414,20 +436,22 @@ impl Process {
                 }
             };
 
-            let containers = containers.read().await;
-            let container_id = &process.container_id.container_id;
-            if let Some(c) = containers.get(container_id) {
-                if let Err(err) = c.stop_process(&process).await {
+            {
+                let containers = containers.read().await;
+                let container_id = &process.container_id.container_id;
+                if let Some(c) = containers.get(container_id) {
+                    if let Err(err) = c.stop_process(&process).await {
+                        error!(
+                            logger,
+                            "Failed to stop process, process = {:?}, err = {:?}", process, err
+                        );
+                    }
+                } else {
                     error!(
                         logger,
-                        "Failed to stop process, process = {:?}, err = {:?}", process, err
+                        "Failed to stop process, since container {} not found", container_id
                     );
                 }
-            } else {
-                error!(
-                    logger,
-                    "Failed to stop process, since container {} not found", container_id
-                );
             }
 
             let mut exit_status = exit_status.write().await;
@@ -439,6 +463,8 @@ impl Process {
             drop(status);
 
             drop(exit_notifier);
+            drop(io_wait_task);
+
             info!(logger, "end io wait thread");
         });
         Ok(())
