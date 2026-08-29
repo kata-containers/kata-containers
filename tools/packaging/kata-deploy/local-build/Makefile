@@ -109,7 +109,6 @@ NVGPU_BASE_TARBALLS = \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
-	kernel-tarball \
 	ovmf-sev-tarball \
 	ovmf-tdx-tarball \
 	ovmf-tarball \
@@ -128,7 +127,6 @@ NVGPU_BASE_TARBALLS = \
 	coco-guest-components-tarball \
 	$(PUBLISH_COMPONENT_TARBALLS) \
 	kernel-nvidia-gpu-tarball \
-	kernel-tarball \
 	ovmf-tarball \
 	pause-image-tarball \
 	qemu-no-shared-fs-tarball \
@@ -142,7 +140,6 @@ NVGPU_FINAL_TARBALL_INPUTS = \
 	kata-deploy-static-kata-deploy-binary.tar.zst \
 	kata-deploy-static-nydus-snapshotter-for-coco-guest-pull.tar.zst \
 	kata-static-kernel-nvidia-gpu.tar.zst \
-	kata-static-kernel.tar.zst \
 	kata-static-ovmf-sev.tar.zst \
 	kata-static-ovmf-tdx.tar.zst \
 	kata-static-ovmf.tar.zst \
