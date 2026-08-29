@@ -133,6 +133,27 @@ esac
 # artifact installs.  None of the UEFI images QEMU bundles is ever loaded, so
 # drop them along with the descriptors pointing at them; SeaBIOS and the
 # direct-boot option ROMs stay, x86_64 still boots through them.
+if [[ "${BUILD_SUFFIX:-}" == "microvm" ]]; then
+    # microvm boots through bios-microvm.bin (qboot) and pvh.bin, and builds no
+    # other machine.  Everything else QEMU bundles is left without a consumer:
+    # there is no PCI bus for efi-virtio.rom and no q35 for the 256K SeaBIOS.
+    qemu_black_list+=(
+        */share/*/edk2-*
+        */share/*/firmware
+        */share/*/bios.bin
+        */share/*/bios-256k.bin
+        */share/*/efi-virtio.rom
+        */share/*/kvmvapic.bin
+        */share/*/linuxboot_dma.bin
+        */share/*/multiboot_dma.bin
+        */share/*/qboot.rom
+        */share/*/qemu-nsis.bmp
+        */share/*/dtb
+        */include
+        */lib
+    )
+fi
+
 if [[ "${BUILD_SUFFIX:-}" == "no-shared-fs" ]]; then
     qemu_black_list+=(
         */share/*/edk2-*

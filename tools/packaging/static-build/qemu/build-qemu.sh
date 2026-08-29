@@ -56,11 +56,22 @@ scripts/git-submodule.sh update meson capstone
 # too, a confidential guest cannot boot an nvdimm rootfs, and neither of them
 # resizes the guest.  SGX is not part of it, as nothing emits an EPC backend
 # on a TEE guest.
+#
+# The microvm tarball takes the same trim further and swaps q35 and the PCI
+# transport for microvm and virtio-mmio, dropping the mandatory SeaBIOS stage
+# and most of the DSDT the guest interprets.  Having no PCI bus it cannot host
+# vfio-pci, so any class that passes a device through needs the q35 build.
+# x86_64 only: QEMU's MICROVM depends on I386.
 _no_shared_fs=false
 _tee=false
+_microvm=false
 case "${HYPERVISOR_NAME}" in
 kata-qemu-no-shared-fs)
 	_no_shared_fs=true
+	;;
+kata-qemu-microvm)
+	_no_shared_fs=true
+	_microvm=true
 	;;
 kata-qemu-snp-experimental | kata-qemu-tdx-experimental)
 	_no_shared_fs=true
@@ -69,6 +80,10 @@ kata-qemu-snp-experimental | kata-qemu-tdx-experimental)
 esac
 if [[ "${_no_shared_fs}" == "true" ]] && [[ "${ARCH}" != "x86_64" ]] && [[ "${ARCH}" != "aarch64" ]]; then
 	echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64 and aarch64, not ${ARCH}" >&2
+	exit 1
+fi
+if [[ "${_microvm}" == "true" ]] && [[ "${ARCH}" != "x86_64" ]]; then
+	echo "ERROR: ${HYPERVISOR_NAME} is only built for x86_64, not ${ARCH}" >&2
 	exit 1
 fi
 
@@ -176,6 +191,14 @@ _SGX_DEVS='
 CONFIG_SGX=y
 '
 
+# x86_64 microvm build only.  MICROVM selects VIRTIO_MMIO itself; the transport
+# is listed so the allowlist states it.  Replaces CONFIG_Q35 and _PCIE_DEVS.
+
+_MICROVM_DEVS='
+CONFIG_MICROVM=y
+CONFIG_VIRTIO_MMIO=y
+'
+
 if [[ "${_no_shared_fs}" == "true" ]]; then
 	_MEM_DEVS=
 	_BALLOON_DEVS=
@@ -186,7 +209,14 @@ if [[ "${_no_shared_fs}" == "true" ]]; then
 	[[ "${_tee}" == "true" ]] || _TEE_DEVS=
 fi
 
-if [[ "${ARCH}" == "x86_64" ]]; then
+if [[ "${ARCH}" == "x86_64" ]] && [[ "${_microvm}" == "true" ]]; then
+	# No CONFIG_Q35 and no _PCIE_DEVS: with no PCI bus the *-pci models are
+	# dead weight and vfio-pci is out of scope.  microvm has an ISA bus, so
+	# PVPANIC_ISA still applies.
+	printf 'CONFIG_MICROVM=y\n%s\n%s\nCONFIG_PVPANIC_ISA=y\n' \
+		"${_COMMON_DEVS}" "${_MICROVM_DEVS}" \
+		>> configs/devices/i386-softmmu/default.mak
+elif [[ "${ARCH}" == "x86_64" ]]; then
 	# PVPANIC_ISA provides the pvpanic device (guest kernel panic reporting).
 	# CONFIG_CXL is required because CONFIG_PXB (in _PCIE_DEVS) links against
 	# CXL component symbols; omitting it produces undefined-reference link errors.
@@ -221,7 +251,7 @@ elif [[ "${ARCH}" == "ppc64le" ]]; then
 		>> configs/devices/ppc64-softmmu/default.mak
 fi
 unset _COMMON_DEVS _MEM_DEVS _BALLOON_DEVS _SHARED_FS_DEVS _PCIE_DEVS
-unset _DAX_DEVS _IOMMU_DEVS _TEE_DEVS _SGX_DEVS
+unset _DAX_DEVS _IOMMU_DEVS _TEE_DEVS _SGX_DEVS _MICROVM_DEVS
 
 PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 
@@ -295,13 +325,27 @@ if [[ "${_no_shared_fs}" == "true" ]]; then
 	[[ "${_tee}" == "true" ]] || _tee_objs=()
 fi
 
+# virtio-mmio counterparts of _pci_devs.  scsi-hd is shared with it: container
+# block devices are LUNs on a cold-plugged virtio-scsi controller, which is how
+# block hotplug works without a PCI bus.  Upstream naming is not uniform -- the
+# virtio models take a "-device" suffix, the vhost-user ones do not.
+_mmio_devs=(
+	virtio-blk-device virtio-scsi-device scsi-hd virtio-net-device
+	virtio-serial-device virtconsole virtio-rng-device
+	vhost-vsock-device vhost-user-blk vhost-user-scsi
+)
+
 case "${ARCH}" in
 x86_64)
-	verify_devices "${_pci_devs[@]}" "${_mem_devs[@]}" "${_balloon_devs[@]}" \
-		"${_shared_fs_devs[@]}" "${_dax_devs[@]}" "${_pcie_topology[@]}" \
-		"${_iommu_devs[@]}" pvpanic
-	if [[ "${#_tee_objs[@]}" -gt 0 ]]; then
-		verify_objects "${_tee_objs[@]}"
+	if [[ "${_microvm}" == "true" ]]; then
+		verify_devices "${_mmio_devs[@]}" pvpanic
+	else
+		verify_devices "${_pci_devs[@]}" "${_mem_devs[@]}" "${_balloon_devs[@]}" \
+			"${_shared_fs_devs[@]}" "${_dax_devs[@]}" "${_pcie_topology[@]}" \
+			"${_iommu_devs[@]}" pvpanic
+		if [[ "${#_tee_objs[@]}" -gt 0 ]]; then
+			verify_objects "${_tee_objs[@]}"
+		fi
 	fi
 	;;
 aarch64)
@@ -322,8 +366,8 @@ s390x)
 	;;
 esac
 unset _pci_devs _pcie_topology _mem_devs _balloon_devs _shared_fs_devs
-unset _dax_devs _iommu_devs _tee_objs
-unset _no_shared_fs _tee _qemu_target
+unset _dax_devs _iommu_devs _tee_objs _mmio_devs
+unset _no_shared_fs _tee _microvm _qemu_target
 
 make install DESTDIR="${QEMU_DESTDIR}"
 popd

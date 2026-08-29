@@ -61,6 +61,7 @@ jobs:
           - pause-image
           - qemu
           - qemu-no-shared-fs
+          - qemu-microvm
           - qemu-snp-experimental
           - qemu-tdx-experimental
           - virtiofsd

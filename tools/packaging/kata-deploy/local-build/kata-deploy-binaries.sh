@@ -149,6 +149,7 @@ options:
 	ovmf-tdx
 	qemu
 	qemu-no-shared-fs
+	qemu-microvm
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	stratovirt
@@ -1408,6 +1409,19 @@ install_qemu_no_shared_fs() {
 		"${qemu_flavour_builder}"
 }
 
+# Same qemu as install_qemu_no_shared_fs, built around microvm and virtio-mmio
+# instead of q35 and PCI.  x86_64 only.
+install_qemu_microvm() {
+	export qemu_suffix="microvm"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu.url" \
+		"assets.hypervisor.qemu.version" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_flavour_builder}"
+}
+
 install_qemu_snp_experimental() {
 	export qemu_suffix="snp-experimental"
 	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
@@ -1961,6 +1975,7 @@ handle_build() {
 		install_ovmf_tdx
 		install_qemu
 		install_qemu_no_shared_fs
+		install_qemu_microvm
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_stratovirt
@@ -2017,6 +2032,8 @@ handle_build() {
 	qemu) install_qemu ;;
 
 	qemu-no-shared-fs) install_qemu_no_shared_fs ;;
+
+	qemu-microvm) install_qemu_microvm ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 

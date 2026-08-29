@@ -299,6 +299,9 @@ ovmf-tarball:
 qemu-no-shared-fs-tarball:
 	${MAKE} $@-build
 
+qemu-microvm-tarball:
+	${MAKE} $@-build
+
 qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
