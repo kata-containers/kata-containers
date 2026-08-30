@@ -586,12 +586,9 @@ function deploy_k8s() {
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# The kata-deploy host module job leaves these unloaded, so that
-				# its own privileged stage is what has to load them.
-				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]] &&
-					[[ "${KATA_DEPLOY_MANAGES_HOST_MODULES:-no}" != "yes" ]]; then
-					load_dm_verity_modules
-				fi
+				# erofs, loop and the dm-verity targets are left unloaded on
+				# purpose: kata-deploy's own privileged stage loads and persists
+				# them, and pre-loading them here would hide it failing to.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
