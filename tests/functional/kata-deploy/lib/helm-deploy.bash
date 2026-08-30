@@ -16,6 +16,7 @@
 #   EROFS_SNAPSHOTTER_MODE      - "disk" or "memory"
 #   EROFS_DMVERITY              - Set to "dmverity" to enable dm-verity
 #   EROFS_MERGE_MODE            - "merged" or "unmerged"
+#   EROFS_UTILS_IMAGE           - Image kata-deploy takes erofs-utils from
 
 HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-kata-deploy}"
 HELM_NAMESPACE="${HELM_NAMESPACE:-kube-system}"
@@ -153,6 +154,12 @@ generate_base_values() {
   erofsSnapshotterMode: \"${EROFS_SNAPSHOTTER_MODE:-}\"
   erofsDmverity: ${erofs_dmverity}
   erofsMergeMode: \"${EROFS_MERGE_MODE:-}\"
+
+# The node has no erofs-utils of its own; see deploy_k8s.
+nodeBinaries:
+  erofs-utils:
+    image: \"${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}\"
+    binaries: [mkfs.erofs]
 
 # fs-verity would also need the backing filesystem prepared for it, and these
 # tests only care about dm-verity.
