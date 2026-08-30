@@ -1,4 +1,7 @@
 {{- if eq (.Values.deploymentMode | default "daemonset") "daemonset" -}}
+{{- /* Only the staged install can place these, and it says so. Validated here
+       because the templates that stage them render in job mode alone. */}}
+{{- $_ := include "kata-deploy.nodeBinaries" . -}}
 {{- if index .Values "node-feature-discovery" "enabled" -}}
 {{- $existingNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
 {{- if $existingNFDNamespace -}}

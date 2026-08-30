@@ -1094,7 +1094,8 @@ fn validate_mkfs_erofs_options() -> Result<()> {
         format!(
             "Required host command `{MKFS_EROFS}` is not available. Install \
              erofs-utils >= {MIN_EROFS_UTILS_VERSION} before enabling the \
-             EROFS snapshotter."
+             EROFS snapshotter, or add a nodeBinaries entry taking it from \
+             an image."
         )
     })?;
 
