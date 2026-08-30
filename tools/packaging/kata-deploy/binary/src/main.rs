@@ -110,10 +110,9 @@ const SUGGESTED_KUBELET_RUNTIME_REQUEST_TIMEOUT_SECS: u64 = 10 * 60;
 const MKFS_EROFS: &str = "mkfs.erofs";
 const MIN_EROFS_UTILS_VERSION: &str = "1.8.2";
 /// The `mkfs.erofs` options kata-deploy configures containerd's EROFS differ to
-/// use: `--mkfs-time` and `--sort=none`, both added in erofs-utils 1.8.2. The
-/// leading dashes are left out because that is how the option names appear
-/// inside the binary, which is where `validate_mkfs_erofs_options` looks.
-const REQUIRED_MKFS_EROFS_OPTIONS: &[&str] = &["mkfs-time", "sort"];
+/// use, both added in erofs-utils 1.8.2. Spelled as the binary's own usage text
+/// does, which is where `validate_mkfs_erofs_options` looks for them.
+const REQUIRED_MKFS_EROFS_OPTIONS: &[&str] = &["--mkfs-time", "--sort"];
 
 // Cap the tokio runtime to a small fixed number of worker threads. The default
 // multi-thread runtime allocates `num_cpus()` workers (each with a ~2 MiB
@@ -1087,9 +1086,9 @@ fn host_boot_config_has_builtin_feature(config_symbol: &str) -> bool {
 ///
 /// Running the host binary to ask it is not possible: it is linked against the
 /// host's loader and libraries, which the container does not have. So this
-/// searches the binary for the option names, which `getopt_long` keeps as
-/// plain strings. Their presence says exactly what the tool accepts, which is
-/// what we care about — the erofs-utils version only ever stood in for it.
+/// searches the binary for the options its usage text lists. What it documents
+/// is what it accepts, which is what we care about — the erofs-utils version
+/// only ever stood in for it.
 fn validate_mkfs_erofs_options() -> Result<()> {
     let mkfs_erofs = utils::find_host_program(MKFS_EROFS).with_context(|| {
         format!(
@@ -1105,15 +1104,15 @@ fn validate_mkfs_erofs_options() -> Result<()> {
     let missing: Vec<&str> = REQUIRED_MKFS_EROFS_OPTIONS
         .iter()
         .copied()
-        .filter(|option| !contains_c_string(&binary, option))
+        .filter(|option| !documents_option(&binary, option))
         .collect();
 
     if !missing.is_empty() {
         anyhow::bail!(
-            "Host {} does not support the --{} option(s) that kata-deploy \
+            "Host {} does not support the {} option(s) that kata-deploy \
              configures the EROFS differ to use. Install erofs-utils >= {}.",
             mkfs_erofs.display(),
-            missing.join(", --"),
+            missing.join(", "),
             MIN_EROFS_UTILS_VERSION
         );
     }
@@ -1126,19 +1125,27 @@ fn validate_mkfs_erofs_options() -> Result<()> {
     Ok(())
 }
 
-/// Whether `haystack` holds `needle` as a whole NUL-terminated string, the way
-/// a C string literal is stored in a binary. This is the `strings | grep -x` of
-/// the probe: matching a substring would accept `sort` inside `qsort`.
-fn contains_c_string(haystack: &[u8], needle: &str) -> bool {
-    let needle = needle.as_bytes();
+/// Whether `binary` documents `option`, dashes and all, as a word of its own.
+///
+/// Looking for the bare `getopt_long` name instead does not work: it is short
+/// enough for the linker to fold into the tail of an unrelated string, which
+/// nothing can tell from `sort` inside `qsort`. aarch64 builds of erofs-utils
+/// keep no `sort` but the one in glibc's `rfc3484_sort`.
+fn documents_option(binary: &[u8], option: &str) -> bool {
+    let option = option.as_bytes();
+    let bounds_word = |byte: &u8| !byte.is_ascii_alphanumeric() && !b"-_".contains(byte);
 
-    haystack
-        .windows(needle.len() + 1)
+    binary
+        .windows(option.len())
         .enumerate()
         .any(|(start, window)| {
-            window[..needle.len()] == *needle
-                && window[needle.len()] == 0
-                && (start == 0 || !haystack[start - 1].is_ascii_graphic())
+            window == option
+                // Both ends, so that `--sort` inside a longer word is no more
+                // accepted than `sort` inside `qsort` was.
+                && start
+                    .checked_sub(1)
+                    .is_none_or(|before| bounds_word(&binary[before]))
+                && binary.get(start + option.len()).is_none_or(bounds_word)
         })
 }
 
@@ -2118,23 +2125,24 @@ mod tests {
         );
     }
 
-    /// The option probe reads a binary, so it has to match whole strings the
-    /// way `strings | grep -x` does: a `getopt_long` name is NUL terminated and
-    /// never the tail of a longer word.
+    /// The usage text spellings are the ones erofs-utils 1.9.3 ships on both
+    /// amd64 and arm64; `rfc3484_sort` is what an arm64 build folds its own
+    /// `sort` into.
     #[rstest]
-    #[case(b"\0mkfs-time\0", "mkfs-time", true)]
-    #[case(b"sort\0", "sort", true)]
-    #[case(b"--sort\0", "sort", false)]
-    #[case(b"\0qsort\0", "sort", false)]
-    #[case(b"\0sorted\0", "sort", false)]
-    #[case(b"\0sort", "sort", false)]
-    #[case(b"\0mkfs-timestamp\0", "mkfs-time", false)]
-    fn test_contains_c_string(
-        #[case] haystack: &[u8],
-        #[case] needle: &str,
-        #[case] expected: bool,
-    ) {
-        assert_eq!(contains_c_string(haystack, needle), expected);
+    #[case(b"    --mkfs-time         the t", "--mkfs-time", true)]
+    #[case(b"ta\n --sort=<path,none>  ", "--sort", true)]
+    #[case(b"\0rfc3484_sort\0", "--sort", false)]
+    #[case(b"\0qsort\0", "--sort", false)]
+    #[case(b"\0--mkfs-timestamp\0", "--mkfs-time", false)]
+    #[case(b"\0--sort", "--sort", true)]
+    #[case(b"1.7.1\0", "--sort", false)]
+    // A word ending in the option is no more a mention of it than `qsort` is.
+    #[case(b"\0x--sort\0", "--sort", false)]
+    #[case(b"\0no_--mkfs-time\0", "--mkfs-time", false)]
+    // Nothing before it to look at.
+    #[case(b"--sort=<path,none>", "--sort", true)]
+    fn test_documents_option(#[case] binary: &[u8], #[case] option: &str, #[case] expected: bool) {
+        assert_eq!(documents_option(binary, option), expected);
     }
 
     /// All non-internal staged actions remain visible in `--help` so operators
