@@ -183,6 +183,78 @@ containerd matches none of the presets.
     anything, naming the value to set. An explicit `containerd.configDir` overrides
     the derivation this check is about, so it does not apply in that case.
 
+### nodeBinaries
+
+Some of what Kata needs on a node is not part of Kata: containerd's EROFS
+snapshotter, for instance, needs a `mkfs.erofs` from `erofs-utils` 1.8.2 or newer,
+which most distributions still do not package. When updating the node's packages is
+not on offer, `nodeBinaries` takes the binaries out of container images instead:
+
+```yaml title="values.yaml"
+nodeBinaries:
+  erofs-utils:                                      # (1)!
+    image: quay.io/kata-containers/erofs-utils:1.9.3
+    binaries: [mkfs.erofs, dump.erofs, fsck.erofs]  # (2)!
+    pullPolicy: IfNotPresent                        # (3)!
+```
+
+1. Each key names an entry and becomes the name of the container staging it, so it
+   has to be a valid container name — lowercase letters, digits and dashes,
+   beginning and ending with a letter or a digit — and cannot be one of the names
+   kata-deploy's own containers use. The render fails, naming the key, when it is
+   neither.
+2. Only what is listed here is taken, so an image built on a distribution does not
+   put the rest of its userland on the node. Each one names a single binary, not a
+   path or a pattern, and the render fails on anything else.
+3. Optional; defaults to the chart's `imagePullPolicy`.
+
+Every entry gets a container of its own, which copies the listed binaries into a
+pod-local volume and reaches nothing of the node's. One further container then
+installs whatever was staged into `/usr/local/bin`, ahead of `/usr/bin` in
+containerd's `PATH`, and records the names it installed so that a later run can take
+exactly those out again. That container runs the `kubectl` image, kata-deploy's own
+being distroless and having no shell to do this with.
+
+Each image needs a POSIX shell, `cp`, and every binary the entry lists, statically
+built, in one of `/usr/local/bin`, `/usr/local/sbin`, `/usr/bin`, `/usr/sbin`,
+`/bin`, `/sbin` or its root. Private images use the chart's `imagePullSecrets`.
+
+Adding another binary is a values change and nothing else, so this is the way to
+cover anything else a node turns out to lack.
+
+!!! warning "It will not replace a binary it did not install"
+
+    A file already in `/usr/local/bin` under a name an entry claims fails the
+    install, rather than being replaced, and the same goes for two entries claiming
+    the same name. Nothing on the node records where a binary in `/usr/local/bin`
+    came from, so kata-deploy only ever removes what its own marker file names.
+    Remove the file, or drop it from `nodeBinaries` to keep using it.
+
+    An install it refuses this way changes nothing: every name is checked before any
+    of them is written or removed, so the node keeps the set it already had.
+
+An uninstall takes the binaries out again, and changing an entry replaces what it
+installed. Dropping every entry leaves them in place until the release is
+uninstalled.
+
+!!! note "Side-by-side installs own separate sets"
+
+    Each release's marker file is named after its `env.multiInstallSuffix`, so
+    installing or uninstalling one leaves the binaries another one installed alone.
+    Two releases claiming the same name is still a conflict: whichever installs
+    second finds a file it did not install and fails.
+
+!!! note "One image per architecture being deployed to"
+
+    An image with no manifest for a node's architecture stalls that node's install
+    on the pull, so cover every architecture in the cluster. The `erofs-utils` image
+    above is published for `amd64` and `arm64` only.
+
+This requires `deploymentMode: job`. The staged pipeline is what puts the binaries
+in place before the host check looks for them; the DaemonSet runs the whole install
+in one container and has no such ordering. Setting `nodeBinaries` in `daemonset` mode
+fails the render rather than deploying something that cannot work.
+
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the
