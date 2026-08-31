@@ -8,9 +8,9 @@ use anyhow::{anyhow, Context, Result};
 use common::{
     message::{Action, Message},
     types::{
-        ContainerProcess, PlatformInfo, ProcessType, SandboxConfig, SandboxRequest,
-        SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
-        DEFAULT_SHM_SIZE,
+        ContainerProcess, PlatformInfo, ProcessExitStatus, ProcessType, SandboxConfig,
+        SandboxRequest, SandboxResponse, SandboxStatusInfo, StartSandboxInfo, TaskRequest,
+        TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -687,6 +687,18 @@ impl RuntimeHandlerManager {
             }
             TaskRequest::KillProcess(req) => {
                 cm.kill_process(&req).await.context("kill process")?;
+                // containerd StopPodSandbox Kills the sandbox/pause task id
+                // (ctr tasks: sid RUNNING pid=qemu). The shim has no guest
+                // container for that id ("Signal 9 ignored"), so nobody
+                // called stop() and Wait blocked on the live QEMU.
+                // is_sandbox_container compares container_id to sid and
+                // does not need the container map.
+                if cm.is_sandbox_container(&req.process).await {
+                    sandbox
+                        .stop()
+                        .await
+                        .context("stop sandbox on sandbox-id kill")?;
+                }
                 Ok(TaskResponse::KillProcess)
             }
             TaskRequest::ShutdownContainer(req) => {
@@ -701,8 +713,25 @@ impl RuntimeHandlerManager {
                 Ok(TaskResponse::ShutdownContainer)
             }
             TaskRequest::WaitProcess(process_id) => {
-                let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
-                if cm.is_sandbox_container(&process_id).await {
+                let is_sandbox = cm.is_sandbox_container(&process_id).await;
+                let exit_status = match cm.wait_process(&process_id).await {
+                    Ok(status) => status,
+                    Err(err) if is_sandbox => {
+                        // Pause task exists in containerd but was never in
+                        // the shim container map (start failed after QEMU
+                        // pid was published). Wait would error and
+                        // containerd waitpid's QEMU forever.
+                        warn!(
+                            sl!(),
+                            "wait sandbox container missing ({:#}); stopping VM", err
+                        );
+                        let mut status = ProcessExitStatus::new();
+                        status.update_exit_code(137);
+                        status
+                    }
+                    Err(err) => return Err(err).context("wait process"),
+                };
+                if is_sandbox {
                     sandbox.stop().await.context("stop sandbox")?;
 
                     // Release sandbox resources (cgroup, network, mounts, ...)
