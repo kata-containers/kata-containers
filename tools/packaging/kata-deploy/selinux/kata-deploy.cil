@@ -1,0 +1,149 @@
+; Copyright (c) 2026 NVIDIA Corporation
+;
+; SPDX-License-Identifier: Apache-2.0
+;
+; SELinux policy for the kata-deploy installer, whose containers run
+; unprivileged and are otherwise denied their host work as container_t
+; (kata-containers/kata-containers#13751).
+;
+; Nothing is relabelled: with no filecon rules /opt/kata keeps the labels it has
+; today, so the Kata runtime is unaffected. The rules are only the delta over
+; container_t, whose attributes these domains join.
+;
+; Read README.md before changing them. They were harvested from a full cycle
+; with dontaudit disabled, and a missing one can present as a silent failure
+; with no AVC at all.
+
+; Job mode runs each stage in a container of its own; daemonset mode runs them
+; all in one, so kata_deploy_t is the union.
+(type kata_deploy_check_t)      ; host-check, remove-artifacts' read-only probes
+(type kata_deploy_artifacts_t)  ; artifacts, remove-artifacts
+(type kata_deploy_cri_t)        ; cri, revert-cri
+(type kata_deploy_node_binaries_t) ; node-binaries-install, node-binaries-remove
+(type kata_deploy_t)            ; daemonset mode: all of the above at once
+
+(roletype system_r kata_deploy_check_t)
+(roletype system_r kata_deploy_artifacts_t)
+(roletype system_r kata_deploy_cri_t)
+(roletype system_r kata_deploy_node_binaries_t)
+(roletype system_r kata_deploy_t)
+
+(typeattribute kata_deploy_domain)
+(typeattributeset kata_deploy_domain
+    (kata_deploy_check_t kata_deploy_artifacts_t kata_deploy_cri_t
+     kata_deploy_node_binaries_t kata_deploy_t))
+
+; container_t's own attributes, so these start out as ordinary confined
+; containers. Two deliberate calls: pcmcia_typeattr_1 is left out as a compiler
+; artifact the compiler re-adds itself, and mcs_constrained_type is kept because
+; these domains take a new file's level from its parent directory -- /opt/kata
+; still comes out usr_t:s0 -- so keeping it costs nothing and preserves the MCS
+; isolation from other containers.
+(typeattributeset can_dump_kernel (kata_deploy_domain))
+(typeattributeset can_receive_kernel_messages (kata_deploy_domain))
+(typeattributeset container_domain (kata_deploy_domain))
+(typeattributeset container_net_domain (kata_deploy_domain))
+(typeattributeset corenet_unconfined_type (kata_deploy_domain))
+(typeattributeset corenet_unlabeled_type (kata_deploy_domain))
+(typeattributeset domain (kata_deploy_domain))
+(typeattributeset kernel_system_state_reader (kata_deploy_domain))
+(typeattributeset mcs_constrained_type (kata_deploy_domain))
+(typeattributeset process_user_target (kata_deploy_domain))
+(typeattributeset sandbox_net_domain (kata_deploy_domain))
+(typeattributeset svirt_sandbox_domain (kata_deploy_domain))
+(typeattributeset syslog_client_type (kata_deploy_domain))
+
+; systemd over /run/systemd/private. host-check writes nothing but still asks it
+; whether the CRI unit is running; node-binaries never speaks to it at all.
+(typeattribute kata_deploy_systemd_client)
+(typeattributeset kata_deploy_systemd_client
+    (kata_deploy_check_t kata_deploy_artifacts_t kata_deploy_cri_t kata_deploy_t))
+
+(allow kata_deploy_systemd_client init_t (unix_stream_socket (connectto)))
+(allow kata_deploy_systemd_client init_var_run_t (sock_file (getattr write)))
+(allow kata_deploy_systemd_client init_t (system (status)))
+(allow kata_deploy_systemd_client container_unit_file_t (service (status)))
+
+; The artifacts under /opt/kata (usr_t). cri is here because revert-cri removes
+; the nydus binaries from under it.
+(typeattribute kata_deploy_install_writer)
+(typeattributeset kata_deploy_install_writer
+    (kata_deploy_artifacts_t kata_deploy_cri_t kata_deploy_t))
+
+(allow kata_deploy_install_writer usr_t
+    (dir (search getattr open read write add_name remove_name create rmdir rename reparent)))
+(allow kata_deploy_install_writer usr_t
+    (file (create open getattr setattr read write append unlink link rename execute map)))
+(allow kata_deploy_install_writer usr_t
+    (lnk_file (create getattr read write unlink rename)))
+
+; The node mutation lock at /run/lock/kata-deploy.lock (var_lock_t), which every
+; stage that changes the node takes so that two releases installing at once take
+; turns.
+(typeattribute kata_deploy_lock_holder)
+(typeattributeset kata_deploy_lock_holder
+    (kata_deploy_artifacts_t kata_deploy_cri_t kata_deploy_node_binaries_t
+     kata_deploy_t))
+
+(allow kata_deploy_lock_holder var_lock_t
+    (dir (search getattr open read write add_name remove_name)))
+(allow kata_deploy_lock_holder var_lock_t
+    (file (create open getattr setattr read write lock unlink)))
+
+; The nydus snapshotter unit. artifacts writes it and revert-cri stops and
+; removes it, so both need the whole set rather than a half each.
+(typeattribute kata_deploy_unit_admin)
+(typeattributeset kata_deploy_unit_admin
+    (kata_deploy_artifacts_t kata_deploy_cri_t kata_deploy_t))
+
+(allow kata_deploy_unit_admin systemd_unit_file_t
+    (dir (search getattr open read write add_name remove_name)))
+(allow kata_deploy_unit_admin systemd_unit_file_t
+    (file (create open getattr setattr read write unlink)))
+(allow kata_deploy_unit_admin systemd_unit_file_t (service (start stop status)))
+(allow kata_deploy_unit_admin init_t (system (reload stop)))
+
+; Restarting the CRI itself.
+(typeattribute kata_deploy_cri_restarter)
+(typeattributeset kata_deploy_cri_restarter (kata_deploy_cri_t kata_deploy_t))
+
+(allow kata_deploy_cri_restarter container_unit_file_t (service (start)))
+
+; The CRI drop-in: container_var_lib_t for k3s/RKE2, whose containerd
+; configuration lives under /var/lib/rancher, container_config_t for the
+; /etc/containerd and /etc/crio layouts used elsewhere.
+(typeattribute kata_deploy_cri_config_writer)
+(typeattributeset kata_deploy_cri_config_writer (kata_deploy_cri_t kata_deploy_t))
+
+(allow kata_deploy_cri_config_writer container_var_lib_t
+    (dir (search getattr open read write add_name remove_name create rmdir)))
+(allow kata_deploy_cri_config_writer container_var_lib_t
+    (file (create open getattr setattr read write unlink rename)))
+(allow kata_deploy_cri_config_writer container_config_t
+    (dir (search getattr open read write add_name remove_name create rmdir)))
+(allow kata_deploy_cri_config_writer container_config_t
+    (file (create open getattr setattr read write unlink rename)))
+
+; /usr/local/bin (bin_t), for the binaries nodeBinaries takes out of images.
+; Only writing needs granting: bin_t is a base_ro_file_type, which is what makes
+; host-check's mkfs.erofs probe work already. Deliberately not part of
+; kata_deploy_t, since nodeBinaries requires job mode.
+(allow kata_deploy_node_binaries_t bin_t
+    (dir (search getattr open read write add_name remove_name)))
+(allow kata_deploy_node_binaries_t bin_t
+    (file (create open getattr setattr read write unlink rename)))
+(allow kata_deploy_node_binaries_t bin_t
+    (lnk_file (getattr read unlink)))
+
+; /etc/modules-load.d/kata-containers-*.conf, written on install by the
+; privileged load-kernel-modules stage and removed by remove-artifacts, so only
+; the removal ever shows up as a denial. The broadest grant in the module, since
+; etc_t is most of /etc; narrowing it would need a private type and a filecon,
+; which means relabelling.
+(typeattribute kata_deploy_modules_conf_writer)
+(typeattributeset kata_deploy_modules_conf_writer (kata_deploy_artifacts_t kata_deploy_t))
+
+(allow kata_deploy_modules_conf_writer etc_t
+    (dir (search getattr open read write add_name remove_name)))
+(allow kata_deploy_modules_conf_writer etc_t
+    (file (create open getattr setattr read write unlink)))
