@@ -45,7 +45,9 @@ use crate::{DeviceType, Hypervisor, MemoryConfig, VcpuThreadIds};
 // distinct device number, so the guest-visible path is "DD/00". Device 0 (00.0)
 // is intentionally left unused so the layout does not depend on whether the root
 // complex reserves it. Cold-plug devices use fixed device numbers 1..=7; block
-// hotplug ports use device numbers 8..=31 (hp0..hp23).
+// hotplug ports use device numbers 8..=31 (hp0..hp23). VFIO cold-plug ports
+// share devices 8..=23 at function 1, after the corresponding function-zero
+// block ports make those multifunction devices discoverable.
 pub(crate) const OPENVMM_ROOTFS_PCI_DEVICE: u8 = 1;
 pub(crate) const OPENVMM_SHAREFS_PCI_DEVICE: u8 = 2;
 pub(crate) const OPENVMM_VSOCK_PCI_DEVICE: u8 = 3;
@@ -54,6 +56,10 @@ pub(crate) const OPENVMM_NET_PCI_MAX_COUNT: u8 = 4;
 pub(crate) const OPENVMM_BLOCK_HOTPLUG_FIRST_DEVICE: u8 = 8;
 pub(crate) const OPENVMM_BLOCK_HOTPLUG_PORT_PREFIX: &str = "hp";
 pub(crate) const OPENVMM_BLOCK_HOTPLUG_PORT_COUNT: u8 = 24;
+pub(crate) const OPENVMM_VFIO_COLDPLUG_FIRST_DEVICE: u8 = 8;
+pub(crate) const OPENVMM_VFIO_COLDPLUG_FUNCTION: u8 = 1;
+pub(crate) const OPENVMM_VFIO_COLDPLUG_PORT_PREFIX: &str = "vfio";
+pub(crate) const OPENVMM_VFIO_COLDPLUG_PORT_COUNT: u8 = 16;
 
 /// The OpenVMM hypervisor struct, wrapping inner state behind a lock.
 pub struct OpenVmm {
@@ -160,6 +166,10 @@ impl Hypervisor for OpenVmm {
     async fn update_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.update_device(device).await
+    }
+
+    fn requires_generic_vfio_topology(&self) -> bool {
+        false
     }
 
     async fn get_agent_socket(&self) -> Result<String> {

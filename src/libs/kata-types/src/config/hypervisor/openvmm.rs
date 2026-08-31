@@ -86,6 +86,16 @@ impl ConfigPlugin for OpenVmmConfig {
                     "OpenVMM hypervisor has minimal memory limitation {MIN_OPENVMM_MEMORY_SIZE_MB}",
                 )));
             }
+
+            if conf.runtime.hypervisor_name == HYPERVISOR_NAME_OPENVMM
+                && !conf.runtime.vfio_mode.is_empty()
+                && conf.runtime.vfio_mode != "guest-kernel"
+            {
+                return Err(std::io::Error::other(format!(
+                    "OpenVMM supports only vfio_mode=\"guest-kernel\", got {:?}",
+                    conf.runtime.vfio_mode
+                )));
+            }
         }
         Ok(())
     }
@@ -103,6 +113,7 @@ mod tests {
             ..Default::default()
         };
         let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = HYPERVISOR_NAME_OPENVMM.to_string();
         config
             .hypervisor
             .insert(HYPERVISOR_NAME_OPENVMM.to_string(), hypervisor);
@@ -135,12 +146,25 @@ mod tests {
         hypervisor.cpu_info.default_vcpus = 1.0;
         hypervisor.cpu_info.default_maxvcpus = MAX_OPENVMM_VCPUS;
         hypervisor.memory_info.default_memory = MIN_OPENVMM_MEMORY_SIZE_MB;
+        config.runtime.vfio_mode = "guest-kernel".to_string();
 
         let plugin = OpenVmmConfig::new();
         plugin.adjust_config(&mut config).unwrap();
         plugin.validate(&config).unwrap();
         let hypervisor = config.hypervisor.get(HYPERVISOR_NAME_OPENVMM).unwrap();
         hypervisor.memory_info.validate().unwrap();
+    }
+
+    #[test]
+    fn validate_accepts_omitted_vfio_mode() {
+        let binary = NamedTempFile::new().unwrap();
+        let mut config = create_config(binary.path());
+        let hypervisor = config.hypervisor.get_mut(HYPERVISOR_NAME_OPENVMM).unwrap();
+        hypervisor.cpu_info.default_vcpus = 1.0;
+        hypervisor.cpu_info.default_maxvcpus = MAX_OPENVMM_VCPUS;
+        hypervisor.memory_info.default_memory = MIN_OPENVMM_MEMORY_SIZE_MB;
+
+        OpenVmmConfig::new().validate(&config).unwrap();
     }
 
     #[test]
@@ -179,5 +203,40 @@ mod tests {
             .default_memory = MIN_OPENVMM_MEMORY_SIZE_MB - 1;
 
         assert!(OpenVmmConfig::new().validate(&config).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_vfio_presentation_mode() {
+        let binary = NamedTempFile::new().unwrap();
+        let mut config = create_config(binary.path());
+        config
+            .hypervisor
+            .get_mut(HYPERVISOR_NAME_OPENVMM)
+            .unwrap()
+            .memory_info
+            .default_memory = MIN_OPENVMM_MEMORY_SIZE_MB;
+        config.runtime.vfio_mode = "vfio".to_string();
+
+        let error = OpenVmmConfig::new()
+            .validate(&config)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("supports only vfio_mode=\"guest-kernel\""));
+    }
+
+    #[test]
+    fn validate_ignores_vfio_mode_for_inactive_openvmm() {
+        let binary = NamedTempFile::new().unwrap();
+        let mut config = create_config(binary.path());
+        config
+            .hypervisor
+            .get_mut(HYPERVISOR_NAME_OPENVMM)
+            .unwrap()
+            .memory_info
+            .default_memory = MIN_OPENVMM_MEMORY_SIZE_MB;
+        config.runtime.hypervisor_name = "qemu".to_string();
+        config.runtime.vfio_mode = "vfio".to_string();
+
+        OpenVmmConfig::new().validate(&config).unwrap();
     }
 }

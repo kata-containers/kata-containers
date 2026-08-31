@@ -67,6 +67,18 @@ pub(crate) struct ResourceManagerInner {
     pub swap_resource: Option<SwapResource>,
 }
 
+fn vfio_agent_options(
+    configured_options: &[String],
+    primary_bdf: &str,
+    primary_guest_path: &str,
+) -> Vec<String> {
+    if configured_options.is_empty() {
+        vec![format!("{primary_bdf}={primary_guest_path}")]
+    } else {
+        configured_options.to_vec()
+    }
+}
+
 impl ResourceManagerInner {
     pub(crate) async fn new(
         sid: &str,
@@ -758,7 +770,11 @@ impl ResourceManagerInner {
                             "vfio" => "vfio-pci".to_string(),
                             _ => "vfio-pci-gk".to_string(),
                         };
-                        let device_options = vec![format!("{}={}", host_bdf, guest_pci_path)];
+                        let device_options = vfio_agent_options(
+                            &vfio_device.device_options,
+                            &host_bdf,
+                            &guest_pci_path.to_string(),
+                        );
                         // The Go runtime sets the device Id to
                         // filepath.Base(dev.ContainerPath), e.g. "vfio0".
                         // The agent policy validates this with:
@@ -1339,7 +1355,7 @@ fn block_device_node_is_readonly(major: i64, minor: i64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::device_cgroup_access_is_readonly;
+    use super::{device_cgroup_access_is_readonly, vfio_agent_options};
     use oci_spec::runtime::{
         Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder, LinuxDeviceType,
         LinuxResourcesBuilder,
@@ -1419,5 +1435,21 @@ mod tests {
             MAJOR,
             MINOR
         ));
+    }
+
+    #[test]
+    fn vfio_agent_options_preserve_complete_mapping_with_primary_fallback() {
+        let complete = vec![
+            "0000:02:00.0=08.1/00".to_string(),
+            "0000:03:00.0=09.1/00".to_string(),
+        ];
+        assert_eq!(
+            vfio_agent_options(&complete, "0000:03:00.0", "09.1/00"),
+            complete
+        );
+        assert_eq!(
+            vfio_agent_options(&[], "0000:03:00.0", "09.1/00"),
+            ["0000:03:00.0=09.1/00"]
+        );
     }
 }

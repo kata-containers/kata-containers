@@ -38,6 +38,23 @@ const ERROR_WAIT_SECS: u64 = 120;
 const ONE_MB: usize = 1024 * 1024;
 const ERROR_RETRY_TIMES_MAX: usize = 2;
 
+fn swap_pci_path(pci_path: &hypervisor::device::pci_path::PciPath) -> Result<Vec<u32>> {
+    pci_path
+        .slots
+        .iter()
+        .map(|slot| {
+            if slot.function() != 0 {
+                return Err(anyhow!(
+                    "swap RPC does not support PCI function {} in path {}",
+                    slot.function(),
+                    pci_path
+                ));
+            }
+            Ok(slot.device() as u32)
+        })
+        .collect()
+}
+
 async fn check_disk_size(path: &Path, mut size: usize) -> Result<()> {
     let task_path = path.to_path_buf();
 
@@ -205,7 +222,7 @@ impl SwapTask {
 
             let ret = if let Some(pci_path) = device.config.pci_path.clone() {
                 self.agent.add_swap(agent::types::AddSwapRequest {
-                    pci_path: pci_path.slots.iter().map(|slot| slot.0 as u32).collect(),
+                    pci_path: swap_pci_path(&pci_path)?,
                 })
             } else if !device.config.virt_path.is_empty() {
                 self.agent.add_swap_path(agent::types::AddSwapPathRequest {
@@ -355,6 +372,27 @@ impl SwapTask {
     async fn get_swap_path(&self) -> PathBuf {
         let id = self.core.lock().await.next_swap_id;
         self.path.join(format!("swap{id}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypervisor::device::pci_path::PciPath;
+    use std::convert::TryFrom;
+
+    #[test]
+    fn swap_pci_path_preserves_function_zero_path() {
+        let path = PciPath::try_from("08/00").unwrap();
+        assert_eq!(swap_pci_path(&path).unwrap(), vec![8, 0]);
+    }
+
+    #[test]
+    fn swap_pci_path_rejects_nonzero_function() {
+        let path = PciPath::try_from("08.1/00").unwrap();
+        let error = swap_pci_path(&path).unwrap_err().to_string();
+        assert!(error.contains("does not support PCI function 1"));
+        assert!(error.contains("08.1/00"));
     }
 }
 
