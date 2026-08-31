@@ -204,6 +204,19 @@ job:
   # failed. One node failing never aborts the others.
   backoffLimit: 3
 
+# SELinux confinement for the installer's own containers. On an enforcing node
+# the unprivileged install stages are otherwise denied the host work they exist
+# to do; this loads a Kata-owned policy module and gives each stage a
+# least-privilege domain instead, so they can stay unprivileged.
+#
+# Needs policycoreutils (for semodule) on the SELinux-enabled nodes. Nodes with
+# SELinux off are unaffected, so it is safe to set across a mixed cluster.
+#
+# Off by default because it mutates the node's policy store, and the module is
+# left loaded on uninstall: remove it with `semodule -r kata-deploy`.
+selinux:
+  enabled: false
+
 imagePullPolicy: Always
 
 imagePullSecrets: []
