@@ -7,6 +7,8 @@ package utils
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -90,4 +92,21 @@ func TestGetDevicePathAndFsTypeOptionsWithEscapedPath(t *testing.T) {
 		assert.Equal("tmpfs", fsType)
 		assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
 	}
+}
+
+func TestGetDevicePathAndFsTypeOptionsThroughSymlinkedParent(t *testing.T) {
+	assert := assert.New(t)
+	tempDir := t.TempDir()
+	directDev := filepath.Join(tempDir, "direct-dev")
+	directShm := filepath.Join(directDev, "shm")
+	assert.NoError(os.MkdirAll(directShm, 0o755))
+	symlinkedDev := filepath.Join(tempDir, "dev")
+	assert.NoError(os.Symlink(directDev, symlinkedDev))
+	mounts := "tmpfs " + directShm + " tmpfs rw,nosuid,nodev 0 0\n"
+
+	path, fsType, fsOptions, err := getDevicePathAndFsTypeOptionsFromReader(filepath.Join(symlinkedDev, "shm"), strings.NewReader(mounts))
+	assert.NoError(err)
+	assert.Equal("tmpfs", path)
+	assert.Equal("tmpfs", fsType)
+	assert.Equal([]string{"rw", "nosuid", "nodev"}, fsOptions)
 }

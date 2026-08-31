@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -130,6 +131,14 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 }
 
 func getDevicePathAndFsTypeOptionsFromReader(mountPoint string, mounts io.Reader) (devicePath, fsType string, fsOptions []string, err error) {
+	// Mounting resolves symlinks in the target path, so /proc/mounts records
+	// the resolved path. Resolve the requested path before comparing, or fall
+	// back to the original path if resolution fails.
+	resolvedMountPoint, resolveErr := filepath.EvalSymlinks(mountPoint)
+	if resolveErr != nil {
+		resolvedMountPoint = mountPoint
+	}
+
 	reader := bufio.NewReader(mounts)
 	for {
 		var line string
@@ -147,7 +156,7 @@ func getDevicePathAndFsTypeOptionsFromReader(mountPoint string, mounts io.Reader
 		}
 
 		mountPath := mountFieldUnescaper.Replace(fields[procPathIndex])
-		if mountPoint == mountPath {
+		if resolvedMountPoint == mountPath {
 			devicePath = fields[procDeviceIndex]
 			fsType = fields[procTypeIndex]
 			fsOptions = strings.Split(fields[procOptionIndex], ",")
