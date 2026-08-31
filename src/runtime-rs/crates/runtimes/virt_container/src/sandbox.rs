@@ -1039,10 +1039,16 @@ impl Sandbox for VirtSandbox {
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
 
+        let (qemu_died_tx, qemu_died_rx) = tokio::sync::oneshot::channel();
         let sandbox = self.clone();
         // wait for vm exit in background, and record the exit status and time when vm exited.
         tokio::spawn(async move {
-            match sandbox.hypervisor.wait_vm().await {
+            let wait_res = sandbox.hypervisor.wait_vm().await;
+            // Signal start() before record_stop(). start() holds the inner write
+            // lock across agent/create_sandbox, so record_stop cannot publish
+            // exit_notify until start() returns.
+            let _ = qemu_died_tx.send(());
+            match wait_res {
                 Ok(exit_code) => {
                     sandbox
                         .record_stop(exit_code as u32, SystemTime::now())
@@ -1055,104 +1061,115 @@ impl Sandbox for VirtSandbox {
             }
         });
 
-        // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) =
-            if let Some(hooks) = sandbox_config.hooks.as_ref() {
-                (
-                    hooks.prestart().clone().unwrap_or_default(),
-                    hooks.create_runtime().clone().unwrap_or_default(),
-                )
-            } else {
-                (Vec::new(), Vec::new())
+        let bring_up = async {
+            // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
+            let (prestart_hooks, create_runtime_hooks) =
+                if let Some(hooks) = sandbox_config.hooks.as_ref() {
+                    (
+                        hooks.prestart().clone().unwrap_or_default(),
+                        hooks.create_runtime().clone().unwrap_or_default(),
+                    )
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+
+            self.execute_oci_hook_functions(
+                &prestart_hooks,
+                &create_runtime_hooks,
+                &sandbox_config.state,
+            )
+            .await?;
+
+            // 1. if there are pre-start hook functions, network config might have been changed.
+            //    We need to rescan the netns to handle the change.
+            // 2. Do not scan the netns if we want no network for the VM.
+            // QEMU and Cloud Hypervisor advertise network hotplug support, so
+            // factory VMs using them defer network setup until after VM startup.
+            // Backends without this capability retain pre-start setup.
+            let config = self.resource_manager.config().await;
+            if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
+                && !defer_network
+                && !config.runtime.disable_new_netns
+                && !dan_config_path(&config, &self.sid).exists()
+            {
+                if let Some(netns_path) = &sandbox_config.network_env.netns {
+                    let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
+                        network_model: config.runtime.internetworking_model.clone(),
+                        netns_path: netns_path.to_owned(),
+                        queues: self
+                            .hypervisor
+                            .hypervisor_config()
+                            .await
+                            .network_info
+                            .network_queues as usize,
+                        network_created: sandbox_config.network_env.network_created,
+                    });
+                    self.resource_manager
+                        .handle_network(network_resource)
+                        .await
+                        .context("set up device after start vm")?;
+                }
+            }
+
+            if defer_network {
+                self.setup_deferred_network_after_start(sandbox_config)
+                    .await?;
+            }
+
+            // connect agent
+            // set agent socket
+            let address = self
+                .hypervisor
+                .get_agent_socket()
+                .await
+                .context("get agent socket")?;
+            self.agent
+                .start(&address)
+                .await
+                .context(format!("connect to address {:?}", &address))?;
+            self.set_agent_policy().await.context("set agent policy")?;
+
+            self.resource_manager
+                .setup_after_start_vm()
+                .await
+                .context("setup device after start vm")?;
+
+            // create sandbox in vm
+            let agent_config = self.agent.agent_config().await;
+            let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
+            let req = agent::CreateSandboxRequest {
+                hostname: sandbox_config.hostname.clone(),
+                dns: sandbox_config.dns.clone(),
+                storages: self
+                    .resource_manager
+                    .get_storage_for_sandbox(self.shm_size)
+                    .await
+                    .context("get storages for sandbox")?,
+                sandbox_pidns: false,
+                sandbox_id: id.to_string(),
+                guest_hook_path: self
+                    .hypervisor
+                    .hypervisor_config()
+                    .await
+                    .security_info
+                    .guest_hook_path,
+                kernel_modules,
             };
 
-        self.execute_oci_hook_functions(
-            &prestart_hooks,
-            &create_runtime_hooks,
-            &sandbox_config.state,
-        )
-        .await?;
-
-        // 1. if there are pre-start hook functions, network config might have been changed.
-        //    We need to rescan the netns to handle the change.
-        // 2. Do not scan the netns if we want no network for the VM.
-        // QEMU and Cloud Hypervisor advertise network hotplug support, so
-        // factory VMs using them defer network setup until after VM startup.
-        // Backends without this capability retain pre-start setup.
-        let config = self.resource_manager.config().await;
-        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
-            && !defer_network
-            && !config.runtime.disable_new_netns
-            && !dan_config_path(&config, &self.sid).exists()
-        {
-            if let Some(netns_path) = &sandbox_config.network_env.netns {
-                let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
-                    network_model: config.runtime.internetworking_model.clone(),
-                    netns_path: netns_path.to_owned(),
-                    queues: self
-                        .hypervisor
-                        .hypervisor_config()
-                        .await
-                        .network_info
-                        .network_queues as usize,
-                    network_created: sandbox_config.network_env.network_created,
-                });
-                self.resource_manager
-                    .handle_network(network_resource)
-                    .await
-                    .context("set up device after start vm")?;
-            }
-        }
-
-        if defer_network {
-            self.setup_deferred_network_after_start(sandbox_config)
-                .await?;
-        }
-
-        // connect agent
-        // set agent socket
-        let address = self
-            .hypervisor
-            .get_agent_socket()
-            .await
-            .context("get agent socket")?;
-        self.agent
-            .start(&address)
-            .await
-            .context(format!("connect to address {:?}", &address))?;
-        self.set_agent_policy().await.context("set agent policy")?;
-
-        self.resource_manager
-            .setup_after_start_vm()
-            .await
-            .context("setup device after start vm")?;
-
-        // create sandbox in vm
-        let agent_config = self.agent.agent_config().await;
-        let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
-        let req = agent::CreateSandboxRequest {
-            hostname: sandbox_config.hostname.clone(),
-            dns: sandbox_config.dns.clone(),
-            storages: self
-                .resource_manager
-                .get_storage_for_sandbox(self.shm_size)
+            self.agent
+                .create_sandbox(req)
                 .await
-                .context("get storages for sandbox")?,
-            sandbox_pidns: false,
-            sandbox_id: id.to_string(),
-            guest_hook_path: self
-                .hypervisor
-                .hypervisor_config()
-                .await
-                .security_info
-                .guest_hook_path,
-            kernel_modules,
+                .context("create sandbox")?;
+
+            Ok(())
         };
 
-        self.agent
-            .create_sandbox(req)
-            .await
-            .context("create sandbox")?;
+        tokio::select! {
+            _ = qemu_died_rx => Err(anyhow!(
+                "QEMU exited during sandbox start (agent/create_sandbox)"
+            )),
+            res = bring_up => res,
+        }?;
 
         inner.state = SandboxState::Running;
         inner.created_at = Some(std::time::SystemTime::now());
