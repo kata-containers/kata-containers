@@ -84,9 +84,9 @@ setup_file() {
 
 # Last, and in the suite the union runs last, so the node is left as it was found
 # and neither the tests above nor the other suite see a store without the module.
-@test "The removal semodule -r documents takes the module off the node" {
+@test "The removal the docs document takes the module off the node" {
 	run remove_policy_module
-	echo "# semodule -r kata-deploy: ${output}" >&3
+	echo "# semodule -X <priority> -r kata-deploy: ${output:-none}" >&3
 	[ "${status}" -eq 0 ]
 
 	assert_module_removed

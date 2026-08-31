@@ -118,8 +118,13 @@ assert_module_still_loaded() {
 
 # What values.yaml tells the admin to run. Under a chroot with the host writable,
 # as the installer does: the store belongs to the node, and so does its semodule.
+#
+# By priority, since the module is installed above semodule's default and a bare
+# -r looks only at the default. Every kata-deploy module, since a node whose
+# install directory is labelled unusually carries a supplementary one too.
 remove_policy_module() {
-	run_on_host 'chroot /host /usr/sbin/semodule -r kata-deploy || chroot /host /sbin/semodule -r kata-deploy' false
+	# shellcheck disable=SC2016 # expanded on the node, not here
+	run_on_host 'sem=/usr/sbin/semodule; chroot /host test -x $sem || sem=/sbin/semodule; chroot /host $sem --list-modules=full | grep kata-deploy | while read -r priority name _; do chroot /host $sem -X $priority -r $name || exit 1; done' false
 }
 
 assert_module_removed() {
