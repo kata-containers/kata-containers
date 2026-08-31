@@ -8,7 +8,9 @@ package utils
 import (
 	"bytes"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -62,4 +64,20 @@ func TestGetDevicePathAndFsTypeOptionsSuccessful(t *testing.T) {
 	assert.Equal(fstype, "proc")
 	assert.Equal(fstype, fstypeOut)
 	assert.Equal(fsOptions, optsOut)
+}
+
+func TestGetDevicePathAndFsTypeOptionsThroughSymlinkedParent(t *testing.T) {
+	assert := assert.New(t)
+
+	expectedPath, expectedFSType, expectedOptions, err := GetDevicePathAndFsTypeOptions("/proc")
+	assert.NoError(err)
+
+	rootLink := filepath.Join(t.TempDir(), "root")
+	assert.NoError(os.Symlink("/", rootLink))
+
+	path, fsType, fsOptions, err := GetDevicePathAndFsTypeOptions(filepath.Join(rootLink, "proc"))
+	assert.NoError(err)
+	assert.Equal(expectedPath, path)
+	assert.Equal(expectedFSType, fsType)
+	assert.Equal(expectedOptions, fsOptions)
 }
