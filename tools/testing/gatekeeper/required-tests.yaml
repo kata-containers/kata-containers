@@ -7,6 +7,7 @@ required_tests:
   - GHA security analysis / zizmor
   - Lint GHA workflows / run-actionlint
   - EditorConfig checker / editorconfig-checker
+  - Check Cargo.toml format / Check Cargo.toml format
 
 required_regexps:
   # Always required regexps
