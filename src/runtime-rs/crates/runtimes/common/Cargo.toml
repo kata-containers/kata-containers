@@ -11,6 +11,7 @@ license = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 containerd-shim-protos = { workspace = true, features = ["sandbox"] }
+cgroups = { workspace = true }
 nix = { workspace = true }
 protobuf = { workspace = true }
 strum = { workspace = true }
@@ -25,3 +26,6 @@ kata-types = { workspace = true }
 runtime-spec = { workspace = true }
 resource = { workspace = true }
 protocols = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -437,6 +437,20 @@ impl CgroupsResourceInner {
 }
 
 impl CgroupsResourceInner {
+    pub(crate) fn stats(&self) -> Result<crate::cgroups::SandboxCgroupStats> {
+        if self.sandbox_cgroup.v2() {
+            let path = self
+                .sandbox_cgroup
+                .cgroup_path(None)
+                .context("get sandbox cgroup v2 path")?;
+            Ok(crate::cgroups::SandboxCgroupStats::V2(path.into()))
+        } else {
+            Ok(crate::cgroups::SandboxCgroupStats::V1(Box::new(
+                self.sandbox_cgroup.stats(),
+            )))
+        }
+    }
+
     pub(crate) async fn delete(&mut self) -> Result<()> {
         self.sandbox_cgroup
             .destroy()
