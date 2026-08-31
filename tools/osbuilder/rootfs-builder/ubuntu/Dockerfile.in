@@ -42,8 +42,6 @@ RUN apt-get update && \
     musl-tools \
     protobuf-compiler \
     xz-utils \
-    pip \
-    python3-dev \
     libclang-dev \
     file \
     zstd && \
@@ -78,8 +76,6 @@ RUN ARCH=$(uname -m); \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
 	esac; \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
-
-RUN pip install --no-cache-dir pyinstaller==6.9.0 || pip install --no-cache-dir pyinstaller==6.9.0 --break-system-packages
 
 # pin cosign to 3.0.2
 RUN ARCH=$(uname -m); \

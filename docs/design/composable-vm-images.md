@@ -515,7 +515,7 @@ image unless placed there deliberately, and the NVIDIA base is never built with
 `CONFIDENTIAL_GUEST=yes`, so the same tools arrive as ordinary packages. In both
 cases the extension's `cryptsetup` resolves its libraries against the base, which
 requires the base and the coco-extension builder to stay on the **same distro/ABI**
-(Ubuntu 24.04 "noble" today).
+(Ubuntu 26.04 "resolute" today).
 
 ### Image build pipeline
 
@@ -591,7 +591,7 @@ The `kata-containers-coco-extension.img` is built and published by
 (`tools/coco-extension/`) as a multi-arch OCI index at
 `ghcr.io/confidential-containers/guest-components/coco-extension-disk`. Kata pins
 the guest-components revision in `versions.yaml` under
-`.externals.coco-guest-components` (`version`, `container_image`, and
+`.externals.coco-guest-components` (`version`, `variant`, `container_image`, and
 `extension_image` must stay in sync) and, at build time, `install_image_coco_extension`:
 
 1. Resolves the per-architecture manifest digest from the index

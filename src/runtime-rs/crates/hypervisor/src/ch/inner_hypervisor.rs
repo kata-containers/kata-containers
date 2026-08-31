@@ -192,7 +192,7 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
-        let (shared_fs_devices, network_devices, host_devices, protection_device) =
+        let (shared_fs_devices, network_devices, host_devices, protection_device, boot_disks) =
             self.get_shared_devices().await?;
 
         let sandbox_path = get_sandbox_path(&self.id);
@@ -218,6 +218,7 @@ impl CloudHypervisorInner {
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             host_devices,
+            boot_disks,
             protection_device,
             ..Default::default()
         };

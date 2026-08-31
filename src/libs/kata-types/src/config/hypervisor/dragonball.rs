@@ -116,8 +116,7 @@ impl ConfigPlugin for DragonballConfig {
                 ));
             }
 
-            if !db.blockdev_info.disable_block_device_use
-                && db.blockdev_info.block_device_driver != VIRTIO_BLK_PCI
+            if db.blockdev_info.block_device_driver != VIRTIO_BLK_PCI
                 && db.blockdev_info.block_device_driver != VIRTIO_BLK_MMIO
                 && db.blockdev_info.block_device_driver != VIRTIO_PMEM
             {

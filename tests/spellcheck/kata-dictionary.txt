@@ -52,6 +52,7 @@ VPMU
 
 # GPU & NVIDIA
 CUDA
+DCGM
 DGX
 Gramine
 Mellanox

@@ -33,8 +33,8 @@ pub use vfio_device::{
 pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};
 pub use vhost_user_net::VhostUserNetDevice;
 pub use virtio_blk_modern::{
-    BlockConfigModern, BlockDeviceAio, BlockDeviceFormat, BlockDeviceModern,
-    BlockDeviceModernHandle, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    BlockConfigModern, BlockDeviceAio, BlockDeviceModern, BlockDeviceModernHandle, VmdkConfig,
+    VmdkExtent, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 pub use virtio_fs::{
     ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,

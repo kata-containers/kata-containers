@@ -72,7 +72,7 @@ For a 256 GiB node this yields `256 - 4 - 2 - 2 = 248` GiB of Allocatable memory
 $ sudo mount -o remount,size=248G /dev/shm
 ```
 
-In practice every node operates in a mixed mode: even a node dedicated to Kata workloads runs `runc` Pods for the Kubernetes infrastructure, such as the CNI and CSI node plugins, `kube-proxy`, monitoring and logging DaemonSets, and `kata-deploy` itself. These infrastructure Pods use regular anonymous memory and do not consume `/dev/shm`, but their requests count against the same Allocatable. For workload Pods, on the other hand, mixing `runc` and Kata on the same node is not recommended: run the workloads as Kata Pods so that the isolation guarantees are uniform and the `/dev/shm` sizing stays predictable. Suggested sizing:
+In practice every node operates in a mixed mode: even a node dedicated to Kata workloads runs `runc` Pods for the Kubernetes infrastructure, such as the CNI and CSI node plugins, `kube-proxy`, and monitoring and logging DaemonSets. These infrastructure Pods use regular anonymous memory and do not consume `/dev/shm`, but their requests count against the same Allocatable. For workload Pods, on the other hand, mixing `runc` and Kata on the same node is not recommended: run the workloads as Kata Pods so that the isolation guarantees are uniform and the `/dev/shm` sizing stays predictable. Suggested sizing:
 
 * The node's Allocatable memory is the upper bound: `/dev/shm` never needs to be larger than that.
 * Subtract the memory requests of the infrastructure `runc` Pods (the DaemonSets above) from Allocatable and size `/dev/shm` to the remainder. This is the aggregate VM memory available to Kata Pods.

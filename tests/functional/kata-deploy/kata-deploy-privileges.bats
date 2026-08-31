@@ -63,6 +63,18 @@ per_node_pod_spec() {
 	'
 }
 
+# One named container out of a staged per-node Job. Its env entries are indented
+# deeper than the container itself, so the next peer `- name:` ends it.
+stage_container() {
+	local stage="${1}" name="${2}"
+	shift 2
+	per_node_pod_spec "${stage}" "$@" | awk -v want="            - name: ${name}" '
+		$0 == want { inside = 1 }
+		inside && $0 != want && $0 ~ /^            - name: / { exit }
+		inside { print }
+	'
+}
+
 # One YAML document out of a rendered multi-document template, picked by name, so
 # that a test can assert what a single ClusterRole grants rather than counting
 # substrings across every document at once.
@@ -122,11 +134,69 @@ rbac_doc() {
 
 	# The stages that are left, in order. Install ends with the CRI restart, which
 	# is why it is the main container rather than an init container.
+	echo "${jobs}" | grep -q 'install-stage-load-kernel-modules'
 	echo "${jobs}" | grep -q 'install-stage-host-check'
 	echo "${jobs}" | grep -q 'install-stage-artifacts'
 	echo "${jobs}" | grep -q 'install-stage-cri'
 	echo "${jobs}" | grep -q 'cleanup-stage-revert-cri'
 	echo "${jobs}" | grep -q 'cleanup-stage-remove-artifacts'
+}
+
+@test "Helm template (job mode): module loading is the only privileged stage" {
+	local loader host_check artifacts cri cleanup revert_cri remove_artifacts
+	loader=$(stage_container install load-kernel-modules)
+	host_check=$(stage_container install host-check)
+	artifacts=$(stage_container install artifacts)
+	cri=$(stage_container install cri)
+	cleanup=$(per_node_pod_spec cleanup)
+	revert_cri=$(stage_container cleanup revert-cri)
+	remove_artifacts=$(stage_container cleanup remove-artifacts)
+
+	[[ -n "${loader}" ]]
+	echo "${loader}" | grep -q 'install-stage-load-kernel-modules'
+	echo "${loader}" | grep -qE '^                privileged: true$'
+	echo "${loader}" | grep -qE '^                  mountPath: /host$'
+	echo "${loader}" | grep -qE '^                  readOnly: true$'
+	echo "${loader}" | grep -qE '^                  mountPath: /host-modules-load.d$'
+
+	for container in "${host_check}" "${artifacts}" "${cri}"; do
+		[[ -n "${container}" ]]
+		echo "${container}" | grep -qE '^                privileged: false$'
+		refute_match "${container}" 'mountPath: /host$'
+		refute_match "${container}" 'mountPath: /host-modules-load.d$'
+	done
+
+	# Cleanup never touches host-global module state, so it needs the persistence
+	# file but not the host root.
+	refute_match "${cleanup}" 'install-stage-load-kernel-modules'
+	refute_match "${cleanup}" 'name: host-root'
+	refute_match "${revert_cri}" 'mountPath: /host-modules-load.d$'
+	echo "${remove_artifacts}" | grep -qE '^                  mountPath: /host-modules-load.d$'
+	echo "${remove_artifacts}" | grep -qE '^                privileged: false$'
+
+	# Module loading is job-mode only, so the DaemonSet path stays unprivileged.
+	local daemonset
+	daemonset=$(helm template kata-deploy "${CHART_PATH}" \
+		--set deploymentMode=daemonset \
+		--show-only templates/kata-deploy.yaml)
+	refute_match "${daemonset}" 'install-stage-load-kernel-modules'
+	refute_match "${daemonset}" 'name: host-root'
+	refute_match "${daemonset}" 'name: modules-load-d'
+	refute_match "${daemonset}" 'privileged: true'
+}
+
+@test "Helm template (job mode): module loading runs before host validation" {
+	# The host check rejects a node whose kernel lacks EROFS or device-mapper,
+	# and that is only true after the modules are in.
+	local actions
+	actions=$(per_node_jobs |
+		grep -o 'install-stage-[a-z-]*' |
+		awk '!seen[$0]++')
+	[[ "${actions}" == "$(printf '%s\n' \
+		install-stage-load-kernel-modules \
+		install-stage-host-check \
+		install-stage-artifacts \
+		install-stage-cri)" ]]
 }
 
 @test "Helm template (job mode): a per-node Job can tell which host it woke up on" {
@@ -160,10 +230,20 @@ rbac_doc() {
 }
 
 @test "Helm template (job mode): the dispatcher does the node-level work" {
-	local install cleanup
+	local install cleanup rendered
 	install=$(render_job_mode kata-deploy-install-job.yaml \
 		--set 'startupTaints[0]=kata/installing:NoSchedule')
 	cleanup=$(render_job_mode kata-deploy-cleanup-job.yaml)
+
+	for rendered in "${install}" "${cleanup}"; do
+		echo "${rendered}" | grep -q 'image: ghcr.io/kata-containers/k8s-job-dispatcher:0.2.0'
+		echo "${rendered}" | grep -q -- '/usr/bin/k8s-job-dispatcher'
+		echo "${rendered}" | grep -q -- '--tracking-label-prefix=kata-deploy-job-dispatcher'
+		echo "${rendered}" | grep -q -- '--node-label-key=katacontainers.io/kata-runtime'
+		echo "${rendered}" | grep -q -- '--instance-label-prefix=kata-deploy.katacontainers.io'
+		echo "${rendered}" | grep -q -- '--require-node-runtime-version'
+		echo "${rendered}" | grep -q -- '--require-node-machine-id'
+	done
 
 	# Labelling last, and only once the node is Ready again: the install restarts
 	# the node's CRI runtime, and the label is what admits workloads.

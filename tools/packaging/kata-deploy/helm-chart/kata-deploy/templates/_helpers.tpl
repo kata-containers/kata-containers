@@ -417,6 +417,39 @@ Builds per-shim semicolon-separated list: "shim1=value1;shim2=value2"
 {{- end -}}
 
 {{/*
+Get the shims that run DCGM in the guest from structured config
+Builds a semicolon-separated list of shim names: "shim1;shim2"
+
+The value is a set rather than the "shim=value" mapping the proxies use,
+because the setting is a boolean: naming a shim here means it is on.
+
+A shim with no nvrc block at all reads as off, so a values file written before
+this setting existed - or one defining a shim the chart does not - keeps
+upgrading cleanly instead of failing to render.
+*/}}
+{{- define "kata-deploy.getNvrcEnableDcgm" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- $shims := list -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- $nvrc := $shimConfig.nvrc | default dict -}}
+{{- if and $shimEnabled ($nvrc.enableDCGM | default false) -}}
+{{- $shims = append $shims $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join ";" $shims -}}
+{{- end -}}
+
+{{/*
 Main kata-deploy image reference for the DaemonSet.
 Supports tag (reference:tag) and digest (reference@sha256:...) formats.
 When reference contains "@" (digest), use reference as-is; otherwise use reference:tag (tag defaults to Chart.AppVersion).
@@ -463,15 +496,16 @@ reference:tag (tag defaults to Chart.AppVersion).
 {{- end -}}
 
 {{/*
-Dispatcher image reference for the job-mode dispatcher (kata-deploy-job-dispatcher).
-Supports tag (reference:tag) and digest (reference@sha256:...) formats; tag
-defaults to Chart.AppVersion.
+Image reference for k8s-job-dispatcher.
+Supports tag (reference:tag) and digest (reference@sha256:...) formats.
 */}}
 {{- define "kata-deploy.dispatcherImage" -}}
 {{- $ref := .Values.job.dispatcherImage.reference -}}
-{{- $tag := default .Chart.AppVersion .Values.job.dispatcherImage.tag | toString -}}
+{{- $tag := .Values.job.dispatcherImage.tag | toString -}}
 {{- if contains "@" $ref -}}
 {{- $ref -}}
+{{- else if eq $tag "" -}}
+{{- fail "job.dispatcherImage.tag is required when job.dispatcherImage.reference is not a digest" -}}
 {{- else -}}
 {{- printf "%s:%s" $ref $tag -}}
 {{- end -}}
@@ -618,6 +652,11 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 - name: AGENT_NO_PROXY
   value: {{ $agentNoProxy | quote }}
 {{- end }}
+{{- $nvrcEnableDcgm := include "kata-deploy.getNvrcEnableDcgm" . | trim -}}
+{{- if $nvrcEnableDcgm }}
+- name: NVRC_ENABLE_DCGM
+  value: {{ $nvrcEnableDcgm | quote }}
+{{- end }}
 {{- $pullTypeMappingAmd64 := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $pullTypeMappingAmd64 }}
 - name: PULL_TYPE_MAPPING_X86_64
@@ -719,7 +758,7 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{/*
 Build a Kubernetes label-selector STRING (the form accepted by the apiserver
 and `kubectl --selector`) from an equality map plus a list of match-expression
-requirements. This is handed to `kata-deploy-job-dispatcher --node-selector`, which
+requirements. This is handed to `k8s-job-dispatcher --node-selector`, which
 resolves the actual target nodes LIVE at run time (so node membership is never
 frozen into the Helm release).
 
@@ -786,6 +825,13 @@ kata-deploy.katacontainers.io/default
 
 {{- define "kata-deploy.dispatcherNodeWorkFlags" -}}
 {{- $root := .root -}}
+{{- /* Preserve the tracking and node-management contract of the dispatcher that
+       originally lived in this repository. */ -}}
+- "--tracking-label-prefix=kata-deploy-job-dispatcher"
+- "--node-label-key=katacontainers.io/kata-runtime"
+- "--instance-label-prefix=kata-deploy.katacontainers.io"
+- "--require-node-runtime-version"
+- "--require-node-machine-id"
 {{- /* Installs share katacontainers.io/kata-runtime, so each one also marks its
        own nodes and gives the shared label up only once no other mark is left.
        Both stages need to know which mark is ours. */}}
@@ -1084,7 +1130,7 @@ Same return contract as `kata-deploy.installNodeSelectors`.
 
 {{/*
 Per-node staged Job manifest (deploymentMode: job), embedded verbatim into the
-job-templates ConfigMap. The dispatcher (kata-deploy-job-dispatcher) clones this once per
+job-templates ConfigMap. k8s-job-dispatcher clones this once per
 target node, injecting metadata.name + spec.template.spec.nodeName, so the
 template itself carries NO node identity and NO Helm hook annotations.
 
@@ -1092,7 +1138,7 @@ Arguments (dict):
   root  - top-level context (.)
   stage - "install" | "cleanup"
 
-install pipeline:  host-check -> artifacts (initContainers) ; cri (main)
+install pipeline:  load-kernel-modules -> host-check -> artifacts (initContainers) ; cri (main)
 cleanup pipeline:  revert-cri              (initContainer)  ; remove-artifacts (main)
 
 The node label is not a stage here: the dispatcher sets it once the Job as a whole
@@ -1192,6 +1238,8 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
+{{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
@@ -1200,10 +1248,20 @@ spec:
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true) | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
+        - name: modules-load-d
+          hostPath:
+            path: /etc/modules-load.d
+            type: DirectoryOrCreate
+{{- if eq $stage "install" }}
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -1221,7 +1279,7 @@ kata-deploy.dispatcherServiceAccountName.
 {{- end -}}
 
 {{/*
-ServiceAccount name for the job-mode dispatcher (kata-deploy-job-dispatcher). Separate from
+ServiceAccount name for k8s-job-dispatcher. Separate from
 kata-deploy.serviceAccountName: the dispatcher is a pure API client (list nodes,
 manage Jobs) and must NOT carry the privileged kata-deploy host-mutation rights.
 */}}
@@ -1256,6 +1314,8 @@ Arguments (dict):
   action      - kata-deploy subcommand (e.g. install-stage-cri)
   privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
+  mountHostRoot - bool, whether to mount the host root read-only at /host
+  mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
 
 Emitted at column 0; indent with `nindent` at the call site.
 */}}
@@ -1274,6 +1334,15 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
 {{- else }}
 {{- include "kata-deploy.tmpVolumeMount" . | nindent 4 }}
+{{- end }}
+{{- if .mountHostRoot }}
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+{{- end }}
+{{- if .mountModulesLoad }}
+    - name: modules-load-d
+      mountPath: /host-modules-load.d
 {{- end }}
 {{- end -}}
 

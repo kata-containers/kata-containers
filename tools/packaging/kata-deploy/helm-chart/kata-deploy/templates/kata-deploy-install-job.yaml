@@ -1,8 +1,8 @@
 {{- /*
 Install dispatcher (deploymentMode: job).
 
-A single, tiny post-install/post-upgrade hook Job that runs the dispatcher
-(kata-deploy-job-dispatcher). The dispatcher enumerates the selected nodes LIVE, then
+A single, tiny post-install/post-upgrade hook Job that runs k8s-job-dispatcher.
+The dispatcher enumerates the selected nodes LIVE, then
 creates one node-pinned install Job per node from the job-templates ConfigMap,
 keeping at most job.parallelism in flight and refilling as they finish. This
 guarantees one install per node (coverage) with a paced rollout, while the Helm
@@ -93,7 +93,7 @@ spec:
               drop:
                 - ALL
           command:
-            - /usr/bin/kata-deploy-job-dispatcher
+            - /usr/bin/k8s-job-dispatcher
             - "--job-template=/etc/kata-job/install-job.yaml"
             - "--cleanup-job-template=/etc/kata-job/cleanup-job.yaml"
             - "--name-prefix={{ $base }}-install"

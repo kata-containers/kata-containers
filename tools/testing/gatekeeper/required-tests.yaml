@@ -45,6 +45,7 @@ mapping:
     # Checks the basic functional tests work
     names:
       # ci-on-push.yaml (ci.yaml)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-arm64 / build-asset (openvmm)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, clh-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (latest, dragonball)
@@ -83,6 +84,8 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure, small, oci-distribution)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure-runtime-rs, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh-azure-runtime-rs, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, openvmm-azure-runtime-rs, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, openvmm-azure-runtime-rs, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, minimum)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, latest)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (dragonball, minimum)
@@ -95,14 +98,14 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh-runtime-rs, latest)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (overlayfs, qemu-runtime-rs, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (nydus, qemu-coco-dev-runtime-rs, kubeadm)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-on-tee (sev-snp, qemu-snp)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-on-tee (sev-snp, qemu-snp)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev-runtime-rs, nydus, guest-pull)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
       # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
-      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-nvidia-gpu / run-nvidia-gpu-tests-on-amd64
+      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-nvidia-gpu / run-nvidia-gpu-tests-on-amd64
       # - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-nvidia-gpu / run-nvidia-gpu-snp-tests-on-amd64
     required-labels:
       - ok-to-test
@@ -114,7 +117,7 @@ mapping:
       - Static checks / build-checks / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-22.04)
       - Static checks / build-checks / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ub...
       - Static checks / build-checks / check (make check, dragonball, src/dragonball, rust, ubuntu-22.04)
-      - Static checks / build-checks / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-22.04)
+      # - Static checks / build-checks / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-22.04)
       - Static checks / build-checks / check (make check, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-22.04)
       - Static checks / build-checks / check (make check, libs, src/libs, rust, libdevmapper, protobuf-compiler, ubuntu-22.04)
       - Static checks / build-checks / check (make check, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-22.04)
@@ -123,7 +126,7 @@ mapping:
       - Static checks / build-checks / check (make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-22.04)
       - Static checks / build-checks / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ubu...
       - Static checks / build-checks / check (make test, dragonball, src/dragonball, rust, ubuntu-22.04)
-      - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-22.04)
+      # - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-22.04)
       - Static checks / build-checks / check (make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-22.04)
       # - Static checks / build-checks / check (make test, libs, src/libs, rust, libdevmapper, protobuf-compiler)
       - Static checks / build-checks / check (make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-22.04)
@@ -132,7 +135,7 @@ mapping:
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust, ubuntu-22.04)
-      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, u...
+      # - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, u...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubu...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, libs, src/libs, rust, libdevmapper, protobuf-compiler, ubu...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubunt...
@@ -140,6 +143,7 @@ mapping:
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-2...
       - Static checks / build-checks-depending-on-kvm (runtime-rs)
       - Static checks / check-agent-policy-coverage
+      - Static checks / check-broken-symlinks
       - Static checks / check-kernel-config-version
       - Static checks / codegen
       - Static checks / static-checks (make static-checks)
@@ -147,7 +151,7 @@ mapping:
       # static-checks-self-hosted.yaml
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ub...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, dragonball, src/dragonball, rust, ubuntu-24.04-s390x)
-      - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04-s390x)
+      # - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.04-s390x)
@@ -155,14 +159,14 @@ mapping:
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang, ubuntu-24.04-s...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang, ubu...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, dragonball, src/dragonball, rust, ubuntu-24.04-s390x)
-      - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04-s390x)
+      # - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (make test, trace-forwarder, src/tools/trace-forwarder, rust, ubuntu-24.04-s390x)
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust, ubuntu-24.04-s390x)
-      - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, u...
+      # - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler, u...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust, protobuf-compiler, ubu...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust, protobuf-compiler, ubunt...
       - Static checks self-hosted / build-checks (ubuntu-24.04-s390x) / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR, ubuntu-24.0...

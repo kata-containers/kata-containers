@@ -1,8 +1,8 @@
 # Deployment model for installing/cleaning up Kata on nodes.
-#   daemonset: (default) the long-running kata-deploy DaemonSet installs Kata on
+#   daemonset: the long-running kata-deploy DaemonSet installs Kata on
 #              every matching node and reverts it on pod termination (uninstall).
-#   job:       no always-on component. A tiny dispatcher Job (the dispatcher,
-#              kata-deploy-job-dispatcher) runs as a post-install/upgrade hook, enumerates
+#   job:       (default) no always-on component. A tiny k8s-job-dispatcher Job runs
+#              as a post-install/upgrade hook, enumerates
 #              the selected nodes LIVE, and creates one node-pinned install Job
 #              per node - paced to job.parallelism and guaranteeing one install
 #              per node. Each per-node Job runs the staged pipeline as ordered
@@ -22,17 +22,33 @@
 #   and installs the new nodes (the staged actions are idempotent, so already-
 #   installed nodes are skipped). This is intentional: it avoids an always-on
 #   privileged component on every node.
-deploymentMode: daemonset  # daemonset | job
+#
+#   On a fleet that grows on its own, `job.reconcile` does that re-run on a
+#   schedule instead.
+#
+# NOTE on host kernel modules in "job" mode:
+#   Each per-node install Job starts with one short-lived privileged, tokenless
+#   init container that loads the modules the enabled runtimes and snapshotters
+#   need. It mounts the host root read-only because only the host's own modprobe
+#   matches the running kernel, and it fails the node before anything on it is
+#   changed if a required module cannot be loaded, or if x86 ends up with
+#   neither /dev/kvm nor /dev/mshv.
+#
+#   Those modules are also recorded under the host's /etc/modules-load.d so they
+#   come back after a reboot. Uninstall drops that file but never unloads a
+#   module, because module state is host-global and may be in use by something
+#   else.
+deploymentMode: job  # daemonset | job
 
 # Settings specific to deploymentMode: job
 job:
   # Dispatcher image: the dispatcher that fans out per-node Jobs. It only talks to
   # the Kubernetes API (lists nodes, creates/watches Jobs); it never touches the
-  # host. Supports reference:tag or reference@sha256:digest; tag defaults to the
-  # chart appVersion.
+  # host. Supports reference:tag or reference@sha256:digest. This component is
+  # released independently of Kata Containers, so its version is pinned here.
   dispatcherImage:
-    reference: quay.io/kata-containers/kata-deploy-job-dispatcher
-    tag: ""
+    reference: ghcr.io/kata-containers/k8s-job-dispatcher
+    tag: "0.2.0"
   # Where the dispatcher pods themselves may run (install and uninstall). Nothing
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.
@@ -112,6 +128,27 @@ job:
   # NotReady for a moment. Waiting keeps the first Kata workload away until the
   # runtime is back. A node that never becomes Ready stays unlabeled.
   waitNodeReadySeconds: 300
+  # Scheduled reconcile: covers the nodes that join after the release was applied.
+  #
+  # The dispatcher runs as a release hook, so a node joining later is never
+  # dispatched to and stays without Kata until the next `helm upgrade`. Enable
+  # this and a CronJob does that upgrade's work on a schedule instead, running the
+  # same dispatcher against the same selectors and per-node templates.
+  #
+  # A tick stands aside while a release rollout is in flight, and leaves out the
+  # nodes that already show a finished install, so a tick over a settled fleet is
+  # a couple of API calls and no pods.
+  #
+  # Off by default, for two reasons. A recurring privileged rollout is something
+  # to ask for explicitly, and this only ever ADDS nodes: one that fell out of the
+  # selection is usually a label gone wrong somewhere, so it is left for the next
+  # upgrade rather than dismantled on a timer with nobody watching.
+  #
+  # Requires job.dispatcherImage 0.2.0 or newer.
+  reconcile:
+    enabled: false
+    # Cron expression, interpreted in the cluster's own timezone.
+    schedule: "*/15 * * * *"
   # Node selection for the UNINSTALL (pre-delete hook) dispatcher.
   #
   # Deliberately independent of the install selection: uninstall has to reach
@@ -643,6 +680,11 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    # Settings for NVRC, the init process of the NVIDIA guest images. Each key
+    # becomes an nvrc.* guest kernel parameter; see docs/helm-configuration.md.
+    nvrc:
+      # Run nv-hostengine and dcgm-exporter in the guest (nvrc.dcgm=on).
+      enableDCGM: false
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
@@ -657,6 +699,8 @@ shims:
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # This label is automatically added by gpu-operator. Override it
       # if you want to use a different label.
@@ -676,6 +720,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
@@ -698,6 +744,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       nodeSelector:
         nvidia.com/cc.ready.state: "true"
@@ -716,6 +764,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       # These labels are automatically added by gpu-operator and NFD
       # respectively. Override if you want to use a different label.
@@ -738,6 +788,8 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    nvrc:
+      enableDCGM: false
     runtimeClass:
       nodeSelector:
         nvidia.com/cc.ready.state: "true"

@@ -24,20 +24,8 @@ trap '[[ -n "${KEEP_TMPDIR}" ]] && echo "kept: ${tmp}" || rm -rf "${tmp}"' EXIT
 
 cp -r "${CHART_SRC}" "${tmp}/"
 
-# Job-mode dispatcher image. Its repo mirrors the kata-deploy repo with
-# "-job-dispatcher" inserted before any "-ci" suffix (so the "-ci" stays last):
-#   .../kata-deploy     -> .../kata-deploy-job-dispatcher
-#   .../kata-deploy-ci  -> .../kata-deploy-job-dispatcher-ci
-# It is built and pushed with the same tag by kata-deploy-build-and-upload-payload.sh.
-if [[ "${REGISTRY}" == *-ci ]]; then
-	JOB_DISPATCHER_IMAGE_REFERENCE="${JOB_DISPATCHER_IMAGE_REFERENCE:-"${REGISTRY%-ci}-job-dispatcher-ci"}"
-else
-	JOB_DISPATCHER_IMAGE_REFERENCE="${JOB_DISPATCHER_IMAGE_REFERENCE:-"${REGISTRY}-job-dispatcher"}"
-fi
-
 yq eval ".version = \"${CHART_VERSION}\" | .appVersion = \"${CHART_VERSION}\"" -i "${tmp}/kata-deploy/Chart.yaml"
 yq eval ".image.reference = \"${REGISTRY}\" | .image.tag = \"${TAG}\"" -i "${tmp}/kata-deploy/values.yaml"
-yq eval ".job.dispatcherImage.reference = \"${JOB_DISPATCHER_IMAGE_REFERENCE}\" | .job.dispatcherImage.tag = \"${TAG}\"" -i "${tmp}/kata-deploy/values.yaml"
 
 # Optional values overlay baked into the packaged chart's defaults, so a
 # plain `helm install` of the published chart gives the intended profile

@@ -122,9 +122,10 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
 
+      # On SNP the deploy refreshes the VCEK cache, which may build snphost first.
       - name: Deploy CoCo KBS
         if: ${{ env.SKIP_JOB != 'true' }}
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
 
       - name: Install `kbs-client`

@@ -35,6 +35,14 @@ build_rootfs() {
 	mkdir -p "${dir}"
 	cp --remove-destination /etc/ssl/certs/ca-certificates.crt "${dir}"
 
+	# apt verifies TLS through OpenSSL, which only consults ${OPENSSLDIR}/cert.pem
+	# and ${OPENSSLDIR}/certs. Neither exists here because the bundle above is
+	# copied in rather than installed via the openssl package, so point OpenSSL's
+	# default CAfile at it.
+	mkdir -p "${rootfs_dir}/usr/lib/ssl"
+	ln -sf ../../../etc/ssl/certs/ca-certificates.crt \
+		"${rootfs_dir}/usr/lib/ssl/cert.pem"
+
 	# Reduce image size and memory footprint by removing unnecessary files and directories.
 	rm -rf "${rootfs_dir}"/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
 

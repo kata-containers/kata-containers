@@ -42,14 +42,33 @@ wait_for_rootless_host_resources() {
 	return 1
 }
 
+# Remove this helper once NVIDIA GPU runtime-rs configurations enable rootless
+# by default. Until then, explicitly request a GPU so this test exercises the
+# runtime-rs VFIO file-descriptor path.
+request_gpu_for_nvidia_gpu_runtime_rs() {
+	local available_gpus
+	local config="$1"
+
+	is_runtime_rs || return 0
+	is_nvidia_gpu_platform || return 0
+
+	available_gpus="$(kubectl get node "${node}" \
+		-o jsonpath='{.status.allocatable.nvidia\.com/pgpu}')"
+	[[ "${available_gpus}" =~ ^[1-9][0-9]*$ ]] || \
+		die "${node} has no allocatable nvidia.com/pgpu resource"
+
+	yq -i '.spec.containers[0].resources.limits."nvidia.com/pgpu" = "1"' \
+		"${config}"
+}
+
 qemu_rootless_sandbox_supported() {
 	[[ "${KATA_HYPERVISOR}" == qemu* ]] || return 1
 
-	# Additional QEMU configurations are tracked in:
-	# https://github.com/kata-containers/kata-containers/issues/13424
-	# Rootless QEMU cannot access EROFS layers below root-owned
-	# snapshot directories.
-	[[ "${SNAPSHOTTER:-}" == "erofs" ]] && return 1
+	# Runtime-go does not pass EROFS layers to rootless QEMU by file
+	# descriptor and therefore cannot traverse their snapshot directories.
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]] && ! is_runtime_rs; then
+		return 1
+	fi
 
 	# CoCo-dev does not enable a TEE or require TEE host resources. Keep
 	# actual confidential handlers excluded until rootless QEMU can access
@@ -58,11 +77,14 @@ qemu_rootless_sandbox_supported() {
 		[[ "${KATA_HYPERVISOR}" != qemu-coco-dev* ]]; then
 		return 1
 	fi
-	# Generated CoCo policies add an init-data disk below a root-owned host
-	# path. Neither runtime passes that disk to rootless QEMU yet.
-	if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] &&
-		[[ "${AUTO_GENERATE_POLICY:-}" == "yes" ]]; then
-		return 1
+
+	# Rootless policy testing is supported only by shared_fs=none runtime-rs
+	# handlers. Generated policy does not authorize the rootless host paths
+	# used with filesystem sharing. With shared_fs=none, policy adds an
+	# init-data disk that only runtime-rs passes to QEMU by file descriptor.
+	if auto_generate_policy_enabled; then
+		is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}" || return 1
+		is_runtime_rs || return 1
 	fi
 	return 0
 }
@@ -80,14 +102,41 @@ setup() {
 	pod_name="test-e2e"
 	pod_config="$(new_pod_config \
 		"quay.io/prometheus/busybox:latest" \
-		"$(get_test_runtime_class)")"
+		"$(get_test_runtime_class)" \
+		"" "" "10")"
 	set_node "${pod_config}" "${node}"
+
+	# Adding emptyDir validates that rootless QEMU can access additional writable pod
+	# storage:
+	# - any runtime class with filesystem sharing can exercise emptyDir because QEMU
+	#   does not open a host block image.
+	# - Runtime-rs with shared_fs=none exercises this path by passing the image to
+	#   QEMU by file descriptor.
+	# - Runtime-go with shared_fs=none is skipped because the fd transport method is
+	#   not implemented.
+	# Other uses of block images for which file descriptors are passed by runtime-rs
+	# are:
+	# - raw /dev/loop* volumes (see k8s-block-volume.bats), not exercised in this
+	# bats test to reduce complexity.
+	# - init-data images, implicitly exercised by jobs where policy annotations are
+	# attached.
+	if is_runtime_rs || ! is_shared_fs_none_runtime_class "${KATA_HYPERVISOR}"; then
+		yq -i '
+			.spec.volumes += [{"name": "rootless-emptydir", "emptyDir": {}}] |
+			.spec.containers[0].volumeMounts += [{
+				"name": "rootless-emptydir",
+				"mountPath": "/mnt/rootless-emptydir"
+			}]
+		' "${pod_config}"
+	fi
 	set_container_command "${pod_config}" 0 sleep 30
+	request_gpu_for_nvidia_gpu_runtime_rs "${pod_config}"
 
 	watchable_pod_config="${BATS_FILE_TMPDIR}/inotify-configmap-pod.yaml"
 	cp "${pod_config_dir}/inotify-configmap-pod.yaml" "${watchable_pod_config}"
 	yq -i ".spec.runtimeClassName = \"$(get_test_runtime_class)\"" "${watchable_pod_config}"
 	set_node "${watchable_pod_config}" "${node}"
+	request_gpu_for_nvidia_gpu_runtime_rs "${watchable_pod_config}"
 
 	auto_generate_policy "${pod_config_dir}" "${pod_config}"
 	auto_generate_policy "${pod_config_dir}" "${watchable_pod_config}"

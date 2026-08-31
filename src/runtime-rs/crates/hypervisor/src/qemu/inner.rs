@@ -53,6 +53,7 @@ use tokio::{
 };
 
 const VSOCK_SCHEME: &str = "vsock";
+const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
 
 #[derive(Debug)]
 pub struct QemuInner {
@@ -147,6 +148,7 @@ impl QemuInner {
                     let (
                         device_id,
                         path_on_host,
+                        vmdk,
                         is_direct,
                         is_readonly,
                         discard_unmap,
@@ -159,6 +161,7 @@ impl QemuInner {
                         (
                             device_id,
                             cfg.path_on_host.clone(),
+                            cfg.vmdk.clone(),
                             cfg.is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                             cfg.is_readonly,
@@ -184,6 +187,7 @@ impl QemuInner {
                             cmdline.add_block_device(
                                 device_id.as_str(),
                                 &path_on_host,
+                                vmdk.as_ref(),
                                 is_direct,
                                 is_readonly,
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
@@ -244,8 +248,9 @@ impl QemuInner {
                 }
                 DeviceType::VfioModern(vfio_dev) => {
                     // Snapshot parameters under the lock; release before doing cmdline work.
-                    let (device_type, ap_sysfs_path, devices, bus_port_id) = {
+                    let (vfio_device_id, device_type, ap_sysfs_path, devices, iommufd, bus_port_id) = {
                         let vfio_device = vfio_dev.lock().await;
+                        let vfio_device_id = vfio_device.device_id.clone();
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
@@ -259,9 +264,11 @@ impl QemuInner {
                             .map(|g| g.devices.clone())
                             .unwrap_or_else(|| vfio_device.device.devices.clone());
                         (
+                            vfio_device_id,
                             device_type,
                             ap_sysfs_path,
                             devices,
+                            vfio_device.device.iommufd.clone(),
                             vfio_device.config.bus_port_id.clone(),
                         )
                     };
@@ -276,15 +283,24 @@ impl QemuInner {
                         );
                     } else {
                         // PCI cold plug devices
-                        for dev in devices.iter() {
+                        for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
 
-                            let vfio_cfg = VfioDeviceConfig::new(
+                            let mut vfio_cfg = VfioDeviceConfig::new(
                                 host_bdf,
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
                             .with_vfio_bus(bus_port_id.0.clone());
+                            if let (Some(iommufd), Some(cdev)) =
+                                (iommufd.as_ref(), dev.vfio_cdev.as_ref())
+                            {
+                                vfio_cfg = vfio_cfg.with_device_fds(
+                                    &iommufd.iommufd_dev,
+                                    &cdev.devnode,
+                                    format!("vfio-{vfio_device_id}-{index}"),
+                                );
+                            }
 
                             cmdline.add_pcie_vfio_device(vfio_cfg)?;
                         }
@@ -373,9 +389,16 @@ impl QemuInner {
         let console_socket_path = Path::new(&jailer_root).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
-        info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
+        let qemu_args = cmdline.build().await?;
+        info!(sl!(), "qemu args: {}", qemu_args.join(" "));
         let mut command = Command::new(&self.config.path);
-        command.args(cmdline.build().await?);
+        command.args(qemu_args);
+        let ccw_subchannel = cmdline.take_ccw_subchannel();
+        let block_fdsets = cmdline.take_block_fdsets();
+        let has_memory_hotplug_region = cmdline.has_memory_hotplug_region();
+        let memlock_limit = cmdline.requires_memlock().then(|| {
+            memlock_limit_with_headroom(megs_to_bytes(self.config.memory_info.default_memory))
+        });
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
@@ -411,6 +434,10 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
+                    if let Some(limit) = memlock_limit {
+                        set_memlock_rlimit(limit)
+                            .map_err(|err| io::Error::other(format!("{err:#}")))?;
+                    }
                     set_process_credentials(user)
                         .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
@@ -420,6 +447,9 @@ impl QemuInner {
         }
 
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
+        // QEMU inherited its startup descriptors during spawn. Drop the
+        // privileged shim's copies immediately; QEMU owns the fdsets from here.
+        drop(cmdline);
         let stderr = qemu_process.stderr.take().unwrap();
         self.qemu_process = Mutex::new(Some(qemu_process));
 
@@ -432,13 +462,26 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
+        if self.config.debug_info.enable_debug {
+            tokio::spawn(async move {
+                let stream_result = try_open_qemu_console(&console_socket_path).await;
+                if let Ok(stream) = stream_result {
+                    if let Err(err) = log_qemu_console(stream).await {
+                        warn!(sl!(), "error logging qemu console: {:?}", err);
+                    }
+                }
+            });
+        }
+
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
             Ok(mut qmp) => {
-                if let Some(subchannel) = cmdline.take_ccw_subchannel() {
+                if let Some(subchannel) = ccw_subchannel {
                     qmp.set_ccw_subchannel(subchannel);
                 }
+                qmp.verify_block_fdsets(block_fdsets)?;
                 // Setup virtio-mem device if enabled.  It requires a memory
                 // hotplug region (maxmem) on the QEMU command line; that region
                 // is not reserved for every configuration (e.g. on s390x the
@@ -449,7 +492,7 @@ impl QemuInner {
                 // boot memory -- instead of failing VM start with
                 // "the configuration is not prepared for memory devices".
                 if self.config.memory_info.enable_virtio_mem {
-                    if cmdline.has_memory_hotplug_region() {
+                    if has_memory_hotplug_region {
                         qmp.setup_virtio_mem(
                             self.config.memory_info.default_memory,
                             self.config.memory_info.default_maxmemory,
@@ -482,12 +525,6 @@ impl QemuInner {
                 .await
                 .context("boot from template")?;
             self.resume_vm().context("resume vm")?;
-        }
-
-        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
-        if self.config.debug_info.enable_debug {
-            let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
-            tokio::spawn(log_qemu_console(stream));
         }
 
         Ok(())
@@ -1013,6 +1050,22 @@ fn set_process_credentials(user: &RootlessUser) -> Result<()> {
     )
 }
 
+fn memlock_limit_with_headroom(guest_memory: u64) -> u64 {
+    guest_memory.saturating_add(guest_memory / MEMLOCK_HEADROOM_DIVISOR)
+}
+
+fn set_memlock_rlimit(memlock_limit: u64) -> Result<()> {
+    let limit = libc::rlimit {
+        rlim_cur: memlock_limit,
+        rlim_max: memlock_limit,
+    };
+    let result = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &limit) };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error()).context("set RLIMIT_MEMLOCK failed");
+    }
+    Ok(())
+}
+
 fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
     user: &RootlessUser,
     set_groups_fn: SetGroups,
@@ -1028,6 +1081,32 @@ where
     set_gid_fn(user.gid).context("setgid failed")?;
     set_uid_fn(user.uid).context("setuid failed")?;
     Ok(())
+}
+
+async fn try_open_qemu_console(console_socket_path: &Path) -> Result<UnixStream> {
+    const DEADLINE_SECS: u64 = 5;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(DEADLINE_SECS))
+        .ok_or_else(|| anyhow!("timeout overflow"))?;
+    let console_stream = loop {
+        match UnixStream::connect(console_socket_path.as_os_str()).await {
+            Ok(stream) => break stream,
+            Err(err) => {
+                if Instant::now() >= deadline {
+                    warn!(
+                        sl!(),
+                        "couldn't open qemu console at {:#?} in {} seconds: {}",
+                        console_socket_path,
+                        DEADLINE_SECS,
+                        err
+                    );
+                    return Err(anyhow!("couldn't open qemu console: {err}"));
+                }
+                sleep(Duration::from_millis(50)).await;
+            }
+        };
+    };
+    Ok(console_stream)
 }
 
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
@@ -1199,7 +1278,7 @@ impl QemuInner {
                     is_direct,
                     is_readonly,
                     no_drop,
-                    block_format,
+                    vmdk,
                     discard_unmap,
                     driver,
                     logical_sector_size,
@@ -1216,7 +1295,7 @@ impl QemuInner {
                         ),
                         cfg.is_readonly,
                         cfg.no_drop,
-                        cfg.format.clone(),
+                        cfg.vmdk.clone(),
                         cfg.discard_unmap,
                         self.config.blockdev_info.block_device_driver.clone(),
                         cfg.logical_sector_size,
@@ -1253,7 +1332,7 @@ impl QemuInner {
                         discard_unmap,
                         logical_sector_size,
                         physical_sector_size,
-                        &block_format,
+                        vmdk.as_ref(),
                         iothread,
                     )
                     .context("hotplug block device")?;
@@ -1436,6 +1515,12 @@ mod tests {
             .await
             .unwrap()
             .is_network_device_hotplug_supported());
+    }
+
+    #[test]
+    fn test_memlock_limit_adds_headroom() {
+        assert_eq!(memlock_limit_with_headroom(10 * 1024), 11 * 1024);
+        assert_eq!(memlock_limit_with_headroom(u64::MAX), u64::MAX);
     }
 
     #[rstest]

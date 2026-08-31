@@ -115,7 +115,7 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	} else {
 		vol, err = dv.createVolume(volumeID, req.GetName(), capacity, kind)
 		if err != nil {
-			klog.Errorf("created volume %s at path %s failed with error: %v", vol.VolID, vol.VolPath, err.Error())
+			klog.Errorf("failed to create volume %s: %v", volumeID, err)
 			return nil, err
 		}
 		klog.Infof("created volume %s at path %s", vol.VolID, vol.VolPath)

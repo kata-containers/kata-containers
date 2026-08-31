@@ -27,6 +27,9 @@ self-hosted-runner:
     - s390x-large
     - tdx
     - ubuntu-24.04-arm
+    # GitHub hosted, but missing from the hard coded list of the actionlint
+    # release we pin. Drop once rhysd/actionlint#683 reaches a release.
+    - ubuntu-26.04
 
 paths:
   .github/workflows/**/*.{yml,yaml}:

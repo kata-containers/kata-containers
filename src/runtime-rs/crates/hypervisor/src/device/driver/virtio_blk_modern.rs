@@ -56,26 +56,58 @@ impl std::fmt::Display for BlockDeviceAio {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum BlockDeviceFormat {
-    #[default]
-    Raw,
-    Vmdk,
+const MAX_VMDK_EXTENT_SECTORS: u64 = 0x8000_0000 >> 9;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VmdkExtent {
+    pub path_on_host: String,
+    pub sectors: u64,
+    pub file_offset: u64,
 }
 
-impl std::fmt::Display for BlockDeviceFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let to_string = match *self {
-            BlockDeviceFormat::Raw => "raw".to_string(),
-            BlockDeviceFormat::Vmdk => "vmdk".to_string(),
-        };
-        write!(f, "{to_string}")
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VmdkConfig {
+    pub extents: Vec<VmdkExtent>,
+}
+
+impl VmdkConfig {
+    pub fn push_extent(&mut self, path_on_host: &str, sectors: u64, file_offset: u64) {
+        self.extents.push(VmdkExtent {
+            path_on_host: path_on_host.to_string(),
+            sectors,
+            file_offset,
+        });
+    }
+
+    pub fn push_extent_chunked(&mut self, path_on_host: &str, total_sectors: u64) {
+        let mut remaining = total_sectors;
+        let mut file_offset = 0;
+        while remaining > 0 {
+            let sectors = remaining.min(MAX_VMDK_EXTENT_SECTORS);
+            self.push_extent(path_on_host, sectors, file_offset);
+            file_offset += sectors;
+            remaining -= sectors;
+        }
+    }
+
+    pub fn total_sectors(&self) -> Option<u64> {
+        self.extents
+            .iter()
+            .try_fold(0_u64, |total, extent| total.checked_add(extent.sectors))
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfigModern {
-    /// Path of the drive.
+    /// Actual host path for a raw block source; every backend consumes this
+    /// value according to its block transport. When `vmdk` is present, QEMU is
+    /// currently the only backend that consumes the structured layout. In that
+    /// case, this is a reserved descriptor path used as the block-device key and
+    /// for logging; QEMU neither creates nor opens a file at this path. A future
+    /// backend may instead materialize and open its descriptor here. If
+    /// structured layouts gain more consumers, replace this field and `vmdk`
+    /// with explicit source variants distinguishing a raw host path from a
+    /// VMDK descriptor path and layout.
     pub path_on_host: String,
 
     /// If set to true, the drive is opened in read-only mode. Otherwise, the
@@ -88,8 +120,12 @@ pub struct BlockConfigModern {
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
 
-    /// raw, vmdk, etc. And default to raw if not set.
-    pub format: BlockDeviceFormat,
+    /// Structured VMDK layout, currently consumed only by QEMU. When present,
+    /// the QEMU backend opens the backing extents in the shim, renders an
+    /// anonymous descriptor containing fdset paths, and passes it to QEMU by
+    /// file descriptor. No descriptor file is created at `path_on_host`.
+    /// Without a structured layout, the block source is raw.
+    pub vmdk: Option<VmdkConfig>,
 
     /// Specifies cache-related options for block devices.
     /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.

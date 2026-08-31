@@ -1806,6 +1806,12 @@ fn generate_kernel_params_drop_in(
         additional_params.push(format!("agent.no_proxy={}", no_proxy));
     }
 
+    // NVRC keeps nv-hostengine and dcgm-exporter switched off until the guest is
+    // asked for them, and the request travels on the kernel command line.
+    if config.nvrc_enable_dcgm.iter().any(|s| s == shim) {
+        additional_params.push("nvrc.dcgm=on".to_string());
+    }
+
     // Guest debug kernel cmdline params (debug variant runtimes only)
     if include_debug_params {
         additional_params.push("agent.log=debug".to_string());
@@ -2436,9 +2442,11 @@ mod tests {
         assert!(content.contains("debug_console_enabled = true"));
     }
 
-    #[test]
-    fn test_generate_kernel_params_drop_in_guest_debug_only_when_requested() {
-        let config = crate::config::Config {
+    /// A Config with no source of kernel params of its own, so each test can
+    /// switch on just the one it is about. dest_dir points at a path with no
+    /// installed configuration, which makes the base params come out empty.
+    fn kernel_params_config() -> crate::config::Config {
+        crate::config::Config {
             node_name: "test".to_string(),
             debug: true,
             shims_for_arch: vec!["qemu".to_string()],
@@ -2447,6 +2455,7 @@ mod tests {
             snapshotter_handler_mapping_for_arch: None,
             agent_https_proxy: None,
             agent_no_proxy: None,
+            nvrc_enable_dcgm: vec![],
             pull_type_mapping_for_arch: None,
             installation_prefix: None,
             multi_install_suffix: None,
@@ -2472,7 +2481,12 @@ mod tests {
             startup_taints: vec![],
             container_runtime_version: None,
             k8s_distribution: None,
-        };
+        }
+    }
+
+    #[test]
+    fn test_generate_kernel_params_drop_in_guest_debug_only_when_requested() {
+        let config = kernel_params_config();
 
         let without_debug = generate_kernel_params_drop_in(&config, "qemu", false).unwrap();
         assert!(without_debug.is_empty());
@@ -2480,6 +2494,24 @@ mod tests {
         let with_debug = generate_kernel_params_drop_in(&config, "qemu", true).unwrap();
         assert!(with_debug.contains("agent.log=debug"));
         assert!(with_debug.contains("initcall_debug"));
+    }
+
+    #[test]
+    fn test_generate_kernel_params_drop_in_dcgm_only_for_listed_shims() {
+        let mut config = kernel_params_config();
+        config.shims_for_arch = vec![
+            "qemu-nvidia-gpu".to_string(),
+            "qemu-nvidia-gpu-tdx".to_string(),
+        ];
+        config.nvrc_enable_dcgm = vec!["qemu-nvidia-gpu".to_string()];
+
+        let enabled = generate_kernel_params_drop_in(&config, "qemu-nvidia-gpu", false).unwrap();
+        assert!(enabled.contains("nvrc.dcgm=on"));
+
+        // A GPU shim left out of the set is a GPU shim without DCGM, and with
+        // nothing else to say it writes no drop-in at all.
+        let other = generate_kernel_params_drop_in(&config, "qemu-nvidia-gpu-tdx", false).unwrap();
+        assert!(other.is_empty());
     }
 
     #[rstest]
