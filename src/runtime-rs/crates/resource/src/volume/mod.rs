@@ -8,6 +8,7 @@ pub(crate) mod block_emptydir_volume;
 mod block_volume;
 mod default_volume;
 mod ephemeral_volume;
+pub mod erofs_volume;
 pub mod hugepage;
 mod local_volume;
 mod share_fs_volume;
@@ -40,6 +41,11 @@ pub struct VolumeContext<'a> {
     pub emptydir_mode: &'a str,
     pub fs_sharing_supported: bool,
     pub block_device_discard_supported: bool,
+    /// The erofs_volumes experimental feature, which takes every mount the
+    /// guest cannot otherwise see off copy_file. Everything it changes stays
+    /// behind it, since generated agent policies still expect the copy_file
+    /// layout.
+    pub erofs_volumes: bool,
 }
 
 #[async_trait]
@@ -154,6 +160,18 @@ impl VolumeResource {
                 Arc::new(
                     hugepage::Hugepage::new(m, hugepage_limits, options)
                         .with_context(|| format!("handle hugepages {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && share_fs_volume::is_share_fs_volume(m)
+                && erofs_volume::is_erofs_candidate(m, read_only)
+            {
+                // No fallback to copy_file: quietly falling back would hand
+                // back the attack surface this was turned on to remove.
+                Arc::new(
+                    erofs_volume::ErofsVolume::new(d, m, sid, cid)
+                        .await
+                        .with_context(|| format!("new erofs volume {m:?}"))?,
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
