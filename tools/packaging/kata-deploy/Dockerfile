@@ -96,6 +96,10 @@ COPY --from=artifact-stage /opt/prebuilt/usr/bin/kata-deploy /usr/bin/kata-deplo
 COPY --from=runtime-assembler /output/lib/ /lib/
 COPY --from=runtime-assembler /output/lib64/ /lib64/
 
+# Copy the SELinux policy module, as source CIL so the node's own secilc
+# compiles it and one file works across selinux-policy versions.
+COPY tools/packaging/kata-deploy/selinux/kata-deploy.cil ${DESTINATION}/selinux/
+
 # Copy nydus snapshotter
 COPY tools/packaging/kata-deploy/nydus-snapshotter ${DESTINATION}/nydus-snapshotter
 COPY --from=artifact-stage /opt/prebuilt/opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
