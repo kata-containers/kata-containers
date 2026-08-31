@@ -276,6 +276,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_image_guest_pull_count() {
+        runtests("createcontainer/image_guest_pull_count").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_sysctls() {
         runtests("createcontainer/sysctls").await;
     }
