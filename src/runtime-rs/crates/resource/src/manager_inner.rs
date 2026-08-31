@@ -45,7 +45,10 @@ use crate::{
     resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
     share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, NydusShareFs, ShareFs},
-    volume::{utils::is_block_device_readonly, Volume, VolumeResource},
+    volume::{
+        erofs_volume::EROFS_VOLUMES_FEATURE, utils::is_block_device_readonly, Volume,
+        VolumeResource,
+    },
     ResourceConfig, ResourceUpdateOp,
 };
 
@@ -506,6 +509,10 @@ impl ResourceManagerInner {
             emptydir_mode: &self.toml_config.runtime.emptydir_mode,
             fs_sharing_supported: capabilities.is_fs_sharing_supported(),
             block_device_discard_supported: capabilities.is_block_device_discard_supported(),
+            erofs_volumes: self
+                .toml_config
+                .runtime
+                .is_experiment_enabled(EROFS_VOLUMES_FEATURE),
         };
         self.volume_resource.handler_volumes(&ctx, cid, spec).await
     }
