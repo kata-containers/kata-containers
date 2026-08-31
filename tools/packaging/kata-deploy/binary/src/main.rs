@@ -59,6 +59,11 @@ enum Action {
     Install,
     Cleanup,
     Reset,
+    /// Load the SELinux policy module the confined stages need. Runs first in
+    /// both the install and the cleanup pipeline, privileged, since a stage
+    /// asking for a type the node does not define cannot start at all.
+    #[clap(name = "install-stage-selinux-policy")]
+    InstallStageSelinuxPolicy,
     /// Stage 0 of a staged (JobSet) install: load the host kernel modules the
     /// enabled runtimes and snapshotters need. The only privileged stage, and
     /// the only one the DaemonSet path does not share.
@@ -156,7 +161,8 @@ async fn main() -> Result<()> {
     let config = config::Config::from_env()?;
     if matches!(
         args.action,
-        Action::InstallStageLoadKernelModules
+        Action::InstallStageSelinuxPolicy
+            | Action::InstallStageLoadKernelModules
             | Action::InstallStageHostCheck
             | Action::InstallStageArtifacts
             | Action::InstallStageCri
@@ -169,6 +175,7 @@ async fn main() -> Result<()> {
         Action::Install => "install",
         Action::Cleanup => "cleanup",
         Action::Reset => "reset",
+        Action::InstallStageSelinuxPolicy => "install-stage-selinux-policy",
         Action::InstallStageLoadKernelModules => "install-stage-load-kernel-modules",
         Action::InstallStageHostCheck => "install-stage-host-check",
         Action::InstallStageArtifacts => "install-stage-artifacts",
@@ -196,6 +203,9 @@ async fn main() -> Result<()> {
     let runtime = match args.action {
         Action::InternalPostInstallWait => std::env::var(DETECTED_RUNTIME_ENV)
             .with_context(|| format!("missing {DETECTED_RUNTIME_ENV} env var after re-exec"))?,
+        // Loading a policy module is the same work whatever the CRI is, and this
+        // runs before every stage that would need one detected.
+        Action::InstallStageSelinuxPolicy => String::new(),
         _ => {
             let r = runtime::get_container_runtime(&config).await?;
             info!("Detected container runtime: {r}");
@@ -328,6 +338,10 @@ async fn main() -> Result<()> {
         // pipeline as a short-lived Job/initContainer and exits. The DaemonSet
         // path does not use these directly; it goes through `install` above,
         // which composes the same stage functions.
+        Action::InstallStageSelinuxPolicy => {
+            install_stage_selinux_policy()?;
+            info!("Install SELinux-policy stage completed, exiting");
+        }
         Action::InstallStageLoadKernelModules => {
             install_stage_load_kernel_modules(&config)?;
             info!("Install kernel-module stage completed, exiting");
@@ -864,6 +878,212 @@ fn run_host_modprobe(modprobe: &str, module: &str) -> Result<()> {
         "host modprobe failed for module {module} (status {}): stdout={stdout:?}, stderr={stderr:?}",
         output.status
     )
+}
+
+/// The policy module shipped in this image, and the domains the chart names in
+/// each stage's `seLinuxOptions`.
+const SELINUX_POLICY_PATH: &str = "/opt/kata-artifacts/selinux/kata-deploy.cil";
+const SELINUX_POLICY_DOMAINS: &[&str] = &[
+    "kata_deploy_check_t",
+    "kata_deploy_artifacts_t",
+    "kata_deploy_cri_t",
+    "kata_deploy_node_binaries_t",
+    "kata_deploy_t",
+];
+
+/// Load the SELinux policy module the confined stages need.
+///
+/// Installed with the *host's* own `semodule`, for the same reason the kernel
+/// modules use the host's `modprobe`: the policy store belongs to the node and
+/// only the node's tooling matches its version.
+fn install_stage_selinux_policy() -> Result<()> {
+    let Some(selinuxfs) = host_selinuxfs() else {
+        // Not an error, so the chart's flag can be left on for a mixed cluster:
+        // runc ignores labels where SELinux is off.
+        info!("install (selinux-policy): SELinux is disabled on this node, nothing to load");
+        return Ok(());
+    };
+    info!(
+        "install (selinux-policy): SELinux is enabled (selinuxfs at {})",
+        selinuxfs.display()
+    );
+
+    let semodule = find_host_semodule()?;
+
+    // The node has one policy store, so two releases installing at once would
+    // drive it concurrently.
+    let _node_lock = acquire_node_mutation_lock()?;
+
+    let staged = stage_selinux_policy_on_host()?;
+    // Unconditional rather than skipped when the module looks present: a newer
+    // image may carry new rules under the same domain names, and `semodule -i`
+    // is idempotent.
+    let result = run_host_semodule(&semodule, &staged.chroot_path);
+    if let Err(error) = std::fs::remove_file(&staged.staged_path) {
+        log::debug!(
+            "install (selinux-policy): could not remove staged policy {}: {error}",
+            staged.staged_path.display()
+        );
+    }
+    result?;
+
+    verify_selinux_domains(&selinuxfs)
+}
+
+/// Where the node's selinuxfs is, or `None` when SELinux is disabled.
+///
+/// One kernel-wide filesystem, so the container's own view of it is the node's;
+/// the host mount is tried first in case a runtime stops offering a writable one.
+fn host_selinuxfs() -> Option<std::path::PathBuf> {
+    ["/host/sys/fs/selinux", "/sys/fs/selinux"]
+        .iter()
+        .map(std::path::PathBuf::from)
+        .find(|path| path.join("enforce").exists())
+}
+
+/// The path is returned as it looks after the chroot, not as mounted here.
+fn find_host_semodule() -> Result<String> {
+    const CANDIDATES: &[&str] = &[
+        "/usr/sbin/semodule",
+        "/sbin/semodule",
+        "/usr/bin/semodule",
+        "/bin/semodule",
+    ];
+
+    CANDIDATES
+        .iter()
+        .find(|path| host_path_is_file(std::path::Path::new(HOST_ROOT), std::path::Path::new(path)))
+        .map(|path| (*path).to_string())
+        .with_context(|| {
+            format!(
+                "this node has SELinux enabled but no semodule under {HOST_ROOT}; install \
+                 policycoreutils on the node, or deploy with selinux.enabled=false and accept \
+                 that the install needs privileged containers instead"
+            )
+        })
+}
+
+/// The policy file as this container sees it, and as the chroot will.
+struct StagedPolicy {
+    staged_path: std::path::PathBuf,
+    chroot_path: String,
+}
+
+/// Copy the policy somewhere the chroot can reach, since the host's `semodule`
+/// cannot see this image's filesystem.
+fn stage_selinux_policy_on_host() -> Result<StagedPolicy> {
+    const CHROOT_DIR: &str = "/run/kata-deploy";
+    const FILE_NAME: &str = "kata-deploy.cil";
+
+    let dir = std::path::Path::new(HOST_ROOT).join(CHROOT_DIR.trim_start_matches('/'));
+    std::fs::create_dir_all(&dir).with_context(|| {
+        format!(
+            "failed to create the policy staging directory {}",
+            dir.display()
+        )
+    })?;
+    let staged_path = dir.join(FILE_NAME);
+    std::fs::copy(SELINUX_POLICY_PATH, &staged_path).with_context(|| {
+        format!(
+            "failed to stage the SELinux policy {SELINUX_POLICY_PATH} at {}",
+            staged_path.display()
+        )
+    })?;
+
+    Ok(StagedPolicy {
+        staged_path,
+        chroot_path: format!("{CHROOT_DIR}/{FILE_NAME}"),
+    })
+}
+
+fn run_host_semodule(semodule: &str, policy: &str) -> Result<()> {
+    use std::os::unix::process::CommandExt;
+
+    let host_root = std::ffi::CString::new(HOST_ROOT).expect("HOST_ROOT contains no NUL");
+    let root_dir = std::ffi::CString::new("/").expect("root path contains no NUL");
+    let mut command = std::process::Command::new(semodule);
+    command.arg("--install").arg(policy);
+
+    unsafe {
+        command.pre_exec(move || {
+            if libc::chroot(host_root.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::chdir(root_dir.as_ptr()) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+
+    info!("install (selinux-policy): loading {policy} with the host's {semodule}");
+    let output = command
+        .output()
+        .with_context(|| format!("failed to execute host {semodule} for policy {policy}"))?;
+    if output.status.success() {
+        info!("install (selinux-policy): policy module loaded");
+        return Ok(());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    anyhow::bail!(
+        "host semodule failed to install {policy} (status {}): stdout={stdout:?}, stderr={stderr:?}",
+        output.status
+    )
+}
+
+/// Confirm every domain the chart asks for now resolves, so that a stage which
+/// would otherwise fail with an opaque runc error fails here by name instead.
+///
+/// Asked of the kernel through selinuxfs, which needs no `seinfo`: nodes are not
+/// obliged to carry setools, and RHEL 9 does not install it.
+fn verify_selinux_domains(selinuxfs: &std::path::Path) -> Result<()> {
+    let context_path = selinuxfs.join("context");
+    // An unwritable interface would read as "every domain missing", so check it
+    // before trusting its rejections.
+    if let Err(error) = std::fs::OpenOptions::new().write(true).open(&context_path) {
+        log::warn!(
+            "install (selinux-policy): cannot use {} to verify the policy's domains ({error}); \
+             the module loaded, but a stage requesting a missing domain will fail with an opaque \
+             runc error instead of a clear one here",
+            context_path.display()
+        );
+        return Ok(());
+    }
+
+    let missing: Vec<&str> = SELINUX_POLICY_DOMAINS
+        .iter()
+        .copied()
+        .filter(|domain| !selinux_context_is_valid(&context_path, domain))
+        .collect();
+
+    anyhow::ensure!(
+        missing.is_empty(),
+        "the SELinux policy module loaded but does not define {}; the node's policy is missing \
+         what the install stages ask for, so they would fail to start. This means the loaded \
+         module is not the one this image ships: check for a kata-deploy module installed at a \
+         higher priority with `semodule --list-modules=full`",
+        missing.join(", ")
+    );
+
+    info!(
+        "install (selinux-policy): all {} domains resolve",
+        SELINUX_POLICY_DOMAINS.len()
+    );
+    Ok(())
+}
+
+fn selinux_context_is_valid(context_path: &std::path::Path, domain: &str) -> bool {
+    use std::io::Write;
+
+    let Ok(mut file) = std::fs::OpenOptions::new().write(true).open(context_path) else {
+        return false;
+    };
+    // A whole context, as the kernel validates no single field of one. The role
+    // and level are those the chart pairs each domain with.
+    file.write_all(format!("system_u:system_r:{domain}:s0").as_bytes())
+        .is_ok()
 }
 
 /// Install stage 1 (host-check): validate that this node can support a Kata
@@ -1996,6 +2216,7 @@ mod tests {
     #[case("install", Action::Install)]
     #[case("cleanup", Action::Cleanup)]
     #[case("reset", Action::Reset)]
+    #[case("install-stage-selinux-policy", Action::InstallStageSelinuxPolicy)]
     #[case(
         "install-stage-load-kernel-modules",
         Action::InstallStageLoadKernelModules
