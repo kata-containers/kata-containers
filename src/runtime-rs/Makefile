@@ -1062,6 +1062,10 @@ static-checks-build: $(GENERATED_FILES)
 
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
+ifeq ($(TRIPLE),loongarch64-unknown-linux-musl)
+        EXTRA_RUSTFLAGS += -C target-feature=+crt-static
+endif
+
 $(TARGET_PATH): $(SOURCES) | show-summary
 	@$(RELEASE_CARGO_PROFILE_ENV) RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
