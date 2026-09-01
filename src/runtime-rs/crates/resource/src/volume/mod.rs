@@ -11,6 +11,7 @@ mod ephemeral_volume;
 pub mod erofs_volume;
 pub mod hugepage;
 mod local_volume;
+mod sandbox_file_volume;
 mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
@@ -46,6 +47,9 @@ pub struct VolumeContext<'a> {
     /// behind it, since generated agent policies still expect the copy_file
     /// layout.
     pub erofs_volumes: bool,
+    /// Container mount destinations the agent materialised during
+    /// create_sandbox, and which the containers can therefore share.
+    pub sandbox_files: &'a [String],
 }
 
 #[async_trait]
@@ -160,6 +164,16 @@ impl VolumeResource {
                 Arc::new(
                     hugepage::Hugepage::new(m, hugepage_limits, options)
                         .with_context(|| format!("handle hugepages {m:?}"))?,
+                )
+            } else if ctx.erofs_volumes
+                && share_fs.is_none()
+                && sandbox_file_volume::is_sandbox_file_mount(m, ctx.sandbox_files)
+            {
+                // The agent wrote this file during create_sandbox, so there is
+                // nothing to transfer.
+                Arc::new(
+                    sandbox_file_volume::SandboxFileVolume::new(m)
+                        .with_context(|| format!("new sandbox file volume {m:?}"))?,
                 )
             } else if ctx.erofs_volumes
                 && share_fs.is_none()

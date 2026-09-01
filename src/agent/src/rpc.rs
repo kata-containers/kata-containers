@@ -134,6 +134,9 @@ const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
 const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-restore";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
 const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+/// Holds the sandbox-scoped files the containers share, alongside the
+/// resolv.conf that setup_guest_dns() writes.
+const KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox";
 
 const ERR_CANNOT_GET_WRITER: &str = "Cannot get writer";
 const ERR_INVALID_BLOCK_SIZE: &str = "Invalid block size";
@@ -1578,6 +1581,8 @@ impl agent_ttrpc::AgentService for AgentService {
             }
         }
 
+        setup_guest_hostname(&req.hostname).map_ttrpc_err(same)?;
+
         setup_guest_dns(sl(), &req.dns).map_ttrpc_err(same)?;
         {
             let mut s = self.sandbox.lock().await;
@@ -2573,6 +2578,23 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     )?;
 
     Ok(olddir)
+}
+
+// The host hands every container in the pod a bind mount of one per-pod
+// hostname file, so write the equivalent from the hostname the request
+// already carries and let the containers point at that.
+fn setup_guest_hostname(hostname: &str) -> Result<()> {
+    if hostname.is_empty() {
+        return Ok(());
+    }
+
+    let dir = Path::new(KATA_GUEST_SANDBOX_DIR);
+    fs::create_dir_all(dir)?;
+
+    // Trailing newline to match what containerd writes on the host.
+    fs::write(dir.join("hostname"), format!("{hostname}\n"))?;
+
+    Ok(())
 }
 
 fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
