@@ -110,6 +110,9 @@ func (s *Sandbox) DeleteContainer(ctx context.Context, contID string) (vc.VCCont
 
 // StartContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StartContainer(ctx context.Context, contID string) (vc.VCContainer, error) {
+	if s.StartContainerFunc != nil {
+		return s.StartContainerFunc(contID)
+	}
 	return &Container{}, nil
 }
 
@@ -120,11 +123,17 @@ func (s *Sandbox) StopContainer(ctx context.Context, contID string, force bool) 
 
 // KillContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) KillContainer(ctx context.Context, contID string, signal syscall.Signal, all bool) error {
+	if s.KillContainerFunc != nil {
+		return s.KillContainerFunc(contID, signal, all)
+	}
 	return nil
 }
 
 // StatusContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
+	if s.StatusContainerFunc != nil {
+		return s.StatusContainerFunc(contID)
+	}
 	return vc.ContainerStatus{}, nil
 }
 
@@ -138,11 +147,17 @@ func (s *Sandbox) StatsContainer(ctx context.Context, contID string) (vc.Contain
 
 // PauseContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) PauseContainer(ctx context.Context, contID string) error {
+	if s.PauseContainerFunc != nil {
+		return s.PauseContainerFunc(contID)
+	}
 	return nil
 }
 
 // ResumeContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) ResumeContainer(ctx context.Context, contID string) error {
+	if s.ResumeContainerFunc != nil {
+		return s.ResumeContainerFunc(contID)
+	}
 	return nil
 }
 
