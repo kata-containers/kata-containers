@@ -445,19 +445,21 @@ impl QemuInner {
             });
         }
 
+        let exit_notify = self
+            .exit_notify
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow!("no exit notify"))?;
+
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
         // QEMU inherited its startup descriptors during spawn. Drop the
         // privileged shim's copies immediately; QEMU owns the fdsets from here.
         drop(cmdline);
         let stderr = qemu_process.stderr.take().unwrap();
         self.qemu_process = Mutex::new(Some(qemu_process));
+        self.exit_notify = None;
 
         info!(sl!(), "qemu process started");
-
-        let exit_notify: mpsc::Sender<()> = self
-            .exit_notify
-            .take()
-            .ok_or_else(|| anyhow!("no exit notify"))?;
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
@@ -475,58 +477,70 @@ impl QemuInner {
 
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
-        match Qmp::new(&qmp_socket_path) {
-            Ok(mut qmp) => {
-                if let Some(subchannel) = ccw_subchannel {
-                    qmp.set_ccw_subchannel(subchannel);
-                }
-                qmp.verify_block_fdsets(block_fdsets)?;
-                // Setup virtio-mem device if enabled.  It requires a memory
-                // hotplug region (maxmem) on the QEMU command line; that region
-                // is not reserved for every configuration (e.g. on s390x the
-                // shared memory-backend used with a virtio-blk-ccw rootfs zeroes
-                // maxmem/slots, and static resource management sizes the VM
-                // upfront).  Skip the setup in that case -- like other static
-                // sizing arches (e.g. arm64) the guest simply runs with its
-                // boot memory -- instead of failing VM start with
-                // "the configuration is not prepared for memory devices".
-                if self.config.memory_info.enable_virtio_mem {
-                    if has_memory_hotplug_region {
-                        qmp.setup_virtio_mem(
-                            self.config.memory_info.default_memory,
-                            self.config.memory_info.default_maxmemory,
-                            &self.config.machine_info.machine_type,
-                            self.config.shared_fs.shared_fs.as_deref(),
-                        )
-                        .context("Failed to setup virtio-mem during VM initialization")?;
-                    } else {
-                        info!(
-                            sl!(),
-                            "virtio-mem enabled but no memory hotplug region (maxmem) was reserved; skipping virtio-mem setup"
-                        );
-                    }
-                }
-                let bridge_count = self.config.device_info.default_bridges;
-                if bridge_count > 0 {
-                    qmp.init_pci_bridges(bridge_count);
-                }
-                self.qmp = Some(qmp);
+        let configure_spawned_qemu: Result<()> = async {
+            let mut qmp = Qmp::new(&qmp_socket_path).context("couldn't initialise QMP")?;
+            if let Some(subchannel) = ccw_subchannel {
+                qmp.set_ccw_subchannel(subchannel);
             }
-            Err(e) => {
-                error!(sl!(), "couldn't initialise QMP: {:?}", e);
-                return Err(e);
+            qmp.verify_block_fdsets(block_fdsets)?;
+
+            // Setup virtio-mem device if enabled.  It requires a memory
+            // hotplug region (maxmem) on the QEMU command line; that region
+            // is not reserved for every configuration (e.g. on s390x the
+            // shared memory-backend used with a virtio-blk-ccw rootfs zeroes
+            // maxmem/slots, and static resource management sizes the VM
+            // upfront).  Skip the setup in that case -- like other static
+            // sizing arches (e.g. arm64) the guest simply runs with its
+            // boot memory -- instead of failing VM start with
+            // "the configuration is not prepared for memory devices".
+            if self.config.memory_info.enable_virtio_mem {
+                if has_memory_hotplug_region {
+                    qmp.setup_virtio_mem(
+                        self.config.memory_info.default_memory,
+                        self.config.memory_info.default_maxmemory,
+                        &self.config.machine_info.machine_type,
+                        self.config.shared_fs.shared_fs.as_deref(),
+                    )
+                    .context("Failed to setup virtio-mem during VM initialization")?;
+                } else {
+                    info!(
+                        sl!(),
+                        "virtio-mem enabled but no memory hotplug region (maxmem) was reserved; skipping virtio-mem setup"
+                    );
+                }
+            }
+            let bridge_count = self.config.device_info.default_bridges;
+            if bridge_count > 0 {
+                qmp.init_pci_bridges(bridge_count);
+            }
+            self.qmp = Some(qmp);
+
+            // Start the virtual machine by restoring it from a VM template if enabled.
+            if self.config.vm_template.boot_from_template {
+                self.boot_from_template()
+                    .await
+                    .context("boot from template")?;
+                self.resume_vm().context("resume vm")?;
+            }
+
+            Ok(())
+        }
+        .await;
+
+        match configure_spawned_qemu {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                error!(sl!(), "QEMU startup failed: {err:#}");
+                self.qmp = None;
+                if let Err(cleanup_err) = self.cleanup().await {
+                    error!(
+                        sl!(),
+                        "failed to clean up after QEMU startup error: {cleanup_err:#}"
+                    );
+                }
+                Err(err)
             }
         }
-
-        // Start the virtual machine by restoring it from a VM template if enabled.
-        if self.config.vm_template.boot_from_template {
-            self.boot_from_template()
-                .await
-                .context("boot from template")?;
-            self.resume_vm().context("resume vm")?;
-        }
-
-        Ok(())
     }
 
     async fn boot_from_template(&mut self) -> Result<()> {
@@ -736,12 +750,33 @@ impl QemuInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
+        self.stop_and_reap_qemu_if_present().await;
         let vm_path = [
             prefix_with_rootless_dir(KATA_PATH).as_str(),
             self.id.as_str(),
         ]
         .join("/");
         vm_cleanup(&self.config, vm_path.as_str())
+    }
+
+    async fn stop_and_reap_qemu_if_present(&self) {
+        let mut qemu_process = self.qemu_process.lock().await;
+        let Some(mut child) = qemu_process.take() else {
+            return;
+        };
+
+        let pid = child.id();
+        if let Some(pid) = pid {
+            if let Err(err) = child.kill().await {
+                error!(sl!(), "failed to stop leftover QEMU (pid {pid}): {err}");
+            }
+        }
+        if let Err(err) = child.wait().await {
+            match pid {
+                Some(pid) => error!(sl!(), "failed to reap leftover QEMU (pid {pid}): {err}"),
+                None => error!(sl!(), "failed to reap leftover QEMU: {err}"),
+            }
+        }
     }
 
     pub(crate) async fn resize_vcpu(
@@ -1476,6 +1511,7 @@ mod tests {
     use std::cell::{Cell, RefCell};
 
     use super::*;
+    use nix::{errno::Errno, sys::signal::kill, unistd::Pid};
     use rstest::rstest;
 
     #[tokio::test]
@@ -1488,6 +1524,20 @@ mod tests {
             .await
             .unwrap()
             .is_network_device_hotplug_supported());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_kills_and_reaps_leftover_qemu() {
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+        let qemu = QemuInner::new(exit_notify);
+        let child = Command::new("sleep").arg("60").spawn().unwrap();
+        let pid = child.id().unwrap();
+        *qemu.qemu_process.lock().await = Some(child);
+
+        let _ = qemu.cleanup().await;
+
+        assert!(qemu.qemu_process.lock().await.is_none());
+        assert_eq!(kill(Pid::from_raw(pid as i32), None), Err(Errno::ESRCH));
     }
 
     #[test]
