@@ -1,171 +1,237 @@
-[
-  {
-    "allowed": true,
-    "description": "copy initiated by k8s mount",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-resolv.conf"
+{
+  "bases": {
+    "copy-file": {
+      "kind": "CopyFileRequest",
+      "request": {
+        "file_type": "Regular",
+        "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-resolv.conf"
+      }
+    },
+    "copy-file-2": {
+      "kind": "CopyFileRequest",
+      "request": {
+        "file_type": "Regular",
+        "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo../bar"
+      }
+    },
+    "copy-file-3": {
+      "kind": "CopyFileRequest",
+      "request": {
+        "file_type": "Directory",
+        "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo"
+      }
+    },
+    "copy-file-4": {
+      "kind": "CopyFileRequest",
+      "request": {
+        "symlink_target": "abc",
+        "file_type": "Symlink",
+        "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
+      }
     }
   },
-  {
-    "allowed": true,
-    "description": "a dirname can have trailing dots",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo../bar"
+  "cases": [
+    {
+      "description": "copy initiated by k8s mount",
+      "base": "copy-file",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "a dirname can have trailing dots",
+      "base": "copy-file-2",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "attempt to copy outside of container root",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/etc/ssl/cert.pem"
+        }
+      ]
+    },
+    {
+      "description": "attempt to write into container root",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
+        }
+      ]
+    },
+    {
+      "description": "attempt to write into container root - guest pull",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/run/kata-containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
+        }
+      ]
+    },
+    {
+      "description": "attempted directory traversal",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/../../../../../etc/ssl/cert.pem"
+        }
+      ]
+    },
+    {
+      "description": "attempted directory traversal - parent directory",
+      "base": "copy-file-3",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/.."
+        }
+      ]
+    },
+    {
+      "description": "relative path",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "etc/ssl/cert.pem"
+        }
+      ]
+    },
+    {
+      "description": "relative path - parent directory",
+      "base": "copy-file-3",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": ".."
+        }
+      ]
+    },
+    {
+      "description": "unsupported file type",
+      "base": "copy-file",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/file_type",
+          "value": "Unknown"
+        },
+        {
+          "op": "replace",
+          "path": "/path",
+          "value": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
+        }
+      ]
+    },
+    {
+      "description": "directory in top-level shared directory",
+      "base": "copy-file-3",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "symlink in top-level shared directory",
+      "base": "copy-file-3",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/symlink_target",
+          "value": "abc"
+        },
+        {
+          "op": "replace",
+          "path": "/file_type",
+          "value": "Symlink"
+        }
+      ]
+    },
+    {
+      "description": "symlink beneath top-level shared directory",
+      "base": "copy-file-4",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "symlink pointing up - leading",
+      "base": "copy-file-4",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/symlink_target",
+          "value": "../abc"
+        }
+      ]
+    },
+    {
+      "description": "symlink pointing up - middle",
+      "base": "copy-file-4",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/symlink_target",
+          "value": "a/../../b"
+        }
+      ]
+    },
+    {
+      "description": "symlink pointing up - trailing",
+      "base": "copy-file-4",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/symlink_target",
+          "value": "foo/.."
+        }
+      ]
+    },
+    {
+      "description": "symlink pointing up - ..",
+      "base": "copy-file-4",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/symlink_target",
+          "value": ".."
+        }
+      ]
+    },
+    {
+      "description": "symlink with absolute target",
+      "base": "copy-file-4",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/symlink_target",
+          "value": "/abc"
+        }
+      ]
     }
-  },
-  {
-    "allowed": false,
-    "description": "attempt to copy outside of container root",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/etc/ssl/cert.pem"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "attempt to write into container root",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "attempt to write into container root - guest pull",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/run/kata-containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "attempted directory traversal",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/../../../../../etc/ssl/cert.pem"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "attempted directory traversal - parent directory",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Directory",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/.."
-    }
-  },
-  {
-    "allowed": false,
-    "description": "relative path",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Regular",
-      "path": "etc/ssl/cert.pem"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "relative path - parent directory",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Directory",
-      "path": ".."
-    }
-  },
-  {
-    "allowed": false,
-    "description": "unsupported file type",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Unknown",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/bar"
-    }
-  },
-  {
-    "allowed": true,
-    "description": "directory in top-level shared directory",
-    "kind": "CopyFileRequest",
-    "request": {
-      "file_type": "Directory",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink in top-level shared directory",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "abc",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo"
-    }
-  },
-  {
-    "allowed": true,
-    "description": "symlink beneath top-level shared directory",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "abc",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink pointing up - leading",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "../abc",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink pointing up - middle",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "a/../../b",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink pointing up - trailing",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "foo/..",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink pointing up - ..",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "..",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  },
-  {
-    "allowed": false,
-    "description": "symlink with absolute target",
-    "kind": "CopyFileRequest",
-    "request": {
-      "symlink_target": "/abc",
-      "file_type": "Symlink",
-      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/lnk"
-    }
-  }
-]
+  ]
+}
