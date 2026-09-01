@@ -1,140 +1,148 @@
-[
-  {
-    "allowed": true,
-    "description": "CreateContainer with a container image having volumes",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "redis",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "redis",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "quay.io/opstree/redis"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
+{
+  "bases": {
+    "create-container": {
+      "kind": "CreateContainerRequest",
+      "request": {
+        "OCI": {
+          "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "io.katacontainers.pkg.oci.container_type": "pod_container",
+            "io.kubernetes.cri.container-name": "redis",
+            "io.kubernetes.cri.container-type": "container",
+            "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "io.kubernetes.cri.sandbox-name": "redis",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "io.kubernetes.cri.image-name": "quay.io/opstree/redis"
+          },
+          "Linux": {
+            "GIDMappings": [],
+            "MaskedPaths": [
+              "/proc/acpi",
+              "/proc/asound",
+              "/proc/kcore",
+              "/proc/keys",
+              "/proc/latency_stats",
+              "/proc/timer_list",
+              "/proc/timer_stats",
+              "/proc/sched_debug",
+              "/sys/firmware",
+              "/proc/scsi"
+            ],
+            "MountLabel": "",
+            "Namespaces": [
+              {
+                "Path": "",
+                "Type": "ipc"
+              },
+              {
+                "Path": "",
+                "Type": "uts"
+              },
+              {
+                "Path": "",
+                "Type": "mount"
+              },
+              {
+                "Path": "/run/netns/podns",
+                "Type": "network"
+              }
+            ],
+            "ReadonlyPaths": [
+              "/proc/bus",
+              "/proc/fs",
+              "/proc/irq",
+              "/proc/sys",
+              "/proc/sysrq-trigger"
+            ],
+            "Resources": {
+              "Devices": []
+            },
+            "RootfsPropagation": ""
+          },
+          "Mounts": [
             {
-              "Path": "",
-              "Type": "ipc"
+              "destination": "/data",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-a1b2c3d4e5f6g7h8-data",
+              "type_": "bind"
             },
             {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+              "destination": "/node-conf",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-a1b2c3d4e5f6g7h8-node-conf",
+              "type_": "bind"
             }
           ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
+          "Process": {
+            "Args": [
+              "/usr/bin/entrypoint.sh"
+            ],
+            "Capabilities": {
+              "Ambient": [],
+              "Bounding": [
+                "$(default_caps)"
+              ],
+              "Effective": [
+                "$(default_caps)"
+              ],
+              "Inheritable": [],
+              "Permitted": [
+                "$(default_caps)"
+              ]
+            },
+            "Cwd": "/data",
+            "Env": [
+              "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+              "REDIS_PORT=6379",
+              "HOSTNAME=$(host-name)"
+            ],
+            "NoNewPrivileges": false,
+            "Terminal": false,
+            "User": {
+              "AdditionalGids": [
+                1000
+              ],
+              "GID": 1000,
+              "UID": 1000,
+              "Username": ""
+            }
           },
-          "RootfsPropagation": ""
+          "Root": {
+            "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "Readonly": false
+          },
+          "Version": "1.1.0"
         },
-        "Mounts": [
+        "storages": [
           {
-            "destination": "/data",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
+            "driver": "image_guest_pull",
+            "driver_options": [
+              "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"redis\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/opstree/redis\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"redis\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
             ],
-            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-a1b2c3d4e5f6g7h8-data",
-            "type_": "bind"
-          },
-          {
-            "destination": "/node-conf",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-a1b2c3d4e5f6g7h8-node-conf",
-            "type_": "bind"
+            "fs_group": null,
+            "fstype": "overlay",
+            "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "options": [],
+            "source": "quay.io/opstree/redis"
           }
-        ],
-        "Process": {
-          "Args": [
-            "/usr/bin/entrypoint.sh"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "$(default_caps)"
-            ],
-            "Effective": [
-              "$(default_caps)"
-            ],
-            "Inheritable": [],
-            "Permitted": [
-              "$(default_caps)"
-            ]
-          },
-          "Cwd": "/data",
-          "Env": [
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "REDIS_PORT=6379",
-            "HOSTNAME=$(host-name)"
-          ],
-          "NoNewPrivileges": false,
-          "Terminal": false,
-          "User": {
-            "AdditionalGids": [
-              1000
-            ],
-            "GID": 1000,
-            "UID": 1000,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"redis\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"quay.io/opstree/redis\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"redis\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "quay.io/opstree/redis"
-        }
-      ]
+        ]
+      }
     }
-  }
-]
+  },
+  "cases": [
+    {
+      "description": "CreateContainer with a container image having volumes",
+      "base": "create-container",
+      "allowed": true,
+      "patch": []
+    }
+  ]
+}
