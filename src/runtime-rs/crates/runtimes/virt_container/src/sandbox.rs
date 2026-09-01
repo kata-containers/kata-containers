@@ -1164,6 +1164,18 @@ impl Sandbox for VirtSandbox {
             .await
             .context("create sandbox")?;
 
+        // The agent materialises a file for each of these out of the request,
+        // which the containers can then share. Only the fields we populated,
+        // since given nothing the agent writes nothing.
+        let mut sandbox_files = Vec::new();
+        if !sandbox_config.dns.is_empty() {
+            sandbox_files.push("/etc/resolv.conf".to_string());
+        }
+        if !sandbox_config.hostname.is_empty() {
+            sandbox_files.push("/etc/hostname".to_string());
+        }
+        self.resource_manager.set_sandbox_files(sandbox_files).await;
+
         inner.state = SandboxState::Running;
         inner.created_at = Some(std::time::SystemTime::now());
 
