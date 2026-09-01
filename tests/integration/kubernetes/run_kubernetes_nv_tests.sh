@@ -162,7 +162,7 @@ else
 		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-dcgm.bats" \
 		"k8s-nvidia-vllm.bats" \
-		"k8s-qemu-rootless-sandbox.bats")
+		"k8s-rootless-vmm.bats")
 
 	# Setting K8S_TEST_NV explicitly still runs the NIM tests by hand.
 	if is_nightly_run; then

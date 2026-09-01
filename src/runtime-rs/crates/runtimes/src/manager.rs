@@ -26,7 +26,10 @@ use hypervisor::{
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation,
-    config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
+    config::{
+        default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig,
+        KATA_PATH,
+    },
     mount::SHM_DEVICE,
     prefix_with_rootless_dir,
     rootless::{is_rootless, rootless_dir, set_rootless},
@@ -1050,6 +1053,12 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<RootlessSetu
     );
 
     env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
+
+    // Establish the rootless runtime hierarchy before VMM and resource setup so
+    // newly created directories inherit the temporary VMM user's ownership.
+    let runtime_root = PathBuf::from(prefix_with_rootless_dir(KATA_PATH));
+    create_dir_all_with_inherit_owner(&runtime_root, 0o750)
+        .with_context(|| format!("create rootless runtime root {}", runtime_root.display()))?;
 
     // Update the rootless dir prefix for guest_swap_path
     config.memory_info.guest_swap_path = prefix_with_rootless_dir("/run/kata-containers/swap");
