@@ -28,6 +28,7 @@ else
 
 	KATA_DEPLOY_TEST_UNION+=( \
 		"kata-deploy.bats" \
+		"kata-deploy-qemu-cleanup.bats" \
 		"kata-deploy-custom-runtimes.bats" \
 		"kata-deploy-lifecycle.bats" \
 		"kata-deploy-scheduling.bats" \
