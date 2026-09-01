@@ -468,4 +468,21 @@ impl ContainerManager for VirtContainerManager {
         process.process_type == ProcessType::Container
             && process.container_id.container_id == self.sid
     }
+
+    #[instrument]
+    async fn has_guest_container(&self, process: &ContainerProcess) -> bool {
+        self.containers
+            .read()
+            .await
+            .contains_key(&process.container_id.container_id)
+    }
+
+    #[instrument]
+    async fn guest_map_is_empty(&self) -> bool {
+        // The pause container is created through the task service with
+        // container_id == sandbox id, so it sits in the container map. It is
+        // not a guest workload: only non-sandbox entries count when deciding
+        // whether a missing-task Kill/Wait may stop the VM.
+        self.containers.read().await.keys().all(|id| id == &self.sid)
+    }
 }
