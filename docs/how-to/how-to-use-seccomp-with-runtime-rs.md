@@ -13,6 +13,8 @@ With the exception of `qemu`, seccomp is enabled by default for all other suppor
 
 ### QEMU
 
+QEMU seccomp is enabled by default only for the NVIDIA handlers.
+
 As with runtime-go, you need to modify the following in your **configuration file**. These parameters will be passed directly to the `qemu` startup command line. For more details on the parameters, you can refer to: [https://www.qemu.org/docs/master/system/qemu-manpage.html](https://www.qemu.org/docs/master/system/qemu-manpage.html)
 
 ``` toml
@@ -23,6 +25,7 @@ As with runtime-go, you need to modify the following in your **configuration fil
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
 seccomp_sandbox = "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny"
 ```
+
 ### Cloud Hypervisor, Firecracker and Dragonball
 
 The **seccomp** functionality is enabled by default for the following three hypervisors: `cloud hypervisor`, `firecracker`, and `dragonball`.
