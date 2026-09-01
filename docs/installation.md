@@ -63,6 +63,19 @@ underlying hypervisor must expose the CPU virtualization extensions to the
 guest (for example a `host-passthrough` or `host-model` CPU, with nesting
 enabled on the bare-metal host).
 
+!!! tip "Detecting bare metal vs. nested virtualization"
+    Use `systemd-detect-virt` to determine whether you are running on bare
+    metal or inside a virtual machine:
+
+    ```sh
+    systemd-detect-virt
+    ```
+
+    - Output **`none`**: you are running directly on bare metal.
+    - Output like **`kvm`** or **`qemu`**: you are running inside a virtual
+      machine and will need nested virtualization enabled on the underlying
+      host.
+
 **Host kernel modules** for `vhost` must be loaded. Kata uses VSOCK for the
 communication channel between the runtime and the guest agent (`vhost_vsock`
 provides `/dev/vhost-vsock`); `vhost_net` is needed for networking:
