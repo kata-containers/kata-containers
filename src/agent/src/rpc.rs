@@ -337,7 +337,7 @@ impl AgentService {
         .await?;
 
         // Handle sealed secrets after storage is mounted
-        cdh_handler_sealed_secrets(&mut oci)
+        cdh_handler_sealed_secrets(&cid, &mut oci)
             .await
             .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
 
@@ -519,7 +519,7 @@ impl AgentService {
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
         if confidential_data_hub::is_cdh_client_initialized() {
-            unseal_envs(&mut process.Env).await;
+            unseal_envs(&mut process.Env).await?;
         }
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
@@ -2832,18 +2832,16 @@ pub(crate) async fn cdh_secure_mount(
     Ok(())
 }
 
-async fn unseal_envs(envs: &mut [String]) {
+async fn unseal_envs(envs: &mut [String]) -> Result<()> {
     for env in envs.iter_mut() {
-        match confidential_data_hub::unseal_env(env).await {
-            Ok(unsealed_env) => *env = unsealed_env.to_string(),
-            Err(e) => {
-                warn!(sl(), "Failed to unseal secret: {}", e)
-            }
-        }
+        *env = confidential_data_hub::unseal_env(env)
+            .await
+            .context("unseal environment variable")?;
     }
+    Ok(())
 }
 
-async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
+async fn cdh_handler_sealed_secrets(cid: &str, oci: &mut Spec) -> Result<()> {
     if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
     }
@@ -2852,7 +2850,7 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
     if let Some(envs) = process.env_mut().as_mut() {
-        unseal_envs(envs).await;
+        unseal_envs(envs).await?;
     }
 
     let mounts = oci
@@ -2874,26 +2872,42 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         if is_sealed_secret_path(source_path) {
             debug!(
                 sl(),
-                "Calling unseal_file for - source: {:?} destination: {:?}",
+                "Checking for sealed secrets - source: {:?} destination: {:?}",
                 source_path,
                 m.destination()
             );
-            // Call unseal_file. This function checks the files under the source_path
-            // for the sealed secret header and unseal it if the header is present.
-            // This is suboptimal as we are going through every file under the source_path.
-            // But currently there is no quick way to determine which volume-mount is referring
-            // to a sealed secret without reading the file.
-            // And relying on file naming heuristic is inflexible. So we are going with this approach.
-            if let Err(e) = confidential_data_hub::unseal_file(source_path).await {
-                warn!(
-                    sl(),
-                    "Failed to unseal file: {:?}, Error: {:?}", source_path, e
-                );
+
+            // Every file has to be read: nothing short of the content says
+            // whether a volume holds a sealed secret.
+            let dst = unsealed_dir(cid, source_path)?;
+            if confidential_data_hub::unseal_files_into(Path::new(source_path), &dst)
+                .await
+                .with_context(|| format!("unseal {source_path}"))?
+            {
+                m.set_source(Some(dst));
             }
         }
     }
 
     Ok(())
+}
+
+/// Guest-private and writable, so that the volume itself can stay read-only.
+fn unsealed_dir(cid: &str, source_path: &str) -> Result<PathBuf> {
+    do_unsealed_dir(Path::new(KATA_GUEST_SANDBOX_DIR), cid, source_path)
+}
+
+fn do_unsealed_dir(sandbox_dir: &Path, cid: &str, source_path: &str) -> Result<PathBuf> {
+    let name = Path::new(source_path)
+        .file_name()
+        .ok_or_else(|| anyhow!("mount source {source_path} has no file name"))?;
+
+    // scoped_join clamps to its root rather than failing, so root it here and
+    // not at the sandbox directory that holds hosts, hostname and the rest.
+    let base = sandbox_dir.join("unsealed");
+    fs::create_dir_all(&base)?;
+
+    Ok(scoped_join(&base, Path::new(cid).join(name))?)
 }
 
 #[cfg(test)]
@@ -2996,6 +3010,55 @@ mod tests {
             .as_ref()
             .unwrap()
             .clone()
+    }
+
+    #[test]
+    fn test_unsealed_dir_is_per_container_and_per_volume() {
+        let tmp = tempdir().unwrap();
+        let dir = |cid, source| do_unsealed_dir(tmp.path(), cid, source).unwrap();
+
+        let secret = "/run/kata-containers/shared/containers/dev-hash-secret";
+        let projected = "/run/kata-containers/shared/containers/dev-hash-projected";
+
+        assert_ne!(
+            dir("cid-a", secret),
+            dir("cid-b", secret),
+            "two containers must not share a directory"
+        );
+        assert_ne!(
+            dir("cid-a", secret),
+            dir("cid-a", projected),
+            "two volumes must not share a directory"
+        );
+        assert_eq!(
+            dir("cid-a", secret),
+            tmp.path().join("unsealed/cid-a/dev-hash-secret")
+        );
+
+        // The leaf is unseal_files_into's to create, and only if it finds
+        // something sealed.
+        assert!(!dir("cid-a", secret).exists());
+    }
+
+    #[test]
+    fn test_unsealed_dir_cannot_escape() {
+        let tmp = tempdir().unwrap();
+        let base = tmp.path().join("unsealed");
+
+        for cid in ["../../escaped", "../..", "/etc"] {
+            let dir = do_unsealed_dir(
+                tmp.path(),
+                cid,
+                "/run/kata-containers/shared/containers/vol",
+            )
+            .unwrap();
+            assert!(
+                dir.starts_with(&base),
+                "container id {:?} escaped to {:?}",
+                cid,
+                dir
+            );
+        }
     }
 
     #[test]
