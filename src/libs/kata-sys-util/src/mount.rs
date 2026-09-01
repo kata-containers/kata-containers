@@ -433,7 +433,7 @@ pub fn parse_mount_options<T: AsRef<str>>(options: &[T]) -> Result<(MsFlags, Str
     Ok((flags, data))
 }
 
-fn parse_mount_flags(mut flags: MsFlags, flag_str: &str) -> Option<MsFlags> {
+pub fn parse_mount_flags(mut flags: MsFlags, flag_str: &str) -> Option<MsFlags> {
     // Following mount options are applicable to fstab only.
     // - _netdev: The filesystem resides on a device that requires network access (used to prevent
     //   the system from attempting to mount these filesystems until the network has been enabled
