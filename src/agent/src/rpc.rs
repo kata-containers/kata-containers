@@ -19,7 +19,7 @@ use std::ffi::{CString, OsStr};
 use std::fmt::Debug;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
+use std::path::{Component, Path};
 #[cfg(target_arch = "s390x")]
 use std::str::FromStr;
 use std::sync::Arc;
@@ -2333,22 +2333,14 @@ fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
 
     // Create parent directories if missing
     if let Some(parent) = path.parent() {
-        let dir = root
-            .mkdir_all(
-                parent,
-                &std::fs::Permissions::from_mode(req.dir_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK),
-            )
-            .context("mkdir_all parent")?
-            .reopen(OpenFlags::O_DIRECTORY)
-            .context("reopen parent")?;
-
-        // TODO(burgerdev): why are we only applying this to the immediate parent?
-        unistd::fchown(
-            dir,
-            Some(Uid::from_raw(req.uid as u32)),
-            Some(Gid::from_raw(req.gid as u32)),
+        mkdir_all_owned(
+            &root,
+            parent,
+            &std::fs::Permissions::from_mode(req.dir_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK),
+            Uid::from_raw(req.uid as u32),
+            Gid::from_raw(req.gid as u32),
         )
-        .context("fchown parent")?
+        .context("mkdir_all parent")?;
     }
 
     let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
@@ -2467,6 +2459,49 @@ fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
     .context("fchown")?;
 
     nix::fcntl::renameat(&root, &tmpfile, &root, path).context("renameat")?;
+
+    Ok(())
+}
+
+/// Create missing directory components and apply ownership only to components created by this
+/// call.
+fn mkdir_all_owned(
+    root: &pathrs::Root,
+    path: &Path,
+    permissions: &std::fs::Permissions,
+    uid: Uid,
+    gid: Gid,
+) -> Result<()> {
+    let mut current = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => current.push(part),
+            Component::CurDir => continue,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(anyhow!("invalid implicit parent directory: {path:?}"));
+            }
+        }
+
+        match root.create(&current, &pathrs::InodeType::Directory(permissions.clone())) {
+            Ok(()) => {
+                let dir = root
+                    .resolve_nofollow(&current)
+                    .context("resolve created parent directory")?
+                    .reopen(OpenFlags::O_DIRECTORY)
+                    .context("reopen created parent directory")?;
+                unistd::fchown(dir, Some(uid), Some(gid))
+                    .context("fchown created parent directory")?;
+            }
+            Err(error) if error.kind() == pathrs::error::ErrorKind::OsError(Some(libc::EEXIST)) => {
+                root.resolve(&current)
+                    .context("resolve existing parent directory")?
+                    .reopen(OpenFlags::O_DIRECTORY)
+                    .context("reopen existing parent directory")?;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
 
     Ok(())
 }
@@ -4214,6 +4249,41 @@ COMMIT
             }
             (tc.assertions)(&base).context(tc.name).unwrap()
         }
+    }
+
+    #[test]
+    fn test_do_copy_file_does_not_change_parent_ownership() {
+        skip_if_not_root!();
+
+        let temp_dir = tempdir().expect("creating temp dir failed");
+        let base = temp_dir.path().join("shared");
+        let parent = base.join("parent");
+        std::fs::create_dir_all(&parent).unwrap();
+        nix::unistd::chown(
+            &parent,
+            Some(Uid::from_raw(1000)),
+            Some(Gid::from_raw(1000)),
+        )
+        .unwrap();
+
+        do_copy_file(
+            &CopyFileRequest {
+                path: parent.join("file").to_string_lossy().into(),
+                dir_mode: 0o755 | libc::S_IFDIR,
+                file_mode: 0o644 | libc::S_IFREG,
+                uid: 0,
+                gid: 0,
+                file_size: 4,
+                data: b"data".to_vec(),
+                ..Default::default()
+            },
+            &base,
+        )
+        .unwrap();
+
+        let parent_stat = nix::sys::stat::lstat(&parent).unwrap();
+        assert_eq!(parent_stat.st_uid, 1000);
+        assert_eq!(parent_stat.st_gid, 1000);
     }
 
     #[test]
