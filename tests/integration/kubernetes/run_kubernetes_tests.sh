@@ -107,6 +107,7 @@ else
 		"k8s-projected-volume.bats" \
 		"k8s-qemu-rootless-sandbox.bats" \
 		"k8s-replication.bats" \
+		"k8s-pod-termination.bats" \
 		"k8s-sandbox-cgroup.bats" \
 		"k8s-sandbox-cgroup-placement.bats" \
 		"k8s-seccomp.bats" \
