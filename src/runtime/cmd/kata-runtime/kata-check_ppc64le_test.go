@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -40,6 +41,10 @@ func setupCheckHostIsVMContainerCapable(assert *assert.Assertions, cpuInfoFile s
 }
 
 func TestCCCheckCLIFunction(t *testing.T) {
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ppc64le do not support Virtualization")
+	}
+
 	cpuData := []testCPUData{
 		fakeCPUData,
 	}
