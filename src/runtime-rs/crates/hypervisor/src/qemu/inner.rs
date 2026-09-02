@@ -455,11 +455,18 @@ impl QemuInner {
         // QEMU inherited its startup descriptors during spawn. Drop the
         // privileged shim's copies immediately; QEMU owns the fdsets from here.
         drop(cmdline);
+        let qemu_pid = qemu_process.id();
         let stderr = qemu_process.stderr.take().unwrap();
         self.qemu_process = Mutex::new(Some(qemu_process));
         self.exit_notify = None;
 
-        info!(sl!(), "qemu process started");
+        match qemu_pid {
+            Some(pid) => info!(
+                sl!(),
+                "qemu process started (pid {pid}, sandbox {})", self.id
+            ),
+            None => info!(sl!(), "qemu process started (sandbox {})", self.id),
+        }
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
