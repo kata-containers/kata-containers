@@ -28,13 +28,16 @@ pub const RUST_SHIMS: &[&str] = &[
 /// against a dynamic loader and libraries that only exist in the host's mount
 /// namespace, which the container no longer has access to. It can inspect
 /// them, which is enough to tell what a host tool supports.
+///
+/// Ordered as the host's own PATH is, so that what is found here is what the
+/// host would run. A node can hold several versions of the same tool.
 const HOST_BIN_DIRS: &[&str] = &[
-    "/host-usr/bin",
-    "/host-usr/sbin",
-    "/host-usr-local/bin",
     "/host-usr-local/sbin",
-    "/host-bin",
+    "/host-usr-local/bin",
+    "/host-usr/sbin",
+    "/host-usr/bin",
     "/host-sbin",
+    "/host-bin",
 ];
 
 pub fn is_rust_shim(shim: &str) -> bool {

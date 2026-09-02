@@ -45,6 +45,10 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
 EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
+# What kata-deploy takes erofs-utils from, the runners having none new enough of
+# their own. Only amd64 and arm64 are published, which is every runner the erofs
+# jobs use.
+EROFS_UTILS_IMAGE="${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}"
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -572,19 +576,19 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				install_erofs_utils
+				# No erofs-utils is installed on the node on purpose: these
+				# runners package nothing new enough, which is the very case
+				# nodeBinaries exists for, so the install has to bring its
+				# own.
 
 				# fsverity is only needed here because, unlike
 				# the docker and nerdctl jobs, these do enable
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# The kata-deploy host module job leaves these unloaded, so that
-				# its own privileged stage is what has to load them.
-				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]] &&
-					[[ "${KATA_DEPLOY_MANAGES_HOST_MODULES:-no}" != "yes" ]]; then
-					load_dm_verity_modules
-				fi
+				# erofs, loop and the dm-verity targets are left unloaded on
+				# purpose: kata-deploy's own privileged stage loads and persists
+				# them, and pre-loading them here would hide it failing to.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
@@ -897,6 +901,12 @@ function helm_helper() {
 			for snapshotter in "${snapshotter_list[@]}"; do
 				yq -i ".snapshotter.setup += [\"${snapshotter}\"]" "${values_yaml}"
 			done
+		fi
+
+		# The node has no erofs-utils of its own; see deploy_k8s.
+		if [[ "${SNAPSHOTTER}" == "erofs" ]]; then
+			yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
+			yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
 		fi
 
 		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then
