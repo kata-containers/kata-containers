@@ -784,6 +784,56 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	assert.Error(err, "Hotplug remove pmem block device expected error")
 }
 
+func TestCloudHypervisorCleanupNetDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	mac := "aa:bb:cc:dd:ee:ff"
+	file, err := os.CreateTemp("", "netFd")
+	assert.NoError(err)
+	defer file.Close()
+	defer os.Remove(file.Name())
+
+	clh := cloudHypervisor{}
+	clh.netDevicesFiles = make(map[string][]*os.File)
+
+	e := &VethEndpoint{}
+	e.NetPair.TAPIface.HardAddr = mac
+	e.NetPair.VMFds = []*os.File{file}
+
+	err = clh.addNet(e)
+	assert.NoError(err)
+	assert.Equal(1, len(*clh.netDevices))
+	assert.Contains(clh.netDevicesFiles, mac)
+
+	// Cleanup should remove from both maps
+	clh.cleanupNetDevice(mac)
+	assert.Equal(0, len(*clh.netDevices))
+	assert.NotContains(clh.netDevicesFiles, mac)
+}
+
+func TestCloudHypervisorHotplugRemoveNetDevice(t *testing.T) {
+	assert := assert.New(t)
+
+	clhConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	clh.config = clhConfig
+	clh.APIClient = &clhClientMock{}
+	clh.devicesIds = make(map[string]string)
+
+	// NetDev with nil endpoint should error
+	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)
+	assert.Error(err, "nil endpoint should return error")
+
+	// NetDev with valid endpoint but no device ID should error
+	e := &VethEndpoint{}
+	e.NetPair.TAPIface.HardAddr = "aa:bb:cc:dd:ee:ff"
+	_, err = clh.HotplugRemoveDevice(context.Background(), e, NetDev)
+	assert.Error(err, "missing device ID should return error")
+	assert.Contains(err.Error(), "no CLH device ID found")
+}
+
 func TestCloudHypervisorColdPlugVFIODevice(t *testing.T) {
 	assert := assert.New(t)
 
