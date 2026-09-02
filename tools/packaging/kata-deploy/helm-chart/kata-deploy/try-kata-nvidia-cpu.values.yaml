@@ -89,3 +89,6 @@ runtimeClasses:
   enabled: true
   createDefault: false
   defaultName: "kata"
+
+node-feature-discovery:
+  enabled: true
