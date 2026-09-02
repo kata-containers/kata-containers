@@ -375,8 +375,9 @@ pub(crate) struct ErofsMultiLayerRootfs {
     rwlayer_storage: Option<Storage>,
     // Read-only EROFS layer storages (lower layers), one per partition in GPT mode
     erofs_storages: Vec<Storage>,
-    // Paths to generated GPT metadata files (head, padding) for cleanup
-    gpt_metadata_paths: Vec<PathBuf>,
+    // Host artifacts generated for a VMDK-backed rootfs (GPT head, padding
+    // images, and the VMDK descriptor), removed on cleanup after device unplug.
+    generated_artifact_paths: Vec<PathBuf>,
     // Container-scoped runtime directory that may only contain generated helper artifacts.
     generated_artifacts_dir: PathBuf,
 }
@@ -398,7 +399,7 @@ impl ErofsMultiLayerRootfs {
         let mut device_ids = Vec::new();
         let mut rwlayer_storage: Option<Storage> = None;
         let mut erofs_storages: Vec<Storage> = Vec::new();
-        let mut gpt_metadata_paths: Vec<PathBuf> = Vec::new();
+        let mut generated_artifact_paths: Vec<PathBuf> = Vec::new();
         // Track whether GPT+VMDK erofs layers have already been processed in bulk.
         let mut gpt_erofs_processed = false;
 
@@ -577,9 +578,11 @@ impl ErofsMultiLayerRootfs {
                             generate_gpt_vmdk_with_layout(sid, cid, erofs_layers)
                                 .context("gptdisk: failed to generate GPT VMDK")?;
 
-                        // Track GPT metadata files (head + padding) for cleanup
-                        gpt_metadata_paths.push(gpt_files.head_path.clone());
-                        gpt_metadata_paths.extend(gpt_files.pad_paths.iter().cloned());
+                        // Track every host artifact backing this VMDK for cleanup:
+                        // GPT metadata files (head + padding) and the descriptor
+                        // text file
+                        generated_artifact_paths.push(gpt_files.head_path.clone());
+                        generated_artifact_paths.extend(gpt_files.pad_paths.iter().cloned());
                         for idx in 0..layout.partitions.len() {
                             if idx > 0 {
                                 // Check for padding files (only created when there are gaps)
@@ -589,10 +592,11 @@ impl ErofsMultiLayerRootfs {
                                     .unwrap()
                                     .join(format!("pad-{}.img", idx));
                                 if pad_path.exists() {
-                                    gpt_metadata_paths.push(pad_path);
+                                    generated_artifact_paths.push(pad_path);
                                 }
                             }
                         }
+                        generated_artifact_paths.push(PathBuf::from(&erofs_path));
 
                         info!(
                             sl!(),
@@ -753,6 +757,14 @@ impl ErofsMultiLayerRootfs {
                             vmdk.is_some()
                         );
 
+                        // A structured layout means a VMM backend materializes a
+                        // VMDK descriptor at `erofs_path`; track it for cleanup.
+                        // A single device carries no descriptor (`erofs_path` is
+                        // the EROFS image itself), so only track when merging.
+                        if vmdk.is_some() {
+                            generated_artifact_paths.push(PathBuf::from(&erofs_path));
+                        }
+
                         let device_config = &mut BlockConfigModern {
                             driver_option: block_driver.clone(),
                             vmdk,
@@ -852,7 +864,7 @@ impl ErofsMultiLayerRootfs {
             device_ids,
             rwlayer_storage,
             erofs_storages,
-            gpt_metadata_paths,
+            generated_artifact_paths,
             generated_artifacts_dir: PathBuf::from(kata_types::prefix_with_rootless_dir(
                 DEFAULT_KATA_GUEST_ROOT_SHARED_FS,
             ))
@@ -913,9 +925,9 @@ impl Rootfs for ErofsMultiLayerRootfs {
             dm.try_remove_device(device_id).await?;
         }
 
-        // Clean up GPT metadata files (head, padding).
-        for metadata_path in &self.gpt_metadata_paths {
-            safely_remove_file(metadata_path, &self.generated_artifacts_dir)?;
+        // Remove the generated VMDK artifacts (GPT head, padding, descriptor).
+        for artifact_path in &self.generated_artifact_paths {
+            safely_remove_file(artifact_path, &self.generated_artifacts_dir)?;
         }
 
         Ok(())
