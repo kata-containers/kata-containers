@@ -4,6 +4,7 @@
 //
 
 use flate2::{Compression, GzBuilder};
+use kata_types::initdata::INITDATA_IMAGE_MAGIC;
 use std::{
     fmt, fs,
     io::{self, BufWriter, Write},
@@ -47,7 +48,6 @@ impl From<io::Error> for InitDataError {
     }
 }
 
-const MAGIC_HEADER: &[u8; 8] = b"initdata";
 const SECTOR_SIZE: u64 = 512;
 
 // Default buffer size, adjustable based on target storage optimization
@@ -156,8 +156,8 @@ fn create_compressed_block(
     let mut writer = BufWriter::with_capacity(buffer_size, temp_file);
 
     // 6. Write magic header
-    writer.write_all(MAGIC_HEADER)?;
-    info!(sl!(), "Magic header written: {:?}", MAGIC_HEADER);
+    writer.write_all(INITDATA_IMAGE_MAGIC)?;
+    info!(sl!(), "Magic header written: {:?}", INITDATA_IMAGE_MAGIC);
 
     // 7. First compress data to get the actual compressed size
     let compression =
@@ -207,7 +207,7 @@ fn create_compressed_block(
     info!(sl!(), "Compressed data written");
 
     // 10. Calculate padding for sector alignment
-    let current_pos = MAGIC_HEADER.len() as u64 + 8 + compressed_size; // magic + length + data
+    let current_pos = INITDATA_IMAGE_MAGIC.len() as u64 + 8 + compressed_size; // magic + length + data
     let padding = (SECTOR_SIZE - (current_pos % SECTOR_SIZE)) % SECTOR_SIZE;
 
     // 11. Zero-byte padding using small blocks
@@ -297,7 +297,7 @@ mod tests {
         let mut file = fs::File::open(&path).unwrap();
         let mut header = [0u8; 8];
         file.read_exact(&mut header).unwrap();
-        assert_eq!(&header, MAGIC_HEADER);
+        assert_eq!(&header, INITDATA_IMAGE_MAGIC);
 
         // Cleanup
         fs::remove_file(path).unwrap();

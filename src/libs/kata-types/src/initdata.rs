@@ -4,12 +4,12 @@
 //
 
 use crate::sl;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine as _;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384, Sha512};
-use std::{collections::HashMap, io::Read};
+use std::{collections::BTreeMap, io::Read, path::Path};
 
 /// Currently, initdata only supports version 0.1.0.
 const INITDATA_VERSION: &str = "0.1.0";
@@ -54,7 +54,12 @@ pub struct InitData {
     /// algorithm: sha256, sha512, sha384
     algorithm: String,
     /// data for specific "key:value"
-    data: HashMap<String, String>,
+    ///
+    /// Ordered rather than hashed, because a document Kata serializes itself
+    /// (see [`merge_initdata_documents`]) must come out byte-identical for
+    /// identical inputs: the digest of that text is what a verifier checks
+    /// against the TEE launch measurement.
+    data: BTreeMap<String, String>,
 }
 
 impl InitData {
@@ -63,7 +68,7 @@ impl InitData {
         Self {
             version: version.into(),
             algorithm: algorithm.into(),
-            data: HashMap::new(),
+            data: BTreeMap::new(),
         }
     }
 
@@ -88,7 +93,7 @@ impl InitData {
     }
 
     /// get data
-    pub fn data(&self) -> &HashMap<String, String> {
+    pub fn data(&self) -> &BTreeMap<String, String> {
         &self.data
     }
 
@@ -181,6 +186,121 @@ pub fn parse_initdata(initdata_str: &str) -> Result<InitData> {
     initdata.validate()?;
 
     Ok(initdata)
+}
+
+/// Magic number starting a packed initdata image.
+///
+/// The image layout is this 8-byte magic, an 8-byte little-endian length, the
+/// gzipped initdata document, then zero padding up to a 512-byte sector
+/// boundary. The guest identifies the initdata block device by this magic, so
+/// the writers and readers of the format all share the constant from here.
+pub const INITDATA_IMAGE_MAGIC: &[u8; 8] = b"initdata";
+
+/// Length of the packed initdata image header: the magic plus the payload length.
+const INITDATA_IMAGE_HEADER_LEN: usize = INITDATA_IMAGE_MAGIC.len() + 8;
+
+/// An initdata document loaded from a file on the host.
+#[derive(Debug)]
+pub struct InitdataFile {
+    /// The initdata TOML document.
+    pub document: String,
+    /// Whether the file was already a packed initdata image, and can therefore
+    /// be attached to a guest as it sits on disk rather than being packed again.
+    pub packed: bool,
+}
+
+/// Whether `data` starts with the packed initdata image magic.
+pub fn is_packed_initdata_image(data: &[u8]) -> bool {
+    data.starts_with(INITDATA_IMAGE_MAGIC)
+}
+
+/// Extract the initdata document from a packed initdata image.
+pub fn unpack_initdata_image(image: &[u8]) -> Result<String> {
+    if !is_packed_initdata_image(image) {
+        bail!("not a packed initdata image: the initdata magic is missing");
+    }
+    if image.len() < INITDATA_IMAGE_HEADER_LEN {
+        bail!(
+            "truncated initdata image: {} bytes, shorter than the {}-byte header",
+            image.len(),
+            INITDATA_IMAGE_HEADER_LEN
+        );
+    }
+
+    let mut length = [0u8; 8];
+    length.copy_from_slice(&image[INITDATA_IMAGE_MAGIC.len()..INITDATA_IMAGE_HEADER_LEN]);
+    let length = u64::from_le_bytes(length);
+
+    let payload = &image[INITDATA_IMAGE_HEADER_LEN..];
+    if length > payload.len() as u64 {
+        bail!(
+            "initdata image declares a {}-byte payload but only {} bytes follow the header",
+            length,
+            payload.len()
+        );
+    }
+    let payload = &payload[..length as usize];
+
+    let mut document = String::new();
+    GzDecoder::new(payload)
+        .read_to_string(&mut document)
+        .context("decompressing the initdata image payload")?;
+
+    Ok(document)
+}
+
+/// Load an initdata document from a file, which may be either a packed initdata
+/// image or a bare initdata TOML document.
+///
+/// The two forms are told apart by the image magic, so an operator can install
+/// whichever they have under a single configuration key: a document to hand-edit
+/// on the node, or a prebuilt image to ship as a versioned artifact.
+///
+/// The document is parsed and validated before returning, so a malformed file is
+/// reported against the file that holds it.
+pub fn load_initdata_file(path: impl AsRef<Path>) -> Result<InitdataFile> {
+    let path = path.as_ref();
+    let raw = std::fs::read(path)
+        .with_context(|| format!("reading the initdata file {}", path.display()))?;
+
+    let (document, packed) = if is_packed_initdata_image(&raw) {
+        let document = unpack_initdata_image(&raw)
+            .with_context(|| format!("unpacking the initdata image {}", path.display()))?;
+        (document, true)
+    } else {
+        let document = String::from_utf8(raw)
+            .with_context(|| format!("the initdata file {} is not valid UTF-8", path.display()))?;
+        (document, false)
+    };
+
+    parse_initdata(&document)
+        .with_context(|| format!("parsing the initdata document in {}", path.display()))?;
+
+    Ok(InitdataFile { document, packed })
+}
+
+/// Overlay one initdata document onto another, entry by entry.
+///
+/// `overlay` wins: its `[data]` entries replace same-named entries from `base`,
+/// and the result carries its `algorithm` and `version`. This lets a node supply
+/// defaults, such as an `aa.toml` naming the cluster's KBS, while a workload
+/// adds or replaces individual entries.
+///
+/// The result is re-serialized, so it is this merged text -- not either input --
+/// that gets digested, bound into the TEE launch measurement, and handed to the
+/// guest.
+pub fn merge_initdata_documents(base: &str, overlay: &str) -> Result<String> {
+    let base = parse_initdata(base).context("parsing the base initdata document")?;
+    let overlay = parse_initdata(overlay).context("parsing the overlay initdata document")?;
+
+    let mut merged = InitData::new(overlay.algorithm(), overlay.version());
+    for (key, value) in base.data().iter().chain(overlay.data()) {
+        merged.insert_data(key.clone(), value.clone());
+    }
+
+    merged
+        .to_string()
+        .context("serializing the merged initdata document")
 }
 
 /// calculate initdata digest
@@ -546,5 +666,163 @@ url = 'http://kbs-service.xxx.cluster.local:8080'
             "the encoded initdata toml should not contain escaped newlines, but does:\n{}",
             doc
         )
+    }
+
+    const NODE_DOCUMENT: &str = r#"version = "0.1.0"
+algorithm = "sha384"
+
+[data]
+"aa.toml" = "node aa"
+"cdh.toml" = "node cdh"
+"#;
+
+    const POD_DOCUMENT: &str = r#"version = "0.1.0"
+algorithm = "sha256"
+
+[data]
+"aa.toml" = "pod aa"
+"policy.rego" = "pod policy"
+"#;
+
+    /// Pack a document the way the runtime does: magic, payload length, gzipped
+    /// document, then zero padding up to a sector boundary.
+    fn pack_initdata_image(document: &str) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(document.as_bytes()).unwrap();
+        let payload = encoder.finish().unwrap();
+
+        let mut image = Vec::new();
+        image.extend_from_slice(INITDATA_IMAGE_MAGIC);
+        image.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+        image.extend_from_slice(&payload);
+
+        let padding = (512 - image.len() % 512) % 512;
+        image.resize(image.len() + padding, 0);
+        image
+    }
+
+    #[test]
+    fn unpacks_a_packed_image() {
+        let image = pack_initdata_image(NODE_DOCUMENT);
+        assert!(is_packed_initdata_image(&image));
+        assert_eq!(unpack_initdata_image(&image).unwrap(), NODE_DOCUMENT);
+    }
+
+    #[test]
+    fn a_bare_document_is_not_a_packed_image() {
+        assert!(!is_packed_initdata_image(NODE_DOCUMENT.as_bytes()));
+        // Shorter than the magic itself.
+        assert!(!is_packed_initdata_image(b"init"));
+        assert!(unpack_initdata_image(NODE_DOCUMENT.as_bytes()).is_err());
+    }
+
+    #[test]
+    fn rejects_an_image_with_nothing_after_the_magic() {
+        let err = unpack_initdata_image(INITDATA_IMAGE_MAGIC)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("truncated initdata image"), "{}", err);
+    }
+
+    #[test]
+    fn rejects_an_image_whose_payload_is_truncated() {
+        let mut image = pack_initdata_image(NODE_DOCUMENT);
+        image.truncate(INITDATA_IMAGE_HEADER_LEN + 2);
+
+        let err = unpack_initdata_image(&image).unwrap_err().to_string();
+        assert!(err.contains("only 2 bytes follow the header"), "{}", err);
+    }
+
+    #[test]
+    fn loads_either_form_from_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let document_path = dir.path().join("initdata.toml");
+        std::fs::write(&document_path, NODE_DOCUMENT).unwrap();
+        let loaded = load_initdata_file(&document_path).unwrap();
+        assert_eq!(loaded.document, NODE_DOCUMENT);
+        assert!(!loaded.packed);
+
+        let image_path = dir.path().join("initdata.img");
+        std::fs::write(&image_path, pack_initdata_image(NODE_DOCUMENT)).unwrap();
+        let loaded = load_initdata_file(&image_path).unwrap();
+        assert_eq!(loaded.document, NODE_DOCUMENT);
+        assert!(loaded.packed);
+    }
+
+    #[test]
+    fn rejects_a_file_that_is_not_an_initdata_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("initdata.toml");
+        // A valid TOML file, but missing the mandatory version field.
+        std::fs::write(&path, "algorithm = \"sha384\"\n[data]\n").unwrap();
+
+        let err = format!("{:#}", load_initdata_file(&path).unwrap_err());
+        assert!(err.contains("parsing the initdata document"), "{}", err);
+    }
+
+    #[test]
+    fn merge_lets_the_overlay_win_per_entry() {
+        let merged = merge_initdata_documents(NODE_DOCUMENT, POD_DOCUMENT).unwrap();
+        let merged = parse_initdata(&merged).unwrap();
+
+        assert_eq!(merged.data()["aa.toml"], "pod aa");
+        assert_eq!(merged.data()["cdh.toml"], "node cdh");
+        assert_eq!(merged.data()["policy.rego"], "pod policy");
+        // The overlay's algorithm comes along, since it selects the digest.
+        assert_eq!(merged.algorithm(), "sha256");
+    }
+
+    #[test]
+    fn merge_is_reproducible() {
+        // The digest of the merged text is what the verifier checks against the
+        // launch measurement, so the same inputs must give back the same bytes.
+        let first = merge_initdata_documents(NODE_DOCUMENT, POD_DOCUMENT).unwrap();
+        for _ in 0..16 {
+            assert_eq!(
+                merge_initdata_documents(NODE_DOCUMENT, POD_DOCUMENT).unwrap(),
+                first
+            );
+        }
+    }
+
+    #[test]
+    fn merge_rejects_a_malformed_side() {
+        assert!(merge_initdata_documents("not initdata", POD_DOCUMENT).is_err());
+        assert!(merge_initdata_documents(NODE_DOCUMENT, "not initdata").is_err());
+    }
+
+    #[test]
+    fn the_packing_script_produces_an_image_this_module_can_read() {
+        // gen-initdata-image.sh spells the image layout out a second time, in
+        // shell. Pin it to the reader here: a change to one side that is not
+        // mirrored in the other would otherwise surface only as a guest unable
+        // to read its init data.
+        let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../tools/packaging/scripts/gen-initdata-image.sh");
+        assert!(
+            script.exists(),
+            "packing script not found at {}",
+            script.display()
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let document = dir.path().join("initdata.toml");
+        let image = dir.path().join("initdata.img");
+        std::fs::write(&document, NODE_DOCUMENT).unwrap();
+
+        let status = std::process::Command::new("bash")
+            .arg(&script)
+            .arg("-o")
+            .arg(&image)
+            .arg(&document)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("running the packing script");
+        assert!(status.success(), "the packing script failed: {}", status);
+
+        let loaded = load_initdata_file(&image).unwrap();
+        assert!(loaded.packed);
+        assert_eq!(loaded.document, NODE_DOCUMENT);
     }
 }

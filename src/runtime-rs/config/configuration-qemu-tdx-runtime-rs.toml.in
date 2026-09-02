@@ -58,6 +58,20 @@ rootless = false
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 enable_annotations = @DEFENABLEANNOTATIONS_COCO@
 
+# Path to an initdata document applied to every sandbox started with this
+# configuration, letting a node carry cluster-wide defaults (such as an aa.toml
+# naming the KBS) without every workload passing them.
+#
+# The file may be either a packed initdata image or a bare initdata TOML
+# document, told apart by the image magic number. A packed image can be built
+# with tools/packaging/scripts/gen-initdata-image.sh. A workload's
+# io.katacontainers.config.hypervisor.cc_init_data annotation is overlaid on it
+# entry by entry; drop cc_init_data from enable_annotations above to make this
+# document authoritative.
+#
+# Default is unset, i.e. initdata comes from the annotation alone.
+# initdata_path = "/opt/kata/share/kata-containers/initdata.toml"
+
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)

@@ -69,7 +69,9 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
 use kata_types::config::{hypervisor::Factory, TomlConfig};
-use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
+use kata_types::initdata::{
+    calculate_initdata_digest, load_initdata_file, merge_initdata_documents, ProtectedPlatform,
+};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use pod_resources_rs::handle_cdi_devices;
@@ -828,14 +830,49 @@ impl VirtSandbox {
         }
     }
 
+    /// Resolve the initdata document for this sandbox out of the node
+    /// configuration and the workload annotation.
+    ///
+    /// When both are present the annotation is overlaid on the node document
+    /// entry by entry, so a node can carry cluster-wide defaults while a
+    /// workload still adds its own. Alongside the document, the path of an
+    /// already-packed node image is returned whenever nothing had to be merged
+    /// into it, so it can be attached as it sits on disk.
+    fn resolve_initdata(
+        hypervisor_config: &HypervisorConfig,
+    ) -> Result<Option<(String, Option<String>)>> {
+        let annotation = hypervisor_config.security_info.initdata.clone();
+        let node_path = hypervisor_config.security_info.initdata_path.clone();
+
+        if node_path.is_empty() {
+            if annotation.is_empty() {
+                return Ok(None);
+            }
+            // Passed verbatim, so that the digest of an annotation-only sandbox
+            // stays exactly what it has always been.
+            return Ok(Some((annotation, None)));
+        }
+
+        let node = load_initdata_file(&node_path).context("load the node initdata")?;
+
+        if annotation.is_empty() {
+            let prepacked = node.packed.then_some(node_path);
+            return Ok(Some((node.document, prepacked)));
+        }
+
+        let merged = merge_initdata_documents(&node.document, &annotation)
+            .context("overlay the initdata annotation onto the node initdata")?;
+
+        Ok(Some((merged, None)))
+    }
+
     async fn prepare_initdata_device_config(
         &self,
         hypervisor_config: &HypervisorConfig,
     ) -> Result<Option<InitDataConfig>> {
-        let initdata = hypervisor_config.security_info.initdata.clone();
-        if initdata.is_empty() {
+        let Some((initdata, prepacked_image)) = Self::resolve_initdata(hypervisor_config)? else {
             return Ok(None);
-        }
+        };
         debug!(sl!(), "Init Data Content String: {:?}", &initdata);
         let available_protection = available_guest_protection()?;
         info!(
@@ -856,15 +893,26 @@ impl VirtSandbox {
         };
         info!(sl!(), "initdata  digest {:?}", &initdata_digest);
 
-        // initdata within compressed rawblock
-        let image_path = Path::new(kata_shared_init_data_path().as_str())
-            .join(&self.sid)
-            .join(KATA_INIT_DATA_IMAGE);
-        initdata_block::push_data(&image_path, &initdata)?;
-        info!(
-            sl!(),
-            "initdata push data into compressed block: {:?}", &image_path
-        );
+        // A node image that nothing was merged into is attached as it sits on
+        // disk; every other document has to be packed for this sandbox.
+        let image_path = match prepacked_image {
+            Some(path) => {
+                info!(sl!(), "initdata attached from the node image: {:?}", &path);
+                PathBuf::from(path)
+            }
+            None => {
+                // initdata within compressed rawblock
+                let image_path = Path::new(kata_shared_init_data_path().as_str())
+                    .join(&self.sid)
+                    .join(KATA_INIT_DATA_IMAGE);
+                initdata_block::push_data(&image_path, &initdata)?;
+                info!(
+                    sl!(),
+                    "initdata push data into compressed block: {:?}", &image_path
+                );
+                image_path
+            }
+        };
         let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
         let block_config = BlockConfigModern {
             path_on_host: image_path.display().to_string(),
@@ -1671,5 +1719,120 @@ impl Persist for VirtSandbox {
             factory: None,
             cancel_token: CancellationToken::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_types::config::hypervisor::SecurityInfo;
+    use kata_types::initdata::parse_initdata;
+
+    const NODE_DOCUMENT: &str = r#"version = "0.1.0"
+algorithm = "sha384"
+
+[data]
+"aa.toml" = "node aa"
+"cdh.toml" = "node cdh"
+"#;
+
+    const POD_DOCUMENT: &str = r#"version = "0.1.0"
+algorithm = "sha384"
+
+[data]
+"aa.toml" = "pod aa"
+"policy.rego" = "pod policy"
+"#;
+
+    fn hypervisor_config(initdata_path: &str, annotation: &str) -> HypervisorConfig {
+        HypervisorConfig {
+            security_info: SecurityInfo {
+                initdata_path: initdata_path.to_string(),
+                initdata: annotation.to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn no_initdata_at_all_attaches_nothing() {
+        assert!(VirtSandbox::resolve_initdata(&hypervisor_config("", ""))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn an_annotation_alone_is_passed_through_verbatim() {
+        let (document, prepacked) =
+            VirtSandbox::resolve_initdata(&hypervisor_config("", POD_DOCUMENT))
+                .unwrap()
+                .unwrap();
+
+        // Verbatim, so that the digest of an annotation-only sandbox is exactly
+        // what it was before node-level initdata existed.
+        assert_eq!(document, POD_DOCUMENT);
+        assert_eq!(prepacked, None);
+    }
+
+    #[test]
+    fn a_node_document_is_packed_for_the_sandbox() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("initdata.toml");
+        std::fs::write(&path, NODE_DOCUMENT).unwrap();
+
+        let (document, prepacked) =
+            VirtSandbox::resolve_initdata(&hypervisor_config(&path.to_string_lossy(), ""))
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(document, NODE_DOCUMENT);
+        // A bare document is not an image, so it still has to be packed.
+        assert_eq!(prepacked, None);
+    }
+
+    #[test]
+    fn a_node_image_is_attached_as_it_sits_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("initdata.img");
+        initdata_block::push_data(&image, NODE_DOCUMENT).unwrap();
+        let image = image.to_string_lossy().to_string();
+
+        let (document, prepacked) = VirtSandbox::resolve_initdata(&hypervisor_config(&image, ""))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(document, NODE_DOCUMENT);
+        assert_eq!(prepacked, Some(image));
+    }
+
+    #[test]
+    fn an_annotation_is_overlaid_on_the_node_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = dir.path().join("initdata.img");
+        initdata_block::push_data(&image, NODE_DOCUMENT).unwrap();
+
+        let (document, prepacked) = VirtSandbox::resolve_initdata(&hypervisor_config(
+            &image.to_string_lossy(),
+            POD_DOCUMENT,
+        ))
+        .unwrap()
+        .unwrap();
+
+        // Merging rewrites the document, so the node image can no longer be
+        // handed to the guest as-is.
+        assert_eq!(prepacked, None);
+
+        let merged = parse_initdata(&document).unwrap();
+        assert_eq!(merged.data()["aa.toml"], "pod aa");
+        assert_eq!(merged.data()["cdh.toml"], "node cdh");
+        assert_eq!(merged.data()["policy.rego"], "pod policy");
+    }
+
+    #[test]
+    fn a_missing_node_file_is_an_error() {
+        let err = VirtSandbox::resolve_initdata(&hypervisor_config("/no/such/initdata.toml", ""))
+            .unwrap_err();
+        assert!(format!("{:#}", err).contains("load the node initdata"));
     }
 }

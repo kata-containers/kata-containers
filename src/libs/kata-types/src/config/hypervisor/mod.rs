@@ -25,6 +25,7 @@
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
+use crate::initdata::load_initdata_file;
 use crate::{resolve_path, sl, validate_path};
 use lazy_static::lazy_static;
 use regex::RegexSet;
@@ -1382,6 +1383,21 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub initdata: String,
 
+    /// Path to an initdata document applied to every sandbox started with this
+    /// configuration, letting a node carry cluster-wide defaults (such as an
+    /// `aa.toml` naming the KBS) without every workload having to pass them.
+    ///
+    /// The file may be either a packed initdata image or a bare initdata TOML
+    /// document; the two are told apart by the image magic number. A packed
+    /// image is attached to the guest as it sits on disk, while a document is
+    /// packed per sandbox.
+    ///
+    /// When a workload also carries the initdata annotation, the annotation is
+    /// overlaid on this document entry by entry. Removing `cc_init_data` from
+    /// `enable_annotations` makes this document authoritative.
+    #[serde(default)]
+    pub initdata_path: String,
+
     /// List of valid annotation names for the hypervisor.
     ///
     /// Each member of the list is a regular expression, representing the base name
@@ -1419,14 +1435,22 @@ fn default_snp_guest_policy() -> u32 {
 impl SecurityInfo {
     /// Adjusts the security configuration information after loading from a configuration file.
     ///
-    /// Sets `guest_hook_path` to its default value if it is empty.
+    /// Resolves `initdata_path` to an absolute path.
     pub fn adjust_config(&mut self) -> Result<()> {
+        resolve_path!(self.initdata_path, "initdata file {} is invalid: {}")?;
         Ok(())
     }
 
     /// Validates the security configuration information.
-    /// (Currently, this method performs no specific validations.)
     pub fn validate(&self) -> Result<()> {
+        validate_path!(self.initdata_path, "initdata file {} is invalid: {}")?;
+        if !self.initdata_path.is_empty() {
+            // Load and parse the document here so that a node whose initdata is
+            // malformed fails when its configuration is read, rather than at the
+            // first sandbox that would have consumed it.
+            load_initdata_file(&self.initdata_path)
+                .map_err(|e| io::Error::other(format!("{e:#}")))?;
+        }
         Ok(())
     }
 
