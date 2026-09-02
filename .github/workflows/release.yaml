@@ -341,6 +341,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Upload the helm chart values presets
+        run: |
+          ./tools/packaging/release/release.sh upload-helm-chart-values-files
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Login to the OCI registries
         env:
           QUAY_DEPLOYER_USERNAME: ${{ vars.QUAY_DEPLOYER_USERNAME }}

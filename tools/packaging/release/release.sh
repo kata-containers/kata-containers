@@ -14,6 +14,7 @@ set -o errtrace
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
+helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
 KATA_DEPLOY_IMAGE_TAGS="${KATA_DEPLOY_IMAGE_TAGS:-}"
 IFS=' ' read -r -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS}"
@@ -253,8 +254,27 @@ function _upload_helm_chart_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
-	helm package "${repo_root_dir}"/tools/packaging/kata-deploy/helm-chart/kata-deploy
+	helm package "${helm_chart_dir}"
 	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
+}
+
+function _upload_helm_chart_values_files()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	local values_files=()
+	shopt -s nullglob
+	values_files=( "${helm_chart_dir}"/try-kata-*.values.yaml )
+	shopt -u nullglob
+
+	[[ "${#values_files[@]}" -eq 0 ]] && \
+		_die "no try-kata-*.values.yaml presets found in ${helm_chart_dir}"
+
+	# Plain names, unlike the other assets, so /releases/latest/download/ works.
+	echo "uploading assets '${values_files[*]##*/}' for tag: ${RELEASE_VERSION}"
+	gh release upload --clobber "${RELEASE_VERSION}" "${values_files[@]}"
 }
 
 function main()
@@ -272,6 +292,7 @@ function main()
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;
 		upload-helm-chart-tarball) _upload_helm_chart_tarball ;;
+		upload-helm-chart-values-files) _upload_helm_chart_values_files ;;
 		publish-release) _publish_release ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
