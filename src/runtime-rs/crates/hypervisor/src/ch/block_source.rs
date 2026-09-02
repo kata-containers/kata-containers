@@ -22,6 +22,19 @@ fn extent_reference(extent_path: &str, descriptor_dir: &Path) -> String {
     extent_path.to_string()
 }
 
+// The VMDK descriptor wraps the extent path in double quotes and has
+// no escape mechanism, so a `"`, newline, or carriage return in a path would
+// terminate the field early and could inject additional descriptor lines.
+// Reject such paths rather than emit a malformed descriptor.
+fn validate_extent_reference(reference: &str, extent_path: &str) -> Result<()> {
+    if reference.contains(['"', '\n', '\r']) {
+        return Err(anyhow!(
+            "VMDK extent path {extent_path} contains characters unsupported by the descriptor grammar"
+        ));
+    }
+    Ok(())
+}
+
 /// Render a VMDK descriptor for a structured layout.
 ///
 /// This mirrors the QEMU backend's `render_vmdk_descriptor`, but references the
@@ -44,6 +57,7 @@ fn render_vmdk_descriptor(config: &VmdkConfig, descriptor_dir: &Path) -> Result<
     writeln!(descriptor, "# Extent description")?;
     for extent in &config.extents {
         let extent_path = extent_reference(&extent.path_on_host, descriptor_dir);
+        validate_extent_reference(&extent_path, &extent.path_on_host)?;
         writeln!(
             descriptor,
             "RW {} FLAT \"{}\" {}",
@@ -192,6 +206,23 @@ mod tests {
         // The extent lives in the descriptor's directory, so it is referenced by name.
         assert!(contents.contains("RW 8 FLAT \"extent-flat.img\" 0"));
         assert!(!descriptor_path.with_extension("vmdk.tmp").exists());
+    }
+
+    #[test]
+    fn rejects_extent_paths_with_descriptor_grammar_characters() {
+        for bad in [
+            "/images/ev\"il.raw",
+            "/images/ev\nil.raw",
+            "/images/ev\ril.raw",
+        ] {
+            let mut config = VmdkConfig::default();
+            config.push_extent(bad, 8, 0);
+
+            let error = render_vmdk_descriptor(&config, Path::new("/descriptors")).unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("unsupported by the descriptor grammar"));
+        }
     }
 
     #[test]
