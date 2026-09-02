@@ -138,6 +138,7 @@ configuration-file option** in the Go runtime.
 | `guest_swap_size_percent` | Swap size as a percentage of total guest memory. |
 | `guest_swap_create_threshold_secs` | Delay, in seconds, before creating the guest swap device. |
 | `rootless_user` (`uid`, `gid`, `groups`, `user_name`) | Structured description of the non-root user used to run the VMM. The Go runtime only exposes the `rootless` boolean. |
+| `initdata_path` | Path to a node-level init data document (or packed init data image) applied to every sandbox, with any pod annotation overlaid on it. See [Providing initdata from the node](how-to/how-to-provide-node-level-initdata.md). |
 | `boot_to_be_template`, `boot_from_template`, `memory_path`, `device_state_path` | Fine-grained VM templating controls. |
 
 !!! warning "Guest swap is rejected by the QEMU plugin"

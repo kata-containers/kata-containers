@@ -21,6 +21,7 @@ nav:
       - NUMA Support: how-to/how-to-use-numa-with-kata.md
       - Local Builds & Deployment: how-to/how-to-build-and-deploy-local-artifacts.md
       - virtio-fs with Kata: how-to/how-to-use-virtio-fs-with-kata.md
+      - Node-Level Initdata: how-to/how-to-provide-node-level-initdata.md
     - Contributing:
       - Documentation: doc-contributing.md
   - Releases:
