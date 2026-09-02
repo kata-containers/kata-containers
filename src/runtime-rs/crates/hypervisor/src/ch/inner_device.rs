@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use super::block_source::prepare_vmdk_descriptor;
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_rootless_symlink_sandbox_jailer_root;
 use crate::device::pci_path::PciPath;
@@ -286,6 +287,13 @@ impl CloudHypervisorInner {
         disk_config.direct = config
             .is_direct
             .unwrap_or(self.config.blockdev_info.block_device_cache_direct);
+
+        // Render the structured VMDK layout into a descriptor file on host.
+        if let Some(vmdk) = &config.vmdk {
+            prepare_vmdk_descriptor(&config.path_on_host, vmdk)?;
+            disk_config.path = Some(config.path_on_host.as_str().into());
+            disk_config.image_type = ImageType::Raw;
+        }
 
         disk_config.rate_limiter_config = RateLimiterConfig::new(
             self.config.blockdev_info.disk_rate_limiter_bw_max_rate,

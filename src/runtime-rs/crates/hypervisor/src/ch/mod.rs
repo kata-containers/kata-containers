@@ -23,6 +23,7 @@ macro_rules! sl {
       };
   }
 
+mod block_source;
 mod inner;
 mod inner_device;
 mod inner_hypervisor;
