@@ -1333,7 +1333,12 @@ impl Vm {
                 .restore_state(net_state, ())?;
         }
         #[cfg(feature = "virtio-vsock")]
-        if let Some(vsock_state) = &state.device_states.vsock {
+        {
+            let vsock_state = state.device_states.vsock.as_ref().ok_or_else(|| {
+                crate::snapshot::SnapshotError::InvalidSnapshot(
+                    "missing virtio-vsock device state".to_string(),
+                )
+            })?;
             self.device_manager
                 .vsock_manager
                 .restore_state(vsock_state, ())?;

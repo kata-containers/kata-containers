@@ -35,11 +35,12 @@
 ///       other pollable FDs are then registered under this nested epoll FD. To
 ///       route all these events to their handlers, the muxer uses another
 ///       `HashMap` object, mapping `RawFd`s to `EpollListener`s.
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::Read;
 use std::os::fd::FromRawFd;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::Arc;
 
 use log::{debug, error, info, trace, warn};
 
@@ -51,7 +52,7 @@ use super::super::packet::VsockPacket;
 use super::super::{Result as VsockResult, VsockChannel, VsockEpollListener, VsockError};
 use super::muxer_killq::MuxerKillQ;
 use super::muxer_rxq::MuxerRxQ;
-use super::{defs, Error, Result, VsockGenericMuxer};
+use super::{defs, Error, Result, VsockConnectionId, VsockGenericMuxer, VsockSnapshotTracker};
 
 /// A unique identifier of a `VsockConnection` object. Connections are stored in
 /// a hash map, keyed by a `ConnMapKey` object.
@@ -59,6 +60,15 @@ use super::{defs, Error, Result, VsockGenericMuxer};
 pub struct ConnMapKey {
     local_port: u32,
     pub(crate) peer_port: u32,
+}
+
+impl From<ConnMapKey> for VsockConnectionId {
+    fn from(key: ConnMapKey) -> Self {
+        Self {
+            local_port: key.local_port,
+            peer_port: key.peer_port,
+        }
+    }
 }
 
 /// A muxer RX queue item.
@@ -126,6 +136,13 @@ pub struct VsockMuxer {
     backend_map: HashMap<VsockBackendType, Box<dyn VsockBackend>>,
     /// the backend which can accept peer-initiated connection.
     peer_backend: Option<VsockBackendType>,
+    /// Connection identifiers retained independently of live host resources
+    /// for snapshot restore resets.
+    snapshot_tracker: Arc<VsockSnapshotTracker>,
+    /// Mandatory resets loaded from a snapshot. This queue is separate from
+    /// the bounded normal RX scheduler so all supported connections can be
+    /// reset and so new traffic cannot overtake restore resets.
+    restore_resets: VecDeque<VsockConnectionId>,
 }
 
 impl VsockChannel for VsockMuxer {
@@ -135,6 +152,27 @@ impl VsockChannel for VsockMuxer {
     /// - `Ok(())`: `pkt` has been successfully filled in; or
     /// - `Err(VsockError::NoData)`: there was no available data with which to fill in the packet.
     fn recv_pkt(&mut self, pkt: &mut VsockPacket) -> VsockResult<()> {
+        if let Some(connection) = self.restore_resets.pop_front() {
+            debug!(
+                "vsock: emitting snapshot-restore RST for lp={}, pp={}",
+                connection.local_port, connection.peer_port
+            );
+            pkt.set_op(uapi::VSOCK_OP_RST)
+                .set_src_cid(uapi::VSOCK_HOST_CID)
+                .set_dst_cid(self.cid)
+                .set_src_port(connection.local_port)
+                .set_dst_port(connection.peer_port)
+                .set_len(0)
+                .set_type(uapi::VSOCK_TYPE_STREAM)
+                .set_flags(0)
+                .set_buf_alloc(0)
+                .set_fwd_cnt(0);
+            if let Err(e) = self.snapshot_tracker.remove_pending_reset(connection) {
+                warn!("vsock: failed to update reset tracker: {e}");
+            }
+            return Ok(());
+        }
+
         // We'll look for instructions on how to build the RX packet in the RX
         // queue. If the queue is empty, that doesn't necessarily mean we don't
         // have any pending RX, since the queue might be out-of-sync. If that's
@@ -163,6 +201,15 @@ impl VsockChannel for VsockMuxer {
                         .set_buf_alloc(0)
                         .set_fwd_cnt(0);
                     self.rxq.pop().unwrap();
+                    if let Err(e) = self
+                        .snapshot_tracker
+                        .remove_pending_reset(VsockConnectionId {
+                            local_port,
+                            peer_port,
+                        })
+                    {
+                        warn!("vsock: failed to update reset tracker: {e}");
+                    }
                     trace!(
                         "vsock: muxer.recv[rxq.len={}, type={}, op={}, sp={}, sc={}, dp={}, dc={}]: {:?}",
                         self.rxq.len(),
@@ -329,7 +376,7 @@ impl VsockChannel for VsockMuxer {
     /// Check if the muxer has any pending RX data, with which to fill a
     /// guest-provided RX buffer.
     fn has_pending_rx(&self) -> bool {
-        !self.rxq.is_empty() || !self.rxq.is_synced()
+        !self.restore_resets.is_empty() || !self.rxq.is_empty() || !self.rxq.is_synced()
     }
 }
 
@@ -392,11 +439,45 @@ impl VsockGenericMuxer for VsockMuxer {
         }
         Ok(())
     }
+
+    fn queue_restore_resets(&mut self, connections: &[VsockConnectionId]) -> Result<()> {
+        if connections.len() > defs::MAX_CONNECTIONS {
+            return Err(Error::InvalidRestoreState(format!(
+                "{} connections exceed the muxer limit {}",
+                connections.len(),
+                defs::MAX_CONNECTIONS
+            )));
+        }
+
+        let unique: HashSet<_> = connections.iter().copied().collect();
+        if unique.len() != connections.len() {
+            return Err(Error::InvalidRestoreState(
+                "duplicate connection tuple".to_string(),
+            ));
+        }
+
+        for connection in connections {
+            self.restore_resets.push_back(*connection);
+            self.snapshot_tracker.add_pending_reset(*connection)?;
+        }
+        Ok(())
+    }
+
+    fn mark_reset_delivery_failed(&mut self, id: VsockConnectionId) -> Result<()> {
+        self.snapshot_tracker.mark_reset_delivery_failed(id)
+    }
 }
 
 impl VsockMuxer {
     /// Muxer constructor.
     pub fn new(cid: u64) -> Result<Self> {
+        Self::new_with_tracker(cid, Arc::new(VsockSnapshotTracker::default()))
+    }
+
+    pub(crate) fn new_with_tracker(
+        cid: u64,
+        snapshot_tracker: Arc<VsockSnapshotTracker>,
+    ) -> Result<Self> {
         Ok(Self {
             cid,
             epoll_fd: epoll::create(false).map_err(Error::EpollFdCreate)?,
@@ -408,6 +489,8 @@ impl VsockMuxer {
             local_port_set: HashSet::with_capacity(defs::MAX_CONNECTIONS),
             backend_map: HashMap::new(),
             peer_backend: None,
+            snapshot_tracker,
+            restore_resets: VecDeque::new(),
         })
     }
 
@@ -671,30 +754,47 @@ impl VsockMuxer {
             return Err(Error::TooManyConnections);
         }
 
-        self.add_listener(
-            conn.as_raw_fd(),
-            EpollListener::Connection {
-                key,
-                evset: conn.get_polled_evset(),
-                backend: conn.stream.backend_type(),
-            },
-        )
-        .map(|_| {
-            if conn.has_pending_rx() {
-                // We can safely ignore any error in adding a connection RX
-                // indication. Worst case scenario, the RX queue will get
-                // desynchronized, but we'll handle that the next time we need
-                // to yield an RX packet.
-                self.rxq.push(MuxerRx::ConnRx(key));
+        // Track the connection before it is registered, so a tracker failure
+        // cannot leave a connection in `conn_map` that the next snapshot would
+        // not know to reset.
+        self.snapshot_tracker.add_active(key.into())?;
+
+        let registered = self
+            .add_listener(
+                conn.as_raw_fd(),
+                EpollListener::Connection {
+                    key,
+                    evset: conn.get_polled_evset(),
+                    backend: conn.stream.backend_type(),
+                },
+            )
+            .map(|_| {
+                if conn.has_pending_rx() {
+                    // We can safely ignore any error in adding a connection RX
+                    // indication. Worst case scenario, the RX queue will get
+                    // desynchronized, but we'll handle that the next time we need
+                    // to yield an RX packet.
+                    self.rxq.push(MuxerRx::ConnRx(key));
+                }
+                self.conn_map.insert(key, conn);
+            });
+
+        if let Err(e) = registered {
+            if let Err(tracker_err) = self.snapshot_tracker.remove_active(key.into()) {
+                warn!("vsock: failed to untrack unregistered connection: {tracker_err}");
             }
-            self.conn_map.insert(key, conn);
-        })
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// Remove a connection from the active connection poll.
     fn remove_connection(&mut self, key: ConnMapKey) {
         if let Some(conn) = self.conn_map.remove(&key) {
             self.remove_listener(conn.as_raw_fd());
+            if let Err(e) = self.snapshot_tracker.remove_active(key.into()) {
+                warn!("vsock: failed to update connection tracker: {e}");
+            }
         }
         self.free_local_port(key.local_port);
     }
@@ -976,8 +1076,24 @@ impl VsockMuxer {
             local_port,
             peer_port,
         });
-        if !pushed {
+        if pushed {
+            if let Err(e) = self.snapshot_tracker.add_pending_reset(VsockConnectionId {
+                local_port,
+                peer_port,
+            }) {
+                warn!("vsock: failed to update reset tracker: {e}");
+            }
+        } else {
             warn!("vsock: muxer.rxq full; dropping RST packet for lp={local_port}, pp={peer_port}");
+            if let Err(e) = self
+                .snapshot_tracker
+                .mark_reset_delivery_failed(VsockConnectionId {
+                    local_port,
+                    peer_port,
+                })
+            {
+                warn!("vsock: failed to record dropped reset: {e}");
+            }
         }
     }
 }
@@ -1192,6 +1308,202 @@ mod tests {
         let ctx = MuxerTestContext::new("/tmp/muxer_epoll_listener");
         assert_eq!(ctx.muxer.as_raw_fd(), ctx.muxer.epoll_fd);
         assert_eq!(ctx.muxer.get_polled_evset(), epoll::Events::EPOLLIN);
+    }
+
+    #[test]
+    fn test_snapshot_tracker_follows_connection_lifecycle() {
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/muxer_snapshot_tracker");
+        let (stream, local_port) = ctx.local_connect(PEER_PORT);
+        let connection = VsockConnectionId {
+            local_port,
+            peer_port: PEER_PORT,
+        };
+
+        assert_eq!(
+            ctx.muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            vec![connection]
+        );
+
+        drop(stream);
+        ctx.notify_muxer();
+        ctx.recv();
+        assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_SHUTDOWN);
+        assert_eq!(
+            ctx.muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            vec![connection]
+        );
+
+        ctx.init_pkt(local_port, PEER_PORT, uapi::VSOCK_OP_RST);
+        ctx.send();
+        assert!(ctx
+            .muxer
+            .snapshot_tracker
+            .snapshot_connections()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn test_snapshot_tracker_captures_pending_reset() {
+        const LOCAL_PORT: u32 = 1026;
+        const PEER_PORT: u32 = 1025;
+
+        let mut ctx = MuxerTestContext::new("/tmp/muxer_pending_reset_tracker");
+        ctx.init_pkt(LOCAL_PORT, PEER_PORT, uapi::VSOCK_OP_RW);
+        ctx.send();
+        ctx.send();
+
+        assert_eq!(
+            ctx.muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            vec![VsockConnectionId {
+                local_port: LOCAL_PORT,
+                peer_port: PEER_PORT,
+            }]
+        );
+
+        ctx.recv();
+        assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_RST);
+        assert_eq!(
+            ctx.muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            vec![VsockConnectionId {
+                local_port: LOCAL_PORT,
+                peer_port: PEER_PORT,
+            }]
+        );
+        ctx.recv();
+        assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_RST);
+        assert!(ctx
+            .muxer
+            .snapshot_tracker
+            .snapshot_connections()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn test_restore_resets_precede_normal_rx() {
+        let restore_connections = vec![
+            VsockConnectionId {
+                local_port: 2000,
+                peer_port: 1000,
+            },
+            VsockConnectionId {
+                local_port: 2001,
+                peer_port: 1001,
+            },
+        ];
+        let mut ctx = MuxerTestContext::new("/tmp/muxer_restore_resets");
+
+        // Queue ordinary protocol-error RX first. Mandatory restore resets
+        // must still be delivered ahead of it.
+        ctx.init_pkt(3000, 3001, uapi::VSOCK_OP_RW);
+        ctx.send();
+        ctx.muxer
+            .queue_restore_resets(&restore_connections)
+            .unwrap();
+
+        for expected in &restore_connections {
+            ctx.recv();
+            assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_RST);
+            assert_eq!(ctx.pkt.src_cid(), uapi::VSOCK_HOST_CID);
+            assert_eq!(ctx.pkt.dst_cid(), PEER_CID);
+            assert_eq!(ctx.pkt.src_port(), expected.local_port);
+            assert_eq!(ctx.pkt.dst_port(), expected.peer_port);
+        }
+
+        ctx.recv();
+        assert_eq!(ctx.pkt.op(), uapi::VSOCK_OP_RST);
+        assert_eq!(ctx.pkt.src_port(), 3000);
+        assert_eq!(ctx.pkt.dst_port(), 3001);
+        assert!(ctx
+            .muxer
+            .snapshot_tracker
+            .snapshot_connections()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn test_restore_reset_state_validation() {
+        let connection = VsockConnectionId {
+            local_port: 2000,
+            peer_port: 1000,
+        };
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+
+        assert!(matches!(
+            muxer.queue_restore_resets(&[connection, connection]),
+            Err(Error::InvalidRestoreState(_))
+        ));
+
+        let too_many = (0..=defs::MAX_CONNECTIONS)
+            .map(|port| VsockConnectionId {
+                local_port: port as u32,
+                peer_port: 1000,
+            })
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            muxer.queue_restore_resets(&too_many),
+            Err(Error::InvalidRestoreState(_))
+        ));
+        assert!(!muxer.has_pending_rx());
+    }
+
+    #[test]
+    fn test_restore_reset_queue_supports_connection_limit() {
+        let connections = (0..defs::MAX_CONNECTIONS)
+            .map(|port| VsockConnectionId {
+                local_port: port as u32,
+                peer_port: 1000,
+            })
+            .collect::<Vec<_>>();
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+
+        muxer.queue_restore_resets(&connections).unwrap();
+
+        assert_eq!(muxer.restore_resets.len(), defs::MAX_CONNECTIONS);
+        assert_eq!(
+            muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            connections
+        );
+    }
+
+    #[test]
+    fn test_reset_delivery_failure_retains_obligation() {
+        let connection = VsockConnectionId {
+            local_port: 2000,
+            peer_port: 1000,
+        };
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+
+        // An undelivered reset is carried into the next snapshot so the
+        // restored muxer sends it again; it does not make saving impossible.
+        muxer.mark_reset_delivery_failed(connection).unwrap();
+        assert_eq!(
+            muxer.snapshot_tracker.snapshot_connections().unwrap(),
+            vec![connection]
+        );
+    }
+
+    #[test]
+    fn test_dropped_reset_is_retained_for_snapshot() {
+        let mut muxer = VsockMuxer::new(PEER_CID).unwrap();
+        for port in 0..defs::MUXER_RXQ_SIZE {
+            muxer.enq_rst(port as u32, 1000);
+        }
+        let dropped = VsockConnectionId {
+            local_port: defs::MUXER_RXQ_SIZE as u32,
+            peer_port: 1000,
+        };
+        muxer.enq_rst(dropped.local_port, dropped.peer_port);
+
+        // The RX queue had no room for the last RST, so it was dropped on the
+        // wire. The snapshot still carries it, and restore re-sends it.
+        let connections = muxer.snapshot_tracker.snapshot_connections().unwrap();
+        assert_eq!(connections.len(), defs::MUXER_RXQ_SIZE + 1);
+        assert!(connections.contains(&dropped));
     }
 
     #[test]

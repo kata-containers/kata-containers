@@ -75,7 +75,10 @@ pub struct DeviceManagerState {
 /// Bump this only for a deliberately incompatible change to the persisted
 /// state format that append-only evolution cannot absorb. On restore, an
 /// epoch mismatch causes the snapshot to be refused with a clear error.
-pub const FORMAT_EPOCH: u16 = 1;
+// Epoch 2 adds deterministic restore-time reset semantics for live vsock
+// connections. Epoch 1 snapshots do not carry the connection identifiers
+// needed to provide that guarantee.
+pub const FORMAT_EPOCH: u16 = 2;
 
 /// Errors from the top-level microVM save/restore orchestration.
 #[derive(Debug, thiserror::Error)]

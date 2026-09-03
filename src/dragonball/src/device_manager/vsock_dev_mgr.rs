@@ -6,6 +6,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use dbs_virtio_devices as virtio;
@@ -74,6 +75,10 @@ pub enum VsockDeviceError {
     /// Inner backend create error
     #[error("vsock inner backend create error: {0}")]
     CreateInnerBackend(#[source] std::io::Error),
+
+    /// Snapshot state does not match the configured vsock devices.
+    #[error("invalid vsock snapshot state: {0}")]
+    InvalidSnapshot(String),
 }
 
 /// Configuration information for a vsock device.
@@ -322,9 +327,9 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
 
     /// Capture the state of all vsock devices.
     ///
-    /// The virtual machine must be paused when this is called. Live vsock
-    /// connection state is not captured: snapshots must be taken at a clean
-    /// quiesce point with no active connections.
+    /// The virtual machine must be paused when this is called. Live host
+    /// resources are not captured; connection identifiers are retained so the
+    /// restored devices can reset their stale guest-side sockets.
     fn save_state(&mut self, _args: ()) -> std::result::Result<Self::State, Self::Error> {
         let mut devices = Vec::new();
         for info in self.info_list.iter() {
@@ -354,12 +359,40 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
         state: &Self::State,
         _args: (),
     ) -> std::result::Result<(), Self::Error> {
+        if state.devices.len() != self.info_list.len() {
+            return Err(VsockDeviceError::InvalidSnapshot(format!(
+                "expected {} device state(s), found {}",
+                self.info_list.len(),
+                state.devices.len()
+            )));
+        }
+
+        let mut restored_ids = HashSet::with_capacity(state.devices.len());
+        for dev_state in &state.devices {
+            if !restored_ids.insert(dev_state.config.id()) {
+                return Err(VsockDeviceError::InvalidSnapshot(format!(
+                    "duplicate device id '{}'",
+                    dev_state.config.id()
+                )));
+            }
+            if !self
+                .info_list
+                .iter()
+                .any(|info| info.config.id() == dev_state.config.id())
+            {
+                return Err(VsockDeviceError::InvalidSnapshot(format!(
+                    "unknown device id '{}'",
+                    dev_state.config.id()
+                )));
+            }
+        }
+
         for dev_state in &state.devices {
             let info = self
                 .info_list
                 .iter()
                 .find(|info| info.config.id() == dev_state.config.id())
-                .ok_or(VsockDeviceError::Virtio(VirtioError::InvalidInput))?;
+                .expect("vsock device state was validated above");
             let device = info
                 .device
                 .as_ref()
@@ -378,7 +411,7 @@ impl<'a> dbs_snapshot::Persist<'a> for VsockDeviceMgr {
 
 /// Snapshot state of one vsock device (config + guest-negotiated device state
 /// + transport state); see [`persist::VirtioDevState`].
-pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo>;
+pub type VsockDevState = persist::VirtioDevState<VsockDeviceConfigInfo, virtio::vsock::VsockState>;
 
 /// Snapshot state of the vsock device manager.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -396,5 +429,59 @@ impl Default for VsockDeviceMgr {
             default_inner_connector: None,
             use_shared_irq: USE_SHARED_IRQ,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dbs_snapshot::Persist;
+
+    use super::*;
+    use crate::config_manager::DeviceConfigInfo;
+
+    fn config(id: &str, guest_cid: u32) -> VsockDeviceConfigInfo {
+        VsockDeviceConfigInfo {
+            id: id.to_string(),
+            guest_cid,
+            ..Default::default()
+        }
+    }
+
+    fn state(config: VsockDeviceConfigInfo) -> VsockDevState {
+        persist::VirtioDevState {
+            config,
+            device_info: virtio::vsock::VsockState::default(),
+            transport: persist::VirtioTransportState::Mmio(Default::default()),
+        }
+    }
+
+    #[test]
+    fn test_restore_rejects_missing_vsock_device_state() {
+        let mut manager = VsockDeviceMgr::default();
+        manager
+            .info_list
+            .push(DeviceConfigInfo::new(config("vsock0", 3)));
+
+        let error =
+            Persist::restore_state(&mut manager, &VsockDeviceMgrState::default(), ()).unwrap_err();
+        assert!(matches!(error, VsockDeviceError::InvalidSnapshot(_)));
+    }
+
+    #[test]
+    fn test_restore_rejects_duplicate_vsock_device_state() {
+        let mut manager = VsockDeviceMgr::default();
+        manager
+            .info_list
+            .push(DeviceConfigInfo::new(config("vsock0", 3)));
+        manager
+            .info_list
+            .push(DeviceConfigInfo::new(config("vsock1", 4)));
+        let duplicate = config("vsock0", 3);
+        let snapshot = VsockDeviceMgrState {
+            devices: vec![state(duplicate.clone()), state(duplicate)],
+        };
+
+        let error = Persist::restore_state(&mut manager, &snapshot, ()).unwrap_err();
+        assert!(matches!(error, VsockDeviceError::InvalidSnapshot(_)));
     }
 }

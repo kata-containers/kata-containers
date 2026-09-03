@@ -15,6 +15,7 @@ use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
 use log::debug;
 use log::trace;
 use log::warn;
+use serde::{Deserialize, Serialize};
 use virtio_queue::QueueT;
 use vm_memory::GuestAddressSpace;
 use vm_memory::GuestMemoryRegion;
@@ -22,15 +23,29 @@ use vm_memory::GuestMemoryRegion;
 use super::backend::VsockBackend;
 use super::defs::uapi;
 use super::epoll_handler::VsockEpollHandler;
-use super::muxer::{Error as MuxerError, VsockGenericMuxer, VsockMuxer};
+use super::muxer::{
+    Error as MuxerError, VsockConnectionId, VsockGenericMuxer, VsockMuxer, VsockSnapshotTracker,
+};
 use super::{Result, VsockError};
 use crate::device::{VirtioDeviceConfig, VirtioDeviceInfo};
+use crate::persist::VirtioDeviceInfoState;
 use crate::{ActivateResult, ConfigResult, DbsGuestAddressSpace, VirtioDevice};
 
 const VSOCK_DRIVER_NAME: &str = "virtio-vsock";
 const VSOCK_CONFIG_SPACE_SIZE: usize = 8;
 const VSOCK_AVAIL_FEATURES: u64 =
     (1u64 << uapi::VIRTIO_F_VERSION_1) | (1u64 << uapi::VIRTIO_F_IN_ORDER);
+
+/// Persisted virtio-vsock state.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct VsockState {
+    /// Guest-negotiated virtio device state.
+    #[serde(flatten)]
+    pub device_info: VirtioDeviceInfoState,
+    /// Connections whose host endpoints will not exist in the restored VMM.
+    #[serde(default)]
+    pub reset_connections: Vec<VsockConnectionId>,
+}
 
 /// This is the `VirtioDevice` implementation for our vsock device. It handles
 /// the virtio-level device logic: feature negociation, device configuration,
@@ -54,6 +69,7 @@ pub struct Vsock<AS: GuestAddressSpace, M: VsockGenericMuxer = VsockMuxer> {
     device_info: VirtioDeviceInfo,
     subscriber_id: Option<SubscriberId>,
     muxer: Option<M>,
+    snapshot_tracker: Arc<VsockSnapshotTracker>,
     phantom: PhantomData<AS>,
 }
 
@@ -67,17 +83,45 @@ impl<AS: GuestAddressSpace> Vsock<AS> {
         epoll_mgr: EpollManager,
         f_access_platform: bool,
     ) -> Result<Self> {
-        let muxer = VsockMuxer::new(cid).map_err(VsockError::Muxer)?;
-        Self::new_with_muxer(cid, queue_sizes, epoll_mgr, muxer, f_access_platform)
+        let snapshot_tracker = Arc::new(VsockSnapshotTracker::default());
+        let muxer = VsockMuxer::new_with_tracker(cid, snapshot_tracker.clone())
+            .map_err(VsockError::Muxer)?;
+        Self::new_with_muxer_and_tracker(
+            cid,
+            queue_sizes,
+            epoll_mgr,
+            muxer,
+            snapshot_tracker,
+            f_access_platform,
+        )
     }
 }
 
 impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
+    #[cfg(test)]
     pub(crate) fn new_with_muxer(
         cid: u64,
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
         muxer: M,
+        f_access_platform: bool,
+    ) -> Result<Self> {
+        Self::new_with_muxer_and_tracker(
+            cid,
+            queue_sizes,
+            epoll_mgr,
+            muxer,
+            Arc::new(VsockSnapshotTracker::default()),
+            f_access_platform,
+        )
+    }
+
+    fn new_with_muxer_and_tracker(
+        cid: u64,
+        queue_sizes: Arc<Vec<u16>>,
+        epoll_mgr: EpollManager,
+        muxer: M,
+        snapshot_tracker: Arc<VsockSnapshotTracker>,
         f_access_platform: bool,
     ) -> Result<Self> {
         let mut config_space = Vec::with_capacity(VSOCK_CONFIG_SPACE_SIZE);
@@ -103,6 +147,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
             ),
             subscriber_id: None,
             muxer: Some(muxer),
+            snapshot_tracker,
             phantom: PhantomData,
         })
     }
@@ -127,17 +172,25 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
 impl<'a, AS: GuestAddressSpace, M: VsockGenericMuxer> crate::persist::VirtioDevicePersist<'a>
     for Vsock<AS, M>
 {
-    type State = crate::persist::VirtioDeviceInfoState;
+    type State = VsockState;
     type SaveArgs = ();
     type RestoreArgs = ();
     type Error = crate::Error;
 
-    /// Capture the guest-negotiated state of this device.
-    ///
-    /// Live vsock connection state is not captured: a snapshot must be taken
-    /// at a clean quiesce point with no active connections.
+    /// Capture guest-negotiated state and connections to reset on restore.
     fn save_state(&mut self, _args: ()) -> crate::Result<Self::State> {
-        Ok(self.device_info.save_state())
+        let reset_connections = self
+            .snapshot_tracker
+            .snapshot_connections()
+            .map_err(VsockError::Muxer)?;
+        debug!(
+            "vsock: saving {} connection reset(s) in snapshot",
+            reset_connections.len()
+        );
+        Ok(VsockState {
+            device_info: self.device_info.save_state(),
+            reset_connections,
+        })
     }
 
     /// Restore the guest-negotiated state of this device.
@@ -145,7 +198,17 @@ impl<'a, AS: GuestAddressSpace, M: VsockGenericMuxer> crate::persist::VirtioDevi
     /// The device must have been re-created with the same configuration and
     /// must not have been activated yet.
     fn restore_state(&mut self, state: &Self::State, _args: ()) -> crate::Result<()> {
-        self.device_info.restore_state(state)
+        self.device_info.restore_state(&state.device_info)?;
+        self.muxer
+            .as_mut()
+            .ok_or(VsockError::Muxer(MuxerError::BackendAddAfterActivated))?
+            .queue_restore_resets(&state.reset_connections)
+            .map_err(VsockError::Muxer)?;
+        debug!(
+            "vsock: queued {} connection reset(s) from snapshot",
+            state.reset_connections.len()
+        );
+        Ok(())
     }
 }
 
@@ -244,6 +307,7 @@ where
 mod tests {
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
+    use dbs_snapshot::Persist;
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
@@ -277,6 +341,35 @@ mod tests {
 
             Ok(handler)
         }
+    }
+
+    #[test]
+    fn test_vsock_state_defaults_restore_connections() {
+        let mut value = serde_json::to_value(VsockState::default()).unwrap();
+        value.as_object_mut().unwrap().remove("reset_connections");
+        let state: VsockState = serde_json::from_value(value).unwrap();
+        assert!(state.reset_connections.is_empty());
+    }
+
+    #[test]
+    fn test_save_state_includes_sorted_reset_connections() {
+        let mut ctx = TestContext::new();
+        let first = VsockConnectionId {
+            local_port: 2000,
+            peer_port: 1000,
+        };
+        let second = VsockConnectionId {
+            local_port: 2001,
+            peer_port: 1001,
+        };
+        ctx.device.snapshot_tracker.add_active(second).unwrap();
+        ctx.device
+            .snapshot_tracker
+            .add_pending_reset(first)
+            .unwrap();
+
+        let state = Persist::save_state(&mut ctx.device, ()).unwrap();
+        assert_eq!(state.reset_connections, vec![first, second]);
     }
 
     #[test]

@@ -17,8 +17,9 @@ use std::os::unix::io::AsRawFd;
 use vm_memory::{GuestAddress, GuestMemoryError};
 
 pub use self::defs::{NUM_QUEUES, QUEUE_SIZES};
-pub use self::device::Vsock;
+pub use self::device::{Vsock, VsockState};
 use self::muxer::Error as MuxerError;
+pub use self::muxer::VsockConnectionId;
 pub use self::muxer::VsockMuxer;
 use self::packet::VsockPacket;
 
@@ -183,6 +184,7 @@ pub trait VsockChannel {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::ops::Deref;
     use std::os::unix::io::{AsRawFd, RawFd};
     use std::sync::Arc;
@@ -223,6 +225,7 @@ mod tests {
         pub rx_ok_cnt: usize,
         pub tx_ok_cnt: usize,
         pub evset: Option<epoll::Events>,
+        pub restore_resets: VecDeque<VsockConnectionId>,
     }
 
     impl TestMuxer {
@@ -235,6 +238,7 @@ mod tests {
                 rx_ok_cnt: 0,
                 tx_ok_cnt: 0,
                 evset: None,
+                restore_resets: VecDeque::new(),
             }
         }
 
@@ -257,6 +261,17 @@ mod tests {
 
     impl VsockChannel for TestMuxer {
         fn recv_pkt(&mut self, _pkt: &mut VsockPacket) -> Result<()> {
+            if let Some(connection) = self.restore_resets.pop_front() {
+                _pkt.set_op(defs::uapi::VSOCK_OP_RST)
+                    .set_src_cid(defs::uapi::VSOCK_HOST_CID)
+                    .set_src_port(connection.local_port)
+                    .set_dst_port(connection.peer_port)
+                    .set_len(0)
+                    .set_type(defs::uapi::VSOCK_TYPE_STREAM);
+                self.rx_ok_cnt += 1;
+                return Ok(());
+            }
+
             let cool_buf = [0xDu8, 0xE, 0xA, 0xD, 0xB, 0xE, 0xE, 0xF];
             match self.rx_err.take() {
                 None => {
@@ -283,7 +298,7 @@ mod tests {
         }
 
         fn has_pending_rx(&self) -> bool {
-            self.pending_rx
+            self.pending_rx || !self.restore_resets.is_empty()
         }
     }
 
@@ -308,6 +323,11 @@ mod tests {
             _backend: Box<dyn VsockBackend>,
             _is_peer_backend: bool,
         ) -> MuxerResult<()> {
+            Ok(())
+        }
+
+        fn queue_restore_resets(&mut self, connections: &[VsockConnectionId]) -> MuxerResult<()> {
+            self.restore_resets.extend(connections.iter().copied());
             Ok(())
         }
     }
