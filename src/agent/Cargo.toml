@@ -1,54 +1,54 @@
 [package]
-name = "kata-agent"
-version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "kata-agent"
+version = "0.1.0"
 
 [dependencies]
-oci-spec.workspace = true
+capctl.workspace = true
+const_format.workspace = true
+derivative.workspace = true
 lazy_static.workspace = true
-ttrpc.workspace = true
-protobuf.workspace = true
 libc.workspace = true
 nix.workspace = true
-capctl.workspace = true
-serde_json.workspace = true
+oci-spec.workspace = true
+protobuf.workspace = true
+regex.workspace = true
 scan_fmt.workspace = true
 scopeguard.workspace = true
-thiserror.workspace = true
-regex.workspace = true
+serde_json.workspace = true
 serial_test.workspace = true
+thiserror.workspace = true
+ttrpc.workspace = true
 url.workspace = true
-derivative.workspace = true
-const_format.workspace = true
 
 # Async helpers
-async-trait.workspace = true
 async-recursion.workspace = true
+async-trait.workspace = true
 futures.workspace = true
 
 # Async runtime
 tokio.workspace = true
 tokio-vsock.workspace = true
 
+ipnetwork.workspace = true
+netlink-packet-core.workspace = true
+netlink-packet-route.workspace = true
 netlink-sys.workspace = true
 rtnetlink.workspace = true
-netlink-packet-route.workspace = true
-netlink-packet-core.workspace = true
-ipnetwork.workspace = true
 
 slog.workspace = true
 slog-scope.workspace = true
 slog-term.workspace = true
 
 # Redirect ttrpc log calls
-slog-stdlog.workspace = true
 log.workspace = true
+slog-stdlog.workspace = true
 
 cfg-if.workspace = true
-prometheus.workspace = true
 procfs.workspace = true
+prometheus.workspace = true
 
 anyhow.workspace = true
 
@@ -58,46 +58,46 @@ cgroups.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 # TODO: bump tracing-opentelemetry to sync with version in workspace
-tracing-opentelemetry = "0.17.0"
 opentelemetry.workspace = true
+tracing-opentelemetry = "0.17.0"
 
 # Configuration
-serde.workspace = true
-toml.workspace = true
 clap.workspace = true
+serde.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
+toml.workspace = true
 
 # Local dependencies
-kata-agent-policy = { workspace = true, optional = true }
-mem-agent.workspace = true
-rustjail.workspace = true
-protocols = { workspace = true, features = ["async", "with-serde"] }
+kata-agent-policy = { optional = true, workspace = true }
 kata-sys-util.workspace = true
 kata-types.workspace = true
+mem-agent.workspace = true
 pcilibs-rs.workspace = true
+protocols = { features = ["async", "with-serde"], workspace = true }
 runtime-spec.workspace = true
+rustjail.workspace = true
 safe-path.workspace = true
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
 logging.workspace = true
-vsock-exporter.workspace = true
 pathrs.workspace = true
+vsock-exporter.workspace = true
 
 # Initdata
+async-compression = { features = ["gzip", "tokio"], version = "0.4.22" }
 base64 = { workspace = true }
 sha2 = { workspace = true }
-async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
 
 container-device-interface.workspace = true
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", rev = "4942504a9a2977d49989a5e5b7c1c8e07dc0fa41", package = "s390_pv_core" }
+pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", package = "s390_pv_core", rev = "4942504a9a2977d49989a5e5b7c1c8e07dc0fa41" }
 
 [dev-dependencies]
+rstest.workspace = true
 tempfile.workspace = true
 which.workspace = true
-rstest.workspace = true
 
 test-utils.workspace = true
 
@@ -105,7 +105,7 @@ test-utils.workspace = true
 lto = true
 
 [features]
-seccomp = ["rustjail/seccomp"]
 agent-policy = ["kata-agent-policy"]
-init-data = []
 devicemapper = ["kata-types/devicemapper"]
+init-data = []
+seccomp = ["rustjail/seccomp"]

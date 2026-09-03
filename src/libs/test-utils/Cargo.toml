@@ -1,16 +1,16 @@
 [package]
-name = "test-utils"
-version = "0.1.0"
-description = "A library for test Rust code"
-keywords = ["kata", "container", "test", "utils"]
-categories = ["testing"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
+categories = ["testing"]
+description = "A library for test Rust code"
 edition = "2018"
+homepage = "https://katacontainers.io/"
+keywords = ["container", "kata", "test", "utils"]
+license = "Apache-2.0"
+name = "test-utils"
+readme = "README.md"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [dependencies]
-nix = { workspace = true }
 libc = "0.2"
+nix = { workspace = true }
