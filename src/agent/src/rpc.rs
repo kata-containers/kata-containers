@@ -127,11 +127,11 @@ const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
 /// or /usr/sbin, we need to check both of them
 const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
 const IPTABLES_SAVE: &str = "/sbin/iptables-save";
-const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-store";
+const USR_IPTABLES_RESTORE: &str = "/usr/sbin/iptables-restore";
 const IPTABLES_RESTORE: &str = "/sbin/iptables-restore";
 const USR_IP6TABLES_SAVE: &str = "/usr/sbin/ip6tables-save";
 const IP6TABLES_SAVE: &str = "/sbin/ip6tables-save";
-const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-save";
+const USR_IP6TABLES_RESTORE: &str = "/usr/sbin/ip6tables-restore";
 const IP6TABLES_RESTORE: &str = "/sbin/ip6tables-restore";
 const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
