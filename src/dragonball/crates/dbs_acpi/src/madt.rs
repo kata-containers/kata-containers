@@ -158,7 +158,5 @@ pub fn create_madt_table(max_vcpus: u8, boot_vcpus: u8) -> Sdt {
 
     madt.append_slice(MadtEntryIoapic::new(0, IOAPIC_START, 0).as_slice());
 
-    madt.append_slice(MadtEntryIntrSrcOverride::new(0, 2, 2, 0).as_slice());
-
     madt
 }
