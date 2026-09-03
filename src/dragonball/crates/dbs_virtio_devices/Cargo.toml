@@ -1,31 +1,32 @@
 [package]
-name = "dbs-virtio-devices"
-version = "0.3.1"
 authors = ["Alibaba Dragonball Team"]
-license = "Apache-2.0 AND BSD-3-Clause"
-edition = "2018"
 description = "Virtio device backend driver framework and device drivers"
+edition = "2018"
 homepage = "https://github.com/openanolis/dragonball-sandbox"
-repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
-keywords = ["dragonball", "secure-sandbox", "devices", "virtio"]
+keywords = ["devices", "dragonball", "secure-sandbox", "virtio"]
+license = "Apache-2.0 AND BSD-3-Clause"
+name = "dbs-virtio-devices"
 readme = "README.md"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
+version = "0.3.1"
 
 [dependencies]
-dbs-snapshot = { workspace = true }
 byteorder = "1.4.3"
 caps = "0.5.3"
-dbs-device = { workspace = true }
-dbs-interrupt = { workspace = true, features = [
-    "kvm-legacy-irq",
-    "kvm-msi-irq",
-    "split-legacy-irq",
-] }
-dbs-utils = { workspace = true }
 dbs-address-space = { workspace = true }
 dbs-boot = { workspace = true }
+dbs-device = { workspace = true }
+dbs-interrupt = { features = [
+  "kvm-legacy-irq",
+  "kvm-msi-irq",
+  "split-legacy-irq",
+], workspace = true }
+dbs-snapshot = { workspace = true }
+dbs-utils = { workspace = true }
 epoll = ">=4.3.1, <4.3.2"
+fuse-backend-rs = { optional = true, version = "0.14.0" }
 io-uring = "0.5.2"
-fuse-backend-rs = { version = "0.14.0", optional = true }
+kata-sys-util = { workspace = true }
 kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
 libc = "0.2.119"
@@ -35,40 +36,39 @@ nydus-api = "0.4.1"
 nydus-rafs = "0.4.1"
 nydus-storage = "0.7.2"
 rlimit = "0.7.0"
-serde = { version = "1.0.27", features = ["derive"] }
+sendfd = "0.4.3"
+serde = { features = ["derive"], version = "1.0.27" }
 serde_json = "1.0.9"
 thiserror = { workspace = true }
 threadpool = "1"
+timerfd = "1.0"
+vhost-rs = { optional = true, package = "vhost", version = "0.15.0" }
 virtio-bindings = { workspace = true }
 virtio-queue = { workspace = true }
+vm-memory = { features = ["backend-mmap"], workspace = true }
 vmm-sys-util = { workspace = true }
-vm-memory = { workspace = true, features = ["backend-mmap"] }
-sendfd = "0.4.3"
-vhost-rs = { version = "0.15.0", package = "vhost", optional = true }
-timerfd = "1.0"
-kata-sys-util = { workspace = true }
 
 [dev-dependencies]
-vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }
 test-utils = { workspace = true }
+vm-memory = { features = ["backend-atomic", "backend-mmap"], workspace = true }
 
 [features]
 test-resources = []
-virtio-mmio = []
-virtio-vsock = ["virtio-mmio"]
-virtio-net = ["virtio-mmio"]
-virtio-blk = ["virtio-mmio"]
-virtio-fs = ["virtio-mmio", "fuse-backend-rs/virtiofs", "nydus-rafs/virtio-fs"]
-virtio-fs-pro = [
-    "virtio-fs",
-    "nydus-storage/backend-registry",
-    "nydus-storage/backend-oss",
-]
-virtio-mem = ["virtio-mmio"]
-virtio-balloon = ["virtio-mmio"]
-vhost = ["virtio-mmio", "vhost-rs/vhost-user-frontend", "vhost-rs/vhost-kern"]
+vhost = ["vhost-rs/vhost-kern", "vhost-rs/vhost-user-frontend", "virtio-mmio"]
 vhost-net = ["vhost", "vhost-rs/vhost-net"]
 vhost-user = ["vhost"]
+vhost-user-blk = ["vhost-user"]
 vhost-user-fs = ["vhost-user"]
 vhost-user-net = ["vhost-user"]
-vhost-user-blk = ["vhost-user"]
+virtio-balloon = ["virtio-mmio"]
+virtio-blk = ["virtio-mmio"]
+virtio-fs = ["fuse-backend-rs/virtiofs", "nydus-rafs/virtio-fs", "virtio-mmio"]
+virtio-fs-pro = [
+  "nydus-storage/backend-oss",
+  "nydus-storage/backend-registry",
+  "virtio-fs",
+]
+virtio-mem = ["virtio-mmio"]
+virtio-mmio = []
+virtio-net = ["virtio-mmio"]
+virtio-vsock = ["virtio-mmio"]

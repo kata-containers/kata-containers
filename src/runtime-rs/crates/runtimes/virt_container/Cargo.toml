@@ -1,9 +1,9 @@
 [package]
-name = "virt_container"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "virt_container"
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -12,31 +12,31 @@ awaitgroup = { workspace = true }
 containerd-shim-protos = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true }
+oci-spec = { workspace = true }
 protobuf = { workspace = true }
-sendfd = { version = "0.4.3", features = ["tokio"] }
-serde = { workspace = true, features = ["derive"] }
+sendfd = { features = ["tokio"], version = "0.4.3" }
+serde = { features = ["derive"], workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
+strum = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
-url = { workspace = true }
 tracing = { workspace = true }
-oci-spec = { workspace = true }
-strum = { workspace = true }
-uuid = { version = "1", features = ["v4"] }
+url = { workspace = true }
+uuid = { features = ["v4"], version = "1" }
 
 # Local dependencies
 agent = { workspace = true }
 common = { workspace = true }
-hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+hypervisor = { features = ["cloud-hypervisor"], workspace = true }
 kata-sys-util = { workspace = true }
-pod-resources-rs = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
-runtime-spec = { workspace = true }
 persist = { workspace = true }
+pod-resources-rs = { workspace = true }
 resource = { workspace = true }
+runtime-spec = { workspace = true }
 
 [features]
 default = ["cloud-hypervisor"]

@@ -1,25 +1,25 @@
 [package]
-name = "mem-agent"
-version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "mem-agent"
+version = "0.2.0"
 
 [dependencies]
+anyhow = "1.0"
+chrono = "0.4"
+maplit = "1.0"
+nix = { features = ["fs", "sched"], workspace = true }
+page_size = "0.6"
 slog = "2.5.2"
 slog-scope = "4.1.2"
-anyhow = "1.0"
-page_size = "0.6"
-chrono = "0.4"
-tokio = { version = "1.45.1", features = ["full"] }
-maplit = "1.0"
-nix = { workspace = true, features = ["fs", "sched"] }
+tokio = { features = ["full"], version = "1.45.1" }
 
 [dev-dependencies]
-maplit = "1.0"
-slog-term = "2.9.0"
-slog-async = "2.7"
-once_cell = "1.9.0"
 lazy_static = "1.4"
-nix = { workspace = true, features = ["user"] }
+maplit = "1.0"
+nix = { features = ["user"], workspace = true }
+once_cell = "1.9.0"
+slog-async = "2.7"
+slog-term = "2.9.0"
 test-utils = { path = "../test-utils" }

@@ -20,8 +20,8 @@ members = [
 
   # kata-agent
   "src/agent",
-  "src/agent/rustjail",
   "src/agent/policy",
+  "src/agent/rustjail",
   "src/agent/vsock-exporter",
 
   # Dragonball
@@ -73,7 +73,6 @@ exclude = [
   "tools/packaging/kata-deploy/local-build/build",
 
   # Exclude vendor directories created by cargo vendor
-  "vendor",
   "src/agent/vendor",
   "src/runtime-rs/vendor",
   "src/tools/agent-ctl/vendor",
@@ -81,6 +80,7 @@ exclude = [
   "src/tools/kata-ctl/vendor",
   "src/tools/trace-forwarder/vendor",
   "tools/packaging/kata-deploy/binary/vendor",
+  "vendor",
 ]
 
 [workspace.dependencies]
@@ -100,7 +100,6 @@ vm-superio = "0.8.0"
 vmm-sys-util = "0.15.0"
 
 # Local dependencies from Dragonball Sandbox crates
-dragonball = { path = "src/dragonball" }
 dbs-acpi = { path = "src/dragonball/crates/dbs_acpi" }
 dbs-address-space = { path = "src/dragonball/crates/dbs_address_space" }
 dbs-allocator = { path = "src/dragonball/crates/dbs_allocator" }
@@ -110,33 +109,34 @@ dbs-device = { path = "src/dragonball/crates/dbs_device" }
 dbs-interrupt = { path = "src/dragonball/crates/dbs_interrupt" }
 dbs-legacy-devices = { path = "src/dragonball/crates/dbs_legacy_devices" }
 dbs-pci = { path = "src/dragonball/crates/dbs_pci" }
-dbs-upcall = { path = "src/dragonball/crates/dbs_upcall" }
 dbs-snapshot = { path = "src/dragonball/crates/dbs_snapshot" }
+dbs-upcall = { path = "src/dragonball/crates/dbs_upcall" }
 dbs-utils = { path = "src/dragonball/crates/dbs_utils" }
 dbs-virtio-devices = { path = "src/dragonball/crates/dbs_virtio_devices" }
+dragonball = { path = "src/dragonball" }
 
 # Local dependencies from runtime-rs
 agent = { path = "src/runtime-rs/crates/agent" }
+ch-config = { path = "src/runtime-rs/crates/hypervisor/ch-config" }
+common = { path = "src/runtime-rs/crates/runtimes/common" }
 hypervisor = { path = "src/runtime-rs/crates/hypervisor" }
+linux_container = { path = "src/runtime-rs/crates/runtimes/linux_container" }
 persist = { path = "src/runtime-rs/crates/persist" }
 resource = { path = "src/runtime-rs/crates/resource" }
 runtimes = { path = "src/runtime-rs/crates/runtimes" }
 service = { path = "src/runtime-rs/crates/service" }
 tests_utils = { path = "src/runtime-rs/tests/utils" }
-ch-config = { path = "src/runtime-rs/crates/hypervisor/ch-config" }
-common = { path = "src/runtime-rs/crates/runtimes/common" }
-linux_container = { path = "src/runtime-rs/crates/runtimes/linux_container" }
 virt_container = { path = "src/runtime-rs/crates/runtimes/virt_container" }
 wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
 
 # Local dependencies from `src/lib`
 kata-sys-util = { path = "src/libs/kata-sys-util" }
-pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "d248714e" }
-pod-resources-rs = { path = "src/libs/pod-resources-rs" }
-kata-types = { path = "src/libs/kata-types", features = ["safe-path"] }
+kata-types = { features = ["safe-path"], path = "src/libs/kata-types" }
 logging = { path = "src/libs/logging" }
 mem-agent = { path = "src/libs/mem-agent" }
-protocols = { path = "src/libs/protocols", features = ["async"] }
+pcilibs-rs = { git = "https://github.com/kata-containers/pcilibs-rs", rev = "d248714e" }
+pod-resources-rs = { path = "src/libs/pod-resources-rs" }
+protocols = { features = ["async"], path = "src/libs/protocols" }
 runtime-spec = { path = "src/libs/runtime-spec" }
 safe-path = { path = "src/libs/safe-path" }
 shim-interface = { path = "src/libs/shim-interface" }
@@ -150,26 +150,31 @@ vsock-exporter = { path = "src/agent/vsock-exporter" }
 # Outside dependencies
 actix-rt = "2.7.0"
 anyhow = "1.0.103"
-awaitgroup = "0.7.0"
-base64 = "0.22"
 async-recursion = "0.3.2"
 async-trait = "0.1.48"
+awaitgroup = "0.7.0"
+base64 = "0.22"
 bilge = "0.3.0"
+bytes = "1.0"
 capctl = "0.2.0"
 cfg-if = "1.0.0"
-cgroups = { package = "cgroups-rs", version = "0.5.1", features = ["oci"] }
-clap = { version = "4.5.40", features = ["derive"] }
+cgroups = { features = ["oci"], package = "cgroups-rs", version = "0.5.1" }
+clap = { features = ["derive"], version = "4.5.40" }
 const_format = "0.2.30"
 container-device-interface = "1.1.1"
-containerd-shim = { version = "0.11.0", features = ["async"] }
-containerd-shim-protos = { version = "0.11.0", features = ["async"] }
+containerd-shim = { features = ["async"], version = "0.11.0" }
+containerd-shim-protos = { features = ["async"], version = "0.11.0" }
 derivative = "2.2.0"
 futures = "0.3.30"
 go-flag = "0.1.0"
-bytes = "1.0"
 http-body-util = "0.1"
-hyper = { version = "1.10.1", features = ["http1", "server", "client"] }
-hyper-util = { version = "0.1", features = ["tokio", "server-auto", "server-graceful", "client-legacy"] }
+hyper = { features = ["client", "http1", "server"], version = "1.10.1" }
+hyper-util = { features = [
+  "client-legacy",
+  "server-auto",
+  "server-graceful",
+  "tokio",
+], version = "0.1" }
 hyperlocal = "0.9.1"
 ipnetwork = "0.17.0"
 lazy_static = "1.4"
@@ -177,15 +182,32 @@ libc = "0.2.94"
 log = "0.4.14"
 netlink-packet-core = "0.7.0"
 netlink-packet-route = "0.19.0"
-netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
+netlink-sys = { features = ["tokio_socket"], version = "0.7.0" }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
-nix = { version = "0.31.3", features = ["fs", "mount", "sched", "process", "ioctl", "signal", "socket", "feature", "user", "hostname", "term", "event", "mman", "reboot"] }
-oci-spec = { version = "0.10.0", features = ["runtime"] }
-opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
+devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
+gpt = "4.1.0"
+nix = { features = [
+  "event",
+  "feature",
+  "fs",
+  "hostname",
+  "ioctl",
+  "mman",
+  "mount",
+  "process",
+  "reboot",
+  "sched",
+  "signal",
+  "socket",
+  "term",
+  "user",
+], version = "0.31.3" }
+oci-spec = { features = ["runtime"], version = "0.10.0" }
+opentelemetry = { features = ["rt-tokio"], version = "0.17.0" }
 pathrs = "0.2.4"
 procfs = "0.12.0"
-prometheus = { version = "0.14.0", features = ["process"] }
+prometheus = { features = ["process"], version = "0.14.0" }
 protobuf = "3.7.2"
 rand = "0.10.1"
 regex = "1.10.5"
@@ -193,16 +215,16 @@ rstest = "0.26.1"
 rtnetlink = "0.14.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"
-serde = { version = "1.0.145", features = ["derive"] }
-serde_json = "1.0.91"
 semver = "1.0"
+serde = { features = ["derive"], version = "1.0.145" }
+serde_json = "1.0.91"
 serial_test = "0.10.0"
 sha2 = "0.11.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 slog-stdlog = "4.0.0"
 slog-term = "2.9.0"
-strum = { version = "0.24.0", features = ["derive"] }
+strum = { features = ["derive"], version = "0.24.0" }
 strum_macros = "0.26.2"
 sysinfo = "0.39.5"
 tar = "0.4.46"
@@ -219,8 +241,6 @@ tracing-subscriber = "0.3.20"
 ttrpc = "0.9.0"
 url = "2.5.4"
 which = "4.3.0"
-gpt = "4.1.0"
-devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev = "078e70ceecf0d08eb0c800626827c9bc0a9a8adc" }
 
 # Per-package release profile overrides for kata-deploy. The kata-deploy
 # binary runs once at pod start and then idles waiting for SIGTERM, so we
@@ -229,5 +249,5 @@ devicemapper = { git = "https://github.com/stratis-storage/devicemapper-rs", rev
 # kata-deploy crate; agent / runtime-rs / dragonball compile with their
 # usual defaults.
 [profile.release.package."kata-deploy"]
-opt-level = "z"
 codegen-units = 1
+opt-level = "z"
