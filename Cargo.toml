@@ -148,6 +148,7 @@ rustjail = { path = "src/agent/rustjail" }
 vsock-exporter = { path = "src/agent/vsock-exporter" }
 
 # Outside dependencies
+acpi_tables = "0.2.1"
 actix-rt = "2.7.0"
 anyhow = "1.0.103"
 awaitgroup = "0.7.0"
