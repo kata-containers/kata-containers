@@ -167,16 +167,14 @@ impl InitialSizeManager {
             return Ok(());
         }
 
-        if self.resource.vcpu > 0.0 || self.resource.mem_mb > 0 {
-            if self.resource.vcpu > 0.0 {
-                info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
-            }
-            if self.resource.mem_mb > 0 {
-                info!(sl!(), "resource with memory {}", self.resource.mem_mb);
-            }
-
+        // Sized per resource: an unset limit keeps its configured default.
+        if self.resource.vcpu > 0.0 {
+            info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
             hv.cpu_info.default_vcpus = (hv.cpu_info.overhead_vcpus + self.resource.vcpu).max(1.0);
+        }
 
+        if self.resource.mem_mb > 0 {
+            info!(sl!(), "resource with memory {}", self.resource.mem_mb);
             hv.memory_info.default_memory = hv.memory_info.overhead_memory + self.resource.mem_mb;
             hv.memory_info.default_maxmemory = hv
                 .memory_info
@@ -594,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_setup_config_static_errors_on_zero_memory() {
-        let mut config = make_config(1.0, 0.5, 8, 1024, 0, 4096, true);
+        let mut config = make_config(1.0, 0.5, 8, 0, 0, 4096, true);
         let mut mgr = InitialSizeManager {
             resource: InitialSize {
                 vcpu: 1.0,
@@ -610,10 +608,10 @@ mod tests {
 
     #[rstest]
     #[case::both_limits(3.0, 0.75, 1024, 256, 1.25, 1024, 2.0, 1280)]
-    #[case::cpu_only_limit(3.0, 0.5, 1024, 128, 1.5, 0, 2.0, 128)]
-    #[case::memory_only_limit(3.0, 0.5, 1024, 128, 0.0, 512, 1.0, 640)]
+    #[case::cpu_only_limit_keeps_default_memory(3.0, 0.5, 1024, 128, 1.5, 0, 2.0, 1024)]
+    #[case::memory_only_limit_keeps_default_vcpus(3.0, 0.5, 1024, 128, 0.0, 512, 3.0, 640)]
     #[case::both_limits_zero_overhead(3.0, 0.0, 1024, 0, 1.25, 1024, 1.25, 1024)]
-    #[case::memory_only_zero_overhead(3.0, 0.0, 1024, 0, 0.0, 512, 1.0, 512)]
+    #[case::memory_only_zero_overhead(3.0, 0.0, 1024, 0, 0.0, 512, 3.0, 512)]
     fn test_setup_config_static_requested_vs_defaults(
         #[case] default_vcpus: f32,
         #[case] overhead_vcpus: f32,
