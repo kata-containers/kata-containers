@@ -8,6 +8,7 @@
 // found in the THIRD-PARTY file.
 use std::any::Any;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use dbs_device::resources::ResourceConstraint;
@@ -254,13 +255,32 @@ where
         trace!(target: "virtio-vsock", "{}: VirtioDevice::activate()", self.id());
 
         self.device_info.check_queue_sizes(&config.queues[..])?;
-        let handler: VsockEpollHandler<AS, Q, R, M> = VsockEpollHandler::new(
+        let mut handler: VsockEpollHandler<AS, Q, R, M> = VsockEpollHandler::new(
             config,
             self.id().to_owned(),
             self.cid,
-            // safe to unwrap, because we create muxer using New()
+            // safe to unwrap: the muxer is created in `new()` and is handed
+            // back below if the rest of activation fails.
             self.muxer.take().unwrap(),
         );
+
+        // Restore queues connection resets before replaying normal backend
+        // traffic. Process them synchronously during activation so they do not
+        // remain stuck until an unrelated backend or queue event occurs.
+        if handler.muxer.has_pending_rx() {
+            let result = {
+                let guard = handler.config.lock_guest_memory();
+                handler.process_rx(guard.deref())
+            };
+            if let Err(e) = result {
+                // Activation is fallible past the point where the muxer was
+                // moved into the handler, so return it to the device: dropping
+                // it here would leave `self.muxer` empty and panic the unwrap
+                // above on any later activation attempt.
+                self.muxer = Some(handler.muxer);
+                return Err(e.into());
+            }
+        }
 
         self.subscriber_id = Some(self.device_info.register_event_handler(Box::new(handler)));
 
@@ -330,7 +350,7 @@ mod tests {
             self.device_info
                 .check_queue_sizes(&config.queues[..])
                 .unwrap();
-            let handler: VsockEpollHandler<AS, QueueSync, GuestRegionMmap, M> =
+            let mut handler: VsockEpollHandler<AS, QueueSync, GuestRegionMmap, M> =
                 VsockEpollHandler::new(
                     config,
                     self.id().to_owned(),
@@ -338,6 +358,11 @@ mod tests {
                     // safe to unwrap, because we create muxer using New()
                     self.muxer.take().unwrap(),
                 );
+
+            if handler.muxer.has_pending_rx() {
+                let guard = handler.config.lock_guest_memory();
+                handler.process_rx(guard.deref()).unwrap();
+            }
 
             Ok(handler)
         }
@@ -370,6 +395,55 @@ mod tests {
 
         let state = Persist::save_state(&mut ctx.device, ()).unwrap();
         assert_eq!(state.reset_connections, vec![first, second]);
+    }
+
+    #[test]
+    fn test_restore_reset_is_processed_during_activation() {
+        skip_if_kvm_unaccessable!();
+
+        let test_ctx = TestContext::new();
+        let mut handler_ctx = test_ctx.create_event_handler_context();
+        let mut state = Persist::save_state(&mut handler_ctx.device, ()).unwrap();
+        state.reset_connections = vec![VsockConnectionId {
+            local_port: 2000,
+            peer_port: 1000,
+        }];
+
+        Persist::restore_state(&mut handler_ctx.device, &state, ()).unwrap();
+        handler_ctx.arti_activate(&test_ctx.mem);
+
+        let handler = handler_ctx.epoll_handler.as_ref().unwrap();
+        assert!(handler.muxer.restore_resets.is_empty());
+        assert_eq!(handler.muxer.rx_ok_cnt, 1);
+        assert_eq!(handler_ctx.guest_rxvq.used.idx().load(), 1);
+    }
+
+    #[test]
+    fn test_restore_reset_waits_for_guest_rx_descriptor() {
+        skip_if_kvm_unaccessable!();
+
+        let test_ctx = TestContext::new();
+        let mut handler_ctx = test_ctx.create_event_handler_context();
+        handler_ctx.guest_rxvq.avail.idx().store(0);
+        let mut state = Persist::save_state(&mut handler_ctx.device, ()).unwrap();
+        state.reset_connections = vec![VsockConnectionId {
+            local_port: 2000,
+            peer_port: 1000,
+        }];
+
+        Persist::restore_state(&mut handler_ctx.device, &state, ()).unwrap();
+        handler_ctx.arti_activate(&test_ctx.mem);
+
+        let handler = handler_ctx.epoll_handler.as_ref().unwrap();
+        assert_eq!(handler.muxer.restore_resets.len(), 1);
+        assert_eq!(handler_ctx.guest_rxvq.used.idx().load(), 0);
+
+        handler_ctx.guest_rxvq.avail.idx().store(1);
+        handler_ctx.signal_rxq_event();
+
+        let handler = handler_ctx.epoll_handler.as_ref().unwrap();
+        assert!(handler.muxer.restore_resets.is_empty());
+        assert_eq!(handler_ctx.guest_rxvq.used.idx().load(), 1);
     }
 
     #[test]

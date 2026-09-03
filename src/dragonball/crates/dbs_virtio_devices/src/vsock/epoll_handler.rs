@@ -15,7 +15,7 @@ use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{GuestMemoryRegion, GuestRegionMmap};
 
 use super::defs;
-use super::muxer::{VsockGenericMuxer, VsockMuxer};
+use super::muxer::{VsockConnectionId, VsockGenericMuxer, VsockMuxer};
 use super::packet::VsockPacket;
 use crate::device::VirtioDeviceConfig;
 use crate::{DbsGuestAddressSpace, Result as VirtioResult};
@@ -93,24 +93,35 @@ where
 
     /// Walk the driver-provided RX queue buffers and attempt to fill them up
     /// with any data that we have pending.
-    fn process_rx(&mut self, mem: &AS::M) {
+    pub(crate) fn process_rx(&mut self, mem: &AS::M) -> VirtioResult<()> {
         trace!("{}: epoll_handler::process_rx()", self.id);
         let mut raise_irq = false;
+        // Deferred so that descriptors already committed to the used ring are
+        // still signalled to the guest before the error is reported. Returning
+        // early would leave those packets in the ring with no notification.
+        let mut deferred_error = None;
         {
             let rxvq = &mut self.config.queues[QUEUE_RX].queue_mut().lock();
             loop {
                 let mut iter = match rxvq.iter(mem) {
-                    Err(e) => {
-                        error!("{}: failed to process rx queue. {}", self.id, e);
-                        return;
-                    }
                     Ok(iter) => iter,
+                    Err(e) => {
+                        deferred_error = Some(e.into());
+                        break;
+                    }
                 };
 
                 if let Some(mut desc_chain) = iter.next() {
+                    let mut reset = None;
                     let used_len = match VsockPacket::from_rx_virtq_head(&mut desc_chain) {
                         Ok(mut pkt) => {
                             if self.muxer.recv_pkt(&mut pkt).is_ok() {
+                                if pkt.op() == super::defs::uapi::VSOCK_OP_RST {
+                                    reset = Some(VsockConnectionId {
+                                        local_port: pkt.src_port(),
+                                        peer_port: pkt.dst_port(),
+                                    });
+                                }
                                 pkt.hdr().len() as u32 + pkt.len()
                             } else {
                                 // We are using a consuming iterator over the virtio buffers, so, if we
@@ -125,17 +136,38 @@ where
                         }
                     };
 
+                    if let Err(e) = rxvq.add_used(mem, desc_chain.head_index(), used_len) {
+                        if let Some(id) = reset {
+                            if let Err(tracker_err) = self.muxer.mark_reset_delivery_failed(id) {
+                                error!(
+                                    "{}: failed to retain undelivered vsock reset: {}",
+                                    self.id, tracker_err
+                                );
+                            }
+                        }
+                        deferred_error = Some(e.into());
+                        break;
+                    }
+                    if let Some(id) = reset {
+                        log::debug!(
+                            "{}: committed vsock RST for lp={}, pp={} to guest RX",
+                            self.id,
+                            id.local_port,
+                            id.peer_port
+                        );
+                    }
                     raise_irq = true;
-                    let _ = rxvq.add_used(mem, desc_chain.head_index(), used_len);
                 } else {
                     break;
                 }
             }
         }
         if raise_irq {
-            if let Err(e) = self.signal_used_queue(QUEUE_RX) {
-                error!("{}: failed to notify guest for RX queue, {:?}", self.id, e);
-            }
+            self.signal_used_queue(QUEUE_RX)?;
+        }
+        match deferred_error {
+            Some(e) => Err(e),
+            None => Ok(()),
         }
     }
 
@@ -192,7 +224,9 @@ where
         if let Err(e) = self.config.queues[QUEUE_RX].consume_event() {
             error!("{}: failed to consume rx queue event, {:?}", self.id, e);
         } else if self.muxer.has_pending_rx() {
-            self.process_rx(mem);
+            if let Err(e) = self.process_rx(mem) {
+                error!("{}: failed to process rx queue: {:?}", self.id, e);
+            }
         }
     }
 
@@ -207,7 +241,9 @@ where
             // need to fetch those responses and place them into RX
             // buffers.
             if self.muxer.has_pending_rx() {
-                self.process_rx(mem);
+                if let Err(e) = self.process_rx(mem) {
+                    error!("{}: failed to process rx queue: {:?}", self.id, e);
+                }
             }
         }
     }
@@ -232,7 +268,9 @@ where
         // This event may have caused some packets to be queued up by the
         // backend. Make sure they are processed.
         if self.muxer.has_pending_rx() {
-            self.process_rx(mem);
+            if let Err(e) = self.process_rx(mem) {
+                error!("{}: failed to process rx queue: {:?}", self.id, e);
+            }
         }
     }
 }
@@ -463,7 +501,7 @@ mod tests {
 
             // The chain should've been processed, without employing the backend.
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.process_rx(&test_ctx.mem);
+                epoll_handler.process_rx(&test_ctx.mem).unwrap();
                 assert_eq!(ctx.guest_rxvq.used.idx().load(), 1);
                 assert_eq!(epoll_handler.muxer.rx_ok_cnt, 0);
             }
