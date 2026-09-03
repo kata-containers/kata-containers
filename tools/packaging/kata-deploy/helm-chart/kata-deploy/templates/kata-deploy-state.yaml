@@ -4,6 +4,9 @@ marker all derive from multiInstallSuffix. Changing it in place creates a second
 installation while the release forgets how to remove the first one, so persist
 the first value under a suffix-independent name and reject changes.
 */ -}}
+{{- /* Checks belonging to no single resource are made here, because this object
+       is rendered by every install and every upgrade. */ -}}
+{{- include "kata-deploy.validateShimArches" . -}}
 {{- $name := printf "%s-kata-deploy-state" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $wantedSuffix := .Values.env.multiInstallSuffix | default "" | toString -}}
 {{- $wantedMode := .Values.deploymentMode | default "daemonset" | toString -}}

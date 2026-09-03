@@ -77,6 +77,17 @@ enabled_shims() {
 	done < <(runtime_classes)
 }
 
+@test "Helm template: enabling a shim the defaults do not carry is refused" {
+	# Without supportedArches the shim is installed on no architecture and still
+	# gets a RuntimeClass, so the install looks fine until the first pod hangs in
+	# ContainerCreating. The chart says so instead, and names the way out.
+	run render --set shims.disableAll=true --set shims.qemu-tdx.enabled=true
+	[ "${status}" -ne 0 ]
+	[[ "${output}" =~ "qemu-tdx" ]]
+	[[ "${output}" =~ "supportedArches is empty" ]]
+	[[ "${output}" =~ "try-kata-" ]]
+}
+
 @test "Helm template: the profiles are how the tests find a shim's definition" {
 	# deploy_kata installs the profile defining the shim under test, found by
 	# looking the shim up in each profile. A shim no profile claims would leave it
@@ -93,8 +104,9 @@ enabled_shims() {
 }
 
 @test "Helm template: every profile renders the shims it enables" {
-	# A shim block carrying no supportedArches matches no architecture and is
-	# skipped without a word, which is exactly how a copied-out profile goes wrong.
+	# A shim block carrying no supportedArches matches no architecture, which the
+	# chart now refuses outright - and refusing it is what makes this comparison
+	# fail rather than come out empty on both sides.
 	local profile shim classes
 	for profile in "${CHART_PATH}"/try-kata-*.values.yaml; do
 		classes=$(runtime_classes -f "${profile}")
