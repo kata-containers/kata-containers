@@ -2334,9 +2334,9 @@ func (k *kataAgent) onlineCPUMem(ctx context.Context, cpus uint32, cpuOnly bool)
 	return err
 }
 
-func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Container) (*ContainerStats, error) {
+func (k *kataAgent) statsContainer(ctx context.Context, containerID string) (*ContainerStats, error) {
 	req := &grpc.StatsContainerRequest{
-		ContainerId: c.id,
+		ContainerId: containerID,
 	}
 
 	returnStats, err := k.sendReq(ctx, req)
