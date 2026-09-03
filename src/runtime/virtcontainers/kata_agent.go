@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -330,7 +331,7 @@ type kataAgent struct {
 	dialTimout uint32
 
 	keepConn bool
-	dead     bool
+	dead     atomic.Bool
 }
 
 func (k *kataAgent) Logger() *logrus.Entry {
@@ -2370,7 +2371,7 @@ func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 }
 
 func (k *kataAgent) connect(ctx context.Context) error {
-	if k.dead {
+	if k.dead.Load() {
 		return errors.New("Dead agent")
 	}
 	// lockless quick pass
@@ -2384,6 +2385,9 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	// This is for the first connection only, to prevent race
 	k.Lock()
 	defer k.Unlock()
+	if k.dead.Load() {
+		return errors.New("Dead agent")
+	}
 	if k.client != nil {
 		return nil
 	}
@@ -2391,7 +2395,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 	k.Logger().WithField("url", k.state.URL).Info("New client")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.dialTimout)
 	if err != nil {
-		k.dead = true
+		k.dead.Store(true)
 		return err
 	}
 
@@ -2845,8 +2849,12 @@ func (k *kataAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 
 func (k *kataAgent) markDead(ctx context.Context) {
 	k.Logger().Infof("mark agent dead")
-	k.dead = true
+	k.dead.Store(true)
 	k.disconnect(ctx)
+}
+
+func (k *kataAgent) isDead() bool {
+	return k.dead.Load()
 }
 
 func (k *kataAgent) cleanup(ctx context.Context) {

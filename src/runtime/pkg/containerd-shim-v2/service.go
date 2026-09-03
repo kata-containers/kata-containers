@@ -161,6 +161,11 @@ type service struct {
 	// across the teardown.
 	teardownOnce sync.Once
 
+	// teardownMu serializes per-container cleanup with whole-sandbox cleanup.
+	// It is independent of s.mu so State, Stats, and Kill RPCs remain
+	// responsive while teardown performs potentially slow guest or QMP work.
+	teardownMu sync.Mutex
+
 	// hypervisor pid, Since this shimv2 cannot get the container processes pid from VM,
 	// thus for the returned values needed pid, just return the hypervisor's
 	// pid directly.
@@ -541,6 +546,14 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("delete").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
+
+	// TaskExit can cause containerd to issue Delete while wait() is still
+	// finishing container or sandbox teardown. Serialize those operations
+	// without holding s.mu so State, Stats, and Kill remain responsive.
+	if r.ExecID == "" {
+		s.teardownMu.Lock()
+		defer s.teardownMu.Unlock()
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

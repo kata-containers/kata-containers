@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
@@ -1289,6 +1290,134 @@ func TestSandboxStopStopped(t *testing.T) {
 	err := s.Stop(context.Background(), false)
 
 	assert.Nil(t, err)
+}
+
+type noOpFilesystemSharer struct{}
+
+func (*noOpFilesystemSharer) Prepare(context.Context) error {
+	return nil
+}
+
+func (*noOpFilesystemSharer) Cleanup(context.Context) error {
+	return nil
+}
+
+func (*noOpFilesystemSharer) ShareFile(context.Context, *Container, *Mount) (*SharedFile, error) {
+	return nil, nil
+}
+
+func (*noOpFilesystemSharer) UnshareFile(context.Context, *Container, *Mount) error {
+	return nil
+}
+
+func (*noOpFilesystemSharer) ShareRootFilesystem(context.Context, *Container) (*SharedFile, error) {
+	return nil, nil
+}
+
+func (*noOpFilesystemSharer) UnshareRootFilesystem(context.Context, *Container) error {
+	return nil
+}
+
+func (*noOpFilesystemSharer) StartFileEventWatcher(context.Context) error {
+	return nil
+}
+
+func (*noOpFilesystemSharer) StopFileEventWatcher(context.Context) {
+}
+
+type deadAgentTeardownHypervisor struct {
+	mockHypervisor
+	stopped bool
+	calls   []string
+}
+
+func (h *deadAgentTeardownHypervisor) StopVM(context.Context, bool) error {
+	h.calls = append(h.calls, "stop-vm")
+	h.stopped = true
+	return nil
+}
+
+func (h *deadAgentTeardownHypervisor) HotplugRemoveDevice(context.Context, interface{}, DeviceType) (interface{}, error) {
+	h.calls = append(h.calls, "hot-unplug")
+	if !h.stopped {
+		return nil, context.DeadlineExceeded
+	}
+	return nil, nil
+}
+
+func TestStopContainerStopsVMBeforeDeviceDetachWhenAgentDead(t *testing.T) {
+	ctx := context.Background()
+	store, err := fs.MockAutoInit()
+	assert.NoError(t, err)
+	assert.NotNil(t, store)
+
+	network, err := NewNetwork()
+	assert.NoError(t, err)
+
+	agent := &kataAgent{}
+	agent.markDead(ctx)
+
+	deviceInfo := &config.DeviceInfo{
+		HostPath:      "/dev/dm-9",
+		ContainerPath: "/dev/dm-9",
+		DevType:       "b",
+	}
+	blockDevice := &drivers.BlockDevice{
+		GenericDevice: &drivers.GenericDevice{
+			DeviceInfo:  deviceInfo,
+			ID:          "block-device",
+			RefCount:    1,
+			AttachCount: 1,
+		},
+		BlockDrive: &config.BlockDrive{
+			File:  "/dev/dm-9",
+			ID:    "drive-test",
+			Index: 0,
+		},
+	}
+	devManager := manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, []api.Device{blockDevice})
+	hypervisor := &deadAgentTeardownHypervisor{}
+
+	sandbox := &Sandbox{
+		ctx:        ctx,
+		id:         "dead-agent-sandbox",
+		agent:      agent,
+		hypervisor: hypervisor,
+		devManager: devManager,
+		store:      store,
+		fsShare:    &noOpFilesystemSharer{},
+		network:    network,
+		config: &SandboxConfig{
+			ID: "dead-agent-sandbox",
+		},
+		state: types.SandboxState{
+			State:         types.StateRunning,
+			BlockIndexMap: map[int]struct{}{0: {}},
+		},
+		containers: make(map[string]*Container),
+	}
+	container := &Container{
+		ctx:       ctx,
+		id:        "volume-preparer",
+		sandboxID: sandbox.id,
+		sandbox:   sandbox,
+		config: &ContainerConfig{
+			ID:          "volume-preparer",
+			Annotations: make(map[string]string),
+		},
+		state: types.ContainerState{State: types.StateRunning},
+		devices: []ContainerDevice{{
+			ID:            blockDevice.DeviceID(),
+			ContainerPath: "/dev/dm-9",
+		}},
+	}
+	sandbox.containers[container.id] = container
+
+	_, err = sandbox.StopContainer(ctx, container.id, true)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"stop-vm", "hot-unplug"}, hypervisor.calls)
+	assert.Equal(t, types.StateStopped, container.state.State)
+	assert.Nil(t, devManager.GetDeviceByID(blockDevice.DeviceID()))
 }
 
 func checkDirNotExist(path string) error {
