@@ -90,12 +90,17 @@ delete_nvidia_gpu_test_pods_if_any_exist() {
 	local pods=(
 		"aa-test-cc"
 		"nvidia-cuda-vectoradd"
+		"nvidia-dcgm-exporter"
 		"nvidia-nim-llama-3-2-1b-instruct"
 		"nvidia-nim-llama-3-2-1b-instruct-tee"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 		"nvidia-nim-llama-3-2-nv-embedqa-1b-v2-tee"
 		"numa-topology-test"
 		"numa-topology-gpu-test"
+		"vllm-qwen2-5-0-5b-instruct"
+		"vllm-qwen2-5-0-5b-instruct-tee"
+		"vllm-all-minilm-l6-v2"
+		"vllm-all-minilm-l6-v2-tee"
 	)
 	local -a existing_pods=()
 	local pod
@@ -129,14 +134,40 @@ K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 # Enable NVRC trace logging by default for NVIDIA GPU tests
 ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
 
+# ci-nightly.yaml is the only caller passing pr-number=nightly, which the
+# workflow exports as GH_PR_NUMBER.
+is_nightly_run() {
+	[[ "${GH_PR_NUMBER:-}" == "nightly" ]]
+}
+
+# Whether a bats file ended up in the list of files to run.  Compared with
+# whitespace stripped, because splitting K8S_TEST_NV below leaves a trailing
+# newline on its last entry.
+nv_tests_include() {
+	local wanted="$1"
+	local bats_file
+
+	for bats_file in "${K8S_TEST_NV[@]}"; do
+		[[ "${bats_file//[[:space:]]/}" == "${wanted}" ]] && return 0
+	done
+
+	return 1
+}
+
 if [[ -n "${K8S_TEST_NV:-}" ]]; then
 	mapfile -d " " -t K8S_TEST_NV <<< "${K8S_TEST_NV}"
 else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-numa.bats" \
 		"k8s-nvidia-cuda.bats" \
-		"k8s-nvidia-nim.bats" \
-		"k8s-qemu-rootless-sandbox.bats")
+		"k8s-nvidia-dcgm.bats" \
+		"k8s-nvidia-vllm.bats" \
+		"k8s-rootless-vmm.bats")
+
+	# Setting K8S_TEST_NV explicitly still runs the NIM tests by hand.
+	if is_nightly_run; then
+		K8S_TEST_NV+=("k8s-nvidia-nim.bats")
+	fi
 fi
 
 SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx" "qemu-nvidia-gpu-runtime-rs" "qemu-nvidia-gpu-snp-runtime-rs" "qemu-nvidia-gpu-tdx-runtime-rs")

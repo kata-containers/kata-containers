@@ -30,18 +30,17 @@ permissions: {}
 
 jobs:
   run-kata-deploy-tests:
-    name: run-kata-deploy-tests
+    name: run-kata-deploy-tests (${{ matrix.environment.vmm }}, ${{ matrix.environment.k8s }})
     strategy:
       fail-fast: false
       matrix:
-        vmm:
-          - qemu
-        k8s:
-          - k0s
-          - k3s
-          - rke2
-          - microk8s
-          - kubeadm
+        environment: [
+          { vmm: qemu-runtime-rs, k8s: k0s },
+          { vmm: qemu-runtime-rs, k8s: k3s },
+          { vmm: qemu-runtime-rs, k8s: rke2 },
+          { vmm: qemu-runtime-rs, k8s: microk8s },
+          { vmm: qemu-nvidia-cpu-runtime-rs, k8s: kubeadm, snapshotter: erofs, erofs_snapshotter_mode: disk, erofs_dmverity: dmverity },
+        ]
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
       cancel-in-progress: true
@@ -51,11 +50,16 @@ jobs:
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       GH_PR_NUMBER: ${{ inputs.pr-number }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBERNETES: ${{ matrix.k8s }}
+      KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
+      KUBERNETES: ${{ matrix.environment.k8s }}
       # Only used when deploying the kubeadm flavour
       CONTAINER_ENGINE: containerd
       CONTAINER_ENGINE_VERSION: latest
+      # Only the kubeadm flavour runs EROFS, so that is where the host module
+      # coverage lives: nothing loads them but the install itself.
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
+      EROFS_SNAPSHOTTER_MODE: ${{ matrix.environment.erofs_snapshotter_mode }}
+      EROFS_DMVERITY: ${{ matrix.environment.erofs_dmverity }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -87,7 +91,7 @@ jobs:
           sudo rm -rf /opt/google
           sudo rm -rf /usr/lib/firefox
 
-      - name: Deploy ${{ matrix.k8s }}
+      - name: Deploy ${{ matrix.environment.k8s }}
         run:  bash tests/functional/kata-deploy/gha-run.sh deploy-k8s
 
       - name: Install `bats`

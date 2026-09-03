@@ -45,6 +45,10 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 EROFS_SNAPSHOTTER_MODE="${EROFS_SNAPSHOTTER_MODE:-}"
 EROFS_MERGE_MODE="${EROFS_MERGE_MODE:-}"
+# What kata-deploy takes erofs-utils from, the runners having none new enough of
+# their own. Only amd64 and arm64 are published, which is every runner the erofs
+# jobs use.
+EROFS_UTILS_IMAGE="${EROFS_UTILS_IMAGE:-quay.io/kata-containers/erofs-utils:1.9.3}"
 
 # Wait for the Kubernetes API to recover after kata-deploy uninstall, then
 # retry the uninstall to purge any stale helm release state. On k3s/rke2,
@@ -207,7 +211,8 @@ function delete_cluster() {
 	rg="$(_print_rg_name "${test_type}")"
 
 	if [[ "$(az group exists -g "${rg}")" == "true" ]]; then
-		az group delete -g "${rg}" --yes
+		az group delete -g "${rg}" --yes || \
+			warn "Failed to delete the resource group ${rg}"
 	fi
 }
 
@@ -395,7 +400,7 @@ function deploy_microk8s() {
 function install_system_dependencies() {
 	dependencies="${1}"
 
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install "${dependencies}"
 }
 
@@ -452,7 +457,7 @@ function do_deploy_k8s() {
 		Pin-Priority: 1000
 		EOF
 
-		sudo apt-get update
+		apt_get_update
 		if sudo apt-get -y install --dry-run kubeadm kubelet kubectl cri-tools \
 			--allow-downgrades >/dev/null 2>&1; then
 			version="${candidate}"
@@ -475,12 +480,12 @@ function do_deploy_k8s() {
 	local kubeadm_config
 	kubeadm_config="$(mktemp --tmpdir kubeadm-config.XXXXXX.yaml)"
 	cat <<EOF | tee "${kubeadm_config}"
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 nodeRegistration:
-  criSocket: "/run/containerd/containerd.sock"
+  criSocket: "unix:///run/containerd/containerd.sock"
 ---
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 networking:
   podSubnet: "10.244.0.0/16"
@@ -571,17 +576,19 @@ function deploy_k8s() {
 		microk8s) deploy_microk8s ;;
 		kubeadm|vanilla)
 			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
-				install_erofs_utils
+				# No erofs-utils is installed on the node on purpose: these
+				# runners package nothing new enough, which is the very case
+				# nodeBinaries exists for, so the install has to bring its
+				# own.
 
 				# fsverity is only needed here because, unlike
 				# the docker and nerdctl jobs, these do enable
 				# fs-verity on the layer blobs.
 				sudo apt-get -y install --no-install-recommends fsverity
 
-				# Load device-mapper and dm-verity kernel modules.
-				if [[ "${EROFS_DMVERITY:-}" == "dmverity" ]]; then
-					load_dm_verity_modules
-				fi
+				# erofs, loop and the dm-verity targets are left unloaded on
+				# purpose: kata-deploy's own privileged stage loads and persists
+				# them, and pre-loading them here would hide it failing to.
 
 				# Ensure fsverity is enabled on the disk, otherwise
 				# fsverity won't work on the erofs-snapshotter side.
@@ -631,6 +638,92 @@ function delete_test_runners(){
 			echo "${pids}" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
 		fi
 	done
+}
+
+# Logs of the containers that exited non-zero, which is what a reader of this
+# dump is after. A CI log is truncated from the end and the bulk dumps below run
+# to hundreds of lines per pod, so these come first or they are the ones lost.
+function dump_failed_container_logs() {
+	local ns="${1}"
+	local selector="${2}"
+	local pods=()
+	local pod
+	local container
+	local exit_code
+
+	read -r -a pods <<< "$(kubectl -n "${ns}" get pods -l "${selector}" \
+		-o jsonpath='{.items[*].metadata.name}' 2>/dev/null)"
+
+	for pod in "${pods[@]}"; do
+		[[ -n "${pod}" ]] || continue
+		while read -r container exit_code; do
+			# Empty for a container that never terminated.
+			[[ "${exit_code}" =~ ^[0-9]+$ && "${exit_code}" -ne 0 ]] || continue
+			echo "-- ${pod}/${container} (exit ${exit_code}) --"
+			kubectl -n "${ns}" logs "${pod}" -c "${container}" \
+				--tail=-1 --timestamps 2>/dev/null || true
+		done < <(kubectl -n "${ns}" get pod "${pod}" -o jsonpath\
+='{range .status.initContainerStatuses[*]}{.name}{" "}{.state.terminated.exitCode}{"\n"}{end}{range .status.containerStatuses[*]}{.name}{" "}{.state.terminated.exitCode}{"\n"}{end}' \
+			2>/dev/null)
+	done
+}
+
+# A failed job-mode install only surfaces as "BackoffLimitExceeded" in the helm
+# output; the reason lives in the dispatcher and per-node Job pod logs.
+# Best-effort throughout, so it never masks the original failure.
+function dump_kata_deploy_diagnostics() {
+	local deployment_mode="${1:-daemonset}"
+	local context="${2:-}"
+	local ns="kube-system"
+	# kubectl logs -l silently drops pods past its default of 5.
+	local max_log_requests=50
+
+	echo "::group::kata-deploy diagnostics${context:+ - ${context}}"
+
+	echo "== nodes =="
+	kubectl get nodes -o wide --show-labels || true
+
+	echo "== recent events (${ns}) =="
+	kubectl -n "${ns}" get events --sort-by=.lastTimestamp 2>/dev/null | tail -n 100 || true
+
+	if [[ "${deployment_mode}" == "job" ]]; then
+		echo "== kata-deploy Jobs (dispatchers + per-node) =="
+		kubectl -n "${ns}" get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
+		echo "== kata-deploy Pods =="
+		kubectl -n "${ns}" get pods -l app.kubernetes.io/name=kata-deploy -o wide || true
+		echo "== logs of failed kata-deploy containers =="
+		dump_failed_container_logs "${ns}" "app.kubernetes.io/name=kata-deploy"
+		echo "== describe kata-deploy Jobs =="
+		kubectl -n "${ns}" describe jobs -l app.kubernetes.io/name=kata-deploy || true
+		echo "== describe kata-deploy Pods =="
+		kubectl -n "${ns}" describe pods -l app.kubernetes.io/name=kata-deploy || true
+		echo "== dispatcher logs (install + cleanup) =="
+		kubectl -n "${ns}" logs -l kata-deploy/dispatcher --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== per-node Job logs (current) =="
+		kubectl -n "${ns}" logs -l app.kubernetes.io/name=kata-deploy --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== per-node Job logs (previous) =="
+		kubectl -n "${ns}" logs -l app.kubernetes.io/name=kata-deploy --all-containers --prefix \
+			--previous --tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+	else
+		echo "== kata-deploy DaemonSet =="
+		kubectl -n "${ns}" get ds -l name=kata-deploy -o wide || true
+		kubectl -n "${ns}" describe ds -l name=kata-deploy || true
+		echo "== kata-deploy Pods =="
+		kubectl -n "${ns}" get pods -l name=kata-deploy -o wide || true
+		echo "== logs of failed kata-deploy containers =="
+		dump_failed_container_logs "${ns}" "name=kata-deploy"
+		kubectl -n "${ns}" describe pods -l name=kata-deploy || true
+		echo "== kata-deploy logs (current) =="
+		kubectl -n "${ns}" logs -l name=kata-deploy --all-containers --prefix \
+			--tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+		echo "== kata-deploy logs (previous) =="
+		kubectl -n "${ns}" logs -l name=kata-deploy --all-containers --prefix \
+			--previous --tail=-1 --timestamps --max-log-requests="${max_log_requests}" 2>/dev/null || true
+	fi
+
+	echo "::endgroup::"
 }
 
 function helm_helper() {
@@ -704,10 +797,13 @@ function helm_helper() {
 	fi
 	yq -i ".image.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
 
-	# Resolve the deployment mode coming from the (base) values file so the
-	# post-install wait below knows whether to expect a DaemonSet or per-node Jobs.
+	# Guessing wrong makes the wait below expect something the release never
+	# creates, so take the chart default rather than assuming one.
 	local deployment_mode
-	deployment_mode="$(yq -r '.deploymentMode // "daemonset"' "${values_yaml}")"
+	deployment_mode="$(yq -r '.deploymentMode // ""' "${values_yaml}")"
+	if [[ -z "${deployment_mode}" ]]; then
+		deployment_mode="$(yq -r '.deploymentMode' "${helm_chart_dir}/values.yaml")"
+	fi
 
 	# No node-selection override is needed for "job" mode: with an empty
 	# nodeSelector the dispatcher targets every node whose taints the install
@@ -805,6 +901,12 @@ function helm_helper() {
 			for snapshotter in "${snapshotter_list[@]}"; do
 				yq -i ".snapshotter.setup += [\"${snapshotter}\"]" "${values_yaml}"
 			done
+		fi
+
+		# The node has no erofs-utils of its own; see deploy_k8s.
+		if [[ "${SNAPSHOTTER}" == "erofs" ]]; then
+			yq -i ".nodeBinaries[\"erofs-utils\"].image = \"${EROFS_UTILS_IMAGE}\"" "${values_yaml}"
+			yq -i ".nodeBinaries[\"erofs-utils\"].binaries = [\"mkfs.erofs\", \"dump.erofs\", \"fsck.erofs\"]" "${values_yaml}"
 		fi
 
 		if [[ -n "${EROFS_SNAPSHOTTER_MODE}" ]]; then
@@ -1054,8 +1156,16 @@ VERIFICATION_POD_EOF
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	# Ensure any potential leftover is cleaned up ... and this secret usually is not in case of previous failures
-	kubectl delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
+	# A failed dispatcher hook leaves the release non-deployed, after which
+	# `helm upgrade --install` refuses with `no deployed releases`. Deleting only
+	# the v1 secret is not enough once more than one revision exists. Skip hooks:
+	# the pre-delete dispatcher may be broken too, and a fresh install re-applies
+	# node state anyway.
+	if helm status kata-deploy -n kube-system >/dev/null 2>&1; then
+		echo "Found a leftover kata-deploy release; removing it before install"
+		helm uninstall kata-deploy -n kube-system --no-hooks || true
+	fi
+	kubectl delete secret -n kube-system -l "owner=helm,name=kata-deploy" 2>/dev/null || true
 
 	max_tries=3
 	interval=10
@@ -1072,6 +1182,9 @@ VERIFICATION_POD_EOF
 			echo "Helm install succeeded!"
 			break
 		fi
+		# Last chance: hook-delete-policy before-hook-creation means the retry
+		# deletes the failed dispatcher Job, and its pod logs with it.
+		dump_kata_deploy_diagnostics "${deployment_mode}" "helm upgrade failed (exit ${ret}), attempt $((i+1)) of ${max_tries}"
 		i=$((i+1))
 		if [[ ${i} -lt ${max_tries} ]]; then
 			echo "Retrying after ${interval} seconds (Attempt ${i} of ${max_tries})"
@@ -1093,6 +1206,13 @@ VERIFICATION_POD_EOF
 		# The final stage labels the node, so wait until at least one node carries
 		# the kata-runtime label as the "install complete" signal.
 		echo "deploymentMode=job: waiting for per-node install Jobs to label the node(s)"
+
+		# Grab it now, not on failure: job.ttlSecondsAfterFinished collects the
+		# dispatcher Job, log included, long before this wait times out.
+		echo "::group::kata-deploy install dispatcher log"
+		kubectl_retry -n kube-system logs -l kata-deploy/dispatcher=install --tail=-1 --timestamps 2>/dev/null || true
+		echo "::endgroup::"
+
 		local label_wait_deadline=$((SECONDS + KATA_DEPLOY_WAIT_TIMEOUT))
 		while true; do
 			if [[ -n "$(kubectl get nodes -l katacontainers.io/kata-runtime=true -o name 2>/dev/null)" ]]; then
@@ -1100,12 +1220,7 @@ VERIFICATION_POD_EOF
 			fi
 			if (( SECONDS >= label_wait_deadline )); then
 				echo "ERROR: Timed out waiting for kata-deploy install Jobs to label any node"
-				echo "::group::kata-deploy job-mode status (no node labeled)"
-				kubectl -n kube-system get jobs -l app.kubernetes.io/name=kata-deploy -o wide || true
-				kubectl -n kube-system get pods -l app.kubernetes.io/name=kata-deploy -o wide || true
-				kubectl -n kube-system describe jobs -l app.kubernetes.io/name=kata-deploy || true
-				kubectl -n kube-system logs -l app.kubernetes.io/name=kata-deploy --all-containers --tail=-1 --timestamps 2>/dev/null || true
-				echo "::endgroup::"
+				dump_kata_deploy_diagnostics "${deployment_mode}" "timed out waiting for a node to be labeled"
 				return 1
 			fi
 			sleep 5

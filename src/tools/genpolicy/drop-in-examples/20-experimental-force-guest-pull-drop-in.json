@@ -1,7 +1,0 @@
-[
-  {
-    "op": "replace",
-    "path": "/cluster_config/guest_pull",
-    "value": false
-  }
-]

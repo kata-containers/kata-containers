@@ -49,7 +49,6 @@ apply_kata_deploy() {
 		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | HELM_INSTALL_DIR='.' bash -s -- --no-sudo
 	fi
 
-	oc label --overwrite ns kube-system pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline
 	local version chart
 	version='0.0.0-dev'
 	chart="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
@@ -224,7 +223,18 @@ if [[ "${KATA_WITH_HOST_KERNEL}" == "yes" ]]; then
 	oc apply -f "${deployments_dir}/configmap_installer_kernel.yaml"
 fi
 
+# Kata and selinux handling requires privileged pods
+oc label --overwrite ns kube-system pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline
+
+# Selinux context is currently not handled by kata-deploy
+oc apply -f "${deployments_dir}/relabel_selinux.yaml"
+wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to configure selinux, proceeding anyway..."
+
 apply_kata_deploy
+
+# Kata-deploy runs without selinux, we need to re-lable the /opt and /var
+oc delete -n kube-system -l app=restorecon pods --wait
+wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to relable selinux after deployment, proceeding anyway..."
 
 # Set SELinux to permissive mode
 if [[ ${SELINUX_PERMISSIVE} == "yes" ]]; then
@@ -247,8 +257,3 @@ if [[ "${WORKAROUND_9206_CRIO}" == "yes" ]]; then
 	oc apply -f "${deployments_dir}/workaround-9206-crio-ds.yaml"
 	wait_for_app_pods_message workaround-9206-crio-ds "${num_nodes}" "Config file present" 1200 || echo "Failed to apply the workaround, proceeding anyway..."
 fi
-
-# FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
-# Selinux context is currently not handled by kata-deploy
-oc apply -f "${deployments_dir}/relabel_selinux.yaml"
-wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to treat selinux, proceeding anyway..."

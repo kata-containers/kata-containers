@@ -1,0 +1,18 @@
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'
+
+name: Build checks for ppc64le
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-build-checks-ppc64le
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build-checks:
+    uses: ./.github/workflows/build-checks.yaml
+    with:
+      instance: "ubuntu-24.04-ppc64le"

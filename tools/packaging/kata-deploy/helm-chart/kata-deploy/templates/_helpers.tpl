@@ -417,6 +417,39 @@ Builds per-shim semicolon-separated list: "shim1=value1;shim2=value2"
 {{- end -}}
 
 {{/*
+Get the shims that run DCGM in the guest from structured config
+Builds a semicolon-separated list of shim names: "shim1;shim2"
+
+The value is a set rather than the "shim=value" mapping the proxies use,
+because the setting is a boolean: naming a shim here means it is on.
+
+A shim with no nvrc block at all reads as off, so a values file written before
+this setting existed - or one defining a shim the chart does not - keeps
+upgrading cleanly instead of failing to render.
+*/}}
+{{- define "kata-deploy.getNvrcEnableDcgm" -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
+{{- $shims := list -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- $nvrc := $shimConfig.nvrc | default dict -}}
+{{- if and $shimEnabled ($nvrc.enableDCGM | default false) -}}
+{{- $shims = append $shims $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join ";" $shims -}}
+{{- end -}}
+
+{{/*
 Main kata-deploy image reference for the DaemonSet.
 Supports tag (reference:tag) and digest (reference@sha256:...) formats.
 When reference contains "@" (digest), use reference as-is; otherwise use reference:tag (tag defaults to Chart.AppVersion).
@@ -490,6 +523,53 @@ Get EROFS merge mode from structured config ("merged" or "unmerged")
 */}}
 {{- define "kata-deploy.getErofsMergeMode" -}}
 {{- .Values.snapshotter.erofsMergeMode | default "" -}}
+{{- end -}}
+
+{{/*
+The nodeBinaries entries, validated.
+
+Values making an entry a no-op fail the render, as on the node they would only
+surface much later, as a missing command or a layer conversion failure.
+*/}}
+{{- define "kata-deploy.nodeBinaries" -}}
+{{- $entries := .Values.nodeBinaries | default dict -}}
+{{- if $entries -}}
+{{- if ne (.Values.deploymentMode | default "daemonset") "job" -}}
+{{- fail (printf "\n\nERROR: nodeBinaries is set (%s), which requires deploymentMode: job.\n\nInstalling binaries onto the node relies on the staged install pipeline, where they are in place before the host check looks for them. The DaemonSet runs the whole install in one container and has no such ordering.\n" (keys $entries | sortAlpha | join ", ")) -}}
+{{- end -}}
+{{- /* Names of containers the install and cleanup pods carry of their own, which
+       an entry cannot take without the API server rejecting the pod for two
+       containers sharing a name. */}}
+{{- $taken := list "artifacts" "cri" "dispatcher" "host-check" "kube-kata" "load-kernel-modules" "node-binaries-install" "node-binaries-remove" "rb-cleanup" "remove-artifacts" "revert-cri" -}}
+{{- range $name, $spec := $entries -}}
+{{- /* A DNS-1123 label, which is all a container name may be. */}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $name) -}}
+{{- fail (printf "\n\nERROR: nodeBinaries key %q is not usable as a container name.\n\nIt names the container that stages those binaries, so it may hold only lowercase letters, digits and dashes, and has to begin and end with a letter or a digit.\n" $name) -}}
+{{- end -}}
+{{- if gt (len $name) 63 -}}
+{{- fail (printf "\n\nERROR: nodeBinaries key %q is %d characters long.\n\nIt names the container that stages those binaries, and Kubernetes stops at 63.\n" $name (len $name)) -}}
+{{- end -}}
+{{- if has $name $taken -}}
+{{- fail (printf "\n\nERROR: nodeBinaries key %q is the name of a container kata-deploy runs itself.\n\nTwo containers in a pod cannot share a name, so pick another: %s are taken.\n" $name (join ", " $taken)) -}}
+{{- end -}}
+{{- if not ($spec.image | default "" | trim) -}}
+{{- fail (printf "\n\nERROR: nodeBinaries.%s.image is empty.\n\nSet it to the image carrying %s, or drop the entry.\n" $name $name) -}}
+{{- end -}}
+{{- if not ($spec.binaries | default list) -}}
+{{- fail (printf "\n\nERROR: nodeBinaries.%s.binaries is empty.\n\nList the binaries to take out of %s. Nothing is installed by default, so that an image built on a distribution does not put the rest of its userland on the node.\n" $name ($spec.image | default "the image")) -}}
+{{- end -}}
+{{- /* Each name reaches the node as a word of shell, so anything a shell would
+       take apart -- whitespace, a glob, a separator -- has to be turned away
+       here rather than split, expanded or run there. A path would also escape
+       the directory the binaries are staged in. */}}
+{{- range $binary := ($spec.binaries | default list) -}}
+{{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._+-]*$" (toString $binary)) -}}
+{{- fail (printf "\n\nERROR: nodeBinaries.%s.binaries lists %q, which is not a plain file name.\n\nEach entry names one binary to take out of the image, so it may hold only letters, digits, dots, underscores, plus signs and dashes, and has to begin with a letter or a digit.\n" $name (toString $binary)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $entries -}}
 {{- end -}}
 
 {{/*
@@ -618,6 +698,11 @@ e.g. `{{- include "kata-deploy.commonEnv" . | nindent 8 }}`.
 {{- if $agentNoProxy }}
 - name: AGENT_NO_PROXY
   value: {{ $agentNoProxy | quote }}
+{{- end }}
+{{- $nvrcEnableDcgm := include "kata-deploy.getNvrcEnableDcgm" . | trim -}}
+{{- if $nvrcEnableDcgm }}
+- name: NVRC_ENABLE_DCGM
+  value: {{ $nvrcEnableDcgm | quote }}
 {{- end }}
 {{- $pullTypeMappingAmd64 := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
 {{- if $pullTypeMappingAmd64 }}
@@ -1100,7 +1185,7 @@ Arguments (dict):
   root  - top-level context (.)
   stage - "install" | "cleanup"
 
-install pipeline:  host-check -> artifacts (initContainers) ; cri (main)
+install pipeline:  load-kernel-modules -> host-check -> artifacts (initContainers) ; cri (main)
 cleanup pipeline:  revert-cri              (initContainer)  ; remove-artifacts (main)
 
 The node label is not a stage here: the dispatcher sets it once the Job as a whole
@@ -1200,6 +1285,18 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
+{{- /* All before the host check, so it validates the binaries being installed
+       rather than the versions they are there to replace. One staging container
+       per nodeBinaries entry, so a new entry is a values change only. */}}
+{{- $nodeBinaries := include "kata-deploy.nodeBinaries" $root | fromYaml }}
+{{- range $name, $spec := $nodeBinaries }}
+{{- include "kata-deploy.nodeBinariesStageContainer" (dict "root" $root "name" $name "spec" $spec) | nindent 8 }}
+{{- end }}
+{{- if $nodeBinaries }}
+{{- include "kata-deploy.nodeBinariesInstallContainer" (dict "root" $root "name" "node-binaries-install" "staged" true) | nindent 8 }}
+{{- end }}
+{{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
       containers:
@@ -1207,11 +1304,30 @@ spec:
 {{- else }}
       initContainers:
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
+{{- /* After the revert, so containerd is no longer converting layers with them.
+       Unconditional, and driven by the marker alone, so that an uninstall tidies
+       up even when the entries were dropped from the values first. */}}
+{{- include "kata-deploy.nodeBinariesInstallContainer" (dict "root" $root "name" "node-binaries-remove") | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true) | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
+        - name: modules-load-d
+          hostPath:
+            path: /etc/modules-load.d
+            type: DirectoryOrCreate
+{{- if eq $stage "install" }}
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+{{- if and (eq $stage "install") (include "kata-deploy.nodeBinaries" $root | fromYaml) }}
+        {{- /* Pod-local, so those images reach nothing of the node's. */}}
+        - name: node-binaries
+          emptyDir: {}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -1255,6 +1371,221 @@ Compute the host install directory (must match Config::from_env in the binary):
 {{- end -}}
 
 {{/*
+Copy one nodeBinaries entry's binaries out of the image carrying them.
+
+The only containers running images kata-deploy did not build, hence the only ones
+reaching nothing but the volume they write to.
+
+Arguments (dict):
+  root - the top-level context (.)
+  name - the entry's name, which is also the container's
+  spec - the entry: image, binaries, and optionally pullPolicy
+
+Emitted at column 0; indent with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.nodeBinariesStageContainer" -}}
+- name: {{ .name }}
+  image: {{ .spec.image | trim | quote }}
+  imagePullPolicy: {{ .spec.pullPolicy | default .root.Values.imagePullPolicy | quote }}
+  command: ["/bin/sh", "-c"]
+  args:
+    {{- /* Every plausible layout is searched so the image is the only value to
+           set. Its own directory, so two entries offering the same name are the
+           install container's to reject rather than a silent overwrite. */}}
+    - |
+      set -eu
+
+      staged="/node-binaries/{{ .name }}"
+      mkdir -p "${staged}"
+
+      for binary in {{ .spec.binaries | join " " }}; do
+        for dir in /usr/local/bin /usr/local/sbin /usr/bin /usr/sbin /bin /sbin /; do
+          if [ -f "${dir}/${binary}" ]; then
+            cp "${dir}/${binary}" "${staged}/${binary}"
+            echo "staged ${dir}/${binary}"
+            break
+          fi
+        done
+
+        if [ ! -f "${staged}/${binary}" ]; then
+          echo "ERROR: no ${binary} in this image, in any directory searched above." >&2
+          exit 1
+        fi
+      done
+  securityContext:
+    privileged: false
+    readOnlyRootFilesystem: true
+    {{- /* The image's own user may not be able to write the volume. */}}
+    runAsUser: 0
+  volumeMounts:
+    - name: node-binaries
+      mountPath: /node-binaries
+{{- with .root.Values.resources }}
+  resources:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Put the staged binaries in /usr/local/bin, ahead of /usr/bin in containerd's
+PATH, and take out what a previous run put there. With nothing staged, taking
+them out is the whole job.
+
+Installs whatever the staging containers left rather than a list of its own, so
+a new nodeBinaries entry needs no change here.
+
+Runs the kubectl image because kata-deploy's own is distroless: without a shell
+it cannot do this, and giving the images carrying the binaries the node's
+/usr/local/bin would put images we do not build on the node's PATH.
+
+Arguments (dict):
+  root   - the top-level context (.)
+  name   - container name
+  staged - bool, whether the staged binaries are mounted (install, not just remove)
+
+Emitted at column 0; indent with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.nodeBinariesInstallContainer" -}}
+- name: {{ .name }}
+  image: {{ include "kata-deploy.kubectlImage" .root }}
+  imagePullPolicy: {{ .root.Values.imagePullPolicy }}
+  command: ["/bin/sh", "-c"]
+  args:
+    - |
+      set -eu
+
+      node_bin=/host-usr-local/bin-writable
+      staged=/node-binaries
+
+      {{- /* The lock every other kata-deploy mutation of this node takes, so
+             that two releases installing at once take turns rather than
+             interleaving their writes. Held until this container exits. */}}
+      exec 9>/host-run-lock/kata-deploy.lock
+      flock -x 9
+
+      {{- /* /usr/local/bin holds files from many sources and none of them say
+             where they came from. Kept beside them rather than under the install
+             directory, which cleanup empties before this can read it, and named
+             after this installation so that side-by-side ones own separate sets
+             rather than removing each other's. */}}
+      marker="${node_bin}/.kata-deploy-node-binaries{{ with .root.Values.env.multiInstallSuffix }}-{{ . }}{{ end }}"
+
+      {{- /* What a previous run of this installation put there. Read, not acted
+             on yet: nothing is removed before this run knows it can carry out
+             what it is replacing them with. */}}
+      owned=""
+      if [ -f "${marker}" ]; then
+        while read -r binary; do
+          [ -n "${binary}" ] || continue
+          owned="${owned}${binary} "
+        done < "${marker}"
+      fi
+
+      {{- /* No staged directory means nothing is configured any more, or this is
+             the cleanup: taking them out is the whole job. */}}
+      if [ ! -d "${staged}" ]; then
+        for binary in ${owned}; do
+          rm -f "${node_bin}/${binary}"
+          echo "removed /usr/local/bin/${binary}"
+        done
+        rm -f "${marker}"
+        exit 0
+      fi
+
+      {{- /* Whatever the staging containers left, each in its own directory, so
+             two entries offering the same name are caught here rather than one
+             silently overwriting the other. */}}
+      claim=""
+      for path in "${staged}"/*/*; do
+        [ -f "${path}" ] || continue
+        binary="${path##*/}"
+        case " ${claim}" in
+        *" ${binary} "*)
+          echo "ERROR: ${binary} was staged by more than one nodeBinaries entry." >&2
+          exit 1
+          ;;
+        esac
+        claim="${claim}${binary} "
+      done
+
+      if [ -z "${claim}" ]; then
+        echo "ERROR: nothing was staged; see the staging containers' logs." >&2
+        exit 1
+      fi
+
+      {{- /* All of them checked before anything is written or removed, so an
+             install this node refuses leaves it the set it already had. */}}
+      for binary in ${claim}; do
+        case " ${owned}" in
+        *" ${binary} "*)
+          continue
+          ;;
+        esac
+        if [ -e "${node_bin}/${binary}" ] || [ -L "${node_bin}/${binary}" ]; then
+          echo "ERROR: /usr/local/bin/${binary} was not installed by kata-deploy." >&2
+          echo "Remove it, or drop it from nodeBinaries to keep using it." >&2
+          exit 1
+        fi
+      done
+
+      {{- /* Everything this run may touch, claimed before any of it is written:
+             a run that dies midway leaves the next one something to remove,
+             rather than a binary nothing owns. */}}
+      union="${claim}"
+      for binary in ${owned}; do
+        case " ${claim}" in
+        *" ${binary} "*)
+          continue
+          ;;
+        esac
+        union="${union}${binary} "
+      done
+      printf '%s\n' ${union} > "${marker}"
+
+      for binary in ${claim}; do
+        set -- "${staged}"/*/"${binary}"
+        {{- /* Renamed into place so nothing ever finds a partial binary. */}}
+        cp "${1}" "${node_bin}/.${binary}.new"
+        chmod 0755 "${node_bin}/.${binary}.new"
+        mv "${node_bin}/.${binary}.new" "${node_bin}/${binary}"
+        echo "installed /usr/local/bin/${binary}"
+      done
+
+      {{- /* What the previous run installed and this one no longer offers. */}}
+      for binary in ${owned}; do
+        case " ${claim}" in
+        *" ${binary} "*)
+          continue
+          ;;
+        esac
+        rm -f "${node_bin}/${binary}"
+        echo "removed /usr/local/bin/${binary}"
+      done
+
+      printf '%s\n' ${claim} > "${marker}"
+  securityContext:
+    privileged: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    {{- /* Writes into the node's /usr/local/bin. */}}
+    runAsUser: 0
+  volumeMounts:
+    - name: host-usr-local-bin
+      mountPath: /host-usr-local/bin-writable
+    - name: host-run-lock
+      mountPath: /host-run-lock
+{{- if .staged }}
+    - name: node-binaries
+      mountPath: /node-binaries
+      readOnly: true
+{{- end }}
+{{- with .root.Values.resources }}
+  resources:
+{{- toYaml . | nindent 4 }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Render a single staged-pipeline container that runs one kata-deploy stage action.
 Used by the per-node staged install/cleanup Jobs (deploymentMode: job).
 
@@ -1264,6 +1595,8 @@ Arguments (dict):
   action      - kata-deploy subcommand (e.g. install-stage-cri)
   privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
+  mountHostRoot - bool, whether to mount the host root read-only at /host
+  mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
 
 Emitted at column 0; indent with `nindent` at the call site.
 */}}
@@ -1282,6 +1615,15 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
 {{- else }}
 {{- include "kata-deploy.tmpVolumeMount" . | nindent 4 }}
+{{- end }}
+{{- if .mountHostRoot }}
+    - name: host-root
+      mountPath: /host
+      readOnly: true
+{{- end }}
+{{- if .mountModulesLoad }}
+    - name: modules-load-d
+      mountPath: /host-modules-load.d
 {{- end }}
 {{- end -}}
 

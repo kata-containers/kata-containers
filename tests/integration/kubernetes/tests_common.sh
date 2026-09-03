@@ -381,12 +381,6 @@ install_genpolicy_drop_ins() {
 	elif is_k3s_or_rke2 || is_nvidia_gpu_platform || is_snp_hypervisor "${KATA_HYPERVISOR}" || is_tdx_hypervisor "${KATA_HYPERVISOR}" || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] || is_arm64_host; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
-
-	# 20-* experimental force guest pull overlay
-	if [[ "${PULL_TYPE:-}" == "experimental-force-guest-pull" ]]; then
-		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
-	fi
-
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings
@@ -597,7 +591,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-tdx-runtime-rs" "qemu-coco-dev-runtime-rs")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-snp-runtime-rs" "qemu-tdx" "qemu-tdx-runtime-rs" "qemu-coco-dev-runtime-rs" "clh-runtime-rs" "clh-azure-runtime-rs")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then

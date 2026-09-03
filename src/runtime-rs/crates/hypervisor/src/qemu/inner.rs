@@ -17,7 +17,7 @@ use crate::{
 
 use crate::utils::{
     bytes_to_megs, create_dir_all_with_inherit_owner, enter_netns, get_jailer_root, megs_to_bytes,
-    set_groups, uses_native_ccw_bus, vm_cleanup,
+    set_process_credentials, uses_native_ccw_bus, vm_cleanup,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -30,7 +30,6 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
 };
-use nix::unistd::{setgid, setuid, Gid, Uid};
 use persist::sandbox_persist::Persist;
 use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
@@ -53,6 +52,7 @@ use tokio::{
 };
 
 const VSOCK_SCHEME: &str = "vsock";
+const MEMLOCK_HEADROOM_DIVISOR: u64 = 10;
 
 #[derive(Debug)]
 pub struct QemuInner {
@@ -247,8 +247,9 @@ impl QemuInner {
                 }
                 DeviceType::VfioModern(vfio_dev) => {
                     // Snapshot parameters under the lock; release before doing cmdline work.
-                    let (device_type, ap_sysfs_path, devices, bus_port_id) = {
+                    let (vfio_device_id, device_type, ap_sysfs_path, devices, iommufd, bus_port_id) = {
                         let vfio_device = vfio_dev.lock().await;
+                        let vfio_device_id = vfio_device.device_id.clone();
                         let device_type = vfio_device.device.device_type.clone();
                         let ap_sysfs_path =
                             vfio_device.device.primary.sysfs_path.display().to_string();
@@ -262,9 +263,11 @@ impl QemuInner {
                             .map(|g| g.devices.clone())
                             .unwrap_or_else(|| vfio_device.device.devices.clone());
                         (
+                            vfio_device_id,
                             device_type,
                             ap_sysfs_path,
                             devices,
+                            vfio_device.device.iommufd.clone(),
                             vfio_device.config.bus_port_id.clone(),
                         )
                     };
@@ -279,15 +282,24 @@ impl QemuInner {
                         );
                     } else {
                         // PCI cold plug devices
-                        for dev in devices.iter() {
+                        for (index, dev) in devices.iter().enumerate() {
                             let host_bdf = dev.addr.to_string();
 
-                            let vfio_cfg = VfioDeviceConfig::new(
+                            let mut vfio_cfg = VfioDeviceConfig::new(
                                 host_bdf,
                                 bus_port_id.1 as u16,
                                 bus_port_id.1 + 1,
                             )
                             .with_vfio_bus(bus_port_id.0.clone());
+                            if let (Some(iommufd), Some(cdev)) =
+                                (iommufd.as_ref(), dev.vfio_cdev.as_ref())
+                            {
+                                vfio_cfg = vfio_cfg.with_device_fds(
+                                    &iommufd.iommufd_dev,
+                                    &cdev.devnode,
+                                    format!("vfio-{vfio_device_id}-{index}"),
+                                );
+                            }
 
                             cmdline.add_pcie_vfio_device(vfio_cfg)?;
                         }
@@ -383,6 +395,9 @@ impl QemuInner {
         let ccw_subchannel = cmdline.take_ccw_subchannel();
         let block_fdsets = cmdline.take_block_fdsets();
         let has_memory_hotplug_region = cmdline.has_memory_hotplug_region();
+        let memlock_limit = cmdline.requires_memlock().then(|| {
+            memlock_limit_with_headroom(megs_to_bytes(self.config.memory_info.default_memory))
+        });
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
@@ -418,6 +433,10 @@ impl QemuInner {
                     }
                 }
                 if let Some(user) = &user {
+                    if let Some(limit) = memlock_limit {
+                        set_memlock_rlimit(limit)
+                            .map_err(|err| io::Error::other(format!("{err:#}")))?;
+                    }
                     set_process_credentials(user)
                         .map_err(|err| io::Error::other(format!("{err:#}")))?;
                 }
@@ -441,6 +460,18 @@ impl QemuInner {
             .ok_or_else(|| anyhow!("no exit notify"))?;
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
+
+        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
+        if self.config.debug_info.enable_debug {
+            tokio::spawn(async move {
+                let stream_result = try_open_qemu_console(&console_socket_path).await;
+                if let Ok(stream) = stream_result {
+                    if let Err(err) = log_qemu_console(stream).await {
+                        warn!(sl!(), "error logging qemu console: {:?}", err);
+                    }
+                }
+            });
+        }
 
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
@@ -493,12 +524,6 @@ impl QemuInner {
                 .await
                 .context("boot from template")?;
             self.resume_vm().context("resume vm")?;
-        }
-
-        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
-        if self.config.debug_info.enable_debug {
-            let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
-            tokio::spawn(log_qemu_console(stream));
         }
 
         Ok(())
@@ -1015,30 +1040,46 @@ fn check_bpf_enabled_with<ReadStatus, LogWarning>(
     }
 }
 
-fn set_process_credentials(user: &RootlessUser) -> Result<()> {
-    set_process_credentials_with(
-        user,
-        set_groups,
-        |gid| setgid(Gid::from_raw(gid)).map_err(anyhow::Error::from),
-        |uid| setuid(Uid::from_raw(uid)).map_err(anyhow::Error::from),
-    )
+fn memlock_limit_with_headroom(guest_memory: u64) -> u64 {
+    guest_memory.saturating_add(guest_memory / MEMLOCK_HEADROOM_DIVISOR)
 }
 
-fn set_process_credentials_with<SetGroups, SetGid, SetUid>(
-    user: &RootlessUser,
-    set_groups_fn: SetGroups,
-    set_gid_fn: SetGid,
-    set_uid_fn: SetUid,
-) -> Result<()>
-where
-    SetGroups: Fn(&[u32]) -> Result<()>,
-    SetGid: Fn(u32) -> Result<()>,
-    SetUid: Fn(u32) -> Result<()>,
-{
-    set_groups_fn(&user.groups).context("setgroups failed")?;
-    set_gid_fn(user.gid).context("setgid failed")?;
-    set_uid_fn(user.uid).context("setuid failed")?;
+fn set_memlock_rlimit(memlock_limit: u64) -> Result<()> {
+    let limit = libc::rlimit {
+        rlim_cur: memlock_limit,
+        rlim_max: memlock_limit,
+    };
+    let result = unsafe { libc::setrlimit(libc::RLIMIT_MEMLOCK, &limit) };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error()).context("set RLIMIT_MEMLOCK failed");
+    }
     Ok(())
+}
+
+async fn try_open_qemu_console(console_socket_path: &Path) -> Result<UnixStream> {
+    const DEADLINE_SECS: u64 = 5;
+    let deadline = Instant::now()
+        .checked_add(Duration::from_secs(DEADLINE_SECS))
+        .ok_or_else(|| anyhow!("timeout overflow"))?;
+    let console_stream = loop {
+        match UnixStream::connect(console_socket_path.as_os_str()).await {
+            Ok(stream) => break stream,
+            Err(err) => {
+                if Instant::now() >= deadline {
+                    warn!(
+                        sl!(),
+                        "couldn't open qemu console at {:#?} in {} seconds: {}",
+                        console_socket_path,
+                        DEADLINE_SECS,
+                        err
+                    );
+                    return Err(anyhow!("couldn't open qemu console: {err}"));
+                }
+                sleep(Duration::from_millis(50)).await;
+            }
+        };
+    };
+    Ok(console_stream)
 }
 
 async fn log_qemu_console(console: UnixStream) -> Result<()> {
@@ -1449,6 +1490,12 @@ mod tests {
             .is_network_device_hotplug_supported());
     }
 
+    #[test]
+    fn test_memlock_limit_adds_headroom() {
+        assert_eq!(memlock_limit_with_headroom(10 * 1024), 11 * 1024);
+        assert_eq!(memlock_limit_with_headroom(u64::MAX), u64::MAX);
+    }
+
     #[rstest]
     #[case::seccomp_sandbox_unset(None, Err(io::ErrorKind::NotFound), false, None)]
     #[case::seccomp_sandbox_empty(Some(""), Err(io::ErrorKind::NotFound), false, None)]
@@ -1495,118 +1542,5 @@ mod tests {
             }
             None => assert!(warnings.is_empty()),
         }
-    }
-
-    // The Set* prefix mirrors the setgroups/setgid/setuid syscalls these
-    // variants stand for, so keep it despite clippy::enum_variant_names.
-    #[derive(Debug, PartialEq)]
-    #[allow(clippy::enum_variant_names)]
-    enum CredentialOperation {
-        SetGroups(Vec<u32>),
-        SetGid(u32),
-        SetUid(u32),
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    #[allow(clippy::enum_variant_names)]
-    enum CredentialStep {
-        SetGroups,
-        SetGid,
-        SetUid,
-    }
-
-    fn rootless_user() -> RootlessUser {
-        RootlessUser {
-            uid: 1001,
-            gid: 1002,
-            groups: vec![1003, 1004],
-            user_name: "kata-test".to_string(),
-        }
-    }
-
-    #[rstest]
-    #[case::with_supplementary_groups(vec![1003, 1004])]
-    #[case::without_supplementary_groups(Vec::new())]
-    fn test_set_process_credentials_order(#[case] groups: Vec<u32>) {
-        let operations = RefCell::new(Vec::new());
-        let mut user = rootless_user();
-        user.groups = groups.clone();
-
-        set_process_credentials_with(
-            &user,
-            |groups| {
-                operations
-                    .borrow_mut()
-                    .push(CredentialOperation::SetGroups(groups.to_vec()));
-                Ok(())
-            },
-            |gid| {
-                operations
-                    .borrow_mut()
-                    .push(CredentialOperation::SetGid(gid));
-                Ok(())
-            },
-            |uid| {
-                operations
-                    .borrow_mut()
-                    .push(CredentialOperation::SetUid(uid));
-                Ok(())
-            },
-        )
-        .unwrap();
-
-        assert_eq!(
-            *operations.borrow(),
-            vec![
-                // Calling setgroups with an empty list clears any inherited
-                // supplementary groups and must not be skipped.
-                CredentialOperation::SetGroups(groups),
-                CredentialOperation::SetGid(1002),
-                CredentialOperation::SetUid(1001),
-            ]
-        );
-    }
-
-    #[rstest]
-    #[case::setgroups(CredentialStep::SetGroups, "setgroups failed", 1)]
-    #[case::setgid(CredentialStep::SetGid, "setgid failed", 2)]
-    #[case::setuid(CredentialStep::SetUid, "setuid failed", 3)]
-    fn test_set_process_credentials_stops_on_error(
-        #[case] failed_step: CredentialStep,
-        #[case] expected_error: &str,
-        #[case] expected_calls: usize,
-    ) {
-        let calls = Cell::new(0);
-        let result = set_process_credentials_with(
-            &rootless_user(),
-            |_| {
-                calls.set(calls.get() + 1);
-                if failed_step == CredentialStep::SetGroups {
-                    Err(anyhow!("injected setgroups failure"))
-                } else {
-                    Ok(())
-                }
-            },
-            |_| {
-                calls.set(calls.get() + 1);
-                if failed_step == CredentialStep::SetGid {
-                    Err(anyhow!("injected setgid failure"))
-                } else {
-                    Ok(())
-                }
-            },
-            |_| {
-                calls.set(calls.get() + 1);
-                if failed_step == CredentialStep::SetUid {
-                    Err(anyhow!("injected setuid failure"))
-                } else {
-                    Ok(())
-                }
-            },
-        );
-
-        let error = result.expect_err("credential failure must abort setup");
-        assert!(format!("{error:#}").contains(expected_error));
-        assert_eq!(calls.get(), expected_calls);
     }
 }

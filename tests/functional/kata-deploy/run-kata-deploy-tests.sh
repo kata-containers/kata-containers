@@ -18,7 +18,15 @@ export BATS_TEST_FAIL_FAST="${BATS_TEST_FAIL_FAST:-no}"
 if [[ -n "${KATA_DEPLOY_TEST_UNION:-}" ]]; then
 	KATA_DEPLOY_TEST_UNION=("${KATA_DEPLOY_TEST_UNION}")
 else
-	KATA_DEPLOY_TEST_UNION=( \
+	KATA_DEPLOY_TEST_UNION=()
+
+	# Only the kubeadm setup prepares EROFS, and this has to run before any
+	# other suite loads the modules it is meant to exercise.
+	if [[ "${KUBERNETES:-}" == "kubeadm" ]]; then
+		KATA_DEPLOY_TEST_UNION+=("kata-deploy-host-modules.bats")
+	fi
+
+	KATA_DEPLOY_TEST_UNION+=( \
 		"kata-deploy.bats" \
 		"kata-deploy-custom-runtimes.bats" \
 		"kata-deploy-lifecycle.bats" \
@@ -27,6 +35,8 @@ else
 		"kata-deploy-distribution.bats" \
 		"kata-deploy-privileges.bats" \
 		"kata-deploy-multi-install.bats" \
+		"kata-deploy-reconcile.bats" \
+		"kata-deploy-node-binaries.bats" \
 	)
 fi
 

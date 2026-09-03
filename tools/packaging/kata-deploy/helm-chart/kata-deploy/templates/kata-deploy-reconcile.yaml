@@ -1,0 +1,236 @@
+{{- /*
+Scheduled reconcile (deploymentMode: job, opt-in).
+
+The install dispatcher runs as a release hook, so it covers the nodes that exist
+while the release is applied. A node joining afterwards matches the same
+selectors, yet nothing installs Kata on it until somebody re-runs `helm upgrade`,
+which on a cluster with an autoscaler nobody reliably does. This CronJob is that
+re-run on a schedule, with the same templates, selectors and labelling flags as
+the hook.
+
+It only ever adds nodes: no --cleanup-job-template is passed, so a node that fell
+out of the selection is left for the next upgrade. Such a node is usually a label
+gone wrong somewhere, and dismantling a host on a timer with nobody watching is
+the worse outcome.
+*/ -}}
+{{- if eq (.Values.deploymentMode | default "daemonset") "job" }}
+{{- $reconcile := .Values.job.reconcile | default dict }}
+{{- if $reconcile.enabled }}
+{{- $root := . }}
+{{- $base := .Chart.Name }}
+{{- if .Values.env.multiInstallSuffix }}
+{{- $base = printf "%s-%s" .Chart.Name .Values.env.multiInstallSuffix }}
+{{- end }}
+{{- $sa := include "kata-deploy.dispatcherServiceAccountName" . }}
+{{- /* A CronJob names each Job it creates after itself plus a timestamp, so its
+       own name has to leave room for that suffix. */}}
+{{- $reconcileName := printf "%s-reconcile" $base | trunc 52 | trimSuffix "-" }}
+{{- $schedule := $reconcile.schedule | default "" | toString }}
+{{- if not $schedule }}
+{{- fail "job.reconcile.enabled is set but job.reconcile.schedule is empty. Give it a cron expression, e.g. \"*/15 * * * *\"." }}
+{{- end }}
+{{- $nodes := .Values.job.nodes | default list }}
+{{- $selectors := include "kata-deploy.installNodeSelectors" . | splitList "\n" | compact }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $reconcileName }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    kata-deploy/dispatcher: reconcile
+spec:
+  schedule: {{ $schedule | quote }}
+  # Two runs over the same fleet would fight over the same nodes, and a tick
+  # missed while the cluster was unavailable has nothing to catch up on - the next
+  # one covers whatever is still uncovered.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  # A failed tick is the thing worth looking at, so keep a few of those and only
+  # the last success.
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A tick that failed on a node should surface as a failed Job rather than be
+      # retried at once: the next tick is the retry.
+      backoffLimit: 0
+      # Nothing outside bounds a tick the way Helm's release timeout bounds the
+      # hook, and concurrencyPolicy means one that hangs holds up every tick after
+      # it. Ending it loses nothing: the per-node Jobs it created run on, and the
+      # next tick labels the nodes they finished.
+      activeDeadlineSeconds: {{ $root.Values.job.activeDeadlineSeconds | default 3600 }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+            app.kubernetes.io/instance: {{ $root.Release.Name }}
+            kata-deploy/dispatcher: reconcile
+        spec:
+{{- with $root.Values.imagePullSecrets }}
+          imagePullSecrets:
+{{- toYaml . | nindent 12 }}
+{{- end }}
+          serviceAccountName: {{ $sa }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+{{- with include "kata-deploy.dispatcherPlacement" $root | trim }}
+{{- . | nindent 10 }}
+{{- end }}
+{{- with $root.Values.priorityClassName }}
+          priorityClassName: {{ . | quote }}
+{{- end }}
+          containers:
+            - name: dispatcher
+              image: {{ include "kata-deploy.dispatcherImage" $root }}
+              imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              command:
+                - /usr/bin/k8s-job-dispatcher
+                - "--job-template=/etc/kata-job/install-job.yaml"
+{{- /* The same name prefix as the hook, so each sees the other's per-node Jobs
+       and neither treats them as an abandoned run's leftovers. */}}
+                - "--name-prefix={{ $base }}-install"
+{{- /* A CronJob's Jobs are named for it plus a timestamp, so a tick cannot name
+       its own Job to own what it creates; it reads it off its pod instead. */}}
+                - "--owner-job-from-pod=$(POD_NAME)"
+{{- /* An upgrade rolling out is the overlap concurrencyPolicy cannot see. */}}
+                - "--yield-to-live-run"
+{{- /* Leaving the fleet alone but for the nodes with nothing to show yet. */}}
+                - "--skip-satisfied-nodes"
+                - "--parallelism={{ $root.Values.job.parallelism }}"
+{{- if $nodes }}
+                - "--nodes={{ join "," $nodes }}"
+{{- else }}
+{{- /* One flag per nodeSelectorTerm; the dispatcher unions the matches (OR). */}}
+{{- range $selector := $selectors }}
+                - "--node-selector={{ $selector }}"
+{{- end }}
+{{- /*
+Deliberately not job.waitForNodesSeconds: a wait declares that nodes are
+expected and makes an empty selection an error, which for something periodic
+should be a quiet no-op. It also enables settling, and a tick that catches the
+fleet mid-labelling can leave the rest to the next one.
+*/}}
+                - "--wait-for-nodes-secs=0"
+{{- end }}
+{{- include "kata-deploy.dispatcherNodeWorkFlags" (dict "root" $root "stage" "install") | nindent 16 }}
+              env:
+                - name: POD_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+              volumeMounts:
+                - name: job-templates
+                  mountPath: /etc/kata-job
+                  readOnly: true
+          volumes:
+            - name: job-templates
+              configMap:
+                name: {{ printf "%s-job-templates" $base | trunc 63 | trimSuffix "-" }}
+---
+{{- /*
+Helm deletes the CronJob above only after the pre-delete hooks are done, so a tick
+firing while the uninstall dispatcher works would reinstall the nodes it has just
+taken apart. This runs first (a lower hook weight) and takes the schedule away,
+along with any tick and per-node install Job still in flight.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-reconcile-stop" $base | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+    app.kubernetes.io/instance: {{ $root.Release.Name }}
+    kata-deploy/dispatcher: reconcile-stop
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kata-deploy.name" $root }}
+        app.kubernetes.io/instance: {{ $root.Release.Name }}
+        kata-deploy/dispatcher: reconcile-stop
+    spec:
+{{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+      serviceAccountName: {{ $sa }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+{{- with include "kata-deploy.dispatcherPlacement" $root | trim }}
+{{- . | nindent 6 }}
+{{- end }}
+      containers:
+        - name: stop-reconcile
+          image: {{ include "kata-deploy.kubectlImage" $root }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+
+              NS="{{ $root.Release.Namespace }}"
+
+              # A timeout of its own, so a Job that will not go away is reported as
+              # that rather than as Helm's release timeout.
+              kubectl delete cronjob "{{ $reconcileName }}" -n "${NS}" \
+                --ignore-not-found --cascade=foreground --wait=true --timeout=180s
+
+              # A tick's per-node Jobs outlive the tick that created them, and each
+              # one is a privileged pod writing to a node this uninstall is about
+              # to revert. Only this release's own: with env.multiInstallSuffix a
+              # sibling release's installs carry the same stage label.
+              kubectl delete jobs -n "${NS}" \
+                -l kata-deploy/stage=install,app.kubernetes.io/instance={{ $root.Release.Name }} \
+                --ignore-not-found --cascade=foreground --wait=true --timeout=180s
+          env:
+            # kubectl caches API discovery under $HOME, and the root filesystem is
+            # read-only.
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
+{{- end }}

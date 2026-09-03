@@ -44,7 +44,7 @@ function install_dependencies() {
 		podman-docker
 	)
 
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install "${system_deps[@]}"
 
 	# Dependency list of projects that we can install them

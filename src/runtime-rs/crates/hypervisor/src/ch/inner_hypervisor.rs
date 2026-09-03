@@ -11,7 +11,7 @@ use crate::kernel_param::KernelParams;
 use crate::selinux;
 use crate::utils::create_dir_all_with_inherit_owner;
 use crate::utils::remove_dir_all_if_exists;
-use crate::utils::set_groups;
+use crate::utils::set_process_credentials;
 use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
@@ -38,10 +38,6 @@ use kata_types::config::hypervisor::RootlessUser;
 use kata_types::rootless::is_rootless;
 use lazy_static::lazy_static;
 use nix::sched::{setns, CloneFlags};
-use nix::unistd::setgid;
-use nix::unistd::setuid;
-use nix::unistd::Gid;
-use nix::unistd::Uid;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -192,7 +188,7 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
-        let (shared_fs_devices, network_devices, host_devices, protection_device) =
+        let (shared_fs_devices, network_devices, host_devices, protection_device, boot_disks) =
             self.get_shared_devices().await?;
 
         let sandbox_path = get_sandbox_path(&self.id);
@@ -218,6 +214,7 @@ impl CloudHypervisorInner {
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             host_devices,
+            boot_disks,
             protection_device,
             ..Default::default()
         };
@@ -557,13 +554,8 @@ impl CloudHypervisorInner {
                     }
                 }
                 if let Some(user) = &user {
-                    let groups = user.groups.clone();
-                    let gid = Gid::from_raw(user.gid);
-                    let uid = Uid::from_raw(user.uid);
-
-                    let _ = set_groups(&groups);
-                    let _ = setgid(gid).context("setgid failed");
-                    let _ = setuid(uid).context("setuid failed");
+                    set_process_credentials(user)
+                        .map_err(|err| std::io::Error::other(format!("{err:#}")))?;
                 }
 
                 Ok(())

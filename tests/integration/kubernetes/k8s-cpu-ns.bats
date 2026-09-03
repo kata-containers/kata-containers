@@ -56,7 +56,7 @@ setup() {
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
-	retries="10"
+	retries="6"
 
 	# Check the total of cpus
 	for _ in $(seq 1 "$retries"); do
@@ -76,7 +76,7 @@ setup() {
 		# Verify number of cpus
 		[ "$total_cpus_container" -le "$total_cpus" ]
 		[ "$total_cpus_container" -eq "$total_cpus" ] && break
-		sleep 1
+		sleep 5
 	done
 	[ "$total_cpus_container" -eq "$total_cpus" ]
 

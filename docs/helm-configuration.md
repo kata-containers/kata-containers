@@ -55,6 +55,43 @@ default (non-custom) runtime. kata-deploy writes it as
 
 It's best to reference the default `values.yaml` file above for more details.
 
+### NVIDIA guest settings
+
+The NVIDIA GPU images boot [NVRC](https://github.com/NVIDIA/nvrc) as their init
+process, which brings the NVIDIA stack up before the Kata agent starts. The
+`shims.<shim>.nvrc` block configures it. Every key becomes an `nvrc.*` guest
+kernel parameter, so it applies to all sandboxes on that shim and takes effect
+when a sandbox boots:
+
+```yaml title="values.yaml"
+shims:
+  qemu-nvidia-gpu:
+    nvrc:
+      enableDCGM: true
+```
+
+`enableDCGM` runs `nv-hostengine` and `dcgm-exporter` inside the guest. The
+exporter serves GPU metrics on port 9400 of the sandbox, which is the pod IP, so
+anything that can reach the pod can scrape `/metrics` without a sidecar:
+
+```sh
+curl "http://$(kubectl get pod my-gpu-pod -o jsonpath='{.status.podIP}'):9400/metrics"
+```
+
+It is off by default because it costs guest memory and an extra process in every
+sandbox on the shim. Enable it per shim, on the shims whose workloads you want to
+observe.
+
+!!! note
+    The block is only meaningful on the `qemu-nvidia-gpu*` shims, and kata-deploy
+    refuses to install if it finds it on any other shim. DCGM itself ships in the
+    NVIDIA GPU guest images — with composable images it arrives in the GPU
+    extension — so a shim using a guest image without it will not serve metrics.
+
+Under the hood kata-deploy appends `nvrc.dcgm=on` to the shim's kernel command
+line, in the same `config.d/30-kernel-params.toml` drop-in that carries the proxy
+and debug settings.
+
 ### defaultShim
 
 `defaultShim` selects, per architecture, which shim the auto-created default
@@ -146,15 +183,87 @@ containerd matches none of the presets.
     anything, naming the value to set. An explicit `containerd.configDir` overrides
     the derivation this check is about, so it does not apply in that case.
 
+### nodeBinaries
+
+Some of what Kata needs on a node is not part of Kata: containerd's EROFS
+snapshotter, for instance, needs a `mkfs.erofs` from `erofs-utils` 1.8.2 or newer,
+which most distributions still do not package. When updating the node's packages is
+not on offer, `nodeBinaries` takes the binaries out of container images instead:
+
+```yaml title="values.yaml"
+nodeBinaries:
+  erofs-utils:                                      # (1)!
+    image: quay.io/kata-containers/erofs-utils:1.9.3
+    binaries: [mkfs.erofs, dump.erofs, fsck.erofs]  # (2)!
+    pullPolicy: IfNotPresent                        # (3)!
+```
+
+1. Each key names an entry and becomes the name of the container staging it, so it
+   has to be a valid container name — lowercase letters, digits and dashes,
+   beginning and ending with a letter or a digit — and cannot be one of the names
+   kata-deploy's own containers use. The render fails, naming the key, when it is
+   neither.
+2. Only what is listed here is taken, so an image built on a distribution does not
+   put the rest of its userland on the node. Each one names a single binary, not a
+   path or a pattern, and the render fails on anything else.
+3. Optional; defaults to the chart's `imagePullPolicy`.
+
+Every entry gets a container of its own, which copies the listed binaries into a
+pod-local volume and reaches nothing of the node's. One further container then
+installs whatever was staged into `/usr/local/bin`, ahead of `/usr/bin` in
+containerd's `PATH`, and records the names it installed so that a later run can take
+exactly those out again. That container runs the `kubectl` image, kata-deploy's own
+being distroless and having no shell to do this with.
+
+Each image needs a POSIX shell, `cp`, and every binary the entry lists, statically
+built, in one of `/usr/local/bin`, `/usr/local/sbin`, `/usr/bin`, `/usr/sbin`,
+`/bin`, `/sbin` or its root. Private images use the chart's `imagePullSecrets`.
+
+Adding another binary is a values change and nothing else, so this is the way to
+cover anything else a node turns out to lack.
+
+!!! warning "It will not replace a binary it did not install"
+
+    A file already in `/usr/local/bin` under a name an entry claims fails the
+    install, rather than being replaced, and the same goes for two entries claiming
+    the same name. Nothing on the node records where a binary in `/usr/local/bin`
+    came from, so kata-deploy only ever removes what its own marker file names.
+    Remove the file, or drop it from `nodeBinaries` to keep using it.
+
+    An install it refuses this way changes nothing: every name is checked before any
+    of them is written or removed, so the node keeps the set it already had.
+
+An uninstall takes the binaries out again, and changing an entry replaces what it
+installed. Dropping every entry leaves them in place until the release is
+uninstalled.
+
+!!! note "Side-by-side installs own separate sets"
+
+    Each release's marker file is named after its `env.multiInstallSuffix`, so
+    installing or uninstalling one leaves the binaries another one installed alone.
+    Two releases claiming the same name is still a conflict: whichever installs
+    second finds a file it did not install and fails.
+
+!!! note "One image per architecture being deployed to"
+
+    An image with no manifest for a node's architecture stalls that node's install
+    on the pull, so cover every architecture in the cluster. The `erofs-utils` image
+    above is published for `amd64` and `arm64` only.
+
+This requires `deploymentMode: job`. The staged pipeline is what puts the binaries
+in place before the host check looks for them; the DaemonSet runs the whole install
+in one container and has no such ordering. Setting `nodeBinaries` in `daemonset` mode
+fails the render rather than deploying something that cannot work.
+
 ## Deployment Modes (DaemonSet vs Job)
 
 The chart can install Kata on nodes in one of two ways, selected with the
 top-level `deploymentMode` value:
 
-- **`daemonset`** (default): the long-running `kata-deploy` DaemonSet installs
+- **`daemonset`**: the long-running `kata-deploy` DaemonSet installs
   Kata on every matching node and reverts it when the pod is terminated (i.e. on
   uninstall). This is the historical behavior and is unchanged.
-- **`job`**: there is **no always-on component**. A tiny
+- **`job`** (default): there is **no always-on component**. A tiny
   [`k8s-job-dispatcher`](https://github.com/kata-containers/k8s-job-dispatcher)
   Job runs as a `post-install`/`post-upgrade` hook, enumerates the selected nodes
   **live** via the Kubernetes API, and creates one
@@ -179,9 +288,24 @@ top-level `deploymentMode` value:
   escalation, read-only root filesystem, `RuntimeDefault` seccomp), never touches
   the host, and can be confined to nodes you trust.
 
-```yaml title="values.yaml"
-deploymentMode: job
-```
+`job` is the default; ask for `daemonset` explicitly to keep the historical
+behavior:
+
+=== "Job (default)"
+    ```yaml title="values.yaml"
+    deploymentMode: job
+    ```
+
+=== "DaemonSet"
+    ```yaml title="values.yaml"
+    deploymentMode: daemonset
+    ```
+
+!!! warning "Upgrading a release installed before `job` became the default"
+    `deploymentMode` is [immutable for the life of a release](#how-installations-keep-out-of-each-others-way-on-a-node),
+    so an existing `daemonset` release does not silently move to per-node Jobs:
+    the upgrade is refused instead. Keep `deploymentMode: daemonset` in your
+    values to stay where you are, or `helm uninstall` first to adopt `job`.
 
 #### Where the credentials live
 
@@ -192,7 +316,7 @@ of any pod running there.
 
 | | runs where | privileged on the host | API rights |
 |---|---|---|---|
-| dispatcher (install, uninstall) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured |
+| dispatcher (install, uninstall, and each scheduled reconcile) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured; `pods: get` and `cronjobs: get, delete` only with [`job.reconcile`](#doing-it-on-a-schedule-instead) enabled |
 | per-node Jobs | every node Kata is installed on | yes | **none — no token is mounted** |
 | `post-delete` hook (uninstall only) | one pod, wherever it schedules | no | `delete` on ClusterRoles, ClusterRoleBindings, Roles, RoleBindings and ServiceAccounts |
 | verification Job (only if `verification.pod` is set) | one pod, wherever it schedules | no | pods and pod logs (`create`, `delete`, `get`, `list`, `watch`), `nodes`/`events`/`daemonsets`/`jobs`: `get`, `list` |
@@ -351,6 +475,52 @@ helm upgrade kata-deploy "${CHART}" --version "${VERSION}" --reuse-values
 
 Each per-node stage is idempotent (it skips when already applied), so the
 upgrade only does real work on the newly added nodes.
+
+#### Doing it on a schedule instead
+
+On a fleet that grows on its own — an autoscaler, or nodes joining faster than
+anybody notices — the upgrade above needs somebody to run it, and until they do the
+new node adds no Kata capacity. Nothing lands on it wrongly (every RuntimeClass
+selects `katacontainers.io/kata-runtime`, which is exactly what the install has not
+written there yet), so a pod asking for a Kata runtime class stays `Pending` while a
+node that could have run it takes non-Kata work instead — and if it was the pending
+pod that grew the fleet in the first place, the next node changes nothing either.
+`job.reconcile` turns that upgrade into a `CronJob` running the same dispatcher,
+against the same selectors and the same per-node templates:
+
+```yaml title="values.yaml"
+job:
+  reconcile:
+    enabled: true
+    schedule: "*/15 * * * *"
+```
+
+A tick installs the nodes that have nothing to show yet and leaves the rest of the
+fleet untouched, so a tick over a settled fleet lists nodes, finds nothing to do,
+and exits without creating a single pod. It also stands aside when a release
+rollout is in flight, rather than deleting the per-node Jobs that rollout is
+waiting on. Failures are visible where you would look for them: the CronJob keeps
+its last three failed Jobs, and a tick that failed on a node fails as a Job rather
+than being retried immediately — the next tick is the retry.
+
+!!! note "It only ever adds nodes"
+
+    A node that has dropped out of the selection is left alone, where `helm
+    upgrade` would run the cleanup pipeline on it. That asymmetry is deliberate: a
+    node falling out is usually a label gone wrong somewhere, and taking a host
+    apart on a timer with nobody watching is the worse of the two outcomes. Removals
+    stay with the upgrade you run yourself.
+
+!!! warning "Off by default"
+
+    Enabling this stands up a recurring, privileged rollout, so it is opt-in. It
+    also needs a `job.dispatcherImage` of `0.2.0` or newer; older dispatchers do
+    not understand the flags a scheduled run needs and every tick fails at startup.
+
+`helm uninstall` takes the schedule away before it starts reverting nodes (a
+`pre-delete` hook that runs ahead of the uninstall dispatcher and removes the
+CronJob together with anything it still has in flight), so a tick cannot reinstall
+a node the uninstall has just cleaned.
 
 ### Recovering from a failed or deleted dispatcher
 

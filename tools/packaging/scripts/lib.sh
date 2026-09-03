@@ -239,28 +239,27 @@ get_virtiofsd_image_name() {
 	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps ".externals.virtiofsd.toolchain")-${libc}-$(get_last_modification "${virtiofsd_script_dir}")-$(uname -m)"
 }
 
+get_libseccomp_hash() {
+	merge_two_hashes \
+		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
+		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")"
+}
+
 get_tools_image_name() {
 	tools_script_dir="${repo_root_dir}/tools/packaging/static-build/tools"
 	tools_dir="${repo_root_dir}/src/tools"
 	libs_dir="${repo_root_dir}/src/libs"
 	agent_dir="${repo_root_dir}/src/agent"
 
-	echo "${BUILDER_REGISTRY}:tools-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:tools-go-$(get_from_kata_deps ".languages.golang.meta.newest-version")-rust-$(get_from_kata_deps ".languages.rust.meta.newest-version")-$(get_libseccomp_hash)-$(get_last_modification "${tools_dir}")-$(get_last_modification "${libs_dir}")-$(get_last_modification "${agent_dir}")-$(get_last_modification "${tools_script_dir}")-$(uname -m)"
 }
 
 get_agent_image_name() {
-	libseccomp_hash=$(merge_two_hashes \
-		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
-		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")")
+	libseccomp_hash="$(get_libseccomp_hash)"
 	agent_dir="${repo_root_dir}/tools/packaging/static-build/agent"
 	rust_toolchain="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
 	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification "${agent_dir}")-${rust_toolchain}-$(uname -m)"
-}
-
-get_coco_guest_components_image_name() {
-	coco_guest_components_script_dir="${repo_root_dir}/tools/packaging/static-build/coco-guest-components"
-	echo "${BUILDER_REGISTRY}:coco-guest-components-$(get_from_kata_deps ".externals.coco-guest-components.toolchain")-$(get_last_modification "${coco_guest_components_script_dir}")-$(uname -m)"
 }
 
 get_pause_image_name() {

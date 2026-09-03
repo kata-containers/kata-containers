@@ -127,9 +127,9 @@ virtio-fs
     `kata-qemu-runtime-rs`).
 
 `kata-deploy`
-:   The recommended installer. It is a DaemonSet that lays down all of the Kata
-    binaries and artifacts on each node and wires up the container manager and
-    `RuntimeClass` objects for you.
+:   The recommended installer. It lays down all of the Kata binaries and
+    artifacts on each node and wires up the container manager and `RuntimeClass`
+    objects for you, by default through a short-lived Job per node.
 
 ## Try it out
 

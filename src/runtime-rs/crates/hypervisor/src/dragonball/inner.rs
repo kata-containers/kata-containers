@@ -140,8 +140,25 @@ impl DragonballInner {
         info!(sl!(), "start sandbox cold");
 
         self.set_vm_base_config().context("set vm base config")?;
+        self.configure_boot_source()?;
 
-        // get kernel params
+        // add pending devices
+        while let Some(dev) = self.pending_devices.pop() {
+            self.add_device(dev).await.context("add_device")?;
+        }
+
+        // start vmm and wait ready
+        self.start_vmm_instance().context("start vmm instance")?;
+        self.wait_vmm_ready(timeout).context("wait vmm")?;
+
+        Ok(())
+    }
+
+    fn configure_boot_source(&mut self) -> Result<()> {
+        if self.config.vm_template.boot_from_template {
+            return Ok(());
+        }
+
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
 
         if self.config.boot_info.initrd.is_empty() {
@@ -171,18 +188,7 @@ impl DragonballInner {
                 .to_string()
                 .context("kernel params to string")?,
         )
-        .context("set_boot_source")?;
-
-        // add pending devices
-        while let Some(dev) = self.pending_devices.pop() {
-            self.add_device(dev).await.context("add_device")?;
-        }
-
-        // start vmm and wait ready
-        self.start_vmm_instance().context("start vmm instance")?;
-        self.wait_vmm_ready(timeout).context("wait vmm")?;
-
-        Ok(())
+        .context("set_boot_source")
     }
 
     pub(crate) fn run_vmm_server(&mut self) -> Result<()> {
@@ -590,5 +596,20 @@ impl Persist for DragonballInner {
             balloon_size: 0,
             passfd_listener_port: hypervisor_state.passfd_listener_port,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_restore_skips_boot_source_configuration() {
+        let (tx, _) = mpsc::channel(1);
+        let mut inner = DragonballInner::new(tx);
+        inner.config.vm_template.boot_from_template = true;
+        inner.config.boot_info.kernel = "/kernel-must-not-be-opened".to_string();
+
+        inner.configure_boot_source().unwrap();
     }
 }

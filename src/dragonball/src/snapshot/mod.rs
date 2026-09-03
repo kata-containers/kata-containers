@@ -84,6 +84,10 @@ pub enum SnapshotError {
     #[error("invalid VM state for snapshot: {0}")]
     InvalidState(String),
 
+    /// Snapshot contents are incomplete or inconsistent with the target VM.
+    #[error("invalid VM snapshot: {0}")]
+    InvalidSnapshot(String),
+
     /// vCPU manager failure while saving/restoring vCPU state.
     #[error("vcpu manager error: {0}")]
     Vcpu(#[from] crate::vcpu::VcpuManagerError),
@@ -182,9 +186,9 @@ pub struct VmKvmState {
 
 /// Aggregated state of a microVM.
 ///
-/// Components are added progressively: a component whose `Persist` support is
-/// not implemented yet simply keeps its `Default` value in the snapshot and
-/// is ignored on restore.
+/// Core VM, vCPU and guest-memory state is required for restore. Device
+/// components are added progressively: a device class whose `Persist` support
+/// is not implemented yet keeps its `Default` value and is ignored on restore.
 #[derive(Default, Deserialize, Serialize)]
 pub struct MicrovmState {
     /// Snapshot header.
@@ -233,6 +237,53 @@ impl MicrovmState {
         check_epoch(found, FORMAT_EPOCH)?;
         Ok(serde_json::from_value(value)?)
     }
+
+    /// Validate the state that must be present before a restored VM can run.
+    #[cfg(target_arch = "x86_64")]
+    pub fn validate_for_restore(
+        &self,
+        expected_vcpu_count: u8,
+    ) -> std::result::Result<(), SnapshotError> {
+        if self.vm_kvm_state.is_none() {
+            return Err(SnapshotError::InvalidSnapshot(
+                "missing VM-scoped KVM state".to_string(),
+            ));
+        }
+
+        let memory_state = self.memory_state.as_ref().ok_or_else(|| {
+            SnapshotError::InvalidSnapshot("missing guest-memory state".to_string())
+        })?;
+        if memory_state.regions.is_empty() {
+            return Err(SnapshotError::InvalidSnapshot(
+                "guest-memory state has no regions".to_string(),
+            ));
+        }
+
+        let expected = usize::from(expected_vcpu_count);
+        if self.vcpu_states.len() != expected {
+            return Err(SnapshotError::InvalidSnapshot(format!(
+                "expected {expected} vCPU states, found {}",
+                self.vcpu_states.len()
+            )));
+        }
+
+        let mut seen = vec![false; expected];
+        for state in &self.vcpu_states {
+            let id = usize::from(state.id);
+            if id >= expected {
+                return Err(SnapshotError::InvalidSnapshot(format!(
+                    "vCPU state id {id} is outside configured count {expected}"
+                )));
+            }
+            if std::mem::replace(&mut seen[id], true) {
+                return Err(SnapshotError::InvalidSnapshot(format!(
+                    "duplicate vCPU state id {id}"
+                )));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -251,6 +302,16 @@ mod tests {
         assert_eq!(loaded.header.format_epoch, FORMAT_EPOCH);
         assert_eq!(loaded.header.producer_version, env!("CARGO_PKG_VERSION"));
         assert!(loaded.vcpu_states.is_empty());
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_default_microvm_state_is_not_restorable() {
+        assert!(matches!(
+            MicrovmState::default().validate_for_restore(1),
+            Err(SnapshotError::InvalidSnapshot(message))
+                if message == "missing VM-scoped KVM state"
+        ));
     }
 
     #[test]

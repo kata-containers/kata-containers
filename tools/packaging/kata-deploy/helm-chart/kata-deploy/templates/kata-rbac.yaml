@@ -123,6 +123,17 @@ rules:
 - apiGroups: ["batch"]
   resources: ["jobs"]
   verbs: ["create", "get", "list", "delete"]
+{{- if (.Values.job.reconcile | default dict).enabled }}
+# A scheduled run cannot know the name of the Job the CronJob made for it, so it
+# reads its own pod to find it and own the per-node Jobs with it.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+# And uninstall takes the schedule away before it starts reverting nodes.
+- apiGroups: ["batch"]
+  resources: ["cronjobs"]
+  verbs: ["get", "delete"]
+{{- end }}
 ---
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

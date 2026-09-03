@@ -195,6 +195,7 @@ pub async fn cri_serving_config_from(runtime: &str, written_at: Option<SystemTim
     }
 
     let Some(written_at) = written_at else {
+        info!("Could not tell when the CRI config was written; assuming a restart is needed");
         return false;
     };
 
@@ -211,7 +212,25 @@ pub async fn cri_serving_config_from(runtime: &str, written_at: Option<SystemTim
         }
     };
 
-    active_since > written_at
+    if active_since <= written_at {
+        info!(
+            "{unit} started at {}, not after the CRI config was written at {}; a restart is still \
+             needed",
+            epoch_secs(active_since),
+            epoch_secs(written_at)
+        );
+        return false;
+    }
+
+    true
+}
+
+/// Timestamps are only ever reported to explain a restart decision, so seconds
+/// since the epoch is enough and needs no date formatting dependency.
+fn epoch_secs(time: SystemTime) -> u64 {
+    time.duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Restart the CRI runtime, then wait for it to come back.

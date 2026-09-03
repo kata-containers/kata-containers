@@ -23,6 +23,19 @@ snapshotter:
   erofsSnapshotterMode: "memory"
   erofsDmverity: true
 
+# The EROFS settings above need erofs-utils >= 1.8.2, newer than most
+# distributions package (Ubuntu 24.04 is on 1.7.1). Nodes packaging an older one,
+# or none, can be given it from an image by uncommenting the block below: the
+# binaries go into /usr/local/bin, ahead of /usr/bin in containerd's PATH, and
+# are removed again on uninstall. The install refuses to replace an
+# /usr/local/bin/mkfs.erofs it did not put there, and that image is published for
+# amd64 and arm64 only.
+#
+# nodeBinaries:
+#   erofs-utils:
+#     image: quay.io/kata-containers/erofs-utils:1.9.3
+#     binaries: [mkfs.erofs]
+
 # EROFS fs-verity requires the backing filesystem to support fs-verity, and we
 # cannot guarantee that on an arbitrary node. Rather than gate this profile on a
 # host feature we do not control, we disable fs-verity so it works on the widest

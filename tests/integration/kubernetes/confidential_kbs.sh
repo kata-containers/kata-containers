@@ -51,6 +51,9 @@ readonly KBS_NODEPORT_SVC_NAME="trustee-kbs-nodeport"
 readonly KBS_INGRESS_NAME="trustee-kbs"
 # Workdir for installing snphost
 readonly SNPHOST_DIR="/tmp/snphost-workdir"
+# Offline VCEK store. The chart mounts it at the verifier's built-in
+# KDS_OFFLINE_STORE_PATH, so an OfflineStore source needs no explicit path.
+readonly SNP_KDS_STORE_DIR="${SNP_KDS_STORE_DIR:-/opt/confidential-containers/attestation-service/kds-store}"
 
 # Set "allow all" policy to resources.
 #
@@ -264,7 +267,7 @@ kbs_install_cli() {
 		debian|ubuntu)
 			local pkgs="build-essential pkg-config libssl-dev"
 
-			sudo apt-get update -y
+			apt_get_update
 			# shellcheck disable=2086
 			sudo apt-get install -y ${pkgs}
 			;;
@@ -306,9 +309,11 @@ kbs_uninstall_cli() {
 	fi
 }
 
-# Ensure ~/.cicd/venv exists and activate it in the current shell.
+# Ensure a virtualenv exists and activate it in the current shell. Defaults to
+# ~/.cicd/venv; callers that need incompatible dependency sets should pass their
+# own path, as the runners are long lived and keep these venvs around.
 ensure_cicd_python_venv() {
-	local venv_path="${HOME}/.cicd/venv"
+	local venv_path="${1:-${HOME}/.cicd/venv}"
 	if [[ ! -f "${venv_path}/bin/activate" ]]; then
 		# NIM tests need Python 3.10 via pyenv; attestation uses system python3. Both are fine.
 		if command -v pyenv &>/dev/null; then
@@ -316,7 +321,7 @@ ensure_cicd_python_venv() {
 			[[ -d "${PYENV_ROOT}/bin" ]] && export PATH="${PYENV_ROOT}/bin:${PATH}"
 			eval "$(pyenv init - bash)"
 		fi
-		mkdir -p "${HOME}/.cicd"
+		mkdir -p "$(dirname "${venv_path}")"
 		python3 -m venv "${venv_path}"
 	fi
 	# shellcheck disable=SC1091
@@ -346,6 +351,73 @@ ensure_snphost() {
 
 	popd
 	rm -rf "${SNPHOST_DIR}"
+}
+
+# Cache a VCEK for this host so that verification stops depending on AMD KDS.
+#
+# snphost derives the KDS URL from the same chip ID and reported TCB that the
+# verifier encodes into the file name, so the name derived here is the one the
+# verifier will look for, and its existence means the cache still matches the
+# firmware. Never fatal: on failure the verifier falls back to KDS as it does
+# today.
+#
+snp_refresh_vcek_store() {
+	local url hwid query key tcb_prefix val target tmpdir
+
+	# Deploy runs before the tests that install snphost. Subshelled because a
+	# failed build would unbalance the caller's dir stack.
+	if ! command -v snphost >/dev/null; then
+		( ensure_snphost ) || true
+	fi
+
+	if ! command -v snphost >/dev/null; then
+		warn "snphost is not available; leaving the offline VCEK store untouched"
+		return 0
+	fi
+
+	url=$(sudo snphost show vcek-url) || {
+		warn "could not read the VCEK URL from the firmware; leaving the offline VCEK store untouched"
+		return 0
+	}
+
+	# https://kdsintf.amd.com/vcek/v1/<Gen>/<HWID>?[fmcSPL=NN&]blSPL=NN&teeSPL=NN&snpSPL=NN&ucodeSPL=NN
+	query="${url#*\?}"
+	# snphost prints the chip ID upper case, the verifier looks it up lower case.
+	hwid=$(printf '%s' "${url%%\?*}" | sed 's|.*/||' | tr '[:upper:]' '[:lower:]')
+
+	# fmcSPL is Turin and above only, where the verifier truncates the chip ID.
+	if [[ "${query}" == *fmcSPL=* ]]; then
+		hwid="${hwid:0:16}"
+	fi
+
+	# fmc comes first in the URL but last in the file name.
+	tcb_prefix=""
+	for key in bl tee snp ucode fmc; do
+		val=$(printf '%s' "${query}" | grep -oP "(^|&)${key}SPL=\K[0-9]+") || continue
+		tcb_prefix+="${tcb_prefix:+_}${key}$(printf '%02d' "$((10#${val}))")"
+	done
+
+	if [[ -z "${tcb_prefix}" || -z "${hwid}" ]]; then
+		warn "could not derive the VCEK store entry from '${url}'; leaving the offline VCEK store untouched"
+		return 0
+	fi
+
+	target="${SNP_KDS_STORE_DIR}/vcek/${hwid}/${tcb_prefix}_vcek.der"
+	if [[ -f "${target}" ]]; then
+		info "offline VCEK store already matches the host firmware (${target})"
+		return 0
+	fi
+
+	# Older certificates stay: the TCB is in the file name, so they still cover a
+	# firmware rollback.
+	info "fetching a VCEK for the current host firmware into ${target}"
+	tmpdir=$(mktemp -d -t snp-vcek-XXXXX)
+	if sudo snphost fetch vek der "${tmpdir}" && [[ -s "${tmpdir}/vcek.der" ]]; then
+		sudo install -D -m 0644 "${tmpdir}/vcek.der" "${target}"
+	else
+		warn "could not fetch a VCEK from AMD KDS; SNP attestation will fall back to KDS at verification time"
+	fi
+	rm -rf "${tmpdir}"
 }
 
 # Delete the kbs on Kubernetes
@@ -400,6 +472,7 @@ function kbs_k8s_deploy() {
 	local image_rvps
 	local svc_host
 	local timeout
+	local node_name
 
 	ensure_yq
 	ensure_helm
@@ -445,14 +518,31 @@ function kbs_k8s_deploy() {
 	#
 	# The AS auto-selects a verifier per evidence type; the chart configures the
 	# NVIDIA and Intel DCAP verifiers by default (DCAP already points at the
-	# public Intel collateral service), so SNP and TDX need no extra knobs. Only
-	# NVIDIA requires overriding the verifier type (Local vs Remote).
+	# public Intel collateral service), so TDX needs no extra knobs. NVIDIA
+	# requires overriding the verifier type (Local vs Remote), and SNP needs to
+	# be pointed at the offline VCEK store.
 	local helm_set_args=()
 
 	if [[ "${KATA_HYPERVISOR}" == *nvidia-gpu* ]]; then
 		local nvidia_verifier_type
 		nvidia_verifier_type="$(printf '%s' "${NVIDIA_VERIFIER_MODE:-remote}" | sed 's/./\u&/')"
 		helm_set_args+=(--set "as.verifier.nvidia.type=${nvidia_verifier_type}")
+	fi
+
+	# Offline store first so KDS is only reached for a genuinely missing
+	# certificate. The chart refuses to render a partial configuration, hence all
+	# three values or none.
+	if [[ "${KATA_HYPERVISOR}" == *snp* ]]; then
+		snp_refresh_vcek_store
+		if [[ -d "${SNP_KDS_STORE_DIR}/vcek" ]]; then
+			node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+			helm_set_args+=(--set "as.verifier.snp.kdsStoreHostPath=${SNP_KDS_STORE_DIR}")
+			helm_set_args+=(--set "as.verifier.snp.nodeName=${node_name}")
+			helm_set_args+=(--set "as.verifier.snp.vcekSources[0].type=OfflineStore")
+			helm_set_args+=(--set "as.verifier.snp.vcekSources[1].type=KDS")
+		else
+			warn "no offline VCEK store at ${SNP_KDS_STORE_DIR}; SNP attestation will depend on AMD KDS"
+		fi
 	fi
 
 	# Build Helm values override.
@@ -552,7 +642,6 @@ function kbs_k8s_deploy() {
 	# chart's as.verifier.se.* knobs, which create a node-local PV/PVC pointing at
 	# ${IBM_SE_CREDS_DIR} on the target node.
 	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
-		local node_name
 		node_name=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
 		prepare_credentials_for_qemu_se
 		helm_set_args+=(--set "as.verifier.se.credsDir=${IBM_SE_CREDS_DIR:-}")

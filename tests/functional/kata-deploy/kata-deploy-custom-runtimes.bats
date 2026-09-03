@@ -26,6 +26,24 @@ CUSTOM_RUNTIME_HANDLER="kata-my-custom-handler"
 TEST_POD_NAME="kata-deploy-custom-verify"
 CHART_PATH="$(get_chart_path)"
 
+# The two runtimes spell the agent dial timeout differently, and runtime-rs
+# refuses a config carrying a field it does not know, so a drop-in meant to be
+# applied for real has to match the base config it extends.
+if [[ "${KATA_HYPERVISOR:-qemu-runtime-rs}" == *-runtime-rs ]]; then
+	DROP_IN_SETTING="dial_timeout_ms = 999"
+else
+	DROP_IN_SETTING="dial_timeout = 999"
+fi
+
+# A custom runtime inherits the rootfs type of the base config it extends, so it
+# needs the very snapshotter that base config was built around -- an EROFS
+# configuration cannot make sense of the overlayfs rootfs containerd hands out
+# by default.
+CUSTOM_RUNTIME_SNAPSHOTTER=""
+if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+	CUSTOM_RUNTIME_SNAPSHOTTER="erofs"
+fi
+
 # =============================================================================
 # Template Rendering Tests (no cluster required)
 # =============================================================================
@@ -62,7 +80,7 @@ CHART_PATH="$(get_chart_path)"
 		> /tmp/rendered.yaml
 
 	grep -q "dropin-${CUSTOM_RUNTIME_HANDLER}.toml" /tmp/rendered.yaml
-	grep -q "dial_timeout = 999" /tmp/rendered.yaml
+	grep -q "${DROP_IN_SETTING}" /tmp/rendered.yaml
 }
 
 @test "Helm template: CUSTOM_RUNTIMES_ENABLED env var is set" {
@@ -187,7 +205,7 @@ EOF
 	run kubectl get runtimeclass "${CUSTOM_RUNTIME_HANDLER}" -o name
 	if [[ "${status}" -ne 0 ]]; then
 		echo "# RuntimeClass not found. kata-deploy logs:" >&3
-		kubectl -n kube-system logs -l name=kata-deploy 2>/dev/null || true
+		kubectl -n kube-system logs -l "$(kata_deploy_pod_selector)" 2>/dev/null || true
 		die "Custom RuntimeClass ${CUSTOM_RUNTIME_HANDLER} not found"
 	fi
 
@@ -306,7 +324,7 @@ customRuntimes:
       baseConfig: "${KATA_HYPERVISOR}"
       dropIn: |
         [agent.kata]
-        dial_timeout = 999
+        ${DROP_IN_SETTING}
       runtimeClass: |
         kind: RuntimeClass
         apiVersion: node.k8s.io/v1
@@ -323,7 +341,7 @@ customRuntimes:
           nodeSelector:
             katacontainers.io/kata-runtime: "true"
       containerd:
-        snapshotter: ""
+        snapshotter: "${CUSTOM_RUNTIME_SNAPSHOTTER}"
       crio:
         pullType: ""
 EOF
@@ -344,7 +362,7 @@ customRuntimes:
       baseConfig: "${KATA_HYPERVISOR:-qemu-runtime-rs}"
       dropIn: |
         [agent.kata]
-        dial_timeout = 999
+        ${DROP_IN_SETTING}
       runtimeClass: |
         kind: RuntimeClass
         apiVersion: node.k8s.io/v1
@@ -361,7 +379,7 @@ customRuntimes:
           nodeSelector:
             katacontainers.io/kata-runtime: "true"
       containerd:
-        snapshotter: ""
+        snapshotter: "${CUSTOM_RUNTIME_SNAPSHOTTER}"
       crio:
         pullType: ""
 EOF
@@ -373,7 +391,7 @@ teardown() {
 		echo "# Test failed, gathering diagnostics..." >&3
 		kubectl describe pod "${TEST_POD_NAME}" 2>/dev/null || true
 		echo "# kata-deploy logs:" >&3
-		kubectl -n kube-system logs -l name=kata-deploy 2>/dev/null || true
+		kubectl -n kube-system logs -l "$(kata_deploy_pod_selector)" 2>/dev/null || true
 	fi
 
 	# Clean up test pod

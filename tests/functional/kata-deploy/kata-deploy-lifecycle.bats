@@ -32,61 +32,22 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 
 LIFECYCLE_POD_NAME="kata-lifecycle-test"
 
-# Run a command on the host node's filesystem using a short-lived privileged pod.
-# The host root is mounted at /host inside the pod.
-# Usage: run_on_host "test -d /host/opt/kata && echo YES || echo NO"
-#
-# We avoid `kubectl run --rm -i` because rke2 injects session-recording banners
-# into interactive pods, polluting stdout. Instead: create, wait, fetch logs, delete.
-run_on_host() {
-	local cmd="$1"
-	local node_name
-	node_name=$(kubectl get nodes --no-headers -o custom-columns=NAME:.metadata.name | head -1)
-	local pod_name="host-exec-${RANDOM}"
-
-	kubectl run "${pod_name}" \
-		--image=quay.io/kata-containers/alpine-bash-curl:latest \
-		--restart=Never \
-		--overrides="{
-			\"spec\": {
-				\"nodeName\": \"${node_name}\",
-				\"activeDeadlineSeconds\": 300,
-				\"tolerations\": [{\"operator\": \"Exists\"}],
-				\"containers\": [{
-					\"name\": \"exec\",
-					\"image\": \"quay.io/kata-containers/alpine-bash-curl:latest\",
-					\"imagePullPolicy\": \"IfNotPresent\",
-					\"command\": [\"sh\", \"-c\", \"${cmd}\"],
-					\"securityContext\": {\"privileged\": true},
-					\"volumeMounts\": [{\"name\": \"host\", \"mountPath\": \"/host\", \"readOnly\": true}]
-				}],
-				\"volumes\": [{\"name\": \"host\", \"hostPath\": {\"path\": \"/\"}}]
-			}
-		}" > /dev/null 2>&1
-
-	local deadline=$((SECONDS + 60))
-	while (( SECONDS < deadline )); do
-		local phase
-		phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null) || true
-		case "${phase}" in
-			Succeeded|Failed) break ;;
-		esac
-		sleep 1
-	done
-
-	kubectl logs "${pod_name}" 2>/dev/null
-	kubectl delete pod "${pod_name}" --ignore-not-found=true > /dev/null 2>&1
-	[[ "${phase}" == "Succeeded" ]]
-}
-
 setup_file() {
+	# erofs-utils now reaches the node through the job pipeline's staging, which
+	# the DaemonSet has no equivalent of, and these runners package none of their
+	# own. The other flavours cover this suite in daemonset mode.
+	if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+		skip "the DaemonSet cannot install the erofs-utils the node lacks"
+	fi
+
 	ensure_helm
 
 	echo "# Image: ${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" >&3
 	echo "# Hypervisor: ${KATA_HYPERVISOR}" >&3
 	echo "# K8s distribution: ${KUBERNETES}" >&3
 	echo "# Deploying kata-deploy..." >&3
-	deploy_kata
+	# `rollout restart daemonset/kata-deploy` below needs a DaemonSet.
+	deploy_kata "" --set deploymentMode=daemonset
 	echo "# kata-deploy deployed successfully" >&3
 }
 

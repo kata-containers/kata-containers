@@ -112,8 +112,31 @@ predicate_has_shim_metric() {
 		--set "monitor.image.reference=${KATA_MONITOR_IMAGE_REFERENCE}" \
 		--set "monitor.image.tag=${KATA_MONITOR_IMAGE_TAG}"
 
+	# deploy_kata's readiness wait is best-effort, so make sure kata-deploy has
+	# really finished here: everything below is written around containerd having
+	# already been bounced by the install.
+	#
+	# --for=create is what makes the readiness wait below trustworthy: on its
+	# own it would give up rather than wait while the selector still matches
+	# nothing, which is exactly the state a cluster only seconds old is in.
+	#
+	# Only in daemonset mode: job mode has no pod to wait for, and helm already
+	# waited for the dispatcher hook, which does not return until every per-node
+	# install Job has finished.
+	if kata_deploy_ds_exists; then
+		kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+			--for=create --timeout="${helm_timeout}"
+		kubectl -n "${HELM_NAMESPACE}" wait pod -l name=kata-deploy \
+			--for=condition=Ready --timeout="${helm_timeout}"
+	fi
+
 	echo ""
 	echo "::group::kata-monitor DaemonSet rollout"
+	# Same for the rollout: a DaemonSet with nothing scheduled yet counts as
+	# rolled out, so wait for a pod to exist before believing the status.
+	kubectl -n "${HELM_NAMESPACE}" wait pod \
+		-l app.kubernetes.io/name=kata-monitor \
+		--for=create --timeout="${rollout_timeout}"
 	kubectl -n "${HELM_NAMESPACE}" rollout status ds/kata-monitor \
 		--timeout="${rollout_timeout}"
 	echo "::endgroup::"

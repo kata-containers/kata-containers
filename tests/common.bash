@@ -164,6 +164,28 @@ function kubectl_retry() {
 	echo "'kubectl $*' failed after ${max_tries} tries" 1>&2 && return 1
 }
 
+# A wrapper around `apt-get update` with retry logic.
+#
+# The GitHub runner images come with third-party apt repositories configured
+# (packages.microsoft.com, dl.google.com, ...) that we don't use but that apt
+# still refreshes, and a single one of them answering 403 or timing out is
+# enough to make the whole update fail.  Retrying keeps a hiccup on a
+# repository we don't even need from taking the job down.
+function apt_get_update() {
+	local -r max_tries=5
+	local -r interval=15
+	local i
+
+	for ((i = 1; i <= max_tries; i++)); do
+		sudo apt-get update && return 0
+		[[ "${i}" -eq "${max_tries}" ]] && break
+		warn "'apt-get update' failed, retrying in ${interval} seconds"
+		sleep "${interval}"
+	done
+
+	die "'apt-get update' failed after ${max_tries} tries"
+}
+
 function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
@@ -907,7 +929,7 @@ function install_erofs_utils() {
 		Pin: release n=questing
 		Pin-Priority: 100
 		APTPIN
-		sudo apt-get update
+		apt_get_update
 		sudo apt-get -y install --no-install-recommends -t questing erofs-utils
 		sudo rm -f /etc/apt/preferences.d/questing-pin
 		sudo add-apt-repository -y --remove 'deb https://archive.ubuntu.com/ubuntu/ questing universe'
@@ -1383,7 +1405,7 @@ function install_crio() {
 	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/ /" | \
 		sudo tee /etc/apt/sources.list.d/cri-o.list
 
-	sudo apt update
+	apt_get_update
 	sudo apt install -y cri-o
 
 	# We need to set the default capabilities to ensure our tests will pass
@@ -1414,7 +1436,7 @@ EOF
 
 function install_docker() {
 	# Add Docker's official GPG key
-	sudo apt-get update
+	apt_get_update
 	sudo apt-get -y install ca-certificates curl gnupg
 	sudo install -m 0755 -d /etc/apt/keyrings
 	curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -1425,7 +1447,7 @@ function install_docker() {
 		"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
 		$(. /etc/os-release && echo "${VERSION_CODENAME}") stable" | \
 		sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-	sudo apt-get update
+	apt_get_update
 
 	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }

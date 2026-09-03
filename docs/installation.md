@@ -63,6 +63,19 @@ underlying hypervisor must expose the CPU virtualization extensions to the
 guest (for example a `host-passthrough` or `host-model` CPU, with nesting
 enabled on the bare-metal host).
 
+!!! tip "Detecting bare metal vs. nested virtualization"
+    Use `systemd-detect-virt` to determine whether you are running on bare
+    metal or inside a virtual machine:
+
+    ```sh
+    systemd-detect-virt
+    ```
+
+    - Output **`none`**: you are running directly on bare metal.
+    - Output like **`kvm`** or **`qemu`**: you are running inside a virtual
+      machine and will need nested virtualization enabled on the underlying
+      host.
+
 **Host kernel modules** for `vhost` must be loaded. Kata uses VSOCK for the
 communication channel between the runtime and the guest agent (`vhost_vsock`
 provides `/dev/vhost-vsock`); `vhost_net` is needed for networking:
@@ -123,8 +136,9 @@ export CHART="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
 helm install kata-deploy "${CHART}" --version "${VERSION}"
 ```
 
-This installs the `kata-deploy` DaemonSet and the default Kata `RuntimeClass`
-resources on your cluster. To see everything you can configure:
+This installs Kata via short-lived, staged per-node Jobs (the default `job`
+deployment mode) and the default Kata `RuntimeClass` resources on your cluster.
+To see everything you can configure:
 
 ```sh
 helm show values "${CHART}" --version "${VERSION}"
@@ -140,10 +154,10 @@ For the full set of configuration options (shim selection, custom runtimes,
 node selectors, TEE shims, drop-in configuration files and more), see the
 [Helm configuration document](helm-configuration.md).
 
-!!! note "Deployment modes: DaemonSet vs Job"
-    The DaemonSet is the default install model, but it is no longer the only
-    one. You can instead install Kata via short-lived, staged per-node Jobs
-    (no always-on component on the node) by setting `deploymentMode: job`.
+!!! note "Deployment modes: Job vs DaemonSet"
+    Short-lived, staged per-node Jobs (no always-on component on the node) are
+    the default install model (`deploymentMode: job`). You can instead use the
+    long-running `kata-deploy` DaemonSet by setting `deploymentMode: daemonset`.
     See [Deployment Modes (DaemonSet vs Job)](helm-configuration.md#deployment-modes-daemonset-vs-job)
     for details and node-selection options.
 

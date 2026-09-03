@@ -280,6 +280,14 @@ chisseled_dcgm() {
 	cp -a "${stage_one}"/usr/"${libdir}"/libdcgm.*     "${libdir}"/.
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
+	# dcgm-exporter dlopen()s libdcgm.so.4, so it needs no extra NEEDED entry
+	# beyond the libc/libdl/libpthread/libresolv set chisseled_compute copies.
+	cp -a "${stage_one}"/usr/bin/dcgm-exporter   bin/.
+
+	# NVRC passes the counter set as -f gpu_extension::path(<csv>), which is the
+	# identity mapping in the monolith, so the CSVs belong at the canonical path
+	# here. partition_base() drops them and the extension ships its own copy.
+	cp -a "${stage_one}"/etc/dcgm-exporter/*.csv etc/dcgm-exporter/.
 }
 
 # copute always includes utility per default
@@ -567,6 +575,7 @@ readonly nvidia_gpu_extension_bins=(
 	bin/nvidia-cdi-hook
 	bin/nvidia-persistenced
 	bin/nv-hostengine
+	bin/dcgm-exporter
 	bin/nv-fabricmanager
 	sbin/nvlsm
 )
@@ -643,7 +652,12 @@ assemble_nvidia_gpu_extension() {
 
 	if nvidia_stack_has dcgm; then
 		install -D -m0755 "${source}/usr/bin/nv-hostengine" "${extension}/bin/nv-hostengine"
+		install -D -m0755 "${source}/usr/bin/dcgm-exporter" "${extension}/bin/dcgm-exporter"
 		cp -a "${source}/${source_lib}"/libdcgm.* "${extension}/${extlib}/"
+		# The counter CSVs travel with the exporter: NVRC resolves them through
+		# gpu_extension::path(), so they resolve under the extension mount.
+		mkdir -p "${extension}/etc/dcgm-exporter"
+		cp -a "${source}/etc/dcgm-exporter/"*.csv "${extension}/etc/dcgm-exporter/"
 	fi
 
 	if nvidia_stack_has nvswitch; then
@@ -677,14 +691,6 @@ assemble_nvidia_gpu_extension() {
 	# container start significantly.
 	mkdir -p "${extension}/etc"
 	ldconfig -r "${extension}" 2>/dev/null || true
-
-	# The topology files are only available under the GPU extension mount.
-	# Point Fabric Manager there so it can find them.
-	local fm_cfg="${extension}/usr/share/nvidia/nvswitch/fabricmanager.cfg"
-	if [[ -f "${fm_cfg}" ]]; then
-		sed -i 's|^TOPOLOGY_FILE_PATH=.*|TOPOLOGY_FILE_PATH=/run/kata-extensions/gpu/usr/share/nvidia/nvswitch|' \
-			"${fm_cfg}"
-	fi
 
 	# The topology files are only available under the GPU extension mount.
 	# Point Fabric Manager there so it can find them.
@@ -758,6 +764,10 @@ partition_base() {
 	rm -rf usr/share/nvidia
 	mkdir -p usr/share/nvidia
 
+	# The exporter and its counter CSVs both live in the extension, and NVRC
+	# resolves the -f path there, so the base needs no stub for them.
+	rm -rf etc/dcgm-exporter
+
 	# Keep /lib/firmware/nvidia as an empty mountpoint for NVRC's firmware bind.
 	rm -rf lib/firmware/nvidia
 	mkdir -p lib/firmware/nvidia
@@ -778,7 +788,7 @@ partition_base() {
 # so it must carry veritysetup and its shared-library closure unconditionally -
 # regardless of whether the guest is confidential. This closure is also exactly
 # what cryptsetup links, so the cryptsetup binary shipped in the coco extension
-# (encrypted storage, see build-static-coco-guest-components.sh) resolves its
+# (encrypted storage, bundled in the published coco-extension image) resolves its
 # libraries against the base without bundling any of its own. Runs inside
 # ${ROOTFS_DIR}.
 chisseled_veritysetup() {
