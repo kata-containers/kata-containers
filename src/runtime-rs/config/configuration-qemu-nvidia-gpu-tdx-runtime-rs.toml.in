@@ -50,7 +50,7 @@ vm_rootfs_driver = "@VMROOTFSDRIVER_NV@"
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
-rootless = false
+rootless = @DEFROOTLESS_NV@
 
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
