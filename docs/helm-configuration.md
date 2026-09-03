@@ -83,9 +83,10 @@ default (non-custom) runtime. kata-deploy writes it as
 
     A shim is only considered for an architecture that its own `supportedArches`
     lists, and a shim block that does not set the field matches none — so
-    `--set shims.qemu-tdx.enabled=true` on its own installs nothing and says
-    nothing. Use the profile that carries the shim, or copy its whole block out of
-    that profile, which is also where its snapshotter and guest-pull settings live.
+    `--set shims.qemu-tdx.enabled=true` on its own would install nothing, which the
+    chart rejects rather than leaving you a RuntimeClass no pod can run on. Use the
+    profile that carries the shim, or copy its whole block out of that profile,
+    which is also where its snapshotter and guest-pull settings live.
 
 It's best to reference the default `values.yaml` file above for more details.
 
