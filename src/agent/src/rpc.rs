@@ -79,7 +79,7 @@ use crate::device::{
     update_env_pci,
 };
 use crate::features::get_build_features;
-use crate::metrics::get_metrics;
+use crate::metrics::{get_metrics, is_collection_in_progress};
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
@@ -1753,7 +1753,14 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "get_metrics", req);
         is_allowed(&req).await?;
 
-        let s = get_metrics(&req).map_ttrpc_err(same)?;
+        let s = get_metrics(&req).await.map_err(|err| {
+            let code = if is_collection_in_progress(&err) {
+                ttrpc::Code::UNAVAILABLE
+            } else {
+                ttrpc::Code::INTERNAL
+            };
+            ttrpc_error(code, err)
+        })?;
         let mut metrics = Metrics::new();
         metrics.set_metrics(s);
         Ok(metrics)
@@ -2756,7 +2763,11 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
-    use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
+    use crate::{
+        metrics::{get_metrics_with_filesystem_collector, MetricsState},
+        namespace::Namespace,
+        protocols::{agent_ttrpc_async::AgentService as _, health_ttrpc_async::Health as _},
+    };
     use anyhow::{bail, ensure};
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
@@ -2847,6 +2858,59 @@ mod tests {
             .unwrap(),
             dir,
         )
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn blocking_metrics_do_not_block_control_handlers() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let sandbox = Sandbox::new(&logger).unwrap();
+        let agent_service = AgentService {
+            sandbox: Arc::new(Mutex::new(sandbox)),
+            init_mode: true,
+            oma: None,
+        };
+
+        let state = Arc::new(MetricsState::default());
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+
+        let blocked_metrics =
+            tokio::spawn(get_metrics_with_filesystem_collector(state, move || {
+                let _ = started_tx.send(());
+                let _ = release_rx.recv();
+            }));
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), started_rx)
+            .await
+            .expect("filesystem collector did not start")
+            .expect("filesystem collector dropped its start notification");
+
+        let ctx = mk_ttrpc_context();
+        let health = tokio::time::timeout(
+            std::time::Duration::from_millis(250),
+            HealthService.check(&ctx, protocols::health::CheckRequest::default()),
+        )
+        .await
+        .expect("health check was blocked by metrics collection")
+        .unwrap();
+        assert_eq!(health.status(), HealthCheckResponse_ServingStatus::SERVING);
+
+        let signal = tokio::time::timeout(
+            std::time::Duration::from_millis(250),
+            agent_service.signal_process(&ctx, protocols::agent::SignalProcessRequest::default()),
+        )
+        .await
+        .expect("signal handler was blocked by metrics collection");
+        assert!(signal.is_err(), "the test request has no matching process");
+
+        release_tx.send(()).unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), blocked_metrics)
+            .await
+            .expect("metrics collection did not finish after release")
+            .unwrap()
+            .unwrap();
     }
 
     #[test]

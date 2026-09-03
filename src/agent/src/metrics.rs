@@ -10,7 +10,10 @@ use prometheus::{Encoder, Gauge, GaugeVec, IntCounter, Opts, Registry, TextEncod
 use anyhow::{anyhow, Result};
 use nix::sys::statfs;
 use slog::warn;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, OnceLock,
+};
 use tracing::instrument;
 
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
@@ -21,9 +24,33 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "metrics"))
 }
 
+static REGISTERED: OnceLock<Result<(), String>> = OnceLock::new();
+
+#[derive(Default)]
+pub(crate) struct MetricsState {
+    collection_in_progress: AtomicBool,
+    last_successful_metrics: Mutex<Option<String>>,
+}
+
+struct CollectionGuard {
+    state: Arc<MetricsState>,
+}
+
+impl Drop for CollectionGuard {
+    fn drop(&mut self) {
+        self.state
+            .collection_in_progress
+            .store(false, Ordering::Release);
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("guest metrics collection already in progress")]
+struct CollectionInProgress;
+
 lazy_static! {
 
-    static ref REGISTERED: Mutex<bool> = Mutex::new(false);
+    static ref METRICS_STATE: Arc<MetricsState> = Arc::new(MetricsState::default());
 
     // custom registry
     static ref REGISTRY: Registry = Registry::new();
@@ -83,23 +110,78 @@ lazy_static! {
 }
 
 #[instrument]
-pub fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
-    let mut registered = REGISTERED
-        .lock()
-        .map_err(|e| anyhow!("failed to check agent metrics register status {:?}", e))?;
+pub async fn get_metrics(_: &protocols::agent::GetMetricsRequest) -> Result<String> {
+    get_metrics_with_filesystem_collector(METRICS_STATE.clone(), update_guest_filesystem_metrics)
+        .await
+}
 
-    if !(*registered) {
-        register_metrics()?;
-        *registered = true;
+pub(crate) fn is_collection_in_progress(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<CollectionInProgress>().is_some()
+}
+
+fn ensure_metrics_registered() -> Result<()> {
+    match REGISTERED.get_or_init(|| register_metrics().map_err(|err| format!("{err:#}"))) {
+        Ok(()) => Ok(()),
+        Err(err) => Err(anyhow!("failed to register agent metrics: {err}")),
+    }
+}
+
+pub(crate) async fn get_metrics_with_filesystem_collector<F>(
+    state: Arc<MetricsState>,
+    filesystem_collector: F,
+) -> Result<String>
+where
+    F: FnOnce() + Send + 'static,
+{
+    ensure_metrics_registered()?;
+
+    if state
+        .collection_in_progress
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return state
+            .last_successful_metrics
+            .lock()
+            .map_err(|err| anyhow!("failed to read cached agent metrics: {err}"))?
+            .clone()
+            .ok_or_else(|| CollectionInProgress.into());
     }
 
+    // Move the guard into the blocking task. If the caller goes away, the gate
+    // remains closed until the task actually exits; dropping JoinHandle does not
+    // cancel a blocking syscall.
+    let guard = CollectionGuard {
+        state: state.clone(),
+    };
+
+    tokio::task::spawn_blocking(move || {
+        let _guard = guard;
+        let metrics = collect_metrics(filesystem_collector)?;
+
+        *state
+            .last_successful_metrics
+            .lock()
+            .map_err(|err| anyhow!("failed to cache agent metrics: {err}"))? =
+            Some(metrics.clone());
+
+        Ok(metrics)
+    })
+    .await
+    .map_err(|err| anyhow!("guest metrics collector task failed: {err}"))?
+}
+
+fn collect_metrics<F>(filesystem_collector: F) -> Result<String>
+where
+    F: FnOnce(),
+{
     AGENT_SCRAPE_COUNT.inc();
 
     // update agent process metrics
     update_agent_metrics()?;
 
     // update guest os metrics
-    update_guest_metrics();
+    update_guest_metrics(filesystem_collector);
 
     // gather all metrics and return as a String
     let metric_families = REGISTRY.gather();
@@ -194,8 +276,11 @@ fn update_agent_metrics() -> Result<()> {
     Ok(())
 }
 
-#[instrument]
-fn update_guest_metrics() {
+#[instrument(skip(filesystem_collector))]
+fn update_guest_metrics<F>(filesystem_collector: F)
+where
+    F: FnOnce(),
+{
     // try get load and task info
     match procfs::LoadAverage::new() {
         Err(err) => {
@@ -277,7 +362,7 @@ fn update_guest_metrics() {
     }
 
     // get filesystem space usage via statfs
-    update_guest_filesystem_metrics();
+    filesystem_collector();
 }
 
 #[instrument]
@@ -647,4 +732,109 @@ fn set_gauge_vec_proc_stat(gv: &prometheus::GaugeVec, stat: &procfs::process::St
     gv.with_label_values(&["stime"]).set(stat.stime as f64);
     gv.with_label_values(&["cutime"]).set(stat.cutime as f64);
     gv.with_label_values(&["cstime"]).set(stat.cstime as f64);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    #[test]
+    fn registration_is_race_free() {
+        const CALLERS: usize = 32;
+
+        let barrier = Arc::new(std::sync::Barrier::new(CALLERS));
+        let mut callers = Vec::with_capacity(CALLERS);
+
+        for _ in 0..CALLERS {
+            let barrier = barrier.clone();
+            callers.push(std::thread::spawn(move || {
+                barrier.wait();
+                ensure_metrics_registered()
+            }));
+        }
+
+        for caller in callers {
+            caller.join().unwrap().unwrap();
+        }
+
+        let families = REGISTRY.gather();
+        let names = families
+            .iter()
+            .map(|family| family.name())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(names.len(), families.len());
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn blocking_filesystem_collection_is_single_flight_and_cached() {
+        let state = Arc::new(MetricsState::default());
+
+        let cached = get_metrics_with_filesystem_collector(state.clone(), || {})
+            .await
+            .unwrap();
+        assert!(cached.contains("kata_agent_scrape_count"));
+
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let collector_calls = Arc::new(AtomicUsize::new(0));
+
+        let blocked_calls = collector_calls.clone();
+        let blocked = tokio::spawn(get_metrics_with_filesystem_collector(
+            state.clone(),
+            move || {
+                blocked_calls.fetch_add(1, Ordering::SeqCst);
+                let _ = started_tx.send(());
+                let _ = release_rx.recv();
+            },
+        ));
+
+        tokio::time::timeout(Duration::from_secs(1), started_rx)
+            .await
+            .expect("filesystem collector did not start")
+            .expect("filesystem collector dropped its start notification");
+
+        let unexpected_calls = collector_calls.clone();
+        let concurrent = tokio::time::timeout(
+            Duration::from_millis(250),
+            get_metrics_with_filesystem_collector(state.clone(), move || {
+                unexpected_calls.fetch_add(1, Ordering::SeqCst);
+            }),
+        )
+        .await
+        .expect("concurrent metrics request waited for the blocked collector")
+        .unwrap();
+
+        assert_eq!(concurrent, cached);
+        assert_eq!(collector_calls.load(Ordering::SeqCst), 1);
+
+        release_tx.send(()).unwrap();
+
+        let refreshed = tokio::time::timeout(Duration::from_secs(1), blocked)
+            .await
+            .expect("metrics collection did not finish after release")
+            .unwrap()
+            .unwrap();
+        assert!(refreshed.contains("kata_guest_load"));
+    }
+
+    #[tokio::test]
+    async fn concurrent_collection_without_cache_is_transient_error() {
+        let state = Arc::new(MetricsState::default());
+        state.collection_in_progress.store(true, Ordering::Release);
+
+        let result = tokio::time::timeout(
+            Duration::from_millis(250),
+            get_metrics_with_filesystem_collector(state.clone(), || {
+                panic!("a second collector must not start");
+            }),
+        )
+        .await
+        .expect("concurrent metrics request did not return promptly")
+        .unwrap_err();
+
+        assert!(is_collection_in_progress(&result));
+    }
 }
