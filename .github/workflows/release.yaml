@@ -348,6 +348,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Upload the helm chart values presets
+        run: |
+          ./tools/packaging/release/release.sh upload-helm-chart-values-files
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Login to the OCI registries
         env:
           QUAY_DEPLOYER_USERNAME: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -365,7 +371,7 @@ jobs:
 
   publish-release:
     name: publish-release
-    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, publish-kata-monitor-image, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
+    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, publish-kata-monitor-image, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball, upload-helm-chart-tarball ]
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:

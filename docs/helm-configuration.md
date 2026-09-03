@@ -811,6 +811,15 @@ See the default [`values.yaml`](#parameters) for the remaining `job.*` options
 
 We provide a few examples that you can pass to helm via the `-f`/`--values` flag.
 
+Each is published as a release asset and `-f` takes a URL, so helm fetches the
+file itself. Replace `VERSION` in both the flag and the URL, or use
+`/releases/latest/download/<file>` for the newest release.
+
+!!! warning "Releases up to and including 4.1.0"
+    Those releases do not carry the presets as assets. Fetch the desired file from
+    its tag instead, replacing `<file>` with the preset filename:
+    `https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/VERSION/tools/packaging/kata-deploy/helm-chart/kata-deploy/<file>`
+
 ### [`try-kata-tee.values.yaml`](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-tee.values.yaml)
 
 This file enables only the TEE (Trusted Execution Environment) shims for confidential computing:
@@ -818,7 +827,7 @@ This file enables only the TEE (Trusted Execution Environment) shims for confide
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
   --version VERSION \
-  -f try-kata-tee.values.yaml
+  -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-tee.values.yaml
 ```
 
 Includes:
@@ -839,7 +848,7 @@ DaemonSet on the node):
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
   --version VERSION \
-  -f try-kata-nvidia-cpu.values.yaml
+  -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-nvidia-cpu.values.yaml
 ```
 
 Includes:
@@ -857,7 +866,7 @@ DaemonSet on the node):
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
   --version VERSION \
-  -f try-kata-nvidia-gpu.values.yaml
+  -f https://github.com/kata-containers/kata-containers/releases/download/VERSION/try-kata-nvidia-gpu.values.yaml
 ```
 
 Includes:
