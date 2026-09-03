@@ -1,22 +1,22 @@
 [package]
-name = "pod-resources-rs"
-version = "0.1.0"
 edition = { workspace = true }
 license = { workspace = true }
+name = "pod-resources-rs"
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+hyper-util = { features = ["tokio"], version = "0.1" }
 tokio = { workspace = true }
 tokio-util = "0.7.17"
 tower = "0.5"
-hyper-util = { version = "0.1", features = ["tokio"] }
 # gRPC dependencies for kubelet pod-resources API
-tonic = "0.14"
-prost = "0.14"
-tonic-prost = "0.14"
-oci-spec = { workspace = true }
 container-device-interface.workspace = true
+oci-spec = { workspace = true }
+prost = "0.14"
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
+tonic = "0.14"
+tonic-prost = "0.14"

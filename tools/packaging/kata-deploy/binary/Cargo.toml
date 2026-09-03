@@ -1,10 +1,10 @@
 [package]
-name = "kata-deploy"
-version = "0.1.0"
 authors.workspace = true
 edition = "2021"
 license.workspace = true
+name = "kata-deploy"
 rust-version.workspace = true
+version = "0.1.0"
 
 [[bin]]
 name = "kata-deploy"
@@ -16,9 +16,9 @@ clap.workspace = true
 env_logger = "0.10"
 flate2 = "1"
 humantime = "2.1.0"
-k8s-openapi = { version = "0.26", default-features = false, features = [
-    "v1_33",
-] }
+k8s-openapi = { default-features = false, features = [
+  "v1_33",
+], version = "0.26" }
 # kata-deploy doesn't use kube::runtime (controllers/watchers/reflectors) or
 # kube::derive (the CustomResource macro). Skipping those features keeps the
 # binary smaller and trims the static data segment that gets mapped into RSS.
@@ -27,12 +27,12 @@ k8s-openapi = { version = "0.26", default-features = false, features = [
 # must stay enabled — without it, rustls panics at runtime with
 # "Could not automatically determine the process-level CryptoProvider".
 json-patch = "4"
-kube = { version = "2.0", default-features = false, features = [
-    "client",
-    "jsonpatch",
-    "rustls-tls",
-    "ring",
-] }
+kube = { default-features = false, features = [
+  "client",
+  "jsonpatch",
+  "ring",
+  "rustls-tls",
+], version = "2.0" }
 libc.workspace = true
 log.workspace = true
 regex.workspace = true
@@ -40,15 +40,15 @@ serde.workspace = true
 serde_json.workspace = true
 serde_yaml = "0.9"
 tar = "0.4.46"
-tokio = { workspace = true, features = [
-    "rt-multi-thread",
-    "macros",
-    "signal",
-    "sync",
-    "time",
-    "net",
-    "io-util",
-] }
+tokio = { features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+  "time",
+], workspace = true }
 toml_edit = "0.22"
 walkdir = "2"
 zstd = "0.13.3"

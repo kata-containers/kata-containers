@@ -1,55 +1,55 @@
 [package]
-name = "rustjail"
-version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "rustjail"
+version = "0.1.0"
 
 [dependencies]
 awaitgroup = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 
-oci-spec.workspace = true
-caps = "0.5.0"
-nix.workspace = true
-scopeguard.workspace = true
+anyhow = "1.0.32"
 capctl.workspace = true
+caps = "0.5.0"
+cfg-if.workspace = true
+cgroups.workspace = true
 lazy_static.workspace = true
 libc.workspace = true
+nix.workspace = true
+oci-spec.workspace = true
+path-absolutize = "3.1.1"
 protobuf.workspace = true
+regex.workspace = true
+rlimit = "0.5.3"
+safe-path.workspace = true
+scan_fmt.workspace = true
+scopeguard.workspace = true
 slog.workspace = true
 slog-scope.workspace = true
-scan_fmt.workspace = true
-safe-path.workspace = true
-regex.workspace = true
-path-absolutize = "3.1.1"
-anyhow = "1.0.32"
-cgroups.workspace = true
-rlimit = "0.5.3"
-cfg-if.workspace = true
 
-tokio = { workspace = true, features = [
-    "sync",
-    "io-util",
-    "process",
-    "time",
-    "macros",
-    "rt",
-    "fs",
-] }
-tokio-vsock.workspace = true
-futures.workspace = true
 async-trait.workspace = true
-inotify = "0.9.2"
-libseccomp = { version = "0.3.0", optional = true }
-zbus = "3.12.0"
 bit-vec = "0.8.0"
+futures.workspace = true
+inotify = "0.9.2"
+libseccomp = { optional = true, version = "0.3.0" }
+tokio = { features = [
+  "fs",
+  "io-util",
+  "macros",
+  "process",
+  "rt",
+  "sync",
+  "time",
+], workspace = true }
+tokio-vsock.workspace = true
 xattr = "0.2.3"
+zbus = "3.12.0"
 
 # Local dependencies
-protocols.workspace = true
 kata-sys-util.workspace = true
+protocols.workspace = true
 runtime-spec.workspace = true
 
 [dev-dependencies]

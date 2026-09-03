@@ -1,9 +1,9 @@
 [package]
-name = "hypervisor"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "hypervisor"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,9 +11,25 @@ license = { workspace = true }
 actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bytes = { workspace = true }
+crossbeam-channel = "0.5.6"
+futures = "0.3.25"
 go-flag = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+lazy_static = { workspace = true }
 libc = { workspace = true }
 nix = { workspace = true }
+once_cell = "1.21.3"
+path-clean = "1.0.1"
+pcilibs-rs = { workspace = true }
+protobuf = { optional = true, workspace = true }
+qapi = { features = ["async-tokio-all", "qmp"], version = "0.15" }
+qapi-qmp = "0.15.0"
+qapi-spec = "0.3.2"
+rand = { workspace = true }
+regex = "1"
 rust-ini = "0.18.0"
 seccompiler = "0.5.0"
 serde = { workspace = true }
@@ -21,36 +37,20 @@ serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "fs", "process", "io-util"] }
-vmm-sys-util = "0.15.0"
-rand = { workspace = true }
-path-clean = "1.0.1"
-lazy_static = { workspace = true }
+tokio = { features = ["fs", "io-util", "process", "sync"], workspace = true }
 tracing = { workspace = true }
-ttrpc = { workspace = true, features = ["async"] }
-protobuf = { workspace = true, optional = true }
-futures = "0.3.25"
-crossbeam-channel = "0.5.6"
-qapi = { version = "0.15", features = ["qmp", "async-tokio-all"] }
-qapi-spec = "0.3.2"
-qapi-qmp = "0.15.0"
-bytes = { workspace = true }
-http-body-util = { workspace = true }
-hyper = { workspace = true }
-hyper-util = { workspace = true }
-regex = "1"
-once_cell = "1.21.3"
-pcilibs-rs = { workspace = true }
+ttrpc = { features = ["async"], workspace = true }
+vmm-sys-util = "0.15.0"
 # Local dependencies
+ch-config = { optional = true, workspace = true }
 kata-sys-util = { workspace = true }
 kata-types = { workspace = true }
 logging = { workspace = true }
-protocols = { workspace = true, features = ["async"] }
 persist = { workspace = true }
-ch-config = { workspace = true, optional = true }
+protocols = { features = ["async"], workspace = true }
 safe-path = { workspace = true }
-tests_utils = { workspace = true }
 tempfile = { workspace = true }
+tests_utils = { workspace = true }
 
 # Dependencies that only exist to support hypervisors which upstream only
 # build on x86_64 and aarch64 (dragonball, firecracker). Keeping them in a
@@ -70,27 +70,27 @@ tempfile = { workspace = true }
 # use for it elsewhere, so don't pull it in.
 dbs-utils = { workspace = true }
 # `hyperlocal` is only used by the firecracker driver (UDS HTTP client).
+dragonball = { features = [
+  "atomic-guest-memory",
+  "dbs-upcall",
+  "host-device",
+  "hotplug",
+  "vhost-net",
+  "vhost-user-net",
+  "virtio-balloon",
+  "virtio-blk",
+  "virtio-fs",
+  "virtio-mem",
+  "virtio-net",
+  "virtio-vsock",
+], optional = true, workspace = true }
 hyperlocal = { workspace = true }
-dragonball = { workspace = true, features = [
-    "atomic-guest-memory",
-    "virtio-vsock",
-    "hotplug",
-    "virtio-blk",
-    "virtio-net",
-    "virtio-fs",
-    "vhost-net",
-    "dbs-upcall",
-    "virtio-mem",
-    "virtio-balloon",
-    "vhost-user-net",
-    "host-device",
-], optional = true }
 
 [features]
 default = ["cloud-hypervisor"]
 
-dragonball = ["dep:dragonball"]
 cloud-hypervisor = ["ch-config"]
+dragonball = ["dep:dragonball"]
 openvmm = ["dep:protobuf"]
 
 [dev-dependencies]
@@ -105,6 +105,6 @@ test-utils = { workspace = true }
 ttrpc-codegen = "0.6.0"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("enable-vendor"))',
-] }
+unexpected_cfgs = { check-cfg = [
+  'cfg(feature, values("enable-vendor"))',
+], level = "warn" }

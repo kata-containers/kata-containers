@@ -1,13 +1,13 @@
 [package]
-name = "kata-agent-policy"
-version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+name = "kata-agent-policy"
+version = "0.1.0"
 
 [dependencies]
 # Async runtime
-tokio = { workspace = true, features = ["fs", "io-util"] }
+tokio = { features = ["fs", "io-util"], workspace = true }
 
 anyhow.workspace = true
 
@@ -27,14 +27,14 @@ serde_json.workspace = true
 # limits configurable per engine"), which adds Engine::set_policy_length_config.
 # Switch back to a crates.io version once a release > 0.9.1 containing #624
 # is published.
-regorus = { git = "https://github.com/microsoft/regorus", rev = "898643129e3652efd43e596f978d99f85e770235", default-features = false, features = [
-    "arc",
-    "base64",
-    "base64url",
-    "regex",
-    "std",
-] }
 json-patch = "4.2.0"
+regorus = { default-features = false, features = [
+  "arc",
+  "base64",
+  "base64url",
+  "regex",
+  "std",
+], git = "https://github.com/microsoft/regorus", rev = "898643129e3652efd43e596f978d99f85e770235" }
 
 # POSIX
 libc.workspace = true
@@ -47,4 +47,4 @@ slog-scope.workspace = true
 
 # Internal dependencies
 
-protocols = { workspace = true, features = ["with-serde"] }
+protocols = { features = ["with-serde"], workspace = true }
