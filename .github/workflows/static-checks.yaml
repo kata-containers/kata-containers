@@ -26,6 +26,7 @@ jobs:
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - name: Checkout the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -57,6 +58,7 @@ jobs:
   build-checks-depending-on-kvm:
     name: build-checks-depending-on-kvm
     runs-on: ubuntu-22.04
+    timeout-minutes: 130
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     strategy:
@@ -101,6 +103,7 @@ jobs:
   kata-deploy-binary-build-check:
     name: kata-deploy-binary-build-check
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     permissions:
@@ -125,6 +128,7 @@ jobs:
   static-checks:
     name: static-checks
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     strategy:
@@ -189,6 +193,7 @@ jobs:
   codegen:
     name: codegen
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     permissions:
@@ -223,6 +228,7 @@ jobs:
   go-mod-tidy:
     name: go-mod-tidy
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     permissions:
@@ -299,6 +305,7 @@ jobs:
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - name: Checkout the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -313,6 +320,7 @@ jobs:
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - name: Checkout the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

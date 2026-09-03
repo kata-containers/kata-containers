@@ -20,6 +20,7 @@ jobs:
   push-oras-cache:
     name: push-oras-cache
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: write # needed to push the ORAS tarball cache to ghcr.io

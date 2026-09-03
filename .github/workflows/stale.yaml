@@ -14,6 +14,7 @@ jobs:
   stale:
     name: stale
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     permissions:
       actions: write # Needed to manage caches for state persistence across runs
       pull-requests: write # Needed to add/remove labels, post comments, or close PRs

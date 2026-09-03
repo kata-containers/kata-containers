@@ -40,6 +40,7 @@ jobs:
   run-cri-containerd:
     name: run-cri-containerd-${{ inputs.arch }} (${{ inputs.containerd_version }}, ${{ inputs.vmm }})
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 25
     env:
       CONTAINERD_VERSION: ${{ inputs.containerd_version }}
       GOPATH: ${{ github.workspace }}

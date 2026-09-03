@@ -77,6 +77,7 @@ jobs:
       contents: read
       packages: write # needed to push kata images to ghcr.io
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 25
     strategy:
       matrix:
         image-kind: ${{ fromJson(inputs.image-kinds-json != '' && inputs.image-kinds-json || format('["{0}"]', inputs.image-kind)) }}

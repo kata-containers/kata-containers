@@ -23,6 +23,7 @@ jobs:
   stale:
     name: stale
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       actions: write # Needed to manage caches for state persistence across runs
       issues: write # Needed to add/remove labels, post comments, or close issues

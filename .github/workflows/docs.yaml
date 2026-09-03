@@ -13,6 +13,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     name: Build docs
     permissions:
       contents: read
@@ -40,6 +41,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     name: Deploy docs
     permissions:
       pages: write # needed to deploy to GitHub Pages

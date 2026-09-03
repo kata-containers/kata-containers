@@ -34,6 +34,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-sandboxapi-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -93,6 +94,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
+    timeout-minutes: 35
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -151,6 +153,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-nydus-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -211,6 +214,7 @@ jobs:
           - qemu-nvidia-gpu
           - qemu-nvidia-gpu-runtime-rs
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
@@ -266,6 +270,7 @@ jobs:
     # 24.04 is what the erofs snapshotter legs need: the erofs-utils backport
     # they install comes from Ubuntu 25.10 and does not install on 22.04.
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:

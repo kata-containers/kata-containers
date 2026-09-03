@@ -37,6 +37,7 @@ jobs:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io
     runs-on: ubuntu-24.04-ppc64le
+    timeout-minutes: 55
     strategy:
       matrix:
         asset:
@@ -97,6 +98,7 @@ jobs:
   build-kata-deploy-components:
     name: build-kata-deploy-components
     runs-on: ubuntu-24.04-ppc64le
+    timeout-minutes: 50
     strategy:
       matrix:
         component:
@@ -137,6 +139,7 @@ jobs:
   build-asset-rootfs:
     name: build-asset-rootfs
     runs-on: ubuntu-24.04-ppc64le
+    timeout-minutes: 30
     needs: build-asset
     permissions:
       contents: read
@@ -207,6 +210,7 @@ jobs:
   remove-rootfs-binary-artifacts:
     name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: build-asset-rootfs
     strategy:
       matrix:
@@ -224,6 +228,7 @@ jobs:
   build-asset-shim-v2:
     name: build-asset-shim-v2
     runs-on: ubuntu-24.04-ppc64le
+    timeout-minutes: 55
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
       contents: read

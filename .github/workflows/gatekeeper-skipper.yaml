@@ -41,6 +41,7 @@ jobs:
   skipper:
     name: skipper
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     outputs:
       skip_build: ${{ steps.skipper.outputs.skip_build }}
       skip_test: ${{ steps.skipper.outputs.skip_test }}

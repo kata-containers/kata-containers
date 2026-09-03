@@ -19,6 +19,7 @@ jobs:
   scan:
     name: Scan PR changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       actions: read  # Required to upload SARIF file to CodeQL
       contents: read  # Read commit contents

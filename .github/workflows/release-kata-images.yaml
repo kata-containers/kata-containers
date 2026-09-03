@@ -21,6 +21,7 @@ jobs:
   resolve-tags:
     name: Resolve image tags
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     outputs:
       tags: ${{ steps.tags.outputs.tags }}
     steps:
@@ -78,6 +79,7 @@ jobs:
     name: Publish multi-arch manifest
     needs: [resolve-tags, publish-monitor]
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write # needed to push build artifacts to ghcr.io

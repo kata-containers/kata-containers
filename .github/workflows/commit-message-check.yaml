@@ -21,6 +21,7 @@ env:
 jobs:
   commit-message-check:
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     env:
       PR_AUTHOR: ${{ github.event.pull_request.user.login }}
     name: Commit Message Check

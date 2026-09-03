@@ -17,6 +17,7 @@ jobs:
   test:
     name: test
     runs-on: macos-latest
+    timeout-minutes: 35
     steps:
     - name: Install Protoc
       run: |
