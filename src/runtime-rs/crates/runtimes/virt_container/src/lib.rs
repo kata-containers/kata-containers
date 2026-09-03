@@ -64,7 +64,7 @@ use hypervisor::{openvmm::OpenVmm, HYPERVISOR_NAME_OPENVMM};
 ))]
 use kata_types::config::OpenVmmConfig;
 
-use crate::factory::{template_device_state_path, vm::VmConfig};
+use crate::factory::{template::validate_template_ready, template_device_state_path, vm::VmConfig};
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
@@ -143,15 +143,33 @@ impl RuntimeHandler for VirtContainer {
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
         let factory = config.get_factory();
-        let (hypervisor, agent) = if factory.enable_template {
-            build_vm_from_template()
-                .await
-                .context("build vm from template")?
+        let from_template = if factory.enable_template {
+            match build_vm_from_template().await {
+                Ok(pair) => Some(pair),
+                Err(error) => {
+                    // A template that is absent, incomplete, left behind by an
+                    // older Kata, or saved in a superseded snapshot format
+                    // cannot be restored. Cold boot rather than failing every
+                    // sandbox on the node; `kata-ctl factory init` recreates
+                    // the template.
+                    slog::warn!(
+                        sl!(),
+                        "cannot boot from VM template, falling back to cold boot: {:#}",
+                        error
+                    );
+                    None
+                }
+            }
         } else {
-            (
+            None
+        };
+
+        let (hypervisor, agent) = match from_template {
+            Some(pair) => pair,
+            None => (
                 new_hypervisor(&config).await.context("new hypervisor")?,
                 new_agent(&config).context("new agent")? as Arc<dyn agent::Agent>,
-            )
+            ),
         };
 
         let resource_manager = Arc::new(
@@ -201,6 +219,8 @@ async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>
         TomlConfig::load_from_default().context("failed to load toml config")?;
     let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
     if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
+        validate_template_ready(Path::new(&h.factory.template_path), &hypervisor_name)
+            .context("VM template is incomplete or has not passed validation")?;
         h.vm_template.boot_to_be_template = false;
         h.vm_template.boot_from_template = true;
         let path = Path::new(&h.factory.template_path);
