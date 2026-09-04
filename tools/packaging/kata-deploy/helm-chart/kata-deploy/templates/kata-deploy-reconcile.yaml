@@ -91,6 +91,9 @@ spec:
             - name: dispatcher
               image: {{ include "kata-deploy.dispatcherImage" $root }}
               imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+              {{- /* No Helm run is watching a scheduled reconcile, so its pod's
+                     status is where the summary has to end up. */}}
+              terminationMessagePolicy: FallbackToLogsOnError
               securityContext:
                 privileged: false
                 allowPrivilegeEscalation: false

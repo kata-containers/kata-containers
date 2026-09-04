@@ -1605,6 +1605,10 @@ Emitted at column 0; indent with `nindent` at the call site.
   image: {{ include "kata-deploy.image" .root }}
   imagePullPolicy: {{ .root.Values.imagePullPolicy }}
   command: ["/usr/bin/kata-deploy", "{{ .action }}"]
+{{- /* kata-deploy writes why it failed to /dev/termination-log; the fallback
+       covers the deaths it cannot report itself, such as the OOM killer. Either
+       way the reason is in the pod's status, which outlives the Job's logs. */}}
+  terminationMessagePolicy: FallbackToLogsOnError
   env:
 {{- include "kata-deploy.commonEnv" .root | nindent 4 }}
   securityContext:

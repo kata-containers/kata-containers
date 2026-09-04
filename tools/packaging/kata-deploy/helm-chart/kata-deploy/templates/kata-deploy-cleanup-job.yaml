@@ -79,6 +79,8 @@ spec:
         - name: dispatcher
           image: {{ include "kata-deploy.dispatcherImage" $root }}
           imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          {{- /* The dispatcher's last words are its per-node summary. */}}
+          terminationMessagePolicy: FallbackToLogsOnError
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
