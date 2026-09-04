@@ -6,4 +6,6 @@ pub mod epoll_manager;
 pub mod metric;
 pub mod net;
 pub mod rate_limiter;
+#[cfg(target_arch = "x86_64")]
+pub mod tdx_exit_handler;
 pub mod time;

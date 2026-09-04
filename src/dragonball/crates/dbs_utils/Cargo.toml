@@ -13,11 +13,15 @@ readme = "README.md"
 [dependencies]
 anyhow = "1.0"
 event-manager = { workspace = true, features = [ "remote_endpoint" ] }
+kvm-ioctls = { workspace = true }
 libc = "0.2.39"
 log = "0.4.14"
 serde = { version = "1.0.27", features = ["derive", "rc"] }
+tdx = { workspace = true }
 thiserror = { workspace = true }
+threadpool = "1"
 timerfd = "1.0"
+vm-memory = { workspace = true }
 vmm-sys-util = {workspace = true}
 
 [dev-dependencies]
