@@ -873,7 +873,9 @@ kata-deploy.katacontainers.io/default
 {{- define "kata-deploy.dispatcherNodeWorkFlags" -}}
 {{- $root := .root -}}
 {{- /* Preserve the tracking and node-management contract of the dispatcher that
-       originally lived in this repository. */ -}}
+       originally lived in this repository. The prefix also names the keys each
+       node's result is recorded under, such as
+       kata-deploy-job-dispatcher/result. */ -}}
 - "--tracking-label-prefix=kata-deploy-job-dispatcher"
 - "--node-label-key=katacontainers.io/kata-runtime"
 - "--instance-label-prefix=kata-deploy.katacontainers.io"

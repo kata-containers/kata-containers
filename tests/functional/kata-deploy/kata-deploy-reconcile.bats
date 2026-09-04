@@ -220,19 +220,19 @@ EOF
 	local role
 	role=$(render_with_reconcile kata-rbac.yaml)
 
-	# Reading its own pod is what --owner-job-from-pod needs; deleting the CronJob
-	# is what the uninstall hook needs.
-	echo "${role}" | grep -q 'resources: \["pods"\]'
+	# Deleting the CronJob is what the uninstall hook needs, and get on pods is
+	# how --owner-job-from-pod reads the Job that owns the tick.
 	echo "${role}" | grep -q 'resources: \["cronjobs"\]'
-	echo "${role}" | grep -q 'verbs: \["get"\]'
 	echo "${role}" | grep -q 'verbs: \["get", "delete"\]'
+	echo "${role}" | grep -q 'verbs: \["get", "list"\]'
 
-	# Neither is asked for by a release that does not run a schedule.
+	# A rollout only lists the pod a failed Job left behind.
 	local plain
 	plain=$(helm template kata-deploy "${CHART_PATH}" \
 		--set deploymentMode=job \
 		--show-only templates/kata-rbac.yaml)
-	refute_match "${plain}" 'resources: \["pods"\]'
+	echo "${plain}" | grep -q 'resources: \["pods"\]'
+	echo "${plain}" | grep -q 'verbs: \["list"\]'
 	refute_match "${plain}" 'cronjobs'
 }
 
