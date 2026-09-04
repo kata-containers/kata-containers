@@ -235,6 +235,8 @@ function setup_crio() {
 
 	install_crio "${crio_version}"
 	overwrite_crio_config
+
+	install_cri_tools
 }
 
 function deploy_k0s() {
