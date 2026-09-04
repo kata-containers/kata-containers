@@ -711,8 +711,19 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
     info!(sl!(), "{} is unbound from {}", bdf, host_driver);
 
     // echo bdf > /sys/bus/pci/drivers_probe
-    fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
-        .with_context(|| format!("Failed to echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
+    if let Err(err) = fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf) {
+        if let Err(restore_err) = bind_device_to_host(bdf, host_driver, _vendor_device_id) {
+            warn!(
+                sl!(),
+                "failed to restore {} to {} after vfio probe failure: {}",
+                bdf,
+                host_driver,
+                restore_err
+            );
+        }
+        return Err(err)
+            .with_context(|| format!("Failed to echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"));
+    }
 
     info!(sl!(), "echo {} > /sys/bus/pci/drivers_probe", bdf);
 
