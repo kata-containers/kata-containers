@@ -73,14 +73,10 @@ const VM_ROOTFS_ROOT_PMEM: &str = "/dev/pmem0p1";
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
 pub const HUGETLBFS: &str = "hugetlbfs";
+const DEV_HUGEPAGES: &str = "/dev/hugepages";
 // Constants required for Dragonball VMM when enabled.
 // Gated on both feature and arch so they activate together with `pub mod
 // dragonball;` above (the dragonball crate only builds on x86_64/aarch64).
-#[cfg(all(
-    feature = "dragonball",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
-const DEV_HUGEPAGES: &str = "/dev/hugepages";
 #[cfg(all(
     feature = "dragonball",
     any(target_arch = "x86_64", target_arch = "aarch64")
