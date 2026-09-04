@@ -6,7 +6,7 @@
 #
 # NUMA topology and vCPU pinning verification tests for Kata Containers.
 #
-# Five tests cover the main paths in the runtime's NUMA logic:
+# Seven tests cover the main paths in the runtime's NUMA logic:
 #   1. Multi-node sandbox: a workload that does NOT fit in a single host
 #      NUMA node should be balanced across host nodes — the guest sees
 #      multiple NUMA nodes with even vCPU/memory distribution and host
@@ -28,6 +28,13 @@
 #      maybeRightSizeAutoNUMA() must be a no-op and buildNUMATopology()
 #      must propagate the binding (memory + vCPU pinning land on the
 #      chosen host node, regardless of how small the workload is).
+#   6. Two sandboxes side by side: neither may claim a host CPU the other
+#      already claimed, whatever the host NUMA node count.
+#   7. Two guest NUMA nodes on one host node (numa_mapping = ["0", "0"]):
+#      a single sandbox must not put two of its own vCPUs on one host CPU.
+#
+# Tests 6 and 7 guard kata-containers#13539 and run on single-NUMA hosts
+# too, since that is where the reported reproduction lives.
 #
 # The NVIDIA configurations ship with NUMA and vCPU pinning turned off,
 # so every test here turns both on through a config.d/ drop-in before it
@@ -42,10 +49,16 @@
 #
 # WARNING: The host-side pinning check runs numa-pinning-check.sh directly
 # on the host (not inside a container).  This requires the bats runner to
-# execute on the k8s node with privileged access to /proc, /sys, crictl,
-# and taskset.  If the test environment changes so that bats no longer
-# runs on the node, these calls must be reworked to use exec_host or
-# equivalent.
+# execute on the k8s node with privileged access to /proc, /sys and crictl.
+# If the test environment changes so that bats no longer runs on the node,
+# these calls must be reworked to use exec_host or equivalent.
+#
+# The host-side checks assert on where the vCPU threads may run, not on how
+# narrow their affinity is: the runtime gives each vCPU a host CPU of its own
+# only when the sandbox owns its cpuset, and confines the threads to their
+# NUMA node otherwise.  What must hold in either case is that the threads
+# stay on the expected host node(s) and that no two of them are pinned to the
+# same host CPU.
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
@@ -91,7 +104,12 @@ NUMA_TEST_MEMORY_GPU="${NUMA_TEST_MEMORY_GPU:-64Gi}"
 NUMA_TEST_VCPUS_GPU_SMALL="${NUMA_TEST_VCPUS_GPU_SMALL:-4}"
 NUMA_TEST_MEMORY_GPU_SMALL="${NUMA_TEST_MEMORY_GPU_SMALL:-4Gi}"
 
+# Two-sandbox test: small enough to run a pair of them side by side.
+NUMA_TEST_VCPUS_PAIR="${NUMA_TEST_VCPUS_PAIR:-2}"
+NUMA_TEST_MEMORY_PAIR="${NUMA_TEST_MEMORY_PAIR:-1Gi}"
+
 export POD_NAME_NUMA="numa-topology-test"
+POD_NAME_NUMA_B="numa-topology-test-b"
 POD_NAME_NUMA_GPU="numa-topology-gpu-test"
 
 POD_WAIT_TIMEOUT=${POD_WAIT_TIMEOUT:-600s}
@@ -105,6 +123,7 @@ setup() {
 
     pod_yaml_in="${pod_config_dir}/${POD_NAME_NUMA}.yaml.in"
     pod_yaml="${pod_config_dir}/${POD_NAME_NUMA}.yaml"
+    pod_yaml_b="${pod_config_dir}/${POD_NAME_NUMA_B}.yaml"
 
     policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
     add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
@@ -114,15 +133,25 @@ setup() {
 # Skip / topology helpers
 # -----------------------------------------------------------------------------
 
-# numa_skip_reason returns a non-empty skip reason on stdout when the
-# current test should be skipped (hypervisor does not support NUMA OR
-# host has fewer than 2 NUMA nodes).  Empty stdout means run.
+# numa_unsupported_reason returns a non-empty reason on stdout when the
+# hypervisor under test does not implement NUMA, and nothing when it does.
+# Tests that hold on any host NUMA topology use this one.
 # Callers must invoke `skip` themselves — bats `skip` inside command
 # substitution does not propagate.
-numa_skip_reason() {
+numa_unsupported_reason() {
     # shellcheck disable=SC2076
     if [[ ! " ${NUMA_SUPPORTED[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
         echo "NUMA not supported on ${KATA_HYPERVISOR}"
+    fi
+}
+
+# numa_skip_reason extends numa_unsupported_reason with the >= 2 host NUMA
+# nodes a test needs to tell node-local placement from node-remote.
+numa_skip_reason() {
+    local reason
+    reason=$(numa_unsupported_reason)
+    if [[ -n "${reason}" ]]; then
+        echo "${reason}"
         return 0
     fi
     local nodes
@@ -163,6 +192,23 @@ deploy_and_get_guest_logs() {
     kubectl wait --for=condition=Ready --timeout="${POD_WAIT_TIMEOUT}" pod "${POD_NAME_NUMA}"
     sleep 2
     kubectl logs "${POD_NAME_NUMA}"
+}
+
+# deploy_second_pod <vcpus> <memory> <node> renders the same template under a
+# second name and runs it on <node>, so both sandboxes compete for the same
+# host CPUs — otherwise there is nothing for them to collide over. Waits for
+# the pod to be Ready.
+deploy_second_pod() {
+    local vcpus="${1}" memory="${2}" target_node="${3}"
+
+    POD_NAME_NUMA="${POD_NAME_NUMA_B}" NUMA_TEST_VCPUS="${vcpus}" \
+        NUMA_TEST_MEMORY="${memory}" \
+        envsubst < "${pod_yaml_in}" > "${pod_yaml_b}"
+    set_node "${pod_yaml_b}" "${target_node}"
+    auto_generate_policy "${policy_settings_dir}" "${pod_yaml_b}"
+
+    kubectl apply -f "${pod_yaml_b}"
+    kubectl wait --for=condition=Ready --timeout="${POD_WAIT_TIMEOUT}" pod "${POD_NAME_NUMA_B}"
 }
 
 # -----------------------------------------------------------------------------
@@ -206,11 +252,89 @@ pinning_thread_total() {
     echo "${1}" | awk -F: '/^node[0-9]+:/ {sum+=$2} END {print sum+0}'
 }
 
+# assert_no_shared_host_cpus <check_output>
+# Fails when two vCPU threads are pinned to the same host CPU.  Both then
+# sustain roughly half the throughput of a thread that owns its CPU, while
+# other CPUs stay idle (kata-containers#13539).
+assert_no_shared_host_cpus() {
+    local threads cpus
+    threads=$(check_output_field "${1}" single_cpu_threads)
+    cpus=$(check_output_field "${1}" distinct_single_cpus)
+    echo "# vCPU threads pinned to one CPU: ${threads:-0} on ${cpus:-0} distinct host CPUs"
+    [[ "${threads:-0}" -eq "${cpus:-0}" ]] \
+        || die "${threads} vCPU threads pinned to only ${cpus} host CPUs: ${1}"
+}
+
+# node_cpu_manager_policy <node>
+# Echoes the kubelet's cpuManagerPolicy on <node>, or an empty string when the
+# kubelet configuration cannot be read — the node may not allow the configz
+# endpoint.  Never fails, so that a caller running under `set -e` reaches its
+# own handling of an unknown policy.
+node_cpu_manager_policy() {
+    local config
+    config=$(kubectl get --raw "/api/v1/nodes/${1}/proxy/configz" 2>/dev/null) \
+        || return 0
+    echo "${config}" | grep -o '"cpuManagerPolicy":"[^"]*"' | cut -d'"' -f4 \
+        || return 0
+}
+
+# assert_pins_match_exclusive_cpus <pod_name> <check_output> <pod_cpu_limit>
+# The kubelet reserves a Guaranteed pod's whole CPU limit under
+# cpuManagerPolicy=static and nothing at all under none, so a sandbox pins
+# exactly that many vCPU threads to a host CPU each under static, and none at
+# all under none.  A count in between means the runtime handed out CPUs it does
+# not hold, or left vCPUs unpinned that the cpuset could back.  Checking only
+# that no two threads share a CPU would pass on a node reserving CPUs even if
+# nothing were pinned at all.
+assert_pins_match_exclusive_cpus() {
+    local pod_name="${1}" output="${2}" expected="${3}"
+    local node policy threads
+    threads=$(check_output_field "${output}" single_cpu_threads)
+    threads="${threads:-0}"
+
+    node=$(kubectl get pod "${pod_name}" -o jsonpath='{.spec.nodeName}') \
+        || die "cannot tell which node pod ${pod_name} runs on"
+    [[ -n "${node}" ]] || die "pod ${pod_name} has no node assigned"
+
+    policy=$(node_cpu_manager_policy "${node}") || policy=""
+    echo "# cpuManagerPolicy on ${node}: ${policy:-<unreadable>}"
+
+    case "${policy}" in
+        static)
+            [[ "${threads}" -eq "${expected}" ]] \
+                || die "cpuManagerPolicy=static reserves ${expected} CPUs for the pod, but ${threads} vCPU threads hold a host CPU of their own: ${output}"
+            ;;
+        none)
+            [[ "${threads}" -eq 0 ]] \
+                || die "cpuManagerPolicy=none reserves no CPU for the pod, yet ${threads} vCPU threads hold one of their own: ${output}"
+            ;;
+        *)
+            echo "# Skipping the pin count check: the kubelet's cpuManagerPolicy is unknown"
+            ;;
+    esac
+}
+
+# check_output_field <check_output> <field>
+# Echoes the value of a "<field>: <value>" line of numa-pinning-check.sh
+# output, empty when the field is absent.  awk rather than grep so a missing
+# field yields an empty value instead of failing the calling test.
+check_output_field() {
+    echo "${1}" | awk -v field="${2}:" '$1 == field {print $2}'
+}
+
+# pinned_cpu_list <check_output>
+# Echoes the comma-separated host CPUs the sandbox claimed for a single vCPU
+# thread each, empty when it claimed none.
+pinned_cpu_list() {
+    check_output_field "${1}" pinned_cpus
+}
+
 # wait_for_host_pinning <qemu_pid> <expected_vcpus>
 # Polls numa-pinning-check.sh until at least <expected_vcpus> threads
-# report per-CPU affinity, or until HOST_PINNING_RETRIES is exhausted.
-# Echoes the final script output regardless of whether convergence was
-# reached, so callers can inspect/assert on the bucket distribution.
+# are confined to a single host NUMA node, or until HOST_PINNING_RETRIES
+# is exhausted.  Echoes the final script output regardless of whether
+# convergence was reached, so callers can inspect/assert on the bucket
+# distribution.
 wait_for_host_pinning() {
     local qemu_pid="${1}" expected="${2}"
     local script="${BATS_TEST_DIRNAME}/numa-pinning-check.sh"
@@ -223,7 +347,7 @@ wait_for_host_pinning() {
             echo "${output}"
             return 0
         fi
-        echo "# Host pinning attempt ${attempt}/${HOST_PINNING_RETRIES}: ${total}/${expected} threads pinned" >&2
+        echo "# Host pinning attempt ${attempt}/${HOST_PINNING_RETRIES}: ${total}/${expected} threads placed" >&2
         sleep "${HOST_PINNING_SLEEP}"
     done
     echo "${output}"
@@ -414,6 +538,8 @@ host_gpu_numa() {
     diff=$(minmax_diff "${host_counts[@]}")
     echo "# Host pinning diff: ${diff}"
     [[ "${diff}" -le 1 ]] || die "host pinning imbalance: ${host_output}"
+
+    assert_no_shared_host_cpus "${host_output}"
 }
 
 @test "NUMA: small workload right-sizes to a single guest NUMA node" {
@@ -470,7 +596,108 @@ host_gpu_numa() {
     [[ ${#host_counts[@]} -eq 1 ]] \
         || die "right-sized sandbox vCPU threads should land on a single host NUMA node, got ${#host_counts[@]} buckets: ${host_output}"
     [[ "${host_counts[0]}" -ge "${NUMA_TEST_VCPUS_SMALL}" ]] \
-        || die "expected at least ${NUMA_TEST_VCPUS_SMALL} vCPU threads pinned, got ${host_counts[0]}: ${host_output}"
+        || die "expected at least ${NUMA_TEST_VCPUS_SMALL} vCPU threads placed, got ${host_counts[0]}: ${host_output}"
+
+    assert_no_shared_host_cpus "${host_output}"
+    assert_pins_match_exclusive_cpus "${POD_NAME_NUMA}" "${host_output}" "${NUMA_TEST_VCPUS_SMALL}"
+}
+
+@test "NUMA: two sandboxes do not claim the same host CPUs" {
+    # A sandbox cannot see what the other sandboxes on the node are using, so
+    # placing its vCPU threads from a CPU list it does not own puts every
+    # sandbox on the same CPUs (kata-containers#13539).  Both sandboxes here
+    # are sized alike and land on the same node, which is exactly the case
+    # that used to make them pick the same host CPUs.
+    #
+    # No minimum host NUMA node count: the collision does not need a second
+    # host node, and the reported reproduction is a single-node host.
+    local skip_reason
+    skip_reason=$(numa_unsupported_reason)
+    [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
+
+    patch_kata_numa_config
+
+    local guest_logs target_node
+    guest_logs=$(deploy_and_get_guest_logs "${NUMA_TEST_VCPUS_PAIR}" "${NUMA_TEST_MEMORY_PAIR}")
+    echo "# First sandbox guest NUMA output:"
+    echo "# ${guest_logs}"
+
+    target_node=$(kubectl get pod "${POD_NAME_NUMA}" -o jsonpath='{.spec.nodeName}')
+    [[ -n "${target_node}" ]] || die "pod ${POD_NAME_NUMA} has no node assigned"
+    deploy_second_pod "${NUMA_TEST_VCPUS_PAIR}" "${NUMA_TEST_MEMORY_PAIR}" "${target_node}"
+    echo "# Both sandboxes running on node ${target_node}"
+
+    local qemu_pid_a qemu_pid_b output_a output_b
+    qemu_pid_a=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
+    qemu_pid_b=$(get_qemu_pid_for_pod "${POD_NAME_NUMA_B}")
+    [[ "${qemu_pid_a}" != "${qemu_pid_b}" ]] \
+        || die "both pods resolved to the same QEMU PID ${qemu_pid_a}"
+
+    output_a=$(wait_for_host_pinning "${qemu_pid_a}" "${NUMA_TEST_VCPUS_PAIR}")
+    output_b=$(wait_for_host_pinning "${qemu_pid_b}" "${NUMA_TEST_VCPUS_PAIR}")
+    echo "# Sandbox A placement: ${output_a}"
+    echo "# Sandbox B placement: ${output_b}"
+
+    # Neither sandbox may double-pin on its own ...
+    assert_no_shared_host_cpus "${output_a}"
+    assert_no_shared_host_cpus "${output_b}"
+
+    # ... nor may the two of them pin onto each other's CPUs.
+    local pins_a pins_b shared
+    pins_a=$(pinned_cpu_list "${output_a}")
+    pins_b=$(pinned_cpu_list "${output_b}")
+    echo "# Sandbox A pinned CPUs: ${pins_a:-<none>}"
+    echo "# Sandbox B pinned CPUs: ${pins_b:-<none>}"
+
+    shared=$(comm -12 \
+        <(echo "${pins_a}" | tr ',' '\n' | grep -v '^$' | sort -u) \
+        <(echo "${pins_b}" | tr ',' '\n' | grep -v '^$' | sort -u) \
+        | paste -sd,)
+    [[ -z "${shared}" ]] \
+        || die "both sandboxes pinned vCPU threads to host CPU(s) ${shared}"
+}
+
+@test "NUMA: two guest nodes on one host node keep one vCPU per host CPU" {
+    # numa_mapping = ["0", "0"] puts both guest NUMA nodes on host node 0, so
+    # the two nodes draw their vCPUs from one host CPU list.  The runtime used
+    # to walk that list once per guest node and pinned the sandbox's own vCPUs
+    # in pairs (0 1 0 1).  Needs one host node only.
+    [[ "${KATA_HYPERVISOR}" == qemu-* ]] \
+        || skip "explicit numa_mapping test is QEMU-only (got ${KATA_HYPERVISOR})"
+
+    local skip_reason
+    skip_reason=$(numa_unsupported_reason)
+    [[ -z "${skip_reason}" ]] || skip "${skip_reason}"
+
+    # Patch the active runtime config; teardown() restores it.
+    patch_kata_numa_config '["0","0"]'
+
+    local guest_logs
+    guest_logs=$(deploy_and_get_guest_logs "${NUMA_TEST_VCPUS_SMALL}" "${NUMA_TEST_MEMORY_SMALL}")
+    echo "# Guest NUMA output:"
+    echo "# ${guest_logs}"
+
+    # --- Guest sees the two nodes the mapping asked for ---
+    local online guest_count
+    online=$(guest_field "${guest_logs}" numa_online)
+    guest_count=$(guest_online_count "${online}")
+    echo "# Guest NUMA online: ${online} -> ${guest_count} node(s)"
+    [[ "${guest_count}" -eq 2 ]] \
+        || die "numa_mapping=[0,0] should expose 2 guest NUMA nodes, got ${guest_count}"
+
+    # --- Every vCPU thread keeps a host CPU to itself ---
+    local qemu_pid host_output
+    qemu_pid=$(get_qemu_pid_for_pod "${POD_NAME_NUMA}")
+    host_output=$(wait_for_host_pinning "${qemu_pid}" "${NUMA_TEST_VCPUS_SMALL}")
+    echo "# Host placement: ${host_output}"
+
+    # Both guest nodes map to host node 0, so all threads bucket there.
+    mapfile -t host_counts < <(echo "${host_output}" | grep -oP '^node[0-9]+:\s*\K\d+')
+    [[ ${#host_counts[@]} -eq 1 ]] \
+        || die "numa_mapping=[0,0] should keep every vCPU on host node 0, got ${#host_counts[@]} buckets: ${host_output}"
+
+    assert_no_shared_host_cpus "${host_output}"
+    assert_pins_match_exclusive_cpus "${POD_NAME_NUMA}" "${host_output}" "${NUMA_TEST_VCPUS_SMALL}"
 }
 
 @test "NUMA: GPU passthrough with VFIO has correct NUMA placement" {
@@ -557,6 +784,8 @@ host_gpu_numa() {
     diff=$(minmax_diff "${host_counts[@]}")
     echo "# Host pinning diff: ${diff}"
     [[ "${diff}" -le 1 ]] || die "GPU pod host pinning imbalance: ${host_output}"
+
+    assert_no_shared_host_cpus "${host_output}"
 
     # --- QEMU command line: pxb-pcie and NUMA binding ---
     echo "# Checking QEMU cmdline for pxb-pcie..."
@@ -647,6 +876,8 @@ host_gpu_numa() {
     pinned_node=$(echo "${host_output}" | grep -oP '^node\K[0-9]+' | head -1)
     [[ "${pinned_node}" -eq "${host_node}" ]] \
         || die "right-sized GPU sandbox vCPUs pinned to node ${pinned_node} but GPU is on host node ${host_node}"
+
+    assert_no_shared_host_cpus "${host_output}"
 }
 
 @test "NUMA: explicit numa_mapping in TOML pins the sandbox to the chosen host node" {
@@ -715,15 +946,19 @@ host_gpu_numa() {
     pinned_node=$(echo "${host_output}" | grep -oP '^node\K[0-9]+' | head -1)
     [[ "${pinned_node}" -eq 1 ]] \
         || die "explicit numa_mapping=[1] pinned vCPUs to node ${pinned_node}, expected 1"
+
+    assert_no_shared_host_cpus "${host_output}"
 }
 
 teardown() {
     echo "=== NUMA test pod describe ==="
     kubectl describe pod "${POD_NAME_NUMA}" || true
+    kubectl describe pod "${POD_NAME_NUMA_B}" 2>/dev/null || true
     kubectl describe pod "${POD_NAME_NUMA_GPU}" 2>/dev/null || true
 
     echo "=== NUMA test pod logs ==="
     kubectl logs "${POD_NAME_NUMA}" || true
+    kubectl logs "${POD_NAME_NUMA_B}" 2>/dev/null || true
     kubectl logs "${POD_NAME_NUMA_GPU}" 2>/dev/null || true
 
     # Always restore the Kata config (no-op if no patch was applied).
@@ -732,6 +967,7 @@ teardown() {
     delete_tmp_policy_settings_dir "${policy_settings_dir}"
 
     [ -f "${pod_yaml}" ] && kubectl delete -f "${pod_yaml}" --ignore-not-found=true
+    [ -f "${pod_yaml_b}" ] && kubectl delete -f "${pod_yaml_b}" --ignore-not-found=true
     local gpu_yaml="${pod_config_dir}/${POD_NAME_NUMA_GPU}.yaml"
     [ -f "${gpu_yaml}" ] && kubectl delete -f "${gpu_yaml}" --ignore-not-found=true
 
