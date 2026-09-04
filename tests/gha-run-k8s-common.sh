@@ -235,6 +235,8 @@ function setup_crio() {
 
 	install_crio "${crio_version}"
 	overwrite_crio_config
+
+	install_cri_tools
 }
 
 function deploy_k0s() {
@@ -1275,6 +1277,27 @@ VERIFICATION_POD_EOF
 		kubectl_retry -n kube-system logs -l "name=${pod_label_name}" --all-containers --previous --tail=-1 --timestamps 2>/dev/null || true
 		echo "::endgroup::"
 	fi
+
+	# k0s uses /var/lib/k0s/kubelet instead of the default /var/lib/kubelet.
+	# kata-deploy generates a 22-k0s-kubelet-root.toml drop-in for k0s's
+	# bundled containerd (install.rs:182), but when CRI-O replaces it the
+	# runtime is detected as "crio" and the drop-in is skipped.
+	# if [[ "${KUBERNETES}" == "k0s" && "${CONTAINER_RUNTIME}" == "crio" ]]; then
+	# 	echo "::group::k0s kubelet_root_dir drop-in for CRI-O"
+	# 	local kata_config_base="/opt/kata/share/defaults/kata-containers"
+	# 	local dropin_content
+	# 	read -r -d '' dropin_content <<-'TOML' || true
+	# 	[runtime]
+	# 	kubelet_root_dir = "/var/lib/k0s/kubelet"
+	# 	TOML
+	# 	for config_d in "${kata_config_base}"/runtimes/*/config.d \
+	# 	                 "${kata_config_base}"/runtime-rs/runtimes/*/config.d; do
+	# 		[[ -d "${config_d}" ]] || continue
+	# 		echo "${dropin_content}" | sudo tee "${config_d}/22-k0s-kubelet-root.toml" > /dev/null
+	# 		info "Wrote ${config_d}/22-k0s-kubelet-root.toml"
+	# 	done
+	# 	echo "::endgroup::"
+	# fi
 
 	echo "::group::Runtime classes"
 	kubectl_retry get runtimeclass
