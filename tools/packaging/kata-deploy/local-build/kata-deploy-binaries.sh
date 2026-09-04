@@ -1480,7 +1480,9 @@ install_clh_helper() {
 # Install static cloud-hypervisor asset
 install_clh() {
 	if [[ "${ARCH}" == "x86_64" ]]; then
-		features="mshv,tdx"
+		# Cloud Hypervisor deliberately rejects the TDX feature as broken.
+		# Select the supported KVM backend explicitly and retain MSHV support.
+		features="kvm,mshv"
 	else
 		features=""
 	fi
