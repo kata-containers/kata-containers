@@ -11,6 +11,7 @@ mod device;
 mod epoll_handler;
 pub mod muxer;
 mod packet;
+pub mod persist;
 
 use std::os::unix::io::AsRawFd;
 
@@ -21,6 +22,7 @@ pub use self::device::Vsock;
 use self::muxer::Error as MuxerError;
 pub use self::muxer::VsockMuxer;
 use self::packet::VsockPacket;
+pub use self::persist::{VsockConnectionId, VsockState};
 
 mod defs {
     /// RX queue event: the driver added available buffers to the RX queue.
@@ -207,6 +209,7 @@ mod tests {
     use super::epoll_handler::VsockEpollHandler;
     use super::muxer::{Result as MuxerResult, VsockGenericMuxer};
     use super::packet::{VsockPacket, VSOCK_PKT_HDR_SIZE};
+    use super::persist::VsockConnectionId;
     use super::*;
     use crate::device::VirtioDeviceConfig;
     use crate::tests::{
@@ -230,9 +233,22 @@ mod tests {
         pub rx_ok_cnt: usize,
         pub tx_ok_cnt: usize,
         pub evset: Option<epoll::Events>,
+        /// Restore resets still owed to the guest, in delivery order.
+        pub restore_resets: Vec<VsockConnectionId>,
+        /// Restore resets yielded by `recv_pkt()`, in delivery order.
+        pub sent_resets: Vec<VsockConnectionId>,
     }
 
     impl TestMuxer {
+        /// Seed resets the way a restore would. Inherent rather than part of
+        /// `VsockGenericMuxer`: only handler *delivery* tests need it, and
+        /// the real union logic belongs to `VsockMuxer`.
+        pub fn queue_restore_resets(&mut self, ids: &[VsockConnectionId]) -> MuxerResult<()> {
+            self.restore_resets.extend_from_slice(ids);
+            self.pending_rx = !self.restore_resets.is_empty();
+            Ok(())
+        }
+
         pub fn new() -> Self {
             Self {
                 evfd: EventFd::new(EFD_NONBLOCK).unwrap(),
@@ -242,6 +258,8 @@ mod tests {
                 rx_ok_cnt: 0,
                 tx_ok_cnt: 0,
                 evset: None,
+                restore_resets: Vec::new(),
+                sent_resets: Vec::new(),
             }
         }
 
@@ -266,6 +284,18 @@ mod tests {
         fn recv_pkt(&mut self, _pkt: &mut VsockPacket) -> Result<()> {
             let cool_buf = [0xDu8, 0xE, 0xA, 0xD, 0xB, 0xE, 0xE, 0xF];
             match self.rx_err.take() {
+                None if !self.restore_resets.is_empty() => {
+                    // Restore resets come first, as in the real muxer.
+                    let id = self.restore_resets.remove(0);
+                    _pkt.set_op(defs::uapi::VSOCK_OP_RST)
+                        .set_src_port(id.local_port)
+                        .set_dst_port(id.peer_port)
+                        .set_len(0);
+                    self.sent_resets.push(id);
+                    self.pending_rx = !self.restore_resets.is_empty();
+                    self.rx_ok_cnt += 1;
+                    Ok(())
+                }
                 None => {
                     if let Some(buf) = _pkt.buf_mut() {
                         for i in 0..buf.len() {

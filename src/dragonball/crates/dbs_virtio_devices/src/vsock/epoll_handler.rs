@@ -62,11 +62,20 @@ pub struct VsockEpollHandler<
 > {
     pub(crate) config: VirtioDeviceConfig<AS, Q, R>,
     id: String,
-    /// Shared with the owning device, which needs to reach the muxer after
-    /// activation. Locked per packet; the only other user is the device
-    /// thread, so it is effectively uncontended (this is what Cloud
-    /// Hypervisor does too).
+    /// Shared with the owning device, which needs to read live connection
+    /// state when a snapshot is taken. Locked per packet; the only other
+    /// user is the device thread taking a snapshot, so it is effectively
+    /// uncontended (this is what Cloud Hypervisor does too).
     pub(crate) muxer: Arc<Mutex<M>>,
+    /// A descriptor whose packet was written into guest memory but whose used
+    /// ring entry could not be published, kept as `(head_index, len)`.
+    ///
+    /// `VsockPacket` writes straight through to guest memory, so by the time
+    /// `recv_pkt()` returns the guest's buffer already holds the packet and
+    /// only the publish is outstanding. Retrying that publish needs nothing
+    /// from the muxer: re-queueing the packet would be both unnecessary and
+    /// lossy, since the muxer can only reproduce resets, not RX data.
+    pending_used: Option<(u16, u32)>,
     _cid: u64,
 }
 
@@ -88,6 +97,7 @@ where
             id,
             _cid: cid,
             muxer,
+            pending_used: None,
         }
     }
 
@@ -114,6 +124,15 @@ where
         }
     }
 
+    /// Whether an RX pass has anything to do.
+    ///
+    /// A publish left outstanding by a failed `add_used()` counts: it is the
+    /// handler's own obligation, and the muxer may well have nothing further
+    /// to offer, so gating only on the muxer would strand the descriptor.
+    fn needs_rx_pass(&self) -> bool {
+        self.pending_used.is_some() || self.muxer().is_some_and(|muxer| muxer.has_pending_rx())
+    }
+
     /// Signal the guest driver that we've used some virtio buffers that it had
     /// previously made available.
     pub(crate) fn signal_used_queue(&self, idx: usize) -> VirtioResult<()> {
@@ -131,6 +150,29 @@ where
         let mut raise_irq = false;
         {
             let rxvq = &mut self.config.queues[QUEUE_RX].queue_mut().lock();
+
+            // Finish a publish that failed on an earlier pass before taking
+            // anything new from the muxer, so the guest sees packets in the
+            // order they were produced.
+            //
+            // Nothing this depends on changes between attempts -- a failed
+            // `add_used()` leaves `next_used` unadvanced, and the head index
+            // and ring address are fixed -- so this will keep failing unless
+            // guest memory itself changed. That makes the real job of
+            // `pending_used` a latch rather than a retry: while it is set,
+            // the muxer is not consumed, so a wedged ring cannot silently
+            // drain restore resets into a ring the guest will never read.
+            // The failure was already reported where it happened; stay quiet
+            // here or a busy device logs on every event.
+            if let Some((head_index, used_len)) = self.pending_used {
+                if let Err(e) = rxvq.add_used(mem, head_index, used_len) {
+                    trace!("{}: RX used ring still unusable, {:?}", self.id, e);
+                    return;
+                }
+                self.pending_used = None;
+                raise_irq = true;
+            }
+
             loop {
                 let mut iter = match rxvq.iter(mem) {
                     Err(e) => {
@@ -165,8 +207,20 @@ where
                         }
                     };
 
+                    // `iter` is not used past this point, so the queue can be
+                    // borrowed again.
+                    let head_index = desc_chain.head_index();
+                    if let Err(e) = rxvq.add_used(mem, head_index, used_len) {
+                        error!("{}: failed to add used RX buffer, {:?}", self.id, e);
+                        // The packet is already in the guest's buffer; only
+                        // the used ring entry is missing. Hold the descriptor
+                        // -- neither published nor handed back -- and retry
+                        // the publish on the next pass, which loses nothing
+                        // and needs no cooperation from the muxer.
+                        self.pending_used = Some((head_index, used_len));
+                        break;
+                    }
                     raise_irq = true;
-                    let _ = rxvq.add_used(mem, desc_chain.head_index(), used_len);
                 } else {
                     break;
                 }
@@ -177,6 +231,24 @@ where
                 error!("{}: failed to notify guest for RX queue, {:?}", self.id, e);
             }
         }
+    }
+
+    /// Deliver whatever the muxer already has pending, without waiting for a
+    /// queue or backend event.
+    ///
+    /// Called once from device activation so that resets queued by a restore
+    /// reach the guest before its vCPUs resume; queueing a reset is not
+    /// delivering it. If the guest posted no RX descriptor, the resets stay
+    /// queued and its next RX kick delivers them -- still ahead of any new
+    /// traffic.
+    pub(crate) fn flush_pending_rx(&mut self) {
+        if !self.needs_rx_pass() {
+            return;
+        }
+        trace!("{}: epoll_handler::flush_pending_rx()", self.id);
+        let guard = self.config.lock_guest_memory();
+        let mem = guard.deref();
+        self.process_rx(mem);
     }
 
     /// Walk the dirver-provided TX queue buffers, package them up as vsock
@@ -243,8 +315,7 @@ where
             error!("{}: failed to consume rx queue event, {:?}", self.id, e);
             return;
         }
-        let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
-        if pending {
+        if self.needs_rx_pass() {
             self.process_rx(mem);
         }
     }
@@ -259,8 +330,7 @@ where
             // we sent during TX queue processing. If that happened, we
             // need to fetch those responses and place them into RX
             // buffers.
-            let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
-            if pending {
+            if self.needs_rx_pass() {
                 self.process_rx(mem);
             }
         }
@@ -287,8 +357,7 @@ where
         self.process_tx(mem);
         // This event may have caused some packets to be queued up by the
         // backend. Make sure they are processed.
-        let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
-        if pending {
+        if self.needs_rx_pass() {
             self.process_rx(mem);
         }
     }
@@ -381,8 +450,9 @@ mod tests {
     use vmm_sys_util::epoll::EventSet;
 
     use super::super::packet::VSOCK_PKT_HDR_SIZE;
+    use super::super::persist::VsockConnectionId;
     use super::super::tests::TestContext;
-    use super::super::VsockError;
+    use super::super::{VsockChannel, VsockError};
     use super::*;
 
     #[test]
@@ -712,6 +782,144 @@ mod tests {
     }
 
     #[test]
+    fn test_flush_pending_rx_delivers_without_an_event() {
+        skip_if_kvm_unaccessable!();
+
+        // Nothing else would deliver a reset queued by a restore: `init()`
+        // only registers epoll listeners, and `process_rx()` otherwise runs
+        // only on a queue or backend event.
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        ctx.arti_activate(&test_ctx.mem);
+
+        let stale = VsockConnectionId {
+            local_port: 1024,
+            peer_port: 7,
+        };
+        let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+        epoll_handler
+            .muxer()
+            .unwrap()
+            .queue_restore_resets(&[stale])
+            .unwrap();
+        epoll_handler.flush_pending_rx();
+
+        assert_eq!(epoll_handler.muxer().unwrap().sent_resets, vec![stale]);
+        assert!(!epoll_handler.muxer().unwrap().has_pending_rx());
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 1);
+    }
+
+    #[test]
+    fn test_flush_pending_rx_with_nothing_pending() {
+        skip_if_kvm_unaccessable!();
+
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        ctx.arti_activate(&test_ctx.mem);
+
+        let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+        epoll_handler.muxer().unwrap().set_pending_rx(false);
+        epoll_handler.flush_pending_rx();
+
+        assert_eq!(epoll_handler.muxer().unwrap().rx_ok_cnt, 0);
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 0);
+    }
+
+    #[test]
+    fn test_pending_rx_survives_a_queue_with_no_descriptor() {
+        skip_if_kvm_unaccessable!();
+
+        // With no RX descriptor available the resets stay queued, and the
+        // guest's next RX kick delivers them -- still ahead of any new
+        // traffic.
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        // Retract the descriptor the guest had posted.
+        ctx.guest_rxvq.avail.idx().store(0);
+        ctx.arti_activate(&test_ctx.mem);
+
+        let stale = VsockConnectionId {
+            local_port: 1024,
+            peer_port: 7,
+        };
+        let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+        epoll_handler
+            .muxer()
+            .unwrap()
+            .queue_restore_resets(&[stale])
+            .unwrap();
+        epoll_handler.flush_pending_rx();
+
+        assert!(epoll_handler.muxer().unwrap().sent_resets.is_empty());
+        assert!(epoll_handler.muxer().unwrap().has_pending_rx());
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 0);
+
+        // The guest posts a buffer and kicks the RX queue.
+        ctx.guest_rxvq.avail.idx().store(1);
+        ctx.signal_rxq_event();
+
+        let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+        assert_eq!(epoll_handler.muxer().unwrap().sent_resets, vec![stale]);
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 1);
+    }
+
+    #[test]
+    fn test_failed_publish_is_retried_and_loses_nothing() {
+        skip_if_kvm_unaccessable!();
+
+        // `VsockPacket` writes through to guest memory, so a failed
+        // `add_used()` means the packet is already in the guest's buffer and
+        // only the used ring entry is missing. The handler holds the
+        // descriptor and republishes it later; nothing is asked of the muxer.
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        ctx.arti_activate(&test_ctx.mem);
+
+        let stale = VsockConnectionId {
+            local_port: 1024,
+            peer_port: 7,
+        };
+        {
+            let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+            epoll_handler
+                .muxer()
+                .unwrap()
+                .queue_restore_resets(&[stale])
+                .unwrap();
+
+            // Point the used ring outside guest memory so publishing fails.
+            let good = epoll_handler.config.queues[QUEUE_RX]
+                .queue_mut()
+                .lock()
+                .used_ring();
+            epoll_handler.config.queues[QUEUE_RX]
+                .queue_mut()
+                .lock()
+                .set_used_ring_address(Some(0xffff_0000), Some(0xffff_ffff));
+            epoll_handler.flush_pending_rx();
+
+            // The muxer handed the packet over and is not asked to take it
+            // back; the obligation now lives with the handler.
+            assert_eq!(epoll_handler.muxer().unwrap().sent_resets, vec![stale]);
+            assert!(epoll_handler.pending_used.is_some());
+            assert_eq!(ctx.guest_rxvq.used.idx().load(), 0);
+
+            // Once the ring works again the descriptor is published, without
+            // the muxer producing a second packet.
+            epoll_handler.config.queues[QUEUE_RX]
+                .queue_mut()
+                .lock()
+                .set_used_ring_address(Some(good as u32), Some((good >> 32) as u32));
+            epoll_handler.muxer().unwrap().set_pending_rx(false);
+            epoll_handler.flush_pending_rx();
+
+            assert!(epoll_handler.pending_used.is_none());
+            assert_eq!(epoll_handler.muxer().unwrap().sent_resets, vec![stale]);
+        }
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 1);
+    }
+
+    #[test]
     fn test_poisoned_muxer_lock_does_not_panic_the_handler() {
         skip_if_kvm_unaccessable!();
 
@@ -739,6 +947,7 @@ mod tests {
             assert!(result.is_err());
 
             assert!(epoll_handler.muxer().is_none());
+            epoll_handler.flush_pending_rx();
         }
 
         // Every entry point survives, and none of them touched the guest.
