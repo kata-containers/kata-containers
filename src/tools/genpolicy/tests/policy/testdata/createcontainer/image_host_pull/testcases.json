@@ -1,288 +1,169 @@
-[
-  {
-    "allowed": true,
-    "description": "valid host-pull request",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-          "io.kubernetes.cri.container-type": "sandbox",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
+{
+  "bases": {
+    "create-container": {
+      "kind": "CreateContainerRequest",
+      "request": {
+        "OCI": {
+          "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+            "io.kubernetes.cri.container-type": "sandbox",
+            "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
+            "io.kubernetes.cri.sandbox-name": "dummy",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000"
+          },
+          "Linux": {
+            "GIDMappings": [],
+            "MaskedPaths": [
+              "/proc/acpi",
+              "/proc/asound",
+              "/proc/kcore",
+              "/proc/keys",
+              "/proc/latency_stats",
+              "/proc/timer_list",
+              "/proc/timer_stats",
+              "/proc/sched_debug",
+              "/sys/firmware",
+              "/proc/scsi"
+            ],
+            "MountLabel": "",
+            "Namespaces": [
+              {
+                "Path": "",
+                "Type": "ipc"
+              },
+              {
+                "Path": "",
+                "Type": "uts"
+              },
+              {
+                "Path": "",
+                "Type": "mount"
+              },
+              {
+                "Path": "/run/netns/podns",
+                "Type": "network"
+              }
+            ],
+            "ReadonlyPaths": [
+              "/proc/bus",
+              "/proc/fs",
+              "/proc/irq",
+              "/proc/sys",
+              "/proc/sysrq-trigger"
+            ],
+            "Resources": {
+              "Devices": []
             },
-            {
-              "Path": "",
-              "Type": "uts"
+            "RootfsPropagation": ""
+          },
+          "Process": {
+            "Args": [
+              "/pause"
+            ],
+            "Capabilities": {
+              "Ambient": [],
+              "Bounding": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Effective": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Permitted": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ]
             },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+            "Cwd": "/",
+            "NoNewPrivileges": true,
+            "SelinuxLabel": "",
+            "User": {
+              "AdditionalGids": [
+                65535
+              ],
+              "GID": 65535,
+              "UID": 65535,
+              "Username": ""
             }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
           },
-          "RootfsPropagation": ""
-        },
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
+          "Root": {
+            "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "Readonly": true
           },
-          "Cwd": "/",
-          "NoNewPrivileges": true,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              65535
-            ],
-            "GID": 65535,
-            "UID": 65535,
-            "Username": ""
-          }
+          "Version": "1.1.0"
         },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": true
-        },
-        "Version": "1.1.0"
-      },
-      "storages": []
+        "storages": []
+      }
     }
   },
-  {
-    "allowed": false,
-    "description": "host-pull request with forbidden image_guest_pull storage",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-          "io.kubernetes.cri.container-type": "sandbox",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": true,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              65535
-            ],
-            "GID": 65535,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": true
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
+  "cases": [
+    {
+      "description": "valid host-pull request",
+      "base": "create-container",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "host-pull request with forbidden image_guest_pull storage",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
         {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_sandbox\",\"io.kubernetes.cri.container-type\":\"sandbox\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-log-directory\":\"/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"nerdctl/network-namespace\":\"/var/run/netns/cni-00000000-0000-0000-0000-000000000000\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "pause"
+          "op": "add",
+          "path": "/storages/-",
+          "value": {
+            "driver": "image_guest_pull",
+            "driver_options": [
+              "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_sandbox\",\"io.kubernetes.cri.container-type\":\"sandbox\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-log-directory\":\"/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\",\"nerdctl/network-namespace\":\"/var/run/netns/cni-00000000-0000-0000-0000-000000000000\"}}"
+            ],
+            "fs_group": null,
+            "fstype": "overlay",
+            "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "options": [],
+            "source": "pause"
+          }
         }
       ]
     }
-  }
-]
+  ]
+}

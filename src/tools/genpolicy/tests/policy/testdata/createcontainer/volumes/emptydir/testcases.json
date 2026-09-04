@@ -1,523 +1,433 @@
-[
-  {
-    "allowed": true,
-    "description": "volumeMount: valid mount structure",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
+{
+  "bases": {
+    "create-container": {
+      "kind": "CreateContainerRequest",
+      "request": {
+        "OCI": {
+          "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "io.katacontainers.pkg.oci.container_type": "pod_container",
+            "io.kubernetes.cri.container-name": "dummy",
+            "io.kubernetes.cri.container-type": "container",
+            "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+            "io.kubernetes.cri.sandbox-name": "dummy",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+          },
+          "Linux": {
+            "GIDMappings": [],
+            "MaskedPaths": [
+              "/proc/acpi",
+              "/proc/asound",
+              "/proc/kcore",
+              "/proc/keys",
+              "/proc/latency_stats",
+              "/proc/timer_list",
+              "/proc/timer_stats",
+              "/proc/sched_debug",
+              "/sys/firmware",
+              "/proc/scsi"
+            ],
+            "MountLabel": "",
+            "Namespaces": [
+              {
+                "Path": "",
+                "Type": "ipc"
+              },
+              {
+                "Path": "",
+                "Type": "uts"
+              },
+              {
+                "Path": "",
+                "Type": "mount"
+              },
+              {
+                "Path": "/run/netns/podns",
+                "Type": "network"
+              }
+            ],
+            "ReadonlyPaths": [
+              "/proc/bus",
+              "/proc/fs",
+              "/proc/irq",
+              "/proc/sys",
+              "/proc/sysrq-trigger"
+            ],
+            "Resources": {
+              "Devices": []
+            },
+            "RootfsPropagation": ""
+          },
+          "Mounts": [
             {
-              "Path": "",
-              "Type": "ipc"
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
             },
             {
-              "Path": "",
-              "Type": "uts"
+              "destination": "/mnt/test2",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+              "type_": "bind"
             },
             {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+              "destination": "/mnt/test3",
+              "options": [
+                "rbind",
+                "rprivate",
+                "ro"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDIvMDI=",
+              "type_": "bind"
             }
           ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
+          "Process": {
+            "Args": [
+              "/pause"
+            ],
+            "Capabilities": {
+              "Ambient": [],
+              "Bounding": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Effective": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ],
+              "Permitted": [
+                "CAP_CHOWN",
+                "CAP_DAC_OVERRIDE",
+                "CAP_FSETID",
+                "CAP_FOWNER",
+                "CAP_MKNOD",
+                "CAP_NET_RAW",
+                "CAP_SETGID",
+                "CAP_SETUID",
+                "CAP_SETFCAP",
+                "CAP_SETPCAP",
+                "CAP_NET_BIND_SERVICE",
+                "CAP_SYS_CHROOT",
+                "CAP_KILL",
+                "CAP_AUDIT_WRITE"
+              ]
+            },
+            "Cwd": "/",
+            "NoNewPrivileges": false,
+            "SelinuxLabel": "",
+            "User": {
+              "AdditionalGids": [
+                0
+              ],
+              "GID": 0,
+              "UID": 65535,
+              "Username": ""
+            }
           },
-          "RootfsPropagation": ""
+          "Root": {
+            "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "Readonly": false
+          },
+          "Version": "1.1.0"
         },
-        "Mounts": [
+        "storages": [
           {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
+            "driver": "blk",
+            "driver_options": [
+              "encryption_key=ephemeral",
+              "create_filesystem"
             ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
+            "fs_group": null,
+            "fstype": "ext4",
+            "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+            "options": [],
+            "source": "00/00",
+            "shared": true
           },
           {
-            "destination": "/mnt/test2",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
+            "driver": "blk",
+            "driver_options": [
+              "encryption_key=ephemeral",
+              "create_filesystem"
             ],
-            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-            "type_": "bind"
+            "fs_group": null,
+            "fstype": "ext4",
+            "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+            "options": [],
+            "source": "01/01",
+            "shared": true
           },
           {
-            "destination": "/mnt/test3",
-            "options": [
-              "rbind",
-              "rprivate",
-              "ro"
+            "driver": "blk",
+            "driver_options": [
+              "encryption_key=ephemeral",
+              "create_filesystem"
             ],
-            "source": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-            "type_": "bind"
+            "fs_group": null,
+            "fstype": "ext4",
+            "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
+            "options": [],
+            "source": "02/02",
+            "shared": true
+          },
+          {
+            "driver": "blk",
+            "driver_options": [
+              "encryption_key=ephemeral",
+              "create_filesystem"
+            ],
+            "fs_group": null,
+            "fstype": "ext4",
+            "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
+            "options": [],
+            "source": "03/03",
+            "shared": true
+          },
+          {
+            "driver": "image_guest_pull",
+            "driver_options": [
+              "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
+            ],
+            "fs_group": null,
+            "fstype": "overlay",
+            "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
+            "options": [],
+            "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
           }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
+        ]
+      }
     }
   },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid source",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
+  "cases": [
+    {
+      "description": "volumeMount: valid mount structure",
+      "base": "create-container",
+      "allowed": true,
+      "patch": []
+    },
+    {
+      "description": "volumeMount: invalid source",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
             {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/invalid-mount",
+              "type_": "bind"
             }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/invalid-mount",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/invalid-mount",
-          "options": [],
-          "source": "invalid-source",
-          "shared": true
+          ]
         },
         {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/invalid-mount",
-          "options": [],
-          "source": "invalid-source",
-          "shared": true
+          "op": "replace",
+          "path": "/storages/0/mount_point",
+          "value": "/run/kata-containers/sandbox/storage/invalid-mount"
         },
         {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/invalid-mount",
-          "options": [],
-          "source": "invalid-source",
-          "shared": true
+          "op": "replace",
+          "path": "/storages/0/source",
+          "value": "invalid-source"
         },
         {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/invalid-mount",
-          "options": [],
-          "source": "invalid-source",
-          "shared": true
+          "op": "replace",
+          "path": "/storages/1/mount_point",
+          "value": "/run/kata-containers/sandbox/storage/invalid-mount"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/1/source",
+          "value": "invalid-source"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/2/mount_point",
+          "value": "/run/kata-containers/sandbox/storage/invalid-mount"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/2/source",
+          "value": "invalid-source"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/3/mount_point",
+          "value": "/run/kata-containers/sandbox/storage/invalid-mount"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/3/source",
+          "value": "invalid-source"
         }
-      ,
+      ]
+    },
+    {
+      "description": "volumeMount: valid mount destination(s)",
+      "base": "create-container",
+      "allowed": true,
+      "patch": [
         {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": true,
-    "description": "volumeMount: valid mount destination(s)",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
             {
-              "Path": "",
-              "Type": "ipc"
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
             },
             {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+              "destination": "/mnt/test4",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDMvMDM=",
+              "type_": "bind"
             }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          },
-          {
+          ]
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid mount format",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
+            {
+              "destination": "/mnt/test",
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid mount destination(s) - duplicate",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
+            {
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
+            },
+            {
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid mount destination(s) - mismatch",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
+            {
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
+            },
+            {
+              "destination": "/mnt/unexpected",
+              "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
+              "type_": "bind"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid mount - more mounts than allowed",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "add",
+          "path": "/OCI/Mounts/-",
+          "value": {
             "destination": "/mnt/test4",
             "options": [
               "rbind",
@@ -527,904 +437,11 @@
             "source": "/run/kata-containers/sandbox/storage/MDMvMDM=",
             "type_": "bind"
           }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
         },
         {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid mount format",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid mount destination(s) - duplicate",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          },
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid mount destination(s) - mismatch",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          },
-          {
-            "destination": "/mnt/unexpected",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid mount - more mounts than allowed",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          },
-          {
-            "destination": "/mnt/test2",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-            "type_": "bind"
-          },
-          {
-            "destination": "/mnt/test3",
-            "options": [
-              "rbind",
-              "rprivate",
-              "ro"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-            "type_": "bind"
-          },
-          {
-            "destination": "/mnt/test4",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-            "type_": "bind"
-          },
-          {
+          "op": "add",
+          "path": "/OCI/Mounts/-",
+          "value": {
             "destination": "/mnt/test5",
             "options": [
               "rbind",
@@ -1434,792 +451,101 @@
             "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
             "type_": "bind"
           }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
         }
-      ,
+      ]
+    },
+    {
+      "description": "volumeMount: invalid options",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
         {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid options",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+          "op": "remove",
+          "path": "/OCI/Mounts/2"
         },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
+        {
+          "op": "remove",
+          "path": "/OCI/Mounts/1"
+        },
+        {
+          "op": "add",
+          "path": "/storages/0/options/-",
+          "value": "invalid_option=true"
+        },
+        {
+          "op": "add",
+          "path": "/storages/1/options/-",
+          "value": "invalid_option=true"
+        },
+        {
+          "op": "add",
+          "path": "/storages/2/options/-",
+          "value": "invalid_option=true"
+        },
+        {
+          "op": "add",
+          "path": "/storages/3/options/-",
+          "value": "invalid_option=true"
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid fstype",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "remove",
+          "path": "/OCI/Mounts/2"
+        },
+        {
+          "op": "remove",
+          "path": "/OCI/Mounts/1"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/0/fstype",
+          "value": "invalid_fstype"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/1/fstype",
+          "value": "invalid_fstype"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/2/fstype",
+          "value": "invalid_fstype"
+        },
+        {
+          "op": "replace",
+          "path": "/storages/3/fstype",
+          "value": "invalid_fstype"
+        }
+      ]
+    },
+    {
+      "description": "volumeMount: invalid mount options",
+      "base": "create-container",
+      "allowed": false,
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/OCI/Mounts",
+          "value": [
             {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
+              "destination": "/mnt/test",
+              "options": [
+                "rbind",
+                "rshared",
+                "rw"
+              ],
+              "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+              "type_": "bind"
             }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [
-            "invalid_option=true"
-          ],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [
-            "invalid_option=true"
-          ],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [
-            "invalid_option=true"
-          ],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [
-            "invalid_option=true"
-          ],
-          "source": "03/03",
-          "shared": true
+          ]
         }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
+      ]
     }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid fstype",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rprivate",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "invalid_fstype",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "invalid_fstype",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "invalid_fstype",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "invalid_fstype",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  },
-  {
-    "allowed": false,
-    "description": "volumeMount: invalid mount options",
-    "kind": "CreateContainerRequest",
-    "request": {
-      "OCI": {
-        "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
-          "io.kubernetes.cri.container-name": "dummy",
-          "io.kubernetes.cri.container-type": "container",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        },
-        "Linux": {
-          "GIDMappings": [],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
-          "MountLabel": "",
-          "Namespaces": [
-            {
-              "Path": "",
-              "Type": "ipc"
-            },
-            {
-              "Path": "",
-              "Type": "uts"
-            },
-            {
-              "Path": "",
-              "Type": "mount"
-            },
-            {
-              "Path": "/run/netns/podns",
-              "Type": "network"
-            }
-          ],
-          "ReadonlyPaths": [
-            "/proc/bus",
-            "/proc/fs",
-            "/proc/irq",
-            "/proc/sys",
-            "/proc/sysrq-trigger"
-          ],
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": ""
-        },
-        "Mounts": [
-          {
-            "destination": "/mnt/test",
-            "options": [
-              "rbind",
-              "rshared",
-              "rw"
-            ],
-            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-            "type_": "bind"
-          }
-        ],
-        "Process": {
-          "Args": [
-            "/pause"
-          ],
-          "Capabilities": {
-            "Ambient": [],
-            "Bounding": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Effective": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ],
-            "Permitted": [
-              "CAP_CHOWN",
-              "CAP_DAC_OVERRIDE",
-              "CAP_FSETID",
-              "CAP_FOWNER",
-              "CAP_MKNOD",
-              "CAP_NET_RAW",
-              "CAP_SETGID",
-              "CAP_SETUID",
-              "CAP_SETFCAP",
-              "CAP_SETPCAP",
-              "CAP_NET_BIND_SERVICE",
-              "CAP_SYS_CHROOT",
-              "CAP_KILL",
-              "CAP_AUDIT_WRITE"
-            ]
-          },
-          "Cwd": "/",
-          "NoNewPrivileges": false,
-          "SelinuxLabel": "",
-          "User": {
-            "AdditionalGids": [
-              0
-            ],
-            "GID": 0,
-            "UID": 65535,
-            "Username": ""
-          }
-        },
-        "Root": {
-          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "Readonly": false
-        },
-        "Version": "1.1.0"
-      },
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
-          "options": [],
-          "source": "00/00",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDEvMDE=",
-          "options": [],
-          "source": "01/01",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDIvMDI=",
-          "options": [],
-          "source": "02/02",
-          "shared": true
-        },
-        {
-          "driver": "blk",
-          "driver_options": [
-            "encryption_key=ephemeral",
-            "create_filesystem"
-          ],
-          "fs_group": null,
-          "fstype": "ext4",
-          "mount_point": "/run/kata-containers/sandbox/storage/MDMvMDM=",
-          "options": [],
-          "source": "03/03",
-          "shared": true
-        }
-      ,
-        {
-          "driver": "image_guest_pull",
-          "driver_options": [
-            "image_guest_pull={\"metadata\":{\"io.katacontainers.pkg.oci.bundle_path\":\"/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"io.katacontainers.pkg.oci.container_type\":\"pod_container\",\"io.kubernetes.cri.container-name\":\"dummy\",\"io.kubernetes.cri.container-type\":\"container\",\"io.kubernetes.cri.image-name\":\"registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db\",\"io.kubernetes.cri.sandbox-id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"io.kubernetes.cri.sandbox-name\":\"dummy\",\"io.kubernetes.cri.sandbox-namespace\":\"default\"}}"
-          ],
-          "fs_group": null,
-          "fstype": "overlay",
-          "mount_point": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
-          "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
-        }]
-    }
-  }
-]
+  ]
+}
