@@ -54,11 +54,14 @@ jobs:
           - kernel-debug
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
+          - kernel-cca-confidential
           - nydus
           - openvmm
           - ovmf
+          - ovmf-cca
           - pause-image
           - qemu
+          - qemu-cca-experimental
           - qemu-no-shared-fs
           - virtiofsd
     concurrency:
@@ -208,6 +211,8 @@ jobs:
         asset:
           - rootfs-image
           - rootfs-image-confidential
+          - rootfs-cca-confidential-image
+          - rootfs-cca-confidential-initrd
           - rootfs-image-coco-extension
           - rootfs-image-devkit-extension
           - rootfs-image-nvidia-gpu
