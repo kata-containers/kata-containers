@@ -5269,25 +5269,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "pci-ids"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "098762dc8ca11c831fee9544ae9f7eae8fc4666ec37e7b753f56d624c03d725e"
+name = "pcilibs-rs"
+version = "0.1.0"
+source = "git+https://github.com/kata-containers/pcilibs-rs?rev=28308229#28308229a8601b5dd616a9f9907002dec781e3ac"
 dependencies = [
+ "nix 0.31.3",
  "nom",
  "phf",
  "phf_codegen",
  "proc-macro2",
  "quote",
-]
-
-[[package]]
-name = "pcilibs-rs"
-version = "0.1.0"
-source = "git+https://github.com/kata-containers/pcilibs-rs?rev=d248714e#d248714ed4b34b5738dbafab510611f543802e27"
-dependencies = [
- "nix 0.31.3",
- "pci-ids",
 ]
 
 [[package]]
