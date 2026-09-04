@@ -443,11 +443,12 @@ func genericImage(path string) (config.BlockDrive, error) {
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
 	drive := config.BlockDrive{
-		File:     path,
-		Format:   "raw",
-		ID:       id,
-		ShareRW:  true,
-		ReadOnly: true,
+		File:           path,
+		Format:         "raw",
+		ID:             id,
+		ShareRW:        true,
+		ReadOnly:       true,
+		DisableLocking: true,
 	}
 
 	return drive, nil
@@ -683,16 +684,17 @@ func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.Bloc
 	}
 
 	return govmmQemu.BlockDevice{
-		Driver:        govmmQemu.VirtioBlock,
-		ID:            drive.ID,
-		File:          drive.File,
-		AIO:           govmmQemu.Threads,
-		Format:        govmmQemu.BlockDeviceFormat(drive.Format),
-		Interface:     "none",
-		DisableModern: nestedRun,
-		ShareRW:       drive.ShareRW,
-		ReadOnly:      drive.ReadOnly,
-		DiscardUnmap:  drive.DiscardUnmap,
+		Driver:         govmmQemu.VirtioBlock,
+		ID:             drive.ID,
+		File:           drive.File,
+		AIO:            govmmQemu.Threads,
+		Format:         govmmQemu.BlockDeviceFormat(drive.Format),
+		Interface:      "none",
+		DisableModern:  nestedRun,
+		ShareRW:        drive.ShareRW,
+		ReadOnly:       drive.ReadOnly,
+		DisableLocking: drive.DisableLocking,
+		DiscardUnmap:   drive.DiscardUnmap,
 	}, nil
 }
 

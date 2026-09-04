@@ -7,7 +7,10 @@
 
 package qemu
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 var (
 	deviceFSString                 = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
@@ -64,6 +67,40 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		ROMFile:       romfile,
 	}
 	testAppendQ35(vhostuserNetDevice, deviceVhostUserNetString, t)
+}
+
+func TestBlockDeviceDisablesFileLocking(t *testing.T) {
+	blockDevice := BlockDevice{
+		Driver:         VirtioBlock,
+		ID:             "rootfs",
+		File:           "/var/lib/rootfs.img",
+		Interface:      NoInterface,
+		AIO:            Threads,
+		Format:         "raw",
+		ShareRW:        true,
+		ReadOnly:       true,
+		DisableLocking: true,
+	}
+
+	params := strings.Join(blockDevice.QemuParams(&Config{}), " ")
+	if !strings.Contains(params, "file.filename=/var/lib/rootfs.img") {
+		t.Fatalf("missing structured file backend: %s", params)
+	}
+	if !strings.Contains(params, "file.locking=off") {
+		t.Fatalf("file locking was not disabled: %s", params)
+	}
+	if strings.Contains(params, "file=/var/lib/rootfs.img") {
+		t.Fatalf("legacy file option conflicts with structured backend: %s", params)
+	}
+
+	blockDevice.DisableLocking = false
+	params = strings.Join(blockDevice.QemuParams(&Config{}), " ")
+	if !strings.Contains(params, "file=/var/lib/rootfs.img") {
+		t.Fatalf("default file backend was not preserved: %s", params)
+	}
+	if strings.Contains(params, "file.locking=off") {
+		t.Fatalf("file locking was disabled without an explicit request: %s", params)
+	}
 }
 
 func TestAppendVirtioBalloon(t *testing.T) {

@@ -175,6 +175,12 @@ impl QemuInner {
                         // command line.
                         continue;
                     }
+                    // Cloud Hypervisor locks the image's full byte range, which
+                    // overlaps QEMU's permission lock bytes despite both VMMs
+                    // opening this shared Kata rootfs read-only. Kata owns this
+                    // immutable file, so QEMU locking is redundant.
+                    let disable_locking =
+                        is_readonly && path_on_host == self.config.boot_info.image;
                     match driver_option.as_str() {
                         KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(&path_on_host, is_readonly)?,
                         KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => {
@@ -192,6 +198,7 @@ impl QemuInner {
                                 driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                                 discard_unmap,
                                 serial,
+                                disable_locking,
                             )?
                         }
                         unsupported => {

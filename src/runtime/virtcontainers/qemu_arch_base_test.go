@@ -375,14 +375,15 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.BlockDevice{
-			Driver:    govmmQemu.VirtioBlock,
-			ID:        drive.ID,
-			File:      image.Name(),
-			AIO:       govmmQemu.Threads,
-			Format:    "raw",
-			Interface: "none",
-			ShareRW:   true,
-			ReadOnly:  true,
+			Driver:         govmmQemu.VirtioBlock,
+			ID:             drive.ID,
+			File:           image.Name(),
+			AIO:            govmmQemu.Threads,
+			Format:         "raw",
+			Interface:      "none",
+			ShareRW:        true,
+			ReadOnly:       true,
+			DisableLocking: true,
 		},
 	}
 
