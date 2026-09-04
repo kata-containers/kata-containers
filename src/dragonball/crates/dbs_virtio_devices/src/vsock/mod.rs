@@ -126,6 +126,13 @@ pub enum VsockError {
     /// vsock muxer error
     #[error("Vsock muxer error: {0}")]
     Muxer(#[source] MuxerError),
+    /// The muxer is no longer available, the device having been removed.
+    #[error("The vsock muxer is no longer available")]
+    MuxerUnavailable,
+    /// A thread panicked while holding the muxer lock, so the muxer's state
+    /// may be incomplete and must not be trusted.
+    #[error("The vsock muxer lock is poisoned")]
+    MuxerLockPoisoned,
     /// A data fetch was attempted when no data was available.
     #[error("A data fetch was attempted when no data was available")]
     NoData,

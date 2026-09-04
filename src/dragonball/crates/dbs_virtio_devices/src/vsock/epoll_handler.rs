@@ -8,6 +8,7 @@
 // found in the THIRD-PARTY file.
 
 use std::ops::Deref;
+use std::sync::{Arc, Mutex};
 
 use dbs_utils::epoll_manager::{EventOps, EventSet, Events, MutEventSubscriber};
 use log::{error, trace, warn};
@@ -61,7 +62,11 @@ pub struct VsockEpollHandler<
 > {
     pub(crate) config: VirtioDeviceConfig<AS, Q, R>,
     id: String,
-    pub(crate) muxer: M,
+    /// Shared with the owning device, which needs to reach the muxer after
+    /// activation. Locked per packet; the only other user is the device
+    /// thread, so it is effectively uncontended (this is what Cloud
+    /// Hypervisor does too).
+    pub(crate) muxer: Arc<Mutex<M>>,
     _cid: u64,
 }
 
@@ -72,12 +77,40 @@ where
     R: GuestMemoryRegion,
     M: VsockGenericMuxer,
 {
-    pub fn new(config: VirtioDeviceConfig<AS, Q, R>, id: String, cid: u64, muxer: M) -> Self {
+    pub fn new(
+        config: VirtioDeviceConfig<AS, Q, R>,
+        id: String,
+        cid: u64,
+        muxer: Arc<Mutex<M>>,
+    ) -> Self {
         VsockEpollHandler {
             config,
             id,
             _cid: cid,
             muxer,
+        }
+    }
+
+    /// Borrow the muxer, or `None` if a thread panicked while holding its
+    /// lock.
+    ///
+    /// Nothing here can return an error -- `MutEventSubscriber::process()`
+    /// yields `()` -- so a poisoned lock is logged and the operation is
+    /// skipped, the way this file already handles a queue it cannot walk.
+    /// The vsock device stops moving packets; the VMM keeps running, which a
+    /// second panic would not allow.
+    ///
+    /// The lock is never held across a call that takes it again -- `Mutex` is
+    /// not reentrant -- so every caller binds the guard to a local rather
+    /// than using it inline in a condition, which under edition 2018 would
+    /// keep it alive for the whole `if` statement.
+    pub(crate) fn muxer(&self) -> Option<std::sync::MutexGuard<'_, M>> {
+        match self.muxer.lock() {
+            Ok(muxer) => Some(muxer),
+            Err(_) => {
+                error!("{}: vsock muxer lock poisoned, skipping", self.id);
+                None
+            }
         }
     }
 
@@ -108,9 +141,16 @@ where
                 };
 
                 if let Some(mut desc_chain) = iter.next() {
+                    let mut muxer = match self.muxer.lock() {
+                        Ok(muxer) => muxer,
+                        Err(_) => {
+                            error!("{}: vsock muxer lock poisoned, stopping RX", self.id);
+                            break;
+                        }
+                    };
                     let used_len = match VsockPacket::from_rx_virtq_head(&mut desc_chain) {
                         Ok(mut pkt) => {
-                            if self.muxer.recv_pkt(&mut pkt).is_ok() {
+                            if muxer.recv_pkt(&mut pkt).is_ok() {
                                 pkt.hdr().len() as u32 + pkt.len()
                             } else {
                                 // We are using a consuming iterator over the virtio buffers, so, if we
@@ -168,7 +208,17 @@ where
                         }
                     };
 
-                    if self.muxer.send_pkt(&pkt).is_err() {
+                    // Field access, not `self.muxer()`: the helper borrows
+                    // all of `self`, which the queue guard above already
+                    // borrows mutably.
+                    let send_err = match self.muxer.lock() {
+                        Ok(mut muxer) => muxer.send_pkt(&pkt).is_err(),
+                        Err(_) => {
+                            error!("{}: vsock muxer lock poisoned, stopping TX", self.id);
+                            break;
+                        }
+                    };
+                    if send_err {
                         iter.go_to_previous_position();
                         break;
                     }
@@ -191,7 +241,10 @@ where
         trace!("{}: handle RX queue event", self.id);
         if let Err(e) = self.config.queues[QUEUE_RX].consume_event() {
             error!("{}: failed to consume rx queue event, {:?}", self.id, e);
-        } else if self.muxer.has_pending_rx() {
+            return;
+        }
+        let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
+        if pending {
             self.process_rx(mem);
         }
     }
@@ -206,7 +259,8 @@ where
             // we sent during TX queue processing. If that happened, we
             // need to fetch those responses and place them into RX
             // buffers.
-            if self.muxer.has_pending_rx() {
+            let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
+            if pending {
                 self.process_rx(mem);
             }
         }
@@ -222,7 +276,9 @@ where
     pub(crate) fn notify_backend_event(&mut self, events: &Events, mem: &AS::M) {
         trace!("{}: backend event", self.id);
         let events = epoll::Events::from_bits(events.event_set().bits()).unwrap();
-        self.muxer.notify(events);
+        if let Some(mut muxer) = self.muxer() {
+            muxer.notify(events);
+        }
         // After the backend has been kicked, it might've freed up some
         // resources, so we can attempt to send it more data to process. In
         // particular, if `self.backend.send_pkt()` halted the TX queue
@@ -231,7 +287,8 @@ where
         self.process_tx(mem);
         // This event may have caused some packets to be queued up by the
         // backend. Make sure they are processed.
-        if self.muxer.has_pending_rx() {
+        let pending = self.muxer().is_some_and(|muxer| muxer.has_pending_rx());
+        if pending {
             self.process_rx(mem);
         }
     }
@@ -296,8 +353,17 @@ where
             );
         }
 
-        let be_fd = self.muxer.as_raw_fd();
-        let be_evset = EventSet::from_bits(self.muxer.get_polled_evset().bits()).unwrap();
+        let be = self.muxer().map(|muxer| {
+            (
+                muxer.as_raw_fd(),
+                EventSet::from_bits(muxer.get_polled_evset().bits()).unwrap(),
+            )
+        });
+        // A poisoned lock here leaves the backend unregistered; the error is
+        // already logged, and the queue listeners above still stand.
+        let Some((be_fd, be_evset)) = be else {
+            return;
+        };
         let events = Events::with_data_raw(be_fd, defs::BACKEND_EVENT, be_evset);
         if let Err(e) = ops.add(events) {
             error!(
@@ -342,7 +408,7 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(false);
+                epoll_handler.muxer().unwrap().set_pending_rx(false);
             }
             ctx.signal_txq_event();
 
@@ -362,7 +428,7 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(true);
+                epoll_handler.muxer().unwrap().set_pending_rx(true);
             }
             ctx.signal_txq_event();
 
@@ -381,8 +447,11 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(false);
-                epoll_handler.muxer.set_tx_err(Some(VsockError::NoData));
+                epoll_handler.muxer().unwrap().set_pending_rx(false);
+                epoll_handler
+                    .muxer()
+                    .unwrap()
+                    .set_tx_err(Some(VsockError::NoData));
             }
             ctx.signal_txq_event();
 
@@ -407,7 +476,7 @@ mod tests {
             // should have reached the backend.
             assert_eq!(ctx.guest_txvq.used.idx().load(), 1);
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                assert_eq!(epoll_handler.muxer.tx_ok_cnt, 0);
+                assert_eq!(epoll_handler.muxer().unwrap().tx_ok_cnt, 0);
             }
         }
     }
@@ -425,8 +494,11 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(true);
-                epoll_handler.muxer.set_rx_err(Some(VsockError::NoData));
+                epoll_handler.muxer().unwrap().set_pending_rx(true);
+                epoll_handler
+                    .muxer()
+                    .unwrap()
+                    .set_rx_err(Some(VsockError::NoData));
             }
             ctx.signal_rxq_event();
 
@@ -444,7 +516,7 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(true);
+                epoll_handler.muxer().unwrap().set_pending_rx(true);
             }
             ctx.signal_rxq_event();
 
@@ -465,7 +537,7 @@ mod tests {
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
                 epoll_handler.process_rx(&test_ctx.mem);
                 assert_eq!(ctx.guest_rxvq.used.idx().load(), 1);
-                assert_eq!(epoll_handler.muxer.rx_ok_cnt, 0);
+                assert_eq!(epoll_handler.muxer().unwrap().rx_ok_cnt, 0);
             }
         }
     }
@@ -482,12 +554,15 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(true);
+                epoll_handler.muxer().unwrap().set_pending_rx(true);
                 epoll_handler
                     .notify_backend_event(&Events::new_raw(0, EventSet::IN), &test_ctx.mem);
 
                 // The backend should've received this event
-                assert_eq!(epoll_handler.muxer.evset, Some(epoll::Events::EPOLLIN));
+                assert_eq!(
+                    epoll_handler.muxer().unwrap().evset,
+                    Some(epoll::Events::EPOLLIN)
+                );
             }
 
             // TX queue processing should've been triggered.
@@ -505,12 +580,15 @@ mod tests {
             ctx.arti_activate(&test_ctx.mem);
 
             if let Some(epoll_handler) = &mut ctx.epoll_handler {
-                epoll_handler.muxer.set_pending_rx(false);
+                epoll_handler.muxer().unwrap().set_pending_rx(false);
                 epoll_handler
                     .notify_backend_event(&Events::new_raw(0, EventSet::IN), &test_ctx.mem);
 
                 // The backend should've received this event.
-                assert_eq!(epoll_handler.muxer.evset, Some(epoll::Events::EPOLLIN));
+                assert_eq!(
+                    epoll_handler.muxer().unwrap().evset,
+                    Some(epoll::Events::EPOLLIN)
+                );
             }
             // TX queue processing should've been triggered.
             assert_eq!(ctx.guest_txvq.used.idx().load(), 1);
@@ -631,5 +709,42 @@ mod tests {
             GAP_START_ADDR as u64 - 4,
             GAP_SIZE as u32 + 100,
         );
+    }
+
+    #[test]
+    fn test_poisoned_muxer_lock_does_not_panic_the_handler() {
+        skip_if_kvm_unaccessable!();
+
+        // `MutEventSubscriber::process()` returns `()`, so there is nobody to
+        // report a poisoned lock to. The handler logs and skips: the vsock
+        // device stops moving packets, but the VMM survives, which a second
+        // panic would not allow.
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        ctx.arti_activate(&test_ctx.mem);
+
+        {
+            let epoll_handler = ctx.epoll_handler.as_mut().unwrap();
+            epoll_handler.muxer().unwrap().set_pending_rx(true);
+
+            let lock = epoll_handler.muxer.clone();
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(|_| {}));
+            let result = std::thread::spawn(move || {
+                let _guard = lock.lock().unwrap();
+                panic!("poison the muxer lock");
+            })
+            .join();
+            std::panic::set_hook(previous);
+            assert!(result.is_err());
+
+            assert!(epoll_handler.muxer().is_none());
+        }
+
+        // Every entry point survives, and none of them touched the guest.
+        ctx.signal_rxq_event();
+        ctx.signal_txq_event();
+        assert_eq!(ctx.guest_rxvq.used.idx().load(), 0);
+        assert_eq!(ctx.guest_txvq.used.idx().load(), 0);
     }
 }

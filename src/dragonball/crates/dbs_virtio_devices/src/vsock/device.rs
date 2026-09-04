@@ -8,7 +8,7 @@
 // found in the THIRD-PARTY file.
 use std::any::Any;
 use std::marker::PhantomData;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use dbs_device::resources::ResourceConstraint;
 use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
@@ -53,7 +53,11 @@ pub struct Vsock<AS: GuestAddressSpace, M: VsockGenericMuxer = VsockMuxer> {
     queue_sizes: Arc<Vec<u16>>,
     device_info: VirtioDeviceInfo,
     subscriber_id: Option<SubscriberId>,
-    muxer: Option<M>,
+    /// Shared with the activated epoll handler rather than moved into it, so
+    /// that the device can still reach the muxer once the handler owns it.
+    /// The handler locks it per packet; the only other user is the device
+    /// thread, so the lock is effectively uncontended.
+    muxer: Option<Arc<Mutex<M>>>,
     phantom: PhantomData<AS>,
 }
 
@@ -102,7 +106,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
                 epoll_mgr,
             ),
             subscriber_id: None,
-            muxer: Some(muxer),
+            muxer: Some(Arc::new(Mutex::new(muxer))),
             phantom: PhantomData,
         })
     }
@@ -114,13 +118,28 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
     /// add backend for vsock muxer
     // NOTE: Backend is not allowed to add when vsock device is activated.
     pub fn add_backend(&mut self, backend: Box<dyn VsockBackend>, is_default: bool) -> Result<()> {
-        if let Some(muxer) = self.muxer.as_mut() {
-            muxer
-                .add_backend(backend, is_default)
-                .map_err(VsockError::Muxer)
-        } else {
-            Err(VsockError::Muxer(MuxerError::BackendAddAfterActivated))
+        // The muxer outlives activation now, so a missing one no longer says
+        // the device was activated; the subscriber id does.
+        if self.subscriber_id.is_some() {
+            return Err(VsockError::Muxer(MuxerError::BackendAddAfterActivated));
         }
+        self.muxer()?
+            .add_backend(backend, is_default)
+            .map_err(VsockError::Muxer)
+    }
+
+    /// Borrow the muxer, which the device shares with its epoll handler.
+    ///
+    /// A poisoned lock is reported, not panicked on. It means some thread
+    /// panicked while mutating the muxer, so its state may be incomplete;
+    /// refusing the operation is the safe answer, and taking the VMM down
+    /// with a second panic is not.
+    fn muxer(&self) -> Result<std::sync::MutexGuard<'_, M>> {
+        self.muxer
+            .as_ref()
+            .ok_or(VsockError::MuxerUnavailable)?
+            .lock()
+            .map_err(|_| VsockError::MuxerLockPoisoned)
     }
 }
 
@@ -191,13 +210,15 @@ where
         trace!(target: "virtio-vsock", "{}: VirtioDevice::activate()", self.id());
 
         self.device_info.check_queue_sizes(&config.queues[..])?;
-        let handler: VsockEpollHandler<AS, Q, R, M> = VsockEpollHandler::new(
-            config,
-            self.id().to_owned(),
-            self.cid,
-            // safe to unwrap, because we create muxer using New()
-            self.muxer.take().unwrap(),
-        );
+        // The device keeps its own handle rather than handing the muxer over.
+        let muxer = self
+            .muxer
+            .as_ref()
+            .ok_or(VsockError::MuxerUnavailable)
+            .map_err(crate::Error::from)?
+            .clone();
+        let handler: VsockEpollHandler<AS, Q, R, M> =
+            VsockEpollHandler::new(config, self.id().to_owned(), self.cid, muxer);
 
         self.subscriber_id = Some(self.device_info.register_event_handler(Box::new(handler)));
 
@@ -234,9 +255,11 @@ where
                 Ok(_) => debug!("virtio-vsock: removed subscriber_id {subscriber_id:?}"),
                 Err(err) => warn!("virtio-vsock: failed to remove event handler: {err:?}"),
             };
-        } else {
-            self.muxer.take();
         }
+        // Drop the device's handle either way. Before activation this is the
+        // only one, so the muxer's epoll FD and backend sockets are released
+        // here; afterwards the removed handler drops the last one.
+        self.muxer.take();
     }
 }
 
@@ -250,7 +273,8 @@ mod tests {
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
 
     use super::super::defs::uapi;
-    use super::super::tests::{test_bytes, TestContext};
+    use super::super::tests::{test_bytes, TestContext, TestMuxer};
+    use super::super::VsockChannel;
     use super::*;
     use crate::device::VirtioDeviceConfig;
     use crate::tests::create_address_space;
@@ -271,8 +295,7 @@ mod tests {
                     config,
                     self.id().to_owned(),
                     self.cid,
-                    // safe to unwrap, because we create muxer using New()
-                    self.muxer.take().unwrap(),
+                    self.muxer.as_ref().unwrap().clone(),
                 );
 
             Ok(handler)
@@ -407,5 +430,86 @@ mod tests {
 
         // Test activation.
         ctx.device.activate(config).unwrap();
+    }
+
+    /// Make a thread panic while holding `lock`, poisoning it.
+    fn poison(lock: Arc<Mutex<TestMuxer>>) {
+        let previous = std::panic::take_hook();
+        // The panic below is the point of the test; don't print its backtrace.
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::thread::spawn(move || {
+            let _guard = lock.lock().unwrap();
+            panic!("poison the muxer lock");
+        })
+        .join();
+        std::panic::set_hook(previous);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_device_reaches_the_muxer_the_handler_uses() {
+        skip_if_kvm_unaccessable!();
+
+        // The point of sharing: after activation has handed the muxer to the
+        // epoll handler, the device still sees the handler's view of it.
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+
+        let kvm = Kvm::new().unwrap();
+        let vm_fd = Arc::new(kvm.create_vm().unwrap());
+        let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync>::new(
+            Arc::new(test_ctx.mem.clone()),
+            create_address_space(),
+            vm_fd,
+            DeviceResources::new(),
+            ctx.queues.drain(..).collect(),
+            None,
+            Arc::new(NoopNotifier::new()),
+        );
+        let shared = ctx.device.muxer.as_ref().unwrap().clone();
+        ctx.device.activate(config).unwrap();
+
+        shared.lock().unwrap().set_pending_rx(true);
+        assert!(ctx.device.muxer().unwrap().has_pending_rx());
+    }
+
+    #[test]
+    fn test_poisoned_muxer_lock_is_reported_not_panicked() {
+        let mut ctx = TestContext::new();
+        poison(ctx.device.muxer.as_ref().unwrap().clone());
+
+        // A thread panicked mid-mutation, so the muxer's state may be
+        // incomplete. Report that rather than panicking a second thread.
+        let backend = Box::new(super::super::backend::VsockInnerBackend::new().unwrap());
+        assert!(matches!(
+            ctx.device.add_backend(backend, false),
+            Err(VsockError::MuxerLockPoisoned)
+        ));
+    }
+
+    #[test]
+    fn test_activate_without_a_muxer_is_reported_not_panicked() {
+        skip_if_kvm_unaccessable!();
+
+        let test_ctx = TestContext::new();
+        let mut ctx = test_ctx.create_event_handler_context();
+        // `remove()` drops the device's muxer handle.
+        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::remove(
+            &mut ctx.device,
+        );
+
+        let kvm = Kvm::new().unwrap();
+        let vm_fd = Arc::new(kvm.create_vm().unwrap());
+        let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync>::new(
+            Arc::new(test_ctx.mem.clone()),
+            create_address_space(),
+            vm_fd,
+            DeviceResources::new(),
+            ctx.queues.drain(..).collect(),
+            None,
+            Arc::new(NoopNotifier::new()),
+        );
+
+        assert!(ctx.device.activate(config).is_err());
     }
 }
