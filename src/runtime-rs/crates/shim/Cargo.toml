@@ -1,12 +1,12 @@
 [package]
-name = "shim"
-version = "0.1.0"
 authors = { workspace = true }
 description = "Containerd shim runtime for Kata Containers"
-keywords = ["kata-containers", "shim"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-license = { workspace = true }
 edition = { workspace = true }
+keywords = ["kata-containers", "shim"]
+license = { workspace = true }
+name = "shim"
+repository = "https://github.com/kata-containers/kata-containers.git"
+version = "0.1.0"
 
 [[bin]]
 name = "containerd-shim-kata-v2"
@@ -14,37 +14,37 @@ path = "src/bin/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-backtrace = { version = ">=0.3.76", features = [
-    "libunwind",
-    "std",
-], default-features = false }
+backtrace = { default-features = false, features = [
+  "libunwind",
+  "std",
+], version = ">=0.3.76" }
 containerd-shim-protos = { workspace = true }
 go-flag = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 nix = { workspace = true }
+oci-spec = { workspace = true }
 protobuf = { workspace = true }
 sha2 = { workspace = true }
-slog = { workspace = true, features = [
-    "std",
-    "release_max_level_trace",
-    "max_level_trace",
-] }
+slog = { features = [
+  "max_level_trace",
+  "release_max_level_trace",
+  "std",
+], workspace = true }
 slog-async = "2.5.2"
 slog-scope = { workspace = true }
 slog-stdlog = "4.1.0"
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tokio = { features = ["rt", "rt-multi-thread"], workspace = true }
 unix_socket2 = "0.5.4"
-oci-spec = { workspace = true }
 
 # Local dependencies
-kata-types = { workspace = true }
 kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
 logging = { workspace = true }
 runtime-spec = { workspace = true }
 service = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 serial_test = "0.10.0"
+tempfile = { workspace = true }

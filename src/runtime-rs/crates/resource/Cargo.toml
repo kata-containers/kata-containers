@@ -1,9 +1,9 @@
 [package]
-name = "resource"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name = "resource"
+version = "0.1.0"
 
 [dev-dependencies]
 rstest = { workspace = true }
@@ -16,34 +16,34 @@ test-utils = { workspace = true }
 actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+base64 = { workspace = true }
 byte-unit = "5.1.6"
+bytes = { workspace = true }
 cgroups.workspace = true
+flate2 = "1.1"
 futures = "0.3.11"
+hex = "0.4"
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+hyperlocal = { workspace = true }
+inotify = "0.11.0"
 lazy_static = { workspace = true }
 libc = { workspace = true }
 netns-rs = { workspace = true }
 nix = { workspace = true }
+oci-spec = { workspace = true }
 rand = { workspace = true }
 scopeguard = "1.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
-tokio = { workspace = true, features = ["process", "time"] }
-tracing = { workspace = true }
-uuid = { version = "0.4", features = ["v4"] }
-oci-spec = { workspace = true }
-inotify = "0.11.0"
-walkdir = "2.5.0"
-flate2 = "1.1"
 tempfile = "3.19.1"
-hex = "0.4"
-base64 = { workspace = true }
-bytes = { workspace = true }
-http-body-util = { workspace = true }
-hyper = { workspace = true }
-hyper-util = { workspace = true }
-hyperlocal = { workspace = true }
+tokio = { features = ["process", "time"], workspace = true }
+tracing = { workspace = true }
+uuid = { features = ["v4"], version = "0.4" }
+walkdir = "2.5.0"
 
 ## Dependencies from `rust-netlink`
 ## 0.30+ parses IFLA_INET6_CONF on kernels 6.17+ (240-byte blob; DEVCONF_FORCE_FORWARDING).
@@ -55,8 +55,8 @@ rtnetlink = "0.21"
 # Local dependencies
 agent = { workspace = true }
 hypervisor = { workspace = true }
-kata-types = { workspace = true }
 kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
 logging = { workspace = true }
 persist = { workspace = true }
 tests_utils = { workspace = true }
