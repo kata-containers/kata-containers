@@ -9,8 +9,8 @@ to be used in runtime-rs.
 
 > [!IMPORTANT]
 > For correct and predictable Kata sandbox sizing in Kubernetes, workload CPU
-> and memory limits **must** be set. Without limits, runtime-rs falls back to
-> `default_vcpus` and `default_memory`, which is a compatibility fallback and
+> and memory limits **must** be set. A dimension left without a limit falls back
+> to `default_vcpus` or `default_memory`, which is a compatibility fallback and
 > not the intended production sizing model.
 
 ## Why these fields exist
@@ -23,21 +23,24 @@ but the VM also needs extra resources for guest/kernel/runtime overhead.
 
 ## Sizing model
 
-With runtime-rs static sandbox sizing, Kata uses:
+With runtime-rs static sandbox sizing, CPU and memory are sized independently of
+each other:
 
-- If workload limits are present:
+- If a workload CPU limit is present:
   - `vm_vcpus = requested_vcpus + overhead_vcpus`
-  - `vm_memory = requested_memory + overhead_memory`
-- If workload limits are not present:
+- If a workload CPU limit is not present:
   - `vm_vcpus = default_vcpus`
+- If a workload memory limit is present:
+  - `vm_memory = requested_memory + overhead_memory`
+- If a workload memory limit is not present:
   - `vm_memory = default_memory`
 
-In other words, `default_*` is the fallback for "no limits", while
-`overhead_*` is the additive budget for "limits are set".
+In other words, `default_*` is the fallback for "no limit on that dimension",
+while `overhead_*` is the additive budget for "a limit is set on that dimension".
 For CPU, runtime-rs sums workload and overhead values, and if the computed
 result is fractional it is rounded up to the next integer (`ceil`), since VMMs
 expose integer vCPU counts. A minimum of `1` vCPU is enforced for the
-limit-driven path, including the `0 + 0` edge case.
+limit-driven path.
 
 ## `podFixed` as a sizing function
 
@@ -162,7 +165,8 @@ must also cover the host-side runtime components that live outside the VM.
 
 **Scenario intent:** show what happens when only one limit is provided.
 
-**Consequence:** once any limit exists, overhead logic applies to both dimensions.
+**Consequence:** each dimension is sized on its own, so the dimension without a
+limit falls back to its `default_*` value.
 
 **`RuntimeClass.overhead.podFixed` relationship:** same rule as Example 1;
 `podFixed` should remain higher than `overhead_*`.
@@ -183,7 +187,7 @@ Workload sets:
 
 Result:
 
-- CPU is rounded up for boot: `vm_vcpus = ceil(0 + 0.5) = 1`
+- CPU has no limit, so it falls back to the default: `vm_vcpus = default_vcpus = 2`
 - Memory uses overhead formula: `vm_memory = 512 + 128 = 640 MiB`
 
 ### 2B. CPU limit only
@@ -196,19 +200,14 @@ Workload sets:
 Result:
 
 - CPU uses overhead formula: `vm_vcpus = 1.5 + 0.5 = 2.0`
-- Memory still uses overhead baseline: `vm_memory = 0 + 128 = 128 MiB`
+- Memory has no limit, so it falls back to the default: `vm_memory = default_memory = 1024 MiB`
 
-This is the reason workload memory limits **must** be set (see the note at the
-top of this document): with a CPU limit but no memory limit, the VM is sized
-with `overhead_memory` only, which is almost certainly too small to run a real
-workload. It is the explicit overhead baseline, not a default fallback to
-`default_memory`. As a safety net, if the computed sandbox memory would be `0`
-(for example, a CPU-only workload with `overhead_memory = 0`), runtime-rs fails
+Workload memory limits should still be set (see the note at the top of this
+document): `default_memory` is an admin-chosen baseline that is unrelated to what
+this particular workload needs, so relying on it gives a VM size that is either
+wasteful or too small. As a safety net, if the computed sandbox memory would be
+`0` (for example, no memory limit and `default_memory = 0`), runtime-rs fails
 early with an actionable error instead of booting an unusable VM.
-
-This mirrors runtime-rs behavior: once limits are present for a sandbox, overhead
-is applied on both dimensions, and any missing dimension uses `0 + overhead_*`
-(with fractional CPU results rounded up).
 
 ## Example 3: `overhead_* = 0` (zero-overhead model)
 
