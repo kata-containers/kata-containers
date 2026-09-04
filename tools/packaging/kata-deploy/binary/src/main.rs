@@ -22,6 +22,15 @@ use std::io::{BufRead, Write};
 /// committed to a runtime.
 const DETECTED_RUNTIME_ENV: &str = "KATA_DEPLOY_DETECTED_RUNTIME";
 
+/// Where the kubelet collects a container's last words, putting them in the
+/// pod's status rather than in a log the Job's TTL deletes minutes later.
+///
+/// A mount of its own, so it stays writable under `readOnlyRootFilesystem`.
+const TERMINATION_LOG: &str = "/dev/termination-log";
+
+/// What the kubelet keeps of that file; the rest is dropped.
+const TERMINATION_MESSAGE_MAX: usize = 4096;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -130,6 +139,47 @@ const REQUIRED_MKFS_EROFS_OPTIONS: &[&str] = &["--mkfs-time", "--sort"];
 // probe and the pod is restarted before install can finish.
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<()> {
+    let result = run().await;
+    if let Err(error) = result.as_ref() {
+        write_termination_message(error);
+    }
+    result
+}
+
+/// The error chain on one line, as `kubectl` will show it.
+fn termination_message(error: &anyhow::Error) -> String {
+    // A failing host command brings its stderr along, newlines and all.
+    let mut message = format!("{error:#}")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if message.len() > TERMINATION_MESSAGE_MAX {
+        // The outermost context says which step failed, so the tail goes.
+        const ELLIPSIS: &str = "... (truncated)";
+        let keep = TERMINATION_MESSAGE_MAX - ELLIPSIS.len();
+        let keep = (0..=keep)
+            .rev()
+            .find(|index| message.is_char_boundary(*index))
+            .unwrap_or(0);
+        message.truncate(keep);
+        message.push_str(ELLIPSIS);
+    }
+    message
+}
+
+/// Best-effort: outside a pod there is no such file, and the reason is logged
+/// either way.
+fn write_termination_message(error: &anyhow::Error) {
+    if !std::path::Path::new(TERMINATION_LOG).exists() {
+        return;
+    }
+
+    if let Err(write_error) = std::fs::write(TERMINATION_LOG, termination_message(error)) {
+        log::warn!("failed to write {TERMINATION_LOG}: {write_error}");
+    }
+}
+
+async fn run() -> Result<()> {
     let args = Args::parse();
 
     // Set log level based on DEBUG environment variable
@@ -2164,6 +2214,43 @@ mod tests {
             "staged action {:?} should be visible in --help",
             value.get_name(),
         );
+    }
+
+    /// The pod's status has to read as a sentence, not as a Debug dump.
+    #[test]
+    fn the_termination_message_is_the_whole_chain_on_one_line() {
+        let error = anyhow::anyhow!("host modprobe failed for module vhost_vsock")
+            .context("failed to load the host kernel modules");
+
+        assert_eq!(
+            termination_message(&error),
+            "failed to load the host kernel modules: host modprobe failed for module vhost_vsock"
+        );
+    }
+
+    #[test]
+    fn a_commands_output_does_not_break_the_termination_message_apart() {
+        let error =
+            anyhow::anyhow!("modprobe: FATAL: module vhost_vsock not found\nin /lib/modules")
+                .context("failed to load the host kernel modules");
+
+        assert_eq!(
+            termination_message(&error),
+            "failed to load the host kernel modules: modprobe: FATAL: module vhost_vsock \
+             not found in /lib/modules"
+        );
+    }
+
+    #[test]
+    fn an_over_long_termination_message_is_marked_as_truncated() {
+        // Twelve bytes to nine characters, so the cut falls inside the "ü" -
+        // which `truncate` panics on rather than tolerates.
+        let error = anyhow::anyhow!("{}", "übergröße".repeat(500));
+        let message = termination_message(&error);
+
+        assert!(message.len() <= TERMINATION_MESSAGE_MAX);
+        assert!(message.ends_with("... (truncated)"));
+        assert!(message.starts_with("übergröße"));
     }
 
     fn module_names(modules: &[HostModule]) -> Vec<&str> {
