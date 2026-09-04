@@ -540,7 +540,7 @@ surface much later, as a missing command or a layer conversion failure.
 {{- /* Names of containers the install and cleanup pods carry of their own, which
        an entry cannot take without the API server rejecting the pod for two
        containers sharing a name. */}}
-{{- $taken := list "artifacts" "cri" "dispatcher" "host-check" "kube-kata" "load-kernel-modules" "node-binaries-install" "node-binaries-remove" "rb-cleanup" "remove-artifacts" "revert-cri" -}}
+{{- $taken := list "artifacts" "cri" "dispatcher" "host-check" "kube-kata" "load-kernel-modules" "node-binaries-install" "node-binaries-remove" "rb-cleanup" "remove-artifacts" "revert-cri" "selinux-policy" -}}
 {{- range $name, $spec := $entries -}}
 {{- /* A DNS-1123 label, which is all a container name may be. */}}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $name) -}}
@@ -570,6 +570,36 @@ surface much later, as a missing command or a layer conversion failure.
 {{- end -}}
 {{- end -}}
 {{- toYaml $entries -}}
+{{- end -}}
+
+{{/*
+Whether the installer's stages are SELinux-confined. Empty when off, so call
+sites read as `if include "kata-deploy.selinuxEnabled" . | trim`.
+*/}}
+{{- define "kata-deploy.selinuxEnabled" -}}
+{{- if (.Values.selinux | default dict).enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+The seLinuxOptions block for one stage, or nothing when confinement is off.
+
+level: s0 is pinned rather than left to the runtime, which would hand the stage
+per-pod MCS categories. Every host path the installer writes is s0.
+
+Arguments (dict):
+  root   - the top-level context (.)
+  domain - the SELinux type for this stage, e.g. kata_deploy_cri_t
+
+Emitted at column 0; indent with `nindent` at the call site.
+*/}}
+{{- define "kata-deploy.seLinuxOptions" -}}
+{{- if and (include "kata-deploy.selinuxEnabled" .root | trim) .domain -}}
+seLinuxOptions:
+  type: {{ .domain }}
+  level: s0
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1285,6 +1315,10 @@ spec:
 {{- end }}
 {{- if eq $stage "install" }}
       initContainers:
+{{- /* First of all: a stage asking for a domain the node lacks cannot start. */}}
+{{- if include "kata-deploy.selinuxEnabled" $root | trim }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "selinux-policy" "action" "install-stage-selinux-policy" "privileged" true "mountHost" true "mountHostRoot" true "hostRootWritable" true) | nindent 8 }}
+{{- end }}
 {{- /* All before the host check, so it validates the binaries being installed
        rather than the versions they are there to replace. One staging container
        per nodeBinaries entry, so a new entry is a values change only. */}}
@@ -1297,19 +1331,24 @@ spec:
 {{- end }}
 {{- /* Privileged, and holding the host root, because it runs the host's own modprobe. */}}
 {{- include "kata-deploy.stageContainer" (dict "root" $root "name" "load-kernel-modules" "action" "install-stage-load-kernel-modules" "privileged" true "mountHost" true "mountHostRoot" true "mountModulesLoad" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true) | nindent 8 }}
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "host-check" "action" "install-stage-host-check" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_check_t") | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "artifacts" "action" "install-stage-artifacts" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "cri" "action" "install-stage-cri" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_cri_t") | nindent 8 }}
 {{- else }}
       initContainers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true) | nindent 8 }}
+{{- /* Here too, since these stages are confined as well: a node whose module went
+       missing could otherwise never be uninstalled. Re-loading it is idempotent. */}}
+{{- if include "kata-deploy.selinuxEnabled" $root | trim }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "selinux-policy" "action" "install-stage-selinux-policy" "privileged" true "mountHost" true "mountHostRoot" true "hostRootWritable" true) | nindent 8 }}
+{{- end }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "revert-cri" "action" "cleanup-stage-revert-cri" "privileged" false "mountHost" true "selinuxDomain" "kata_deploy_cri_t") | nindent 8 }}
 {{- /* After the revert, so containerd is no longer converting layers with them.
        Unconditional, and driven by the marker alone, so that an uninstall tidies
        up even when the entries were dropped from the values first. */}}
 {{- include "kata-deploy.nodeBinariesInstallContainer" (dict "root" $root "name" "node-binaries-remove") | nindent 8 }}
       containers:
-{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true) | nindent 8 }}
+{{- include "kata-deploy.stageContainer" (dict "root" $root "name" "remove-artifacts" "action" "cleanup-stage-remove-artifacts" "privileged" false "mountHost" true "mountModulesLoad" true "selinuxDomain" "kata_deploy_artifacts_t") | nindent 8 }}
 {{- end }}
       volumes:
 {{- include "kata-deploy.commonVolumes" $root | nindent 8 }}
@@ -1317,16 +1356,17 @@ spec:
           hostPath:
             path: /etc/modules-load.d
             type: DirectoryOrCreate
-{{- if eq $stage "install" }}
+{{- /* The cleanup pipeline holds the host root for the policy stage alone. */}}
+{{- if or (eq $stage "install") (include "kata-deploy.selinuxEnabled" $root | trim) }}
         - name: host-root
           hostPath:
             path: /
             type: Directory
+{{- end }}
 {{- if and (eq $stage "install") (include "kata-deploy.nodeBinaries" $root | fromYaml) }}
         {{- /* Pod-local, so those images reach nothing of the node's. */}}
         - name: node-binaries
           emptyDir: {}
-{{- end }}
 {{- end }}
 {{- end -}}
 
@@ -1569,6 +1609,12 @@ Emitted at column 0; indent with `nindent` at the call site.
     readOnlyRootFilesystem: true
     {{- /* Writes into the node's /usr/local/bin. */}}
     runAsUser: 0
+    {{- /* Its own domain: the node's PATH is out of reach of every other stage,
+           and /opt/kata and the CRI config out of reach of this one. */}}
+{{- $seLinux := include "kata-deploy.seLinuxOptions" (dict "root" .root "domain" "kata_deploy_node_binaries_t") | trim }}
+{{- if $seLinux }}
+{{- $seLinux | nindent 4 }}
+{{- end }}
   volumeMounts:
     - name: host-usr-local-bin
       mountPath: /host-usr-local/bin-writable
@@ -1596,7 +1642,9 @@ Arguments (dict):
   privileged  - bool, whether the container runs privileged
   mountHost   - bool, whether to mount the host paths (crio/containerd/install/...)
   mountHostRoot - bool, whether to mount the host root read-only at /host
+  hostRootWritable - bool, whether that host root mount is writable
   mountModulesLoad - bool, whether to mount the host modules-load.d directory writable
+  selinuxDomain - SELinux type to confine this stage to, when selinux.enabled
 
 Emitted at column 0; indent with `nindent` at the call site.
 */}}
@@ -1610,6 +1658,10 @@ Emitted at column 0; indent with `nindent` at the call site.
   securityContext:
     privileged: {{ .privileged }}
     readOnlyRootFilesystem: true
+{{- $seLinux := include "kata-deploy.seLinuxOptions" (dict "root" .root "domain" .selinuxDomain) | trim }}
+{{- if $seLinux }}
+{{- $seLinux | nindent 4 }}
+{{- end }}
   volumeMounts:
 {{- if .mountHost }}
 {{- include "kata-deploy.commonVolumeMounts" .root | nindent 4 }}
@@ -1619,7 +1671,8 @@ Emitted at column 0; indent with `nindent` at the call site.
 {{- if .mountHostRoot }}
     - name: host-root
       mountPath: /host
-      readOnly: true
+      {{- /* The policy stage writes: semodule rebuilds the node's policy store. */}}
+      readOnly: {{ not .hostRootWritable }}
 {{- end }}
 {{- if .mountModulesLoad }}
     - name: modules-load-d
