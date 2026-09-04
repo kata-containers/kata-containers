@@ -140,11 +140,15 @@ ifeq ($(ARCH), aarch64)
     EDK2_NAME := aavmf
 endif
 
-# Set firmware path from QEMUFW if defined
+# Generic firmware stays empty so direct-kernel hypervisors (CLH, Dragonball,
+# OpenVMM, remote) do not inherit QEMU AAVMF or OVMF.
 FIRMWAREPATH :=
+
+# QEMU firmware from QEMUFW (AAVMF on aarch64). Empty when QEMUFW is unset.
+FIRMWAREPATH_QEMU :=
 ifneq (,$(QEMUCMD))
     ifneq (,$(QEMUFW))
-        FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
+        FIRMWAREPATH_QEMU := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
     endif
 endif
 
@@ -775,6 +779,7 @@ USER_VARS += KERNELPATH_COCO
 USER_VARS += KERNELPATH
 USER_VARS += KERNELVIRTIOFSPATH
 USER_VARS += FIRMWAREPATH
+USER_VARS += FIRMWAREPATH_QEMU
 USER_VARS += FIRMWAREPATH_NV
 USER_VARS += FIRMWAREPATH_NV_CPU
 USER_VARS += FIRMWAREVOLUMEPATH

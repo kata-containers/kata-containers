@@ -79,7 +79,7 @@ kernel_verity_params = "@KERNELVERITYPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWAREPATH_QEMU@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
