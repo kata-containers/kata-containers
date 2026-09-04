@@ -45,6 +45,9 @@ metadata:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "5"
     "helm.sh/hook-delete-policy": before-hook-creation
+{{- /* Otherwise Helm reports only that a hook Job failed, leaving the reader to
+       find a pod that holds the names of the nodes that failed. */}}
+    "helm.sh/hook-output-log-policy": hook-failed
 spec:
   # The dispatcher does per-node retries (job.backoffLimit) itself; a dispatcher
   # failure means "some node failed" and should surface, not be retried blindly.

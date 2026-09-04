@@ -45,6 +45,9 @@ metadata:
     "helm.sh/hook": pre-delete
     "helm.sh/hook-weight": "5"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+{{- /* A failed uninstall leaves hosts half reverted, so the dispatcher's
+       account of them belongs in the `helm uninstall` output. */}}
+    "helm.sh/hook-output-log-policy": hook-failed
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: {{ $root.Values.job.ttlSecondsAfterFinished }}

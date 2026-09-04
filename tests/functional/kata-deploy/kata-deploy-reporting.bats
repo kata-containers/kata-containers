@@ -12,6 +12,14 @@ source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 
 CHART_PATH="$(get_chart_path)"
 
+refute_match() {
+	local rendered="${1}" pattern="${2}"
+	if echo "${rendered}" | grep -q -- "${pattern}"; then
+		echo "unexpected in rendered output: ${pattern}" >&2
+		return 1
+	fi
+}
+
 render_job_mode() {
 	local template="${1}"
 	shift
@@ -47,4 +55,16 @@ render_job_mode() {
 
 	rendered=$(render_job_mode kata-deploy-reconcile.yaml --set job.reconcile.enabled=true)
 	echo "${rendered}" | grep -q 'terminationMessagePolicy: FallbackToLogsOnError'
+}
+
+@test "Helm template (job mode): a failed hook prints the dispatcher's summary" {
+	local template rendered
+	for template in kata-deploy-install-job.yaml kata-deploy-cleanup-job.yaml; do
+		rendered=$(render_job_mode "${template}")
+		echo "${rendered}" | grep -q '"helm.sh/hook-output-log-policy": hook-failed'
+	done
+
+	# Only on failure: a successful rollout's log is pages of per-node progress,
+	# and printing it every time is how people learn to ignore it.
+	refute_match "$(render_job_mode kata-deploy-install-job.yaml)" 'hook-output-log-policy": hook-succeeded'
 }
