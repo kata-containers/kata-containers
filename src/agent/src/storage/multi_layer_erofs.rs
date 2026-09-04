@@ -56,6 +56,9 @@ const OPT_GPT_PARTITIONED: &str = "X-kata.gpt-partitioned=true";
 const OPT_MKDIR_PATH: &str = "X-kata.mkdir.path=";
 const OPT_PARTITION_NUMBER: &str = "X-kata.partition-number=";
 
+/// Base directory to mount per-container erofs and ext4 layers
+const MULTI_LAYER_EROFS_BASE: &str = "/run/kata-containers/erofs-multi-layer";
+
 /// dm-verity related storage options
 #[allow(dead_code)]
 const OPT_DMVERITY_ENABLED: &str = "X-kata.dmverity-enabled=true";
@@ -85,7 +88,7 @@ pub struct MultiLayerErofsResult {
     pub processed_mount_points: Vec<String>,
     /// Temporary mount points (explicit upper, lower-0, lower-1, …) that back
     /// the overlay. These must be tracked so they are unmounted *after* the
-    /// overlay target during container teardown.
+    /// overlay target during container teardown, followed by their parent directory.
     pub temp_mount_points: Vec<String>,
     /// dm-verity device paths that need to be destroyed during cleanup
     pub verity_devices: Vec<String>,
@@ -237,17 +240,26 @@ pub async fn handle_multi_layer_erofs_group(
     let cid_str = cid.as_deref().unwrap_or("sandbox");
     // Validate container ID to prevent path traversal via crafted cid values
     validate_container_id(cid_str)?;
-    let container_base =
-        scoped_join(CONTAINER_BASE, cid_str).context("failed to build container temporary path")?;
-    fs::create_dir_all(&container_base).context("failed to create container temporary path")?;
-    let temp_base =
-        scoped_join(&container_base, "multi-layer").context("failed to build multi-layer path")?;
-    fs::create_dir_all(&temp_base).context("failed to create temp mount base")?;
-
     // Validate mount point to prevent path traversal via crafted mount_point values
     validate_mount_point(&target_mount_point)?;
 
-    let upper_mount = temp_base.join("upper");
+    // Backing mounts must survive bundle removal until storage cleanup.
+    fs::create_dir_all(MULTI_LAYER_EROFS_BASE).context("failed to create EROFS mount base")?;
+    let temp_base =
+        scoped_join(MULTI_LAYER_EROFS_BASE, cid_str).context("failed to build multi-layer path")?;
+    fs::create_dir_all(&temp_base).context("failed to create temp mount base")?;
+
+    let upper_mount = if upper_storage.is_some() {
+        temp_base.join("upper")
+    } else {
+        // The implicit upper has no backing mount. Keep its disposable data in
+        // the bundle so container destroy still removes it.
+        let container_base = scoped_join(CONTAINER_BASE, cid_str)
+            .context("failed to build container temporary path")?;
+        fs::create_dir_all(&container_base).context("failed to create container temporary path")?;
+        scoped_join(&container_base, "multi-layer/upper")
+            .context("failed to build implicit upper path")?
+    };
     fs::create_dir_all(&upper_mount).context("failed to create upper mount dir")?;
 
     if let Some(upper) = upper_storage {
@@ -492,13 +504,16 @@ pub async fn handle_multi_layer_erofs_group(
     // Collect temporary backing mounts. The implicit /run-backed upper is just
     // a directory under the container bundle and is removed with that bundle.
     let mut temp_mount_points =
-        Vec::with_capacity(usize::from(upper_storage.is_some()) + lower_mounts.len());
+        Vec::with_capacity(usize::from(upper_storage.is_some()) + lower_mounts.len() + 1);
     if upper_storage.is_some() {
         temp_mount_points.push(upper_mount.display().to_string());
     }
     for lm in &lower_mounts {
         temp_mount_points.push(lm.display().to_string());
     }
+    // Track the parent directory last so cleanup removes it only once empty.
+    track_temporary_mount_for_cleanup(sandbox, &temp_base, &logger).await?;
+    temp_mount_points.push(temp_base.display().to_string());
 
     Ok(MultiLayerErofsResult {
         mount_point: target_mount_point,
