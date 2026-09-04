@@ -79,7 +79,7 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
     }
 }
 
-pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Result<()> {
+pub async fn install_artifacts(config: &Config) -> Result<()> {
     info!("copying kata artifacts onto host");
 
     // Create the installation directory if it doesn't exist
@@ -116,12 +116,12 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
     set_executable_permissions(&config.host_install_dir)?;
 
     for shim in &config.shims_for_arch {
-        configure_shim_config(config, shim, container_runtime).await?;
+        configure_shim_config(config, shim).await?;
     }
 
     // Install custom runtime configuration files if enabled
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
-        install_custom_runtime_configs(config, container_runtime)?;
+        install_custom_runtime_configs(config)?;
     }
 
     // Drop stale kata-<shim>-debug handler dirs left by a previous deploy with
@@ -213,7 +213,6 @@ fn write_common_drop_ins(
     config: &Config,
     shim: &str,
     config_d_dir: &str,
-    container_runtime: &str,
     apply_guest_debug: bool,
 ) -> Result<()> {
     info!("Generating drop-in configuration files for shim: {}", shim);
@@ -233,9 +232,7 @@ fn write_common_drop_ins(
     }
 
     // 2b. k0s: set kubelet root dir so ConfigMap/Secret volume propagation works (non-Rust shims only)
-    if (container_runtime == "k0s-worker" || container_runtime == "k0s-controller")
-        && !utils::is_rust_shim(shim)
-    {
+    if config.k8s_distribution.as_deref() == Some("k0s") && !utils::is_rust_shim(shim) {
         info!("  - k0s: setting kubelet_root_dir for ConfigMap/Secret propagation");
         let k0s_content = generate_k0s_kubelet_root_drop_in();
         write_drop_in_file(config_d_dir, "22-k0s-kubelet-root.toml", &k0s_content)?;
@@ -330,7 +327,7 @@ fn reconcile_optional_drop_in(
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
 /// Custom runtimes inherit the same drop-in configurations as standard runtimes
 /// (installation prefix, debug, kernel_params, and for k0s on Go/remote runtime: kubelet root) plus any user-provided overrides.
-fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> Result<()> {
+fn install_custom_runtime_configs(config: &Config) -> Result<()> {
     info!("Installing custom runtime configuration files");
 
     for runtime in &config.custom_runtimes {
@@ -384,7 +381,6 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             config,
             &runtime.base_config,
             &config_d_dir,
-            container_runtime,
             runtime.debug_variant,
         )?;
 
@@ -1323,7 +1319,7 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &str) -> Result<()> {
+async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
     // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
@@ -1345,7 +1341,7 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 
     // Generate common drop-in files (shared with custom runtimes).
     // Normal RuntimeClasses never carry guest debug settings.
-    write_common_drop_ins(config, shim, &config_d_dir, container_runtime, false)?;
+    write_common_drop_ins(config, shim, &config_d_dir, false)?;
 
     // Apply user-provided drop-in for default runtimes, if present.
     install_default_runtime_drop_in(shim, &config_d_dir)?;

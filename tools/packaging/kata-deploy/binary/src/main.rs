@@ -1427,7 +1427,7 @@ async fn install_stage_artifacts(
         );
     }
 
-    artifacts::install_artifacts(config, runtime).await?;
+    artifacts::install_artifacts(config).await?;
 
     if runtime != "crio" {
         if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
