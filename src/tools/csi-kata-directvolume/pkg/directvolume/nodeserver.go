@@ -120,13 +120,21 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		return nil, status.Error(codes.Aborted, errMsg)
 	}
 
-	// kata-containers DirectVolume add
+	// kata-containers DirectVolume add.
+	//
+	// The "options" slice above is for the host-side CSI bind-mount
+	// only — it always contains "bind" plus "ro"/"rw". Forwarding it
+	// to kata-agent is wrong: kata-agent calls parse_mount_options(),
+	// which turns "bind" into MS_BIND, and mount(2) with MS_BIND on a
+	// block device is rejected by the kernel (see #11296). Send no
+	// options here; the in-guest mount is a plain fsType mount of the
+	// attached block device.
 	mountInfo := utils.MountInfo{
 		VolumeType: volType,
 		Device:     devicePath,
 		FsType:     fsType,
 		Metadata:   attrib,
-		Options:    options,
+		Options:    nil,
 	}
 	if err := utils.AddDirectVolume(targetPath, mountInfo); err != nil {
 		klog.Errorf("add direct volume with source %s and mountInfo %v failed", targetPath, mountInfo)
