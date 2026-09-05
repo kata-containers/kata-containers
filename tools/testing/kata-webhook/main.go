@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/sirupsen/logrus"
@@ -74,6 +75,23 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	runtimeClassEnvKey := "RUNTIME_CLASS"
 	kataRuntimeClassName := getRuntimeClass(runtimeClassEnvKey, "kata")
 	pod.Spec.RuntimeClassName = &kataRuntimeClassName
+
+	minMemoryLimit, foundMinMemoryLimit := os.LookupEnv("MIN_MEMORY_LIMIT")
+
+	if foundMinMemoryLimit {
+		minMemoryLimitVal := resource.MustParse(minMemoryLimit)
+		for i := range pod.Spec.Containers {
+			if pod.Spec.Containers[i].Resources.Limits == nil {
+				continue
+			} else {
+				currentMemoryLimit := pod.Spec.Containers[i].Resources.Limits.Memory().Value()
+				if currentMemoryLimit < minMemoryLimitVal.Value() {
+					pod.Spec.Containers[i].Resources.Limits["memory"] = resource.MustParse(minMemoryLimit)
+					fmt.Println("memory limit too low. Updating to : ", pod.Spec.Containers[i].Resources.Limits)
+				}
+			}
+		}
+	}
 
 	return &kwhmutating.MutatorResult{
 		MutatedObject: pod,
