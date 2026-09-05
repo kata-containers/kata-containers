@@ -183,6 +183,22 @@ containerd matches none of the presets.
     anything, naming the value to set. An explicit `containerd.configDir` overrides
     the derivation this check is about, so it does not apply in that case.
 
+The value carries one thing beyond that directory: where the kubelet keeps its root
+directory. A pod's `ConfigMap`, `Secret`, projected and downward-API volumes are
+written under it, and the Go runtime watches that path so later updates to them
+reach the running guest. `k0s` uses `/var/lib/k0s/kubelet` and `microk8s`
+`/var/snap/microk8s/common/var/lib/kubelet`; `k3s`, `rke2` and vanilla Kubernetes
+leave the kubelet's own `/var/lib/kubelet` alone and need nothing.
+
+!!! note "The kubelet is not the CRI runtime"
+
+    Unlike the containerd directory, this cannot be worked out on the node: a `k0s`
+    node running CRI-O or a containerd of its own still keeps its volumes under
+    `/var/lib/k0s`. So declare the flavour even when you pin
+    `containerd.configDir` — that pin takes only the check above out of the way.
+    Only the Go runtime needs this; runtime-rs recognises the volumes by the shape
+    of their paths and works wherever the kubelet root happens to be.
+
 ### nodeBinaries
 
 Some of what Kata needs on a node is not part of Kata: containerd's EROFS
