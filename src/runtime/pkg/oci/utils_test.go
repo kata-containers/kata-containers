@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -1333,6 +1334,26 @@ func getCtrResourceSpec(memory, quota int64, period uint64) *specs.Spec {
 
 }
 
+func makeCRIOSizingAnnotations(memory, quota, period string) *specs.Spec {
+	spec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+	// CRI-O encodes pod resources as a single JSON annotation
+	resources := crioPodLinuxResources{
+		CPUPeriod:        mustParseInt(period),
+		CPUQuota:         mustParseInt(quota),
+		MemoryLimitBytes: mustParseInt(memory),
+	}
+	data, _ := json.Marshal(resources)
+	spec.Annotations[crioPodLinuxResourcesKey] = string(data)
+	return &spec
+}
+
+func mustParseInt(s string) int64 {
+	v, _ := strconv.ParseInt(s, 10, 64)
+	return v
+}
+
 func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec := specs.Spec{
 		Annotations: make(map[string]string),
@@ -1501,6 +1522,41 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			expectedMem: 0,
 		},
 	}
+
+		// CRI-O PodLinuxResources annotation (JSON-encoded)
+		{
+			spec:        makeCRIOSizingAnnotations("1048576", "200", "100"),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeCRIOSizingAnnotations("1024", "200", "1"),
+			expectedCPU: 200,
+			expectedMem: 0,
+		},
+		{
+			spec:        makeCRIOSizingAnnotations("-1048576", "-100", "1"),
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		// CRI-O annotation with all resources set
+		{
+			spec:        makeCRIOSizingAnnotations("2097152", "400", "200"),
+			expectedCPU: 4,
+			expectedMem: 2,
+		},
+		// Empty CRI-O JSON should not affect sizing
+		{
+			spec:        &specs.Spec{Annotations: map[string]string{crioPodLinuxResourcesKey: "{}"}},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
+		// Malformed CRI-O JSON should not affect sizing
+		{
+			spec:        &specs.Spec{Annotations: map[string]string{crioPodLinuxResourcesKey: "not-json"}},
+			expectedCPU: 0,
+			expectedMem: 0,
+		},
 
 	for _, tt := range testCases {
 
