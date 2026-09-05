@@ -254,8 +254,9 @@ monitor:
 
 # Which Kubernetes flavour this cluster runs. It picks the host directory that
 # holds containerd's configuration, which is mounted into the install, and where
-# the kubelet keeps its root directory: k0s and microk8s both move it, and
-# ConfigMap/Secret updates only reach a Kata workload from the right one.
+# the kubelet keeps its root directory: k0s and microk8s both move it, and only
+# the right one leads to a Kata workload's ConfigMap/Secret updates and to the
+# Pod Resources API socket that GPU cold plug asks for its devices.
 #
 # Getting it wrong used to pass unnoticed: the install detects the runtime on the
 # node itself, so it would write a correct configuration into whichever directory
