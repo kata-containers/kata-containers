@@ -1474,16 +1474,24 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	// several retries can be performed to avoid this error.
 	ret := retry.Do(func() error {
 
-		if _, err = cl.VmResizePut(ctx, resize); err != nil {
-			errMsg := err.Error()
+		resp, err := cl.VmResizePut(ctx, resize)
+		if err != nil {
+			// CLH replies 429 while a previous vCPU hot-unplug is still
+			// pending (CpuManager::VcpuPendingRemovedVcpu), a transient
+			// condition that clears once the guest completes the removal,
+			// so it has to be retried. Key that decision off the HTTP status
+			// code rather than off the error text: the reason phrase is
+			// optional in a status line (RFC 9112 4.1) and micro_http emits
+			// it empty ("HTTP/1.1 429 "), so the generated client stringifies
+			// the error as a bare "429" and a check for "Too Many Requests"
+			// never matches.
 			// see https://github.com/cloud-hypervisor/cloud-hypervisor/commit/d0225fe68fd14146bacc3be26f0b7e548ce9c239
-			if !strings.Contains(errMsg, "Too Many Requests") {
+			if resp == nil || resp.StatusCode != http.StatusTooManyRequests {
 				return retry.Unrecoverable(err)
 			}
 			return errors.Wrap(err, "[clh] VmResizePut failed")
-		} else {
-			return nil
 		}
+		return nil
 	},
 		retry.Attempts(20),
 		retry.LastErrorOnly(true),
