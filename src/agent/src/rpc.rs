@@ -146,8 +146,8 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
-/// This mask is applied to parent directories implicitly created for CopyFile requests.
-const IMPLICIT_DIRECTORY_PERMISSION_MASK: u32 = 0o777;
+/// This mask is applied when creating directories for CopyFile requests.
+const DIRECTORY_CREATION_PERMISSION_MASK: u32 = 0o777;
 
 /// This mask is applied to files and directories created for CopyFile requests.
 /// In addition to the permissions, it allows setuid/setgid/sticky bits.
@@ -2342,16 +2342,22 @@ fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
             _ => Err(e),
         })?;
 
-        // mkdir_all does not support the setuid/setgid/sticky bits, so we first create the
-        // directory with the stricter mask and then change permissions with the correct mask.
+        // Create the directory if needed.
+        root.create(
+            path,
+            &pathrs::InodeType::Directory(std::fs::Permissions::from_mode(
+                req.file_mode & DIRECTORY_CREATION_PERMISSION_MASK,
+            )),
+        )
+        .or_else(|e| match e.kind() {
+            pathrs::error::ErrorKind::OsError(Some(errno)) if errno == libc::EEXIST => Ok(()),
+            _ => Err(e),
+        })
+        .context("create dir")?;
+
         let dir = root
-            .mkdir_all(
-                path,
-                &std::fs::Permissions::from_mode(
-                    req.file_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK,
-                ),
-            )
-            .context("mkdir_all dir")?
+            .resolve(path)
+            .context("resolve dir")?
             .reopen(OpenFlags::O_DIRECTORY)
             .context("reopen dir")?;
         dir.set_permissions(std::fs::Permissions::from_mode(
@@ -3894,6 +3900,17 @@ COMMIT
                     path: base.join("a/b").to_string_lossy().into(),
                     dir_mode: 0o755 | libc::S_IFDIR,
                     file_mode: 0o644 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: true,
+                assertions: Box::new(|_| Ok(())),
+            },
+            TestCase {
+                name: "Create directory in non-existent directory fails".into(),
+                request: CopyFileRequest {
+                    path: base.join("x/y").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o755 | libc::S_IFDIR,
                     ..Default::default()
                 },
                 should_fail: true,
