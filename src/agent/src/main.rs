@@ -38,6 +38,7 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+mod clock_sync;
 mod confidential_data_hub;
 mod config;
 mod console;
@@ -403,6 +404,10 @@ async fn start_sandbox(
     ));
 
     tasks.push(signal_handler_task);
+
+    if init_mode {
+        clock_sync::start(logger).await;
+    }
 
     let uevents_handler_task = tokio::spawn(watch_uevents(sandbox.clone(), shutdown.clone()));
 
