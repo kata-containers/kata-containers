@@ -68,7 +68,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 ))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_BLK_PCI};
-use kata_types::config::{hypervisor::Factory, TomlConfig};
+use kata_types::config::{hypervisor::Factory, PodResourceDeviceSource, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
@@ -406,12 +406,37 @@ impl VirtSandbox {
                 annotations.get("io.kubernetes.cri.sandbox-namespace")
             );
 
-            let cdi_devices = pod_resources_rs::pod_resources::get_pod_cdi_devices(
+            let sources: Vec<pod_resources_rs::DeviceSource> = config
+                .runtime
+                .pod_resource_device_sources()
+                .into_iter()
+                .map(|s| match s {
+                    PodResourceDeviceSource::DevicePlugin => {
+                        pod_resources_rs::DeviceSource::DevicePlugin
+                    }
+                    PodResourceDeviceSource::Dra => pod_resources_rs::DeviceSource::Dra,
+                })
+                .collect();
+
+            let selected = pod_resources_rs::pod_resources::get_pod_cdi_devices(
                 pod_resource_socket,
                 annotations,
+                &sources,
             )
             .await
             .context("failed to query Pod Resources CDI devices")?;
+
+            // Cross-source enforcement belongs to the device path, not the
+            // PodResources parser: this is the last point where a device
+            // still carries its source, right before attachment.
+            pod_resources_rs::pod_resources::overlap::check_cross_source_physical_overlap(
+                &selected.device_plugin,
+                &selected.dra,
+                &pod_resources_rs::DEFAULT_CDI_SPEC_DIRS,
+            )
+            .context("cold plug: cross-source physical overlap")?;
+
+            let cdi_devices = selected.flattened();
             info!(sl!(), "pod cdi devices: {:?}", cdi_devices);
 
             let device_nodes = handle_cdi_devices(&cdi_devices).await?;

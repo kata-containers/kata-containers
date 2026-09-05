@@ -833,4 +833,14 @@ kubelet_root_dir = "@DEFKUBELETROOTDIR@"
 # When set (together with a non-"no-port" cold_plug_vfio), the runtime can cold-plug
 # devices discovered via the Pod Resources API. Path is typically under kubelet root-dir.
 # Empty here: qemu-nvidia-cpu does not cold-plug any VFIO device.
-pod_resource_api_sock = ""
+pod_resource_api_sock = "@DEFPODRESOURCEAPISOCK@"
+
+# pod_resource_device_sources selects which kubelet PodResources sources feed
+# cold plug: "device-plugin" and/or "dra" (KEP-3695). Default ["device-plugin"]
+# preserves historical behavior; ["dra"] for DRA-only nodes; [] trusts neither
+# (a pod carrying cold-pluggable data then fails closed). List both only for
+# DISJOINT device sets -- kubelet double-counts a device advertised via both at
+# scheduling (a same-device collision is caught at cold plug). Unlisted-source
+# cold-pluggable data fails sandbox creation rather than being silently dropped.
+# Requires cold_plug_vfio and pod_resource_api_sock.
+pod_resource_device_sources = @DEFPODRESOURCEDEVICESOURCES@
