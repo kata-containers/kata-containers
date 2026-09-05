@@ -451,6 +451,29 @@ impl Annotation {
         value.unwrap_or(0)
     }
 
+    /// Get the pod's summed container resources as reported by CRI-O.
+    ///
+    /// CRI-O states them as one JSON annotation rather than the per-resource
+    /// keys containerd uses, so a caller after sandbox sizing has to ask for
+    /// them separately. Returns `None` when the annotation is absent or does
+    /// not parse.
+    pub fn get_crio_pod_linux_resources(&self) -> Option<crio::PodLinuxResources> {
+        let value = self
+            .get(crio::POD_LINUX_RESOURCES_KEY)
+            .or_else(|| self.get(crio::POD_LINUX_RESOURCES_KEY_DEPRECATED))?;
+
+        match serde_json::from_str::<crio::PodLinuxResources>(&value) {
+            Ok(resources) => Some(resources),
+            Err(e) => {
+                warn!(
+                    sl!(),
+                    "sandbox-sizing: failed to parse CRI-O pod resources: {}", e
+                );
+                None
+            }
+        }
+    }
+
     /// Get the annotation to specify the Resources.Memory.Swappiness.
     pub fn get_container_resource_swappiness(&self) -> Result<Option<u32>> {
         match self.get_value::<u32>(KATA_ANNO_CONTAINER_RES_SWAPPINESS) {
