@@ -38,6 +38,16 @@
 #   come back after a reboot. Uninstall drops that file but never unloads a
 #   module, because module state is host-global and may be in use by something
 #   else.
+#
+# NOTE on finding out what went wrong in "job" mode:
+#   A failed rollout names the nodes that failed and what stopped each of them,
+#   in the `helm install` output, as an Event on each node, and afterwards under
+#   `kubectl get nodes -l kata-deploy-job-dispatcher/result=failed`. None of it
+#   is configured here; it is what a rollout does.
+#
+#   Each stage writes why it is giving up to /dev/termination-log, so the reason
+#   is in the pod's status rather than only in a log that
+#   job.ttlSecondsAfterFinished deletes along with the pod.
 deploymentMode: job  # daemonset | job
 
 # Settings specific to deploymentMode: job
@@ -48,7 +58,7 @@ job:
   # released independently of Kata Containers, so its version is pinned here.
   dispatcherImage:
     reference: ghcr.io/kata-containers/k8s-job-dispatcher
-    tag: "0.2.0"
+    tag: "0.3.0"
   # Where the dispatcher pods themselves may run (install and uninstall). Nothing
   # to do with which nodes get Kata - that is the top-level `nodeSelector` /
   # `affinity` / `tolerations`.

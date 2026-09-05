@@ -34,6 +34,7 @@ else
 		"kata-deploy-tee-keys.bats" \
 		"kata-deploy-distribution.bats" \
 		"kata-deploy-privileges.bats" \
+		"kata-deploy-reporting.bats" \
 		"kata-deploy-multi-install.bats" \
 		"kata-deploy-reconcile.bats" \
 		"kata-deploy-node-binaries.bats" \

@@ -316,7 +316,7 @@ of any pod running there.
 
 | | runs where | privileged on the host | API rights |
 |---|---|---|---|
-| dispatcher (install, uninstall, and each scheduled reconcile) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; Jobs in the release namespace; `nodes/proxy: get` only when guest pull or image conversion is configured; `pods: get` and `cronjobs: get, delete` only with [`job.reconcile`](#doing-it-on-a-schedule-instead) enabled |
+| dispatcher (install, uninstall, and each scheduled reconcile) | one pod, only where you let it schedule ([Where the dispatcher runs](#where-the-dispatcher-runs)) | no | `nodes: list, get, patch`; `jobs: create, get, list, delete` and `pods: list` in the release namespace; `events: create` in `default`, which is the only namespace an Event about a Node can live in; `nodes/proxy: get` only when guest pull or image conversion is configured; `pods: get` and `cronjobs: get, delete` only with [`job.reconcile`](#doing-it-on-a-schedule-instead) enabled |
 | per-node Jobs | every node Kata is installed on | yes | **none — no token is mounted** |
 | `post-delete` hook (uninstall only) | one pod, wherever it schedules | no | `delete` on ClusterRoles, ClusterRoleBindings, Roles, RoleBindings and ServiceAccounts |
 | verification Job (only if `verification.pod` is set) | one pod, wherever it schedules | no | pods and pod logs (`create`, `delete`, `get`, `list`, `watch`), `nodes`/`events`/`daemonsets`/`jobs`: `get`, `list` |
@@ -560,6 +560,99 @@ The `before-hook-creation` delete policy first removes the stale dispatcher Job
 re-enumerates nodes live, recreates the per-node Jobs (adopting any that still
 exist rather than duplicating them), and because every stage is idempotent the
 already-installed nodes are fast no-ops. Coverage converges on the re-run.
+
+### Finding out why a node failed
+
+A rollout that fails says which nodes failed and what stopped each of them in
+three places, as long as the dispatcher lived long enough to say so. Helm prints
+its summary directly, and the node Event and annotation remain available after
+the command exits.
+
+=== "From `helm`"
+    The chart asks Helm to print the dispatcher's log when the hook fails, and
+    the dispatcher ends that log with one line per failed node, so the command
+    that failed is also the one that explains it:
+
+    ```text title="$ helm install kata-deploy ..."
+    level=INFO msg="[2026-09-03T18:22:11Z INFO ] fanning out 2 per-node Job(s) with parallelism 1\n...
+    Error: 2 node(s) failed:\n  worker-2: its job kata-deploy-install-worker-2 failed:
+    load-kernel-modules exited 1: this node has no usable virtualization backend: neither
+    /dev/kvm nor /dev/mshv is present [BackoffLimitExceeded: Job has reached the specified
+    backoff limit]\n  worker-5: its job kata-deploy-install-worker-5 failed: cri never
+    started: ImagePullBackOff: Back-off pulling image \"kata-deploy:bad-tag\"\n"
+    Error: INSTALLATION FAILED: failed post-install: resource Job/kube-system/kata-deploy-install-dispatcher not ready. status: Failed, message: Job Failed. failed: 1/1
+    ```
+
+    !!! warning "Helm prints hook logs as a single escaped line"
+        Helm writes hook output through its structured logger, so the whole log
+        arrives as one `level=INFO msg="..."` record with newlines escaped to `\n`.
+        Helm's own closing `Error:` line says only that the hook Job failed — the
+        reason is inside that record. The dispatcher keeps its output short so the
+        record stays readable, and `sed` gives it back its newlines:
+
+        ```sh
+        helm install kata-deploy "${CHART}" 2>&1 | sed -e 's/\\n/\n/g' -e 's/\\"/"/g'
+        ```
+
+        Nothing is lost either way: the same reason is on the node, in the two
+        forms below, after the command has scrolled away.
+
+=== "From the node"
+    The same reason is recorded as an Event against the `Node`, so it turns up in
+    `kubectl describe node` and in whatever already collects events from the
+    cluster:
+
+    ```text title="$ kubectl describe node worker-2"
+    Events:
+      Type     Reason     Age   From                Message
+      ----     ------     ----  ----                -------
+      Warning  JobFailed  2m    kata-deploy-job-dispatcher  its job kata-deploy-install-worker-2
+                                failed: load-kernel-modules exited 1: this node has no
+                                usable virtualization backend
+    ```
+
+    Listing them directly needs the `default` namespace rather than the release's:
+    a `Node` has no namespace, and that is the only one the API server accepts an
+    Event about a cluster-scoped object in — the same place the kubelet's own
+    node events go.
+
+    ```sh
+    kubectl get events -n default --field-selector involvedObject.kind=Node
+    ```
+
+=== "Afterwards"
+    Events expire, so the result is also written to the node itself and stays
+    until the next rollout overwrites it:
+
+    ```sh title="$ kubectl get nodes -l kata-deploy-job-dispatcher/result=failed"
+    NAME       STATUS   ROLES    AGE   VERSION
+    worker-2   Ready    <none>   9d    v1.34.1
+    ```
+
+    ```sh title="$ kubectl get node worker-2 -o jsonpath='{.metadata.annotations}'"
+    kata-deploy-job-dispatcher/error:       its job kata-deploy-install-worker-2 failed: ...
+    kata-deploy-job-dispatcher/finished-at: 2026-09-03T18:22:41Z
+    ```
+
+What makes any of that possible is that each stage writes why it is giving up to
+`/dev/termination-log`, which lands in the pod's status rather than only in its
+log. The dispatcher reads it the moment a Job is judged, and passes it on. The
+dispatcher's own pod keeps the same summary in its status as a fallback for the
+three places above: a dispatcher killed before it could report anything is
+explained by `kubectl describe pod` alone.
+
+!!! tip "A node that is stuck, rather than failed"
+    Nothing marks a Job whose pod cannot be scheduled or cannot pull its image:
+    it stays *running* until `job.activeDeadlineSeconds` expires, which is an
+    hour on the defaults. Two minutes in, and every five after that, the
+    dispatcher says what the wait is for — as a log line and as a
+    `Warning`/`JobPending` Event on the node.
+
+!!! note "Where the log still helps"
+    The summary carries one line per node. The per-node Job's own log carries
+    everything the stage printed on the way there, and `job.ttlSecondsAfterFinished`
+    (10 minutes by default) is how long you have to read it. Raise it on a cluster
+    where nobody is watching the rollout live.
 
 ### Choosing which nodes get a Job
 

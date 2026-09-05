@@ -873,7 +873,9 @@ kata-deploy.katacontainers.io/default
 {{- define "kata-deploy.dispatcherNodeWorkFlags" -}}
 {{- $root := .root -}}
 {{- /* Preserve the tracking and node-management contract of the dispatcher that
-       originally lived in this repository. */ -}}
+       originally lived in this repository. The prefix also names the keys each
+       node's result is recorded under, such as
+       kata-deploy-job-dispatcher/result. */ -}}
 - "--tracking-label-prefix=kata-deploy-job-dispatcher"
 - "--node-label-key=katacontainers.io/kata-runtime"
 - "--instance-label-prefix=kata-deploy.katacontainers.io"
@@ -1605,6 +1607,10 @@ Emitted at column 0; indent with `nindent` at the call site.
   image: {{ include "kata-deploy.image" .root }}
   imagePullPolicy: {{ .root.Values.imagePullPolicy }}
   command: ["/usr/bin/kata-deploy", "{{ .action }}"]
+{{- /* kata-deploy writes why it failed to /dev/termination-log; the fallback
+       covers the deaths it cannot report itself, such as the OOM killer. Either
+       way the reason is in the pod's status, which outlives the Job's logs. */}}
+  terminationMessagePolicy: FallbackToLogsOnError
   env:
 {{- include "kata-deploy.commonEnv" .root | nindent 4 }}
   securityContext:
