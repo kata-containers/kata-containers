@@ -36,13 +36,24 @@ render() {
 
 @test "Helm template: pinning the containerd directory takes the check out of the way" {
 	# containerd.configDir overrides the very derivation the install would be
-	# checking, so an operator who set it is taken at their word.
+	# checking, so an operator who set it is taken at their word. The flavour is
+	# still declared: it decides the kubelet root directory too, which a pinned
+	# containerd directory says nothing about.
 	local rendered
 	rendered=$(render --set deploymentMode=job \
+		--set k8sDistribution=k0s \
 		--set 'containerd.configDir=/etc/my-containerd/')
 
-	if echo "${rendered}" | grep -q 'name: K8S_DISTRIBUTION'; then
-		echo "K8S_DISTRIBUTION was passed despite an explicit containerd.configDir" >&2
+	echo "${rendered}" | grep -A1 'name: K8S_DISTRIBUTION' | grep -q 'value: "k0s"'
+	echo "${rendered}" | grep -A1 'name: CONTAINERD_CONFIG_DIR' | grep -q 'value: "/etc/my-containerd/"'
+}
+
+@test "Helm template: the containerd directory is only reported when pinned" {
+	local rendered
+	rendered=$(render --set deploymentMode=job --set k8sDistribution=k0s)
+
+	if echo "${rendered}" | grep -q 'name: CONTAINERD_CONFIG_DIR'; then
+		echo "CONTAINERD_CONFIG_DIR was passed without an explicit containerd.configDir" >&2
 		return 1
 	fi
 }

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{variant_handler, Config, Variant, DEFAULT_KATA_INSTALL_DIR};
+use crate::runtime;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
@@ -49,6 +50,29 @@ const ALL_SHIMS: &[&str] = &[
     "qemu-tdx-runtime-rs",
 ];
 
+/// Kubelet root directories that are not the kubelet's own /var/lib/kubelet.
+const DISTRIBUTION_KUBELET_ROOT_DIRS: &[(&str, &str)] = &[
+    ("k0s", "/var/lib/k0s/kubelet"),
+    ("microk8s", "/var/snap/microk8s/common/var/lib/kubelet"),
+];
+
+const DEFAULT_KUBELET_ROOT_DIR: &str = "/var/lib/kubelet";
+
+const KUBELET_ROOT_DROP_IN: &str = "22-kubelet-root.toml";
+
+/// The same drop-in up to Kata Containers 4.1, when k0s was the only flavour it
+/// was written for. Left behind, it keeps pointing a node at /var/lib/k0s.
+const LEGACY_K0S_KUBELET_ROOT_DROP_IN: &str = "22-k0s-kubelet-root.toml";
+
+fn kubelet_root_dir_for(distribution: Option<&str>) -> Option<&'static str> {
+    let distribution = distribution?;
+
+    DISTRIBUTION_KUBELET_ROOT_DIRS
+        .iter()
+        .find(|(name, _)| *name == distribution)
+        .map(|(_, root_dir)| *root_dir)
+}
+
 /// Check if a shim is a QEMU-based shim (all QEMU shims start with "qemu")
 fn is_qemu_shim(shim: &str) -> bool {
     shim.starts_with("qemu")
@@ -81,6 +105,8 @@ fn get_hypervisor_name(shim: &str) -> Result<&str> {
 
 pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Result<()> {
     info!("copying kata artifacts onto host");
+
+    let distribution = runtime::resolve_distribution(config, container_runtime);
 
     // Create the installation directory if it doesn't exist
     // fs::create_dir_all handles existing directories gracefully (returns Ok if already exists)
@@ -116,12 +142,12 @@ pub async fn install_artifacts(config: &Config, container_runtime: &str) -> Resu
     set_executable_permissions(&config.host_install_dir)?;
 
     for shim in &config.shims_for_arch {
-        configure_shim_config(config, shim, container_runtime).await?;
+        configure_shim_config(config, shim, distribution).await?;
     }
 
     // Install custom runtime configuration files if enabled
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
-        install_custom_runtime_configs(config, container_runtime)?;
+        install_custom_runtime_configs(config, distribution)?;
     }
 
     // Drop stale kata-<shim>-debug handler dirs left by a previous deploy with
@@ -213,7 +239,7 @@ fn write_common_drop_ins(
     config: &Config,
     shim: &str,
     config_d_dir: &str,
-    container_runtime: &str,
+    distribution: Option<&str>,
     apply_guest_debug: bool,
 ) -> Result<()> {
     info!("Generating drop-in configuration files for shim: {}", shim);
@@ -232,14 +258,14 @@ fn write_common_drop_ins(
         reconcile_stale_drop_in(config_d_dir, "20-debug.toml")?;
     }
 
-    // 2b. k0s: set kubelet root dir so ConfigMap/Secret volume propagation works (non-Rust shims only)
-    if (container_runtime == "k0s-worker" || container_runtime == "k0s-controller")
-        && !utils::is_rust_shim(shim)
-    {
-        info!("  - k0s: setting kubelet_root_dir for ConfigMap/Secret propagation");
-        let k0s_content = generate_k0s_kubelet_root_drop_in();
-        write_drop_in_file(config_d_dir, "22-k0s-kubelet-root.toml", &k0s_content)?;
+    // 2b. Settings measured from the kubelet's root directory
+    let kubelet_root_content = generate_kubelet_root_drop_in(config, shim, distribution)?;
+    if kubelet_root_content.is_empty() {
+        reconcile_stale_drop_in(config_d_dir, KUBELET_ROOT_DROP_IN)?;
+    } else {
+        write_drop_in_file(config_d_dir, KUBELET_ROOT_DROP_IN, &kubelet_root_content)?;
     }
+    reconcile_stale_drop_in(config_d_dir, LEGACY_K0S_KUBELET_ROOT_DROP_IN)?;
 
     // 3. Combined kernel_params (proxy, and guest debug when requested)
     // Reads base kernel_params from original config and combines with new params
@@ -329,8 +355,9 @@ fn reconcile_optional_drop_in(
 
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
 /// Custom runtimes inherit the same drop-in configurations as standard runtimes
-/// (installation prefix, debug, kernel_params, and for k0s on Go/remote runtime: kubelet root) plus any user-provided overrides.
-fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> Result<()> {
+/// (installation prefix, debug, kernel_params, kubelet root) plus any
+/// user-provided overrides.
+fn install_custom_runtime_configs(config: &Config, distribution: Option<&str>) -> Result<()> {
     info!("Installing custom runtime configuration files");
 
     for runtime in &config.custom_runtimes {
@@ -384,7 +411,7 @@ fn install_custom_runtime_configs(config: &Config, container_runtime: &str) -> R
             config,
             &runtime.base_config,
             &config_d_dir,
-            container_runtime,
+            distribution,
             runtime.debug_variant,
         )?;
 
@@ -1323,7 +1350,11 @@ fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &str) -> Result<()> {
+async fn configure_shim_config(
+    config: &Config,
+    shim: &str,
+    distribution: Option<&str>,
+) -> Result<()> {
     // Set up the runtime directory: copy config to per-shim dir and replace original with symlink
     setup_runtime_directory(config, shim)?;
 
@@ -1345,7 +1376,7 @@ async fn configure_shim_config(config: &Config, shim: &str, container_runtime: &
 
     // Generate common drop-in files (shared with custom runtimes).
     // Normal RuntimeClasses never carry guest debug settings.
-    write_common_drop_ins(config, shim, &config_d_dir, container_runtime, false)?;
+    write_common_drop_ins(config, shim, &config_d_dir, distribution, false)?;
 
     // Apply user-provided drop-in for default runtimes, if present.
     install_default_runtime_drop_in(shim, &config_d_dir)?;
@@ -1562,17 +1593,61 @@ fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<S
     Ok(content)
 }
 
-/// Generate drop-in content for k0s kubelet root directory.
-/// k0s uses /var/lib/k0s/kubelet instead of /var/lib/kubelet; setting this
-/// allows the runtime to match ConfigMap/Secret volume paths for propagation.
-fn generate_k0s_kubelet_root_drop_in() -> String {
-    r#"# k0s kubelet root directory
-# Generated by kata-deploy for k0s (ConfigMap/Secret volume propagation)
+fn generate_kubelet_root_drop_in(
+    config: &Config,
+    shim: &str,
+    distribution: Option<&str>,
+) -> Result<String> {
+    let Some(kubelet_root_dir) = kubelet_root_dir_for(distribution) else {
+        return Ok(String::new());
+    };
 
-[runtime]
-kubelet_root_dir = "/var/lib/k0s/kubelet"
-"#
-    .to_string()
+    let mut settings = Vec::new();
+
+    // runtime-rs matches those volumes by path shape
+    // (kata_types::k8s::is_special_dir) rather than against the kubelet root, so
+    // it has no such setting. It does read the socket below.
+    if !utils::is_rust_shim(shim) {
+        settings.push(format!(r#"kubelet_root_dir = "{kubelet_root_dir}""#));
+    }
+
+    let base_sock = read_base_pod_resource_api_sock(config, shim)?;
+    if let Some(sock) = relocate_under_kubelet_root(&base_sock, kubelet_root_dir) {
+        settings.push(format!(r#"pod_resource_api_sock = "{sock}""#));
+    }
+
+    if settings.is_empty() {
+        return Ok(String::new());
+    }
+
+    Ok(format!(
+        "# Kubelet root directory\n# Generated by kata-deploy\n\n[runtime]\n{}\n",
+        settings.join("\n")
+    ))
+}
+
+/// Only paths the build measured from the default root move: empty is how a
+/// feature is left switched off, and any other prefix is somebody's own choice.
+fn relocate_under_kubelet_root(path: &str, kubelet_root_dir: &str) -> Option<String> {
+    let relative = path.strip_prefix(&format!("{DEFAULT_KUBELET_ROOT_DIR}/"))?;
+
+    Some(format!("{kubelet_root_dir}/{relative}"))
+}
+
+fn read_base_pod_resource_api_sock(config: &Config, shim: &str) -> Result<String> {
+    let original_config_dir =
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+    let original_config_file = format!("{original_config_dir}/configuration-{shim}.toml");
+    let config_path = Path::new(&original_config_file);
+
+    if !config_path.exists() {
+        return Ok(String::new());
+    }
+
+    let sock = toml_utils::get_toml_value(config_path, "runtime.pod_resource_api_sock")
+        .unwrap_or_default();
+
+    Ok(sock.trim_matches('"').to_string())
 }
 
 /// Generate drop-in content for debug configuration.
@@ -2481,6 +2556,7 @@ mod tests {
             startup_taints: vec![],
             container_runtime_version: None,
             k8s_distribution: None,
+            containerd_config_dir: None,
         }
     }
 
@@ -2536,6 +2612,156 @@ mod tests {
         fs::create_dir_all(&config_d_dir).unwrap();
 
         reconcile_stale_drop_in(config_d_dir.to_str().unwrap(), "20-debug.toml").unwrap();
+    }
+
+    // --- kubelet root directory ---
+
+    #[rstest]
+    #[case::k0s(Some("k0s"), Some("/var/lib/k0s/kubelet"))]
+    #[case::microk8s(Some("microk8s"), Some("/var/snap/microk8s/common/var/lib/kubelet"))]
+    // K3s and RKE2 move containerd's configuration but not the kubelet's root.
+    #[case::k3s(Some("k3s"), None)]
+    #[case::rke2(Some("rke2"), None)]
+    #[case::vanilla(None, None)]
+    fn test_kubelet_root_dir_for(
+        #[case] distribution: Option<&str>,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            kubelet_root_dir_for(distribution),
+            expected,
+            "distribution: {distribution:?}"
+        );
+    }
+
+    #[rstest]
+    #[case::k0s(Some("k0s"), "qemu", Some("/var/lib/k0s/kubelet"))]
+    #[case::microk8s(
+        Some("microk8s"),
+        "qemu",
+        Some("/var/snap/microk8s/common/var/lib/kubelet")
+    )]
+    #[case::vanilla(Some("k8s"), "qemu", None)]
+    #[case::runtime_rs_does_not_read_it(Some("k0s"), "qemu-runtime-rs", None)]
+    fn the_kubelet_root_drop_in_follows_the_flavour(
+        #[case] distribution: Option<&str>,
+        #[case] shim: &str,
+        #[case] expected: Option<&str>,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        write_common_drop_ins(
+            &kernel_params_config(),
+            shim,
+            config_d_dir.to_str().unwrap(),
+            distribution,
+            false,
+        )
+        .unwrap();
+
+        let drop_in = config_d_dir.join(KUBELET_ROOT_DROP_IN);
+        match expected {
+            Some(root_dir) => assert!(
+                fs::read_to_string(&drop_in)
+                    .unwrap()
+                    .contains(&format!(r#"kubelet_root_dir = "{root_dir}""#)),
+                "expected {root_dir} in {}",
+                drop_in.display()
+            ),
+            None => assert!(!drop_in.exists(), "{} was written", drop_in.display()),
+        }
+    }
+
+    #[rstest]
+    #[case::under_the_default(
+        "/var/lib/kubelet/pod-resources/kubelet.sock",
+        Some("/var/lib/k0s/kubelet/pod-resources/kubelet.sock")
+    )]
+    #[case::switched_off("", None)]
+    #[case::chosen_elsewhere("/run/kubelet/pod-resources/kubelet.sock", None)]
+    #[case::a_longer_name("/var/lib/kubelet-standby/pod-resources/kubelet.sock", None)]
+    fn only_paths_measured_from_the_default_kubelet_root_move(
+        #[case] base_path: &str,
+        #[case] expected: Option<&str>,
+    ) {
+        assert_eq!(
+            relocate_under_kubelet_root(base_path, "/var/lib/k0s/kubelet").as_deref(),
+            expected,
+            "base path: {base_path:?}"
+        );
+    }
+
+    #[rstest]
+    #[case::go("qemu-nvidia-gpu", true)]
+    #[case::runtime_rs("qemu-nvidia-gpu-runtime-rs", false)]
+    fn the_pod_resources_socket_follows_the_kubelet_root(
+        #[case] shim: &str,
+        #[case] also_names_the_root_dir: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let mut config = kernel_params_config();
+        config.dest_dir = tmpdir.path().to_str().unwrap().to_string();
+
+        let shipped_dir = utils::get_kata_containers_original_config_path(shim, &config.dest_dir);
+        fs::create_dir_all(&shipped_dir).unwrap();
+        fs::write(
+            format!("{shipped_dir}/configuration-{shim}.toml"),
+            "[runtime]\npod_resource_api_sock = \"/var/lib/kubelet/pod-resources/kubelet.sock\"\n",
+        )
+        .unwrap();
+
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+
+        write_common_drop_ins(
+            &config,
+            shim,
+            config_d_dir.to_str().unwrap(),
+            Some("k0s"),
+            false,
+        )
+        .unwrap();
+
+        let drop_in = fs::read_to_string(config_d_dir.join(KUBELET_ROOT_DROP_IN)).unwrap();
+        assert!(
+            drop_in.contains(
+                r#"pod_resource_api_sock = "/var/lib/k0s/kubelet/pod-resources/kubelet.sock""#
+            ),
+            "{drop_in}"
+        );
+        assert_eq!(
+            drop_in.contains("kubelet_root_dir"),
+            also_names_the_root_dir
+        );
+    }
+
+    /// Left behind, the 4.1 file would keep pointing a microk8s or vanilla node
+    /// at /var/lib/k0s/kubelet.
+    #[test]
+    fn the_k0s_specific_kubelet_root_drop_in_is_taken_out_again() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config_d_dir = tmpdir.path().join("config.d");
+        fs::create_dir_all(&config_d_dir).unwrap();
+        let legacy = config_d_dir.join(LEGACY_K0S_KUBELET_ROOT_DROP_IN);
+        fs::write(
+            &legacy,
+            "[runtime]\nkubelet_root_dir = \"/var/lib/k0s/kubelet\"\n",
+        )
+        .unwrap();
+
+        write_common_drop_ins(
+            &kernel_params_config(),
+            "qemu",
+            config_d_dir.to_str().unwrap(),
+            Some("k0s"),
+            false,
+        )
+        .unwrap();
+
+        assert!(!legacy.exists());
+        assert!(config_d_dir.join(KUBELET_ROOT_DROP_IN).exists());
     }
 
     #[test]
