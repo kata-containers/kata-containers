@@ -580,8 +580,8 @@ message CopyFileRequest {
 	int64 file_size = 2;
 	// FileMode is the file mode.
 	uint32 file_mode = 3;
-	// DirMode is the mode for the parent directories of destination path.
-	uint32 dir_mode = 4;
+	// Deprecated: CopyFile no longer creates parent directories.
+	uint32 dir_mode = 4 [deprecated = true];
 	// Uid is the numeric user id.
 	int32 uid = 5;
 	// Gid is the numeric group id.
