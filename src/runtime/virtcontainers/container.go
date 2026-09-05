@@ -615,20 +615,20 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 	return
 }
 
+func allowBlockDeviceForMount(disableBlockDeviceUse bool, emptyDirMode string, mountSource string, hasDirectVolume bool) bool {
+	if !disableBlockDeviceUse || hasDirectVolume {
+		return true
+	}
+
+	return isBlockEmptyDirMode(emptyDirMode) && IsDiskEmptyDir(mountSource)
+}
+
 // Add any mount based block devices to the device manager and Save the
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
 func (c *Container) createBlockDevices(ctx context.Context) error {
 	// iterate all mounts and create block device if it's block based.
 	for i := range c.mounts {
-		// If block devices are disabled, we selectively only hotplug if
-		// the mount is a block-based emptyDir, to avoid
-		// cases that could regress 20ca4d2.
-		if !c.checkBlockDeviceSupport(ctx) && (!isBlockEmptyDirMode(c.sandbox.config.EmptyDirMode) || !IsDiskEmptyDir(c.mounts[i].Source)) {
-			c.Logger().Warn("Block device not supported")
-			continue
-		}
-
 		if len(c.mounts[i].BlockDeviceID) > 0 {
 			// Non-empty m.BlockDeviceID indicates there's already one device
 			// associated with the mount,so no need to create a new device for it
@@ -647,6 +647,22 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 		if e != nil && !os.IsNotExist(e) {
 			c.Logger().WithError(e).WithField("mount-source", c.mounts[i].Source).
 				Error("failed to parse the mount info file for a direct assigned volume")
+			continue
+		}
+
+		// If block devices are disabled, we selectively only hotplug if
+		// the mount is a block-based emptyDir or a direct-assigned volume, to avoid
+		// cases that could regress 20ca4d2.
+		if !c.checkBlockDeviceCapabilities(ctx) {
+			c.Logger().Warn("Block device not supported")
+			continue
+		}
+
+		hasDirectVolume := mntInfo != nil && mntInfo.Device != ""
+		if !allowBlockDeviceForMount(c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse,
+			c.sandbox.config.EmptyDirMode, c.mounts[i].Source, hasDirectVolume) {
+			c.Logger().WithField("mount-source", c.mounts[i].Source).
+				Warn("Block device use is disabled")
 			continue
 		}
 
@@ -1271,17 +1287,16 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 	}
 }
 
+func (c *Container) checkBlockDeviceCapabilities(ctx context.Context) bool {
+	agentCaps := c.sandbox.agent.capabilities()
+	hypervisorCaps := c.sandbox.hypervisor.Capabilities(ctx)
+
+	return agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported()
+}
+
 func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
-	if !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse {
-		agentCaps := c.sandbox.agent.capabilities()
-		hypervisorCaps := c.sandbox.hypervisor.Capabilities(ctx)
-
-		if agentCaps.IsBlockDeviceSupported() && hypervisorCaps.IsBlockDeviceHotplugSupported() {
-			return true
-		}
-	}
-
-	return false
+	return !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse &&
+		c.checkBlockDeviceCapabilities(ctx)
 }
 
 // Sort the devices starting with device #1 being the VFIO control group
