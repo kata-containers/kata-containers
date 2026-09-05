@@ -125,6 +125,54 @@ get_chart_path() {
 	echo "${script_dir}/../../../../tools/packaging/kata-deploy/helm-chart/kata-deploy"
 }
 
+# The values file defining a shim, when values.yaml does not.
+#
+# values.yaml carries the generic shims only; the ones needing a snapshotter set
+# up or hardware on the node ship as try-kata-*.values.yaml profiles. Enabling
+# such a shim by name is not enough to install it - the block also has to say
+# which architectures it supports, and the rest of what the shim needs is in the
+# profile too - so the tests deploy the profile and override what they care
+# about, rather than describing the shim themselves.
+#
+# Prints nothing when values.yaml already defines the shim.
+# Arguments:
+#   $1 - Shim name
+shim_profile_file() {
+	local shim="$1"
+	local chart_path profile
+
+	chart_path="$(get_chart_path)"
+	if [[ "$(yq ".shims | has(\"${shim}\")" "${chart_path}/values.yaml")" == "true" ]]; then
+		return 0
+	fi
+
+	for profile in "${chart_path}"/try-kata-*.values.yaml; do
+		[[ -f "${profile}" ]] || continue
+		if [[ "$(yq ".shims | has(\"${shim}\")" "${profile}")" == "true" ]]; then
+			echo "${profile}"
+			return 0
+		fi
+	done
+}
+
+# The shims a profile enables besides the one under test, one per line.
+#
+# A profile turns on every shim it ships, and an explicit enabled: true outlives
+# the disableAll below, so the ones not under test have to be named and turned
+# off for the install to stay the single-shim one the tests expect.
+# Arguments:
+#   $1 - Shim name
+profile_shims_to_disable() {
+	local shim="$1"
+	local profile
+
+	profile="$(shim_profile_file "${shim}")"
+	[[ -n "${profile}" ]] || return 0
+
+	yq ".shims | to_entries | map(select(.value.enabled == true and .key != \"${shim}\") | .key) | .[]" \
+		"${profile}"
+}
+
 # Generate base values YAML that disables all shims except the specified one
 # Arguments:
 #   $1 - Output file path
@@ -169,6 +217,15 @@ containerd:
       enable_fsverity = false"
 	fi
 
+	local other_shim_values=""
+	local other_shim
+	while read -r other_shim; do
+		[[ -n "${other_shim}" ]] || continue
+		other_shim_values+="  ${other_shim}:
+    enabled: false
+"
+	done < <(profile_shims_to_disable "${KATA_HYPERVISOR}")
+
 	cat > "${output_file}" <<EOF
 image:
   reference: ${DOCKER_REGISTRY}/${DOCKER_REPO}
@@ -177,12 +234,15 @@ image:
 k8sDistribution: "${k8s_distribution}"
 debug: true
 
-# Disable all shims at once, then enable only the one we need
+# Disable all shims at once, then enable only the one we need. A shim coming
+# from a profile is already enabled there, along with the shims it ships next to,
+# which are the ones named below.
 shims:
   disableAll: true
   ${KATA_HYPERVISOR}:
     enabled: true
 ${shim_snapshotter_values}
+${other_shim_values}
 
 defaultShim:
   amd64: ${KATA_HYPERVISOR}
@@ -207,6 +267,7 @@ deploy_kata() {
 
 	local chart_path
 	local values_yaml
+	local profile_values
 
 	chart_path="$(get_chart_path)"
 	values_yaml=$(mktemp)
@@ -214,13 +275,22 @@ deploy_kata() {
 	# Generate base values
 	generate_base_values "${values_yaml}"
 
+	# The profile defining the shim under test, if values.yaml does not, first so
+	# that the generated values override it.
+	profile_values="$(shim_profile_file "${KATA_HYPERVISOR}")"
+
 	# NFD is vendored under charts/*.tgz; no helm dependency fetch needed.
 
 	# Build helm command
 	local helm_cmd=(
 		helm upgrade --install "${HELM_RELEASE_NAME}" "${chart_path}"
-		-f "${values_yaml}"
 	)
+
+	if [[ -n "${profile_values}" ]]; then
+		helm_cmd+=(-f "${profile_values}")
+	fi
+
+	helm_cmd+=(-f "${values_yaml}")
 
 	# Add extra values file if provided
 	if [[ -n "${extra_values_file}" && -f "${extra_values_file}" ]]; then

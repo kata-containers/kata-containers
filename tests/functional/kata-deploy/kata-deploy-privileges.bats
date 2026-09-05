@@ -349,17 +349,20 @@ EOF
 }
 
 @test "Helm template (job mode): kubelet config is only read when it matters" {
-	local rbac install
-	rbac=$(render_job_mode kata-rbac.yaml)
-	install=$(render_job_mode kata-deploy-install-job.yaml)
+	local tee_values rbac install
+	tee_values="${CHART_PATH}/try-kata-tee.values.yaml"
+	rbac=$(render_job_mode kata-rbac.yaml -f "${tee_values}")
+	install=$(render_job_mode kata-deploy-install-job.yaml -f "${tee_values}")
 
-	# The default enables the confidential shims, which pull images inside
+	# The TEE profile enables the confidential shims, which pull images inside
 	# CreateContainer - the one thing slow enough to hit runtimeRequestTimeout.
 	echo "${rbac}" | grep -q 'resources: \["nodes/proxy"\]'
 	echo "${install}" | grep -q -- '--kubelet-timeout-warn-secs=600'
 
 	# Without guest pull or image conversion there is nothing to warn about, so the
-	# right to read any node's kubelet configuration is not asked for.
+	# right to read any node's kubelet configuration is not asked for. Spelled out
+	# rather than left to the chart defaults: what this asserts is that the rights
+	# follow the configuration, not that the defaults happen to ask for neither.
 	local plain_rbac plain_install
 	plain_rbac=$(render_job_mode kata-rbac.yaml \
 		--set shims.disableAll=true \
