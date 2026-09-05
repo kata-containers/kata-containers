@@ -211,6 +211,27 @@ Once a job has been removed from the required list, it requires two
 consecutive successful nightly test runs before being made required
 again.
 
+### Maintainership
+
+Tests which do not belong to the `experimental/unsupported` should transition
+to required status within a reasonable timeframe after
+being added/updated. Without this progression, tests face several challenges
+that can impact the overall quality of the project:
+
+- Maintainers lack motivation to stabilize tests when there's no pressure to
+  make them required
+- Non-required failing tests receive little attention from the community
+- Regressions can slip through when failing tests don't block PR merges
+- Once tests become unstable, it becomes increasingly difficult to restore
+  their reliability
+
+To address these concerns, any test that continues to fail for 10 consecutive
+working days should be considered unmaintained and skipped to prevent
+disruption to the entire workflow chain.
+
+> [!NOTE]
+> A deprecating process for unmaintained tests should be documented.
+
 ## Running tests
 
 ### Running the tests as part of the CI
