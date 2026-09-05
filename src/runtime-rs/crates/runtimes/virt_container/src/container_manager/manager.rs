@@ -222,6 +222,11 @@ impl ContainerManager for VirtContainerManager {
         oci_process.set_apparmor_profile(None);
         oci_process.set_capabilities(None);
 
+        // CRI-O derives an exec's process from the container's, so a container
+        // declaring tty: true asks for a terminal the exec never wanted. Only
+        // req.terminal says how the streams are copied, so it decides here too.
+        oci_process.set_terminal(Some(req.terminal));
+
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
         let c = containers
