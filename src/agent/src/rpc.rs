@@ -4212,6 +4212,41 @@ COMMIT
     }
 
     #[test]
+    fn test_do_copy_file_does_not_change_parent_ownership() {
+        skip_if_not_root!();
+
+        let temp_dir = tempdir().expect("creating temp dir failed");
+        let base = temp_dir.path().join("shared");
+        let parent = base.join("parent");
+        std::fs::create_dir_all(&parent).unwrap();
+        nix::unistd::chown(
+            &parent,
+            Some(Uid::from_raw(1000)),
+            Some(Gid::from_raw(1000)),
+        )
+        .unwrap();
+
+        do_copy_file(
+            &CopyFileRequest {
+                path: parent.join("file").to_string_lossy().into(),
+                dir_mode: 0o755 | libc::S_IFDIR,
+                file_mode: 0o644 | libc::S_IFREG,
+                uid: 0,
+                gid: 0,
+                file_size: 4,
+                data: b"data".to_vec(),
+                ..Default::default()
+            },
+            &base,
+        )
+        .unwrap();
+
+        let parent_stat = nix::sys::stat::lstat(&parent).unwrap();
+        assert_eq!(parent_stat.st_uid, 1000);
+        assert_eq!(parent_stat.st_gid, 1000);
+    }
+
+    #[test]
     fn test_map_ttrpc_err_preserves_not_found() {
         let not_found_err = ttrpc_error(ttrpc::Code::NOT_FOUND, "process not found");
         let anyhow_err: anyhow::Result<()> = Err(not_found_err.into());
